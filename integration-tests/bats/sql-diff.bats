@@ -949,12 +949,30 @@ SQL
     [ "$status" -eq 1 ]
 }
 
-@test "sql-diff: BIT(n) types show values in diff output" {
-    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, some_bitval BIT(3))"
-    dolt sql -q "INSERT INTO t (id, some_bitval) VALUES ROW(0, b'000'), ROW(1, b'001'), ROW(2, b'010')"
-    run dolt diff HEAD -r sql
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "INSERT INTO \`t\` (\`id\`,\`some_bitval\`) VALUES (0,0x00);" ]] || false
-    [[ "$output" =~ "INSERT INTO \`t\` (\`id\`,\`some_bitval\`) VALUES (1,0x01);" ]] || false
-    [[ "$output" =~ "INSERT INTO \`t\` (\`id\`,\`some_bitval\`) VALUES (2,0x02);" ]] || false
+@test "sql-diff: binary types show correct format" {
+    dolt sql <<'EOF'
+CREATE TABLE all_bin_test (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    b_bit BIT(32),
+    b_fixed BINARY(8),
+    b_var VARBINARY(32),
+
+    b_tinyblob TINYBLOB,
+    b_blob BLOB,
+    b_mediumblob MEDIUMBLOB,
+    b_longblob LONGBLOB
+);
+
+INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES
+    (b'00000000', X'00', X'00', X'00', X'00', X'00', X'00'),
+    (b'11111111', X'FF', X'FF', X'FF', X'FF', X'FF', X'FF'),
+    (b'0001001000110100', X'0001020304050607', X'0001020304050607', X'0001020304050607', X'0001020304050607', X'0001020304050607', X'0001020304050607'),
+    (b'00000000', X'', X'', X'', X'', X'', X''),
+    (b'01000001010000100100001101000100', X'41424344', X'41424344', X'41424344', X'41424344', X'41424344', X'41424344'),
+    (b'11011110101011011011111011101111', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF')
+;
+EOF
+  dolt sql -q 'select * from all_bin_test'
+  echo $output
 }

@@ -223,14 +223,14 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 	return row.KeylessRow(vrw.Format(), vals[:j]...)
 }
 
-// BinaryAsHexDisplayValue is a wrapper for binary values that should be displayed as hex strings.
-type BinaryAsHexDisplayValue string
+// BinaryAsHexPrintValue is a wrapper for binary values that should be displayed as hex strings.
+type BinaryAsHexPrintValue string
 
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string.
 // NULL values are treated as empty strings. Handle nil separately if you require other behavior.
 func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
-		if hexVal, ok := col.(BinaryAsHexDisplayValue); ok {
+		if hexVal, ok := col.(BinaryAsHexPrintValue); ok {
 			return string(hexVal), nil
 		}
 
