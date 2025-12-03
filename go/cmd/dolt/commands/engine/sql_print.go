@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -230,20 +231,75 @@ func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
 	for i, val := range rowData {
 		if val != nil && i < len(iter.schema) {
 			switch iter.schema[i].Type.Type() {
-			case sqltypes.Binary, sqltypes.VarBinary:
-				switch v := val.(type) {
-				case []byte: // hex fmt is explicitly upper case
-					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", v))
-				case string: // handles results from sql-server; MySQL wire protocol returns strings
-					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(v)))
-				default:
-					return nil, fmt.Errorf("unexpected type %T for binary column %s", val, iter.schema[i].Name)
+			case sqltypes.Binary, sqltypes.VarBinary, sqltypes.Blob:
+				hexStr, err := convertBinaryValueToHexString(ctx, val)
+				if err != nil {
+					return nil, err
+				}
+				rowData[i] = sqlutil.BinaryAsHexPrintValue(hexStr)
+			case sqltypes.Bit:
+				if vUint, ok := val.(uint64); ok {
+					hexDigits := 0
+					if bitType, ok := iter.schema[i].Type.(types.BitType); ok {
+						hexDigits = (int(bitType.NumberOfBits()) + 3) / 4
+					}
+					if hexDigits > 0 {
+						format := fmt.Sprintf("0x%%0%dX", hexDigits)
+						rowData[i] = sqlutil.BinaryAsHexPrintValue(fmt.Sprintf(format, vUint))
+					} else {
+						rowData[i] = sqlutil.BinaryAsHexPrintValue(fmt.Sprintf("0x%X", vUint))
+					}
+				} else {
+					// fallback for other types (e.g. []byte if that happens)
+					hexStr, err := convertBinaryValueToHexString(ctx, val)
+					if err != nil {
+						return nil, err
+					}
+					rowData[i] = sqlutil.BinaryAsHexPrintValue(hexStr)
 				}
 			}
 		}
 	}
 
 	return rowData, nil
+}
+
+func convertBinaryValueToHexString(ctx *sql.Context, val interface{}) (string, error) {
+	var valBytes []byte
+	switch v := val.(type) {
+	case []byte:
+		valBytes = v
+	case string:
+		valBytes = []byte(v)
+	case sql.BytesWrapper:
+		var err error
+		valBytes, err = v.Unwrap(*ctx)
+		if err != nil {
+			return "", err
+		}
+	default:
+		return "", fmt.Errorf("unexpected type %T (%v)", val, val)
+	}
+
+	buffer := make([]byte, 2+hex.EncodedLen(len(valBytes)))
+	buffer[0] = '0'
+	buffer[1] = 'x'
+
+	if len(valBytes) == 0 {
+		return string(buffer), nil
+	}
+
+	hex.Encode(buffer[2:], valBytes)
+	for i := 2; i < len(buffer); i++ {
+		// Convert a-f to A-F.
+		// 0-9 are 0x30-0x39 (bit 6 is 0).
+		// a-f are 0x61-0x66 (bit 6 is 1).
+		// We want to subtract 0x20 (32) from a-f.
+		// (buf[i] & 0x40) is 0x40 for letters, 0 for digits.
+		// 0x40 >> 1 is 0x20.
+		buffer[i] -= (buffer[i] & 0x40) >> 1
+	}
+	return string(buffer), nil
 }
 
 // Close closes the wrapped iterator and releases any resources.

@@ -1,19 +1,30 @@
 #!/usr/bin/expect
-# dolthub/dolt#9554
 # https://github.com/dolthub/dolt/issues/9554
-# Test script for binary-a-hex flag behavior in dolt sql.
+# Test script for binary-as-hex flag behavior in dolt sql. By default this flag is set to true matching MySQL behavior
+# in the shell and CLI. One exception however, if the query is piped into the MySQL shell the --binary-as-hex flag will
+# be set to false.
 #
 # Usage:
-#   expect binary-hex-test.expect [flags...]
+#   expect sql-shell-binary-as-hex.expect [flags...]
 #
 # Tracked flags:
-#   --binary-as-hex:        Use binary as hex encoding for VARBINARY and BINARY types.
-#   --skip-binary-as-hex:   Skip binary as hex encoding for VARBINARY and BINARY types.
+#   --binary-as-hex:        Use binary as hex encoding for binary-like types.
+#   --skip-binary-as-hex:   Skip binary as hex encoding for binary-like types.
 
 source "$env(BATS_CWD)/helper/common_expect_functions.tcl"
 
 set timeout 10
 set env(NO_COLOR) 1
+set debug 0
+if {$debug} {
+    # Built-in expect variable that when set shows everything the shell sends and receives.
+    log_user 1
+    # Controls the helper functions logging in common_expect_function.tcl.
+    set debug_matches 1
+} else {
+    log_user 0
+    set debug_matches 0
+}
 
 set has_binary_hex 0
 set has_skip_hex 0
@@ -23,27 +34,25 @@ foreach arg $argv {
     if {$arg eq "--skip-binary-as-hex"} {set has_skip_hex 1}
 }
 
-# In the interactive shell, the default behavior is to use binary as hex output.
+# --binary-as-hex is enabled by default.
 if {!$has_skip_hex} {
     set has_binary_hex 1
 }
 
 proc run_query {query expect_proc} {
+    # The expect_proc procedure might mention these global variables.
     global has_skip_hex has_binary_hex argv
     expect_with_defaults {>} "send {$query\r}"
     eval $expect_proc
 }
 
-# Handles the following cases:
-# 1. check dolt's ability to detect conflicting flags.
-# 2. spawns interactive shell
+# This also spawns the dolt shell while doing this conflicting flag test.
 spawn dolt sql {*}$argv
-
 if {$has_binary_hex && $has_skip_hex} {
     expect {
         "cannot use both --binary-as-hex and --skip-binary-as-hex" {
             expect eof
-            exit 3 # differentiate exit err from common_expect_functions.tcl
+            exit 3
         }
         eof {
             puts "Process ended without error message."
@@ -52,49 +61,120 @@ if {$has_binary_hex && $has_skip_hex} {
     }
 }
 
-run_query "DROP TABLE IF EXISTS test_vbin;" {}
-run_query "CREATE TABLE test_vbin (id INT PRIMARY KEY, v VARBINARY(10));" {}
-run_query "INSERT INTO test_vbin VALUES (1, 'abc');" {}
-run_query "SELECT *, LENGTH(v) FROM test_vbin;" {
+run_query "DROP TABLE IF EXISTS all_bin_test;" {}
+run_query "CREATE TABLE all_bin_test (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    b_bit BIT(32),
+    b_fixed BINARY(8),
+    b_var VARBINARY(32),
+    b_tinyblob TINYBLOB,
+    b_blob BLOB,
+    b_mediumblob MEDIUMBLOB,
+    b_longblob LONGBLOB
+);" {}
+
+# Row 1: Zeroes
+run_query "INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES (b'00000000', X'00', X'00', X'00', X'00', X'00', X'00');" {}
+
+# Row 2: Max values (FF)
+run_query "INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES (b'11111111', X'FF', X'FF', X'FF', X'FF', X'FF', X'FF');" {}
+
+# Row 3: Sequence 00-07
+run_query "INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES (b'0001001000110100', X'0001020304050607', X'0001020304050607', X'0001020304050607', X'0001020304050607', X'0001020304050607', X'0001020304050607');" {}
+
+# Row 4: Empty
+run_query "INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES (b'00000000', X'', X'', X'', X'', X'', X'');" {}
+
+# Row 5: ASCII 'ABCD' (0x41424344)
+run_query "INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES (b'01000001010000100100001101000100', X'41424344', X'41424344', X'41424344', X'41424344', X'41424344', X'41424344');" {}
+
+# Row 6: DEADBEEF
+run_query "INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES (b'11011110101011011011111011101111', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF');" {}
+
+
+run_query "SELECT b_bit, b_fixed, b_var, b_tinyblob, b_blob, b_mediumblob, b_longblob FROM all_bin_test WHERE id = 1;" {
     if {$has_skip_hex} {
-        expect_without_pattern {0x[0-9A-F]+} {}
+        expect_without_pattern {0x00} {}
     } else {
-        expect_with_defaults_2 {0x616263} {\| 3 } {}
+        expect_with_defaults_2 {0x00000000} {\|} {}
+        expect_with_defaults_2 {0x0000000000000000} {\|} {}
+        expect_with_defaults_2 {0x00} {\|} {}
+        expect_with_defaults_2 {0x00} {\|} {}
+        expect_with_defaults_2 {0x00} {\|} {}
+        expect_with_defaults_2 {0x00} {\|} {}
+        expect_with_defaults_2 {0x00} {\|} {}
     }
 }
 
-run_query "INSERT INTO test_vbin VALUES (2, UNHEX('0A000000001000112233'));" {}
-run_query "INSERT INTO test_vbin VALUES (3, UNHEX(''));" {}
-run_query "SELECT *, LENGTH(v) FROM test_vbin;" {
+run_query "SELECT b_bit, b_fixed, b_var, b_tinyblob, b_blob, b_mediumblob, b_longblob FROM all_bin_test WHERE id = 2;" {
     if {$has_skip_hex} {
-        expect_without_pattern {0x[0-9A-F]+} {}
+        expect_without_pattern {0xFF} {}
     } else {
-        expect_with_defaults_2 {0x616263} {\| 3 } {}
-        expect_with_defaults_2 {0x0A000000001000112233} {\| 10 } {}
-        expect_with_defaults_2 {0x} {\| 0 } {}
+        expect_with_defaults_2 {0x000000FF} {\|} {}
+        expect_with_defaults_2 {0xFF00000000000000} {\|} {}
+        expect_with_defaults_2 {0xFF} {\|} {}
+        expect_with_defaults_2 {0xFF} {\|} {}
+        expect_with_defaults_2 {0xFF} {\|} {}
+        expect_with_defaults_2 {0xFF} {\|} {}
+        expect_with_defaults_2 {0xFF} {\|} {}
     }
 }
 
-run_query "DROP TABLE IF EXISTS test_bin;" {}
-run_query "CREATE TABLE test_bin (id INT PRIMARY KEY, b BINARY(10));" {}
-run_query "INSERT INTO test_bin VALUES (1, 'abc');" {}
-run_query "SELECT *, LENGTH(b) FROM test_bin;" {
+run_query "SELECT b_bit, b_fixed, b_var, b_tinyblob, b_blob, b_mediumblob, b_longblob FROM all_bin_test WHERE id = 3;" {
     if {$has_skip_hex} {
-        expect_without_pattern {0x[0-9A-F]+} {}
+        expect_without_pattern {0x1234} {}
     } else {
-        expect_with_defaults_2 {0x61626300000000000000} {\| 10 } {}
+        expect_with_defaults_2 {0x00001234} {\|} {}
+        expect_with_defaults_2 {0x0001020304050607} {\|} {}
+        expect_with_defaults_2 {0x0001020304050607} {\|} {}
+        expect_with_defaults_2 {0x0001020304050607} {\|} {}
+        expect_with_defaults_2 {0x0001020304050607} {\|} {}
+        expect_with_defaults_2 {0x0001020304050607} {\|} {}
+        expect_with_defaults_2 {0x0001020304050607} {\|} {}
     }
 }
 
-run_query "INSERT INTO test_bin VALUES (2, UNHEX('0A000000001000112233'));" {}
-run_query "INSERT INTO test_bin VALUES (3, UNHEX(''));" {}
-run_query "SELECT *, LENGTH(b) FROM test_bin;" {
+run_query "SELECT b_bit, b_fixed, b_var, b_tinyblob, b_blob, b_mediumblob, b_longblob FROM all_bin_test WHERE id = 4;" {
     if {$has_skip_hex} {
-        expect_without_pattern {0x[0-9A-F]+} {}
+        expect_without_pattern {0x} {}
     } else {
-        expect_with_defaults_2 {0x61626300000000000000} {\| 10 } {}
-        expect_with_defaults_2 {0x0A000000001000112233} {\| 10 } {}
-        expect_with_defaults_2 {0x00000000000000000000} {\| 10 } {}
+        expect_with_defaults_2 {0x00000000} {\|} {}
+        expect_with_defaults_2 {0x0000000000000000} {\|} {}
+        expect_with_defaults_2 {0x} {\|} {}
+        expect_with_defaults_2 {0x} {\|} {}
+        expect_with_defaults_2 {0x} {\|} {}
+        expect_with_defaults_2 {0x} {\|} {}
+        expect_with_defaults_2 {0x} {\|} {}
+    }
+}
+
+run_query "SELECT b_bit, b_fixed, b_var, b_tinyblob, b_blob, b_mediumblob, b_longblob FROM all_bin_test WHERE id = 5;" {
+    if {$has_skip_hex} {
+        expect_without_pattern {0x41424344} {}
+    } else {
+        expect_with_defaults_2 {0x41424344} {\|} {}
+        expect_with_defaults_2 {0x4142434400000000} {\|} {}
+        expect_with_defaults_2 {0x41424344} {\|} {}
+        expect_with_defaults_2 {0x41424344} {\|} {}
+        expect_with_defaults_2 {0x41424344} {\|} {}
+        expect_with_defaults_2 {0x41424344} {\|} {}
+        expect_with_defaults_2 {0x41424344} {\|} {}
+    }
+}
+
+run_query "SELECT b_bit, b_fixed, b_var, b_tinyblob, b_blob, b_mediumblob, b_longblob FROM all_bin_test WHERE id = 6;" {
+    if {$has_skip_hex} {
+        expect_without_pattern {0xDEADBEEF} {}
+    } else {
+        # BIT(32) -> 0xDEADBEEF
+        # BINARY(8) -> 0xDEADBEEF00000000
+        expect_with_defaults_2 {0xDEADBEEF} {\|} {}
+        expect_with_defaults_2 {0xDEADBEEF00000000} {\|} {}
+        expect_with_defaults_2 {0xDEADBEEF} {\|} {}
+        expect_with_defaults_2 {0xDEADBEEF} {\|} {}
+        expect_with_defaults_2 {0xDEADBEEF} {\|} {}
+        expect_with_defaults_2 {0xDEADBEEF} {\|} {}
+        expect_with_defaults_2 {0xDEADBEEF} {\|} {}
     }
 }
 

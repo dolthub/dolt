@@ -223,9 +223,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	// Determine binary-as-hex behavior from flags (default false for non-interactive modes)
-	binaryAsHex := apr.Contains(binaryAsHexFlag)
-	if binaryAsHex && apr.Contains(skipBinaryAsHexFlag) { // We stray from MYSQL here to make usage clear for users
+	// Determine binary-as-hex behavior from flags (default true)
+	binaryAsHex := !apr.Contains(skipBinaryAsHexFlag)
+	if apr.Contains(binaryAsHexFlag) && apr.Contains(skipBinaryAsHexFlag) { // We stray from MYSQL here to make usage clear for users
 		return HandleVErrAndExitCode(errhand.BuildDError("cannot use both --%s and --%s", binaryAsHexFlag, skipBinaryAsHexFlag).Build(), usage)
 	}
 
@@ -283,9 +283,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			// In shell mode, default to hex format unless explicitly disabled
-			shellBinaryAsHex := !apr.Contains(skipBinaryAsHexFlag)
-			err := execShell(queryist.Context, queryist.Queryist, format, cliCtx, shellBinaryAsHex)
+			err := execShell(queryist.Context, queryist.Queryist, format, cliCtx, binaryAsHex)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
