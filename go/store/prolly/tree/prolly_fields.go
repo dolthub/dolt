@@ -101,22 +101,15 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 			v, err = deserializeGeometry(buf)
 		}
 	case val.GeomAddrEnc:
-		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
 		var buf []byte
-		buf, ok = td.GetGeometry(i, tup)
+		var h hash.Hash
+		h, ok = td.GetGeometryAddr(i, tup)
 		if ok {
-			v, err = deserializeGeometry(buf)
-		}
-		if !ok || err != nil {
-			var h hash.Hash
-			h, ok = td.GetGeometryAddr(i, tup)
-			if ok {
-				buf, err = ns.ReadBytes(ctx, h)
-				if err != nil {
-					return nil, err
-				}
-				v, err = deserializeGeometry(buf)
+			buf, err = ns.ReadBytes(ctx, h)
+			if err != nil {
+				return nil, err
 			}
+			v, err = deserializeGeometry(buf)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
@@ -206,16 +199,6 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		return v, nil
 
 	case val.GeomAddrEnc:
-		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
-		var ok bool
-		v.Val, ok = td.GetGeometry(i, tup)
-		if ok {
-			_, err = deserializeGeometry(v.Val) // TODO: on successful deserialize, this work is wasted
-			if err == nil {
-				return v, nil
-			}
-		}
-		// TODO: have GeometryAddr implement TextStorage
 		h, ok := td.GetGeometryAddr(i, tup)
 		if ok {
 			v.Val, err = ns.ReadBytes(ctx, h)
