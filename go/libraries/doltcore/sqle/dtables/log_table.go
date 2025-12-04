@@ -90,7 +90,7 @@ func (dt *LogTable) Schema() sql.Schema {
 		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
 		{Name: "committer", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "date", Type: types.Datetime3, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 		{Name: "commit_order", Type: types.Uint64, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}

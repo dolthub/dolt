@@ -95,7 +95,7 @@ func (ht *HistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 		&sql.Column{
 			Name:   CommitDateCol,
 			Source: tableName,
-			Type:   types.Datetime,
+			Type:   types.Datetime3,
 		},
 	)
 	return newSch
@@ -209,7 +209,7 @@ func historyTableSchema(tableName string, table *DoltTable) sql.Schema {
 		&sql.Column{
 			Name:   CommitDateCol,
 			Source: tableName,
-			Type:   types.Datetime,
+			Type:   types.Datetime3,
 		},
 	)
 	return newSch
@@ -409,7 +409,7 @@ func (ht *HistoryTable) Schema() sql.Schema {
 			projectedSch[i] = &sql.Column{
 				Name:   CommitDateCol,
 				Source: ht.Name(),
-				Type:   types.Datetime,
+				Type:   types.Datetime3,
 			}
 		} else {
 			panic("column not found")

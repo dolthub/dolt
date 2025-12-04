@@ -50,10 +50,10 @@ func (bat *BranchActivityTable) String() string {
 func (bat *BranchActivityTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "branch", Type: types.Text, Source: bat.tableName, PrimaryKey: true, Nullable: false, DatabaseSource: bat.db.Name()},
-		{Name: "last_read", Type: types.Datetime, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
-		{Name: "last_write", Type: types.Datetime, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
+		{Name: "last_read", Type: types.DatetimeMaxPrecision, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
+		{Name: "last_write", Type: types.DatetimeMaxPrecision, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
 		{Name: "active_sessions", Type: types.Int32, Source: bat.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bat.db.Name()},
-		{Name: "system_start_time", Type: types.Datetime, Source: bat.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bat.db.Name()},
+		{Name: "system_start_time", Type: types.DatetimeMaxPrecision, Source: bat.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bat.db.Name()},
 	}
 }
 
