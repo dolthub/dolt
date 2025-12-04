@@ -71,7 +71,7 @@ func (tt *TagsTable) Schema() sql.Schema {
 		{Name: "tag_hash", Type: types.Text, Source: tt.tableName, PrimaryKey: true},
 		{Name: "tagger", Type: types.Text, Source: tt.tableName, PrimaryKey: false},
 		{Name: "email", Type: types.Text, Source: tt.tableName, PrimaryKey: false},
-		{Name: "date", Type: types.Datetime, Source: tt.tableName, PrimaryKey: false},
+		{Name: "date", Type: types.Datetime3, Source: tt.tableName, PrimaryKey: false},
 		{Name: "message", Type: types.Text, Source: tt.tableName, PrimaryKey: false},
 	}
 }
