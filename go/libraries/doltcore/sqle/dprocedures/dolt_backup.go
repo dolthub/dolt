@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -55,17 +56,25 @@ var awsParamsUsage = []string{
 // based on the first argument. The procedure requires superuser privileges and write access to the current database.
 // Supported operations are: add, remove/rm, sync, sync-url, and restore.
 func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	dbName := ctx.GetCurrentDatabase()
-	if dbName == "" {
-		return nil, fmt.Errorf("empty database name")
-	}
-
-	err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write)
+	apr, err := cli.CreateBackupArgParser().Parse(args)
 	if err != nil {
 		return nil, err
 	}
 
-	apr, err := cli.CreateBackupArgParser().Parse(args)
+	if apr.NArg() == 0 || (apr.NArg() == 1 && apr.Contains(cli.VerboseFlag)) {
+		return nil, fmt.Errorf("use '%s' table to list backups", doltdb.BackupsTableName)
+	}
+
+	var dbName string
+	funcParam := apr.Arg(0)
+	if funcParam != DoltBackupParamRestore {
+		dbName = ctx.GetCurrentDatabase()
+		if dbName == "" {
+			return nil, fmt.Errorf("empty database name")
+		}
+	}
+
+	err = branch_control.CheckAccess(ctx, branch_control.Permissions_Write)
 	if err != nil {
 		return nil, err
 	}
@@ -82,17 +91,12 @@ func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		}
 	}
 
-	if apr.NArg() == 0 || (apr.NArg() == 1 && apr.Contains(cli.VerboseFlag)) {
-		return nil, fmt.Errorf("use '%s' table to list backups", doltdb.BackupsTableName)
-	}
-
 	doltSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := doltSess.GetDbData(ctx, dbName)
-	if !ok {
+	if !ok && funcParam != DoltBackupParamRestore {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	funcParam := apr.Arg(0)
 	switch funcParam {
 	case DoltBackupParamAdd:
 		if apr.NArg() != 3 {
@@ -225,7 +229,14 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	}
 
 	remote := env.NewRemote(DoltBackupParamRestore, remoteUrl, remoteParams)
-	remoteDb, err := dsess.Provider().GetRemoteDB(ctx, dbData.Ddb.Format(), remote, true)
+
+	// Use default format if no database context is available (e.g., when run from invalid directory).
+	format := types.Format_Default
+	if dbData.Ddb != nil {
+		format = dbData.Ddb.Format()
+	}
+
+	remoteDb, err := dsess.Provider().GetRemoteDB(ctx, format, remote, true)
 	if err != nil {
 		return err
 	}
@@ -247,7 +258,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		}
 	}
 
-	if lookupDbInFileSys {
+	if lookupDbInFileSys && !hasLookupDb {
 		err = fileSys.Delete(lookupDbName, forceRestore)
 		if err != nil {
 			return err
