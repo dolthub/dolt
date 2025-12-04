@@ -231,11 +231,12 @@ type FSCKReport struct {
 	Problems   []error
 }
 
-// noopGetAddrs is a placeholder function that extracts no references from chunks.
-// For basic mark-and-sweep operations, this prevents following references.
-func noopGetAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+// getAddrs extracts reference addresses from chunks, allowing mark-and-sweep to follow the tree structure.
+// This is similar to ValueStore.getAddrs but works directly with chunks.
+func getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
-		panic("Following references is the entire fucking point")
+		// Use the same logic as ValueStore.getAddrs to extract references from Noms values
+		return types.AddrsFromNomsValue(c, types.Format_Default, addrs)
 	}
 }
 
@@ -258,8 +259,8 @@ func performMarkAndSweep(ctx context.Context, gs *nbs.GenerationalNBS, progress 
 
 	progress <- "Starting mark-and-sweep operation..."
 
-	// Create mark-and-sweep operation with basic parameters
-	sweeper, err := gs.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full, chunks.NoArchive)
+	// Create mark-and-sweep operation with reference-following getAddrs
+	sweeper, err := gs.MarkAndSweepChunks(ctx, getAddrs, noopFilter, nil, chunks.GCMode_Full, chunks.NoArchive)
 	if err != nil {
 		return fmt.Errorf("failed to create mark-and-sweep operation: %w", err)
 	}
