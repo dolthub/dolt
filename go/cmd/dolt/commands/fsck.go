@@ -235,7 +235,7 @@ type FSCKReport struct {
 // For basic mark-and-sweep operations, this prevents following references.
 func noopGetAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
-		return nil
+		panic("Following references is the entire fucking point")
 	}
 }
 
@@ -248,7 +248,7 @@ func noopFilter(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) 
 // This demonstrates the basic MarkAndSweep functionality without finalization.
 func performMarkAndSweep(ctx context.Context, gs *nbs.GenerationalNBS, progress chan string, appendErr func(error)) error {
 	progress <- "Beginning GC mode..."
-	
+
 	// Begin garbage collection
 	err := gs.BeginGC(nil, chunks.GCMode_Full)
 	if err != nil {
@@ -257,33 +257,32 @@ func performMarkAndSweep(ctx context.Context, gs *nbs.GenerationalNBS, progress 
 	defer gs.EndGC(chunks.GCMode_Full)
 
 	progress <- "Starting mark-and-sweep operation..."
-	
+
 	// Create mark-and-sweep operation with basic parameters
 	sweeper, err := gs.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full, chunks.NoArchive)
 	if err != nil {
 		return fmt.Errorf("failed to create mark-and-sweep operation: %w", err)
 	}
 	defer sweeper.Close(ctx)
-	
+
 	// Get the root hash to preserve it
-	rootHash, err := gs.Root(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get root hash: %w", err)
-	}
-	
-	progress <- "Saving root hash and reachable chunks..."
-	
+	//	rootHash, err := gs.Root(ctx)
+	//	if err != nil {
+	//		return fmt.Errorf("failed to get root hash: %w", err)
+	//	}
+
+	//	progress <- "Saving root hash and reachable chunks..."
+
 	// Save the root hash (and any chunks reachable from it)
 	var rootHashes []hash.Hash
-	if rootHash != (hash.Hash{}) {
-		rootHashes = append(rootHashes, rootHash)
-	}
-	
+	h := hash.Parse("uqb8mmceook4qoh6o3d09qqoeo7h72n7")
+	rootHashes = append(rootHashes, h)
+
 	err = sweeper.SaveHashes(ctx, rootHashes)
 	if err != nil {
 		return fmt.Errorf("failed to save hashes: %w", err)
 	}
-	
+
 	progress <- "Mark-and-sweep operation completed successfully"
 	return nil
 }
@@ -322,6 +321,16 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error
 		errsLock.Lock()
 		defer errsLock.Unlock()
 		errs = append(errs, err)
+	}
+
+	// Perform mark-and-sweep if requested
+	if markAndSweep {
+		progress <- "Starting mark-and-sweep garbage collection..."
+
+		err = performMarkAndSweep(ctx, gs, progress, appendErr)
+		if err != nil {
+			appendErr(errors.New(fmt.Sprintf("Mark-and-sweep failed: %s", err.Error())))
+		}
 	}
 
 	// Callback for validating chunks. This code could be called concurrently, though that is not currently the case.
@@ -378,16 +387,6 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error
 	err = gs.NewGen().IterateAllChunks(ctx, validationCallback)
 	if err != nil {
 		return nil, err
-	}
-
-	// Perform mark-and-sweep if requested
-	if markAndSweep {
-		progress <- "Starting mark-and-sweep garbage collection..."
-		
-		err = performMarkAndSweep(ctx, gs, progress, appendErr)
-		if err != nil {
-			appendErr(errors.New(fmt.Sprintf("Mark-and-sweep failed: %s", err.Error())))
-		}
 	}
 
 	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
