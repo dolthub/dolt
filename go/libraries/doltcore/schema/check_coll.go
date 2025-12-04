@@ -137,11 +137,11 @@ func NewCheck(name, expression string, enforced bool) check {
 	}
 }
 
-func (c checkCollection) Copy() CheckCollection {
-	checks := make([]check, len(c.checks))
+func (c *checkCollection) Copy() CheckCollection {
+	newC := *c
+	newC.checks = make([]check, len(c.checks))
 	for i, check := range c.checks {
-		checks[i] = NewCheck(check.name, check.expression, check.enforced)
+		newC.checks[i] = NewCheck(check.name, check.expression, check.enforced)
 	}
-
-	return &c
+	return &newC
 }
