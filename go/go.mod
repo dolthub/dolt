@@ -30,7 +30,7 @@ require (
 	github.com/sergi/go-diff v1.1.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.8.3
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/stretchr/testify v1.11.1
 	github.com/tealeg/xlsx v1.0.5
