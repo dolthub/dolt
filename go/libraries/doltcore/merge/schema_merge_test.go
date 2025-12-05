@@ -1251,6 +1251,20 @@ var jsonMergeTests = []schemaMergeTest{
 				dataConflict: true,
 			},
 			{
+				name:         `divergent modification with NULL ancestor`,
+				ancestor:     singleRow(1, 1, 1, nil),
+				left:         singleRow(1, 2, 1, `{ "key1": "value2" }`),
+				right:        singleRow(1, 1, 2, `{ "key1": "value3" }`),
+				dataConflict: true,
+			},
+			{
+				name:         `divergent modification with NULL child`,
+				ancestor:     singleRow(1, 1, 1, `{ "key1": "value1"}`),
+				left:         singleRow(1, 2, 1, nil),
+				right:        singleRow(1, 1, 2, `{ "key1": "value3" }`),
+				dataConflict: true,
+			},
+			{
 				name:         `divergent modification and deletion`,
 				ancestor:     singleRow(1, 1, 1, `{ "key1": "value1"}`),
 				left:         singleRow(1, 2, 1, `{ "key1": "value2" }`),
