@@ -948,3 +948,31 @@ SQL
     [[ "$output" =~ "multiple values provided for \`skinny" ]] || false
     [ "$status" -eq 1 ]
 }
+
+@test "sql-diff: binary types show correct format" {
+    dolt sql <<'EOF'
+CREATE TABLE all_bin_test (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    b_bit BIT(32),
+    b_fixed BINARY(8),
+    b_var VARBINARY(32),
+
+    b_tinyblob TINYBLOB,
+    b_blob BLOB,
+    b_mediumblob MEDIUMBLOB,
+    b_longblob LONGBLOB
+);
+
+INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES
+    (b'00000000', X'00', X'00', X'00', X'00', X'00', X'00'),
+    (b'11111111', X'FF', X'FF', X'FF', X'FF', X'FF', X'FF'),
+    (b'0001001000110100', X'0001020304050607', X'0001020304050607', X'0001020304050607', X'0001020304050607', X'0001020304050607', X'0001020304050607'),
+    (b'00000000', X'', X'', X'', X'', X'', X''),
+    (b'01000001010000100100001101000100', X'41424344', X'41424344', X'41424344', X'41424344', X'41424344', X'41424344'),
+    (b'11011110101011011011111011101111', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF')
+;
+EOF
+  dolt sql -q 'select * from all_bin_test'
+  echo $output
+}
