@@ -367,11 +367,6 @@ var GetSchemaConflictsTableName = func() string {
 	return SchemaConflictsTableName
 }
 
-// GetStatusTableName returns the status system table name.
-var GetStatusTableName = func() string {
-	return StatusTableName
-}
-
 // GetTagsTableName returns the tags table name
 var GetTagsTableName = func() string {
 	return TagsTableName

@@ -25,10 +25,34 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/adapters"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
 const statusDefaultRowCount = 10
+
+func init() {
+	adapters.TableAdapters[doltdb.StatusTableName] = DoltStatusTableAdapter{}
+}
+
+// DoltStatusTableAdapter implements the adapters.TableAdapter interface. It serves as the default dolt_status table
+// implementation, applying zero modifications. This exists in case no adapters are initialized by the integrator, i.e.
+// Doltgres.
+type DoltStatusTableAdapter struct{}
+
+var _ adapters.TableAdapter = DoltStatusTableAdapter{}
+
+// CreateTable implements the adapters.TableAdapter interface. It returns the default constructor for the dolt_status
+// table, applying zero modifications.
+func (d DoltStatusTableAdapter) CreateTable(ctx *sql.Context, tableName string, dDb *doltdb.DoltDB, workingSet *doltdb.WorkingSet, rootsProvider env.RootsProvider[*sql.Context]) sql.Table {
+	return NewStatusTable(ctx, tableName, dDb, workingSet, rootsProvider)
+}
+
+// TableName implements the adapters.TableAdapter interface. It returns the default name for the dolt_status table,
+// applying zero modifications.
+func (d DoltStatusTableAdapter) TableName() string {
+	return doltdb.StatusTableName
+}
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type StatusTable struct {
@@ -61,20 +85,12 @@ func (st StatusTable) String() string {
 	return st.tableName
 }
 
-func getDoltStatusSchema(tableName string) sql.Schema {
-	return []*sql.Column{
-		{Name: "table_name", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
-		{Name: "staged", Type: types.Boolean, Source: tableName, PrimaryKey: true, Nullable: false},
-		{Name: "status", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
-	}
-}
-
-// GetDoltStatusSchema returns the schema of the dolt_status system table. This is used
-// by Doltgres to update the dolt_status schema using Doltgres types.
-var GetDoltStatusSchema = getDoltStatusSchema
-
 func (st StatusTable) Schema() sql.Schema {
-	return GetDoltStatusSchema(st.tableName)
+	return []*sql.Column{
+		{Name: "table_name", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
+		{Name: "staged", Type: types.Boolean, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
+		{Name: "status", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
+	}
 }
 
 func (st StatusTable) Collation() sql.CollationID {
