@@ -173,6 +173,26 @@ jobs:
 
               if (pull.keepAlive) process.exit(0);
 
+              const checkSuiteRes = await github.rest.checks.listSuitesForRef({
+                owner,
+                repo,
+                ref: pull.headRef,
+              });
+
+              if (checkSuiteRes.data) {
+                for (const suite of checkSuiteRes.data.check_suites) {
+                  console.log("suite id:", suite.id);
+                  console.log("suite app slug:", suite.app.slug);
+                  console.log("suite status:", suite.status);
+                  console.log("suite conclusion:", suite.conclusion);
+                  if (suite.app.slug === "github-actions") {
+                     if (suite.status !== "completed" || suite.conclusion !== "success") {
+                       console.log(`Leaving pr open due to status:${suite.status} conclusion${suite.conclusion}`);
+                       process.exit(0);
+                     }
+                  }
+              }
+
               console.log(`Closing open pr ${pull.number}`);
               await github.rest.issues.createComment({
                 issue_number: pull.number,
