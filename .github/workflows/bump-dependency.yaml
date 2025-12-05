@@ -191,6 +191,7 @@ jobs:
                        process.exit(0);
                      }
                   }
+                }
               }
 
               console.log(`Closing open pr ${pull.number}`);
