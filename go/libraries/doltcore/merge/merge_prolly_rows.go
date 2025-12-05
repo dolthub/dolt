@@ -2154,6 +2154,10 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 			return nil, true, err
 		}
 		if _, ok := sqlType.(types.JsonType); ok && !disallowJsonMerge {
+			// if any of the values are NULL, this is an unresolvable conflict
+			if baseCol == nil || leftCol == nil || rightCol == nil {
+				return nil, true, nil
+			}
 			return m.mergeJSONAddr(ctx, baseCol, leftCol, rightCol)
 		}
 		// otherwise, this is a conflict.
