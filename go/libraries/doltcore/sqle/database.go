@@ -478,8 +478,11 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 		} else if err != nil {
 			return nil, false, err
 		}
-
-		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), tname, db.ddb, root, stagedRoot)
+		headRef, err := db.rsr.CWBHeadRef(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), tname, db.ddb, root, stagedRoot, headRef)
 		if err != nil {
 			return nil, false, err
 		}
