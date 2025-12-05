@@ -105,7 +105,7 @@ func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*p
 	if ok {
 		catalog := analyzer.NewCatalog(sess.GenericProvider())
 		catalog.AuthHandler = sql.NoopAuthorizationHandler{}
-		b = planbuilder.New(ctx, catalog, nil, nil)
+		b = planbuilder.NewFromContext(ctx, catalog)
 	} else {
 		mockDatabase := memory.NewDatabase("mydb")
 		mockProvider := memory.NewDBProvider(mockDatabase)
@@ -115,7 +115,7 @@ func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*p
 		parseCtx := sql.NewEmptyContext()
 		parseCtx.SetCurrentDatabase("mydb")
 
-		b = planbuilder.New(parseCtx, catalog, nil, nil)
+		b = planbuilder.NewFromContext(parseCtx, catalog)
 	}
 
 	pseudoAnalyzedQuery, _, _, _, err := b.Parse(query, nil, false)

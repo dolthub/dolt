@@ -22,6 +22,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"gopkg.in/yaml.v2"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -1014,6 +1015,10 @@ func (cfg YAMLConfig) EventSchedulerStatus() string {
 	default:
 		return strings.ToUpper(*cfg.BehaviorConfig.EventSchedulerStatus)
 	}
+}
+
+func (cfg YAMLConfig) Overrides() gms.EngineOverrides {
+	return gms.EngineOverrides{}
 }
 
 type ClusterYAMLConfig struct {

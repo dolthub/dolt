@@ -965,7 +965,7 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		return nil, fmt.Errorf("unable to access running SQL server")
 	}
 
-	binder := planbuilder.New(ctx, server.Engine.Analyzer.Catalog, server.Engine.EventScheduler, server.Engine.Parser)
+	binder := planbuilder.New(ctx, server.Engine.Analyzer.Catalog, server.Engine.EventScheduler, server.Engine.Parser, server.Engine.Overrides.Builder)
 	node, _, _, qFlags, err := binder.Parse("SELECT "+strValue, nil, false)
 	if err != nil {
 		return nil, err
@@ -1031,7 +1031,7 @@ func loadReplicaServerId(ctx *sql.Context) (uint32, error) {
 
 func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) {
 	// Create a sub-context when running queries against the engine, so that we get an accurate query start time.
-	queryCtx := sql.NewContext(ctx, sql.WithSession(ctx.Session))
+	queryCtx := ctx.NewContext(ctx, sql.WithSession(ctx.Session))
 
 	if queryCtx.GetCurrentDatabase() == "" {
 		ctx.GetLogger().WithFields(logrus.Fields{

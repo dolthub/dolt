@@ -1118,7 +1118,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Co
 	if err != nil {
 		panic(err)
 	}
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(doltSession))
+	sqlCtx := sql.NewNonEngineContext(ctx, sql.WithSession(doltSession))
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
 	return gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{

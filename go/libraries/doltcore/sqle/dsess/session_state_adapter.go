@@ -225,7 +225,7 @@ func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error 
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() (string, error) {
-	branchState, _, err := s.session.lookupDbState(sql.NewContext(context.Background()), s.dbName)
+	branchState, _, err := s.session.lookupDbState(sql.NewNonEngineContext(context.Background()), s.dbName)
 	if err != nil {
 		return "", err
 	}

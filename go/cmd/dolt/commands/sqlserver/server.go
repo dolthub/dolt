@@ -251,6 +251,7 @@ func ConfigureServices(
 				ClusterController:          clusterController,
 				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
 				SkipRootUserInitialization: cfg.SkipRootUserInit,
+				EngineOverrides:            cfg.ServerConfig.Overrides(),
 			}
 			return nil
 		},
@@ -391,7 +392,7 @@ func ConfigureServices(
 
 	InitBinlogging := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
-			sqlCtx := sql.NewContext(ctx)
+			sqlCtx := sql.NewNonEngineContext(ctx)
 			primaryController := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController
 			doltBinlogPrimaryController, ok := primaryController.(*binlogreplication.DoltBinlogPrimaryController)
 			if !ok {

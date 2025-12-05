@@ -1420,7 +1420,7 @@ func TestBranchControl(t *testing.T) {
 			defer engine.Close()
 
 			ctx := enginetest.NewContext(harness)
-			ctx.NewCtxWithClient(sql.Client{
+			ctx.WithClient(sql.Client{
 				User:    "root",
 				Address: "localhost",
 			})
@@ -1440,7 +1440,7 @@ func TestBranchControl(t *testing.T) {
 				if host == "" {
 					host = "localhost"
 				}
-				ctx = ctx.NewCtxWithClient(sql.Client{
+				ctx = ctx.WithClient(sql.Client{
 					User:    user,
 					Address: host,
 				})
@@ -1478,7 +1478,7 @@ func TestBranchControlBlocks(t *testing.T) {
 			defer engine.Close()
 
 			rootCtx := enginetest.NewContext(harness)
-			rootCtx.NewCtxWithClient(sql.Client{
+			rootCtx.WithClient(sql.Client{
 				User:    "root",
 				Address: "localhost",
 			})
@@ -1522,7 +1522,7 @@ func TestBranchControlBlocks(t *testing.T) {
 			defer engine.Close()
 
 			rootCtx := enginetest.NewContext(harness)
-			rootCtx.NewCtxWithClient(sql.Client{
+			rootCtx.WithClient(sql.Client{
 				User:    "root",
 				Address: "localhost",
 			})

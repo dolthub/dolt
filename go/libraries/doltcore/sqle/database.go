@@ -2673,7 +2673,7 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx), nil)
+	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx), nil, planbuilder.BuilderOverrides{})
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
 	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), nil, false)
 	if err != nil {

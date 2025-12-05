@@ -1082,7 +1082,7 @@ func newCompleter(
 	subCtx, stop := signal.NotifyContext(ctx.Context, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	sqlCtx := sql.NewContext(subCtx, sql.WithSession(ctx.Session))
+	sqlCtx := sql.NewNonEngineContext(subCtx, sql.WithSession(ctx.Session))
 
 	sqlCtx.Session.LockWarnings()
 	defer sqlCtx.Session.UnlockWarnings()

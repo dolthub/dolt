@@ -139,7 +139,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	sqlCtx := sql.NewContext(ctx)
+	sqlCtx := sql.NewNonEngineContext(ctx)
 	err = engine.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...), false, false, false, false)
 
 	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)

@@ -37,7 +37,7 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb dsess.SqlDatabase) (*sql.
 	engine := sqle.NewDefault(pro)
 
 	sess := dsess.DefaultSession(pro, writer.NewWriteSession)
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
+	sqlCtx := sql.NewNonEngineContext(ctx, sql.WithSession(sess))
 	sqlCtx.SetCurrentDatabase(sqlDb.Name())
 	return sqlCtx, engine, sess
 }

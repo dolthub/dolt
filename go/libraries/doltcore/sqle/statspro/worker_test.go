@@ -826,7 +826,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 		panic(err)
 	}
 
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(doltSession))
+	sqlCtx := sql.NewNonEngineContext(ctx, sql.WithSession(doltSession))
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
 	ctxGen := func(ctx context.Context) (*sql.Context, error) {
@@ -834,7 +834,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 		if err != nil {
 			return nil, err
 		}
-		return sql.NewContext(ctx, sql.WithSession(doltSession)), nil
+		return sql.NewNonEngineContext(ctx, sql.WithSession(doltSession)), nil
 	}
 
 	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, NewInitDatabaseHook(sc))

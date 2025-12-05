@@ -131,7 +131,7 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 	}
 
 	s.SetCurrentDatabase("dolt")
-	return sql.NewContext(
+	return sql.NewNonEngineContext(
 		ctx,
 		sql.WithSession(s),
 	)

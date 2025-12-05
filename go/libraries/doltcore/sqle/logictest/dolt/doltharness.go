@@ -70,7 +70,7 @@ func (h *DoltHarness) Init() error {
 }
 
 func (h *DoltHarness) ExecuteStatement(statement string) error {
-	ctx := sql.NewContext(
+	ctx := sql.NewNonEngineContext(
 		context.Background(),
 		sql.WithPid(rand.Uint64()),
 		sql.WithSession(h.sess))
@@ -85,7 +85,7 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 
 func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
 	pid := rand.Uint32()
-	ctx := sql.NewContext(
+	ctx := sql.NewNonEngineContext(
 		context.Background(),
 		sql.WithPid(uint64(pid)),
 		sql.WithSession(h.sess))

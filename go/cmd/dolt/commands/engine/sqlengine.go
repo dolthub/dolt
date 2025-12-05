@@ -86,6 +86,7 @@ type SqlEngineConfig struct {
 	BinlogReplicaController    binlogreplication.BinlogReplicaController
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
 	BranchActivityTracking     bool
+	EngineOverrides            gms.EngineOverrides
 }
 
 type SqlEngineConfigOption func(*SqlEngineConfig)
@@ -175,6 +176,7 @@ func NewSqlEngine(
 	engine := gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
+		Overrides:      config.EngineOverrides,
 	}).WithBackgroundThreads(bThreads)
 
 	if err := configureBinlogPrimaryController(engine); err != nil {
@@ -515,7 +517,7 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 // sqlContextFactory returns a contextFactory that creates a new sql.Context with the given session
 func sqlContextFactory(ctx context.Context, opts ...sql.ContextOption) *sql.Context {
 	ctx = valctx.WithContextValidation(ctx)
-	sqlCtx := sql.NewContext(ctx, opts...)
+	sqlCtx := sql.NewNonEngineContext(ctx, opts...)
 	if sqlCtx.Session != nil {
 		valctx.SetContextValidation(ctx, dsess.DSessFromSess(sqlCtx.Session).Validate)
 	}

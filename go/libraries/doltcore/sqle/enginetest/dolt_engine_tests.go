@@ -1756,7 +1756,7 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 		enginetest.TestScript(t, harness, addPkScript)
 
 		// make sure there is only one NOT NULL constraint after all those mutations
-		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.Session()))
+		ctx := sql.NewNonEngineContext(context.Background(), sql.WithSession(harness.Session()))
 		ws, err := harness.Session().WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
@@ -1812,7 +1812,7 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 		}
 		enginetest.TestScript(t, harness, script)
 
-		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.Session()))
+		ctx := sql.NewNonEngineContext(context.Background(), sql.WithSession(harness.Session()))
 		ws, err := harness.Session().WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
@@ -1888,7 +1888,7 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 
 		enginetest.TestScript(t, harness, script)
 
-		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.Session()))
+		ctx := sql.NewNonEngineContext(context.Background(), sql.WithSession(harness.Session()))
 		ws, err := harness.Session().WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 

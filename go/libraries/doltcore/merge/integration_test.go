@@ -311,7 +311,7 @@ func runConcurrentTxs(ctx context.Context, eng *engine.SqlEngine, seed int) erro
 	if err != nil {
 		return err
 	}
-	sctx := sql.NewContext(ctx, sql.WithSession(sess))
+	sctx := sql.NewNonEngineContext(ctx, sql.WithSession(sess))
 	sctx.SetCurrentDatabase("dolt")
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%"})
 

@@ -123,7 +123,7 @@ func validateTableData(ctx context.Context, name string, old, new *doltdb.Table)
 }
 
 func validateTableDataPartition(ctx context.Context, name string, old, new *doltdb.Table, start, end uint64) error {
-	sctx := sql.NewContext(ctx)
+	sctx := sql.NewNonEngineContext(ctx)
 	_, oldIter, err := sqle.DoltTablePartitionToRowIter(sctx, name, old, start, end)
 	if err != nil {
 		return err
