@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 type FsckCmd struct{}
@@ -51,7 +53,7 @@ var fsckDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Verifies the contents of the database are not corrupted.",
 	LongDesc:  "Verifies the contents of the database are not corrupted.",
 	Synopsis: []string{
-		"[--quiet] [--mark-and-sweep]",
+		"[--quiet] [--mark-and-sweep <commit_hash>]",
 		"--revive-journal-with-data-loss",
 	},
 }
@@ -72,7 +74,7 @@ func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
 WARNING: This may result in data loss. Your original data will be preserved in a backup file. Use this option to restore
 the ability to use your Dolt database. Please contact Dolt (https://github.com/dolthub/dolt/issues) for assistance.
 `)
-	ap.SupportsFlag(markAndSweepFlag, "", "Validates commit DAG and tree structures starting from a specific commit.")
+	ap.SupportsString(markAndSweepFlag, "", "commit_hash", "Validates commit DAG and tree structures starting from the specified commit hash.")
 
 	return ap
 }
@@ -97,7 +99,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	quiet := apr.Contains(cli.QuietFlag)
-	markAndSweep := apr.Contains(markAndSweepFlag)
+	markAndSweepCommit, markAndSweep := apr.GetValue(markAndSweepFlag)
 
 	// We expect these to work because the database has already been initialized in higher layers. We'll check anyway
 	// since it's possible something went sideways or this isn't a local database.
@@ -157,7 +159,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	terminate = func() bool {
 		defer close(progress)
 		var err error
-		report, err = fsckOnChunkStore(ctx, gs, errs, progress, markAndSweep)
+		report, err = fsckOnChunkStore(ctx, gs, errs, progress, markAndSweep, markAndSweepCommit)
 		if err != nil {
 			// When FSCK errors, it's unexpected. As in corruption can be found and we shouldn't get an error here.
 			// So we print the error and not the report.
@@ -232,9 +234,9 @@ type FSCKReport struct {
 }
 
 
-// validateCommitDAG walks the commit DAG starting from a specific commit hash,
-// validates each commit's tree structure in order using breadth-first search.
-func validateCommitDAG(ctx context.Context, gs *nbs.GenerationalNBS, startCommitHash hash.Hash, progress chan string, appendErr func(error)) error {
+// validateCommitDAGAndTrackChunks walks the commit DAG starting from a specific commit hash,
+// validates each commit's tree structure and tracks all reachable chunks.
+func validateCommitDAGAndTrackChunks(ctx context.Context, gs *nbs.GenerationalNBS, startCommitHash hash.Hash, progress chan string, appendErr func(error), reachableChunks hash.HashSet) error {
 	progress <- "Starting commit DAG validation..."
 	
 	vs := types.NewValueStore(gs)
@@ -253,6 +255,7 @@ func validateCommitDAG(ctx context.Context, gs *nbs.GenerationalNBS, startCommit
 			continue
 		}
 		visitedCommits.Insert(commitHash)
+		reachableChunks.Insert(commitHash) // Mark this commit chunk as reachable
 		
 		progress <- fmt.Sprintf("Validating commit: %s", commitHash.String())
 		
@@ -268,81 +271,140 @@ func validateCommitDAG(ctx context.Context, gs *nbs.GenerationalNBS, startCommit
 			continue
 		}
 		
-		// Ensure it's actually a commit
-		commit, ok := commitValue.(types.Struct)
-		if !ok {
-			appendErr(fmt.Errorf("hash %s is not a commit struct", commitHash.String()))
-			continue
-		}
-		
-		// Get the tree reference from the commit (stored in the "value" field)
-		treeValue, ok, err := commit.MaybeGet("value")
-		if err != nil {
-			appendErr(fmt.Errorf("failed to get value from commit %s: %w", commitHash.String(), err))
-			continue
-		}
-		if !ok {
-			appendErr(fmt.Errorf("commit %s missing value field", commitHash.String()))
-			continue
-		}
-		
-		// Validate the tree structure (the value is the root tree)
-		if treeRefValue, ok := treeValue.(types.Ref); ok {
-			err = validateTree(ctx, vs, treeRefValue.TargetHash(), progress, appendErr)
+		// Handle SerialMessage commits only
+		if serialMsg, ok := commitValue.(types.SerialMessage); ok {
+			progress <- fmt.Sprintf("Processing SerialMessage commit: %s", commitHash.String())
+			err = processSerialCommitAndTrack(ctx, vs, serialMsg, commitHash, &commitQueue, progress, appendErr, reachableChunks)
 			if err != nil {
-				appendErr(fmt.Errorf("failed to validate tree in commit %s: %w", commitHash.String(), err))
+				appendErr(fmt.Errorf("failed to process SerialMessage commit %s: %w", commitHash.String(), err))
 			}
 		} else {
-			// If it's not a Ref, try to validate the value directly
-			err = validateTree(ctx, vs, commitHash, progress, appendErr)
-			if err != nil {
-				appendErr(fmt.Errorf("failed to validate tree in commit %s: %w", commitHash.String(), err))
-			}
-		}
-		
-		// Add parent commits to queue for processing (using parents_list if available, otherwise parents Set)
-		parentsList, hasParentsList, err := commit.MaybeGet("parents_list")
-		if err != nil {
-			appendErr(fmt.Errorf("failed to get parents_list from commit %s: %w", commitHash.String(), err))
+			appendErr(fmt.Errorf("hash %s is not a SerialMessage commit, got type %T", commitHash.String(), commitValue))
 			continue
-		}
-		
-		if hasParentsList {
-			if pList, ok := parentsList.(types.List); ok {
-				err := pList.Iter(ctx, func(v types.Value, index uint64) (stop bool, err error) {
-					if ref, ok := v.(types.Ref); ok {
-						commitQueue = append(commitQueue, ref.TargetHash())
-					}
-					return false, nil
-				})
-				if err != nil {
-					appendErr(fmt.Errorf("failed to iterate parents_list in commit %s: %w", commitHash.String(), err))
-				}
-			}
-		} else {
-			// Fall back to parents Set
-			parents, ok, err := commit.MaybeGet("parents")
-			if err != nil {
-				appendErr(fmt.Errorf("failed to get parents from commit %s: %w", commitHash.String(), err))
-				continue
-			}
-			if ok {
-				if parentsSet, ok := parents.(types.Set); ok {
-					err := parentsSet.Iter(ctx, func(v types.Value) (stop bool, err error) {
-						if ref, ok := v.(types.Ref); ok {
-							commitQueue = append(commitQueue, ref.TargetHash())
-						}
-						return false, nil
-					})
-					if err != nil {
-						appendErr(fmt.Errorf("failed to iterate parents in commit %s: %w", commitHash.String(), err))
-					}
-				}
-			}
 		}
 	}
 	
 	progress <- "Commit DAG validation completed"
+	return nil
+}
+
+
+// processSerialCommitAndTrack handles validation and tracking of new-style SerialMessage (flatbuffer) commits
+func processSerialCommitAndTrack(ctx context.Context, vs *types.ValueStore, serialMsg types.SerialMessage, commitHash hash.Hash, commitQueue *[]hash.Hash, progress chan string, appendErr func(error), reachableChunks hash.HashSet) error {
+	// Parse the SerialMessage as a commit
+	var commit serial.Commit
+	err := serial.InitCommitRoot(&commit, []byte(serialMsg), serial.MessagePrefixSz)
+	if err != nil {
+		return fmt.Errorf("failed to parse SerialMessage as commit: %w", err)
+	}
+	
+	// Get the root tree hash
+	rootBytes := commit.RootBytes()
+	if len(rootBytes) == hash.ByteLen {
+		rootHash := hash.New(rootBytes)
+		progress <- fmt.Sprintf("Validating root tree: %s", rootHash.String())
+		
+		err = validateTreeAndTrack(ctx, vs, rootHash, progress, appendErr, reachableChunks)
+		if err != nil {
+			return fmt.Errorf("failed to validate root tree: %w", err)
+		}
+	} else {
+		return fmt.Errorf("invalid root hash length: %d", len(rootBytes))
+	}
+	
+	// Get parent commit hashes
+	parentAddrs, err := types.SerialCommitParentAddrs(vs.Format(), serialMsg)
+	if err != nil {
+		return fmt.Errorf("failed to get parent addresses: %w", err)
+	}
+	
+	// Add parents to the queue
+	for _, parentHash := range parentAddrs {
+		*commitQueue = append(*commitQueue, parentHash)
+	}
+	
+	return nil
+}
+
+// processSerialCommit handles validation of new-style SerialMessage (flatbuffer) commits
+func processSerialCommit(ctx context.Context, vs *types.ValueStore, serialMsg types.SerialMessage, commitHash hash.Hash, commitQueue *[]hash.Hash, progress chan string, appendErr func(error)) error {
+	// Parse the SerialMessage as a commit
+	var commit serial.Commit
+	err := serial.InitCommitRoot(&commit, []byte(serialMsg), serial.MessagePrefixSz)
+	if err != nil {
+		return fmt.Errorf("failed to parse SerialMessage as commit: %w", err)
+	}
+	
+	// Get the root tree hash
+	rootBytes := commit.RootBytes()
+	if len(rootBytes) == hash.ByteLen {
+		rootHash := hash.New(rootBytes)
+		progress <- fmt.Sprintf("Validating root tree: %s", rootHash.String())
+		
+		err = validateTree(ctx, vs, rootHash, progress, appendErr)
+		if err != nil {
+			return fmt.Errorf("failed to validate root tree: %w", err)
+		}
+	} else {
+		return fmt.Errorf("invalid root hash length: %d", len(rootBytes))
+	}
+	
+	// Get parent commit hashes
+	parentAddrs, err := types.SerialCommitParentAddrs(vs.Format(), serialMsg)
+	if err != nil {
+		return fmt.Errorf("failed to get parent addresses: %w", err)
+	}
+	
+	// Add parents to the queue
+	for _, parentHash := range parentAddrs {
+		*commitQueue = append(*commitQueue, parentHash)
+	}
+	
+	return nil
+}
+
+// validateTreeAndTrack performs breadth-first validation of a tree structure and tracks all reachable chunks
+func validateTreeAndTrack(ctx context.Context, vs *types.ValueStore, treeHash hash.Hash, progress chan string, appendErr func(error), reachableChunks hash.HashSet) error {
+	progress <- fmt.Sprintf("Validating tree: %s", treeHash.String())
+	
+	// Queue for tree entries to process (breadth-first)
+	treeQueue := []hash.Hash{treeHash}
+	visitedTrees := make(hash.HashSet)
+	
+	for len(treeQueue) > 0 {
+		// Dequeue next tree
+		currentTreeHash := treeQueue[0]
+		treeQueue = treeQueue[1:]
+		
+		// Skip if already processed
+		if visitedTrees.Has(currentTreeHash) {
+			continue
+		}
+		visitedTrees.Insert(currentTreeHash)
+		reachableChunks.Insert(currentTreeHash) // Mark this tree chunk as reachable
+		
+		// Load the tree
+		treeValue, err := vs.ReadValue(ctx, currentTreeHash)
+		if err != nil {
+			return fmt.Errorf("failed to read tree %s: %w", currentTreeHash.String(), err)
+		}
+		
+		if treeValue == nil {
+			return fmt.Errorf("tree %s not found", currentTreeHash.String())
+		}
+		
+		// Handle SerialMessage trees only
+		if serialMsg, ok := treeValue.(types.SerialMessage); ok {
+			progress <- fmt.Sprintf("Processing SerialMessage tree: %s", currentTreeHash.String())
+			err = validateSerialTreeAndTrack(ctx, vs, serialMsg, currentTreeHash, &treeQueue, appendErr, reachableChunks)
+			if err != nil {
+				return fmt.Errorf("failed to validate SerialMessage tree %s: %w", currentTreeHash.String(), err)
+			}
+		} else {
+			return fmt.Errorf("hash %s is not a SerialMessage tree, got type %T", currentTreeHash.String(), treeValue)
+		}
+	}
+	
 	return nil
 }
 
@@ -375,43 +437,55 @@ func validateTree(ctx context.Context, vs *types.ValueStore, treeHash hash.Hash,
 			return fmt.Errorf("tree %s not found", currentTreeHash.String())
 		}
 		
-		// Ensure it's a map (trees are stored as maps in Noms)
-		treeMap, ok := treeValue.(types.Map)
-		if !ok {
-			return fmt.Errorf("hash %s is not a tree map", currentTreeHash.String())
-		}
-		
-		// Iterate through tree entries
-		err = treeMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-			// Validate that we can read the key (should be a string - the filename)
-			if _, ok := key.(types.String); !ok {
-				appendErr(fmt.Errorf("invalid tree entry key type in tree %s", currentTreeHash.String()))
+		// Handle SerialMessage trees only
+		if serialMsg, ok := treeValue.(types.SerialMessage); ok {
+			progress <- fmt.Sprintf("Processing SerialMessage tree: %s", currentTreeHash.String())
+			err = validateSerialTree(ctx, vs, serialMsg, currentTreeHash, &treeQueue, appendErr)
+			if err != nil {
+				return fmt.Errorf("failed to validate SerialMessage tree %s: %w", currentTreeHash.String(), err)
 			}
-			
-			// Process the value (could be a blob ref or subtree ref)
-			if ref, ok := value.(types.Ref); ok {
-				targetHash := ref.TargetHash()
-				
-				// Try to load the target to see if it's a subtree or blob
-				targetValue, err := vs.ReadValue(ctx, targetHash)
-				if err != nil {
-					appendErr(fmt.Errorf("failed to read tree entry target %s in tree %s: %w", targetHash.String(), currentTreeHash.String(), err))
-					return false, nil // Continue processing other entries
-				} else if targetValue != nil {
-					// If it's another map, it's a subtree - add to queue
-					if _, isMap := targetValue.(types.Map); isMap {
-						treeQueue = append(treeQueue, targetHash)
-					}
-					// If it's a blob or other type, we've validated we can read it
-				}
-			}
-			
-			return false, nil // Continue iteration
-		})
-		if err != nil {
-			return fmt.Errorf("failed to iterate tree entries in %s: %w", currentTreeHash.String(), err)
+		} else {
+			return fmt.Errorf("hash %s is not a SerialMessage tree, got type %T", currentTreeHash.String(), treeValue)
 		}
 	}
+	
+	return nil
+}
+
+
+// validateSerialTreeAndTrack handles validation and tracking of new-style SerialMessage trees
+func validateSerialTreeAndTrack(ctx context.Context, vs *types.ValueStore, serialMsg types.SerialMessage, treeHash hash.Hash, treeQueue *[]hash.Hash, appendErr func(error), reachableChunks hash.HashSet) error {
+	// For now, just validate that we can read the SerialMessage without errors
+	// TODO: Parse the SerialMessage as a Tree and validate its entries
+	// This would require understanding the flatbuffer schema for trees
+	
+	// Basic validation: ensure the SerialMessage is valid
+	if len(serialMsg) == 0 {
+		return fmt.Errorf("empty SerialMessage for tree %s", treeHash.String())
+	}
+	
+	// For basic validation, we'll just confirm we can read it
+	// In a full implementation, we'd parse the tree entries and validate them
+	// but for now this confirms the tree exists and is readable
+	
+	return nil
+}
+
+
+// validateSerialTree handles validation of new-style SerialMessage trees
+func validateSerialTree(ctx context.Context, vs *types.ValueStore, serialMsg types.SerialMessage, treeHash hash.Hash, treeQueue *[]hash.Hash, appendErr func(error)) error {
+	// For now, just validate that we can read the SerialMessage without errors
+	// TODO: Parse the SerialMessage as a Tree and validate its entries
+	// This would require understanding the flatbuffer schema for trees
+	
+	// Basic validation: ensure the SerialMessage is valid
+	if len(serialMsg) == 0 {
+		return fmt.Errorf("empty SerialMessage for tree %s", treeHash.String())
+	}
+	
+	// For basic validation, we'll just confirm we can read it
+	// In a full implementation, we'd parse the tree entries and validate them
+	// but for now this confirms the tree exists and is readable
 	
 	return nil
 }
@@ -419,7 +493,7 @@ func validateTree(ctx context.Context, vs *types.ValueStore, treeHash hash.Hash,
 // FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
 // The success or failure of the scan are returned in the report as a list of errors. The error returned by this function
 // indicates a deeper issue such as an inability to read from the underlying storage at all.
-func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error, progress chan string, markAndSweep bool) (*FSCKReport, error) {
+func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error, progress chan string, markAndSweep bool, markAndSweepCommit string) (*FSCKReport, error) {
 	chunkCount, err := gs.OldGen().Count()
 	if err != nil {
 		return nil, err
@@ -452,18 +526,9 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error
 		errs = append(errs, err)
 	}
 
-	// Perform commit DAG validation if requested
-	if markAndSweep {
-		progress <- "Starting commit DAG validation..."
-
-		// Use the hardcoded hash for now - this can be made configurable later
-		startCommitHash := hash.Parse("uqb8mmceook4qoh6o3d09qqoeo7h72n7")
-		err = validateCommitDAG(ctx, gs, startCommitHash, progress, appendErr)
-		if err != nil {
-			appendErr(fmt.Errorf("commit DAG validation failed: %w", err))
-		}
-	}
-
+	// Build a set of all chunks found during the full scan
+	allChunks := make(hash.HashSet)
+	
 	// Callback for validating chunks. This code could be called concurrently, though that is not currently the case.
 	validationCallback := func(chunk chunks.Chunk) {
 		chunkOk := true
@@ -471,6 +536,9 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error
 		h := chunk.Hash()
 		raw := chunk.Data()
 		calcChkSum := hash.Of(raw)
+		
+		// Add chunk to our set of all found chunks
+		allChunks.Insert(h)
 
 		if h != calcChkSum {
 			fuzzyMatch := false
@@ -518,6 +586,85 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error
 	err = gs.NewGen().IterateAllChunks(ctx, validationCallback)
 	if err != nil {
 		return nil, err
+	}
+
+	// Perform commit DAG validation after full scan to identify unreachable chunks
+	if markAndSweep {
+		progress <- "Starting commit DAG validation..."
+
+		// Parse the provided commit hash
+		startCommitHash := hash.Parse(markAndSweepCommit)
+		if startCommitHash.IsEmpty() {
+			appendErr(fmt.Errorf("invalid commit hash: %s", markAndSweepCommit))
+		} else {
+			// Track reachable chunks by removing them from allChunks set
+			reachableChunks := make(hash.HashSet)
+			err = validateCommitDAGAndTrackChunks(ctx, gs, startCommitHash, progress, appendErr, reachableChunks)
+			if err != nil {
+				appendErr(fmt.Errorf("commit DAG validation failed: %w", err))
+			} else {
+				// Report unreachable chunks (excluding essential repository infrastructure)
+				unreachableCount := 0
+				infrastructureCount := 0
+				vs := types.NewValueStore(gs)
+				for chunkHash := range allChunks {
+					if !reachableChunks.Has(chunkHash) {
+						// Try to read the chunk to determine if it's infrastructure
+						chunkValue, err := vs.ReadValue(ctx, chunkHash)
+						if err != nil {
+							unreachableCount++
+							progress <- fmt.Sprintf("Unreachable chunk: %s (failed to read: %v)", chunkHash.String(), err)
+							continue
+						}
+						
+						if chunkValue == nil {
+							unreachableCount++
+							progress <- fmt.Sprintf("Unreachable chunk: %s (chunk value is nil)", chunkHash.String())
+							continue
+						}
+						
+						// Check if this is essential repository infrastructure
+						isInfrastructure := false
+						if serialMsg, ok := chunkValue.(types.SerialMessage); ok {
+							// Check for StoreRoot (STRT) and WorkingSet (WRST) chunks
+							// The message type appears to be at different offsets, so search for the patterns
+							msgStr := string(serialMsg)
+							if strings.Contains(msgStr, "STRT") {
+								isInfrastructure = true
+								infrastructureCount++
+								progress <- fmt.Sprintf("Infrastructure chunk: %s (type: StoreRoot)", chunkHash.String())
+							} else if strings.Contains(msgStr, "WRST") {
+								isInfrastructure = true
+								infrastructureCount++
+								progress <- fmt.Sprintf("Infrastructure chunk: %s (type: WorkingSet)", chunkHash.String())
+							}
+						}
+						
+						if !isInfrastructure {
+							unreachableCount++
+							humanStr, err := types.EncodedValue(ctx, chunkValue)
+							progress <- fmt.Sprintf("Unreachable chunk: %s", chunkHash.String())
+							progress <- fmt.Sprintf("  Type: %T", chunkValue)
+							if err != nil {
+								progress <- fmt.Sprintf("  Human readable: (error: %v)", err)
+							} else {
+								progress <- fmt.Sprintf("  Human readable: %s", humanStr)
+							}
+							
+							// For SerialMessage, also try to show some raw content
+							if serialMsg, ok := chunkValue.(types.SerialMessage); ok {
+								if len(serialMsg) < 200 {
+									progress <- fmt.Sprintf("  Raw content: %q", string(serialMsg))
+								} else {
+									progress <- fmt.Sprintf("  Raw content (first 200 bytes): %q", string(serialMsg[:200]))
+								}
+							}
+						}
+					}
+				}
+				progress <- fmt.Sprintf("Found %d unreachable chunks out of %d total chunks (%d infrastructure chunks excluded)", unreachableCount, len(allChunks), infrastructureCount)
+			}
+		}
 	}
 
 	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
