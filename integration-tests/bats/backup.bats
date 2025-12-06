@@ -1,4 +1,10 @@
 #!/usr/bin/env bats
+# Since the dolt backup command uses dolt_backup procedure internally, `sql-backup.bats` tests should generally apply to
+# `backup.bats` as well, removing the need to duplicate tests. As a result, prefer writing backup tests in
+# `sql-backup.bats`. Exceptions to this rule is testing external factors related to commands (i.e. invalid repo checks
+#  before calling dolt_backup) or command specific functionality (i.e. the command version can list current database
+#  backup table).
+
 load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
@@ -337,7 +343,7 @@ teardown() {
 # No HTTPS test for sync-url; `dolt/go/utils/remotesrv` does not expose TLS configuration flags.
 @test "backup: sync-url and restore HTTP" {
     start_remotesrv
-    
+
     cd repo1
     dolt sql -q "CREATE TABLE t2 (b int)"
     dolt add .
@@ -377,4 +383,22 @@ teardown() {
     [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
 
     stop_sql_server
+}
+
+@test "backup: restore works from non-dolt directory" {
+    cd repo1
+    backupFileUrl="file://$BATS_TEST_TMPDIR/backup"
+    dolt sql<<EOF
+create table t (i int);
+insert into t values (1), (2);
+call dolt_backup('sync-url', '$backupFileUrl');
+EOF
+
+    invalidRepo="$BATS_TEST_TMPDIR/invalidRepo"
+    mkdir "$invalidRepo" && cd "$invalidRepo"
+
+    run dolt backup restore "$backupFileUrl" new_db
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv -q "select * from t"
+    [[ "$output" =~ i.*2.*1 ]] || false
 }
