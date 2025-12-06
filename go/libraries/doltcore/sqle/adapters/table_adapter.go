@@ -21,6 +21,45 @@ type TableAdapter interface {
 	TableName() string
 }
 
-// TableAdapters is a registry for TableAdapter implementations, keyed by table name. It is populated during package
-// initialization and intended to be read-only thereafter.
-var TableAdapters = make(map[string]TableAdapter)
+var DoltTableAdapterRegistry = newDoltTableAdapterRegistry()
+
+// doltTableAdapterRegistry is a TableAdapter registry for Dolt tables, keyed by table name. It is populated during
+// package initialization (in the Dolt table source) and intended to be read-only thereafter.
+type doltTableAdapterRegistry struct {
+	Adapters       map[string]TableAdapter
+	adapterAliases map[string]string
+}
+
+// newDoltTableAdapterRegistry constructs Dolt table adapter registry with empty alias and adapter maps.
+func newDoltTableAdapterRegistry() *doltTableAdapterRegistry {
+	return &doltTableAdapterRegistry{
+		Adapters:       make(map[string]TableAdapter),
+		adapterAliases: make(map[string]string),
+	}
+}
+
+// AddAdapter adds a TableAdapter to the Dolt table adapter registry with optional |aliases| (alternative table name
+// keys). An alias cannot exist as both an adapter and alias, if you provide an alias that is already in the adapter
+// map, it will be dropped. This overriding behavior is typically used by integrators, i.e. Doltgres, to replace the
+// original Dolt table.
+func (as *doltTableAdapterRegistry) AddAdapter(tableName string, adapter TableAdapter, aliases ...string) {
+	for _, alias := range aliases {
+		as.adapterAliases[alias] = tableName
+		if _, ok := as.Adapters[alias]; ok {
+			delete(as.Adapters, alias) // We don't want this to show up in the catalog.
+		}
+	}
+	as.adapterAliases[tableName] = tableName
+	as.Adapters[tableName] = adapter
+}
+
+// GetAdapter gets a Dolt TableAdapter mapped to |name|, which can be an alias or the table name.
+func (as *doltTableAdapterRegistry) GetAdapter(name string) TableAdapter {
+	name = as.adapterAliases[name]
+	return as.Adapters[name]
+}
+
+// GetTableName gets the Dolt table name mapped to |name|, which can be an alias or the table name.
+func (as *doltTableAdapterRegistry) GetTableName(name string) string {
+	return as.adapterAliases[name]
+}

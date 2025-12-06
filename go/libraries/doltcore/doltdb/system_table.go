@@ -155,7 +155,6 @@ func GeneratedSystemTableNames() []string {
 		GetTableOfTablesWithViolationsName(),
 		GetCommitsTableName(),
 		GetCommitAncestorsTableName(),
-		GetStatusTableName(),
 		GetRemotesTableName(),
 		GetHelpTableName(),
 		GetBackupsTableName(),
