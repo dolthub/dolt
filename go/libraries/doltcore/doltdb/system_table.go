@@ -155,7 +155,6 @@ func GeneratedSystemTableNames() []string {
 		GetTableOfTablesWithViolationsName(),
 		GetCommitsTableName(),
 		GetCommitAncestorsTableName(),
-		GetStatusTableName(),
 		GetRemotesTableName(),
 		GetHelpTableName(),
 		GetBackupsTableName(),
@@ -365,11 +364,6 @@ var GetRemotesTableName = func() string {
 // GetSchemaConflictsTableName returns the schema conflicts system table name
 var GetSchemaConflictsTableName = func() string {
 	return SchemaConflictsTableName
-}
-
-// GetStatusTableName returns the status system table name.
-var GetStatusTableName = func() string {
-	return StatusTableName
 }
 
 // GetTagsTableName returns the tags table name

@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/adapters"
 )
 
 // GetGeneratedSystemTables returns table names of all generated system tables.
@@ -35,6 +36,10 @@ func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]dol
 		for _, t := range doltdb.GeneratedSystemTableNames() {
 			s.Add(doltdb.TableName{Name: t, Schema: doltdb.DoltNamespace})
 		}
+	}
+
+	for _, adapter := range adapters.DoltTableAdapterRegistry.Adapters {
+		s.Add(doltdb.TableName{Name: adapter.TableName(), Schema: doltdb.DoltNamespace})
 	}
 
 	schemas, err := root.GetDatabaseSchemas(ctx)
