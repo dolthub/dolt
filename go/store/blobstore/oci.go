@@ -327,7 +327,6 @@ func uploadParts(ctx context.Context, objectName, uploadID string, numParts, con
 	for {
 		if batchSize >= maxBatchSize {
 			for _, u := range batch {
-				u := u
 				eg.Go(func() error {
 					cp, err := uploadF(egCtx, objectName, uploadID, u.partNum, int64(len(u.b)), bytes.NewReader(u.b))
 					if err != nil {
@@ -364,7 +363,6 @@ func uploadParts(ctx context.Context, objectName, uploadID string, numParts, con
 
 	if batchSize > 0 && len(batch) > 0 {
 		for _, u := range batch {
-			u := u
 			eg.Go(func() error {
 				cp, err := uploadF(egCtx, objectName, uploadID, u.partNum, int64(len(u.b)), bytes.NewReader(u.b))
 				if err != nil {
