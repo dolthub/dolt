@@ -99,6 +99,7 @@ const (
 	SummaryFlag  = "summary"
 	WhereParam   = "where"
 	LimitParam   = "limit"
+	FilterParam  = "filter"
 	MergeBase    = "merge-base"
 	DiffMode     = "diff-mode"
 	ReverseFlag  = "reverse"
