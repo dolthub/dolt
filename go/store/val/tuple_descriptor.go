@@ -585,13 +585,10 @@ func (td *TupleDesc) GetAddr(i int, tup Tuple) (hash.Hash, bool) {
 	return hash.New(b), true
 }
 
-func (td *TupleDesc) ExpectEncoding(i int, encodings ...Encoding) {
-	for _, enc := range encodings {
-		if enc == td.Types[i].Enc {
-			return
-		}
+func (td *TupleDesc) ExpectEncoding(i int, enc Encoding) {
+	if enc != td.Types[i].Enc {
+		panic("incorrect value encoding")
 	}
-	panic("incorrect value encoding")
 }
 
 func (td *TupleDesc) GetCell(i int, tup Tuple) (v Cell, ok bool) {
