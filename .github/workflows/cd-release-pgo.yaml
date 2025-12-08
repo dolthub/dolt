@@ -170,6 +170,26 @@ jobs:
           asset_path: go/out/install.sh
           asset_name: install.sh
           asset_content_type: text/plain
+      - name: Upload Linux AMD64 RPM
+        id: upload-linux-amd64-rpm
+        uses: dolthub/upload-release-asset@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-${{ needs.format-version.outputs.version }}-1.x86_64.rpm
+          asset_name: dolt-${{ needs.format-version.outputs.version }}-1.x86_64.rpm
+          asset_content_type: application/zip
+      - name: Upload Linux ARM64 RPM
+        id: upload-linux-arm64-rpm
+        uses: dolthub/upload-release-asset@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-${{ needs.format-version.outputs.version }}-1.aarch64.rpm
+          asset_name: dolt-${{ needs.format-version.outputs.version }}-1.aarch64.rpm
+          asset_content_type: application/zip
 
   create-windows-msi:
     needs: [format-version, create-pgo-release]

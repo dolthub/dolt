@@ -71,7 +71,7 @@ var _ manifest = &ChunkJournal{}
 var _ manifestGCGenUpdater = &ChunkJournal{}
 var _ io.Closer = &ChunkJournal{}
 
-func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister) (*ChunkJournal, error) {
+func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister, warningsCb func(error)) (*ChunkJournal, error) {
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
@@ -87,11 +87,15 @@ func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifes
 	} else if ok {
 		// only bootstrap journalWriter if the journal file exists,
 		// otherwise we wait to open in case we're cloning
-		if err = j.bootstrapJournalWriter(ctx); err != nil {
+		if err = j.bootstrapJournalWriter(ctx, warningsCb); err != nil {
 			return nil, err
 		}
 	}
 	return j, nil
+}
+
+func JournalParserLoggingWarningsCb(err error) {
+	logrus.Error(err.Error())
 }
 
 // reflogBufferSize returns the size of the ring buffer to allocate to store in-memory roots references when
@@ -133,20 +137,25 @@ func reflogBufferSize() int {
 // file (see indexRec). The journal file is the source of truth for latest root hash.
 // As we process journal records, we keep track of the latest root hash record we see
 // and update the manifest file with the last root hash we saw.
-func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
+//
+// |warningsCb| is a callback function invoked if a recoverable parse error is encountered. Usually used
+// for printing an error message to the user, but also used for fsck to report the error and exit with an error.
+func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb func(error)) (err error) {
 	var ok bool
 	ok, err = fileExists(j.path)
 	if err != nil {
 		return err
 	}
 
-	if !ok { // create new journal file
+	canCreate := !j.backing.readOnly()
+
+	if canCreate && !ok { // create new journal file
 		j.wr, err = createJournalWriter(ctx, j.path)
 		if err != nil {
 			return err
 		}
 
-		_, err = j.wr.bootstrapJournal(ctx, j.reflogRingBuffer)
+		_, err = j.wr.bootstrapJournal(ctx, j.reflogRingBuffer, warningsCb)
 		if err != nil {
 			return err
 		}
@@ -174,7 +183,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 	}
 
 	// parse existing journal file
-	root, err := j.wr.bootstrapJournal(ctx, j.reflogRingBuffer)
+	root, err := j.wr.bootstrapJournal(ctx, j.reflogRingBuffer, warningsCb)
 	if err != nil {
 		return err
 	}
@@ -247,7 +256,7 @@ func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) er
 func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	if j.backing.readOnly() {
 		return nil, gcBehavior_Continue, errReadOnlyManifest
-	} else if err := j.maybeInit(ctx); err != nil {
+	} else if err := j.maybeInit(ctx, JournalParserLoggingWarningsCb); err != nil {
 		return nil, gcBehavior_Continue, err
 	}
 
@@ -265,7 +274,7 @@ func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 		if record.has {
 			continue
 		}
-		c := chunks.NewChunkWithHash(hash.Hash(*record.a), mt.chunks[*record.a])
+		c := chunks.NewChunkWithHash(*record.a, mt.chunks[*record.a])
 		err := j.wr.writeCompressedChunk(ctx, ChunkToCompressedChunk(c))
 		if err != nil {
 			return nil, gcBehavior_Continue, err
@@ -285,7 +294,7 @@ func (j *ChunkJournal) ConjoinAll(ctx context.Context, sources chunkSources, sta
 // Open implements tablePersister.
 func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	if name == journalAddr {
-		if err := j.maybeInit(ctx); err != nil {
+		if err := j.maybeInit(ctx, JournalParserLoggingWarningsCb); err != nil {
 			return nil, err
 		}
 		return journalChunkSource{journal: j.wr}, nil
@@ -464,9 +473,9 @@ func (j *ChunkJournal) ParseIfExists(ctx context.Context, stats *Stats, readHook
 	return
 }
 
-func (j *ChunkJournal) maybeInit(ctx context.Context) (err error) {
+func (j *ChunkJournal) maybeInit(ctx context.Context, warningsCb func(error)) (err error) {
 	if j.wr == nil {
-		err = j.bootstrapJournalWriter(ctx)
+		err = j.bootstrapJournalWriter(ctx, warningsCb)
 	}
 	return
 }

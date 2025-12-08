@@ -887,7 +887,7 @@ SQL
     run dolt sql -q "select synopsis from dolt_help where name='dolt_backup'"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt backup [-v | --verbose]" ]] || false
-    [[ "$output" =~ "dolt backup restore [--force] <url> <name>" ]] || false
+    [[ "$output" =~ "restore [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] [--force] <url> <name>" ]] || false
 
     run dolt sql -q "select short_description from dolt_help where name='dolt_commit'"
     [ "$status" -eq 0 ]

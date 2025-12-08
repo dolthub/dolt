@@ -22,9 +22,11 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
+	"path/filepath"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/dolthub/fslock"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -239,13 +241,78 @@ func validateJournalRecord(buf []byte) error {
 			off, len(buf))
 	}
 
-	off -= indexRecChecksumSz
+	off -= journalRecChecksumSz
 	crcMatches := crc(buf[:off]) == readUint32(buf[off:])
 	if !crcMatches {
 		return fmt.Errorf("invalid journal record: CRC checksum does not match")
 	}
 
 	return nil
+}
+
+// ReviveJournalWithDataLoss attempts to recover from a corrupted chunk journal file located in |nomsDir|. This is
+// a special access method for use by the FSCK command. It acquires the lock on the NBS store,
+// verifies that there is data loss, then truncates the journal to the last known good offset. A backup of the
+// corrupted journal file is created with a timestamped suffix before truncating. If no data loss is detected, no action
+// is taken and an empty string and error is returned.
+func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) {
+	lock := fslock.New(filepath.Join(nomsDir, lockFileName))
+	err = lock.TryLock()
+	if err != nil {
+		return "", fmt.Errorf("could not acquire lock on NBS store: %w", err)
+	}
+	defer lock.Unlock()
+
+	journalPath := filepath.Join(nomsDir, chunkJournalName)
+	jornalFile, err := os.OpenFile(journalPath, os.O_RDWR, 0666)
+	if err != nil {
+		return "", fmt.Errorf("could not open chunk journal file: %w", err)
+	}
+	defer jornalFile.Close()
+
+	noOp := func(o int64, r journalRec) error { return nil }
+	// First verify that the journal has data loss.
+	var offset int64
+	offset, err = processJournalRecords(context.Background(), jornalFile, 0, noOp, nil)
+	if err == nil {
+		// No data loss detected, nothing to do.
+		return "", fmt.Errorf("no data loss detected in chunk journal file; no recovery performed")
+	}
+	if !errors.Is(err, ErrJournalDataLoss) {
+		return "", fmt.Errorf("could not process chunk journal file: %w", err)
+	}
+
+	// Seek back to the start, to perform a full copy.
+	if _, err = jornalFile.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("could not seek to start of chunk journal file: %w", err)
+	}
+
+	// Create a backup of the journal file before truncating.
+	now := time.Now()
+	seconds := now.Hour()*3600 + now.Minute()*60 + now.Second()
+	ts := fmt.Sprintf("%04d_%02d_%02d_%05d", now.Year(), now.Month(), now.Day(), seconds)
+	preservePath = fmt.Sprintf("%s_save_%s", journalPath, ts)
+	saveFile, err := os.OpenFile(preservePath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+	if err != nil {
+		return "", fmt.Errorf("could not create backup of corrupted chunk journal file: %w", err)
+	}
+	if _, err = io.Copy(saveFile, jornalFile); err != nil {
+		return "", fmt.Errorf("could not backup corrupted chunk journal file: %w", err)
+	}
+
+	if err = saveFile.Close(); err != nil {
+		return "", fmt.Errorf("could not close backup of corrupted chunk journal file: %w", err)
+	}
+
+	// Now truncate the journal file to the last known good offset.
+	if err = jornalFile.Truncate(offset); err != nil {
+		return "", fmt.Errorf("could not truncate corrupted chunk journal file: %w", err)
+	}
+	if err = jornalFile.Sync(); err != nil {
+		return "", fmt.Errorf("could not sync truncated chunk journal file: %w", err)
+	}
+
+	return preservePath, nil
 }
 
 // processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
@@ -256,8 +323,11 @@ func validateJournalRecord(buf []byte) error {
 // records are being persisted to disk. This isn't likely, but the OS filesystem write is not an atomic
 // operation, so it's possible to leave the journal in a corrupted state. We must gracefully recover
 // without preventing the server from starting up, so we are careful to only return the journal file
-// offset that points to end fo the last valid record.
-func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error) (int64, error) {
+// offset that points to end of the last valid record.
+//
+// The |warningsCb| callback is called with any errors encountered that we automatically recover from. This allows the caller
+// to handle the situation in a context specific way.
+func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error, warningsCb func(error)) (int64, error) {
 	var (
 		buf []byte
 		err error
@@ -268,10 +338,16 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		return 0, err
 	}
 
+	// There are a few ways we can recover from journals which seem truncated or corrupted, but we want to be sure
+	// to scan to the end of the file in these cases to ensure there is no indication of data loss.
+	recovered := false
+
 	rdr := bufio.NewReaderSize(r, journalWriterBuffSize)
 	for {
 		// peek to read next record size
 		if buf, err = rdr.Peek(uint32Size); err != nil {
+			// If we hit EOF here, it's expected. We can have no more than 3 bytes of data left, and we don't really have
+			// a way to determine if that was valid data or just padding. So we simply stop scanning.
 			break
 		}
 
@@ -283,10 +359,28 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		// length of 0, we know we've reached the end of the journal records and are starting to
 		// read the zero padding.
 		if l == 0 {
+			recovered = true
+			break
+		}
+
+		if l > journalWriterBuffSize {
+			// Probably hit a corrupted record. Report error and stop processing.
+			if warningsCb != nil {
+				// We don't assign this error to err, because we want to recover from this.
+				jErr := fmt.Errorf("invalid journal record length: %d exceeds max allowed size of %d", l, journalWriterBuffSize)
+				warningsCb(jErr)
+			}
+			recovered = true
 			break
 		}
 
 		if buf, err = rdr.Peek(int(l)); err != nil {
+			if warningsCb != nil {
+				// We probably wend off the end of the file. Report error and recover.
+				jErr := fmt.Errorf("failed to read full journal record of length %d at offset %d: %w", l, off, err)
+				warningsCb(jErr)
+			}
+			recovered = true
 			break
 		}
 
@@ -296,11 +390,12 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		//       clean shutdown, we expect all journal records to be valid, and could safely error out during startup
 		//       for invalid records.
 		if validationErr := validateJournalRecord(buf); validationErr != nil {
-			// NOTE: We don't assign the validation error to err, because we want to stop processing journal records
-			//       when we see an invalid record and return successfully from processJournalRecords(), so that only
-			//       the preceding, valid records in the journal are used.
-			logrus.Errorf("Error validating journal record; "+
-				"skipping remaining journal records past offset %d: %s", off, validationErr)
+			if warningsCb != nil {
+				// We don't assign the validation error to err, because we want to recover from this.
+				jErr := fmt.Errorf("invalid journal record at offset %d: %w", off, validationErr)
+				warningsCb(jErr)
+			}
+			recovered = true
 			break
 		}
 
@@ -325,12 +420,135 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		return 0, err
 	}
 
+	// If we hit a recovery state, we want to check if there is any parseable data in the remainder of the journal.
+	if recovered {
+		dataLossFound, dErr := possibleDataLossCheck(rdr)
+		if dErr != nil {
+			// Finding an error at this point is considered recoverable since we were already in a recovery state.
+			// Report the error and continue.
+			if warningsCb != nil {
+				warningsCb(fmt.Errorf("error while checking for possible data loss in journal at offset %d: %w", off, dErr))
+			}
+		}
+		if dataLossFound {
+			return off, NewJournalDataLossError(off)
+		}
+	}
+
 	// reset the file pointer to end of the last
 	// successfully processed journal record
 	if _, err = r.Seek(off, 0); err != nil {
 		return 0, err
 	}
+
+	// When we have a real file, we truncate anything which is beyond the current offset. Historically we put
+	// null bytes there, and there have been cases of garbage data being present instead of nulls. If there is any
+	// data beyond the current offset which we can parse and looks like data loss, we would have errored out above.
+	if f, ok := r.(*os.File); ok {
+		err = f.Truncate(off)
+		if err != nil {
+			return 0, err
+		}
+		err = f.Sync()
+		if err != nil {
+			return 0, err
+		}
+	}
+
 	return off, nil
+}
+
+var ErrJournalDataLoss = errors.New("corrupted journal")
+
+func NewJournalDataLossError(offset int64) error {
+	return fmt.Errorf("possible data loss detected in journal file at offset %d: %w", offset, ErrJournalDataLoss)
+}
+
+// possibleDataLossCheck checks for parsable data remaining in |reader| which constitutes data loss. When calling this
+// method, we've already hit a state where we can't read a record at the current position. We'll read until EOF looking
+// for a parsable root hash record followed by another parsable record. If that occurs, we consider that data loss, and
+// return true. Otherwise, false is returned.
+func possibleDataLossCheck(reader *bufio.Reader) (dataLoss bool, err error) {
+	firstRootFound := false
+
+	atEOF := false
+
+	bufferPrefix := 0
+	const buffSize = journalWriterBuffSize * 2
+
+	buf := make([]byte, buffSize)
+
+ReadBatchGoto:
+	n, err := io.ReadFull(reader, buf[bufferPrefix:])
+	switch err {
+	case nil:
+		// Got a full buffer. Let's go.
+	case io.ErrUnexpectedEOF:
+		// Final short read before EOF: n bytes valid
+		atEOF = true
+		buf = buf[:bufferPrefix+n]
+	case io.EOF:
+		// ReadFull only returns EOF if no bytes were read. We may have plenty of unprocessed data in buf.
+		atEOF = true
+		buf = buf[:bufferPrefix]
+	default:
+		return false, err
+	}
+
+	idx := 0
+	for idx <= len(buf)-rootHashRecordSize() {
+		sz := readUint32(buf[idx : idx+uint32Size])
+		if sz > 0 && sz <= journalWriterBuffSize {
+			// in the right range.
+			if int(sz) <= len(buf[idx:]) {
+				// try to validate it.
+				candidate := buf[idx : idx+int(sz)]
+				e := validateJournalRecord(candidate)
+				if e == nil {
+					record, err := readJournalRecord(candidate)
+					if err != nil {
+						// Unexpected, since we already validated it.
+						return false, err
+					}
+					if firstRootFound {
+						// found the second record! => possible data loss
+						return true, nil
+					}
+					if record.kind == rootHashJournalRecKind {
+						// found the first root hash record
+						firstRootFound = true
+					}
+					// If we have a valid record, skip ahead by its size even if it's not an interesting record.
+					idx += int(sz)
+					continue
+				}
+			} else {
+				// Not enough data to validate this record. Break out to try to read more data. Interestingly, if you are
+				// looking at random data, and you've parsed a size which is one byte shy of the max size (5Mb), this means
+				// we only got halfway through the buffer, and we're forced to perform a largish copy of the remaining data to the front
+				// of the buffer.
+				if !atEOF {
+					// We can read more data. Data shifted after the loop then we'll hit that sweet goto.
+					break
+				}
+
+				// We are at EOF, so we can't read more data. Just end the scan byte for byte.
+				// We got a length which is in the range, but there isn't enough data in the file so we just assume
+				// the current position isn't the start of a valid record.
+			}
+		}
+		idx++
+	}
+
+	if !atEOF {
+		// Shift remaining data to front of buffer and read more.
+		remaining := len(buf) - idx
+		copy(buf[0:], buf[idx:idx+remaining])
+		bufferPrefix = remaining
+		goto ReadBatchGoto
+	}
+
+	return false, nil
 }
 
 func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
@@ -345,13 +563,21 @@ func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err erro
 		err = fmt.Errorf("invalid root hash record at %d: %d", offset, n)
 		return
 	}
+	return rootHashFromBuffer(buf, offset)
+}
+
+// rootHashFromBuffer extracts the root hash from a root hash journal record stored in |buf|. The buffer must always
+// be exactly the size of a root hash record (i.e. rootHashRecordSize()), and the CRC is checked before parsing. |offset|
+// is only used for error reporting, so it should be relative to the start of the journal file.
+func rootHashFromBuffer(buf []byte, offset int64) (root hash.Hash, err error) {
 	sz := readUint32(buf)
-	if sz > uint32(expSz) {
+	if sz > uint32(rootHashRecordSize()) {
 		err = fmt.Errorf("invalid root hash record size at %d", offset)
 		return
 	}
 	buf = buf[:sz]
-	if !validateIndexRecord(buf) {
+	err = validateJournalRecord(buf)
+	if err != nil {
 		err = fmt.Errorf("failed to validate root hash record at %d", offset)
 		return
 	}
@@ -362,7 +588,7 @@ func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err erro
 		err = fmt.Errorf("expected root hash record, got kind: %d", rec.kind)
 		return
 	}
-	return hash.Hash(rec.address), nil
+	return rec.address, nil
 }
 
 func readUint32(buf []byte) uint32 {

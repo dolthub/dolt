@@ -2154,6 +2154,10 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 			return nil, true, err
 		}
 		if _, ok := sqlType.(types.JsonType); ok && !disallowJsonMerge {
+			// if any of the values are NULL, this is an unresolvable conflict
+			if baseCol == nil || leftCol == nil || rightCol == nil {
+				return nil, true, nil
+			}
 			return m.mergeJSONAddr(ctx, baseCol, leftCol, rightCol)
 		}
 		// otherwise, this is a conflict.
@@ -2228,46 +2232,14 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 		}
 	}
 
-	indexedBase, isBaseIndexed := base.(tree.IndexedJsonDocument)
-	indexedLeft, isLeftIndexed := left.(tree.IndexedJsonDocument)
-	indexedRight, isRightIndexed := right.(tree.IndexedJsonDocument)
-
-	// We only do three way merges on values read from tables right now, which are read in as tree.IndexedJsonDocument.
-
-	var leftDiffer tree.IJsonDiffer
-	if isBaseIndexed && isLeftIndexed {
-		leftDiffer, err = tree.NewIndexedJsonDiffer(ctx, indexedBase, indexedLeft)
-		if err != nil {
-			return nil, true, err
-		}
-	} else {
-		baseObject, err := base.ToInterface(ctx)
-		if err != nil {
-			return nil, true, err
-		}
-		leftObject, err := left.ToInterface(ctx)
-		if err != nil {
-			return nil, true, err
-		}
-		leftDiffer = tree.NewJsonDiffer(baseObject.(types.JsonObject), leftObject.(types.JsonObject))
+	leftDiffer, err := tree.NewJsonDiffer(ctx, base, left)
+	if err != nil {
+		return nil, true, err
 	}
 
-	var rightDiffer tree.IJsonDiffer
-	if isBaseIndexed && isRightIndexed {
-		rightDiffer, err = tree.NewIndexedJsonDiffer(ctx, indexedBase, indexedRight)
-		if err != nil {
-			return nil, true, err
-		}
-	} else {
-		baseObject, err := base.ToInterface(ctx)
-		if err != nil {
-			return nil, true, err
-		}
-		rightObject, err := right.ToInterface(ctx)
-		if err != nil {
-			return nil, true, err
-		}
-		rightDiffer = tree.NewJsonDiffer(baseObject.(types.JsonObject), rightObject.(types.JsonObject))
+	rightDiffer, err := tree.NewJsonDiffer(ctx, base, right)
+	if err != nil {
+		return nil, true, err
 	}
 
 	threeWayDiffer := ThreeWayJsonDiffer{

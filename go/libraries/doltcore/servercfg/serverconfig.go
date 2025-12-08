@@ -16,9 +16,11 @@ package servercfg
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -61,6 +63,7 @@ const (
 	DefaultAutoCommit                = true
 	DefaultAutoGCBehaviorEnable      = true
 	DefaultDoltTransactionCommit     = false
+	DefaultBranchActivityTracking    = false
 	DefaultMaxConnections            = 1000
 	DefaultMaxWaitConnections        = 50
 	DefaultMaxWaitConnectionsTimeout = 60 * time.Second
@@ -160,6 +163,8 @@ type ServerConfig interface {
 	// DoltTransactionCommit defines the value of the @@dolt_transaction_commit session variable that enables Dolt
 	// commits to be automatically created when a SQL transaction is committed.
 	DoltTransactionCommit() bool
+	// BranchActivityTracking enables or disables the tracking of branch activity for the dolt_branch_activity table
+	BranchActivityTracking() bool
 	// DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
 	DataDir() string
 	// CfgDir is the path to a directory to use to store the dolt configuration files.
@@ -175,8 +180,15 @@ type ServerConfig interface {
 	TLSKey() string
 	// TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
 	TLSCert() string
+	// CACert returns a path to the servers certificate authority file, or "" if there
+	// is no CA cert configured.
+	CACert() string
 	// RequireSecureTransport is true if the server should reject non-TLS connections.
 	RequireSecureTransport() bool
+	// RequireClientCert is true if the server should reject any connections that don't present a certificate. When
+	// enabled, a client certificate is always required, and if a CA cert is also configured, then the client cert
+	// will also be verified. Enabling this option also means that non-TLS connections are not allowed.
+	RequireClientCert() bool
 	// MaxLoggedQueryLen is the max length of queries written to the logs.  Queries longer than this number are truncated.
 	// If this value is 0 then the query is not truncated and will be written to the logs in its entirety.  If the value
 	// is less than 0 then the queries will be omitted from the logs completely
@@ -193,6 +205,10 @@ type ServerConfig interface {
 	MetricsLabels() map[string]string
 	MetricsHost() string
 	MetricsPort() int
+	MetricsTLSCert() string
+	MetricsTLSKey() string
+	MetricsTLSCA() string
+
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
 	PrivilegeFilePath() string
@@ -245,9 +261,10 @@ func defaultServerConfigYAML() *YAMLConfig {
 		MaxQueryLenInLogs: ptr(DefaultMaxLoggedQueryLen),
 		EncodeLoggedQuery: ptr(DefaultEncodeLoggedQuery),
 		BehaviorConfig: BehaviorYAMLConfig{
-			ReadOnly:              ptr(DefaultReadOnly),
-			AutoCommit:            ptr(DefaultAutoCommit),
-			DoltTransactionCommit: ptr(DefaultDoltTransactionCommit),
+			ReadOnly:               ptr(DefaultReadOnly),
+			AutoCommit:             ptr(DefaultAutoCommit),
+			DoltTransactionCommit:  ptr(DefaultDoltTransactionCommit),
+			BranchActivityTracking: ptr(DefaultBranchActivityTracking),
 			AutoGCBehavior: &AutoGCBehaviorYAMLConfig{
 				Enable_:       ptr(DefaultAutoGCBehaviorEnable),
 				ArchiveLevel_: ptr(DefaultCompressionLevel),
@@ -326,6 +343,7 @@ const (
 	LogFormatKey                    = "log_format"
 	AutoCommitKey                   = "autocommit"
 	DoltTransactionCommitKey        = "dolt_transaction_commit"
+	BranchActivityTrackingKey       = "branch_activity_tracking"
 	DataDirKey                      = "data_dir"
 	CfgDirKey                       = "cfg_dir"
 	MaxConnectionsKey               = "max_connections"
@@ -340,6 +358,9 @@ const (
 	MetricsLabelsKey                = "metrics_labels"
 	MetricsHostKey                  = "metrics_host"
 	MetricsPortKey                  = "metrics_port"
+	MetricsTLSCertKey               = "metrics_tls_cert"
+	MetricsTLSKeyKey                = "metrics_tls_key"
+	MetricsTLSCAKey                 = "metrics_tls_ca"
 	PrivilegeFilePathKey            = "privilege_file_path"
 	BranchControlFilePathKey        = "branch_control_file_path"
 	UserVarsKey                     = "user_vars"
@@ -457,21 +478,62 @@ func ConfigInfo(config ServerConfig) string {
 		config.ReadTimeout(), config.ReadOnly(), config.LogLevel(), socket)
 }
 
+func getTLSConfig(cert, key, ca string, requireClientCert bool) (*tls.Config, error) {
+	if key == "" && cert == "" {
+		if requireClientCert {
+			return nil, fmt.Errorf("must supply tls_cert and tls_key when require_client_cert is enabled")
+		} else {
+			// No TLS configuration needed
+			return nil, nil
+		}
+	}
+
+	c, err := tls.LoadX509KeyPair(cert, key)
+	if err != nil {
+		return nil, fmt.Errorf("tls.LoadX509KeyPair(%v, %v) failed: %w", cert, key, err)
+	}
+
+	var caCertPool *x509.CertPool
+	if ca != "" {
+		caCertPEM, err := os.ReadFile(ca)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read CA file at %s: %w", ca, err)
+		}
+
+		caCertPool = x509.NewCertPool()
+		if ok := caCertPool.AppendCertsFromPEM(caCertPEM); !ok {
+			return nil, fmt.Errorf("unable to add CA cert to cert pool")
+		}
+	}
+
+	clientAuthType := tls.VerifyClientCertIfGiven
+	if requireClientCert {
+		// If a CA cert has been specified, then in addition to requiring
+		// a client cert, also verify it, otherwise allow any client cert.
+		if ca != "" {
+			clientAuthType = tls.RequireAndVerifyClientCert
+		} else {
+			clientAuthType = tls.RequireAnyClientCert
+		}
+	}
+
+	return &tls.Config{
+		Certificates: []tls.Certificate{c},
+		// tlsVerifyClientCertIfGiven will request a client cert from the client,
+		// and if provided, will validate it against the specified client CAs.
+		ClientAuth: clientAuthType,
+		ClientCAs:  caCertPool,
+	}, nil
+}
+
 // LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns
 // a *tls.Config configured for its use. Returns `nil` if key and cert are `""`.
 func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
-	if cfg.TLSKey() == "" && cfg.TLSCert() == "" {
-		return nil, nil
-	}
-	c, err := tls.LoadX509KeyPair(cfg.TLSCert(), cfg.TLSKey())
-	if err != nil {
-		return nil, err
-	}
-	return &tls.Config{
-		Certificates: []tls.Certificate{
-			c,
-		},
-	}, nil
+	return getTLSConfig(cfg.TLSCert(), cfg.TLSKey(), cfg.CACert(), cfg.RequireClientCert())
+}
+
+func LoadMetricsTLSConfig(cfg ServerConfig) (*tls.Config, error) {
+	return getTLSConfig(cfg.MetricsTLSCert(), cfg.MetricsTLSKey(), cfg.MetricsTLSCA(), false)
 }
 
 // CheckForUnixSocket evaluates ServerConfig for whether the unix socket is to be used or not.

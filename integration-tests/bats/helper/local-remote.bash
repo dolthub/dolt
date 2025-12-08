@@ -68,7 +68,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~arg-parsing.bats~
 ~dump.bats~
 ~rename-tables.bats~
-~sql-backup.bats~
 ~drop-create.bats~
 ~constraint-violations.bats~
 ~branch-control.bats~
@@ -95,11 +94,9 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~diff-stat.bats~
 ~sql-merge.bats~
 ~import-append-tables.bats~
-~backup.bats~
 ~default-values.bats~
 ~types.bats~
 ~config-home.bats~
-~cherry-pick.bats~
 ~triggers.bats~
 ~config.bats~
 ~sql-branch.bats~
@@ -145,6 +142,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~admin-archive-inspect.bats~
 ~nonlocal.bats~
 ~branch-activity.bats~
+~mutual-tls-auth.bats~
 EOM
 )
 

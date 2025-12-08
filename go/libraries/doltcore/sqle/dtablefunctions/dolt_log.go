@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -36,28 +35,149 @@ import (
 
 const logTableDefaultRowCount = 10
 
-var _ sql.TableFunction = (*LogTableFunction)(nil)
-var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
-var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
-
-type LogTableFunction struct {
-	database        sql.Database
-	ctx             *sql.Context
+// LogTableFunctionArgs represents the information derived from arguments to DOLT_LOG(...)
+// It is created once at build time to determine the table schema (ignoring arguments that must be deferred)
+// It is created again at execution time, this time incorporating deferred arguments.
+type LogTableFunctionArgs struct {
 	decoration      string
 	revisionStrs    []string
 	notRevisionStrs []string
 	tableNames      []string
-	argumentExprs   []sql.Expression
 	minParents      int
 	showParents     bool
 	showSignature   bool
 }
 
+// Name implements the sql.TableFunction interface
+func (ltfa *LogTableFunctionArgs) Name() string {
+	return "dolt_log"
+}
+
+// evaluateArguments handles range syntax for revisions and returns processed strings.
+func (ltfa *LogTableFunctionArgs) evaluateArguments() (revisionValStrs []string, notRevisionValStrs []string, threeDot bool) {
+	for _, revisionStr := range ltfa.revisionStrs {
+		if strings.Contains(revisionStr, "...") {
+			refs := strings.Split(revisionStr, "...")
+			return refs, nil, true
+		}
+
+		if strings.Contains(revisionStr, "..") {
+			refs := strings.Split(revisionStr, "..")
+			return []string{refs[1]}, []string{refs[0]}, false
+		}
+
+		revisionValStrs = append(revisionValStrs, revisionStr)
+	}
+
+	notRevisionValStrs = append(notRevisionValStrs, ltfa.notRevisionStrs...)
+
+	return revisionValStrs, notRevisionValStrs, false
+}
+
+// validateRevisionStrings checks the revision strings for semantic errors.
+func (ltfa *LogTableFunctionArgs) validateRevisionStrings() error {
+	// validate revision specifications for semantic errors
+	// this works with the parsed string values from CLI parser
+	// no type validation needed here since getDoltArgs already validates expression types
+
+	for _, revisionStr := range ltfa.revisionStrs {
+		if strings.Contains(revisionStr, "..") && (len(ltfa.revisionStrs) > 1 || len(ltfa.notRevisionStrs) > 0) {
+			return sql.ErrInvalidArgumentDetails.New(ltfa.Name(), "revision cannot contain '..' or '...' if multiple revisions exist")
+		}
+	}
+
+	for _, notRevStr := range ltfa.notRevisionStrs {
+		if strings.Contains(notRevStr, "..") {
+			return sql.ErrInvalidArgumentDetails.New(ltfa.Name(), "--not revision cannot contain '..'")
+		}
+		if strings.HasPrefix(notRevStr, "^") {
+			return sql.ErrInvalidArgumentDetails.New(ltfa.Name(), "--not revision cannot contain '^'")
+		}
+	}
+
+	return nil
+}
+
+// addOptions instantiates a LogTableFunctionArgs by parsing expressions.
+func (ltfa *LogTableFunctionArgs) addOptions(ctx *sql.Context, expressions []sql.Expression, parentRow sql.Row, deferExpressions bool) error {
+	// TODO: Detect when the schema would change after resolving args.
+	var expressionsToParse []sql.Expression
+	if deferExpressions {
+		for _, expr := range expressions {
+			if !isDeferredExpression(expr) {
+				expressionsToParse = append(expressionsToParse, expr)
+			}
+		}
+	} else {
+		expressionsToParse = expressions
+	}
+
+	args, err := getDoltArgs(ctx, expressionsToParse, ltfa.Name(), parentRow)
+	if err != nil {
+		return err
+	}
+
+	apr, err := cli.CreateLogArgParser(true).Parse(args)
+	if err != nil {
+		return sql.ErrInvalidArgumentDetails.New(ltfa.Name(), err.Error())
+	}
+
+	if notRevisionStrs, ok := apr.GetValueList(cli.NotFlag); ok {
+		ltfa.notRevisionStrs = append(ltfa.notRevisionStrs, notRevisionStrs...)
+	}
+
+	if tableNames, ok := apr.GetValueList(cli.TablesFlag); ok {
+		ltfa.tableNames = append(ltfa.tableNames, tableNames...)
+	}
+
+	minParents := apr.GetIntOrDefault(cli.MinParentsFlag, 0)
+	if apr.Contains(cli.MergesFlag) {
+		minParents = 2
+	}
+
+	ltfa.minParents = minParents
+	ltfa.showParents = apr.Contains(cli.ParentsFlag)
+	ltfa.showSignature = apr.Contains(cli.ShowSignatureFlag)
+
+	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
+	switch decorateOption {
+	case "short", "full", "auto", "no":
+	default:
+		return sql.ErrInvalidArgumentDetails.New(ltfa.Name(), fmt.Sprintf("invalid --decorate option: %s", decorateOption))
+	}
+	ltfa.decoration = decorateOption
+
+	// store revision strs directly from cli parse instead of mapping back exprs
+	// avoid circular conv expr -> str -> expr, downstream
+	for _, revisionStr := range apr.Args {
+		if strings.HasPrefix(revisionStr, "^") {
+			revisionStr = strings.TrimPrefix(revisionStr, "^")
+			ltfa.notRevisionStrs = append(ltfa.notRevisionStrs, revisionStr)
+		} else {
+			ltfa.revisionStrs = append(ltfa.revisionStrs, revisionStr)
+		}
+	}
+
+	// validate revision specifications for semantic errors
+	return ltfa.validateRevisionStrings()
+}
+
+// LogTableFunction implements the DOLT_LOG system table function
+type LogTableFunction struct {
+	database      sql.Database
+	argumentExprs []sql.Expression
+	LogTableFunctionArgs
+}
+
+var _ sql.TableFunction = (*LogTableFunction)(nil)
+var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
+var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
+
 var logTableSchema = sql.Schema{
 	&sql.Column{Name: "commit_hash", Type: types.Text},
 	&sql.Column{Name: "committer", Type: types.Text},
 	&sql.Column{Name: "email", Type: types.Text},
-	&sql.Column{Name: "date", Type: types.Datetime},
+	&sql.Column{Name: "date", Type: types.Datetime3},
 	&sql.Column{Name: "message", Type: types.Text},
 	&sql.Column{Name: "commit_order", Type: types.Uint64},
 }
@@ -65,11 +185,10 @@ var logTableSchema = sql.Schema{
 // NewInstance creates a new instance of TableFunction interface
 func (ltf *LogTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &LogTableFunction{
-		ctx:      ctx,
 		database: db,
 	}
 
-	node, err := newInstance.deferExpressions(expressions...)
+	node, err := newInstance.deferExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -102,11 +221,6 @@ func (ltf *LogTableFunction) WithDatabase(database sql.Database) (sql.Node, erro
 	nltf := *ltf
 	nltf.database = database
 	return &nltf, nil
-}
-
-// Name implements the sql.TableFunction interface
-func (ltf *LogTableFunction) Name() string {
-	return "dolt_log"
 }
 
 // Resolved implements the sql.Resolvable interface
@@ -220,23 +334,17 @@ func (ltf *LogTableFunction) Expressions() []sql.Expression {
 
 // getDoltArgs builds an argument string from sql expressions so that we can
 // later parse the arguments with the same util as the CLI
-func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([]string, error) {
+func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, tableName string, row sql.Row) ([]string, error) {
 	var args []string
 
 	for _, expr := range expressions {
-		// Skip bind variables during prepared statement analysis, since we can't evaluate them.
-		// During execution of a prepared statement, bind variables are replaced with eval'able expressions.
-		if expression.IsBindVar(expr) {
-			continue
-		}
-
-		childVal, err := expr.Eval(ctx, nil)
+		childVal, err := expr.Eval(ctx, row)
 		if err != nil {
 			return nil, err
 		}
 
 		if !types.IsText(expr.Type()) {
-			return args, sql.ErrInvalidArgumentDetails.New(name, expr.String())
+			return args, sql.ErrInvalidArgumentDetails.New(tableName, expr.String())
 		}
 
 		text, _, err := types.Text.Convert(ctx, childVal)
@@ -252,58 +360,6 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([
 	return args, nil
 }
 
-// addOptions modifies struct state (revisionStrs, notRevisionStrs, showParents, etc.) by parsing expressions.
-func (ltf *LogTableFunction) addOptions(expressions []sql.Expression) error {
-	args, err := getDoltArgs(ltf.ctx, expressions, ltf.Name())
-	if err != nil {
-		return err
-	}
-
-	apr, err := cli.CreateLogArgParser(true).Parse(args)
-	if err != nil {
-		return sql.ErrInvalidArgumentDetails.New(ltf.Name(), err.Error())
-	}
-
-	if notRevisionStrs, ok := apr.GetValueList(cli.NotFlag); ok {
-		ltf.notRevisionStrs = append(ltf.notRevisionStrs, notRevisionStrs...)
-	}
-
-	if tableNames, ok := apr.GetValueList(cli.TablesFlag); ok {
-		ltf.tableNames = append(ltf.tableNames, tableNames...)
-	}
-
-	minParents := apr.GetIntOrDefault(cli.MinParentsFlag, 0)
-	if apr.Contains(cli.MergesFlag) {
-		minParents = 2
-	}
-
-	ltf.minParents = minParents
-	ltf.showParents = apr.Contains(cli.ParentsFlag)
-	ltf.showSignature = apr.Contains(cli.ShowSignatureFlag)
-
-	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
-	switch decorateOption {
-	case "short", "full", "auto", "no":
-	default:
-		return ltf.invalidArgDetailsErr(fmt.Sprintf("invalid --decorate option: %s", decorateOption))
-	}
-	ltf.decoration = decorateOption
-
-	// store revision strs directly from cli parse instead of mapping back exprs
-	// avoid circular conv expr -> str -> expr, downstream
-	for _, revisionStr := range apr.Args {
-		if strings.HasPrefix(revisionStr, "^") {
-			revisionStr = strings.TrimPrefix(revisionStr, "^")
-			ltf.notRevisionStrs = append(ltf.notRevisionStrs, revisionStr)
-		} else {
-			ltf.revisionStrs = append(ltf.revisionStrs, revisionStr)
-		}
-	}
-
-	// validate revision specifications for semantic errors
-	return ltf.validateRevisionStrings()
-}
-
 // WithExpressions returns copy with expressions stored and revision strings cleared.
 func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
 	newLtf := *ltf
@@ -314,6 +370,16 @@ func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node,
 	return &newLtf, nil
 }
 
+func isDeferredExpression(expr sql.Expression) bool {
+	if expression.IsBindVar(expr) {
+		return true
+	}
+	if _, ok := expr.(*expression.GetField); ok {
+		return true
+	}
+	return false
+}
+
 // deferExpressions stores the input expressions for later evaluation during execution.
 // This table function violates SQL analyzer principles by evaluating expressions
 // during analysis. This is necessary because the schema changes based on what
@@ -321,59 +387,45 @@ func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node,
 // during analysis time. Bind variables are skipped over during the initial analysis
 // of the prepared statement, and get fully resolved when they are bound when the
 // prepared statement is later executed.
-func (ltf *LogTableFunction) deferExpressions(expressions ...sql.Expression) (sql.Node, error) {
-	bindVarsExist := false
+func (ltf *LogTableFunction) deferExpressions(ctx *sql.Context, expressions ...sql.Expression) (sql.Node, error) {
+	hasDeferredExpression := false
+	var err error
 	for _, expr := range expressions {
-		// functions are not allowed as arguments
-		if _, ok := expr.(sql.FunctionExpression); ok {
-			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
-		}
-		// also check for UnresolvedFunction which might not implement FunctionExpression
-		if _, ok := expr.(*expression.UnresolvedFunction); ok {
-			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
-		}
-		if expression.IsBindVar(expr) {
-			bindVarsExist = true
-		}
+		sql.Inspect(expr, func(expr sql.Expression) bool {
+			// functions are not allowed as arguments
+			if _, ok := expr.(sql.FunctionExpression); ok {
+				err = ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
+				return false
+			}
+			// also check for UnresolvedFunction which might not implement FunctionExpression
+			if _, ok := expr.(*expression.UnresolvedFunction); ok {
+				err = ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
+				return false
+			}
+			if isDeferredExpression(expr) {
+				hasDeferredExpression = true
+			}
+			return true
+		})
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	node, _ := ltf.WithExpressions(expressions...)
 	newLtf := *node.(*LogTableFunction)
 
 	// Parse literal arguments for schema determination during analysis phase
-	// getDoltArgs will skip bind variables (can't evaluate them yet)
+	// getDoltArgs will skip bind variables and GetFields (can't evaluate them yet)
 	// only return errors if no bind variables exist (incomplete args are expected with bind vars)
 	// TODO: schema-affecting flags as bind variables don't add columns to schema
 	// this may be a common problem for dynamic table functions that need execution-time schema changes
-	if err := newLtf.addOptions(newLtf.argumentExprs); err != nil && !bindVarsExist {
+	err = newLtf.addOptions(ctx, newLtf.argumentExprs, nil, true)
+	if err != nil && !hasDeferredExpression {
 		return nil, err
 	}
 
 	return &newLtf, nil
-}
-
-// validateRevisionStrings checks the revision strings for semantic errors.
-func (ltf *LogTableFunction) validateRevisionStrings() error {
-	// validate revision specifications for semantic errors
-	// this works with the parsed string values from CLI parser
-	// no type validation needed here since getDoltArgs already validates expression types
-
-	for _, revisionStr := range ltf.revisionStrs {
-		if strings.Contains(revisionStr, "..") && (len(ltf.revisionStrs) > 1 || len(ltf.notRevisionStrs) > 0) {
-			return ltf.invalidArgDetailsErr("revision cannot contain '..' or '...' if multiple revisions exist")
-		}
-	}
-
-	for _, notRevStr := range ltf.notRevisionStrs {
-		if strings.Contains(notRevStr, "..") {
-			return ltf.invalidArgDetailsErr("--not revision cannot contain '..'")
-		}
-		if strings.HasPrefix(notRevStr, "^") {
-			return ltf.invalidArgDetailsErr("--not revision cannot contain '^'")
-		}
-	}
-
-	return nil
 }
 
 // expressionsToString converts a slice of expressions to a slice of resolved strings using Eval.
@@ -407,23 +459,17 @@ func expressionToString(ctx *sql.Context, expr sql.Expression) (string, error) {
 	return valStr, nil
 }
 
-// invalidArgDetailsErr creates an error with the given reason for invalid arguments.
-func (ltf *LogTableFunction) invalidArgDetailsErr(reason string) *errors.Error {
-	return sql.ErrInvalidArgumentDetails.New(ltf.Name(), reason)
-}
-
 // RowIter implements the sql.Node interface
 func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 	// Parse args again during execution phase to handle bind variables
 	// At this point, bind variables are resolved to actual values by SQL engine
-	if ltf.argumentExprs != nil {
-		if err := ltf.addOptions(ltf.argumentExprs); err != nil {
-			return nil, err
-		}
+	var args LogTableFunctionArgs
+	err := args.addOptions(ctx, ltf.argumentExprs, row, false)
+	if err != nil {
+		return nil, err
 	}
 
-	revisionValStrs, notRevisionValStrs, threeDot := ltf.evaluateArguments()
-	notRevisionValStrs = append(notRevisionValStrs, ltf.notRevisionStrs...)
+	revisionValStrs, notRevisionValStrs, threeDot := args.evaluateArguments()
 
 	sqledb, ok := ltf.database.(dsess.SqlDatabase)
 	if !ok {
@@ -534,27 +580,6 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	}
 
 	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames)
-}
-
-// evaluateArguments handles range syntax for revisions and returns processed strings.
-func (ltf *LogTableFunction) evaluateArguments() (revisionValStrs []string, notRevisionValStrs []string, threeDot bool) {
-	for _, revisionStr := range ltf.revisionStrs {
-		if strings.Contains(revisionStr, "...") {
-			refs := strings.Split(revisionStr, "...")
-			return refs, nil, true
-		}
-
-		if strings.Contains(revisionStr, "..") {
-			refs := strings.Split(revisionStr, "..")
-			return []string{refs[1]}, []string{refs[0]}, false
-		}
-
-		revisionValStrs = append(revisionValStrs, revisionStr)
-	}
-
-	notRevisionValStrs = append(notRevisionValStrs, ltf.notRevisionStrs...)
-
-	return revisionValStrs, notRevisionValStrs, false
 }
 
 // getCommitHashToRefs builds map of commit hashes to branch/tag names for decoration.

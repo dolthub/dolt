@@ -41,7 +41,7 @@ func doDoltClean(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return statusErr, err
+		return 1, err
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)

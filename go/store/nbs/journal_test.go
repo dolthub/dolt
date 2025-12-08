@@ -40,7 +40,19 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFSTablePersister(dir, q, false)
 	nbf := types.Format_Default.VersionString()
-	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister))
+	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { j.Close() })
+	return j
+}
+
+func openTestChunkJournal(t *testing.T, dir string) *ChunkJournal {
+	m, err := newJournalManifest(t.Context(), dir)
+	require.NoError(t, err)
+	q := NewUnlimitedMemQuotaProvider()
+	p := newFSTablePersister(dir, q, false)
+	nbf := types.Format_Default.VersionString()
+	j, err := newChunkJournal(t.Context(), nbf, dir, m, p.(*fsTablePersister), nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { j.Close() })
 	return j
@@ -51,11 +63,38 @@ func TestChunkJournalBlockStoreSuite(t *testing.T) {
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
 		q := NewUnlimitedMemQuotaProvider()
 		nbf := types.Format_Default.VersionString()
-		return NewLocalJournalingStore(ctx, nbf, dir, q, false)
+		return NewLocalJournalingStore(ctx, nbf, dir, q, false, nil)
 	}
 	suite.Run(t, &BlockStoreSuite{
 		factory:        fn,
 		skipInterloper: true,
+	})
+}
+
+func TestChunkJournalReadOnly(t *testing.T) {
+	t.Run("ReadOnlyOpenNonExistantJournalFails", func(t *testing.T) {
+		// If a read only ChunkJournal tries to open a journal,
+		// and that journal does not exist, it should fail,
+		// not try to create it.
+		rw := makeTestChunkJournal(t)
+		assert.Equal(t, chunks.ExclusiveAccessMode(chunks.ExclusiveAccessMode_Exclusive), rw.AccessMode())
+		ro := openTestChunkJournal(t, rw.backing.dir)
+		assert.Equal(t, chunks.ExclusiveAccessMode(chunks.ExclusiveAccessMode_ReadOnly), ro.AccessMode())
+
+		// We start without a journal.
+		assert.False(t, containsJournalSpec(rw.contents.specs))
+
+		rosource, err := ro.Open(t.Context(), journalAddr, 0, &Stats{})
+		require.Error(t, err)
+		require.Nil(t, rosource)
+
+		rwsource, err := rw.Open(t.Context(), journalAddr, 0, &Stats{})
+		require.NoError(t, err)
+		require.NotNil(t, rwsource)
+
+		rosource, err = ro.Open(t.Context(), journalAddr, 0, &Stats{})
+		require.NoError(t, err)
+		require.NotNil(t, rosource)
 	})
 }
 

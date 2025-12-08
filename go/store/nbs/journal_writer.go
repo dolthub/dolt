@@ -34,12 +34,6 @@ import (
 )
 
 const (
-	// chunkJournalFileSize is the size we initialize the journal file to when it is first created. We
-	// create a 16KB block of zero-initialized data and then sync the file to the first byte. We do this
-	// to ensure that we can write to the journal file and that we have some space for initial records.
-	// This probably isn't strictly necessary, but it also doesn't hurt.
-	chunkJournalFileSize = 16 * 1024
-
 	// journalWriterBuffSize is the size of the statically allocated buffer where journal records are
 	// built before being written to the journal file on disk. There is not a hard limit on the size
 	// of records – specifically, some newer data chunking formats (i.e. optimized JSON storage) can
@@ -121,26 +115,8 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 		return nil, err
 	}
 
-	// Open the journal file and initialize it with 16KB of zero bytes. This is intended to
-	// ensure that we can write to the journal and to allocate space for the first set of
-	// records, but probably isn't strictly necessary.
-	if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666); err != nil {
+	if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666); err != nil {
 		return nil, err
-	}
-	const batch = 1024 * 1024
-	b := make([]byte, batch)
-	for i := 0; i < chunkJournalFileSize; i += batch {
-		if _, err = f.Write(b); err != nil { // zero fill |f|
-			return nil, err
-		}
-	}
-	if err = f.Sync(); err != nil {
-		return nil, err
-	}
-	if o, err := f.Seek(0, io.SeekStart); err != nil {
-		return nil, err
-	} else if o != 0 {
-		return nil, fmt.Errorf("expected file journalOffset 0, got %d", o)
 	}
 
 	return &journalWriter{
@@ -182,12 +158,12 @@ var _ io.Closer = &journalWriter{}
 // the state of the journalWriter. Root hashes read from root update records in the journal are written
 // to |reflogRingBuffer|, which maintains the most recently updated roots which are used to generate the
 // reflog. This function returns the most recent root hash for the journal as well as any error encountered.
-// The journal index will bw truncated to the last valid batch of lookups. Lookups with offsets
+// The journal index will be truncated to the last valid batch of lookups. Lookups with offsets
 // larger than the position of the last valid lookup metadata are rewritten to the index as they
 // are added to the novel ranges map. If the number of novel lookups exceeds |wr.maxNovel|, we
 // extend the journal index with one metadata flush before existing this function to save indexing
 // progress.
-func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer *reflogRingBuffer) (last hash.Hash, err error) {
+func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer *reflogRingBuffer, warningsCb func(error)) (last hash.Hash, err error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 
@@ -318,7 +294,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 
 		case rootHashJournalRecKind:
 			lastOffset = o
-			last = hash.Hash(r.address)
+			last = r.address
 			if !reflogDisabled && reflogRingBuffer != nil {
 				reflogRingBuffer.Push(reflogRootHashEntry{
 					root:      r.address.String(),
@@ -330,7 +306,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
 		}
 		return nil
-	})
+	}, warningsCb)
 	if err != nil {
 		return hash.Hash{}, err
 	}

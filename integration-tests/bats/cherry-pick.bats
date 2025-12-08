@@ -10,16 +10,16 @@ INSERT INTO dolt_ignore VALUES ('generated_*', 1);
 SQL
     dolt add .
     dolt commit -am "Created table"
-    dolt checkout -b branch1
-    dolt sql -q "INSERT INTO test VALUES (1, 'a')"
-    dolt commit -am "Inserted 1"
-    dolt sql -q "INSERT INTO test VALUES (2, 'b')"
-    dolt commit -am "Inserted 2"
-    dolt sql -q "INSERT INTO test VALUES (3, 'c')"
-    dolt commit -am "Inserted 3"
-    dolt sql -q "CREATE TABLE generated_foo (pk int PRIMARY KEY);"
+    dolt branch branch1
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (1, 'a')"
+    dolt --branch branch1 commit -am "Inserted 1"
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (2, 'b')"
+    dolt --branch branch1 commit -am "Inserted 2"
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (3, 'c')"
+    dolt --branch branch1 commit -am "Inserted 3"
+    dolt --branch branch1 sql -q "CREATE TABLE generated_foo (pk int PRIMARY KEY);"
 
-    run dolt sql -q "SELECT * FROM test" -r csv
+    run dolt --branch branch1 sql -q "SELECT * FROM test" -r csv
     [[ "$output" =~ "1,a" ]] || false
     [[ "$output" =~ "2,b" ]] || false
     [[ "$output" =~ "3,c" ]] || false
@@ -31,8 +31,6 @@ teardown() {
 }
 
 @test "cherry-pick: simple cherry pick with the latest commit" {
-    dolt checkout main
-
     run dolt cherry-pick branch1
     [ "$status" -eq "0" ]
 
@@ -43,11 +41,10 @@ teardown() {
 }
 
 @test "cherry-pick: multiple simple cherry-picks" {
-    dolt sql -q "UPDATE test SET v = 'x' WHERE pk = 2"
-    dolt sql -q "INSERT INTO test VALUES (5, 'g'), (8, 'u');"
-    dolt commit -am "Updated 2b to 2x and inserted more rows"
+    dolt --branch branch1 sql -q "UPDATE test SET v = 'x' WHERE pk = 2"
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (5, 'g'), (8, 'u');"
+    dolt --branch branch1 commit -am "Updated 2b to 2x and inserted more rows"
 
-    dolt checkout main
     run dolt cherry-pick branch1~2
     [ "$status" -eq "0" ]
 
@@ -69,15 +66,13 @@ teardown() {
 }
 
 @test "cherry-pick: too far back" {
-    dolt checkout main
     run dolt cherry-pick branch1~10
     [ "$status" -eq "1" ]
     [[ "$output" =~ "ancestor" ]] || false
 }
 
 @test "cherry-pick: empty commit handling" {
-    dolt commit --allow-empty -am "empty commit"
-    dolt checkout main
+    dolt --branch branch1 commit --allow-empty -am "empty commit"
 
     # If an empty commit is cherry-picked, Git will stop the cherry-pick and allow you to manually commit it
     # with the --allow-empty flag. We don't support that yet, so instead, empty commits generate an error.
@@ -97,7 +92,6 @@ teardown() {
 }
 
 @test "cherry-pick: has changes in the working set" {
-    dolt checkout main
     dolt sql -q "INSERT INTO test VALUES (4, 'f')"
     run dolt cherry-pick branch1~2
     [ "$status" -eq "1" ]
@@ -105,7 +99,6 @@ teardown() {
 }
 
 @test "cherry-pick: staged changes" {
-    dolt checkout main
     dolt sql -q "INSERT INTO test VALUES (4, 'f')"
     dolt add -A
     run dolt cherry-pick branch1~2
@@ -114,15 +107,14 @@ teardown() {
 }
 
 @test "cherry-pick: insert, update, delete rows and schema changes on non existent table in working set" {
-    dolt sql -q "CREATE TABLE branch1table (id int primary key, col1 int)"
-    dolt add .
-    dolt sql -q "INSERT INTO branch1table VALUES (9,8),(7,6),(5,4)"
-    dolt commit -am "create table with rows"
+    dolt --branch branch1 sql -q "CREATE TABLE branch1table (id int primary key, col1 int)"
+    dolt --branch branch1 add .
+    dolt --branch branch1 sql -q "INSERT INTO branch1table VALUES (9,8),(7,6),(5,4)"
+    dolt --branch branch1 commit -am "create table with rows"
 
-    dolt sql -q "INSERT INTO branch1table VALUES (1,2)"
-    dolt commit -am "Insert a row"
+    dolt --branch branch1 sql -q "INSERT INTO branch1table VALUES (1,2)"
+    dolt --branch branch1 commit -am "Insert a row"
 
-    dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
@@ -130,11 +122,9 @@ teardown() {
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
 
-    dolt checkout branch1
-    dolt sql -q "UPDATE branch1table SET col1 = 0 WHERE id > 6"
-    dolt commit -am "Update a rows"
+    dolt --branch branch1 sql -q "UPDATE branch1table SET col1 = 0 WHERE id > 6"
+    dolt --branch branch1 commit -am "Update a rows"
 
-    dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
@@ -142,11 +132,9 @@ teardown() {
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
 
-    dolt checkout branch1
-    dolt sql -q "DELETE FROM branch1table WHERE id > 8"
-    dolt commit -am "Update and delete rows"
+    dolt --branch branch1 sql -q "DELETE FROM branch1table WHERE id > 8"
+    dolt --branch branch1 commit -am "Update and delete rows"
 
-    dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
@@ -154,11 +142,9 @@ teardown() {
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
 
-    dolt checkout branch1
-    dolt sql -q "ALTER TABLE branch1table ADD COLUMN col2 int"
-    dolt commit -am "Alter table add column"
+    dolt --branch branch1 sql -q "ALTER TABLE branch1table ADD COLUMN col2 int"
+    dolt --branch branch1 commit -am "Alter table add column"
 
-    dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "merge aborted: schema conflict found for table branch1table" ]] || false
@@ -175,38 +161,37 @@ teardown() {
     [[ ! $output =~ "usage: dolt cherry-pick" ]] || false
 }
 
+# NM4 - breaky break.
 @test "cherry-pick: schema change, with data conflict" {
-    dolt checkout main
     dolt sql -q "CREATE TABLE other (pk int primary key, c1 int, c2 int)"
     dolt sql -q "INSERT INTO other VALUES (1, 2, 3)"
     dolt commit -Am "add other table (on main)"
 
     # Create two commits on branch2: one to assert does NOT get included, and one to cherry pick
-    dolt checkout -b branch2
-    dolt sql -q "INSERT INTO other VALUES (100, 200, 300);"
-    dolt commit -am "add row 100 to other (on branch2)"
+    dolt branch branch2
+    dolt --branch branch2 sql -q "INSERT INTO other VALUES (100, 200, 300);"
+    dolt --branch branch2 commit -am "add row 100 to other (on branch2)"
 
     # This ALTER TABLE statement modifies other rows that aren't included in the cherry-picked
     # commit – row (100, 200, 300) is modified to (100, 400). This shows up as a conflict
     # in the cherry-pick (modified row on one side, row doesn't exist on the other side).
-    dolt sql -q "ALTER TABLE other DROP COLUMN c1;"
-    dolt sql -q "UPDATE other SET c2 = 400 WHERE pk = 100"
-    dolt sql -q "INSERT INTO other VALUES (10, 30);"
-    dolt sql -q "INSERT INTO test VALUES (100, 'q');"
-    dolt commit -am "alter table, add row 10 to other, add row 100 to test (on branch2)"
+    dolt --branch branch2 sql -q "ALTER TABLE other DROP COLUMN c1;"
+    dolt --branch branch2 sql -q "UPDATE other SET c2 = 400 WHERE pk = 100"
+    dolt --branch branch2 sql -q "INSERT INTO other VALUES (10, 30);"
+    dolt --branch branch2 sql -q "INSERT INTO test VALUES (100, 'q');"
+    dolt --branch branch2 commit -am "alter table, add row 10 to other, add row 100 to test (on branch2)"
 
-    dolt checkout main
     run dolt cherry-pick branch2
     [ $status -eq 1 ]
     [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
 
     # Assert that table 'test' is staged, but table 'other' is not staged, since it had conflicts
-    run dolt sql -q "SELECT * from dolt_status;"
+    run dolt sql -r csv -q "SELECT * from dolt_status;"
     [ $status -eq 0 ]
-    [[ $output =~ "| test          | true   | modified  |" ]] || false
-    [[ $output =~ "| other         | false  | modified  |" ]] || false
-    [[ $output =~ "| other         | false  | conflict  |" ]] || false
-    [[ $output =~ "| generated_foo | false  | new table |" ]] || false
+
+    [[ $output =~ "test,1,modified" ]] || false
+    [[ $output =~ "other,0,modified" ]] || false
+    [[ $output =~ "other,0,conflict" ]] || false
 
     # Make sure the data conflict shows up correctly
     run dolt conflicts cat .
@@ -230,60 +215,56 @@ teardown() {
 }
 
 @test "cherry-pick: foreign key violation" {
-    dolt checkout branch1
-    dolt sql -q "CREATE TABLE other (pk int primary key, v varchar(10), FOREIGN KEY (v) REFERENCES test(v))"
-    dolt sql -q "INSERT INTO other VALUES (1, 'a')"
-    dolt commit -Am "add other table (on branch1)"
+    dolt --branch branch1 sql -q "CREATE TABLE other (pk int primary key, v varchar(10), FOREIGN KEY (v) REFERENCES test(v))"
+    dolt --branch branch1 sql -q "INSERT INTO other VALUES (1, 'a')"
+    dolt --branch branch1 commit -Am "add other table (on branch1)"
 
-    dolt checkout -b branch2
-    dolt sql -q "SET @@foreign_key_checks=0; UPDATE other SET v = 'z' where pk = 1;"
-    dolt sql -q "INSERT INTO test VALUES (100, 'q');"
-    dolt commit -Am "update row 1 in other and insert row 100 into test (on branch2)"
+    dolt branch branch2 branch1
+    dolt --branch branch2 sql -q "SET @@foreign_key_checks=0; UPDATE other SET v = 'z' where pk = 1;"
+    dolt --branch branch2 sql -q "INSERT INTO test VALUES (100, 'q');"
+    dolt --branch branch2 commit -Am "update row 1 in other and insert row 100 into test (on branch2)"
 
-    dolt checkout branch1
-    dolt sql -q "SET @@foreign_key_checks=1;"
-    run dolt cherry-pick branch2
+    dolt --branch branch1 sql -q "SET @@foreign_key_checks=1;"
+    run dolt --branch branch1 cherry-pick branch2
     [ $status -eq 1 ]
     [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
 
     # Assert that only 'test' is staged for commit ('other' has a constraint violation)
-    run dolt sql -q "SELECT * from dolt_status;"
+    run dolt --branch branch1 sql -r csv -q "SELECT * from dolt_status;"
     [ $status -eq 0 ]
-    [[ $output =~ "| other         | false  | constraint violation " ]] || false
-    [[ $output =~ "| test          | true   | modified " ]] || false
-    [[ $output =~ "| generated_foo | false  | new table " ]] || false
+    [[ $output =~ "other,0,constraint violation" ]] || false
+    [[ $output =~ "test,1,modified" ]] || false
 
     # Assert the expected constraint violations
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations;"
+    run dolt --branch branch1 sql -q "SELECT * FROM dolt_constraint_violations;"
     [ $status -eq 0 ]
     [[ $output =~ "| other | 1 " ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations_other;"
+    run dolt --branch branch1 sql -q "SELECT * FROM dolt_constraint_violations_other;"
     [ $status -eq 0 ]
     [[ $output =~ "foreign key    | 1  | z " ]] || false
 
     # Abort the cherry-pick and assert that all state has been properly cleared
-    dolt cherry-pick --abort
-    run dolt sql -q "SELECT * from dolt_status;"
+    dolt --branch branch1 cherry-pick --abort
+    run dolt --branch branch1 sql -q "SELECT * from dolt_status;"
     [ $status -eq 0 ]
     [[ ! $output =~ "other" ]] || false
     [[ ! $output =~ "test" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations;"
+    run dolt --branch branch1 sql -q "SELECT * FROM dolt_constraint_violations;"
     [ $status -eq 0 ]
     [[ ! $output =~ "other" ]] || false
-    run dolt sql -r csv -q "SELECT * from other;"
+    run dolt --branch branch1 sql -r csv -q "SELECT * from other;"
     [ $status -eq 0 ]
     [[ $output =~ "1,a" ]] || false
     [[ ! $output =~ "100,q" ]] || false
 }
 
 @test "cherry-pick: conflict resolution" {
-    dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
-    dolt add .
-    dolt sql -q "INSERT INTO other VALUES (1, 2)"
-    dolt sql -q "INSERT INTO test VALUES (4,'f')"
-    dolt commit -am "add other table"
+    dolt --branch branch1 sql -q "CREATE TABLE other (pk int primary key, v int)"
+    dolt --branch branch1 add .
+    dolt --branch branch1 sql -q "INSERT INTO other VALUES (1, 2)"
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (4,'f')"
+    dolt --branch branch1 commit -am "add other table"
 
-    dolt checkout main
     dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
     dolt add .
     dolt sql -q "INSERT INTO other VALUES (1, 3)"
@@ -332,13 +313,12 @@ teardown() {
 }
 
 @test "cherry-pick: commit with CREATE TABLE" {
-    dolt sql -q "CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10))"
-    dolt add .
-    dolt sql -q "INSERT INTO table_a VALUES (11, 'aa'), (22, 'ab'), (33, 'ac')"
-    dolt sql -q "DELETE FROM test WHERE pk = 2"
-    dolt commit -am "Added table_a with rows and delete pk=2 from test"
+    dolt --branch branch1 sql -q "CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10))"
+    dolt --branch branch1 add .
+    dolt --branch branch1 sql -q "INSERT INTO table_a VALUES (11, 'aa'), (22, 'ab'), (33, 'ac')"
+    dolt --branch branch1 sql -q "DELETE FROM test WHERE pk = 2"
+    dolt --branch branch1 commit -am "Added table_a with rows and delete pk=2 from test"
 
-    dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "0" ]
 
@@ -357,13 +337,12 @@ teardown() {
 }
 
 @test "cherry-pick: commit with DROP TABLE" {
-    dolt sql -q "DROP TABLE test"
-    dolt commit -am "Drop table test"
+    dolt --branch branch1 sql -q "DROP TABLE test"
+    dolt --branch branch1 commit -am "Drop table test"
 
-    run dolt sql -q "SHOW TABLES" -r csv
+    run dolt --branch branch1 sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt checkout main
     run dolt sql -q "SHOW TABLES" -r csv
     [[ "$output" =~ "test" ]] || false
 
@@ -378,14 +357,11 @@ teardown() {
 @test "cherry-pick: commit with ALTER TABLE rename table name" {
     # get main and branch1 in sync, so that the data on branch1 doesn't
     # cause a conflict when we cherry pick the table rename statement
-    dolt checkout main
-    dolt merge branch1
+    dolt sql -q "CALL DOLT_MERGE('branch1')"
 
-    dolt checkout branch1
-    dolt sql -q "ALTER TABLE test RENAME TO new_name"
-    dolt commit -Am "rename table test to new_name"
+    dolt --branch branch1 sql -q "ALTER TABLE test RENAME TO new_name"
+    dolt --branch branch1 commit -Am "rename table test to new_name"
 
-    dolt checkout main
     dolt cherry-pick branch1
 
     run dolt sql -q "show tables;"
@@ -395,37 +371,33 @@ teardown() {
 }
 
 @test "cherry-pick: cherry-pick commit is a merge commit" {
-    dolt checkout -b branch2
-    dolt sql -q "INSERT INTO test VALUES (4, 'd'), (5, 'e')"
-    dolt commit -am "add more rows in branch2"
+    dolt branch branch2 branch1
+    dolt --branch branch2 sql -q "INSERT INTO test VALUES (4, 'd'), (5, 'e')"
+    dolt --branch branch2 commit -am "add more rows in branch2"
 
-    dolt checkout branch1
-    dolt sql -q "INSERT INTO test VALUES (6, 'f'), (7, 'g')"
-    dolt commit -am "add more rows in branch1"
-    dolt merge branch2 -m "merge branch2"
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (6, 'f'), (7, 'g')"
+    dolt --branch branch1 commit -am "add more rows in branch1"
+    dolt --branch branch1 sql -q "CALL DOLT_MERGE('branch2', '-m', 'merge branch2')"
 
-    dolt checkout main
     run dolt cherry-pick branch1
     [ $status -eq 1 ]
     [[ $output =~ "cherry-picking a merge commit is not supported" ]] || false
 }
 
 @test "cherry-pick: cherry-pick commit is a cherry-picked commit" {
-    dolt checkout -b branch2
-    dolt sql -q "INSERT INTO test VALUES (4, 'd'), (5, 'e')"
-    dolt commit -am "add more rows in branch2"
+    dolt branch branch2 branch1
+    dolt --branch branch2 sql -q "INSERT INTO test VALUES (4, 'd'), (5, 'e')"
+    dolt --branch branch2 commit -am "add more rows in branch2"
 
-    dolt checkout branch1
-    dolt sql -q "INSERT INTO test VALUES (6, 'f'), (7, 'g')"
-    dolt commit -am "add more rows in branch1"
-    run dolt cherry-pick branch2
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (6, 'f'), (7, 'g')"
+    dolt --branch branch1 commit -am "add more rows in branch1"
+    run dolt --branch branch1 cherry-pick branch2
     [ "$status" -eq "0" ]
 
-    run dolt sql -q "SELECT * FROM test" -r csv
+    run dolt --branch branch1 sql -q "SELECT * FROM test" -r csv
     [[ "$output" =~ "4,d" ]] || false
     [[ "$output" =~ "5,e" ]] || false
 
-    dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "0" ]
 
@@ -435,16 +407,15 @@ teardown() {
 }
 
 @test "cherry-pick: add triggers" {
-    dolt sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v = concat(new.v, ' inserted')"
-    dolt sql -q "CREATE view two as select 1+1"
-    dolt sql -q "INSERT INTO test VALUES (4,'z')"
-    run dolt sql -q "SELECT * FROM test"
+    dolt --branch branch1 sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v = concat(new.v, ' inserted')"
+    dolt --branch branch1 sql -q "CREATE view two as select 1+1"
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (4,'z')"
+    run dolt --branch branch1 sql -q "SELECT * FROM test"
     [[ "$output" =~ "z inserted" ]] || false
 
-    dolt add .
-    dolt commit -am "add trigger"
+    dolt --branch branch1 add .
+    dolt --branch branch1 commit -am "add trigger"
 
-    dolt checkout main
     run dolt sql -q "SHOW TRIGGERS"
     [[ ! "$output" =~ "trigger1" ]] || false
 
@@ -456,10 +427,9 @@ teardown() {
     run dolt sql -q "SHOW TRIGGERS"
     [[ "$output" =~ "trigger1" ]] || false
 
-    dolt checkout branch1
-    dolt sql -q "DROP TRIGGER trigger1"
-    dolt commit -am "drop trigger"
-    dolt checkout main
+    dolt --branch branch1 sql -q "DROP TRIGGER trigger1"
+    dolt --branch branch1 commit -am "drop trigger"
+
     dolt cherry-pick branch1
 
     run dolt sql -q "SHOW TRIGGERS"
@@ -467,15 +437,14 @@ teardown() {
 }
 
 @test "cherry-pick: drop triggers" {
-    dolt sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v = concat(new.v, ' inserted')"
-    dolt sql -q "INSERT INTO test VALUES (4,'z')"
-    run dolt sql -q "SELECT * FROM test"
+    dolt --branch branch1 sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v = concat(new.v, ' inserted')"
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (4,'z')"
+    run dolt --branch branch1 sql -q "SELECT * FROM test"
     [[ "$output" =~ "z inserted" ]] || false
 
-    dolt add .
-    dolt commit -am "add trigger"
+    dolt --branch branch1 add .
+    dolt --branch branch1 commit -am "add trigger"
 
-    dolt checkout main
     run dolt sql -q "SHOW TRIGGERS"
     [[ ! "$output" =~ "trigger1" ]] || false
 
@@ -487,10 +456,8 @@ teardown() {
     run dolt sql -q "SHOW TRIGGERS"
     [[ "$output" =~ "trigger1" ]] || false
 
-    dolt checkout branch1
-    dolt sql -q "DROP TRIGGER trigger1"
-    dolt commit -am "drop trigger"
-    dolt checkout main
+    dolt --branch branch1 sql -q "DROP TRIGGER trigger1"
+    dolt --branch branch1 commit -am "drop trigger"
 
     skip "merge cannot handle dropped dolt_schemas" table
     dolt cherry-pick branch1
@@ -500,14 +467,13 @@ teardown() {
 }
 
 @test "cherry-pick: add procedures" {
-    dolt sql -q "CREATE PROCEDURE proc1 (in x int) select x from dual"
-    run dolt sql -q "CALL proc1(434)"
+    dolt --branch branch1 sql -q "CREATE PROCEDURE proc1 (in x int) select x from dual"
+    run dolt --branch branch1 sql -q "CALL proc1(434)"
     [[ "$output" =~ "434" ]] || false
 
-    dolt add .
-    dolt commit -am "add procedure"
+    dolt --branch branch1 add .
+    dolt --branch branch1 commit -am "add procedure"
 
-    dolt checkout main
     run dolt sql -q "SHOW PROCEDURE STATUS"
     [[ ! "$output" =~ "proc1" ]] || false
 
@@ -522,16 +488,14 @@ teardown() {
 }
 
 @test "cherry-pick: keyless table" {
-    dolt checkout main
     dolt sql -q "CREATE TABLE keyless (id int, name varchar(10))"
     dolt add .
     dolt commit -am "add keyless table"
 
-    dolt checkout -b branch2
-    dolt sql -q "INSERT INTO keyless VALUES (1,'1'), (2,'3')"
-    dolt commit -am "insert into keyless table"
+    dolt branch branch2
+    dolt --branch branch2 sql -q "INSERT INTO keyless VALUES (1,'1'), (2,'3')"
+    dolt --branch branch2 commit -am "insert into keyless table"
 
-    dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "0" ]
 
@@ -541,10 +505,9 @@ teardown() {
 }
 
 @test "cherry-pick: commit with ALTER TABLE add column" {
-    dolt sql -q "ALTER TABLE test ADD COLUMN c int"
-    dolt commit -am "alter table test add column c"
+    dolt --branch branch1 sql -q "ALTER TABLE test ADD COLUMN c int"
+    dolt --branch branch1 commit -am "alter table test add column c"
 
-    dolt checkout main
     dolt cherry-pick branch1
 
     run dolt sql -q "SHOW CREATE TABLE test;"
@@ -553,10 +516,9 @@ teardown() {
 }
 
 @test "cherry-pick: commit with ALTER TABLE change column" {
-    dolt sql -q "ALTER TABLE test CHANGE COLUMN v c varchar(100)"
-    dolt commit -am "alter table test change column v"
+    dolt --branch branch1 sql -q "ALTER TABLE test CHANGE COLUMN v c varchar(100)"
+    dolt --branch branch1 commit -am "alter table test change column v"
 
-    dolt checkout main
     dolt cherry-pick branch1
 
     run dolt sql -q "SHOW CREATE TABLE test;"
@@ -566,25 +528,23 @@ teardown() {
 }
 
 @test "cherry-pick: commit with ALTER TABLE modify column" {
-    dolt sql -q "UPDATE test SET v = '1' WHERE pk < 4"
-    dolt sql -q "ALTER TABLE test MODIFY COLUMN v int"
-    dolt commit -am "alter table test modify column v"
+    dolt --branch branch1 sql -q "UPDATE test SET v = '1' WHERE pk < 4"
+    dolt --branch branch1 sql -q "ALTER TABLE test MODIFY COLUMN v int"
+    dolt --branch branch1 commit -am "alter table test modify column v"
 
     # TODO: Incompatible type changes currently trigger an error response, instead of
     #       being tracked as a schema conflict artifact. Once we fix that, update this test.
-    dolt checkout main
     run dolt cherry-pick branch1
     [ $status -eq 1 ]
     [[ $output =~ "merge aborted: schema conflict found for table test" ]] || false
 }
 
 @test "cherry-pick: commit with ALTER TABLE drop column" {
-    dolt sql -q "ALTER TABLE test DROP COLUMN v"
-    dolt commit -am "alter table test drop column v"
+    dolt --branch branch1 sql -q "ALTER TABLE test DROP COLUMN v"
+    dolt --branch branch1 commit -am "alter table test drop column v"
 
     # Dropping column v on branch1 modifies all rows in the table, and those rows
     # don't exist on main, so they would be a conflict. However, cell-wise merging is able to resolve the conflict.
-    dolt checkout main
     run dolt cherry-pick branch1
     [ $status -eq 0 ]
 
@@ -594,10 +554,9 @@ teardown() {
 }
 
 @test "cherry-pick: commit with ALTER TABLE rename column" {
-    dolt sql -q "ALTER TABLE test RENAME COLUMN v TO c"
-    dolt commit -am "alter table test rename column v"
+    dolt --branch branch1 sql -q "ALTER TABLE test RENAME COLUMN v TO c"
+    dolt --branch branch1 commit -am "alter table test rename column v"
 
-    dolt checkout main
     dolt cherry-pick branch1
 
     run dolt sql -q "SHOW CREATE TABLE test;"
@@ -607,29 +566,29 @@ teardown() {
 }
 
 @test "cherry-pick: commit with ALTER TABLE drop and add primary key" {
-    dolt sql -q "ALTER TABLE test DROP PRIMARY KEY, ADD PRIMARY KEY (pk, v)"
-    dolt commit -am "alter table test drop and add primary key"
+    dolt --branch branch1 sql -q "ALTER TABLE test DROP PRIMARY KEY, ADD PRIMARY KEY (pk, v)"
+    dolt --branch branch1 commit -am "alter table test drop and add primary key"
 
-    dolt checkout main
     run dolt cherry-pick branch1
     [ $status -eq 1 ]
     [[ $output =~ "error: cannot merge because table test has different primary keys" ]] || false
 }
 
 @test "cherry-pick: author and timestamp preserved during cherry-pick" {
-    dolt checkout branch1
-    dolt sql -q "INSERT INTO test VALUES (99, 'auth')"
-    dolt add .
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "see: https://github.com/dolthub/dolt/issues/10116"
+    fi
+
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (99, 'auth')"
+    dolt --branch branch1 add .
     
     # Create commit with specific author and timestamp
-    DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt commit --author="Original Author <original@example.com>" -m "commit with specific author"
-    COMMIT_HASH=$(get_head_commit)
+    DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt --branch branch1 commit --author="Original Author <original@example.com>" -m "commit with specific author"
+    COMMIT_HASH=$(get_head_commit branch1)
     
-    run dolt log -n 1
+    run dolt --branch branch1 log -n 1
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author <original@example.com>" ]] || false
-    
-    dolt checkout main
     
     run dolt cherry-pick $COMMIT_HASH
     [ $status -eq 0 ]
@@ -646,24 +605,20 @@ teardown() {
 }
 
 @test "cherry-pick: multiple authors preserved in sequence with merge workflow" {
-    dolt checkout branch1
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (200, 'alice')"
+    dolt --branch branch1 add .
+    dolt --branch branch1 commit --author="Alice Developer <alice@company.com>" -m "Alice's feature"
+    ALICE_HASH=$(get_head_commit branch1)
     
-    dolt sql -q "INSERT INTO test VALUES (200, 'alice')"
-    dolt add .
-    dolt commit --author="Alice Developer <alice@company.com>" -m "Alice's feature"
-    ALICE_HASH=$(get_head_commit)
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (201, 'bob')"
+    dolt --branch branch1 add .
+    dolt --branch branch1 commit --author="Bob Engineer <bob@company.com>" -m "Bob's improvement"
+    BOB_HASH=$(get_head_commit branch1)
     
-    dolt sql -q "INSERT INTO test VALUES (201, 'bob')"
-    dolt add .
-    dolt commit --author="Bob Engineer <bob@company.com>" -m "Bob's improvement"
-    BOB_HASH=$(get_head_commit)
-    
-    dolt sql -q "INSERT INTO test VALUES (202, 'carol')"
-    dolt add .
-    dolt commit --author="Carol Architect <carol@company.com>" -m "Carol's refactor"  
-    CAROL_HASH=$(get_head_commit)
-    
-    dolt checkout main
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (202, 'carol')"
+    dolt --branch branch1 add .
+    dolt --branch branch1 commit --author="Carol Architect <carol@company.com>" -m "Carol's refactor"
+    CAROL_HASH=$(get_head_commit branch1)
     
     run dolt cherry-pick $ALICE_HASH
     [ $status -eq 0 ]
@@ -681,13 +636,12 @@ teardown() {
     [[ "$output" =~ "Carol Architect <carol@company.com>" ]] || false
     
     # Test merge workflow - customer requirement for merge commits
-    dolt checkout -b integration_branch
-    dolt sql -q "INSERT INTO test VALUES (300, 'merge')"
-    dolt add .
-    dolt commit --author="Integration Manager <integration@company.com>" -m "prepare for merge"
-    
-    dolt checkout main  
-    run dolt merge integration_branch --no-ff -m "Merge integration_branch"
+    dolt branch integration_branch
+    dolt --branch integration_branch sql -q "INSERT INTO test VALUES (300, 'merge')"
+    dolt --branch integration_branch add .
+    dolt --branch integration_branch commit --author="Integration Manager <integration@company.com>" -m "prepare for merge"
+
+    run dolt sql -q "CALL DOLT_MERGE('integration_branch','--no-ff', '-m', 'Merge integration_branch')"
     [ $status -eq 0 ]
     
     run dolt log -n 1

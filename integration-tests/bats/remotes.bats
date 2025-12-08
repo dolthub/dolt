@@ -1902,3 +1902,17 @@ SQL
     cd dest
     env DOLT_FORCE_LOCAL_TEMP_FILES=1 dolt clone file://../toclone .
 }
+
+@test "remotes: add remote with invalid name fails" {
+  run dolt remote add "remote with space" http://localhost:50051/test-org/test-repo
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "remote name invalid" ]] || false
+
+  run dolt remote add "remote/slash" http://localhost:50051/test-org/test-repo
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "remote name invalid" ]] || false
+
+  run dolt remote add "remote@special" http://localhost:50051/test-org/test-repo
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "remote name invalid" ]] || false
+}

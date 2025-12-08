@@ -235,7 +235,7 @@ func (bt *BranchesTable) Schema() sql.Schema {
 		{Name: "hash", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bt.db.Name()},
 		{Name: "latest_committer", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
 		{Name: "latest_committer_email", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
-		{Name: "latest_commit_date", Type: types.Datetime, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		{Name: "latest_commit_date", Type: types.Datetime3, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
 		{Name: "latest_commit_message", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
 	}
 	if !bt.remote {

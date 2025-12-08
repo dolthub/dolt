@@ -5428,25 +5428,36 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "working and staged commits",
+		Name: "working, staged, and head commits",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_commit('-Am', 'created table');",
-			"set @Commit0 = HASHOF('HEAD');",
+			"call dolt_branch('Commit0');",
+			"insert into t values (7, 8, 9);",
+			"call dolt_commit('-Am', 'insert into table');",
+			"call dolt_branch('Commit1')",
 			"insert into t values (1, 2, 3);",
 			"call dolt_add('.');",
 			"insert into t values (4, 5, 6);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='WORKING' and FROM_COMMIT=@Commit0;",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='WORKING' and FROM_COMMIT='HEAD';",
 				Expected: []sql.Row{
 					{1, 2, 3, nil, nil, nil, "added"},
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='STAGED' and FROM_COMMIT=@Commit0;",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='WORKING' and FROM_COMMIT='HEAD~';",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+					{4, 5, 6, nil, nil, nil, "added"},
+					{7, 8, 9, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='STAGED' and FROM_COMMIT='HEAD';",
 				Expected: []sql.Row{
 					{1, 2, 3, nil, nil, nil, "added"},
 				},
@@ -5461,6 +5472,12 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='STAGED' and FROM_COMMIT='WORKING';",
 				Expected: []sql.Row{
 					{nil, nil, nil, 4, 5, 6, "removed"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t AS OF Commit1 WHERE TO_COMMIT='HEAD' and FROM_COMMIT='Commit0';",
+				Expected: []sql.Row{
+					{7, 8, 9, nil, nil, nil, "added"},
 				},
 			},
 		},
@@ -6163,7 +6180,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", false, "modified"},
+					{"__DATABASE__mydb", byte(0), "modified"},
 				},
 			},
 			{
@@ -6182,7 +6199,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", true, "modified"},
+					{"__DATABASE__mydb", byte(1), "modified"},
 				},
 			},
 			{
@@ -6245,7 +6262,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", false, "modified"},
+					{"__DATABASE__mydb", byte(0), "modified"},
 				},
 			},
 			{
@@ -6264,7 +6281,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", true, "modified"},
+					{"__DATABASE__mydb", byte(1), "modified"},
 				},
 			},
 			{
@@ -6327,7 +6344,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", false, "modified"},
+					{"__DATABASE__mydb", byte(0), "modified"},
 				},
 			},
 			{
@@ -6377,7 +6394,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", false, "modified"},
+					{"__DATABASE__mydb", byte(0), "modified"},
 				},
 			},
 			{

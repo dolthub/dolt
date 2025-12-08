@@ -1,5 +1,13 @@
 #!/usr/bin/env bats
+# Since the dolt backup command uses dolt_backup procedure internally, `sql-backup.bats` tests should generally apply to
+# `backup.bats` as well, removing the need to duplicate tests. As a result, prefer writing backup tests in
+# `sql-backup.bats`. Exceptions to this rule is testing external factors related to commands (i.e. invalid repo checks
+#  before calling dolt_backup) or command specific functionality (i.e. the command version can list current database
+#  backup table).
+
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
@@ -20,6 +28,7 @@ setup() {
 }
 
 teardown() {
+    stop_remotesrv
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
@@ -194,7 +203,7 @@ teardown() {
     run dolt backup sync bac1
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unknown backup: 'bac1'" ]] || false
+    [[ "$output" =~ "backup 'bac1' not found" ]] || false
 }
 
 @test "backup: cannot override another client's backup" {
@@ -213,7 +222,7 @@ teardown() {
     dolt backup sync bac1
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unknown backup: 'bac1'" ]] || false
+    [[ "$output" =~ "unknown backup 'bac1'" ]] || false
 }
 
 @test "backup: cannot clone a backup" {
@@ -282,13 +291,14 @@ teardown() {
     # Check in the ".dolt" is in my current directory case...
     run dolt backup restore file://../bac1 repo2
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "cannot restore backup into repo2. A database with that name already exists" ]] || false
+    echo $output
+    [[ "$output" =~ "database 'repo2' already exists, use '--force' to overwrite" ]] || false
 
     # Check in the ".dolt" is in a subdirectory case...
     cd ..
-    run dolt backup restore file://../bac1 repo2
+    run dolt backup restore file://bac1 repo2
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "cannot restore backup into repo2. A database with that name already exists" ]] || false
+    [[ "$output" =~ "database 'repo2' already exists, use '--force' to overwrite" ]] || false
 }
 
 @test "backup: restore existing database with --force succeeds" {
@@ -316,4 +326,79 @@ teardown() {
     mkdir newdir && cd newdir
     run dolt backup sync-url file://../bac1
     [ "$status" -ne 0 ]
+}
+
+@test "backup: add HTTP and HTTPS" {
+    cd repo1
+    dolt backup add httpbackup http://localhost:$REMOTESRV_PORT/test-org/backup-repo
+    dolt backup add httpsbackup https://localhost:$REMOTESRV_PORT/test-org/backup-repo
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "httpbackup" ]] || false
+    [[ "$output" =~ "http://localhost:$REMOTESRV_PORT/test-org/backup-repo" ]] || false
+    [[ "$output" =~ "httpsbackup" ]] || false
+    [[ "$output" =~ "https://localhost:$REMOTESRV_PORT/test-org/backup-repo" ]] || false
+}
+
+# No HTTPS test for sync-url; `dolt/go/utils/remotesrv` does not expose TLS configuration flags.
+@test "backup: sync-url and restore HTTP" {
+    start_remotesrv
+
+    cd repo1
+    dolt sql -q "CREATE TABLE t2 (b int)"
+    dolt add .
+    dolt commit -am "add t2"
+    
+    run dolt backup sync-url http://localhost:$REMOTESRV_PORT/test-org/backup-repo
+    [ "$status" -eq 0 ]
+    
+    cd ..
+    dolt backup restore http://localhost:$REMOTESRV_PORT/test-org/backup-repo repo3
+    cd repo3
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
+}
+
+@test "backup: rejects AWS parameters in sql-server" {
+    skip_if_remote
+    cd repo1
+    start_sql_server
+    
+    run dolt backup add test aws://[table:bucket]/db --aws-region=us-east-1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt backup sync-url aws://[table:bucket]/db --aws-creds-type=file
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt backup restore aws://[table:bucket]/db newdb --aws-region=us-east-1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt backup add aws-backup2 aws://[table:bucket]/db --aws-creds-type=file
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    stop_sql_server
+}
+
+@test "backup: restore works from non-dolt directory" {
+    cd repo1
+    backupFileUrl="file://$BATS_TEST_TMPDIR/backup"
+    dolt sql<<EOF
+create table t (i int);
+insert into t values (1), (2);
+call dolt_backup('sync-url', '$backupFileUrl');
+EOF
+
+    invalidRepo="$BATS_TEST_TMPDIR/invalidRepo"
+    mkdir "$invalidRepo" && cd "$invalidRepo"
+
+    run dolt backup restore "$backupFileUrl" new_db
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv -q "select * from t"
+    [[ "$output" =~ i.*2.*1 ]] || false
 }

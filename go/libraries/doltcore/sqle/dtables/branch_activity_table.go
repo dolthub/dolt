@@ -50,10 +50,10 @@ func (bat *BranchActivityTable) String() string {
 func (bat *BranchActivityTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "branch", Type: types.Text, Source: bat.tableName, PrimaryKey: true, Nullable: false, DatabaseSource: bat.db.Name()},
-		{Name: "last_read", Type: types.Datetime, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
-		{Name: "last_write", Type: types.Datetime, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
+		{Name: "last_read", Type: types.DatetimeMaxPrecision, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
+		{Name: "last_write", Type: types.DatetimeMaxPrecision, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
 		{Name: "active_sessions", Type: types.Int32, Source: bat.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bat.db.Name()},
-		{Name: "system_start_time", Type: types.Datetime, Source: bat.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bat.db.Name()},
+		{Name: "system_start_time", Type: types.DatetimeMaxPrecision, Source: bat.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bat.db.Name()},
 	}
 }
 
@@ -76,6 +76,16 @@ type BranchActivityItr struct {
 }
 
 func NewBranchActivityItr(ctx *sql.Context, table *BranchActivityTable) (*BranchActivityItr, error) {
+	// Check if branch activity tracking is enabled
+	if provider, ok := ctx.Session.(doltdb.BranchActivityProvider); ok {
+		tracker := provider.GetBranchActivityTracker()
+		if tracker == nil || !tracker.IsTrackingEnabled() {
+			return nil, fmt.Errorf("branch activity tracking is not enabled; enable it in the server config with 'behavior.branch_activity_tracking: true'")
+		}
+	} else {
+		return nil, fmt.Errorf("branch activity tracking is not enabled; enable it in the server config with 'behavior.branch_activity_tracking: true'")
+	}
+
 	sessionCounts, err := countActiveSessions(ctx)
 	if err != nil {
 		return nil, err
