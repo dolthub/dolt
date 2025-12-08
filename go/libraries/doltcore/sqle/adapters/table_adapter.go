@@ -58,7 +58,7 @@ func (as *doltTableAdapterRegistry) GetAdapter(name string) (TableAdapter, bool)
 	return adapter, ok
 }
 
-// NormalizeName normalizes |name| if it's an internal alias to the correct Dolt table name, if not match is found the
+// NormalizeName normalizes |name| if it's an internal alias to the correct Dolt table name, if no match is found the
 // |name| is returned as is.
 func (as *doltTableAdapterRegistry) NormalizeName(name string) string {
 	doltTableName, ok := as.internalAliases[name]
