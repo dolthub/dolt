@@ -31,28 +31,6 @@ import (
 
 const statusDefaultRowCount = 10
 
-func init() {
-	adapters.DoltTableAdapterRegistry.AddAdapter(doltdb.StatusTableName, DoltStatusTableAdapter{})
-}
-
-// DoltStatusTableAdapter serves as the default [dtables.StatusTable] implementation, applying zero modifications. It
-// exists in case no adapters are initialized by an integrator for the Dolt status table, i.e. go-mysql-server.
-//
-// DoltStatusTableAdapter implements the [adapters.TableAdapter] interface.
-type DoltStatusTableAdapter struct{}
-
-var _ adapters.TableAdapter = DoltStatusTableAdapter{}
-
-// CreateTable returns the default constructor [NewStatusTable], applying zero modifications.
-func (d DoltStatusTableAdapter) CreateTable(ctx *sql.Context, tableName string, dDb *doltdb.DoltDB, workingSet *doltdb.WorkingSet, rootsProvider env.RootsProvider[*sql.Context]) sql.Table {
-	return NewStatusTable(ctx, tableName, dDb, workingSet, rootsProvider)
-}
-
-// TableName returns the default name for the dolt_status table.
-func (d DoltStatusTableAdapter) TableName() string {
-	return doltdb.StatusTableName
-}
-
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type StatusTable struct {
 	rootsProvider env.RootsProvider[*sql.Context]
@@ -104,7 +82,16 @@ func (st StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.
 	return newStatusItr(context, &st)
 }
 
-// NewStatusTable creates a StatusTable
+// NewStatusTableWithAdapter creates a StatusTable
+func NewStatusTableWithAdapter(ctx *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
+	adapter, ok := adapters.DoltTableAdapterRegistry.GetAdapter(tableName)
+	if ok {
+		return adapter.NewTable(ctx, tableName, ddb, ws, rp)
+	}
+
+	return NewStatusTable(ctx, tableName, ddb, ws, rp)
+}
+
 func NewStatusTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
 	return &StatusTable{
 		tableName:     tableName,

@@ -619,7 +619,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 	var dt sql.Table
 	found := false
 	tname := doltdb.TableName{Name: lwrName, Schema: db.schemaName}
-	switch lwrName {
+	switch adapters.DoltTableAdapterRegistry.NormalizeName(lwrName) {
 	case doltdb.GetLogTableName(), doltdb.LogTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
@@ -748,7 +748,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), lwrName, db.ddb), true
 		}
-	case doltdb.StatusTableName, adapters.DoltTableAdapterRegistry.GetTableName(doltdb.StatusTableName):
+	case doltdb.StatusTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
@@ -804,8 +804,8 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 					rootsProvider = nil
 				}
 			}
-			adapter := adapters.DoltTableAdapterRegistry.GetAdapter(lwrName)
-			dt, found = adapter.CreateTable(ctx, lwrName, db.ddb, ws, rootsProvider), true
+
+			dt, found = dtables.NewStatusTableWithAdapter(ctx, lwrName, db.ddb, ws, rootsProvider), true
 		}
 	case doltdb.MergeStatusTableName, doltdb.GetMergeStatusTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
