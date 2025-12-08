@@ -160,6 +160,8 @@ func GeneratedSystemTableNames() []string {
 		GetBackupsTableName(),
 		GetStashesTableName(),
 		GetBranchActivityTableName(),
+		// [dtables.StatusTable] now uses [adapters.DoltTableAdapterRegistry] in its constructor for Doltgres.
+		StatusTableName,
 	}
 }
 

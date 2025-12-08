@@ -805,7 +805,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 				}
 			}
 
-			dt, found = dtables.NewStatusTableWithAdapter(ctx, lwrName, db.ddb, ws, rootsProvider), true
+			dt, found = dtables.NewStatusTable(ctx, lwrName, db.ddb, ws, rootsProvider), true
 		}
 	case doltdb.MergeStatusTableName, doltdb.GetMergeStatusTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)

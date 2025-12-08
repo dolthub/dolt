@@ -82,19 +82,19 @@ func (st StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.
 	return newStatusItr(context, &st)
 }
 
-// NewStatusTableWithAdapter creates a new StatusTable using either an integrators' [adapters.TableAdapter] or the
-// default [NewStatusTable] constructor.
-func NewStatusTableWithAdapter(ctx *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
+// NewStatusTable creates a new StatusTable using either an integrators' [adapters.TableAdapter] or the default
+// [NewStatusTableWithNoAdapter] constructor (Dolt table default implementation).
+func NewStatusTable(ctx *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
 	adapter, ok := adapters.DoltTableAdapterRegistry.GetAdapter(tableName)
 	if ok {
 		return adapter.NewTable(ctx, tableName, ddb, ws, rp)
 	}
 
-	return NewStatusTable(ctx, tableName, ddb, ws, rp)
+	return NewStatusTableWithNoAdapter(ctx, tableName, ddb, ws, rp)
 }
 
-// NewStatusTable returns a new StatusTable.
-func NewStatusTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
+// NewStatusTableWithNoAdapter returns a new StatusTable.
+func NewStatusTableWithNoAdapter(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
 	return &StatusTable{
 		tableName:     tableName,
 		ddb:           ddb,

@@ -23,8 +23,10 @@ type TableAdapter interface {
 
 var DoltTableAdapterRegistry = newDoltTableAdapterRegistry()
 
-// doltTableAdapterRegistry is a TableAdapter registry for Dolt tables, keyed by the table's original name. It is
-// populated during package initialization by integrators and intended to be read-only thereafter.
+// doltTableAdapterRegistry is a Dolt table name to TableAdapter map. Integrators populate this registry during package
+// initialization, and it's intended to be read-only thereafter. The registry links with existing Dolt system tables to
+// allow them to be resolved and evaluated to integrator's version and internal aliases (integrators' Dolt table name
+// keys).
 type doltTableAdapterRegistry struct {
 	Adapters        map[string]TableAdapter
 	internalAliases map[string]string
@@ -38,13 +40,12 @@ func newDoltTableAdapterRegistry() *doltTableAdapterRegistry {
 	}
 }
 
-// AddAdapter adds a TableAdapter to the Dolt table adapter registry with optional |internalAliases| (integrators'
-// alternative Dolt table name keys).
-func (as *doltTableAdapterRegistry) AddAdapter(doltTable string, adapter TableAdapter, internalAliases ...string) {
+// AddAdapter maps |doltTableName| to an |adapter| in the Dolt table adapter registry, with optional |internalAliases|.
+func (as *doltTableAdapterRegistry) AddAdapter(doltTableName string, adapter TableAdapter, internalAliases ...string) {
 	for _, alias := range internalAliases {
-		as.internalAliases[alias] = doltTable
+		as.internalAliases[alias] = doltTableName
 	}
-	as.Adapters[doltTable] = adapter
+	as.Adapters[doltTableName] = adapter
 }
 
 // GetAdapter gets a Dolt TableAdapter mapped to |name|, which can be the dolt table name or internal alias.
@@ -58,8 +59,8 @@ func (as *doltTableAdapterRegistry) GetAdapter(name string) (TableAdapter, bool)
 	return adapter, ok
 }
 
-// NormalizeName normalizes |name| if it's an internal alias to the correct Dolt table name, if no match is found the
-// |name| is returned as is.
+// NormalizeName normalizes |name| if it's an internal alias of the underlying Dolt table name. If no match is found,
+// |name| is returned as-is.
 func (as *doltTableAdapterRegistry) NormalizeName(name string) string {
 	doltTableName, ok := as.internalAliases[name]
 	if !ok {
