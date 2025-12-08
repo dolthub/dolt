@@ -82,8 +82,8 @@ func (st StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.
 	return newStatusItr(context, &st)
 }
 
-// NewStatusTable creates a new StatusTable using either an integrators' [adapters.TableAdapter] or the default
-// [NewStatusTableWithNoAdapter] constructor (Dolt table default implementation).
+// NewStatusTable creates a new StatusTable using either an integrators' [adapters.TableAdapter] or the
+// NewStatusTableWithNoAdapter constructor (the default implementation provided by Dolt).
 func NewStatusTable(ctx *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
 	adapter, ok := adapters.DoltTableAdapterRegistry.GetAdapter(tableName)
 	if ok {
