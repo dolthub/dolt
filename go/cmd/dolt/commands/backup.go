@@ -29,6 +29,8 @@ import (
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
+const DoltBackupCommandName = "backup"
+
 var backupDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Manage database backups, including creation, sync, and restore.",
 	LongDesc: `

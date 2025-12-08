@@ -680,8 +680,14 @@ If you're interested in running this command against a remote host, hit us up on
 	//
 	// This is also allowed when --help is passed. So we defer the error
 	// until the caller tries to use the cli.LateBindQueryist.
-	isValidRepositoryRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
-
+	commandsNotRequiringRepo := map[string]bool{
+		"init":                         true,
+		"sql":                          true,
+		"sql-server":                   true,
+		"sql-client":                   true,
+		commands.DoltBackupCommandName: true,
+	}
+	isValidRepositoryRequired := !commandsNotRequiringRepo[subcommandName]
 	if noValidRepository && isValidRepositoryRequired {
 		return func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 			err = errors.New("The current directory is not a valid dolt repository.")
