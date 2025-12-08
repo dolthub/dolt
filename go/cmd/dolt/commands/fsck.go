@@ -236,7 +236,6 @@ type FSCKReport struct {
 // validates each commit's tree structure and tracks all reachable chunks.
 func validateCommitDAGAndTrackChunks(ctx context.Context, vs *types.ValueStore, startCommitHash hash.Hash, progress chan string, appendErr func(error), reachableChunks *hash.HashSet) error {
 	progress <- "Starting commit DAG validation..."
-
 	// Queue for commits to process (breadth-first through commit history)
 	commitQueue := []hash.Hash{startCommitHash}
 	visitedCommits := make(hash.HashSet)
@@ -267,7 +266,7 @@ func validateCommitDAGAndTrackChunks(ctx context.Context, vs *types.ValueStore, 
 
 		if serialMsg, ok := commitValue.(types.SerialMessage); ok {
 			progress <- fmt.Sprintf("Processing SerialMessage commit: %s", commitHash.String())
-			err = processSerialCommitAndTrack(ctx, vs, serialMsg, &commitQueue, progress, appendErr, reachableChunks)
+			err = processSerialCommitAndTrack(ctx, commitHash, vs, serialMsg, &commitQueue, progress, appendErr, reachableChunks)
 			if err != nil {
 				appendErr(fmt.Errorf("failed to process SerialMessage commit %s: %w", commitHash.String(), err))
 			}
@@ -284,6 +283,7 @@ func validateCommitDAGAndTrackChunks(ctx context.Context, vs *types.ValueStore, 
 // processSerialCommitAndTrack handles validation and tracking of new-style SerialMessage (flatbuffer) commits
 func processSerialCommitAndTrack(
 	ctx context.Context,
+	commitHash hash.Hash,
 	vs *types.ValueStore,
 	serialMsg types.SerialMessage,
 	commitQueue *[]hash.Hash,
@@ -304,7 +304,7 @@ func processSerialCommitAndTrack(
 		rootHash := hash.New(rootBytes)
 		progress <- fmt.Sprintf("Validating root tree: %s", rootHash.String())
 
-		err = validateTreeAndTrack(ctx, vs, rootHash, progress, appendErr, reachableChunks)
+		err = validateTreeAndTrack(ctx, vs, commitHash, rootHash, progress, appendErr, reachableChunks)
 		if err != nil {
 			// Any Errors here are unexpected. appendErr should be used for things we expect to possibly fail.
 			return fmt.Errorf("failed to validate root tree %s: %w", rootHash.String(), err)
@@ -340,7 +340,7 @@ func processSerialCommitAndTrack(
 }
 
 // validateTreeAndTrack performs breadth-first validation of a tree structure and tracks all reachable chunks
-func validateTreeAndTrack(ctx context.Context, vs *types.ValueStore, treeHash hash.Hash, progress chan string, appendErr func(error), reachableChunks *hash.HashSet) error {
+func validateTreeAndTrack(ctx context.Context, vs *types.ValueStore, commitHash, treeHash hash.Hash, progress chan string, appendErr func(error), reachableChunks *hash.HashSet) error {
 	progress <- fmt.Sprintf("Validating tree: %s", treeHash.String())
 
 	// Queue for tree entries to process (breadth-first)
@@ -369,7 +369,7 @@ func validateTreeAndTrack(ctx context.Context, vs *types.ValueStore, treeHash ha
 		// Handle SerialMessage trees only
 		if serialMsg, ok := treeValue.(types.SerialMessage); ok {
 			progress <- fmt.Sprintf("Processing SerialMessage tree: %s", currentTreeHash.String())
-			err = validateSerialTreeAndTrack(ctx, vs, serialMsg, currentTreeHash, &treeQueue, appendErr, reachableChunks)
+			err = validateSerialTreeAndTrack(ctx, vs, serialMsg, commitHash, currentTreeHash, &treeQueue, appendErr, reachableChunks)
 			if err != nil {
 				return fmt.Errorf("failed to validate SerialMessage tree %s: %w", currentTreeHash.String(), err)
 			}
@@ -389,6 +389,7 @@ func validateSerialTreeAndTrack(
 	ctx context.Context,
 	vs *types.ValueStore,
 	serialMsg types.SerialMessage,
+	commitHash hash.Hash,
 	treeHash hash.Hash,
 	treeQueue *[]hash.Hash,
 	appendErr func(error),
@@ -407,7 +408,7 @@ func validateSerialTreeAndTrack(
 			// Try to load the referenced value to continue traversal
 			refValue, readErr := vs.ReadValue(ctx, addr)
 			if readErr != nil {
-				appendErr(fmt.Errorf("failed to read referenced chunk %s from tree %s: %w", addr.String(), treeHash.String(), readErr))
+				appendErr(fmt.Errorf("failed to read referenced chunk %s from commit %s: %w", addr.String(), commitHash.String(), readErr))
 				return nil // Continue walking other addresses
 			}
 			if refValue == nil {
@@ -419,7 +420,7 @@ func validateSerialTreeAndTrack(
 			if _, isSerial := refValue.(types.SerialMessage); isSerial {
 				*treeQueue = append(*treeQueue, addr)
 			} else {
-				// NM4 - This should never happen.
+				// This should never happen.
 				panic(fmt.Sprintf("referenced chunk %s from tree %s is not a SerialMessage, got type %T", addr.String(), treeHash.String(), refValue))
 			}
 		}
@@ -429,39 +430,6 @@ func validateSerialTreeAndTrack(
 	if err != nil {
 		// We intentionally never return errors from WalkAddrs, so any error here is unexpected. Halt.
 		return fmt.Errorf("failed to walk references in tree %s: %w", treeHash.String(), err)
-	}
-
-	return nil
-}
-
-// validateSerialTree handles validation of SerialMessage trees
-func validateSerialTree(ctx context.Context, vs *types.ValueStore, serialMsg types.SerialMessage, treeHash hash.Hash, treeQueue *[]hash.Hash, appendErr func(error)) error {
-	// Basic validation: ensure the SerialMessage is valid
-	if len(serialMsg) < serial.MessagePrefixSz {
-		return fmt.Errorf("empty SerialMessage for tree %s", treeHash.String())
-	}
-
-	// Use the types system to walk all addresses in this SerialMessage
-	// This validates that all referenced chunks are accessible
-	err := serialMsg.WalkAddrs(vs.Format(), func(addr hash.Hash) error {
-		// Try to load the referenced value to validate it exists
-		refValue, readErr := vs.ReadValue(ctx, addr)
-		if readErr != nil {
-			appendErr(fmt.Errorf("failed to read referenced chunk %s from tree %s: %w", addr.String(), treeHash.String(), readErr))
-			return nil // Continue walking other addresses
-		}
-
-		// If it's another serialized structure, add to queue for further processing
-		if refValue != nil {
-			if _, isSerial := refValue.(types.SerialMessage); isSerial {
-				*treeQueue = append(*treeQueue, addr)
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		appendErr(fmt.Errorf("failed to walk references in tree %s: %w", treeHash.String(), err))
 	}
 
 	return nil
