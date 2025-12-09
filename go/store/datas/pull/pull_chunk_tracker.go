@@ -186,11 +186,12 @@ func (t *PullChunkTracker) reqRespThread(ctx context.Context, initial hash.HashS
 				outstanding -= 1
 				if resp.err != nil {
 					err = errors.Join(err, resp.err)
+				} else if len(resp.hs) > 0 {
+					// Add all the resp.hs hashes, those which are not already present
+					// in dest, to our batches of absent hashes we will return through
+					// GetChunksToFetch.
+					absent = appendAbsent(absent, resp.hs, t.cfg.BatchSize)
 				}
-				// Add all the resp.hs hashes, those which are not already present
-				// in dest, to our batches of absent hashes we will return through
-				// GetChunksToFetch.
-				absent = appendAbsent(absent, resp.hs, t.cfg.BatchSize)
 			case thisHasManyReqCh <- hasManyReq:
 				// We delivered a hasMany request to a hasManyThread.
 				// Remove it here. We do not need to update |outstanding|, since
@@ -232,7 +233,7 @@ func (t *PullChunkTracker) reqRespThread(ctx context.Context, initial hash.HashS
 	return eg.Wait()
 }
 
-// Pop returns the first element of s and the remaining elements of
+// pop returns the first element of s and the remaining elements of
 // s. It copies any suffix to the front of |s| and nils the last
 // element of |s| so that memory doesn't leak through |s[1:]| retaining
 // s[0].
