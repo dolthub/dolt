@@ -1747,7 +1747,7 @@ func convertValueToNewType(ctx *sql.Context, value interface{}, newTypeInfo type
 	if err != nil {
 		return nil, err
 	}
-	if !inRange {
+	if inRange != sql.InRange {
 		return nil, fmt.Errorf("out of range conversion for value %v to type %s", value, newTypeInfo.String())
 	}
 	return newValue, nil

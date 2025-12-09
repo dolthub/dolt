@@ -1407,11 +1407,14 @@ func getRangeCutValue(ctx context.Context, cut sql.MySQLRangeCut, typ sql.Type) 
 	if _, ok := cut.(sql.AboveNull); ok {
 		return nil, nil
 	}
-	ret, oob, err := typ.Convert(ctx, sql.GetMySQLRangeCutKey(cut))
-	if oob == sql.OutOfRange {
+	ret, inRange, err := typ.Convert(ctx, sql.GetMySQLRangeCutKey(cut))
+	if err != nil {
+		return nil, err
+	}
+	if inRange != sql.InRange {
 		return ret, nil
 	}
-	return ret, err
+	return ret, nil
 }
 
 // DropTrailingAllColumnExprs returns the Range with any |AllColumnExprs| at the end of it removed.
