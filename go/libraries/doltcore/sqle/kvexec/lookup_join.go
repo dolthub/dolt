@@ -64,13 +64,13 @@ func (l *lookupJoinKvIter) Close(_ *sql.Context) error {
 var _ sql.RowIter = (*lookupJoinKvIter)(nil)
 
 func newLookupKvIter(
-		srcIter prolly.MapIter,
-		targetIter index.SecondaryLookupIterGen,
-		mapping *lookupMapping,
-		joiner *prollyToSqlJoiner,
-		srcFilter, dstFilter, joinFilter sql.Expression,
-		isLeftJoin bool,
-		excludeNulls bool,
+	srcIter prolly.MapIter,
+	targetIter index.SecondaryLookupIterGen,
+	mapping *lookupMapping,
+	joiner *prollyToSqlJoiner,
+	srcFilter, dstFilter, joinFilter sql.Expression,
+	isLeftJoin bool,
+	excludeNulls bool,
 ) (*lookupJoinKvIter, error) {
 	if lit, ok := joinFilter.(*expression.Literal); ok {
 		if lit.Value() == true {
@@ -199,12 +199,12 @@ type lookupMapping struct {
 }
 
 func newLookupKeyMapping(
-		ctx *sql.Context,
-		sourceSch schema.Schema,
-		tgtKeyDesc *val.TupleDesc,
-		keyExprs []sql.Expression,
-		typs []sql.ColumnExpressionType,
-		ns tree.NodeStore,
+	ctx *sql.Context,
+	sourceSch schema.Schema,
+	tgtKeyDesc *val.TupleDesc,
+	keyExprs []sql.Expression,
+	typs []sql.ColumnExpressionType,
+	ns tree.NodeStore,
 ) (*lookupMapping, error) {
 	keyless := schema.IsKeyless(sourceSch)
 	// |split| is an index into the schema separating the key and value fields

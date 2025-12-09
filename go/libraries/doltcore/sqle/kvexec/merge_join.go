@@ -414,7 +414,7 @@ func mergeComparer(
 
 	cmp, ok := filter.(expression.Comparer)
 	if !ok {
-		if equality, ok := filter.(expression.Equality); ok {
+		if equality, ok := filter.(expression.Equality); ok && equality.RepresentsEquality() {
 			var err error
 			cmp, err = equality.ToComparer()
 			if err != nil {
