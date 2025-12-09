@@ -183,3 +183,38 @@ var getManyerErr = fmt.Errorf("always return an error")
 func (errorGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ToChunker)) error {
 	return getManyerErr
 }
+
+func TestPop(t *testing.T) {
+	var backing [16]*int
+	for i := range 16 {
+		backing[i] = new(int)
+		*backing[i] = i
+	}
+	s := backing[:]
+	for i := range 16 {
+		assert.Len(t, s, 16-i)
+		var p *int
+		p, s = pop(s)
+		assert.Len(t, s, 16-i-1)
+		assert.Equal(t, i, *p)
+		assert.Nil(t, backing[16-i-1], "i is %d", i)
+	}
+}
+
+func TestAppendAbsent(t *testing.T) {
+	var absent []hash.HashSet
+	var hashes [16]hash.Hash
+	for i := range 16 {
+		hashes[i][0] = byte(i)
+	}
+	// Initial set is the full batch.
+	absent = appendAbsent(absent, hash.NewHashSet(hashes[:]...), 4)
+	assert.Len(t, absent, 1)
+	assert.Len(t, absent[0], 16)
+	// Next set get batched up.
+	absent = appendAbsent(absent, hash.NewHashSet(hashes[:]...), 4)
+	assert.Len(t, absent, 5)
+	for i := range 4 {
+		assert.Len(t, absent[i+1], 4)
+	}
+}
