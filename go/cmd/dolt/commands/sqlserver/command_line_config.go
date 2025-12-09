@@ -380,7 +380,7 @@ func (cfg *commandLineServerConfig) MetricsTLSCA() string {
 	return ""
 }
 
-func (cfg *commandLineServerConfig) MetricsJwksConfig() []servercfg.JwksConfig {
+func (cfg *commandLineServerConfig) MetricsJwksConfig() *servercfg.JwksConfig {
 	return nil
 }
 
