@@ -117,6 +117,7 @@ type MetricsYAMLConfig struct {
 	TlsCert *string           `yaml:"tls_cert,omitempty" minver:"1.78.2"`
 	TlsKey  *string           `yaml:"tls_key,omitempty" minver:"1.78.2"`
 	TlsCa   *string           `yaml:"tls_ca,omitempty" minver:"1.78.2"`
+	Jwks    *JwksConfig       `yaml:"jwks,omitempty" minver:"TBD"`
 }
 
 type RemotesapiYAMLConfig struct {
@@ -239,6 +240,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			TlsCert: ptr(cfg.MetricsTLSCert()),
 			TlsKey:  ptr(cfg.MetricsTLSKey()),
 			TlsCa:   ptr(cfg.MetricsTLSCA()),
+			Jwks:    cfg.MetricsJwksConfig(),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     cfg.RemotesapiPort(),
@@ -315,6 +317,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			TlsCert: zeroIf(ptr(cfg.MetricsTLSCert()), !cfg.ValueSet(MetricsTLSCertKey)),
 			TlsKey:  zeroIf(ptr(cfg.MetricsTLSKey()), !cfg.ValueSet(MetricsTLSKeyKey)),
 			TlsCa:   zeroIf(ptr(cfg.MetricsTLSCA()), !cfg.ValueSet(MetricsTLSCAKey)),
+			Jwks:    zeroIf(cfg.MetricsJwksConfig(), !cfg.ValueSet(MetricsJwksConfigKey)),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     zeroIf(cfg.RemotesapiPort(), !cfg.ValueSet(RemotesapiPortKey)),
@@ -800,6 +803,14 @@ func (cfg YAMLConfig) MetricsTLSCA() string {
 		return ""
 	}
 	return *cfg.MetricsConfig.TlsCa
+}
+
+func (cfg YAMLConfig) MetricsJwksConfig() *JwksConfig {
+	if cfg.MetricsConfig.Jwks != nil {
+		return cfg.MetricsConfig.Jwks
+	}
+
+	return nil
 }
 
 func (cfg YAMLConfig) RemotesapiPort() *int {

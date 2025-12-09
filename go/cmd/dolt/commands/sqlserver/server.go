@@ -600,8 +600,9 @@ func ConfigureServices(
 		srv   *http.Server
 	}
 
-	var metSrv SQLMetricsService
+	enableMetricsAuthStr, found := os.LookupEnv("DOLT_SQL_SERVER_ENABLE_METRICS_AUTH")
 
+	var metSrv SQLMetricsService
 	RunMetricsServer := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
 			if cfg.ServerConfig.MetricsHost() != "" && cfg.ServerConfig.MetricsPort() > 0 {
@@ -619,7 +620,34 @@ func ConfigureServices(
 				}
 
 				mux := http.NewServeMux()
-				mux.Handle("/metrics", promhttp.Handler())
+				metricsHandler := promhttp.Handler()
+				jwksConfig := cfg.ServerConfig.MetricsJwksConfig()
+				enableMetricsAuth := jwksConfig != nil
+				if enableMetricsAuth {
+					mux.Handle("/metrics", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						auth := r.Header.Get("Authorization")
+						if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+							w.Header().Set("WWW-Authenticate", `Bearer realm="metrics"`)
+							http.Error(w, "unauthorized", http.StatusUnauthorized)
+							return
+						}
+
+						valid, _, err := validateJWT(jwksConfig, strings.TrimPrefix(auth, "Bearer "), time.Now())
+						if err != nil {
+							http.Error(w, fmt.Sprintf("error validating JWT: %v", err), http.StatusUnauthorized)
+							return
+						} else if !valid {
+							http.Error(w, "invalid token", http.StatusUnauthorized)
+							return
+						}
+
+						metricsHandler.ServeHTTP(w, r)
+					}))
+
+				} else {
+					mux.Handle("/metrics", metricsHandler)
+				}
+
 				metSrv.srv = &http.Server{
 					Addr:      addr,
 					Handler:   mux,

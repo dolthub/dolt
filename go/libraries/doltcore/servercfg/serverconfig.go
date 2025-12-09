@@ -208,6 +208,7 @@ type ServerConfig interface {
 	MetricsTLSCert() string
 	MetricsTLSKey() string
 	MetricsTLSCA() string
+	MetricsJwksConfig() *JwksConfig
 
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
@@ -361,6 +362,7 @@ const (
 	MetricsTLSCertKey               = "metrics_tls_cert"
 	MetricsTLSKeyKey                = "metrics_tls_key"
 	MetricsTLSCAKey                 = "metrics_tls_ca"
+	MetricsJwksConfigKey            = "metrics_jwks_config"
 	PrivilegeFilePathKey            = "privilege_file_path"
 	BranchControlFilePathKey        = "branch_control_file_path"
 	UserVarsKey                     = "user_vars"
