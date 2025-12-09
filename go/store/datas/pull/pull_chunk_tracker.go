@@ -131,7 +131,7 @@ func (t *PullChunkTracker) reqRespThread(ctx context.Context, initial hash.HashS
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	for i := 0; i < hasManyThreadCount; i++ {
+	for range hasManyThreadCount {
 		eg.Go(func() error {
 			return hasManyThread(ctx, t.cfg.HasManyer, hasManyReqCh, hasManyRespCh, doneCh)
 		})
@@ -169,61 +169,58 @@ func (t *PullChunkTracker) reqRespThread(ctx context.Context, initial hash.HashS
 
 			select {
 			case h, ok := <-t.uncheckedCh:
+				// uncheckedCh closing means the PullChunkTracker was closed.
 				if !ok {
 					return nil
 				}
+				// |h| is a hash we need to check against HasMany on the destination.
+				// It could become a hash we fetch from source and add to the destination
+				// or it could already be present.
 				if len(unchecked) == 0 || len(unchecked[len(unchecked)-1]) >= t.cfg.BatchSize {
 					outstanding += 1
 					unchecked = append(unchecked, make(hash.HashSet))
 				}
 				unchecked[len(unchecked)-1].Insert(h)
 			case resp := <-hasManyRespCh:
+				// A hasMany response came back.
 				outstanding -= 1
 				if resp.err != nil {
 					err = errors.Join(err, resp.err)
 				} else if len(resp.hs) > 0 {
-					absent = append(absent, resp.hs)
+					// Add all the resp.hs hashes, those which are not already present
+					// in dest, to our batches of absent hashes we will return through
+					// GetChunksToFetch.
+					absent = appendAbsent(absent, resp.hs, t.cfg.BatchSize)
 				}
 			case thisHasManyReqCh <- hasManyReq:
-				copy(unchecked[:], unchecked[1:])
-				if len(unchecked) > 1 {
-					unchecked[len(unchecked)-1] = nil
-				}
-				unchecked = unchecked[:len(unchecked)-1]
+				// We delivered a hasMany request to a hasManyThread.
+				// Remove it here. We do not need to update |outstanding|, since
+				// it was updated when we created the new batch in |unchecked|.
+				_, unchecked = pop(unchecked)
 			case <-t.processedCh:
+				// TickProcessed helps us keep track of chunks which we returned from GetChunksToFetch
+				// and which are still being processed by WalkAddrs. This only gets called after all
+				// unchecked hashes in the chunks have been delivered to us.
 				unprocessed -= 1
 			case req := <-thisReqCh:
+				// A request for GetChunksToFetch.
 				if err != nil {
+					// Deliver an error we experienced. HasMany can error, and this is where
+					// a client sees it, for example.
 					req.err = err
 					close(req.ready)
 					err = nil
 				} else if len(absent) == 0 {
+					// We have no more chunks to deliver. If len(absent) == 0 but we had
+					// unprocessed stuff, we would have had a |nil| |thisReqCh|. The fact that
+					// we accepted the request means we are ready to tell the client that there
+					// are no more chunks to fetch.
 					req.ok = false
 					close(req.ready)
 				} else {
+					// |absent[0]| is as full a batch as we have.
 					req.ok = true
-					req.hs = absent[0]
-					var i int
-					for i = 1; i < len(absent); i++ {
-						l := len(absent[i])
-						if len(req.hs)+l < t.cfg.BatchSize {
-							req.hs.InsertAll(absent[i])
-						} else {
-							for h := range absent[i] {
-								if len(req.hs) >= t.cfg.BatchSize {
-									break
-								}
-								req.hs.Insert(h)
-								absent[i].Remove(h)
-							}
-							break
-						}
-					}
-					copy(absent[:], absent[i:])
-					for j := len(absent) - i; j < len(absent); j++ {
-						absent[j] = nil
-					}
-					absent = absent[:len(absent)-i]
+					req.hs, absent = pop(absent)
 					unprocessed += len(req.hs)
 					close(req.ready)
 				}
@@ -234,6 +231,40 @@ func (t *PullChunkTracker) reqRespThread(ctx context.Context, initial hash.HashS
 	})
 
 	return eg.Wait()
+}
+
+// pop returns the first element of s and the remaining elements of
+// s. It copies any suffix to the front of |s| and nils the last
+// element of |s| so that memory doesn't leak through |s[1:]| retaining
+// s[0].
+func pop[T any](s []T) (T, []T) {
+	ret := s[0]
+	copy(s[:], s[1:])
+	var empty T
+	s[len(s)-1] = empty
+	return ret, s[:len(s)-1]
+}
+
+// appendAbsent adds all elements in |toadd| to HashSets at the end of |absent|. It creates new HashSets
+// at the end of |absent| if inserting into an existing set would cause its size to exceed |sz|.
+//
+// As a special case, |appendAbsent| just returns []hash.HashSet{toadd} if |absent| is already empty.
+func appendAbsent(absent []hash.HashSet, toadd hash.HashSet, sz int) []hash.HashSet {
+	if len(toadd) == 0 {
+		return absent
+	}
+	// Don't bother splitting up toadd to |sz| if it is the first batch.
+	if len(absent) == 0 {
+		absent = append(absent, toadd)
+		return absent
+	}
+	for h := range toadd {
+		if len(absent[len(absent)-1]) >= sz {
+			absent = append(absent, make(hash.HashSet))
+		}
+		absent[len(absent)-1].Insert(h)
+	}
+	return absent
 }
 
 // Run by a PullChunkTracker, calls HasMany on a batch of addresses and delivers the results.
