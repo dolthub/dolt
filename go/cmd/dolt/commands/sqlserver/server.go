@@ -600,8 +600,6 @@ func ConfigureServices(
 		srv   *http.Server
 	}
 
-	enableMetricsAuthStr, found := os.LookupEnv("DOLT_SQL_SERVER_ENABLE_METRICS_AUTH")
-
 	var metSrv SQLMetricsService
 	RunMetricsServer := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
