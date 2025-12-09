@@ -806,11 +806,7 @@ func (cfg YAMLConfig) MetricsTLSCA() string {
 }
 
 func (cfg YAMLConfig) MetricsJwksConfig() *JwksConfig {
-	if cfg.MetricsConfig.Jwks != nil {
-		return cfg.MetricsConfig.Jwks
-	}
-
-	return nil
+	return cfg.MetricsConfig.Jwks
 }
 
 func (cfg YAMLConfig) RemotesapiPort() *int {
