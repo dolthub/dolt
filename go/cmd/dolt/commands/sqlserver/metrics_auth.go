@@ -79,7 +79,7 @@ func getJWTProvider(expectedClaimsMap map[string]string, url string) (jwtauth.JW
 		case "sub":
 			pr.Subject = claim
 		default:
-			return pr, errors.New("ValidateJWT: Unexpected expected claim found in user identity")
+			return pr, errors.New("ValidateJWT: Unsupported claim found in user identity")
 		}
 	}
 	return pr, nil
