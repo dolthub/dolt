@@ -126,6 +126,10 @@ echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 
 echo "benchmark TPC-C complete at $WORKING_DIR"
 echo "DOLT_DEFAULT_BIN_FORMAT='$DOLT_DEFAULT_BIN_FORMAT'"
+if [ "$PPROF" -eq 1 ]; then
+  # parse run.log to output the profile location
+  head -n1 "$WORKING_DIR/run.log" | cut -d ":" -f 4
+fi
 echo ""
 
 unset DOLT_DEFAULT_BIN_FORMAT
