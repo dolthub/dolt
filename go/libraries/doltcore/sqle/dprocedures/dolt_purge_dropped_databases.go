@@ -27,11 +27,6 @@ func doltPurgeDroppedDatabases(ctx *sql.Context, args ...string) (sql.RowIter, e
 		return nil, fmt.Errorf("dolt_purge_dropped_databases does not take any arguments")
 	}
 
-	// Only allow admins to purge dropped databases
-	if err := checkDoltPurgeDroppedDatabasesPrivs(ctx); err != nil {
-		return nil, err
-	}
-
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	err := doltSession.Provider().PurgeDroppedDatabases(ctx)
 	if err != nil {
@@ -39,19 +34,4 @@ func doltPurgeDroppedDatabases(ctx *sql.Context, args ...string) (sql.RowIter, e
 	}
 
 	return rowToIter(int64(cmdSuccess)), nil
-}
-
-// checkDoltPurgeDroppedDatabasesPrivs returns an error if the user requesting to purge dropped databases
-// does not have SUPER access. Since this is a permanent and destructive operation, we restrict it to admins,
-// even though the SUPER privilege has been deprecated, since there isn't another appropriate global privilege.
-func checkDoltPurgeDroppedDatabasesPrivs(ctx *sql.Context) error {
-	privs, counter := ctx.GetPrivilegeSet()
-	if counter == 0 {
-		return fmt.Errorf("unable to check user privileges for dolt_purge_dropped_databases procedure")
-	}
-	if privs.Has(sql.PrivilegeType_Super) == false {
-		return sql.ErrPrivilegeCheckFailed.New(ctx.Session.Client().User)
-	}
-
-	return nil
 }
