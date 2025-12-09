@@ -64,9 +64,9 @@ metrics:
       name: jwks_name
       location_url: https://website.com
       claims: 
-        field1: a
-        field2: b
-      fields_to_log: [field1, field2]
+        iss: dolthub.com
+        aud: metrics
+      fields_to_log: [iss, aud]
 
 user_session_vars:
     - name: user0
@@ -121,10 +121,10 @@ jwks:
 			Name:        "jwks_name",
 			LocationUrl: "https://website.com",
 			Claims: map[string]string{
-				"field1": "a",
-				"field2": "b",
+				"iss": "dolthub.com",
+				"aud": "metrics",
 			},
-			FieldsToLog: []string{"field1", "field2"},
+			FieldsToLog: []string{"iss", "aud"},
 		},
 	}
 	expected.DataDirStr = ptr("some nonsense")

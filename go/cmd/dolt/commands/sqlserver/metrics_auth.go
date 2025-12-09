@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -45,12 +46,16 @@ func validateJWT(jwksConfig *servercfg.JwksConfig, token string, reqTime time.Ti
 		return false, nil, fmt.Errorf("unable to validate JWT token: %w", err)
 	}
 
-	logString := "Metrics Auth with JWT: "
-	for _, field := range jwksConfig.FieldsToLog {
-		logString += fmt.Sprintf("%s: %s,", field, getClaimFromKey(privClaims, field))
+	if pr.Subject != privClaims.Subject {
+		return false, nil, fmt.Errorf("JWT token subject does not match subject claim")
 	}
 
-	logrus.Info(logString)
+	var keyValPairs []string
+	for _, field := range jwksConfig.FieldsToLog {
+		keyValPairs = append(keyValPairs, fmt.Sprintf("'%s': '%s'", field, getClaimFromKey(privClaims, field))
+	}
+
+	logrus.Info("Metrics Auth with JWT: " + strings.Join(keyValPairs, ", "))
 	return true, privClaims, nil
 }
 

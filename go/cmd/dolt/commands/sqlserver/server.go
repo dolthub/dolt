@@ -632,7 +632,7 @@ func ConfigureServices(
 
 						valid, _, err := validateJWT(jwksConfig, strings.TrimPrefix(auth, "Bearer "), time.Now())
 						if err != nil {
-							logrus.Warnf("JWT validation error for /metrics: %w", err)
+							logrus.Warnf("JWT validation error for /metrics: %v", err)
 							http.Error(w, "auth failed", http.StatusUnauthorized)
 							return
 						} else if !valid {
