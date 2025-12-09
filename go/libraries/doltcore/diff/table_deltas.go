@@ -39,6 +39,17 @@ const (
 	RemovedTable
 )
 
+// Filter type constants for diff filtering.
+// These correspond to the string values used in the --filter flag and
+// are stored in TableDeltaSummary.DiffType field.
+const (
+	DiffTypeAdded    = "added"
+	DiffTypeModified = "modified"
+	DiffTypeRenamed  = "renamed"
+	DiffTypeDropped  = "dropped"
+	DiffTypeAll      = "all"
+)
+
 const DBPrefix = "__DATABASE__"
 
 type TableInfo struct {
@@ -95,6 +106,22 @@ func (tds TableDeltaSummary) IsRename() bool {
 		return false
 	}
 	return tds.FromTableName != tds.ToTableName
+}
+
+// ChangeTypeToDiffType converts a row-level ChangeType to a table-level DiffType string.
+// This allows row-level filtering to use the same DiffType infrastructure as table-level filtering.
+func ChangeTypeToDiffType(ct ChangeType) string {
+	switch ct {
+	case Added:
+		return DiffTypeAdded
+	case Removed:
+		return DiffTypeDropped
+	case ModifiedOld, ModifiedNew:
+		// Both ModifiedOld and ModifiedNew represent the same logical change: modified
+		return DiffTypeModified
+	default:
+		return ""
+	}
 }
 
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
@@ -689,7 +716,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 			FromTableName: td.FromName,
 			DataChange:    dataChange,
 			SchemaChange:  true,
-			DiffType:      "dropped",
+			DiffType:      DiffTypeDropped,
 		}, nil
 	}
 
@@ -700,7 +727,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 			ToTableName:  td.ToName,
 			DataChange:   dataChange,
 			SchemaChange: true,
-			DiffType:     "added",
+			DiffType:     DiffTypeAdded,
 		}, nil
 	}
 
@@ -712,7 +739,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 			ToTableName:   td.ToName,
 			DataChange:    dataChange,
 			SchemaChange:  true,
-			DiffType:      "renamed",
+			DiffType:      DiffTypeRenamed,
 		}, nil
 	}
 
@@ -727,7 +754,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 		ToTableName:   td.ToName,
 		DataChange:    dataChange,
 		SchemaChange:  schemaChange,
-		DiffType:      "modified",
+		DiffType:      DiffTypeModified,
 	}, nil
 }
 
