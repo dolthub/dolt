@@ -710,33 +710,6 @@ func filterJournalCore(journalData []byte, output io.Writer, filterRoots, filter
 	filterRootSet := hash.NewHashSet(filterRoots...)
 	filterChunkSet := hash.NewHashSet(filterChunks...)
 
-	// Generate logging message
-	var logMessages []string
-	if len(filterRoots) > 0 {
-		var rootStrings []string
-		for _, h := range filterRoots {
-			rootStrings = append(rootStrings, h.String())
-		}
-		if len(filterRoots) == 1 {
-			logMessages = append(logMessages, fmt.Sprintf("root hash: %s", filterRoots[0].String()))
-		} else {
-			logMessages = append(logMessages, fmt.Sprintf("%d root hashes: %s", len(filterRoots), strings.Join(rootStrings, ", ")))
-		}
-	}
-	if len(filterChunks) > 0 {
-		var chunkStrings []string
-		for _, h := range filterChunks {
-			chunkStrings = append(chunkStrings, h.String())
-		}
-		if len(filterChunks) == 1 {
-			logMessages = append(logMessages, fmt.Sprintf("chunk hash: %s", filterChunks[0].String()))
-		} else {
-			logMessages = append(logMessages, fmt.Sprintf("%d chunk hashes: %s", len(filterChunks), strings.Join(chunkStrings, ", ")))
-		}
-	}
-
-	logrus.Infof("Filtering journal to exclude %s", strings.Join(logMessages, " and "))
-
 	for offset := 0; offset <= len(journalData)-4; {
 		size := readUint32(journalData[offset:])
 		if size == 0 {
