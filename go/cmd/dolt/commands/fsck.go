@@ -231,12 +231,13 @@ type FSCKReport struct {
 	Problems   []error
 }
 
-// validateCommitDAGAndTrackChunks walks the commit DAG starting from a specific commit hash,
+// validateCommitDAGAndTrackChunks walks the commit DAG starting from multiple commit hashes,
 // validates each commit's tree structure and tracks all reachable chunks.
-func validateCommitDAGAndTrackChunks(ctx context.Context, vs *types.ValueStore, startCommitHash hash.Hash, progress chan string, appendErr func(error), reachableChunks *hash.HashSet) error {
+func validateCommitDAGAndTrackChunks(ctx context.Context, vs *types.ValueStore, startCommitHashes []hash.Hash, progress chan string, appendErr func(error), reachableChunks *hash.HashSet) error {
 	progress <- "Starting commit DAG validation..."
 	// Queue for commits to process (breadth-first through commit history)
-	commitQueue := []hash.Hash{startCommitHash}
+	commitQueue := make([]hash.Hash, len(startCommitHashes))
+	copy(commitQueue, startCommitHashes)
 	visitedCommits := make(hash.HashSet)
 
 	for len(commitQueue) > 0 {
@@ -585,22 +586,16 @@ func fsckOnChunkStore(ctx context.Context, ddb *doltdb.DoltDB, gs *nbs.Generatio
 	if len(startCommits) > 0 {
 		progress <- fmt.Sprintf("Starting commit DAG validation from %d local branches, remote branches, and tags...", len(startCommits))
 
-		// Track reachable chunks by walking from all branch HEADs and tags
 		reachableChunks := make(hash.HashSet)
-		vs := types.NewValueStore(gs)
 
-		// Walk from each starting commit hash
-		for _, startCommit := range startCommits {
-			err = validateCommitDAGAndTrackChunks(ctx, vs, startCommit, progress, appendErr, &reachableChunks)
-			if err != nil {
-				appendErr(fmt.Errorf("commit DAG validation failed from %s: %w", startCommit.String(), err))
-			}
+		err = validateCommitDAGAndTrackChunks(ctx, vs, startCommits, progress, appendErr, &reachableChunks)
+		if err != nil {
+			appendErr(fmt.Errorf("commit DAG validation failed: %w", err))
 		}
 
 		// Report unreachable chunks (excluding essential repository infrastructure)
 		unreachableCount := 0
 		infrastructureCount := 0
-		vs = types.NewValueStore(gs)
 		for chunkHash := range allChunks {
 			if !reachableChunks.Has(chunkHash) {
 				// Try to read the chunk to determine if it's infrastructure
