@@ -25,6 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -531,97 +532,71 @@ func fsckOnChunkStore(ctx context.Context, ddb *doltdb.DoltDB, gs *nbs.Generatio
 		return nil, err
 	}
 
-
 	// Perform commit DAG validation from all branch HEADs and tags to identify unreachable chunks
-	progress <- "Getting all local branches, remote branches, and tags..."
-	
-	// Get all local branches
-	branches, err := ddb.GetBranches(ctx)
+	progress <- "--------------- All Objects scanned. Starting commit DAG validation ---------------"
+
+	var references map[hash.Hash][]string
+
+	// helper to get refs, resolve them to commits, and add them to startCommits/references.
+	// The callback is expected to work, we'll error out if it doesn't. resolving commits is less certain though,
+	// so those errors are appended via appendErr to be reported at the end.
+	refGetter := func(cb func(context.Context) ([]ref.DoltRef, error)) error {
+		refs, err := cb(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get references: %w", err)
+		}
+		for _, ref := range refs {
+			head, err := ddb.ResolveCommitRef(ctx, ref)
+			if err != nil {
+				appendErr(fmt.Errorf("failed to resolve reference %s: %w", ref.GetPath(), err))
+				continue
+			}
+			commitHash, err := head.HashOf()
+			if err != nil {
+				appendErr(fmt.Errorf("failed to get hash for refeence %s: %w", ref.GetPath(), err))
+				continue
+			}
+			references[commitHash] = append(references[commitHash], ref.GetPath())
+		}
+		return nil
+	}
+
+	err = refGetter(ddb.GetBranches)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get branches: %w", err)
 	}
-	
-	// Get all remote tracking branches
-	remoteBranches, err := ddb.GetRemoteRefs(ctx)
+	err = refGetter(ddb.GetRemoteRefs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get remote branches: %w", err)
 	}
-	
-	// Get all tags
-	tags, err := ddb.GetTags(ctx)
+	err = refGetter(ddb.GetTags)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tags: %w", err)
 	}
-	
-	// Collect all commit hashes to start from
-	var startCommits []hash.Hash
-	
-	// Process local branches
-	for _, branch := range branches {
-		branchHead, err := ddb.ResolveCommitRef(ctx, branch)
-		if err != nil {
-			appendErr(fmt.Errorf("failed to resolve branch %s: %w", branch.GetPath(), err))
-			continue
-		}
-		if branchHead != nil {
-			commitHash, err := branchHead.HashOf()
-			if err != nil {
-				appendErr(fmt.Errorf("failed to get hash for branch %s: %w", branch.GetPath(), err))
-				continue
-			}
-			startCommits = append(startCommits, commitHash)
-		}
+
+	startCommits := make([]hash.Hash, 0, len(references))
+	for commitHash := range references {
+		startCommits = append(startCommits, commitHash)
 	}
-	
-	// Process remote tracking branches  
-	for _, remoteBranch := range remoteBranches {
-		remoteBranchHead, err := ddb.ResolveCommitRef(ctx, remoteBranch)
-		if err != nil {
-			appendErr(fmt.Errorf("failed to resolve remote branch %s: %w", remoteBranch.GetPath(), err))
-			continue
-		}
-		if remoteBranchHead != nil {
-			commitHash, err := remoteBranchHead.HashOf()
-			if err != nil {
-				appendErr(fmt.Errorf("failed to get hash for remote branch %s: %w", remoteBranch.GetPath(), err))
-				continue
-			}
-			startCommits = append(startCommits, commitHash)
-		}
-	}
-	
-	// Process tags
-	for _, tag := range tags {
-		tagCommit, err := ddb.ResolveCommitRef(ctx, tag)
-		if err != nil {
-			appendErr(fmt.Errorf("failed to resolve tag %s: %w", tag.GetPath(), err))
-			continue
-		}
-		if tagCommit != nil {
-			commitHash, err := tagCommit.HashOf()
-			if err != nil {
-				appendErr(fmt.Errorf("failed to get hash for tag %s: %w", tag.GetPath(), err))
-				continue
-			}
-			startCommits = append(startCommits, commitHash)
-		}
-	}
-	
+
+	// NM4 - TODO: Get working sets too. Currently commit dag walking will report
+	// uncommited working set chunks as unreachable.
+
 	if len(startCommits) > 0 {
 		progress <- fmt.Sprintf("Starting commit DAG validation from %d local branches, remote branches, and tags...", len(startCommits))
-		
+
 		// Track reachable chunks by walking from all branch HEADs and tags
 		reachableChunks := make(hash.HashSet)
 		vs := types.NewValueStore(gs)
-		
-		// Walk from each starting commit (branches and tags may have different histories)
+
+		// Walk from each starting commit hash
 		for _, startCommit := range startCommits {
 			err = validateCommitDAGAndTrackChunks(ctx, vs, startCommit, progress, appendErr, &reachableChunks)
 			if err != nil {
 				appendErr(fmt.Errorf("commit DAG validation failed from %s: %w", startCommit.String(), err))
 			}
 		}
-		
+
 		// Report unreachable chunks (excluding essential repository infrastructure)
 		unreachableCount := 0
 		infrastructureCount := 0
