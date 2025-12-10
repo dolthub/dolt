@@ -1408,13 +1408,10 @@ func getRangeCutValue(ctx context.Context, cut sql.MySQLRangeCut, typ sql.Type) 
 		return nil, nil
 	}
 	ret, inRange, err := typ.Convert(ctx, sql.GetMySQLRangeCutKey(cut))
-	if err != nil {
-		return nil, err
-	}
 	if inRange != sql.InRange {
 		return ret, nil
 	}
-	return ret, nil
+	return ret, err
 }
 
 // DropTrailingAllColumnExprs returns the Range with any |AllColumnExprs| at the end of it removed.
