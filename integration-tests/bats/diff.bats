@@ -2245,3 +2245,223 @@ EOF
     [[ "$output" =~ "dolt_tests" ]] || false
     [[ "$output" =~ "updated description" ]] || false
 }
+
+@test "diff: --filter option filters by diff type" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt add .
+    dolt commit -m "create table"
+
+    # Test filter with table addition
+    run dolt diff HEAD~1 --filter=modified
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 --filter=removed
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 --filter=added
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/t b/t' ]] || false
+    [[ $output =~ 'added table' ]] || false
+
+    # Test filter with row inserts
+    dolt sql -q "INSERT INTO t VALUES (1, 10)"
+    dolt sql -q "INSERT INTO t VALUES (2, 10)"
+    dolt sql -q "INSERT INTO t VALUES (3, 10)"
+    dolt add .
+    dolt commit -m "add initial rows"
+
+    run dolt diff HEAD~1 --filter=modified
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 --filter=removed
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=added
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,10);' ]
+    [ "${lines[1]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (2,10);' ]
+    [ "${lines[2]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (3,10);' ]
+
+    # Test filter with row updates
+    dolt sql -q "UPDATE t SET val=12 where pk=1"
+    dolt add .
+    dolt commit -m "update row"
+
+    run dolt diff HEAD~1 -r sql --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=removed
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=modified
+    [ "${lines[0]}" = 'UPDATE `t` SET `val`=12 WHERE `pk`=1;' ]
+
+    # Test filter with row deletes
+    dolt sql -q "DELETE from t where pk=1"
+
+    dolt add . && dolt commit -m "delete row"
+
+    run dolt diff HEAD~1 -r sql --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 --filter=modified
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=removed
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'DELETE FROM `t` WHERE `pk`=1;' ]
+
+    # Test filter with schema changes - add column
+    dolt sql -q "ALTER TABLE t ADD val2 int"
+
+    dolt add . && dolt commit -m "add a col"
+
+    run dolt diff HEAD~1 -r sql --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=removed
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=modified
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` ADD `val2` int;' ]
+
+    # Test filter with schema changes - modify column type
+    dolt sql -q "ALTER TABLE t MODIFY COLUMN val2 varchar(255)"
+
+    dolt add . && dolt commit -m "change datatype of column"
+
+    run dolt diff HEAD~1 -r sql --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=removed
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql  --filter=modified
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` MODIFY COLUMN `val2` varchar(255);' ]
+
+    # Test filter with schema changes - rename column
+    dolt sql -q "ALTER TABLE t RENAME COLUMN val2 TO val3"
+
+    dolt add . && dolt commit -m "rename column"
+
+    run dolt diff HEAD~1 -r sql --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=removed
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql  --filter=modified
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `val2` TO `val3`;' ]
+
+    # Test filter with schema changes - drop column
+    dolt sql -q "ALTER TABLE t DROP COLUMN val3"
+
+    dolt add . && dolt commit -m "drop column"
+
+    run dolt diff HEAD~1 -r sql --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=removed
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql  --filter=modified
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` DROP `val3`;' ]
+}
+
+@test "diff: --filter with invalid value returns error" {
+    dolt sql -q "create table t(pk int primary key)"
+    dolt add . && dolt commit -m "create table"
+
+    run dolt diff HEAD~1 --filter=invalid
+    [ $status -eq 1 ]
+    [[ $output =~ "invalid filter" ]] || false
+}
+
+@test "diff: --filter=renamed filters to only renamed tables" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 10)"
+    dolt add . && dolt commit -m "create table with data"
+
+    # Rename the table
+    dolt sql -q "RENAME TABLE t TO t_renamed"
+    dolt add . && dolt commit -m "rename table"
+
+    # filter=renamed should show the renamed table (shows different from/to names)
+    run dolt diff HEAD~1 --filter=renamed
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/t b/t_renamed' ]] || false
+    [[ $output =~ '--- a/t' ]] || false
+    [[ $output =~ '+++ b/t_renamed' ]] || false
+
+    # filter=added should not show the renamed table
+    run dolt diff HEAD~1 --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    # filter=modified should not show the renamed table
+    run dolt diff HEAD~1 --filter=modified
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    # filter=dropped should not show the renamed table
+    run dolt diff HEAD~1 --filter=dropped
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+}
+
+@test "diff: --filter=dropped filters to only dropped tables" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 10)"
+    dolt add . && dolt commit -m "create table with data"
+
+    # Drop the table
+    dolt sql -q "DROP TABLE t"
+    dolt add . && dolt commit -m "drop table"
+
+    # filter=dropped should show the dropped table
+    run dolt diff HEAD~1 --filter=dropped
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/t b/t' ]] || false
+    [[ $output =~ 'deleted table' ]] || false
+
+    # filter=removed (alias for dropped) should also show the dropped table
+    run dolt diff HEAD~1 --filter=removed
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/t b/t' ]] || false
+    [[ $output =~ 'deleted table' ]] || false
+
+    # filter=added should not show the dropped table
+    run dolt diff HEAD~1 --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    # filter=modified should not show the dropped table
+    run dolt diff HEAD~1 --filter=modified
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    # filter=renamed should not show the dropped table
+    run dolt diff HEAD~1 --filter=renamed
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+}

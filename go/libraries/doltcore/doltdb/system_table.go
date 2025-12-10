@@ -155,12 +155,13 @@ func GeneratedSystemTableNames() []string {
 		GetTableOfTablesWithViolationsName(),
 		GetCommitsTableName(),
 		GetCommitAncestorsTableName(),
-		GetStatusTableName(),
 		GetRemotesTableName(),
 		GetHelpTableName(),
 		GetBackupsTableName(),
 		GetStashesTableName(),
 		GetBranchActivityTableName(),
+		// [dtables.StatusTable] now uses [adapters.DoltTableAdapterRegistry] in its constructor for Doltgres.
+		StatusTableName,
 	}
 }
 
@@ -365,11 +366,6 @@ var GetRemotesTableName = func() string {
 // GetSchemaConflictsTableName returns the schema conflicts system table name
 var GetSchemaConflictsTableName = func() string {
 	return SchemaConflictsTableName
-}
-
-// GetStatusTableName returns the status system table name.
-var GetStatusTableName = func() string {
-	return StatusTableName
 }
 
 // GetTagsTableName returns the tags table name
