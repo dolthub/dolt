@@ -22,13 +22,85 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/sirupsen/logrus"
 )
 
 func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan bool) int {
+	return journalInspectInternal(journalPath, seeRoots, seeChunks, crcScan, snapScan, hash.Hash{})
+}
+
+func JournalFilter(journalPath string, filterHashStrs string) int {
+	// Backward compatibility - filter both roots and chunks
+	return JournalFilterByType(journalPath, filterHashStrs, filterHashStrs)
+}
+
+func JournalFilterByType(journalPath string, filterRootsStr, filterChunksStr string) int {
+	var filterRoots, filterChunks []hash.Hash
+	var err error
+
+	// Parse root hashes
+	if filterRootsStr != "" {
+		filterRoots, err = parseHashList(filterRootsStr, "root")
+		if err != nil {
+			logrus.Errorf("Error: %v", err)
+			return 1
+		}
+	}
+
+	// Parse chunk hashes
+	if filterChunksStr != "" {
+		filterChunks, err = parseHashList(filterChunksStr, "chunk")
+		if err != nil {
+			logrus.Errorf("Error: %v", err)
+			return 1
+		}
+	}
+
+	if len(filterRoots) == 0 && len(filterChunks) == 0 {
+		logrus.Errorf("Error: No valid hashes provided")
+		return 1
+	}
+
+	var f *os.File
+	f, err = os.Open(journalPath)
+	if err != nil {
+		panic("could not open journal file")
+	}
+	defer f.Close()
+
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		panic("could not read journal file")
+	}
+	return filterJournalByType(journalPath, buf, filterRoots, filterChunks)
+}
+
+func parseHashList(hashStrs string, hashType string) ([]hash.Hash, error) {
+	hashStrings := strings.Split(hashStrs, ",")
+	var hashes []hash.Hash
+
+	for _, hashStr := range hashStrings {
+		hashStr = strings.TrimSpace(hashStr)
+		if hashStr == "" {
+			continue
+		}
+		h, ok := hash.MaybeParse(hashStr)
+		if !ok {
+			return nil, fmt.Errorf("invalid %s hash format: %s", hashType, hashStr)
+		}
+		hashes = append(hashes, h)
+	}
+
+	return hashes, nil
+}
+
+func journalInspectInternal(journalPath string, seeRoots, seeChunks, crcScan, snapScan bool, filterHash hash.Hash) int {
 	var f *os.File
 	f, err := os.Open(journalPath)
 	if err != nil {
@@ -592,3 +664,148 @@ func (w *LineLogger) flush() {
 
 // Flush can be called manually to force any remaining bytes out.
 func (w *LineLogger) Flush() { w.flush() }
+
+// filterJournal creates a filtered copy of the journal that excludes records with the specified hashes
+// filterJournalByType creates a filtered copy of the journal that excludes records with the specified hashes by type
+func filterJournalByType(journalPath string, buf []byte, filterRoots, filterChunks []hash.Hash) int {
+	// Create maps for faster hash lookups
+	filterRootMap := make(map[hash.Hash]bool)
+	filterChunkMap := make(map[hash.Hash]bool)
+
+	for _, h := range filterRoots {
+		filterRootMap[h] = true
+	}
+	for _, h := range filterChunks {
+		filterChunkMap[h] = true
+	}
+
+	// Generate logging message
+	var logMessages []string
+	if len(filterRoots) > 0 {
+		var rootStrings []string
+		for _, h := range filterRoots {
+			rootStrings = append(rootStrings, h.String())
+		}
+		if len(filterRoots) == 1 {
+			logMessages = append(logMessages, fmt.Sprintf("root hash: %s", filterRoots[0].String()))
+		} else {
+			logMessages = append(logMessages, fmt.Sprintf("%d root hashes: %s", len(filterRoots), strings.Join(rootStrings, ", ")))
+		}
+	}
+	if len(filterChunks) > 0 {
+		var chunkStrings []string
+		for _, h := range filterChunks {
+			chunkStrings = append(chunkStrings, h.String())
+		}
+		if len(filterChunks) == 1 {
+			logMessages = append(logMessages, fmt.Sprintf("chunk hash: %s", filterChunks[0].String()))
+		} else {
+			logMessages = append(logMessages, fmt.Sprintf("%d chunk hashes: %s", len(filterChunks), strings.Join(chunkStrings, ", ")))
+		}
+	}
+	
+	logrus.Infof("Filtering journal to exclude %s", strings.Join(logMessages, " and "))
+
+	dir := filepath.Dir(journalPath)
+	base := filepath.Base(journalPath)
+	outputPath := filepath.Join(dir, base+".filtered")
+
+	outputFile, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
+	if err != nil {
+		logrus.Errorf("Error creating filtered journal file: %v", err)
+		return 1
+	}
+	defer outputFile.Close()
+
+	// Scan through the journal and copy all records except the filtered one
+	filteredRecords := 0
+	totalRecords := 0
+	bytesWritten := 0
+
+	for offset := 0; offset <= len(buf)-4; {
+		size := readUint32(buf[offset:])
+		if size == 0 {
+			logrus.Errorf("Null bytes encountered at offset %d. filterJournal expects valid/truncated journal data. Extend as necessary", offset)
+			return 1
+		}
+		if size >= journalWriterBuffSize {
+			logrus.Errorf("Excessive length prefix found at offset %d. filterJournal expects valid/truncated journal data. Extend as necessary", offset)
+			return 1
+		}
+
+		if offset+int(size) <= len(buf) {
+			recordBuf := buf[offset : offset+int(size)]
+			if err := validateJournalRecord(recordBuf); err == nil {
+				rec, err := readJournalRecord(recordBuf)
+				if err == nil {
+					totalRecords++
+					// Check if this record should be filtered out
+					shouldFilter := false
+					if rec.kind == rootHashJournalRecKind && filterRootMap[rec.address] {
+						logrus.Infof("Filtering out root record with hash: %s", rec.address.String())
+						shouldFilter = true
+					} else if rec.kind == chunkJournalRecKind && filterChunkMap[rec.address] {
+						logrus.Infof("Filtering out chunk record with hash: %s", rec.address.String())
+						shouldFilter = true
+					}
+					
+					if shouldFilter {
+						filteredRecords++
+						offset += int(size)
+						continue
+					}
+					// Copy this record to the output file
+					n, err := outputFile.Write(recordBuf)
+					if err != nil {
+						logrus.Errorf("Error writing to filtered journal: %v", err)
+						return 1
+					}
+					bytesWritten += n
+				}
+			}
+			offset += int(size)
+		} else {
+			logrus.Errorf("Error validating record at (offset:%d len:%d): %v", offset, int(size), err)
+			return 1
+		}
+	}
+
+	logrus.Infof("Filtered journal created: %s", outputPath)
+	logrus.Infof("Total records processed: %d", totalRecords)
+	logrus.Infof("Records filtered out: %d", filteredRecords)
+	logrus.Infof("Bytes written: %d", bytesWritten)
+
+	if filteredRecords == 0 {
+		totalFilterHashes := len(filterRoots) + len(filterChunks)
+		if totalFilterHashes == 1 {
+			if len(filterRoots) == 1 {
+				logrus.Warnf("No root records with hash %s found in journal", filterRoots[0].String())
+			} else {
+				logrus.Warnf("No chunk records with hash %s found in journal", filterChunks[0].String())
+			}
+		} else {
+			var parts []string
+			if len(filterRoots) > 0 {
+				parts = append(parts, fmt.Sprintf("%d root hash(es)", len(filterRoots)))
+			}
+			if len(filterChunks) > 0 {
+				parts = append(parts, fmt.Sprintf("%d chunk hash(es)", len(filterChunks)))
+			}
+			logrus.Warnf("No records with any of the %s found in journal", strings.Join(parts, " and "))
+		}
+	}
+
+	// Print shell commands to replace the journal file
+	now := time.Now()
+	dateString := now.Format("2006_01_02_150405")
+
+	logrus.Infof("")
+	logrus.Infof("Filtered file: %s", outputPath)
+	logrus.Infof("")
+	logrus.Infof("To replace the original journal file, run these commands:")
+	logrus.Infof("cp %s %s_saved_%s", journalPath, journalPath, dateString)
+	logrus.Infof("mv %s %s", outputPath, journalPath)
+	logrus.Infof("rm %s", filepath.Join(filepath.Dir(journalPath), "..", "..", ".dolt", "noms", "journal.idx"))
+
+	return 0
+}

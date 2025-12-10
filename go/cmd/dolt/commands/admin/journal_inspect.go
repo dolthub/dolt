@@ -47,7 +47,12 @@ func (cmd JournalInspectCmd) Docs() *cli.CommandDocumentation {
 		ShortDesc: "Inspect a Dolt journal file and display information about it",
 		LongDesc: `This tool is intented for debugging Dolt journal files. Since it is intended to debug potentially
 corrupted files, it is best run from a location which doesn't attempt to load databases. Ie, go to /tmp, and run
-dolt admin journal-inspect /path/to/journal/file`,
+dolt admin journal-inspect /path/to/journal/file
+
+When using the --filter-roots or --filter-chunks options, a new journal file will be created next to the original 
+file with the .filtered extension. This new journal will be identical to the original except that it will not contain 
+records of the specified type with any of the specified hashes. Multiple hashes can be provided as a comma-separated 
+list. The two filter options can be used together to filter both root and chunk records.`,
 		Synopsis: []string{
 			"<journal-path>",
 		},
@@ -61,10 +66,12 @@ func (cmd JournalInspectCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag("verbose", "v", "Display verbose output during inspection (same as -r -c")
 	ap.SupportsFlag("crc-scan", "", "Scan invalid sections for valid CRCs. SLOW.")
 	ap.SupportsFlag("snappy-scan", "", "Scan invalid sections for snappy tags and content headers.")
+	ap.SupportsString("filter-roots", "", "hashcode1,hashcode2,...", "Create filtered copy of journal excluding the specified root hashes (comma-separated)")
+	ap.SupportsString("filter-chunks", "", "hashcode1,hashcode2,...", "Create filtered copy of journal excluding the specified chunk hashes (comma-separated)")
 	return ap
 }
 
-func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []string, _ *env.DoltEnv, _ cli.CliContext) int {
 	ap := cmd.ArgParser()
 	usage, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, usage)
@@ -93,6 +100,8 @@ func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []s
 
 	crcScan := apr.Contains("crc-scan")
 	snappScan := apr.Contains("snappy-scan")
+	filterRootsStr := apr.GetValueOrDefault("filter-roots", "")
+	filterChunksStr := apr.GetValueOrDefault("filter-chunks", "")
 
 	if _, err := os.Stat(journalPath); os.IsNotExist(err) {
 		cli.PrintErrln("Error: Journal file does not exist:", journalPath)
@@ -103,6 +112,11 @@ func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []s
 	if err != nil {
 		cli.PrintErrln("Error getting absolute path:", err.Error())
 		return 1
+	}
+
+	// Handle filter mode
+	if filterRootsStr != "" || filterChunksStr != "" {
+		return nbs.JournalFilterByType(absPath, filterRootsStr, filterChunksStr)
 	}
 
 	// JournalInspect returns an exit code. It's entire purpose it to print errors, after all.
