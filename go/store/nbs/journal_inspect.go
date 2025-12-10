@@ -31,12 +31,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan bool) int {
-	return journalInspectInternal(journalPath, seeRoots, seeChunks, crcScan, snapScan, hash.Hash{})
-}
-
 // JournalFilter creates a new journal file next to the original with the .filtered extension. The inputs are
 // comma-separated lists of root hashes and chunk hashes to filter out of the journal file.
+//
+// Intended for use in the CLI. Returns exit code 0 on success, 1 on failure.
 func JournalFilter(journalPath string, filterRootsStr, filterChunksStr string) int {
 	var filterRoots, filterChunks []hash.Hash
 	var err error
@@ -94,7 +92,7 @@ func parseHashList(hashStrs string, hashType string) ([]hash.Hash, error) {
 	return hashes, nil
 }
 
-func journalInspectInternal(journalPath string, seeRoots, seeChunks, crcScan, snapScan bool, filterHash hash.Hash) int {
+func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan bool) int {
 	var f *os.File
 	f, err := os.Open(journalPath)
 	if err != nil {
