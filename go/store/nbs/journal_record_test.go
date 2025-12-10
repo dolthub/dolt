@@ -442,3 +442,77 @@ func mustCompressedChunk(rec journalRec) CompressedChunk {
 	d.PanicIfError(err)
 	return cc
 }
+
+type testRecord struct {
+	hash hash.Hash
+	kind journalRecKind
+}
+
+func processJournalAndCollectRecords(t *testing.T, journalData []byte) []testRecord {
+	ctx := context.Background()
+	var records []testRecord
+
+	warnCb := func(err error) {
+		// We don't expect any errors.
+		t.FailNow()
+	}
+
+	_, err := processJournalRecords(ctx, bytes.NewReader(journalData), 0, func(offset int64, rec journalRec) error {
+		records = append(records, testRecord{hash: rec.address, kind: rec.kind})
+		return nil
+	}, warnCb)
+
+	require.NoError(t, err)
+
+	return records
+}
+
+func TestJournalFiltering(t *testing.T) {
+	originalTimestampGen := journalRecordTimestampGenerator
+	journalRecordTimestampGenerator = testTimestampGenerator
+	defer func() { journalRecordTimestampGenerator = originalTimestampGen }()
+
+	// Create a journal with known records
+	journal := &bytes.Buffer{}
+	var allRecords []testRecord
+
+	for i := 0; i < 6; i++ {
+		rec, buf := makeRootHashRecord()
+		if i%2 == 0 {
+			rec, buf = makeChunkRecord()
+		}
+		allRecords = append(allRecords, testRecord{hash: rec.address, kind: rec.kind})
+		journal.Write(buf)
+	}
+
+	originalJournal := journal.Bytes()
+
+	// Verify original journal has all records
+	originalRecords := processJournalAndCollectRecords(t, originalJournal)
+	require.Equal(t, 6, len(originalRecords))
+
+	// Test filtering each record one by one
+	for _, recordToFilter := range allRecords {
+		var filterRoots, filterChunks []hash.Hash
+		if recordToFilter.kind == rootHashJournalRecKind {
+			filterRoots = []hash.Hash{recordToFilter.hash}
+		} else {
+			filterChunks = []hash.Hash{recordToFilter.hash}
+		}
+
+		filtered := &bytes.Buffer{}
+		totalRecords, filteredCount, exitStatus := filterJournalCore(originalJournal, filtered, filterRoots, filterChunks)
+		assert.Equal(t, 0, exitStatus)
+		assert.Equal(t, 6, totalRecords)
+		assert.Equal(t, 1, filteredCount)
+
+		// Verify filtered journal using processJournalRecords
+		records := processJournalAndCollectRecords(t, filtered.Bytes())
+		assert.Equal(t, 5, len(records))
+
+		// Verify the specific record was filtered out
+		for _, rec := range records {
+			assert.NotEqual(t, recordToFilter.hash, rec.hash, "Filtered record should not be present")
+		}
+	}
+}

@@ -116,7 +116,7 @@ func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []s
 
 	// Handle filter mode
 	if filterRootsStr != "" || filterChunksStr != "" {
-		return nbs.JournalFilterByType(absPath, filterRootsStr, filterChunksStr)
+		return nbs.JournalFilter(absPath, filterRootsStr, filterChunksStr)
 	}
 
 	// JournalInspect returns an exit code. It's entire purpose it to print errors, after all.
