@@ -17,9 +17,8 @@ package adapters
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
