@@ -1407,8 +1407,9 @@ func getRangeCutValue(ctx context.Context, cut sql.MySQLRangeCut, typ sql.Type) 
 	if _, ok := cut.(sql.AboveNull); ok {
 		return nil, nil
 	}
-	ret, oob, err := typ.Convert(ctx, sql.GetMySQLRangeCutKey(cut))
-	if oob == sql.OutOfRange {
+	ret, inRange, err := typ.Convert(ctx, sql.GetMySQLRangeCutKey(cut))
+	// TODO: seems like we should check for error before inRange, but certain tests fail
+	if inRange != sql.InRange {
 		return ret, nil
 	}
 	return ret, err

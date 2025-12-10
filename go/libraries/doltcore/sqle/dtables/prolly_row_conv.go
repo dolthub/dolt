@@ -139,7 +139,7 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 				c.warnFn(rowconv.DatatypeCoercionFailureWarningCode, rowconv.DatatypeCoercionFailureWarning, col.Name)
 				dstRow[j] = nil
 				err = nil
-			} else if !inRange {
+			} else if inRange != sql.InRange && c.warnFn != nil {
 				c.warnFn(rowconv.TruncatedOutOfRangeValueWarningCode, rowconv.TruncatedOutOfRangeValueWarning, t, f)
 				dstRow[j] = nil
 			} else if err != nil {

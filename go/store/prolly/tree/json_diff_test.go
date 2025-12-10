@@ -39,7 +39,7 @@ func largeJsonDiffTests(t *testing.T) []JsonDiffTest {
 	insert := func(document types.MutableJSON, path string, val interface{}) types.MutableJSON {
 		jsonVal, inRange, err := types.JSON.Convert(ctx, val)
 		require.NoError(t, err)
-		require.True(t, (bool)(inRange))
+		require.True(t, inRange == sql.InRange)
 		document = document.Clone(ctx).(types.MutableJSON)
 		newDoc, changed, err := document.Insert(ctx, path, jsonVal.(sql.JSONWrapper))
 		require.NoError(t, err)
@@ -50,7 +50,7 @@ func largeJsonDiffTests(t *testing.T) []JsonDiffTest {
 	set := func(document types.MutableJSON, path string, val interface{}) types.MutableJSON {
 		jsonVal, inRange, err := types.JSON.Convert(ctx, val)
 		require.NoError(t, err)
-		require.True(t, (bool)(inRange))
+		require.True(t, inRange == sql.InRange)
 		newDoc, changed, err := document.Replace(ctx, path, jsonVal.(sql.JSONWrapper))
 		require.NoError(t, err)
 		require.True(t, changed)
