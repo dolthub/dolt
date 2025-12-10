@@ -44,6 +44,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/adapters"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -621,7 +622,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 	var dt sql.Table
 	found := false
 	tname := doltdb.TableName{Name: lwrName, Schema: db.schemaName}
-	switch lwrName {
+	switch adapters.DoltTableAdapterRegistry.NormalizeName(lwrName) {
 	case doltdb.GetLogTableName(), doltdb.LogTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
@@ -750,7 +751,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), lwrName, db.ddb), true
 		}
-	case doltdb.GetStatusTableName(), doltdb.StatusTableName:
+	case doltdb.StatusTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err

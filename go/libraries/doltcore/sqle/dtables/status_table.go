@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/adapters"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
@@ -61,20 +62,12 @@ func (st StatusTable) String() string {
 	return st.tableName
 }
 
-func getDoltStatusSchema(tableName string) sql.Schema {
-	return []*sql.Column{
-		{Name: "table_name", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
-		{Name: "staged", Type: types.Boolean, Source: tableName, PrimaryKey: true, Nullable: false},
-		{Name: "status", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
-	}
-}
-
-// GetDoltStatusSchema returns the schema of the dolt_status system table. This is used
-// by Doltgres to update the dolt_status schema using Doltgres types.
-var GetDoltStatusSchema = getDoltStatusSchema
-
 func (st StatusTable) Schema() sql.Schema {
-	return GetDoltStatusSchema(st.tableName)
+	return []*sql.Column{
+		{Name: "table_name", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
+		{Name: "staged", Type: types.Boolean, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
+		{Name: "status", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
+	}
 }
 
 func (st StatusTable) Collation() sql.CollationID {
@@ -89,8 +82,19 @@ func (st StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.
 	return newStatusItr(context, &st)
 }
 
-// NewStatusTable creates a StatusTable
-func NewStatusTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
+// NewStatusTable creates a new StatusTable using either an integrators' [adapters.TableAdapter] or the
+// NewStatusTableWithNoAdapter constructor (the default implementation provided by Dolt).
+func NewStatusTable(ctx *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
+	adapter, ok := adapters.DoltTableAdapterRegistry.GetAdapter(tableName)
+	if ok {
+		return adapter.NewTable(ctx, tableName, ddb, ws, rp)
+	}
+
+	return NewStatusTableWithNoAdapter(ctx, tableName, ddb, ws, rp)
+}
+
+// NewStatusTableWithNoAdapter returns a new StatusTable.
+func NewStatusTableWithNoAdapter(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
 	return &StatusTable{
 		tableName:     tableName,
 		ddb:           ddb,
