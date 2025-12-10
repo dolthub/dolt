@@ -52,7 +52,7 @@ func validateJWT(jwksConfig *servercfg.JwksConfig, token string, reqTime time.Ti
 
 	var keyValPairs []string
 	for _, field := range jwksConfig.FieldsToLog {
-		keyValPairs = append(keyValPairs, fmt.Sprintf("'%s': '%s'", field, getClaimFromKey(privClaims, field))
+		keyValPairs = append(keyValPairs, fmt.Sprintf("'%s': '%s'", field, getClaimFromKey(privClaims, field)))
 	}
 
 	logrus.Info("Metrics Auth with JWT: " + strings.Join(keyValPairs, ", "))
