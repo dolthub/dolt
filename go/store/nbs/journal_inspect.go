@@ -696,7 +696,7 @@ func filterJournalFile(journalPath string, buf []byte, filterRoots, filterChunks
 	logrus.Infof("To replace the original journal file, run these commands:")
 	logrus.Infof("cp %s %s_saved_%s", journalPath, journalPath, dateString)
 	logrus.Infof("mv %s %s", outputPath, journalPath)
-	logrus.Infof("rm %s", filepath.Join(filepath.Dir(journalPath), "..", "..", ".dolt", "noms", "journal.idx"))
+	logrus.Infof("rm %s", filepath.Join(filepath.Dir(journalPath), "journal.idx"))
 
 	return 0
 }
