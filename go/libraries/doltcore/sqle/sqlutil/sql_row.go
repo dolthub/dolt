@@ -33,10 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// BinaryAsHexString serves as an indicator that a binary value has been processed by the --binary-as-hex flag iterator
-// into a hex string value.
-type BinaryAsHexString string
-
 // DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
 func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
 	if doltRow == nil {
@@ -232,10 +228,6 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 // NULL values are treated as empty strings. Handle nil separately if you require other behavior.
 func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
-		if hexVal, ok := col.(BinaryAsHexString); ok {
-			return string(hexVal), nil
-		}
-
 		switch typedCol := col.(type) {
 		case bool:
 			if typedCol {
@@ -261,6 +253,10 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 
 	return "", nil
 }
+
+// BinaryAsHexString is a type indicator for a binary value has been processed by the --binary-as-hex flag iterator
+// into a hex string value.
+type BinaryAsHexString string
 
 // binaryHexIterator wraps a row iterator and transforms binary data to hex format
 type binaryHexIterator struct {
@@ -332,7 +328,7 @@ func (iter *binaryHexIterator) Next(ctx *sql.Context) (rowData sql.Row, err erro
 // convertBinaryToUpperHexBytes converts the input |binary| into uppercase hexadecimal bytes. This is optimized for
 // large byte arrays i.e. sqltypes.Blob, reimplementing a modified version of the hex encoder from Go's standard library
 // to do uppercasing in a single pass.
-func convertBinaryToUpperHexBytes(val interface{}) ([]byte, error) {
+func convertBinaryToUpperHexBytes(val any) ([]byte, error) {
 	upperHexTable := "0123456789ABCDEF"
 	var valBytes []byte
 	switch v := val.(type) {
