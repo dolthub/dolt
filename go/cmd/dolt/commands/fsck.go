@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
@@ -52,14 +53,13 @@ var fsckDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Verifies the contents of the database are not corrupted.",
 	LongDesc:  "Verifies the contents of the database are not corrupted.",
 	Synopsis: []string{
-		"[--quiet] [--mark-and-sweep <commit_hash>]",
+		"[--quiet]",
 		"--revive-journal-with-data-loss",
 	},
 }
 
 const (
 	journalReviveFlag = "revive-journal-with-data-loss"
-	markAndSweepFlag  = "mark-and-sweep"
 )
 
 func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
@@ -73,7 +73,6 @@ func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
 WARNING: This may result in data loss. Your original data will be preserved in a backup file. Use this option to restore
 the ability to use your Dolt database. Please contact Dolt (https://github.com/dolthub/dolt/issues) for assistance.
 `)
-	ap.SupportsString(markAndSweepFlag, "", "commit_hash", "Validates commit DAG and tree structures starting from the specified commit hash.")
 
 	return ap
 }
@@ -98,7 +97,6 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	quiet := apr.Contains(cli.QuietFlag)
-	markAndSweepCommit, markAndSweep := apr.GetValue(markAndSweepFlag)
 
 	// We expect these to work because the database has already been initialized in higher layers. We'll check anyway
 	// since it's possible something went sideways or this isn't a local database.
@@ -158,7 +156,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	terminate = func() bool {
 		defer close(progress)
 		var err error
-		report, err = fsckOnChunkStore(ctx, gs, errs, progress, markAndSweep, markAndSweepCommit)
+		report, err = fsckOnChunkStore(ctx, dEnv.DoltDB(ctx), gs, errs, progress)
 		if err != nil {
 			// When FSCK errors, it's unexpected. As in corruption can be found and we shouldn't get an error here.
 			// So we print the error and not the report.
@@ -438,7 +436,7 @@ func validateSerialTreeAndTrack(
 // FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
 // The success or failure of the scan are returned in the report as a list of errors. The error returned by this function
 // indicates a deeper issue such as an inability to read from the underlying storage at all.
-func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error, progress chan string, markAndSweep bool, markAndSweepCommit string) (*FSCKReport, error) {
+func fsckOnChunkStore(ctx context.Context, ddb *doltdb.DoltDB, gs *nbs.GenerationalNBS, errs []error, progress chan string) (*FSCKReport, error) {
 	chunkCount, err := gs.OldGen().Count()
 	if err != nil {
 		return nil, err
@@ -533,77 +531,152 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error
 		return nil, err
 	}
 
-	// Perform commit DAG validation after full scan to identify unreachable chunks
-	if markAndSweep {
-		progress <- "Starting commit DAG validation..."
 
-		// Parse the provided commit hash
-		startCommitHash := hash.Parse(markAndSweepCommit)
-		if startCommitHash.IsEmpty() {
-			appendErr(fmt.Errorf("invalid commit hash: %s", markAndSweepCommit))
-		} else {
-			// Track reachable chunks by removing them from allChunks set
-			reachableChunks := make(hash.HashSet)
-			vs := types.NewValueStore(gs)
-			err = validateCommitDAGAndTrackChunks(ctx, vs, startCommitHash, progress, appendErr, &reachableChunks)
+	// Perform commit DAG validation from all branch HEADs and tags to identify unreachable chunks
+	progress <- "Getting all local branches, remote branches, and tags..."
+	
+	// Get all local branches
+	branches, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get branches: %w", err)
+	}
+	
+	// Get all remote tracking branches
+	remoteBranches, err := ddb.GetRemoteRefs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get remote branches: %w", err)
+	}
+	
+	// Get all tags
+	tags, err := ddb.GetTags(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tags: %w", err)
+	}
+	
+	// Collect all commit hashes to start from
+	var startCommits []hash.Hash
+	
+	// Process local branches
+	for _, branch := range branches {
+		branchHead, err := ddb.ResolveCommitRef(ctx, branch)
+		if err != nil {
+			appendErr(fmt.Errorf("failed to resolve branch %s: %w", branch.GetPath(), err))
+			continue
+		}
+		if branchHead != nil {
+			commitHash, err := branchHead.HashOf()
 			if err != nil {
-				appendErr(fmt.Errorf("commit DAG validation failed: %w", err))
-			} else {
-				// Report unreachable chunks (excluding essential repository infrastructure)
-				unreachableCount := 0
-				infrastructureCount := 0
-				vs := types.NewValueStore(gs)
-				for chunkHash := range allChunks {
-					if !reachableChunks.Has(chunkHash) {
-						// Try to read the chunk to determine if it's infrastructure
-						chunkValue, err := vs.ReadValue(ctx, chunkHash)
-						if err != nil || chunkValue == nil {
-							// Highly suspect, as allChunks contains chunks which we loaded and verified their address.
-							appendErr(fmt.Errorf("ReadValue failure to read object previously loaded %s: %w", chunkHash.String(), err))
-							continue
-						}
+				appendErr(fmt.Errorf("failed to get hash for branch %s: %w", branch.GetPath(), err))
+				continue
+			}
+			startCommits = append(startCommits, commitHash)
+		}
+	}
+	
+	// Process remote tracking branches  
+	for _, remoteBranch := range remoteBranches {
+		remoteBranchHead, err := ddb.ResolveCommitRef(ctx, remoteBranch)
+		if err != nil {
+			appendErr(fmt.Errorf("failed to resolve remote branch %s: %w", remoteBranch.GetPath(), err))
+			continue
+		}
+		if remoteBranchHead != nil {
+			commitHash, err := remoteBranchHead.HashOf()
+			if err != nil {
+				appendErr(fmt.Errorf("failed to get hash for remote branch %s: %w", remoteBranch.GetPath(), err))
+				continue
+			}
+			startCommits = append(startCommits, commitHash)
+		}
+	}
+	
+	// Process tags
+	for _, tag := range tags {
+		tagCommit, err := ddb.ResolveCommitRef(ctx, tag)
+		if err != nil {
+			appendErr(fmt.Errorf("failed to resolve tag %s: %w", tag.GetPath(), err))
+			continue
+		}
+		if tagCommit != nil {
+			commitHash, err := tagCommit.HashOf()
+			if err != nil {
+				appendErr(fmt.Errorf("failed to get hash for tag %s: %w", tag.GetPath(), err))
+				continue
+			}
+			startCommits = append(startCommits, commitHash)
+		}
+	}
+	
+	if len(startCommits) > 0 {
+		progress <- fmt.Sprintf("Starting commit DAG validation from %d local branches, remote branches, and tags...", len(startCommits))
+		
+		// Track reachable chunks by walking from all branch HEADs and tags
+		reachableChunks := make(hash.HashSet)
+		vs := types.NewValueStore(gs)
+		
+		// Walk from each starting commit (branches and tags may have different histories)
+		for _, startCommit := range startCommits {
+			err = validateCommitDAGAndTrackChunks(ctx, vs, startCommit, progress, appendErr, &reachableChunks)
+			if err != nil {
+				appendErr(fmt.Errorf("commit DAG validation failed from %s: %w", startCommit.String(), err))
+			}
+		}
+		
+		// Report unreachable chunks (excluding essential repository infrastructure)
+		unreachableCount := 0
+		infrastructureCount := 0
+		vs = types.NewValueStore(gs)
+		for chunkHash := range allChunks {
+			if !reachableChunks.Has(chunkHash) {
+				// Try to read the chunk to determine if it's infrastructure
+				chunkValue, err := vs.ReadValue(ctx, chunkHash)
+				if err != nil || chunkValue == nil {
+					// Highly suspect, as allChunks contains chunks which we loaded and verified their address.
+					appendErr(fmt.Errorf("ReadValue failure to read object previously loaded %s: %w", chunkHash.String(), err))
+					continue
+				}
 
-						// Check if this is essential repository infrastructure
-						isInfrastructure := false
-						if serialMsg, ok := chunkValue.(types.SerialMessage); ok {
-							// Check for StoreRoot and WorkingSet chunks using proper file ID
-							id := serial.GetFileID(serialMsg)
-							if id == serial.StoreRootFileID {
-								isInfrastructure = true
-								infrastructureCount++
-								progress <- fmt.Sprintf("Infrastructure chunk: %s (type: StoreRoot)", chunkHash.String())
-							} else if id == serial.WorkingSetFileID {
-								isInfrastructure = true
-								infrastructureCount++
-								progress <- fmt.Sprintf("Infrastructure chunk: %s (type: WorkingSet)", chunkHash.String())
-							}
-						}
+				// Check if this is essential repository infrastructure
+				isInfrastructure := false
+				if serialMsg, ok := chunkValue.(types.SerialMessage); ok {
+					// Check for StoreRoot and WorkingSet chunks using proper file ID
+					id := serial.GetFileID(serialMsg)
+					if id == serial.StoreRootFileID {
+						isInfrastructure = true
+						infrastructureCount++
+						progress <- fmt.Sprintf("Infrastructure chunk: %s (type: StoreRoot)", chunkHash.String())
+					} else if id == serial.WorkingSetFileID {
+						isInfrastructure = true
+						infrastructureCount++
+						progress <- fmt.Sprintf("Infrastructure chunk: %s (type: WorkingSet)", chunkHash.String())
+					}
+				}
 
-						if !isInfrastructure {
-							unreachableCount++
-							humanStr, err := types.EncodedValue(ctx, chunkValue)
-							progress <- fmt.Sprintf("Unreachable chunk: %s", chunkHash.String())
-							progress <- fmt.Sprintf("  Type: %T", chunkValue)
-							if err != nil {
-								progress <- fmt.Sprintf("  Human readable: (error: %v)", err)
-							} else {
-								progress <- fmt.Sprintf("  Human readable: %s", humanStr)
-							}
+				if !isInfrastructure {
+					unreachableCount++
+					humanStr, err := types.EncodedValue(ctx, chunkValue)
+					progress <- fmt.Sprintf("Unreachable chunk: %s", chunkHash.String())
+					progress <- fmt.Sprintf("  Type: %T", chunkValue)
+					if err != nil {
+						progress <- fmt.Sprintf("  Human readable: (error: %v)", err)
+					} else {
+						progress <- fmt.Sprintf("  Human readable: %s", humanStr)
+					}
 
-							// For SerialMessage, also try to show some raw content
-							if serialMsg, ok := chunkValue.(types.SerialMessage); ok {
-								if len(serialMsg) < 200 {
-									progress <- fmt.Sprintf("  Raw content: %q", string(serialMsg))
-								} else {
-									progress <- fmt.Sprintf("  Raw content (first 200 bytes): %q", string(serialMsg[:200]))
-								}
-							}
+					// For SerialMessage, also try to show some raw content
+					if serialMsg, ok := chunkValue.(types.SerialMessage); ok {
+						if len(serialMsg) < 200 {
+							progress <- fmt.Sprintf("  Raw content: %q", string(serialMsg))
+						} else {
+							progress <- fmt.Sprintf("  Raw content (first 200 bytes): %q", string(serialMsg[:200]))
 						}
 					}
 				}
-				progress <- fmt.Sprintf("Found %d unreachable chunks out of %d total chunks (%d infrastructure chunks excluded)", unreachableCount, len(allChunks), infrastructureCount)
 			}
 		}
+		progress <- fmt.Sprintf("Found %d unreachable chunks out of %d total chunks (%d infrastructure chunks excluded)", unreachableCount, len(allChunks), infrastructureCount)
+	} else {
+		progress <- "No branches, remote branches, or tags found - skipping commit DAG validation"
 	}
 
 	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
