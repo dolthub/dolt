@@ -143,3 +143,12 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "recovermenoloss" ]] || false
 }
+
+@test "fsck: missing closure object" {
+    mkdir .dolt
+    cp -R $BATS_CWD/corrupt_dbs/missing_closure_object/* .dolt/
+
+    run dolt fsck
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Commit 00apprui1m4mtcs8umenpt8e2lkjmihc is missing data. Failed to read commit closure d92u2dpnhocp5pv4pn7vgm9fs30vdv94" ]] || false
+}

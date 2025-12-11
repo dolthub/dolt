@@ -19,3 +19,10 @@ and perhaps other tools in the future. Please catalog the contents of each datab
   null bytes or random data to the end of a journal file to get into that state. That does
   not constitute dataloss though - which is why you append this file to the journal because
   these bytes are parsable. 
+
+## missing_closure_object
+  This is a manually mangled database. It contains three empty commits. The second commit's closure
+  object has been removed using the:
+  `dolt admin journal-inspect --filter d92u2dpnhocp5pv4pn7vgm9fs30vdv94 .dolt/noms/vvvvvvv*`
+
+  Original journal preserved in file: vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv_saved_2025_12_10_173658
