@@ -384,6 +384,10 @@ func (cfg *commandLineServerConfig) MetricsJwksConfig() *servercfg.JwksConfig {
 	return nil
 }
 
+func (cfg *commandLineServerConfig) MetricsJWTRequiredForLocalhost() bool {
+	return false
+}
+
 func (cfg *commandLineServerConfig) RemotesapiPort() *int {
 	return cfg.remotesapiPort
 }

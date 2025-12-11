@@ -58,6 +58,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	httputils "github.com/dolthub/dolt/go/libraries/utils/http"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 	"github.com/dolthub/dolt/go/store/chunks"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
@@ -621,11 +622,23 @@ func ConfigureServices(
 				metricsHandler := promhttp.Handler()
 				jwksConfig := cfg.ServerConfig.MetricsJwksConfig()
 				enableMetricsAuth := jwksConfig != nil
+				requireLocalhostAuth := cfg.ServerConfig.MetricsJWTRequiredForLocalhost()
 
-				logrus.Infof("Starting metrics server. auth_enabled = %t, addr = %s", enableMetricsAuth, addr)
+				logrus.Infof("Starting metrics server. auth_enabled = %t, addr = %s, require_localhost_auth = %t", enableMetricsAuth, addr, requireLocalhostAuth)
 
 				if enableMetricsAuth {
 					mux.Handle("/metrics", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						if !requireLocalhostAuth {
+							isLocal, err := httputils.IsLocalRequest(r)
+							logrus.Info("Metrics JWT not required for localhost isLocal:", isLocal, "err:", err)
+							if err != nil {
+								logrus.Warnf("error checking if request is local for /metrics (assuming remote) request: %v.", err)
+							} else if isLocal {
+								metricsHandler.ServeHTTP(w, r)
+								return
+							}
+						}
+
 						auth := r.Header.Get("Authorization")
 						if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
 							w.Header().Set("WWW-Authenticate", `Bearer realm="metrics"`)

@@ -209,6 +209,7 @@ listener:
 metrics:
   host: localhost
   port: %d
+  jwt_required_for_localhost: true
 `, serverPort, metricsPort)
 	}
 
@@ -236,6 +237,7 @@ metrics:
       iss: dolthub.com
       sub: test_sub
       aud: test_aud
+  jwt_required_for_localhost: true
 `, serverPort, metricsPort, jwksPort)
 	}
 
@@ -262,6 +264,7 @@ metrics:
       iss: dolthub.com
       sub: test_sub
       aud: test_aud
+  jwt_required_for_localhost: true
 `, serverPort, metricsPort, jwksPort)
 	}
 
@@ -289,6 +292,7 @@ metrics:
       iss: dolthub.com
       sub: test_sub
       aud: test_aud
+  jwt_required_for_localhost: true
 `, serverPort, metricsPort, jwksPort)
 	}
 
@@ -316,6 +320,7 @@ metrics:
       iss: dolthub.com
       sub: test_sub
       aud: test_aud
+  jwt_required_for_localhost: true
 `, serverPort, metricsPort, jwksPort)
 	}
 
@@ -343,6 +348,7 @@ metrics:
       iss: dolthub.com
       sub: test_sub
       aud: test_aud
+  jwt_required_for_localhost: true
 `, serverPort, metricsPort, jwksPort)
 	}
 
