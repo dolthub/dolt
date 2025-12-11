@@ -60,6 +60,13 @@ metrics:
     tls_cert: /path/to/file.cert
     tls_key: /path/to/file.key
     tls_ca: /path/to/ca.cert
+    jwks:
+      name: jwks_name
+      location_url: https://website.com
+      claims: 
+        iss: dolthub.com
+        aud: metrics
+      fields_to_log: [iss, aud]
 
 user_session_vars:
     - name: user0
@@ -110,6 +117,15 @@ jwks:
 		TlsCert: ptr("/path/to/file.cert"),
 		TlsKey:  ptr("/path/to/file.key"),
 		TlsCa:   ptr("/path/to/ca.cert"),
+		Jwks: &JwksConfig{
+			Name:        "jwks_name",
+			LocationUrl: "https://website.com",
+			Claims: map[string]string{
+				"iss": "dolthub.com",
+				"aud": "metrics",
+			},
+			FieldsToLog: []string{"iss", "aud"},
+		},
 	}
 	expected.DataDirStr = ptr("some nonsense")
 	expected.SystemVars_ = nil

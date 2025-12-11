@@ -111,12 +111,14 @@ type PerformanceYAMLConfig struct {
 }
 
 type MetricsYAMLConfig struct {
-	Labels  map[string]string `yaml:"labels"`
-	Host    *string           `yaml:"host,omitempty"`
-	Port    *int              `yaml:"port,omitempty"`
-	TlsCert *string           `yaml:"tls_cert,omitempty" minver:"1.78.2"`
-	TlsKey  *string           `yaml:"tls_key,omitempty" minver:"1.78.2"`
-	TlsCa   *string           `yaml:"tls_ca,omitempty" minver:"1.78.2"`
+	Labels                  map[string]string `yaml:"labels"`
+	Host                    *string           `yaml:"host,omitempty"`
+	Port                    *int              `yaml:"port,omitempty"`
+	TlsCert                 *string           `yaml:"tls_cert,omitempty" minver:"1.78.2"`
+	TlsKey                  *string           `yaml:"tls_key,omitempty" minver:"1.78.2"`
+	TlsCa                   *string           `yaml:"tls_ca,omitempty" minver:"1.78.2"`
+	Jwks                    *JwksConfig       `yaml:"jwks,omitempty" minver:"TBD"`
+	JWTRequiredForLocalhost *bool             `yaml:"jwt_required_for_localhost,omitempty" minver:"TBD"`
 }
 
 type RemotesapiYAMLConfig struct {
@@ -233,12 +235,14 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels:  cfg.MetricsLabels(),
-			Host:    nillableStrPtr(cfg.MetricsHost()),
-			Port:    ptr(cfg.MetricsPort()),
-			TlsCert: ptr(cfg.MetricsTLSCert()),
-			TlsKey:  ptr(cfg.MetricsTLSKey()),
-			TlsCa:   ptr(cfg.MetricsTLSCA()),
+			Labels:                  cfg.MetricsLabels(),
+			Host:                    nillableStrPtr(cfg.MetricsHost()),
+			Port:                    ptr(cfg.MetricsPort()),
+			TlsCert:                 ptr(cfg.MetricsTLSCert()),
+			TlsKey:                  ptr(cfg.MetricsTLSKey()),
+			TlsCa:                   ptr(cfg.MetricsTLSCA()),
+			Jwks:                    cfg.MetricsJwksConfig(),
+			JWTRequiredForLocalhost: ptr(cfg.MetricsJWTRequiredForLocalhost()),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     cfg.RemotesapiPort(),
@@ -309,12 +313,14 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: zeroIf(ptr(cfg.DataDir()), !cfg.ValueSet(DataDirKey)),
 		CfgDirStr:  zeroIf(ptr(cfg.CfgDir()), !cfg.ValueSet(CfgDirKey)),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels:  zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
-			Host:    zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
-			Port:    zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
-			TlsCert: zeroIf(ptr(cfg.MetricsTLSCert()), !cfg.ValueSet(MetricsTLSCertKey)),
-			TlsKey:  zeroIf(ptr(cfg.MetricsTLSKey()), !cfg.ValueSet(MetricsTLSKeyKey)),
-			TlsCa:   zeroIf(ptr(cfg.MetricsTLSCA()), !cfg.ValueSet(MetricsTLSCAKey)),
+			Labels:                  zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
+			Host:                    zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
+			Port:                    zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
+			TlsCert:                 zeroIf(ptr(cfg.MetricsTLSCert()), !cfg.ValueSet(MetricsTLSCertKey)),
+			TlsKey:                  zeroIf(ptr(cfg.MetricsTLSKey()), !cfg.ValueSet(MetricsTLSKeyKey)),
+			TlsCa:                   zeroIf(ptr(cfg.MetricsTLSCA()), !cfg.ValueSet(MetricsTLSCAKey)),
+			Jwks:                    zeroIf(cfg.MetricsJwksConfig(), !cfg.ValueSet(MetricsJwksConfigKey)),
+			JWTRequiredForLocalhost: zeroIf(ptr(cfg.MetricsJWTRequiredForLocalhost()), !cfg.ValueSet(MetricsJWTRequiredForLocalhostKey)),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     zeroIf(cfg.RemotesapiPort(), !cfg.ValueSet(RemotesapiPortKey)),
@@ -800,6 +806,18 @@ func (cfg YAMLConfig) MetricsTLSCA() string {
 		return ""
 	}
 	return *cfg.MetricsConfig.TlsCa
+}
+
+func (cfg YAMLConfig) MetricsJwksConfig() *JwksConfig {
+	return cfg.MetricsConfig.Jwks
+}
+
+func (cfg YAMLConfig) MetricsJWTRequiredForLocalhost() bool {
+	if cfg.MetricsConfig.JWTRequiredForLocalhost == nil {
+		return false
+	}
+
+	return *cfg.MetricsConfig.JWTRequiredForLocalhost
 }
 
 func (cfg YAMLConfig) RemotesapiPort() *int {
