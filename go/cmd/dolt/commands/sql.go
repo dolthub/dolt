@@ -743,11 +743,11 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	shell.SetMultiPrompt(initialMultilinePrompt)
 	// TODO: update completer on create / drop / alter statements
 	completer, err := newCompleter(sqlCtx, qryist)
-	if err != nil {
-		return err
+	if err == nil {
+		shell.CustomCompleter(completer)
+	} else {
+		cli.PrintErrln("Warning: could not initialize shell completer:", err.Error())
 	}
-
-	shell.CustomCompleter(completer)
 
 	shell.EOF(func(c *ishell.Context) {
 		c.Stop()
