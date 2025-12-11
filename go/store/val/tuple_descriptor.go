@@ -88,7 +88,10 @@ func NewTupleDescriptorWithArgs(args TupleDescriptorArgs, types ...Type) (td *Tu
 	if args.Comparator == nil {
 		args.Comparator = DefaultTupleComparator{}
 	}
-	args.Comparator = ExtendedTupleComparator{args.Comparator, args.Handlers}.Validated(types)
+	args.Comparator = ExtendedTupleComparator{
+		innerCmp: args.Comparator,
+		handlers: args.Handlers,
+	}.Validated(types)
 
 	td = &TupleDesc{
 		Types:    types,

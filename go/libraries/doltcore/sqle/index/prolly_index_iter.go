@@ -407,26 +407,19 @@ type prollyKeylessIndexIter struct {
 
 var _ sql.RowIter = prollyKeylessIndexIter{}
 
-func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, doltgresRange *DoltgresRange, pkSch sql.PrimaryKeySchema, projections []uint64, rows, dsecondary durable.Index, reverse bool) (prollyKeylessIndexIter, error) {
+func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, rows, dsecondary durable.Index, reverse bool) (prollyKeylessIndexIter, error) {
 	secondary, err := durable.ProllyMapFromIndex(dsecondary)
 	if err != nil {
 		return prollyKeylessIndexIter{}, err
 	}
 	var indexIter prolly.MapIter
-	if doltgresRange == nil {
-		if reverse {
-			indexIter, err = secondary.IterRangeReverse(ctx, rng)
-		} else {
-			indexIter, err = secondary.IterRange(ctx, rng)
-		}
-		if err != nil {
-			return prollyKeylessIndexIter{}, err
-		}
+	if reverse {
+		indexIter, err = secondary.IterRangeReverse(ctx, rng)
 	} else {
-		indexIter, err = doltgresProllyMapIterator(ctx, secondary.KeyDesc(), secondary.NodeStore(), secondary.Tuples().Root, *doltgresRange)
-		if err != nil {
-			return prollyKeylessIndexIter{}, err
-		}
+		indexIter, err = secondary.IterRange(ctx, rng)
+	}
+	if err != nil {
+		return prollyKeylessIndexIter{}, err
 	}
 
 	clustered, err := durable.ProllyMapFromIndex(rows)
