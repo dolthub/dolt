@@ -117,8 +117,8 @@ type MetricsYAMLConfig struct {
 	TlsCert                 *string           `yaml:"tls_cert,omitempty" minver:"1.78.2"`
 	TlsKey                  *string           `yaml:"tls_key,omitempty" minver:"1.78.2"`
 	TlsCa                   *string           `yaml:"tls_ca,omitempty" minver:"1.78.2"`
-	Jwks                    *JwksConfig       `yaml:"jwks,omitempty" minver:"TBD"`
-	JWTRequiredForLocalhost *bool             `yaml:"jwt_required_for_localhost,omitempty" minver:"TBD"`
+	Jwks                    *JwksConfig       `yaml:"jwks,omitempty" minver:"1.79.0"`
+	JWTRequiredForLocalhost *bool             `yaml:"jwt_required_for_localhost,omitempty" minver:"1.79.0"`
 }
 
 type RemotesapiYAMLConfig struct {
