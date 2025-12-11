@@ -621,6 +621,9 @@ func ConfigureServices(
 				metricsHandler := promhttp.Handler()
 				jwksConfig := cfg.ServerConfig.MetricsJwksConfig()
 				enableMetricsAuth := jwksConfig != nil
+
+				logrus.Infof("Starting metrics server. auth_enabled = %t, addr = %s", enableMetricsAuth, addr)
+
 				if enableMetricsAuth {
 					mux.Handle("/metrics", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						auth := r.Header.Get("Authorization")
