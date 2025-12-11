@@ -169,46 +169,46 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 		dbState.SessionCache().CacheStrictLookup(schKey, lookups)
 	}
 
+	cols := schCols.GetColumns()
 	for _, lookup := range lookups {
-		if lookup.Cols.Intersection(colset).Len() == lookup.Cols.Len() {
-			// (1) assign lookup columns to range expressions in the appropriate
-			// order for the given lookup.
-			// (2) aggregate the unused expressions into the return filter.
-			rb := sql.NewEqualityIndexBuilder(lookup.Idx)
-			for _, c2 := range lookupCols {
-				var matched bool
-				var matchIdx int
-				for i, ord := range lookup.Ordinals {
-					// the ordinals redirection accounts for index
-					// columns not in schema order
-					idx := ord - 1
-					c := schCols.GetColumns()[idx]
-					if strings.EqualFold(c2.Col, c.Name) {
-						matched = true
-						matchIdx = i
-						break
-					}
-				}
-				if matched {
-					if err := rb.AddEquality(ctx, matchIdx, c2.Lit.Value()); err != nil {
-						return sql.IndexLookup{}, nil, nil, false, nil
-					}
-				}
-				if !matched || !expression.PreciseComparison(c2.Eq) {
-					if leftoverExpr == nil {
-						leftoverExpr = c2.Eq
-					} else {
-						leftoverExpr = expression.NewAnd(leftoverExpr, c2.Eq)
-					}
-				}
-			}
-			ret, err := rb.Build(ctx)
-			if err != nil {
-				return sql.IndexLookup{}, nil, nil, false, err
-			}
-
-			return ret, lookup.Fds, leftoverExpr, true, nil
+		// Every column must be specified in search
+		if lookup.Cols.Intersection(colset).Len() != lookup.Cols.Len() {
+			continue
 		}
+		// (1) assign lookup columns to range expressions in the appropriate order for the given lookup.
+		// (2) aggregate the unused expressions into the return filter.
+		rb := sql.NewEqualityIndexBuilder(lookup.Idx)
+		for _, c2 := range lookupCols {
+			matchIdx := -1
+			for i, ord := range lookup.Ordinals {
+				// the ordinals redirection accounts for index
+				// columns not in schema order
+				idx := ord - 1
+				c := cols[idx]
+				if strings.EqualFold(c2.Col, c.Name) {
+					matchIdx = i
+					break
+				}
+			}
+			if matchIdx != -1 {
+				if err = rb.AddEquality(ctx, matchIdx, c2.Lit.Value()); err != nil {
+					return sql.IndexLookup{}, nil, nil, false, nil
+				}
+				continue
+			}
+			if leftoverExpr == nil {
+				leftoverExpr = c2.Eq
+			} else {
+				leftoverExpr = expression.NewAnd(leftoverExpr, c2.Eq)
+			}
+		}
+
+		var ret sql.IndexLookup
+		ret, err = rb.Build(ctx)
+		if err != nil {
+			return sql.IndexLookup{}, nil, nil, false, err
+		}
+		return ret, lookup.Fds, leftoverExpr, true, nil
 	}
 
 	return sql.IndexLookup{}, nil, nil, false, nil

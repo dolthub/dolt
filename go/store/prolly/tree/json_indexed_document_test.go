@@ -322,7 +322,7 @@ func TestJsonCompare(t *testing.T) {
 		if right != nil {
 			rightJSON, inRange, err := types.JSON.Convert(ctx, right)
 			require.NoError(t, err)
-			require.True(t, bool(inRange))
+			require.True(t, inRange == sql.InRange)
 			rightInterface, err := rightJSON.(sql.JSONWrapper).ToInterface(ctx)
 			require.NoError(t, err)
 			right = types.JSONDocument{Val: rightInterface}

@@ -1442,7 +1442,7 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 	insert := func(document sqltypes.MutableJSON, path string, val interface{}) sqltypes.MutableJSON {
 		jsonVal, inRange, err := sqltypes.JSON.Convert(ctx, val)
 		require.NoError(t, err)
-		require.True(t, (bool)(inRange))
+		require.True(t, inRange == sql.InRange)
 		newDoc, changed, err := document.Insert(ctx, path, jsonVal.(sql.JSONWrapper))
 		require.NoError(t, err)
 		require.True(t, changed)
@@ -1452,7 +1452,7 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 	set := func(document sqltypes.MutableJSON, path string, val interface{}) sqltypes.MutableJSON {
 		jsonVal, inRange, err := sqltypes.JSON.Convert(ctx, val)
 		require.NoError(t, err)
-		require.True(t, (bool)(inRange))
+		require.True(t, inRange == sql.InRange)
 		newDoc, changed, err := document.Replace(ctx, path, jsonVal.(sql.JSONWrapper))
 		require.NoError(t, err)
 		require.True(t, changed)
