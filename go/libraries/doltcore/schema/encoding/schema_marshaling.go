@@ -466,6 +466,9 @@ func UnmarshalSchemaAtAddr(ctx context.Context, vr types.ValueReader, addr hash.
 	if err != nil {
 		return nil, err
 	}
+	if schemaVal == nil {
+		return nil, fmt.Errorf("database malformed: no schema found at address %s", addr.String())
+	}
 
 	sch, err := UnmarshalSchema(ctx, vr.Format(), schemaVal)
 	if err != nil {
