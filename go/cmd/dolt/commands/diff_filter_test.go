@@ -402,9 +402,7 @@ func TestLazyRowWriter_NoRowsWritten(t *testing.T) {
 	mockDW := &mockDiffWriter{}
 	realWriter := &mockRowWriter{}
 
-	beginTableCalled := false
 	onFirstWrite := func() error {
-		beginTableCalled = true
 		return mockDW.BeginTable("fromTable", "toTable", false, false)
 	}
 
@@ -417,7 +415,7 @@ func TestLazyRowWriter_NoRowsWritten(t *testing.T) {
 	}
 
 	// BeginTable should NEVER have been called
-	if beginTableCalled {
+	if mockDW.beginTableCalled {
 		t.Error("BeginTable() was called even though no rows were written - should have been lazy!")
 	}
 }
