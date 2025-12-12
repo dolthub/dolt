@@ -26,3 +26,10 @@ and perhaps other tools in the future. Please catalog the contents of each datab
   `dolt admin journal-inspect --filter d92u2dpnhocp5pv4pn7vgm9fs30vdv94 .dolt/noms/vvvvvvv*`
 
   Original journal preserved in file: vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv_saved_2025_12_10_173658
+
+## missing_schema_object
+  Another manually mangled database it contains the init commit and a commit which created a table
+  with no data. The schema object was removed with the following:
+  `dolt admin journal-inspect --filter 8tsjiu5fcsvchoo4re8bgftuuogl7ko1 .dolt/noms/vvvvvvv*`
+
+  Original journal preserved in: vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv_saved_2025_12_11_113641
