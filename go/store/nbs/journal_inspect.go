@@ -22,11 +22,76 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
+
+// JournalFilter creates a new journal file next to the original with the .filtered extension. The inputs are
+// comma-separated lists of root hashes and chunk hashes to filter out of the journal file.
+//
+// Intended for use in the CLI. Returns exit code 0 on success, 1 on failure.
+func JournalFilter(journalPath string, filterRootsStr, filterChunksStr string) int {
+	var filterRoots, filterChunks []hash.Hash
+	var err error
+
+	if filterRootsStr != "" {
+		filterRoots, err = parseHashList(filterRootsStr, "root")
+		if err != nil {
+			logrus.Errorf("Error: %v", err)
+			return 1
+		}
+	}
+	if filterChunksStr != "" {
+		filterChunks, err = parseHashList(filterChunksStr, "chunk")
+		if err != nil {
+			logrus.Errorf("Error: %v", err)
+			return 1
+		}
+	}
+
+	if len(filterRoots) == 0 && len(filterChunks) == 0 {
+		logrus.Errorf("Error: No valid hashes provided")
+		return 1
+	}
+
+	var f *os.File
+	f, err = os.Open(journalPath)
+	if err != nil {
+		panic("could not open journal file")
+	}
+	defer f.Close()
+
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		panic("could not read journal file")
+	}
+	return filterJournalFile(journalPath, buf, filterRoots, filterChunks)
+}
+
+func parseHashList(hashStrs string, hashType string) ([]hash.Hash, error) {
+	hashStrings := strings.Split(hashStrs, ",")
+	var hashes []hash.Hash
+
+	for _, hashStr := range hashStrings {
+		hashStr = strings.TrimSpace(hashStr)
+		if hashStr == "" {
+			continue
+		}
+		h, ok := hash.MaybeParse(hashStr)
+		if !ok {
+			return nil, fmt.Errorf("invalid %s hash format: %s", hashType, hashStr)
+		}
+		hashes = append(hashes, h)
+	}
+
+	return hashes, nil
+}
 
 func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan bool) int {
 	var f *os.File
@@ -592,3 +657,106 @@ func (w *LineLogger) flush() {
 
 // Flush can be called manually to force any remaining bytes out.
 func (w *LineLogger) Flush() { w.flush() }
+
+// filterJournalFile creates a filtered copy of the journal that excludes records with the specified hashes by type.
+//
+// The |journalPath| is the path to the original journal file, used to create output file journalPath+".filtered".
+// The |buf| is the contents of the original journal file. The |filterRoots| and |filterChunks| are the lists of hashes
+// to exclude from the output journal file. Having 1 or more hashes to filter is expected.
+//
+// Returns exit code 0 on success, 1 on error.
+func filterJournalFile(journalPath string, buf []byte, filterRoots, filterChunks []hash.Hash) int {
+	dir := filepath.Dir(journalPath)
+	base := filepath.Base(journalPath)
+	outputPath := filepath.Join(dir, base+".filtered")
+
+	outputFile, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
+	if err != nil {
+		logrus.Errorf("Error creating filtered journal file: %v", err)
+		return 1
+	}
+	defer outputFile.Close()
+
+	_, filteredRecords, exitStatus := filterJournalCore(buf, outputFile, filterRoots, filterChunks)
+	if exitStatus != 0 {
+		return exitStatus
+	}
+
+	if filteredRecords == 0 {
+		logrus.Infof("No records matched the filter criteria. No changes made.")
+		return 1
+	}
+
+	// Print shell commands to replace the journal file
+	now := time.Now()
+	dateString := now.Format("2006_01_02_150405")
+
+	logrus.Infof("")
+	logrus.Infof("Filtered file: %s", outputPath)
+	logrus.Infof("")
+	logrus.Infof("To replace the original journal file, run these commands:")
+	logrus.Infof("cp %s %s_saved_%s", journalPath, journalPath, dateString)
+	logrus.Infof("mv %s %s", outputPath, journalPath)
+	logrus.Infof("rm %s", filepath.Join(filepath.Dir(journalPath), "journal.idx"))
+
+	return 0
+}
+
+// filterJournalCore performs the core filtering logic. It reads through the given journal data and writes all records
+// except those matching the specified root and chunk hashes to the output writer.
+//
+// Returns the total number of records processed, the number of records filtered out, and an error if any.
+func filterJournalCore(journalData []byte, output io.Writer, filterRoots, filterChunks []hash.Hash) (totalRecords int, filteredRecords int, exitStatus int) {
+	// Create hash sets for faster lookups
+	filterRootSet := hash.NewHashSet(filterRoots...)
+	filterChunkSet := hash.NewHashSet(filterChunks...)
+
+	for offset := 0; offset <= len(journalData)-4; {
+		size := readUint32(journalData[offset:])
+		if size == 0 {
+			logrus.Errorf("Null bytes encountered at offset %d. filterJournal expects valid/truncated journal data. Extend as necessary", offset)
+			return 0, 0, 1
+		}
+		if size >= journalWriterBuffSize {
+			logrus.Errorf("Excessive length prefix found at offset %d. filterJournal expects valid/truncated journal data. Extend as necessary", offset)
+			return 0, 0, 1
+		}
+
+		if offset+int(size) <= len(journalData) {
+			recordBuf := journalData[offset : offset+int(size)]
+			if err := validateJournalRecord(recordBuf); err == nil {
+				rec, err := readJournalRecord(recordBuf)
+				if err == nil {
+					totalRecords++
+					// Check if this record should be filtered out
+					shouldFilter := false
+					if rec.kind == rootHashJournalRecKind && filterRootSet.Has(rec.address) {
+						logrus.Infof("Filtering out root record with hash: %s", rec.address.String())
+						shouldFilter = true
+					} else if rec.kind == chunkJournalRecKind && filterChunkSet.Has(rec.address) {
+						logrus.Infof("Filtering out chunk record with hash: %s", rec.address.String())
+						shouldFilter = true
+					}
+
+					if shouldFilter {
+						filteredRecords++
+						offset += int(size)
+						continue
+					}
+
+					_, err := output.Write(recordBuf)
+					if err != nil {
+						logrus.Errorf("Error writing to filtered journal: %v", err)
+						return 0, 0, 1
+					}
+				}
+			} else {
+				logrus.Errorf("Error validating record at (offset:%d len:%d): %v", offset, int(size), err)
+				return 0, 0, 1
+			}
+			offset += int(size)
+		}
+	}
+
+	return totalRecords, filteredRecords, 0
+}
