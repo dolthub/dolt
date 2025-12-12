@@ -235,7 +235,7 @@ type FSCKReport struct {
 // validates each commit's tree structure and tracks all reachable chunks.
 func validateCommitDAGAndTrackChunks(ctx context.Context, vs *types.ValueStore, startCommitHashes []hash.Hash, progress chan string, appendErr func(error), reachableChunks *hash.HashSet) error {
 	progress <- "Starting commit DAG validation..."
-	// Queue for commits to process (breadth-first through commit history)
+	// Queue for commits to process (breadth-first from all heads through commit history)
 	commitQueue := make([]hash.Hash, len(startCommitHashes))
 	copy(commitQueue, startCommitHashes)
 	visitedCommits := make(hash.HashSet)
@@ -260,7 +260,7 @@ func validateCommitDAGAndTrackChunks(ctx context.Context, vs *types.ValueStore, 
 			continue
 		}
 		if commitValue == nil {
-			appendErr(fmt.Errorf("commit object for %s not found", commitHash.String()))
+			appendErr(fmt.Errorf("commit object for %s not found (no err)", commitHash.String()))
 			continue
 		}
 
@@ -393,10 +393,11 @@ func validateTreeAndTrack(
 
 		// Handle SerialMessage trees only
 		if serialMsg, ok := treeValue.(types.SerialMessage); ok {
-			progress <- fmt.Sprintf("Processing SerialMessage tree: %s", currentTreeHash.String())
+			id := serial.GetFileID(serialMsg)
+			progress <- fmt.Sprintf("Processing tree object (%s): %s", id, currentTreeHash.String())
 			err = validateSerialTreeAndTrack(ctx, vs, serialMsg, commitHash, currentTreeHash, &treeQueue, appendErr, reachableChunks)
 			if err != nil {
-				return fmt.Errorf("failed to validate SerialMessage tree %s: %w", currentTreeHash.String(), err)
+				return fmt.Errorf("failed to validate tree object %s: %w", currentTreeHash.String(), err)
 			}
 		} else {
 			// Spit on the old format.
@@ -433,11 +434,12 @@ func validateSerialTreeAndTrack(
 			// Try to load the referenced value to continue traversal
 			refValue, readErr := vs.ReadValue(ctx, addr)
 			if readErr != nil {
-				appendErr(fmt.Errorf("failed to read referenced chunk %s from commit %s: %w", addr.String(), commitHash.String(), readErr))
+
+				appendErr(fmt.Errorf("commit::%s: tree %s -> (missing) %s: %w", commitHash.String(), treeHash.String(), addr.String(), readErr))
 				return nil // Continue walking other addresses
 			}
 			if refValue == nil {
-				appendErr(fmt.Errorf("referenced chunk %s from tree %s not found", addr.String(), treeHash.String()))
+				appendErr(fmt.Errorf("commit::%s: tree %s -> (missing) %s", commitHash.String(), treeHash.String(), addr.String()))
 				return nil
 			}
 
@@ -446,7 +448,7 @@ func validateSerialTreeAndTrack(
 				*treeQueue = append(*treeQueue, addr)
 			} else {
 				// This should never happen.
-				panic(fmt.Sprintf("referenced chunk %s from tree %s is not a SerialMessage, got type %T", addr.String(), treeHash.String(), refValue))
+				panic(fmt.Sprintf("commit::%s: referenced chunk %s from tree %s is not a SerialMessage, got type %T", commitHash.String(), addr.String(), treeHash.String(), refValue))
 			}
 		}
 		return nil

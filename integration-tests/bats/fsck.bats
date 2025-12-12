@@ -152,3 +152,13 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Commit 00apprui1m4mtcs8umenpt8e2lkjmihc is missing data. Failed to read commit closure d92u2dpnhocp5pv4pn7vgm9fs30vdv94" ]] || false
 }
+
+@test "fsck: missing schema object" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/missing_schema_object/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "commit::gub2hagj8cp2mcdlp95l90sisp37iupd: tree 2dr5okftnc3velmrt0191j479jiel7de -> (missing) 8tsjiu5fcsvchoo4re8bgftuuogl7ko1" ]] || false
+}
+
