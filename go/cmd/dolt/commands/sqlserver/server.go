@@ -252,6 +252,7 @@ func ConfigureServices(
 				ClusterController:          clusterController,
 				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
 				SkipRootUserInitialization: cfg.SkipRootUserInit,
+				EngineOverrides:            cfg.ServerConfig.Overrides(),
 			}
 			return nil
 		},

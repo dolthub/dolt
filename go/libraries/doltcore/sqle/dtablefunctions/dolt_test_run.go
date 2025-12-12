@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 )
 
 const testsRunDefaultRowCount = 10
@@ -303,9 +304,10 @@ func (trtf *TestsRunTableFunction) getDoltTestsData(arg string) ([]sql.Row, erro
 }
 
 func IsWriteQuery(query string, ctx *sql.Context, catalog sql.Catalog) (bool, error) {
-	builder := planbuilder.New(ctx, catalog, nil, nil)
+	builder := planbuilder.New(ctx, catalog, nil)
 
-	parsed, _, _, err := sql.GlobalParser.Parse(ctx, query, false)
+	parser := overrides.ParserFromContext(ctx)
+	parsed, _, _, err := parser.Parse(ctx, query, false)
 	if err != nil {
 		return false, err
 	}

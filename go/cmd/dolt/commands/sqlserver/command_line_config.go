@@ -21,12 +21,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 type commandLineServerConfig struct {
@@ -601,6 +602,10 @@ func (cfg *commandLineServerConfig) ValueSet(value string) bool {
 
 func (cfg *commandLineServerConfig) AutoGCBehavior() servercfg.AutoGCBehavior {
 	return stubAutoGCBehavior{}
+}
+
+func (cfg *commandLineServerConfig) Overrides() sql.EngineOverrides {
+	return sql.EngineOverrides{}
 }
 
 // DoltServerConfigReader is the default implementation of ServerConfigReader suitable for parsing Dolt config files

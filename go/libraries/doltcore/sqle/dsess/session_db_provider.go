@@ -111,6 +111,8 @@ type DoltDatabaseProvider interface {
 	// PurgeDroppedDatabases permanently deletes any dropped databases that are being held in temporary storage
 	// in case they need to be restored. This operation is not reversible, so use with caution!
 	PurgeDroppedDatabases(ctx *sql.Context) error
+	// EngineOverrides returns the overrides that were given during the creation of the provider.
+	EngineOverrides() sql.EngineOverrides
 }
 
 type SessionDatabaseBranchSpec struct {

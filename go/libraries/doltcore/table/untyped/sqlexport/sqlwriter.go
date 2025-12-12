@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -83,7 +84,7 @@ func (w *SqlExportWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 
 	// Special case for schemas table
 	if w.tableName == doltdb.SchemasTableName {
-		stmt, err := sqlfmt.SqlRowAsCreateFragStmt(r)
+		stmt, err := sqlfmt.SqlRowAsCreateFragStmt(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -92,7 +93,7 @@ func (w *SqlExportWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 
 	// Special case for procedures table
 	if w.tableName == doltdb.ProceduresTableName {
-		stmt, err := sqlfmt.SqlRowAsCreateProcStmt(r)
+		stmt, err := sqlfmt.SqlRowAsCreateProcStmt(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -126,7 +127,8 @@ func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	}
 
 	var b strings.Builder
-	b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
+	formatter := overrides.SchemaFormatterFromContext(ctx)
+	b.WriteString(sqlfmt.DropTableIfExistsStmt(formatter, w.tableName))
 	b.WriteRune('\n')
 	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
 	createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)

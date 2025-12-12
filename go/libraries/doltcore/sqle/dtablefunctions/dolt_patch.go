@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -502,7 +503,8 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData[*sql.Context], tableDelta
 			if cerr != nil {
 				return nil, cerr
 			}
-			alterDBCollStmt := sqlfmt.AlterDatabaseCollateStmt(dbName, fromColl, toColl)
+			formatter := overrides.SchemaFormatterFromContext(ctx)
+			alterDBCollStmt := sqlfmt.AlterDatabaseCollateStmt(formatter, dbName, fromColl, toColl)
 			patches = append(patches, &patchNode{
 				tblName:          td.FromName,
 				schemaPatchStmts: []string{alterDBCollStmt},

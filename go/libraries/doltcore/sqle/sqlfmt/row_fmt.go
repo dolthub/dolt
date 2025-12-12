@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
@@ -36,8 +37,9 @@ import (
 const singleQuote = `'`
 
 // QuoteIdentifier quotes the identifier given with backticks.
-func QuoteIdentifier(s string) string {
-	return sql.GlobalSchemaFormatter.QuoteIdentifier(s)
+func QuoteIdentifier(ctx *sql.Context, s string) string {
+	formatter := overrides.SchemaFormatterFromContext(ctx)
+	return formatter.QuoteIdentifier(s)
 }
 
 // QuoteTableName quotes the table name given with backticks.
@@ -51,10 +53,10 @@ func QuoteComment(s string) string {
 	return `'` + strings.ReplaceAll(s, `'`, `\'`) + `'`
 }
 
-func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (string, error) {
+func RowAsInsertStmt(ctx *sql.Context, r row.Row, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 	b.WriteString("INSERT INTO ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(QuoteIdentifier(ctx, tableName))
 	b.WriteString(" ")
 
 	b.WriteString("(")
@@ -63,7 +65,7 @@ func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 		if seenOne {
 			b.WriteRune(',')
 		}
-		b.WriteString(QuoteIdentifier(col.Name))
+		b.WriteString(QuoteIdentifier(ctx, col.Name))
 		seenOne = true
 		return false, nil
 	})
@@ -82,7 +84,7 @@ func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 			b.WriteRune(',')
 		}
 		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		sqlString, err := ValueAsSqlString(col.TypeInfo, val)
+		sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
 		if err != nil {
 			return true, err
 		}
@@ -100,10 +102,10 @@ func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	return b.String(), nil
 }
 
-func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (string, error) {
+func RowAsDeleteStmt(ctx *sql.Context, r row.Row, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 	b.WriteString("DELETE FROM ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(QuoteIdentifier(ctx, tableName))
 
 	b.WriteString(" WHERE (")
 	seenOne := false
@@ -115,11 +117,11 @@ func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 			if seenOne {
 				b.WriteString(" AND ")
 			}
-			sqlString, err := ValueAsSqlString(col.TypeInfo, val)
+			sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
 			if err != nil {
 				return true, err
 			}
-			b.WriteString(QuoteIdentifier(col.Name))
+			b.WriteString(QuoteIdentifier(ctx, col.Name))
 			b.WriteRune('=')
 			b.WriteString(sqlString)
 			seenOne = true
@@ -135,10 +137,10 @@ func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	return b.String(), nil
 }
 
-func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
+func RowAsUpdateStmt(ctx *sql.Context, r row.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
 	var b strings.Builder
 	b.WriteString("UPDATE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(QuoteIdentifier(ctx, tableName))
 	b.WriteString(" ")
 
 	b.WriteString("SET ")
@@ -151,11 +153,11 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema, colsTo
 			if seenOne {
 				b.WriteRune(',')
 			}
-			sqlString, err := ValueAsSqlString(col.TypeInfo, val)
+			sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
 			if err != nil {
 				return true, err
 			}
-			b.WriteString(QuoteIdentifier(col.Name))
+			b.WriteString(QuoteIdentifier(ctx, col.Name))
 			b.WriteRune('=')
 			b.WriteString(sqlString)
 			seenOne = true
@@ -176,11 +178,11 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema, colsTo
 			if seenOne {
 				b.WriteString(" AND ")
 			}
-			sqlString, err := ValueAsSqlString(col.TypeInfo, val)
+			sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
 			if err != nil {
 				return true, err
 			}
-			b.WriteString(QuoteIdentifier(col.Name))
+			b.WriteString(QuoteIdentifier(ctx, col.Name))
 			b.WriteRune('=')
 			b.WriteString(sqlString)
 			seenOne = true
@@ -197,7 +199,7 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema, colsTo
 }
 
 // RowAsTupleString converts a row into it's tuple string representation for SQL insert statements.
-func RowAsTupleString(r row.Row, tableSch schema.Schema) (string, error) {
+func RowAsTupleString(ctx *sql.Context, r row.Row, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 
 	b.WriteString("(")
@@ -208,7 +210,7 @@ func RowAsTupleString(r row.Row, tableSch schema.Schema) (string, error) {
 			b.WriteRune(',')
 		}
 		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		sqlString, err := ValueAsSqlString(col.TypeInfo, val)
+		sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
 		if err != nil {
 			return true, err
 		}
@@ -228,11 +230,11 @@ func RowAsTupleString(r row.Row, tableSch schema.Schema) (string, error) {
 }
 
 // InsertStatementPrefix returns the first part of an SQL insert query for a given table
-func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, error) {
+func InsertStatementPrefix(ctx *sql.Context, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 
 	b.WriteString("INSERT INTO ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(QuoteIdentifier(ctx, tableName))
 	b.WriteString(" (")
 
 	seenOne := false
@@ -240,7 +242,7 @@ func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, er
 		if seenOne {
 			b.WriteRune(',')
 		}
-		b.WriteString(QuoteIdentifier(col.Name))
+		b.WriteString(QuoteIdentifier(ctx, col.Name))
 		seenOne = true
 		return false, nil
 	})
@@ -255,7 +257,7 @@ func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, er
 
 // SqlRowAsCreateProcStmt Converts a Row into either a CREATE PROCEDURE statement
 // This function expects a row from the dolt_procedures table.
-func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
+func SqlRowAsCreateProcStmt(ctx *sql.Context, r sql.Row) (string, error) {
 	var b strings.Builder
 
 	// Write create procedure
@@ -264,7 +266,7 @@ func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
 
 	// Write procedure name
 	nameStr := r[0].(string)
-	b.WriteString(QuoteIdentifier(nameStr))
+	b.WriteString(QuoteIdentifier(ctx, nameStr))
 	b.WriteString(" ") // add a space
 
 	// Write definition
@@ -282,7 +284,7 @@ func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
 
 // SqlRowAsCreateFragStmt Converts a Row into either a CREATE TRIGGER or CREATE VIEW statement
 // This function expects a row from the dolt_schemas table
-func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
+func SqlRowAsCreateFragStmt(ctx *sql.Context, r sql.Row) (string, error) {
 	var b strings.Builder
 
 	// If type is view, add DROP VIEW IF EXISTS statement before CREATE VIEW STATEMENT
@@ -322,7 +324,7 @@ func SqlRowAsInsertStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 	var b strings.Builder
 
 	// Write insert prefix
-	prefix, err := InsertStatementPrefix(tableName, tableSch)
+	prefix, err := InsertStatementPrefix(ctx, tableName, tableSch)
 	if err != nil {
 		return "", err
 	}
@@ -387,7 +389,7 @@ func SqlRowAsStrings(ctx *sql.Context, r sql.Row, sch sql.Schema) ([]string, err
 func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch schema.Schema, limit uint64) (string, error) {
 	var b strings.Builder
 	b.WriteString("DELETE FROM ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(QuoteIdentifier(ctx, tableName))
 
 	b.WriteString(" WHERE ")
 	seenOne := false
@@ -403,7 +405,7 @@ func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 			if err != nil {
 				return true, err
 			}
-			b.WriteString(QuoteIdentifier(col.Name))
+			b.WriteString(QuoteIdentifier(ctx, col.Name))
 			b.WriteRune('=')
 			b.WriteString(sqlString)
 			seenOne = true
@@ -432,7 +434,7 @@ func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
 	var b strings.Builder
 	b.WriteString("UPDATE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(QuoteIdentifier(ctx, tableName))
 	b.WriteString(" ")
 
 	b.WriteString("SET ")
@@ -450,7 +452,7 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 			if err != nil {
 				return true, err
 			}
-			b.WriteString(QuoteIdentifier(col.Name))
+			b.WriteString(QuoteIdentifier(ctx, col.Name))
 			b.WriteRune('=')
 			b.WriteString(sqlString)
 		}
@@ -477,7 +479,7 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 			if err != nil {
 				return true, err
 			}
-			b.WriteString(QuoteIdentifier(col.Name))
+			b.WriteString(QuoteIdentifier(ctx, col.Name))
 			b.WriteRune('=')
 			b.WriteString(sqlString)
 		}
@@ -493,7 +495,7 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 	return b.String(), nil
 }
 
-func ValueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
+func ValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value types.Value) (string, error) {
 	if types.IsNull(value) {
 		return "NULL", nil
 	}

@@ -86,6 +86,7 @@ type SqlEngineConfig struct {
 	BinlogReplicaController    binlogreplication.BinlogReplicaController
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
 	BranchActivityTracking     bool
+	EngineOverrides            sql.EngineOverrides
 }
 
 type SqlEngineConfigOption func(*SqlEngineConfig)
@@ -157,7 +158,7 @@ func NewSqlEngine(
 	}
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
+	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +173,7 @@ func NewSqlEngine(
 
 	sqlEngine := &SqlEngine{}
 	// Create the engine
-	engine := gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
+	engine := gms.New(analyzer.NewBuilder(pro).AddOverrides(config.EngineOverrides).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
@@ -253,7 +254,7 @@ func NewSqlEngine(
 
 	branchActivityTracker := doltdb.NewBranchActivityTracker(ctx, config.BranchActivityTracking)
 
-	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
+	engine.Analyzer.ExecBuilder = rowexec.NewBuilder(kvexec.Builder{}, engine.Analyzer.Overrides)
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit, branchActivityTracker)
 	sqlEngine.provider = pro
 	sqlEngine.dsessFactory = sessFactory

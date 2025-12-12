@@ -249,6 +249,8 @@ type ServerConfig interface {
 	ValueSet(value string) bool
 	// AutoGCBehavior defines parameters around how auto-GC works for the running server.
 	AutoGCBehavior() AutoGCBehavior
+	// Overrides returns any overrides that are defined. This is primarily used by Doltgres.
+	Overrides() sql.EngineOverrides
 }
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
