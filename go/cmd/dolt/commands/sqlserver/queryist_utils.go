@@ -17,7 +17,7 @@ package sqlserver
 import (
 	"context"
 	"crypto/tls"
-	driversql "database/sql"
+	connsql "database/sql"
 	"fmt"
 	"io"
 	"regexp"
@@ -25,7 +25,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -94,7 +93,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 		return nil, err
 	}
 
-	conn := &dbr.Connection{DB: driversql.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
+	conn := &dbr.Connection{DB: connsql.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
 
 	gatherWarnings := false
 	queryist := ConnectionQueryist{connection: conn, gatherWarnings: &gatherWarnings}
@@ -181,35 +180,38 @@ type ConnectionQueryResult struct {
 
 var _ sql.RowIter = (*ConnectionQueryResult)(nil)
 
-func NewConnectionQueryResult(sqlRows *driversql.Rows) (*ConnectionQueryResult, error) {
-	colTypes, err := sqlRows.ColumnTypes()
+func NewConnectionQueryResult(driverResult *connsql.Rows) (*ConnectionQueryResult, error) {
+	driverColumns, err := driverResult.ColumnTypes()
 	if err != nil {
 		return nil, err
 	}
 
-	schema := make(sql.Schema, len(colTypes))
-	vRow := make([]*string, len(colTypes))
-	iRow := make([]interface{}, len(colTypes))
+	schema := make(sql.Schema, len(driverColumns))
+	vRow := make([]*string, len(driverColumns))
+	iRow := make([]interface{}, len(driverColumns))
 	rows := make([]sql.Row, 0)
-	for i, colType := range colTypes {
-		colTypeNullable, ok := colType.Nullable()
+	for i, driverColumn := range driverColumns {
+		driverNullable, ok := driverColumn.Nullable()
 		if !ok {
-			return nil, fmt.Errorf("column '%s' of type '%s' has no nullable", colType.Name(), colType.Name())
+			return nil, fmt.Errorf("driver column '%s' of type '%s' nullable is nil", driverColumn.Name(), driverColumn.Name())
 		}
-		sqlType, err := newSqlTypeFromDriverColumnType(colType)
+
+		sqlType, err := newSqlTypeFromDriverColumn(driverColumn)
 		if err != nil {
 			return nil, err
 		}
+
 		schema[i] = &sql.Column{
-			Name:     colType.Name(),
+			Name:     driverColumn.Name(),
 			Type:     sqlType,
-			Nullable: colTypeNullable,
+			Nullable: driverNullable,
 		}
+
 		iRow[i] = &vRow[i]
 	}
 
-	for sqlRows.Next() {
-		err := sqlRows.Scan(iRow...)
+	for driverResult.Next() {
+		err := driverResult.Scan(iRow...)
 		if err != nil {
 			return nil, err
 		}
@@ -223,7 +225,7 @@ func NewConnectionQueryResult(sqlRows *driversql.Rows) (*ConnectionQueryResult, 
 		rows = append(rows, sqlRow)
 	}
 
-	closeErr := sqlRows.Close()
+	closeErr := driverResult.Close()
 	if closeErr != nil {
 		return nil, err
 	}
@@ -236,23 +238,19 @@ func NewConnectionQueryResult(sqlRows *driversql.Rows) (*ConnectionQueryResult, 
 	}, nil
 }
 
-// newSqlTypeFromDriverColumnType converts a database/sql ColumnType into a go-mysql-server sql.Type.
-// This mapping is required because the database/sql interface exposes types as strings rather
-// than their underlying wire protocol details. We reconstruct GMS types from the driver metadata
-// to ensure consistent type handling when Dolt acts as a MySQL client.
-func newSqlTypeFromDriverColumnType(columnType *driversql.ColumnType) (sql.Type, error) {
+// newSqlTypeFromDriverColumn converts a [connsql.ColumnType] into [sql.Type]. The [connsql.ColumnType] only
+// reveals the name of a type as a string. We reconstruct [sql.Type] from the [connsql.ColumnType] member functions,
+// which provide additional metadata.
+func newSqlTypeFromDriverColumn(columnType *connsql.ColumnType) (sql.Type, error) {
 	typeName := columnType.DatabaseTypeName()
-	typeLength, ok := columnType.Length()
-	if !ok {
-		return nil, fmt.Errorf("column '%s' of type '%s' has no length", columnType.Name(), typeName)
-	}
+	//typeLength, ok := columnType.Length()
 	switch typeName {
 	case "binary":
-		return gmstypes.MustCreateBinary(sqltypes.Binary, typeLength), nil
+		return gmstypes.LongText, nil
 	case "varbinary":
-		return gmstypes.MustCreateBinary(sqltypes.VarBinary, typeLength), nil
+		return gmstypes.LongText, nil
 	case "bit":
-		return gmstypes.MustCreateBitType(uint8(typeLength)), nil
+		return gmstypes.LongText, nil
 	case "tinyblob":
 		return gmstypes.TinyBlob, nil
 	case "blob":
