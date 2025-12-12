@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
@@ -143,7 +144,8 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	iter, err := rowexec.DefaultBuilder.Build(s.sqlCtx, insertOrUpdateOperation, nil)
+	engOverrides := overrides.EngineOverridesFromContext(ctx)
+	iter, err := rowexec.NewBuilder(nil, engOverrides).Build(s.sqlCtx, insertOrUpdateOperation, nil)
 	if err != nil {
 		return err
 	}
@@ -299,21 +301,22 @@ func (s *SqlEngineTableWriter) createOrEmptyTableIfNeeded() error {
 func (s *SqlEngineTableWriter) createTable() error {
 	// TODO don't use internal interfaces to do this, we had to have a sql.Schema somewhere
 	// upstream to make the dolt schema
+	formatter := overrides.SchemaFormatterFromContext(s.sqlCtx)
 	sqlCols := make([]string, len(s.tableSchema.Schema))
 	for i, c := range s.tableSchema.Schema {
-		sqlCols[i] = sql.GenerateCreateTableColumnDefinition(c, c.Default.String(), c.OnUpdate.String(), sql.Collation_Default)
+		sqlCols[i] = formatter.GenerateCreateTableColumnDefinition(c, c.Default.String(), c.OnUpdate.String(), sql.Collation_Default)
 	}
 	var pks string
 	var sep string
 	for _, i := range s.tableSchema.PkOrdinals {
-		pks += sep + sql.QuoteIdentifier(s.tableSchema.Schema[i].Name)
+		pks += sep + formatter.QuoteIdentifier(s.tableSchema.Schema[i].Name)
 		sep = ", "
 	}
 	if len(sep) > 0 {
 		sqlCols = append(sqlCols, fmt.Sprintf("PRIMARY KEY (%s)", pks))
 	}
 
-	createTable := sql.GenerateCreateTableStatement(s.tableName, sqlCols, "", "", sql.CharacterSet_utf8mb4.String(), sql.Collation_Default.String(), "")
+	createTable := formatter.GenerateCreateTableStatement(s.tableName, sqlCols, "", "", sql.CharacterSet_utf8mb4.String(), sql.Collation_Default.String(), "")
 	_, iter, _, err := s.se.Query(s.sqlCtx, createTable)
 	if err != nil {
 		return err
@@ -325,6 +328,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 // createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped
 // with an error handler.
 func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace bool) (sql.Node, error) {
+	formatter := overrides.SchemaFormatterFromContext(s.sqlCtx)
 	update := s.importOption == UpdateOp
 	colNames := ""
 	values := ""
@@ -334,7 +338,7 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 	}
 	sep := ""
 	for _, col := range s.rowOperationSchema.Schema {
-		colNames += fmt.Sprintf("%s%s", sep, sql.QuoteIdentifier(col.Name))
+		colNames += fmt.Sprintf("%s%s", sep, formatter.QuoteIdentifier(col.Name))
 		values += fmt.Sprintf("%s1", sep)
 		if update {
 			duplicate += fmt.Sprintf("%s`%s` = VALUES(`%s`)", sep, col.Name, col.Name)
@@ -343,7 +347,7 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 	}
 
 	sqlEngine := s.se
-	binder := planbuilder.New(s.sqlCtx, sqlEngine.Analyzer.Catalog, sqlEngine.EventScheduler, sqlEngine.Parser)
+	binder := planbuilder.New(s.sqlCtx, sqlEngine.Analyzer.Catalog, sqlEngine.EventScheduler)
 	insert := fmt.Sprintf("insert into `%s` (%s) VALUES (%s)%s", s.tableName, colNames, values, duplicate)
 	parsed, _, _, qFlags, err := binder.Parse(insert, nil, false)
 	if err != nil {

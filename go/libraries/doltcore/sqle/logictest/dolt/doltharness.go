@@ -314,7 +314,7 @@ func sqlNewEngine(ctx context.Context, dEnv *env.DoltEnv) (*sqle.Engine, dsess.D
 	}
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
+	pro, err := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS, sql.EngineOverrides{})
 	if err != nil {
 		return nil, nil, err
 	}

@@ -275,7 +275,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
+		e.Analyzer.ExecBuilder = rowexec.NewBuilder(kvexec.Builder{}, e.Analyzer.Overrides)
 		d.engine = e
 
 		sqlCtx := enginetest.NewContext(d)
@@ -521,7 +521,7 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (enginete
 		locations[i] = loc
 	}
 
-	readOnlyProvider, err := sqle.NewDoltDatabaseProviderWithDatabases("main", ddp.FileSystem(), dbs, locations)
+	readOnlyProvider, err := sqle.NewDoltDatabaseProviderWithDatabases("main", ddp.FileSystem(), dbs, locations, sql.EngineOverrides{})
 	if err != nil {
 		return nil, err
 	}
@@ -569,7 +569,7 @@ func (d *DoltHarness) newProvider(ctx context.Context) sql.MutableDatabaseProvid
 	d.multiRepoEnv = mrEnv
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
-	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem())
+	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem(), sql.EngineOverrides{})
 	require.NoError(d.t, err)
 
 	return pro

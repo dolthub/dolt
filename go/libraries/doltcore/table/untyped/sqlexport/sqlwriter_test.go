@@ -40,7 +40,7 @@ func (*StringBuilderCloser) Close() error {
 
 func TestEndToEnd(t *testing.T) {
 	tableName := "people"
-	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\n" +
+	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(sql.DefaultMySQLSchemaFormatter, tableName) + "\n" +
 		"CREATE TABLE `people` (\n" +
 		"  `id` varchar(1023) NOT NULL,\n" +
 		"  `name` varchar(1023) NOT NULL,\n" +

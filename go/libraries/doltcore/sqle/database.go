@@ -49,6 +49,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -2674,7 +2675,7 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx), nil)
+	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx))
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
 	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), nil, false)
 	if err != nil {
@@ -3031,7 +3032,8 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 		Column: expression.NewGetField(0, rebaseSchema[0].Type, "rebase_order", false),
 		Order:  sql.Ascending,
 	}}, resolvedTable)
-	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
+	engOverrides := overrides.EngineOverridesFromContext(ctx)
+	iter, err := rowexec.NewBuilder(nil, engOverrides).Build(ctx, sort, nil)
 	if err != nil {
 		return nil, err
 	}

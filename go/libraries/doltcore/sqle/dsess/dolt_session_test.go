@@ -318,3 +318,7 @@ func (e emptyRevisionDatabaseProvider) CreateDatabase(ctx *sql.Context, dbName s
 func (e emptyRevisionDatabaseProvider) RevisionDbState(_ *sql.Context, revDB string) (InitialDbState, error) {
 	return InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
 }
+
+func (e emptyRevisionDatabaseProvider) EngineOverrides() sql.EngineOverrides {
+	return sql.EngineOverrides{}
+}

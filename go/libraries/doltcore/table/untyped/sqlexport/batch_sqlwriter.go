@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -114,7 +115,7 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 	var stmt string
 	if w.numInserts == 0 {
 		// Get insert prefix string
-		prefix, err := sqlfmt.InsertStatementPrefix(w.tableName, w.sch)
+		prefix, err := sqlfmt.InsertStatementPrefix(ctx, w.tableName, w.sch)
 		if err != nil {
 			return nil
 		}
@@ -151,7 +152,8 @@ func (w *BatchSqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	}
 
 	var b strings.Builder
-	b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
+	formatter := overrides.SchemaFormatterFromContext(ctx)
+	b.WriteString(sqlfmt.DropTableIfExistsStmt(formatter, w.tableName))
 	b.WriteRune('\n')
 	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
 	createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)

@@ -1272,7 +1272,7 @@ func diffUserTable(
 
 	if dArgs.diffParts&NameOnlyDiff == 0 && !shouldUseLazyHeader(dArgs, tableSummary) {
 		// TODO: schema names
-		err := dw.BeginTable(tableSummary.FromTableName.Name, tableSummary.ToTableName.Name, tableSummary.IsAdd(), tableSummary.IsDrop())
+		err := dw.BeginTable(sqlCtx, tableSummary.FromTableName.Name, tableSummary.ToTableName.Name, tableSummary.IsAdd(), tableSummary.IsDrop())
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1336,7 +1336,7 @@ func diffUserTable(
 			return errhand.BuildDError("cannot retrieve diff stats between '%s' and '%s'", dArgs.fromRef, dArgs.toRef).AddCause(err).Build()
 		}
 
-		err = dw.WriteTableDiffStats(diffStats, fromColLen, toColLen, areTablesKeyless)
+		err = dw.WriteTableDiffStats(sqlCtx, diffStats, fromColLen, toColLen, areTablesKeyless)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1344,7 +1344,7 @@ func diffUserTable(
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
-		err = dw.WriteTableSchemaDiff(fromTableInfo, toTableInfo, tableSummary)
+		err = dw.WriteTableSchemaDiff(sqlCtx, fromTableInfo, toTableInfo, tableSummary)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1487,7 +1487,7 @@ func diffDatabase(
 		return nil
 	}
 
-	err := dw.BeginTable(tableSummary.FromTableName.Name, tableSummary.ToTableName.Name, tableSummary.IsAdd(), tableSummary.IsDrop())
+	err := dw.BeginTable(sqlCtx, tableSummary.FromTableName.Name, tableSummary.ToTableName.Name, tableSummary.IsAdd(), tableSummary.IsDrop())
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1512,7 +1512,7 @@ func diffDatabase(
 		toTableInfo = &to
 	}
 
-	err = dw.WriteTableSchemaDiff(fromTableInfo, toTableInfo, tableSummary)
+	err = dw.WriteTableSchemaDiff(sqlCtx, fromTableInfo, toTableInfo, tableSummary)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1607,7 +1607,7 @@ func diffRows(
 
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
 	var rowWriter diff.SqlRowDiffWriter
-	realWriter, err := dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
+	realWriter, err := dw.RowWriter(sqlCtx, fromTableInfo, toTableInfo, tableSummary, unionSch)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1616,6 +1616,7 @@ func diffRows(
 		// Wrap with lazy writer to delay BeginTable until first row write
 		onFirstWrite := func() error {
 			return dw.BeginTable(
+				sqlCtx,
 				tableSummary.FromTableName.Name,
 				tableSummary.ToTableName.Name,
 				tableSummary.IsAdd(),
@@ -1723,7 +1724,7 @@ func diffRows(
 		}
 
 		// instantiate a new RowWriter with the new schema that only contains the columns with changes
-		rowWriter, err = dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, filteredUnionSch)
+		rowWriter, err = dw.RowWriter(sqlCtx, fromTableInfo, toTableInfo, tableSummary, filteredUnionSch)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}

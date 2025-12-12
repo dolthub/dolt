@@ -344,12 +344,14 @@ type mockDiffWriter struct {
 	beginTableError  error
 }
 
-func (m *mockDiffWriter) BeginTable(_ /* fromTableName */, _ /* toTableName */ string, _ /* isAdd */, _ /* isDrop */ bool) error {
+var _ diffWriter = (*mockDiffWriter)(nil)
+
+func (m *mockDiffWriter) BeginTable(_ /* ctx */ context.Context, _ /* fromTableName */, _ /* toTableName */ string, _ /* isAdd */, _ /* isDrop */ bool) error {
 	m.beginTableCalled = true
 	return m.beginTableError
 }
 
-func (m *mockDiffWriter) WriteTableSchemaDiff(_ /* fromTableInfo */, _ /* toTableInfo */ *diff.TableInfo, _ /* tds */ diff.TableDeltaSummary) error {
+func (m *mockDiffWriter) WriteTableSchemaDiff(_ /* ctx */ context.Context, _ /* fromTableInfo */, _ /* toTableInfo */ *diff.TableInfo, _ /* tds */ diff.TableDeltaSummary) error {
 	return nil
 }
 
@@ -365,11 +367,11 @@ func (m *mockDiffWriter) WriteViewDiff(_ /* ctx */ context.Context, _ /* viewNam
 	return nil
 }
 
-func (m *mockDiffWriter) WriteTableDiffStats(_ /* diffStats */ []diffStatistics, _ /* oldColLen */, _ /* newColLen */ int, _ /* areTablesKeyless */ bool) error {
+func (m *mockDiffWriter) WriteTableDiffStats(_ /* ctx */ context.Context, _ /* diffStats */ []diffStatistics, _ /* oldColLen */, _ /* newColLen */ int, _ /* areTablesKeyless */ bool) error {
 	return nil
 }
 
-func (m *mockDiffWriter) RowWriter(_ /* fromTableInfo */, _ /* toTableInfo */ *diff.TableInfo, _ /* tds */ diff.TableDeltaSummary, _ /* unionSch */ sql.Schema) (diff.SqlRowDiffWriter, error) {
+func (m *mockDiffWriter) RowWriter(_ /* ctx */ context.Context, _ /* fromTableInfo */, _ /* toTableInfo */ *diff.TableInfo, _ /* tds */ diff.TableDeltaSummary, _ /* unionSch */ sql.Schema) (diff.SqlRowDiffWriter, error) {
 	return &mockRowWriter{}, nil
 }
 
@@ -403,7 +405,7 @@ func TestLazyRowWriter_NoRowsWritten(t *testing.T) {
 	realWriter := &mockRowWriter{}
 
 	onFirstWrite := func() error {
-		return mockDW.BeginTable("fromTable", "toTable", false, false)
+		return mockDW.BeginTable(context.Background(), "fromTable", "toTable", false, false)
 	}
 
 	lazyWriter := newLazyRowWriter(realWriter, onFirstWrite)
@@ -425,7 +427,7 @@ func TestLazyRowWriter_RowsWritten(t *testing.T) {
 	realWriter := &mockRowWriter{}
 
 	onFirstWrite := func() error {
-		return mockDW.BeginTable("fromTable", "toTable", false, false)
+		return mockDW.BeginTable(context.Background(), "fromTable", "toTable", false, false)
 	}
 
 	lazyWriter := newLazyRowWriter(realWriter, onFirstWrite)
@@ -454,7 +456,7 @@ func TestLazyRowWriter_CombinedRowsWritten(t *testing.T) {
 	realWriter := &mockRowWriter{}
 
 	onFirstWrite := func() error {
-		return mockDW.BeginTable("fromTable", "toTable", false, false)
+		return mockDW.BeginTable(context.Background(), "fromTable", "toTable", false, false)
 	}
 
 	lazyWriter := newLazyRowWriter(realWriter, onFirstWrite)
@@ -479,7 +481,7 @@ func TestLazyRowWriter_InitializedOnlyOnce(t *testing.T) {
 
 	onFirstWrite := func() error {
 		callCount++
-		return mockDW.BeginTable("fromTable", "toTable", false, false)
+		return mockDW.BeginTable(context.Background(), "fromTable", "toTable", false, false)
 	}
 
 	lazyWriter := newLazyRowWriter(realWriter, onFirstWrite)

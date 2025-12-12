@@ -40,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
@@ -965,7 +966,7 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		return nil, fmt.Errorf("unable to access running SQL server")
 	}
 
-	binder := planbuilder.New(ctx, server.Engine.Analyzer.Catalog, server.Engine.EventScheduler, server.Engine.Parser)
+	binder := planbuilder.New(ctx, server.Engine.Analyzer.Catalog, server.Engine.EventScheduler)
 	node, _, _, qFlags, err := binder.Parse("SELECT "+strValue, nil, false)
 	if err != nil {
 		return nil, err
@@ -976,7 +977,8 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		return nil, err
 	}
 
-	rowIter, err := rowexec.DefaultBuilder.Build(ctx, analyze, nil)
+	engOverrides := overrides.EngineOverridesFromContext(ctx)
+	rowIter, err := rowexec.NewBuilder(nil, engOverrides).Build(ctx, analyze, nil)
 	if err != nil {
 		return nil, err
 	}

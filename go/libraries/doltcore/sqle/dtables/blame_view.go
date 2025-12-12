@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 )
 
@@ -80,7 +81,7 @@ func NewBlameView(ctx *sql.Context, tableName doltdb.TableName, root doltdb.Root
 		return "", nil
 	}
 
-	blameViewExpression, err := createDoltBlameViewExpression(tableName.Name, sch.GetPKCols().GetColumns())
+	blameViewExpression, err := createDoltBlameViewExpression(ctx, tableName.Name, sch.GetPKCols().GetColumns())
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +92,7 @@ func NewBlameView(ctx *sql.Context, tableName doltdb.TableName, root doltdb.Root
 // createDoltBlameViewExpression creates a view expression string to generate the DOLT_BLAME system
 // view for the specified table, with the specified primary keys. The DOLT_BLAME system view is built
 // from the data in the DOLT_DIFF system table for the same specified table name.
-func createDoltBlameViewExpression(tableName string, pks []schema.Column) (string, error) {
+func createDoltBlameViewExpression(ctx *sql.Context, tableName string, pks []schema.Column) (string, error) {
 	if len(pks) == 0 {
 		return "", errUnblameableTable
 	}
@@ -101,6 +102,7 @@ func createDoltBlameViewExpression(tableName string, pks []schema.Column) (strin
 	pksOrderByExpression := ""
 	pksSelectExpression := ""
 
+	formatter := overrides.SchemaFormatterFromContext(ctx)
 	for i, pk := range pks {
 		if i > 0 {
 			allToPks += ", "
@@ -108,13 +110,13 @@ func createDoltBlameViewExpression(tableName string, pks []schema.Column) (strin
 			pksOrderByExpression += ", "
 		}
 
-		toPk := sqlfmt.QuoteIdentifier("to_" + pk.Name)
-		fromPk := sqlfmt.QuoteIdentifier("from_" + pk.Name)
+		toPk := sqlfmt.QuoteIdentifier(ctx, "to_"+pk.Name)
+		fromPk := sqlfmt.QuoteIdentifier(ctx, "from_"+pk.Name)
 
 		allToPks += toPk
 		pksPartitionByExpression += fmt.Sprintf("coalesce(%s, %s)", toPk, fromPk)
 		pksOrderByExpression += fmt.Sprintf("sd.%s ASC ", toPk)
-		pksSelectExpression += fmt.Sprintf("sd.%s AS %s, ", toPk, sqlfmt.QuoteIdentifier(pk.Name))
+		pksSelectExpression += fmt.Sprintf("sd.%s AS %s, ", toPk, formatter.QuoteIdentifier(pk.Name))
 	}
 
 	return fmt.Sprintf(viewExpressionTemplate, allToPks, pksPartitionByExpression, tableName,

@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 )
 
@@ -62,10 +63,11 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 		return nil, err
 	}
 
+	formatter := overrides.SchemaFormatterFromContext(ctx)
 	for _, check := range ct.Checks() {
 		// Check definitions created before v1.55.3 may not have backquotes around identifiers
-		quotedExpr := stripTableNamesFromExpression(check.Expr, true).String()
-		unquotedExpr := stripTableNamesFromExpression(check.Expr, false).String()
+		quotedExpr := stripTableNamesFromExpression(formatter, check.Expr, true).String()
+		unquotedExpr := stripTableNamesFromExpression(formatter, check.Expr, false).String()
 		if quotedExpr == checkExpr || unquotedExpr == checkExpr {
 			return check.Expr, nil
 		}
@@ -74,10 +76,10 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 	return nil, fmt.Errorf("unable to find check expression")
 }
 
-func stripTableNamesFromExpression(expr sql.Expression, quoted bool) sql.Expression {
+func stripTableNamesFromExpression(formatter sql.SchemaFormatter, expr sql.Expression, quoted bool) sql.Expression {
 	e, _, _ := transform.Expr(expr, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 		if col, ok := e.(*expression.GetField); ok {
-			return col.WithTable("").WithQuotedNames(sql.GlobalSchemaFormatter, quoted), transform.NewTree, nil
+			return col.WithTable("").WithQuotedNames(formatter, quoted), transform.NewTree, nil
 		}
 		return e, transform.SameTree, nil
 	})
@@ -90,7 +92,7 @@ type SessionDbProvider interface {
 }
 
 func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*plan.CreateTable, error) {
-	createTable, err := sqlfmt.GenerateCreateTableStatement(tableName, sch, nil, nil)
+	createTable, err := sqlfmt.GenerateCreateTableStatement(ctx, tableName, sch, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -101,21 +103,22 @@ func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*p
 	// this is being called from a query context (which will have a valid Dolt session) or some other context (which
 	// will need to construct a new provider).
 	var b *planbuilder.Builder
+	engOverrides := overrides.EngineOverridesFromContext(ctx)
 	sess, ok := ctx.Session.(SessionDbProvider)
 	if ok {
-		catalog := analyzer.NewCatalog(sess.GenericProvider())
+		catalog := analyzer.NewCatalog(sess.GenericProvider(), engOverrides)
 		catalog.AuthHandler = sql.NoopAuthorizationHandler{}
-		b = planbuilder.New(ctx, catalog, nil, nil)
+		b = planbuilder.New(ctx, catalog, nil)
 	} else {
 		mockDatabase := memory.NewDatabase("mydb")
 		mockProvider := memory.NewDBProvider(mockDatabase)
-		catalog := analyzer.NewCatalog(mockProvider)
+		catalog := analyzer.NewCatalog(mockProvider, engOverrides)
 		catalog.AuthHandler = sql.NoopAuthorizationHandler{}
 		// We need a new context for this operation
 		parseCtx := sql.NewEmptyContext()
 		parseCtx.SetCurrentDatabase("mydb")
 
-		b = planbuilder.New(parseCtx, catalog, nil, nil)
+		b = planbuilder.New(parseCtx, catalog, nil)
 	}
 
 	pseudoAnalyzedQuery, _, _, _, err := b.Parse(query, nil, false)

@@ -17,6 +17,7 @@ package sqlfmt_test
 import (
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
@@ -53,38 +55,38 @@ type updateTest struct {
 }
 
 func TestTableDropStmt(t *testing.T) {
-	stmt := sqlfmt.DropTableStmt("table_name")
+	stmt := sqlfmt.DropTableStmt(sql.DefaultMySQLSchemaFormatter, "table_name")
 
 	assert.Equal(t, expectedDropSql, stmt)
 }
 
 func TestTableDropIfExistsStmt(t *testing.T) {
-	stmt := sqlfmt.DropTableIfExistsStmt("table_name")
+	stmt := sqlfmt.DropTableIfExistsStmt(sql.DefaultMySQLSchemaFormatter, "table_name")
 
 	assert.Equal(t, expectedDropIfExistsSql, stmt)
 }
 
 func TestAlterTableAddColStmt(t *testing.T) {
 	newColDef := "`c0` BIGINT NOT NULL"
-	stmt := sqlfmt.AlterTableAddColStmt("table_name", newColDef)
+	stmt := sqlfmt.AlterTableAddColStmt(sql.DefaultMySQLSchemaFormatter, "table_name", newColDef)
 
 	assert.Equal(t, expectedAddColSql, stmt)
 }
 
 func TestAlterTableDropColStmt(t *testing.T) {
-	stmt := sqlfmt.AlterTableDropColStmt("table_name", "first_name")
+	stmt := sqlfmt.AlterTableDropColStmt(sql.DefaultMySQLSchemaFormatter, "table_name", "first_name")
 
 	assert.Equal(t, expectedDropColSql, stmt)
 }
 
 func TestAlterTableRenameColStmt(t *testing.T) {
-	stmt := sqlfmt.AlterTableRenameColStmt("table_name", "id", "pk")
+	stmt := sqlfmt.AlterTableRenameColStmt(sql.DefaultMySQLSchemaFormatter, "table_name", "id", "pk")
 
 	assert.Equal(t, expectedRenameColSql, stmt)
 }
 
 func TestRenameTableStmt(t *testing.T) {
-	stmt := sqlfmt.RenameTableStmt("table_name", "new_table_name")
+	stmt := sqlfmt.RenameTableStmt(sql.DefaultMySQLSchemaFormatter, "table_name", "new_table_name")
 
 	assert.Equal(t, expectedRenameTableSql, stmt)
 }
@@ -159,7 +161,7 @@ func TestRowAsInsertStmt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stmt, err := sqlfmt.RowAsInsertStmt(tt.row, tableName, tt.sch)
+			stmt, err := sqlfmt.RowAsInsertStmt(nil, tt.row, tableName, tt.sch)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedOutput, stmt)
 		})
@@ -184,7 +186,7 @@ func TestRowAsDeleteStmt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stmt, err := sqlfmt.RowAsDeleteStmt(tt.row, tableName, tt.sch)
+			stmt, err := sqlfmt.RowAsDeleteStmt(nil, tt.row, tableName, tt.sch)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedOutput, stmt)
 		})
@@ -244,7 +246,7 @@ func TestRowAsUpdateStmt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stmt, err := sqlfmt.RowAsUpdateStmt(tt.row, tableName, tt.sch, tt.collDiff)
+			stmt, err := sqlfmt.RowAsUpdateStmt(nil, tt.row, tableName, tt.sch, tt.collDiff)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedOutput, stmt)
 		})
@@ -308,7 +310,7 @@ func TestValueAsSqlString(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			act, err := sqlfmt.ValueAsSqlString(test.ti, test.val)
+			act, err := sqlfmt.ValueAsSqlString(nil, test.ti, test.val)
 			require.NoError(t, err)
 			assert.Equal(t, test.exp, act)
 		})

@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -62,6 +63,7 @@ func GenerateDataDiffStatement(ctx *sql.Context, tableName string, sch schema.Sc
 // specified RootValue, |toRoot|, must be the RootValue that was used as the "To" root when computing the specified
 // TableDelta.
 func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableDelta) ([]string, error) {
+	formatter := overrides.SchemaFormatterFromContext(ctx)
 	toSchemas, err := doltdb.GetAllSchemas(ctx, toRoot)
 	if err != nil {
 		return nil, fmt.Errorf("could not read schemas from toRoot, cause: %s", err.Error())
@@ -74,15 +76,15 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 
 	var ddlStatements []string
 	if td.IsDrop() {
-		ddlStatements = append(ddlStatements, DropTableStmt(td.FromName.Name))
+		ddlStatements = append(ddlStatements, DropTableStmt(formatter, td.FromName.Name))
 	} else if td.IsAdd() {
-		stmt, err := GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := GenerateCreateTableStatement(ctx, td.ToName.Name, td.ToSch, td.ToFks, td.ToFksParentSch)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 		ddlStatements = append(ddlStatements, stmt)
 	} else {
-		stmts, err := generateNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
+		stmts, err := generateNonCreateNonDropTableSqlSchemaDiff(formatter, td, toSchemas, fromSch, toSch)
 		if err != nil {
 			return nil, err
 		}
@@ -94,7 +96,7 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 
 // generateNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
 // TODO: schema names
-func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[doltdb.TableName]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
+func generateNonCreateNonDropTableSqlSchemaDiff(formatter sql.SchemaFormatter, td diff.TableDelta, toSchemas map[doltdb.TableName]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
 	if td.IsAdd() || td.IsDrop() {
 		// use add and drop specific methods
 		return nil, nil
@@ -102,7 +104,7 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 
 	var ddlStatements []string
 	if td.FromName != td.ToName {
-		ddlStatements = append(ddlStatements, RenameTableStmt(td.FromName.Name, td.ToName.Name))
+		ddlStatements = append(ddlStatements, RenameTableStmt(formatter, td.FromName.Name, td.ToName.Name))
 	}
 
 	eq := schema.SchemasAreEqual(fromSch, toSch)
@@ -116,29 +118,29 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 		switch cd.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, AlterTableAddColStmt(td.ToName.Name, GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+			ddlStatements = append(ddlStatements, AlterTableAddColStmt(formatter, td.ToName.Name, GenerateCreateTableColumnDefinition(formatter, *cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 		case diff.SchDiffRemoved:
-			ddlStatements = append(ddlStatements, AlterTableDropColStmt(td.ToName.Name, cd.Old.Name))
+			ddlStatements = append(ddlStatements, AlterTableDropColStmt(formatter, td.ToName.Name, cd.Old.Name))
 		case diff.SchDiffModified:
 			// Ignore any primary key set changes here
 			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
 				continue
 			}
 			if cd.Old.Name != cd.New.Name {
-				ddlStatements = append(ddlStatements, AlterTableRenameColStmt(td.ToName.Name, cd.Old.Name, cd.New.Name))
+				ddlStatements = append(ddlStatements, AlterTableRenameColStmt(formatter, td.ToName.Name, cd.Old.Name, cd.New.Name))
 			}
 			if !cd.Old.TypeInfo.Equals(cd.New.TypeInfo) {
-				ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName.Name,
-					GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+				ddlStatements = append(ddlStatements, AlterTableModifyColStmt(formatter, td.ToName.Name,
+					GenerateCreateTableColumnDefinition(formatter, *cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 			}
 		}
 	}
 
 	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
 	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		ddlStatements = append(ddlStatements, AlterTableDropPks(td.ToName.Name))
+		ddlStatements = append(ddlStatements, AlterTableDropPks(formatter, td.ToName.Name))
 		if toSch.GetPKCols().Size() > 0 {
-			ddlStatements = append(ddlStatements, AlterTableAddPrimaryKeys(td.ToName.Name, toSch.GetPKCols().GetColumnNames()))
+			ddlStatements = append(ddlStatements, AlterTableAddPrimaryKeys(formatter, td.ToName.Name, toSch.GetPKCols().GetColumnNames()))
 		}
 	}
 
@@ -146,12 +148,12 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 		switch idxDiff.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
+			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(formatter, td.ToName.Name, idxDiff.To))
 		case diff.SchDiffRemoved:
-			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(td.FromName.Name, idxDiff.From))
+			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(formatter, td.FromName.Name, idxDiff.From))
 		case diff.SchDiffModified:
-			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(td.FromName.Name, idxDiff.From))
-			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
+			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(formatter, td.FromName.Name, idxDiff.From))
+			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(formatter, td.ToName.Name, idxDiff.To))
 		}
 	}
 
@@ -160,15 +162,15 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
 			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			ddlStatements = append(ddlStatements, AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+			ddlStatements = append(ddlStatements, AlterTableAddForeignKeyStmt(formatter, fkDiff.To, toSch, parentSch))
 		case diff.SchDiffRemoved:
 			from := fkDiff.From
-			ddlStatements = append(ddlStatements, AlterTableDropForeignKeyStmt(from.TableName, from.Name))
+			ddlStatements = append(ddlStatements, AlterTableDropForeignKeyStmt(formatter, from.TableName, from.Name))
 		case diff.SchDiffModified:
 			from := fkDiff.From
-			ddlStatements = append(ddlStatements, AlterTableDropForeignKeyStmt(from.TableName, from.Name))
+			ddlStatements = append(ddlStatements, AlterTableDropForeignKeyStmt(formatter, from.TableName, from.Name))
 			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			ddlStatements = append(ddlStatements, AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+			ddlStatements = append(ddlStatements, AlterTableAddForeignKeyStmt(formatter, fkDiff.To, toSch, parentSch))
 		}
 	}
 
@@ -176,20 +178,20 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 	toCollation := toSch.GetCollation()
 	fromCollation := fromSch.GetCollation()
 	if toCollation != fromCollation {
-		ddlStatements = append(ddlStatements, AlterTableCollateStmt(td.ToName.Name, fromCollation, toCollation))
+		ddlStatements = append(ddlStatements, AlterTableCollateStmt(formatter, td.ToName.Name, fromCollation, toCollation))
 	}
 
 	return ddlStatements, nil
 }
 
 // GenerateCreateTableColumnDefinition returns column definition for CREATE TABLE statement with no indentation
-func GenerateCreateTableColumnDefinition(col schema.Column, tableCollation sql.CollationID) string {
-	colStr := GenerateCreateTableIndentedColumnDefinition(col, tableCollation)
+func GenerateCreateTableColumnDefinition(formatter sql.SchemaFormatter, col schema.Column, tableCollation sql.CollationID) string {
+	colStr := GenerateCreateTableIndentedColumnDefinition(formatter, col, tableCollation)
 	return strings.TrimPrefix(colStr, "  ")
 }
 
 // GenerateCreateTableIndentedColumnDefinition returns column definition for CREATE TABLE statement with no indentation
-func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollation sql.CollationID) string {
+func GenerateCreateTableIndentedColumnDefinition(formatter sql.SchemaFormatter, col schema.Column, tableCollation sql.CollationID) string {
 	var defaultVal, genVal, onUpdateVal *sql.ColumnDefaultValue
 	if col.Default != "" {
 		// hacky way to determine if column default is an expression
@@ -205,7 +207,7 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollati
 		onUpdateVal = sql.NewUnresolvedColumnDefaultValue(col.OnUpdate)
 	}
 
-	return sql.GenerateCreateTableColumnDefinition(
+	return formatter.GenerateCreateTableColumnDefinition(
 		&sql.Column{
 			Name:          col.Name,
 			Type:          col.TypeInfo.ToSqlType(),
@@ -220,13 +222,18 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollati
 }
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
-func GenerateCreateTableIndexDefinition(index schema.Index) (string, bool) {
-	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), index.IsVector(), index.Name(),
-		sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
+func GenerateCreateTableIndexDefinition(formatter sql.SchemaFormatter, index schema.Index) (string, bool) {
+	colNames := index.ColumnNames()
+	quotedColNames := make([]string, len(colNames))
+	for i, id := range colNames {
+		quotedColNames[i] = formatter.QuoteIdentifier(id)
+	}
+	return formatter.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(),
+		index.IsVector(), index.Name(), quotedColNames, index.Comment())
 }
 
 // GenerateCreateTableForeignKeyDefinition returns foreign key definition for CREATE TABLE statement with indentation of 2 spaces
-func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
+func GenerateCreateTableForeignKeyDefinition(formatter sql.SchemaFormatter, fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	// TAGS: Use of tags here is within a single table, so is safe
 	var fkCols []string
 	if fk.IsResolved() {
@@ -259,85 +266,85 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 	}
 
 	// TODO: schema name
-	return sql.GenerateCreateTableForiegnKeyDefinition(fk.Name, fkCols, fk.ReferencedTableName.Name, parentCols, onDelete, onUpdate)
+	return formatter.GenerateCreateTableForiegnKeyDefinition(fk.Name, fkCols, fk.ReferencedTableName.Name, parentCols, onDelete, onUpdate)
 }
 
 // GenerateCreateTableCheckConstraintClause returns check constraint clause definition for CREATE TABLE statement with indentation of 2 spaces
-func GenerateCreateTableCheckConstraintClause(check schema.Check) string {
-	return sql.GenerateCreateTableCheckConstraintClause(check.Name(), check.Expression(), check.Enforced())
+func GenerateCreateTableCheckConstraintClause(formatter sql.SchemaFormatter, check schema.Check) string {
+	return formatter.GenerateCreateTableCheckConstraintClause(check.Name(), check.Expression(), check.Enforced())
 }
 
-func DropTableStmt(tableName string) string {
+func DropTableStmt(formatter sql.SchemaFormatter, tableName string) string {
 	var b strings.Builder
 	b.WriteString("DROP TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(";")
 	return b.String()
 }
 
-func DropTableIfExistsStmt(tableName string) string {
+func DropTableIfExistsStmt(formatter sql.SchemaFormatter, tableName string) string {
 	var b strings.Builder
 	b.WriteString("DROP TABLE IF EXISTS ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(";")
 	return b.String()
 }
 
-func AlterTableAddColStmt(tableName string, newColDef string) string {
+func AlterTableAddColStmt(formatter sql.SchemaFormatter, tableName string, newColDef string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(" ADD ")
 	b.WriteString(newColDef)
 	b.WriteRune(';')
 	return b.String()
 }
 
-func AlterTableModifyColStmt(tableName string, newColDef string) string {
+func AlterTableModifyColStmt(formatter sql.SchemaFormatter, tableName string, newColDef string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(" MODIFY COLUMN ")
 	b.WriteString(newColDef)
 	b.WriteRune(';')
 	return b.String()
 }
 
-func AlterTableDropColStmt(tableName string, oldColName string) string {
+func AlterTableDropColStmt(formatter sql.SchemaFormatter, tableName string, oldColName string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(" DROP ")
-	b.WriteString(QuoteIdentifier(oldColName))
+	b.WriteString(formatter.QuoteIdentifier(oldColName))
 	b.WriteRune(';')
 	return b.String()
 }
 
-func AlterTableRenameColStmt(tableName string, oldColName string, newColName string) string {
+func AlterTableRenameColStmt(formatter sql.SchemaFormatter, tableName string, oldColName string, newColName string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(" RENAME COLUMN ")
-	b.WriteString(QuoteIdentifier(oldColName))
+	b.WriteString(formatter.QuoteIdentifier(oldColName))
 	b.WriteString(" TO ")
-	b.WriteString(QuoteIdentifier(newColName))
+	b.WriteString(formatter.QuoteIdentifier(newColName))
 	b.WriteRune(';')
 	return b.String()
 }
 
-func AlterTableDropPks(tableName string) string {
+func AlterTableDropPks(formatter sql.SchemaFormatter, tableName string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(" DROP PRIMARY KEY")
 	b.WriteRune(';')
 	return b.String()
 }
 
-func AlterTableAddPrimaryKeys(tableName string, pkColNames []string) string {
+func AlterTableAddPrimaryKeys(formatter sql.SchemaFormatter, tableName string, pkColNames []string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(" ADD PRIMARY KEY (")
 
 	for i := 0; i < len(pkColNames); i++ {
@@ -352,89 +359,89 @@ func AlterTableAddPrimaryKeys(tableName string, pkColNames []string) string {
 	return b.String()
 }
 
-func RenameTableStmt(fromName string, toName string) string {
+func RenameTableStmt(formatter sql.SchemaFormatter, fromName string, toName string) string {
 	var b strings.Builder
 	b.WriteString("RENAME TABLE ")
-	b.WriteString(QuoteIdentifier(fromName))
+	b.WriteString(formatter.QuoteIdentifier(fromName))
 	b.WriteString(" TO ")
-	b.WriteString(QuoteIdentifier(toName))
+	b.WriteString(formatter.QuoteIdentifier(toName))
 	b.WriteString(";")
 
 	return b.String()
 }
 
-func AlterTableAddIndexStmt(tableName string, idx schema.Index) string {
+func AlterTableAddIndexStmt(formatter sql.SchemaFormatter, tableName string, idx schema.Index) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(" ADD INDEX ")
-	b.WriteString(QuoteIdentifier(idx.Name()))
+	b.WriteString(formatter.QuoteIdentifier(idx.Name()))
 	var cols []string
 	for _, cn := range idx.ColumnNames() {
-		cols = append(cols, QuoteIdentifier(cn))
+		cols = append(cols, formatter.QuoteIdentifier(cn))
 	}
 	b.WriteString("(" + strings.Join(cols, ",") + ");")
 	return b.String()
 }
 
-func AlterTableDropIndexStmt(tableName string, idx schema.Index) string {
+func AlterTableDropIndexStmt(formatter sql.SchemaFormatter, tableName string, idx schema.Index) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(" DROP INDEX ")
-	b.WriteString(QuoteIdentifier(idx.Name()))
+	b.WriteString(formatter.QuoteIdentifier(idx.Name()))
 	b.WriteRune(';')
 	return b.String()
 }
 
-func AlterTableCollateStmt(tableName string, fromCollation, toCollation schema.Collation) string {
+func AlterTableCollateStmt(formatter sql.SchemaFormatter, tableName string, fromCollation, toCollation schema.Collation) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(formatter.QuoteIdentifier(tableName))
 	toCollationId := sql.CollationID(toCollation)
 	b.WriteString(" COLLATE=" + QuoteComment(toCollationId.Name()) + ";")
 	return b.String()
 }
 
-func AlterDatabaseCollateStmt(dbName string, fromCollation, toCollation schema.Collation) string {
+func AlterDatabaseCollateStmt(formatter sql.SchemaFormatter, dbName string, fromCollation, toCollation schema.Collation) string {
 	var b strings.Builder
 	b.WriteString("ALTER DATABASE ")
-	b.WriteString(QuoteIdentifier(dbName))
+	b.WriteString(formatter.QuoteIdentifier(dbName))
 	toCollationId := sql.CollationID(toCollation)
 	b.WriteString(" COLLATE=" + QuoteComment(toCollationId.Name()) + ";")
 	return b.String()
 }
 
-func AlterTableAddForeignKeyStmt(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
+func AlterTableAddForeignKeyStmt(formatter sql.SchemaFormatter, fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
 	b.WriteString(QuoteTableName(fk.TableName))
 	b.WriteString(" ADD CONSTRAINT ")
-	b.WriteString(QuoteIdentifier(fk.Name))
+	b.WriteString(formatter.QuoteIdentifier(fk.Name))
 	b.WriteString(" FOREIGN KEY ")
 	var childCols []string
 	for _, tag := range fk.TableColumns {
 		c, _ := sch.GetAllCols().GetByTag(tag)
-		childCols = append(childCols, QuoteIdentifier(c.Name))
+		childCols = append(childCols, formatter.QuoteIdentifier(c.Name))
 	}
 	b.WriteString("(" + strings.Join(childCols, ",") + ")")
 	b.WriteString(" REFERENCES ")
 	var parentCols []string
 	for _, tag := range fk.ReferencedTableColumns {
 		c, _ := parentSch.GetAllCols().GetByTag(tag)
-		parentCols = append(parentCols, QuoteIdentifier(c.Name))
+		parentCols = append(parentCols, formatter.QuoteIdentifier(c.Name))
 	}
 	b.WriteString(QuoteTableName(fk.ReferencedTableName))
 	b.WriteString(" (" + strings.Join(parentCols, ",") + ");")
 	return b.String()
 }
 
-func AlterTableDropForeignKeyStmt(tableName doltdb.TableName, fkName string) string {
+func AlterTableDropForeignKeyStmt(formatter sql.SchemaFormatter, tableName doltdb.TableName, fkName string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
 	b.WriteString(QuoteTableName(tableName))
 	b.WriteString(" DROP FOREIGN KEY ")
-	b.WriteString(QuoteIdentifier(fkName))
+	b.WriteString(formatter.QuoteIdentifier(fkName))
 	b.WriteRune(';')
 	return b.String()
 }
@@ -442,14 +449,15 @@ func AlterTableDropForeignKeyStmt(tableName doltdb.TableName, fkName string) str
 // GenerateCreateTableStatement returns a CREATE TABLE statement for given table. This is a reasonable approximation of
 // `SHOW CREATE TABLE` in the engine, but may have some differences. Callers are advised to use the engine when
 // possible.
-func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[doltdb.TableName]schema.Schema) (string, error) {
+func GenerateCreateTableStatement(ctx *sql.Context, tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[doltdb.TableName]schema.Schema) (string, error) {
+	formatter := overrides.SchemaFormatterFromContext(ctx)
 	colStmts := make([]string, sch.GetAllCols().Size())
 
-	schemaFormatter := sql.GlobalSchemaFormatter
+	schemaFormatter := overrides.SchemaFormatterFromContext(ctx)
 
 	// Statement creation parts for each column
 	for i, col := range sch.GetAllCols().GetColumns() {
-		colStmts[i] = GenerateCreateTableIndentedColumnDefinition(col, sql.CollationID(sch.GetCollation()))
+		colStmts[i] = GenerateCreateTableIndentedColumnDefinition(formatter, col, sql.CollationID(sch.GetCollation()))
 	}
 
 	primaryKeyCols := sch.GetPKCols().GetColumnNames()
@@ -465,22 +473,22 @@ func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltd
 			continue
 		}
 
-		definition, shouldInclude := GenerateCreateTableIndexDefinition(index)
+		definition, shouldInclude := GenerateCreateTableIndexDefinition(formatter, index)
 		if shouldInclude {
 			colStmts = append(colStmts, definition)
 		}
 	}
 
 	for _, fk := range fks {
-		colStmts = append(colStmts, GenerateCreateTableForeignKeyDefinition(fk, sch, fksParentSch[fk.ReferencedTableName]))
+		colStmts = append(colStmts, GenerateCreateTableForeignKeyDefinition(formatter, fk, sch, fksParentSch[fk.ReferencedTableName]))
 	}
 
 	for _, check := range sch.Checks().AllChecks() {
-		colStmts = append(colStmts, GenerateCreateTableCheckConstraintClause(check))
+		colStmts = append(colStmts, GenerateCreateTableCheckConstraintClause(formatter, check))
 	}
 
 	coll := sql.CollationID(sch.GetCollation())
-	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, "", "", coll.CharacterSet().Name(), coll.Name(), sch.GetComment())
+	createTableStmt := formatter.GenerateCreateTableStatement(tblName, colStmts, "", "", coll.CharacterSet().Name(), coll.Name(), sch.GetComment())
 	return fmt.Sprintf("%s;", createTableStmt), nil
 }
 
