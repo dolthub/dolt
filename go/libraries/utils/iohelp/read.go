@@ -48,26 +48,6 @@ func (r *ErrPreservingReader) Read(p []byte) (int, error) {
 	return n, r.Err
 }
 
-// ReadNBytes will read n bytes from the given reader and return a new slice containing the data. ReadNBytes will always
-// return n bytes, or it will return no data and an error (So if you request 100 bytes and there are only 99 left before
-// the reader returns io.EOF you won't receive any of the data as this is considered an error as it can't read 100 bytes).
-func ReadNBytes(r io.Reader, n int) ([]byte, error) {
-	bytes := make([]byte, n)
-
-	var err error
-	for totalRead := 0; totalRead < n; {
-		if err != nil {
-			return nil, err
-		}
-
-		read := 0
-		read, err = r.Read(bytes[totalRead:])
-
-		totalRead += read
-	}
-
-	return bytes, nil
-}
 
 
 // ReadLine will read a line from an unbuffered io.Reader where it considers lines to be separated by newlines (\n).
