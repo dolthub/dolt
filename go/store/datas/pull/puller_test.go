@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -384,9 +383,7 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 			sinkRootAddr, ok := sinkDS.MaybeHeadAddr()
 			require.True(t, ok)
 
-			eq, err := pullerAddrEquality(ctx, rootAddr, sinkRootAddr, vs, sinkvs)
-			require.NoError(t, err)
-			assert.True(t, eq)
+			pullerAddrEquality(t, ctx, rootAddr, sinkRootAddr, vs, sinkvs)
 		})
 	}
 }
@@ -413,21 +410,20 @@ func makeABigTable(ctx context.Context, vrw types.ValueReadWriter) (types.Map, e
 	return me.Map(ctx)
 }
 
-func pullerAddrEquality(ctx context.Context, expected, actual hash.Hash, src, sink types.ValueReadWriter) (bool, error) {
+func pullerAddrEquality(t *testing.T, ctx context.Context, expected, actual hash.Hash, src, sink types.ValueReadWriter) {
 	if expected != actual {
-		return false, nil
+		require.FailNow(t, "expected %v, got %v", expected, actual)
 	}
 
 	expectedVal, err := src.ReadValue(ctx, expected)
-	if err != nil {
-		return false, err
-	}
-	actualVal, err := sink.ReadValue(ctx, actual)
-	if err != nil {
-		return false, err
-	}
+	require.NoError(t, err)
+	require.NotNil(t, expectedVal)
 
-	return expectedVal.Equals(actualVal), nil
+	actualVal, err := sink.ReadValue(ctx, actual)
+	require.NoError(t, err)
+	require.NotNil(t, actualVal)
+
+	require.True(t, expectedVal.Equals(actualVal))
 }
 
 func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {

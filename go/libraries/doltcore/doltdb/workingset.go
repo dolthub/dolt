@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -440,6 +441,10 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	if err != nil {
 		return nil, err
 	}
+	if types.IsNull(workingRootVal) {
+		return nil, blobstore.NewMissingChunkError(dsws.WorkingAddr)
+	}
+
 	workingRoot, err := NewRootValue(ctx, vrw, ns, workingRootVal)
 	if err != nil {
 		return nil, err
@@ -450,6 +455,9 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		stagedRootVal, err := vrw.ReadValue(ctx, *dsws.StagedAddr)
 		if err != nil {
 			return nil, err
+		}
+		if types.IsNull(stagedRootVal) {
+			return nil, blobstore.NewMissingChunkError(*dsws.StagedAddr)
 		}
 
 		stagedRoot, err = NewRootValue(ctx, vrw, ns, stagedRootVal)
@@ -486,6 +494,9 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		if err != nil {
 			return nil, err
 		}
+		if types.IsNull(preMergeWorkingV) {
+			return nil, blobstore.NewMissingChunkError(preMergeWorkingAddr)
+		}
 
 		preMergeWorkingRoot, err := NewRootValue(ctx, vrw, ns, preMergeWorkingV)
 		if err != nil {
@@ -519,6 +530,9 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		preRebaseWorkingV, err := vrw.ReadValue(ctx, preRebaseWorkingAddr)
 		if err != nil {
 			return nil, err
+		}
+		if types.IsNull(preRebaseWorkingV) {
+			return nil, blobstore.NewMissingChunkError(preRebaseWorkingAddr)
 		}
 
 		preRebaseWorkingRoot, err := NewRootValue(ctx, vrw, ns, preRebaseWorkingV)

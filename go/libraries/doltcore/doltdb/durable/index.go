@@ -21,6 +21,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -107,6 +108,9 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	v, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
+	}
+	if types.IsNull(v) {
+		return nil, blobstore.NewMissingChunkError(addr)
 	}
 
 	switch vrw.Format() {

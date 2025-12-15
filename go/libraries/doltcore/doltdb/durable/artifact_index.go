@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/blobstore"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -94,6 +95,9 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 	v, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
+	}
+	if types.IsNull(v) {
+		return nil, blobstore.NewMissingChunkError(addr)
 	}
 
 	switch vrw.Format() {

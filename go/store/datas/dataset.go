@@ -29,6 +29,7 @@ import (
 	"unicode"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -856,7 +857,9 @@ func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 		if err != nil {
 			return nil, false, err
 		}
-		return v, v != nil, nil
+
+		// NM4: looks like a legit resaon for GetCommitValue to support returning nil.
+		return v, !types.IsNull(v), nil
 	}
 	return nil, false, nil
 }

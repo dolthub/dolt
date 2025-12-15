@@ -19,6 +19,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/blobstore"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -36,6 +37,9 @@ func NewStash(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueRead
 		headCommit, err := vrw.ReadValue(ctx, headAddr)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
+		}
+		if types.IsNull(headCommit) {
+			return hash.Hash{}, types.Ref{}, blobstore.NewMissingChunkError(headAddr)
 		}
 
 		isCommit, err := IsCommit(headCommit)
