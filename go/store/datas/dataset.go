@@ -29,7 +29,6 @@ import (
 	"unicode"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -615,6 +614,8 @@ func LoadRootNomsValueFromRootIshAddr(ctx context.Context, vr types.ValueReader,
 		return nil, err
 	}
 
+	// NM4 - this is messed up. going to panic when table object is missing.
+
 	switch h.TypeName() {
 	case workingSetName:
 		ws, err := h.HeadWorkingSet()
@@ -633,8 +634,10 @@ func LoadRootNomsValueFromRootIshAddr(ctx context.Context, vr types.ValueReader,
 	}
 }
 
+// newHead constructs a dsHead from a types.Value representing the head and its address. head must be non-nil
 func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, error) {
 	if head == nil {
+		// NM4 - The calling code would seg fault on this, so wtf.
 		return nil, nil
 	}
 
