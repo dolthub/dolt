@@ -21,7 +21,6 @@ import (
 	"testing"
 )
 
-
 var rlTests = []struct {
 	inputStr      string
 	expectedLines []string
@@ -48,7 +47,6 @@ func getTestReadLineClosure(inputStr string) func() (string, bool, error) {
 	}
 }
 
-
 func testReadLineFunctions(t *testing.T, testType string, expected []string, rlFunc func() (string, bool, error)) {
 	var isDone bool
 	var line string
@@ -67,5 +65,3 @@ func testReadLineFunctions(t *testing.T, testType string, expected []string, rlF
 		t.Error("Received unexpected results.")
 	}
 }
-
-
