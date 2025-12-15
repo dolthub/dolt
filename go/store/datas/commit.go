@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/store/blobstore"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -249,8 +250,8 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 		if err != nil {
 			return nil, err
 		}
-		if commitSt == nil {
-			panic("parent not found " + h.String())
+		if types.IsNull(commitSt) {
+			return nil, blobstore.NewMissingChunkError(h)
 		}
 		ref, err := types.NewRef(commitSt, vrw.Format())
 		if err != nil {
