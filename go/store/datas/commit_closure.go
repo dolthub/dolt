@@ -43,7 +43,7 @@ func NewParentsClosure(ctx context.Context, c *Commit, sv types.SerialMessage, v
 		return prolly.CommitClosure{}, err
 	}
 	if types.IsNull(v) {
-		return prolly.CommitClosure{}, fmt.Errorf("internal error or data loss: dangling commit parent closure for addr %s or commit %s", addr.String(), c.Addr().String())
+		return prolly.CommitClosure{}, fmt.Errorf("internal error or data loss: dangling commit parent closure for addr %s for commit %s", addr.String(), c.Addr().String())
 	}
 	node, fileId, err := tree.NodeFromBytes(v.(types.SerialMessage))
 	if err != nil {
