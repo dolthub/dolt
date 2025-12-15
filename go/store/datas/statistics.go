@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/store/blobstore"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -120,6 +121,10 @@ func parse_Statistics(ctx context.Context, bs []byte, ns tree.NodeStore, vr type
 	value, err := vr.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
+	}
+
+	if types.IsNull(value) {
+		return nil, blobstore.NewMissingChunkError(addr)
 	}
 
 	m, err := shim.MapFromValue(value, schema.StatsTableDoltSchema, ns, false)

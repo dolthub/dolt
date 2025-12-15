@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/go-mysql-server/sql"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
@@ -832,6 +833,7 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (RootValue, e
 	if err != nil {
 		return nil, err
 	}
+	// decodeRootNomsValue handles val != nil.
 	return decodeRootNomsValue(ctx, ddb.vrw, ddb.ns, val)
 }
 
@@ -989,9 +991,11 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 
 func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *datas.CommitMeta) (*Commit, error) {
 	val, err := ddb.vrw.ReadValue(ctx, valHash)
-
 	if err != nil {
 		return nil, err
+	}
+	if types.IsNull(val) {
+		return nil, blobstore.NewMissingChunkError(valHash)
 	}
 
 	if !isRootValue(ddb.vrw.Format(), val) {
@@ -1065,6 +1069,10 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	if err != nil {
 		return nil, err
 	}
+	if types.IsNull(val) {
+		return nil, blobstore.NewMissingChunkError(valHash)
+	}
+
 	if !isRootValue(ddb.vrw.Format(), val) {
 		return nil, errors.New("can't commit a value that is not a valid root value")
 	}

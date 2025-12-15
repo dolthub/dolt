@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -242,7 +243,7 @@ func LoadRootValueFromRootIshAddr(ctx context.Context, vrw types.ValueReadWriter
 }
 
 func decodeRootNomsValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, val types.Value) (RootValue, error) {
-	if val == nil {
+	if types.IsNull(val) {
 		return nil, ErrNoRootValAtHash
 	}
 
@@ -521,9 +522,11 @@ func (root *rootValue) GetTableHash(ctx context.Context, tName TableName) (hash.
 
 func (root *rootValue) SetTableHash(ctx context.Context, tName TableName, h hash.Hash) (RootValue, error) {
 	val, err := root.vrw.ReadValue(ctx, h)
-
 	if err != nil {
 		return nil, err
+	}
+	if types.IsNull(val) {
+		return nil, blobstore.NewMissingChunkError(h)
 	}
 
 	ref, err := types.NewRef(val, root.vrw.Format())
