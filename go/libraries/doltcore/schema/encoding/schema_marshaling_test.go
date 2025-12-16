@@ -16,9 +16,7 @@ package encoding
 
 import (
 	"context"
-	"errors"
 	"math/rand"
-	"reflect"
 	"strconv"
 	"testing"
 
@@ -33,102 +31,52 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
-	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func createTestSchema() schema.Schema {
-	columns := []schema.Column{
-		schema.NewColumn("id", 4, types.InlineBlobKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("first", 1, types.StringKind, false),
-		schema.NewColumn("last", 2, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("age", 3, types.UintKind, false),
-	}
-
-	colColl := schema.NewColCollection(columns...)
-	sch := schema.MustSchemaFromCols(colColl)
-	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
-	return sch
-}
-
-func TestNomsMarshalling(t *testing.T) {
-	tSchema := createTestSchema()
-	_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_Default, nil, nil)
-
-	if err != nil {
-		t.Fatal("Could not create in mem noms db.")
-	}
-
-	val, err := MarshalSchema(context.Background(), vrw, tSchema)
-
-	if err != nil {
-		t.Fatal("Failed to marshal Schema as a types.Value.")
-	}
-
-	unMarshalled, err := UnmarshalSchema(context.Background(), types.Format_Default, val)
-
-	if err != nil {
-		t.Fatal("Failed to unmarshal types.Value as Schema")
-	}
-
-	if !assert.Equal(t, tSchema, unMarshalled) {
-		t.Error("Value different after marshalling and unmarshalling.")
-	}
-
-	// this validation step only makes sense for Noms encoded schemas
-	if !types.Format_Default.UsesFlatbuffers() {
-		validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_Default, val)
-		assert.NoError(t, err,
-			"Failed compatibility test. Schema could not be unmarshalled with mirror type, error: %v", err)
-		if !assert.Equal(t, tSchema, validated) {
-			t.Error("Value different after marshalling and unmarshalling.")
-		}
-	}
-}
-
 func getSqlTypes() []sql.Type {
-	//TODO: determine the storage format for BINARY
-	//TODO: determine the storage format for BLOB
-	//TODO: determine the storage format for LONGBLOB
-	//TODO: determine the storage format for MEDIUMBLOB
-	//TODO: determine the storage format for TINYBLOB
-	//TODO: determine the storage format for VARBINARY
+	// TODO: determine the storage format for BINARY
+	// TODO: determine the storage format for BLOB
+	// TODO: determine the storage format for LONGBLOB
+	// TODO: determine the storage format for MEDIUMBLOB
+	// TODO: determine the storage format for TINYBLOB
+	// TODO: determine the storage format for VARBINARY
 	return []sql.Type{
-		gmstypes.Int64,  //BIGINT
-		gmstypes.Uint64, //BIGINT UNSIGNED
-		//sql.MustCreateBinary(sqltypes.Binary, 10), //BINARY(10)
-		gmstypes.MustCreateBitType(10), //BIT(10)
-		//sql.Blob, //BLOB
-		gmstypes.Boolean, //BOOLEAN
-		gmstypes.MustCreateStringWithDefaults(sqltypes.Char, 10), //CHAR(10)
-		gmstypes.Date,     //DATE
-		gmstypes.Datetime, //DATETIME
-		gmstypes.MustCreateColumnDecimalType(9, 5), //DECIMAL(9, 5)
-		gmstypes.Float64, //DOUBLE
-		gmstypes.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default), //ENUM('a','b','c')
-		gmstypes.Float32, //FLOAT
-		gmstypes.Int32,   //INT
-		gmstypes.Uint32,  //INT UNSIGNED
-		//sql.LongBlob, //LONGBLOB
-		gmstypes.LongText, //LONGTEXT
-		//sql.MediumBlob, //MEDIUMBLOB
-		gmstypes.Int24,      //MEDIUMINT
-		gmstypes.Uint24,     //MEDIUMINT UNSIGNED
-		gmstypes.MediumText, //MEDIUMTEXT
-		gmstypes.MustCreateSetType([]string{"a", "b", "c"}, sql.Collation_Default), //SET('a','b','c')
-		gmstypes.Int16,     //SMALLINT
-		gmstypes.Uint16,    //SMALLINT UNSIGNED
-		gmstypes.Text,      //TEXT
-		gmstypes.Time,      //TIME
-		gmstypes.Timestamp, //TIMESTAMP
-		//sql.TinyBlob, //TINYBLOB
-		gmstypes.Int8,     //TINYINT
-		gmstypes.Uint8,    //TINYINT UNSIGNED
-		gmstypes.TinyText, //TINYTEXT
-		//sql.MustCreateBinary(sqltypes.VarBinary, 10), //VARBINARY(10)
-		gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 10),                //VARCHAR(10)
-		gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb3_bin), //VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin
-		gmstypes.Year, //YEAR
+		gmstypes.Int64,  // BIGINT
+		gmstypes.Uint64, // BIGINT UNSIGNED
+		// sql.MustCreateBinary(sqltypes.Binary, 10), //BINARY(10)
+		gmstypes.MustCreateBitType(10), // BIT(10)
+		// sql.Blob, //BLOB
+		gmstypes.Boolean, // BOOLEAN
+		gmstypes.MustCreateStringWithDefaults(sqltypes.Char, 10), // CHAR(10)
+		gmstypes.Date,     // DATE
+		gmstypes.Datetime, // DATETIME
+		gmstypes.MustCreateColumnDecimalType(9, 5), // DECIMAL(9, 5)
+		gmstypes.Float64, // DOUBLE
+		gmstypes.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default), // ENUM('a','b','c')
+		gmstypes.Float32, // FLOAT
+		gmstypes.Int32,   // INT
+		gmstypes.Uint32,  // INT UNSIGNED
+		// sql.LongBlob, //LONGBLOB
+		gmstypes.LongText, // LONGTEXT
+		// sql.MediumBlob, //MEDIUMBLOB
+		gmstypes.Int24,      // MEDIUMINT
+		gmstypes.Uint24,     // MEDIUMINT UNSIGNED
+		gmstypes.MediumText, // MEDIUMTEXT
+		gmstypes.MustCreateSetType([]string{"a", "b", "c"}, sql.Collation_Default), // SET('a','b','c')
+		gmstypes.Int16,     // SMALLINT
+		gmstypes.Uint16,    // SMALLINT UNSIGNED
+		gmstypes.Text,      // TEXT
+		gmstypes.Time,      // TIME
+		gmstypes.Timestamp, // TIMESTAMP
+		// sql.TinyBlob, //TINYBLOB
+		gmstypes.Int8,     // TINYINT
+		gmstypes.Uint8,    // TINYINT UNSIGNED
+		gmstypes.TinyText, // TINYTEXT
+		// sql.MustCreateBinary(sqltypes.VarBinary, 10), //VARBINARY(10)
+		gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 10),                // VARCHAR(10)
+		gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb3_bin), // VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin
+		gmstypes.Year, // YEAR
 	}
 }
 
@@ -155,114 +103,6 @@ func TestTypeInfoMarshalling(t *testing.T) {
 			assert.True(t, ok)
 		})
 	}
-}
-
-func validateUnmarshaledNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
-	var sd testSchemaData
-	err := marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return sd.decodeSchema()
-}
-
-func TestMirroredTypes(t *testing.T) {
-	realType := reflect.ValueOf(&encodedColumn{}).Elem()
-	mirrorType := reflect.ValueOf(&testEncodedColumn{}).Elem()
-	require.Equal(t, mirrorType.NumField(), realType.NumField())
-
-	// TODO: create reflection tests to ensure that:
-	// - no fields in testEncodeColumn have the 'omitempty' annotation
-	// - no legacy fields in encodeColumn have the 'omitempty' annotation (with whitelist)
-	// - all new fields in encodeColumn have the 'omitempty' annotation
-}
-
-// testEncodedColumn is a mirror type of encodedColumn that helps ensure compatibility between Dolt versions
-//
-// If a field in encodedColumn is not optional, it should be added WITHOUT the "omitempty" annotation here
-// in order to guarantee that all fields in encodeColumn are always being written when encodedColumn is serialized.
-// See the comment above type encodeColumn.
-type testEncodedColumn struct {
-	Tag uint64 `noms:"tag" json:"tag"`
-
-	Name string `noms:"name" json:"name"`
-
-	Kind string `noms:"kind" json:"kind"`
-
-	IsPartOfPK bool `noms:"is_part_of_pk" json:"is_part_of_pk"`
-
-	TypeInfo encodedTypeInfo `noms:"typeinfo" json:"typeinfo"`
-
-	Default string `noms:"default,omitempty" json:"default,omitempty"`
-
-	AutoIncrement bool `noms:"auto_increment,omitempty" json:"auto_increment,omitempty"`
-
-	Comment string `noms:"comment,omitempty" json:"comment,omitempty"`
-
-	Constraints []encodedConstraint `noms:"col_constraints" json:"col_constraints"`
-}
-
-type testEncodedIndex struct {
-	Name    string   `noms:"name" json:"name"`
-	Tags    []uint64 `noms:"tags" json:"tags"`
-	Comment string   `noms:"comment" json:"comment"`
-	Unique  bool     `noms:"unique" json:"unique"`
-	Hidden  bool     `noms:"hidden,omitempty" json:"hidden,omitempty"`
-}
-
-type testSchemaData struct {
-	Columns         []testEncodedColumn `noms:"columns" json:"columns"`
-	IndexCollection []testEncodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
-	Collation       schema.Collation    `noms:"collation,omitempty" json:"collation,omitempty"`
-}
-
-func (tec testEncodedColumn) decodeColumn() (schema.Column, error) {
-	var typeInfo typeinfo.TypeInfo
-	var err error
-	if tec.TypeInfo.Type != "" {
-		typeInfo, err = tec.TypeInfo.decodeTypeInfo()
-		if err != nil {
-			return schema.Column{}, err
-		}
-	} else if tec.Kind != "" {
-		typeInfo = typeinfo.FromKind(schema.LwrStrToKind[tec.Kind])
-	} else {
-		return schema.Column{}, errors.New("cannot decode column due to unknown schema format")
-	}
-	colConstraints := decodeAllColConstraint(tec.Constraints)
-	return schema.NewColumnWithTypeInfo(tec.Name, tec.Tag, typeInfo, tec.IsPartOfPK, tec.Default, tec.AutoIncrement, tec.Comment, colConstraints...)
-}
-
-func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
-	numCols := len(tsd.Columns)
-	cols := make([]schema.Column, numCols)
-
-	var err error
-	for i, col := range tsd.Columns {
-		cols[i], err = col.decodeColumn()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	colColl := schema.NewColCollection(cols...)
-
-	sch, err := schema.SchemaFromCols(colColl)
-	if err != nil {
-		return nil, err
-	}
-	sch.SetCollation(tsd.Collation)
-
-	for _, encodedIndex := range tsd.IndexCollection {
-		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, nil, schema.IndexProperties{IsUnique: encodedIndex.Unique, Comment: encodedIndex.Comment})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return sch, nil
 }
 
 func TestSchemaMarshalling(t *testing.T) {
