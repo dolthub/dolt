@@ -32,7 +32,7 @@ const DeprecatedHashOfFuncName = "hashof"
 const HashOfFuncName = "dolt_hashof"
 
 type HashOf struct {
-	expression.UnaryExpression
+	expression.UnaryExpressionStub
 	name string
 }
 
@@ -47,7 +47,7 @@ func NewHashOfFunc(name string) sql.CreateFunc1Args {
 
 // newHashOf creates a new HashOf expression.
 func newHashOf(e sql.Expression, name string) sql.Expression {
-	return &HashOf{expression.UnaryExpression{Child: e}, name}
+	return &HashOf{expression.UnaryExpressionStub{Child: e}, name}
 }
 
 // Eval implements the Expression interface.
