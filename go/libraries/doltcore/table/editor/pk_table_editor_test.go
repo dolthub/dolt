@@ -383,7 +383,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 
 func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	ctx := context.Background()
-	format := types.Format_LD_1
+	format := types.Format_Default
 	_, vrw, ns, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
 	require.NoError(t, err)
 	opts := TestEditorOptions(vrw)
@@ -401,11 +401,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		IsUnique: true,
 	})
 	require.NoError(t, err)
-	emptyMap, err := types.NewMap(ctx, vrw)
-	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(ctx, vrw, ns, tableSch, emptyMap, nil, nil)
-	require.NoError(t, err)
-	table, err = RebuildAllIndexes(ctx, table, opts)
+	table, err := doltdb.NewTable(ctx, vrw, ns, tableSch, nil, nil, nil)
 	require.NoError(t, err)
 	tableEditor, err := newPkTableEditor(ctx, table, tableSch, tableName, opts)
 	require.NoError(t, err)
