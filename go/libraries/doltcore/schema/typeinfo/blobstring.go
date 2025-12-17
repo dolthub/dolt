@@ -165,14 +165,6 @@ func (ti *blobStringType) GetTypeIdentifier() Identifier {
 	return BlobStringTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *blobStringType) GetTypeParams() map[string]string {
-	return map[string]string{
-		blobStringTypeParam_Collate: ti.sqlStringType.Collation().String(),
-		blobStringTypeParam_Length:  strconv.FormatInt(ti.sqlStringType.MaxCharacterLength(), 10),
-	}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *blobStringType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Blob); ok {

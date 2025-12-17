@@ -112,12 +112,6 @@ func (ti *multipointType) GetTypeIdentifier() Identifier {
 	return MultiPointTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *multipointType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlMultiPointType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlMultiPointType.DefinedSRID)}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *multipointType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.MultiPoint); ok {

@@ -112,12 +112,6 @@ func (ti *polygonType) GetTypeIdentifier() Identifier {
 	return PolygonTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *polygonType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlPolygonType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlPolygonType.DefinedSRID)}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *polygonType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.Polygon); ok {

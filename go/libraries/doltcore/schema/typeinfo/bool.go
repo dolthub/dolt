@@ -146,11 +146,6 @@ func (ti *boolType) GetTypeIdentifier() Identifier {
 	return BoolTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *boolType) GetTypeParams() map[string]string {
-	return nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *boolType) IsValid(v types.Value) bool {
 	_, err := ti.ConvertNomsValueToValue(v)

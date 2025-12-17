@@ -112,12 +112,6 @@ func (ti *geomcollType) GetTypeIdentifier() Identifier {
 	return GeometryCollectionTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *geomcollType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlGeomCollType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlGeomCollType.DefinedSRID)}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *geomcollType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.GeomColl); ok {

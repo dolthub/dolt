@@ -155,14 +155,6 @@ func (ti *decimalType) GetTypeIdentifier() Identifier {
 	return DecimalTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *decimalType) GetTypeParams() map[string]string {
-	return map[string]string{
-		decimalTypeParam_Precision: strconv.FormatUint(uint64(ti.sqlDecimalType.Precision()), 10),
-		decimalTypeParam_Scale:     strconv.FormatUint(uint64(ti.sqlDecimalType.Scale()), 10),
-	}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *decimalType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter

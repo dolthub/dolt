@@ -158,22 +158,6 @@ func (ti *inlineBlobType) GetTypeIdentifier() Identifier {
 	return InlineBlobTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *inlineBlobType) GetTypeParams() map[string]string {
-	typeParams := map[string]string{
-		inlineBlobTypeParam_Length: strconv.FormatInt(ti.sqlBinaryType.MaxCharacterLength(), 10),
-	}
-	switch ti.sqlBinaryType.Type() {
-	case sqltypes.Binary:
-		typeParams[inlineBlobTypeParam_SQL] = inlineBlobTypeParam_SQL_Binary
-	case sqltypes.VarBinary:
-		typeParams[inlineBlobTypeParam_SQL] = inlineBlobTypeParam_SQL_VarBinary
-	default:
-		panic(fmt.Errorf(`unknown inlineblob type info sql type "%v"`, ti.sqlBinaryType.Type().String()))
-	}
-	return typeParams
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *inlineBlobType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.InlineBlob); ok {

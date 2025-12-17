@@ -79,11 +79,6 @@ func (ti *tupleType) GetTypeIdentifier() Identifier {
 	return TupleTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *tupleType) GetTypeParams() map[string]string {
-	panic("cannot persist tuple type")
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *tupleType) IsValid(v types.Value) bool {
 	if v == nil {

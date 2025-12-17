@@ -112,12 +112,6 @@ func (ti *linestringType) GetTypeIdentifier() Identifier {
 	return LineStringTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *linestringType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlLineStringType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlLineStringType.DefinedSRID)}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *linestringType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.LineString); ok {

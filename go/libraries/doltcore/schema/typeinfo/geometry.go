@@ -194,12 +194,6 @@ func (ti *geometryType) GetTypeIdentifier() Identifier {
 	return GeometryTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *geometryType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlGeometryType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlGeometryType.DefinedSRID)}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *geometryType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.Null); ok || v == nil {

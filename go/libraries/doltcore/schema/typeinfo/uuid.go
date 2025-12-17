@@ -103,11 +103,6 @@ func (ti *uuidType) GetTypeIdentifier() Identifier {
 	return UuidTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *uuidType) GetTypeParams() map[string]string {
-	return nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *uuidType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.UUID); ok {

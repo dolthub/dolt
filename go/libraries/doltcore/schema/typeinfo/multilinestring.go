@@ -112,12 +112,6 @@ func (ti *multilinestringType) GetTypeIdentifier() Identifier {
 	return MultiLineStringTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *multilinestringType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlMultiLineStringType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlMultiLineStringType.DefinedSRID)}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *multilinestringType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.MultiLineString); ok {

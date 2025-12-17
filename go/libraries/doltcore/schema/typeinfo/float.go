@@ -151,20 +151,6 @@ func (ti *floatType) GetTypeIdentifier() Identifier {
 	return FloatTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *floatType) GetTypeParams() map[string]string {
-	sqlParam := ""
-	switch ti.sqlFloatType.Type() {
-	case sqltypes.Float32:
-		sqlParam = floatTypeParam_Width_32
-	case sqltypes.Float64:
-		sqlParam = floatTypeParam_Width_64
-	default:
-		panic(fmt.Errorf(`unknown float type info sql type "%v"`, ti.sqlFloatType.Type().String()))
-	}
-	return map[string]string{floatTypeParam_Width: sqlParam}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *floatType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter

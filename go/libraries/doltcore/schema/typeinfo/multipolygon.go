@@ -112,12 +112,6 @@ func (ti *multipolygonType) GetTypeIdentifier() Identifier {
 	return MultiPolygonTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *multipolygonType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlMultiPolygonType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlMultiPolygonType.DefinedSRID)}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *multipolygonType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.MultiPolygon); ok {

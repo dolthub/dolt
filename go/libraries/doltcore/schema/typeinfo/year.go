@@ -110,11 +110,6 @@ func (ti *yearType) GetTypeIdentifier() Identifier {
 	return YearTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *yearType) GetTypeParams() map[string]string {
-	return nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *yearType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter or delete typeinfo package

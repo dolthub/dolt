@@ -111,11 +111,6 @@ func (ti *jsonType) GetTypeIdentifier() Identifier {
 	return JSONTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *jsonType) GetTypeParams() map[string]string {
-	return nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *jsonType) IsValid(v types.Value) bool {
 	if v == nil {

@@ -174,24 +174,6 @@ func (ti *datetimeType) GetTypeIdentifier() Identifier {
 	return DatetimeTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *datetimeType) GetTypeParams() map[string]string {
-	params := map[string]string{}
-	switch ti.sqlDatetimeType.Type() {
-	case sqltypes.Date:
-		params[datetimeTypeParam_SQL] = datetimeTypeParam_SQL_Date
-	case sqltypes.Datetime:
-		params[datetimeTypeParam_SQL] = datetimeTypeParam_SQL_Datetime
-		params[datetimeTypeParam_Precision] = strconv.Itoa(ti.sqlDatetimeType.Precision())
-	case sqltypes.Timestamp:
-		params[datetimeTypeParam_SQL] = datetimeTypeParam_SQL_Timestamp
-		params[datetimeTypeParam_Precision] = strconv.Itoa(ti.sqlDatetimeType.Precision())
-	default:
-		panic(fmt.Errorf(`unknown datetime type info sql type "%v"`, ti.sqlDatetimeType.Type().String()))
-	}
-	return params
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *datetimeType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Timestamp); ok {

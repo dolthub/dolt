@@ -112,12 +112,6 @@ func (ti *pointType) GetTypeIdentifier() Identifier {
 	return PointTypeIdentifier
 }
 
-// GetTypeParams implements TypeInfo interface.
-func (ti *pointType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlPointType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlPointType.DefinedSRID)}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *pointType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.Point); ok {

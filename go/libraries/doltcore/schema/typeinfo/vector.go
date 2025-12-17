@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"unsafe"
 
@@ -119,13 +118,6 @@ func (ti *vectorType) FormatValue(v types.Value) (*string, error) {
 // GetTypeIdentifier implements TypeInfo interface.
 func (ti *vectorType) GetTypeIdentifier() Identifier {
 	return VectorTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *vectorType) GetTypeParams() map[string]string {
-	return map[string]string{
-		vectorTypeParam_Length: strconv.FormatInt(int64(ti.sqlVectorType.Dimensions), 10),
-	}
 }
 
 // IsValid implements TypeInfo interface.
