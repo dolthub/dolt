@@ -31,15 +31,8 @@ import (
 )
 
 func TestTypeInfoSuite(t *testing.T) {
-	t.Skip()
 	vrw := types.NewMemoryValueStore()
 	typeInfoArrays, validTypeValues := generateTypeInfoArrays(t, vrw)
-	t.Run("VerifyArray", func(t *testing.T) {
-		verifyTypeInfoArrays(t, typeInfoArrays, validTypeValues)
-	})
-	t.Run("ConvertRoundTrip", func(t *testing.T) {
-		testTypeInfoConvertRoundTrip(t, typeInfoArrays, validTypeValues)
-	})
 	t.Run("Equals", func(t *testing.T) {
 		testTypeInfoEquals(t, typeInfoArrays)
 	})
@@ -60,99 +53,10 @@ func TestTypeInfoSuite(t *testing.T) {
 	})
 }
 
-// verify that the TypeInfos and values are all consistent with each other, and cover the full range of types
-func verifyTypeInfoArrays(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]types.Value) {
-	require.Equal(t, len(tiArrays), len(vaArrays))
-
-	seenTypeInfos := make(map[Identifier]bool)
-	for identifier := range Identifiers {
-		seenTypeInfos[identifier] = false
-	}
-	// delete any types that should not be tested
-	delete(seenTypeInfos, UnknownTypeIdentifier)
-	delete(seenTypeInfos, TupleTypeIdentifier)
-	for _, tiArray := range tiArrays {
-		// no row should be empty
-		require.True(t, len(tiArray) > 0, `length of array "%v" should be greater than zero`, len(tiArray))
-		firstIdentifier := tiArray[0].GetTypeIdentifier()
-		t.Run(firstIdentifier.String(), func(t *testing.T) {
-			seen, ok := seenTypeInfos[firstIdentifier]
-			require.True(t, ok, `identifier "%v" is not recognized`, firstIdentifier)
-			require.False(t, seen, `identifier "%v" is used by another type from the array`, firstIdentifier)
-			seenTypeInfos[firstIdentifier] = true
-			for _, ti := range tiArray {
-				// verify that all of the types have the same identifier
-				require.Equal(t, firstIdentifier, ti.GetTypeIdentifier(),
-					`expected "%v" but got "%v"`, firstIdentifier, ti.GetTypeIdentifier())
-			}
-		})
-	}
-	// make sure that we are testing all of the types (unless deleted above)
-	for seenti, seen := range seenTypeInfos {
-		require.True(t, seen, `identifier "%v" does not have a relevant type being tested`, seenti)
-	}
-	for _, vaArray := range vaArrays {
-		// no row should be empty
-		require.True(t, len(vaArray) > 0, `length of array "%v" should be greater than zero`, len(vaArray))
-		firstKind := vaArray[0].Kind()
-		for _, val := range vaArray {
-			// verify that all of the values in an row are of the same kind
-			require.Equal(t, firstKind, val.Kind(), `expected kind "%v" but got "%v"`, firstKind, val.Kind())
-		}
-	}
-}
-
-// assuming valid data, verifies that the To-From interface{} functions can round trip
-func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]types.Value) {
-	nbf := types.Format_Default
-
-	for rowIndex, tiArray := range tiArrays {
-		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
-			for _, ti := range tiArray {
-				atLeastOneValid := false
-				t.Run(ti.String(), func(t *testing.T) {
-					for _, val := range vaArrays[rowIndex] {
-						t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), humanReadableString(val)), func(t *testing.T) {
-							vInterface, err := ti.ConvertNomsValueToValue(val)
-							if ti.IsValid(val) {
-								atLeastOneValid = true
-								require.NoError(t, err)
-								vrw := types.NewMemoryValueStore()
-								outVal, err := ti.ConvertValueToNomsValue(context.Background(), vrw, vInterface)
-								require.NoError(t, err)
-								if ti == DateType { // Special case as DateType removes the hh:mm:ss
-									val = types.Timestamp(time.Time(val.(types.Timestamp)).Truncate(24 * time.Hour))
-									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)
-								} else if ti.GetTypeIdentifier() != DecimalTypeIdentifier { // Any Decimal's on-disk representation varies by precision/scale
-									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)
-								}
-
-								tup, err := types.NewTuple(nbf, outVal)
-								require.NoError(t, err)
-
-								itr, err := tup.Iterator()
-								require.NoError(t, err)
-
-								reader, n := itr.CodecReader()
-								require.Equal(t, uint64(1), n)
-
-								readVal, err := ti.ReadFrom(nbf, reader)
-								require.NoError(t, err)
-								require.Equal(t, readVal, vInterface)
-							}
-						})
-					}
-				})
-				require.True(t, atLeastOneValid, `all values reported false for "%v"`, ti.String())
-			}
-		})
-	}
-}
-
 // each TypeInfo in tiArrays is unique, so all equality comparisons should fail when the indices don't match
 func testTypeInfoEquals(t *testing.T, tiArrays [][]TypeInfo) {
 	for tiArrayIndex, tiArray := range tiArrays {
-		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
+		t.Run(tiArray[0].ToSqlType().String(), func(t *testing.T) {
 			// check this TypeInfo against its own variations, EX: Int16 & Int32
 			// a != b should also mean b != a
 			for i := range tiArray {
@@ -195,7 +99,7 @@ func testTypeInfoEquals(t *testing.T, tiArrays [][]TypeInfo) {
 // ConvertNomsValueToValue and FormatValue should fail if the kind does not match the TypeInfo kind
 func testTypeInfoForeignKindHandling(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]types.Value) {
 	for _, tiArray := range tiArrays {
-		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
+		t.Run(tiArray[0].ToSqlType().String(), func(t *testing.T) {
 			for _, ti := range tiArray {
 				t.Run(ti.String(), func(t *testing.T) {
 					for _, vaArray := range vaArrays {
@@ -232,7 +136,7 @@ func testTypeInfoForeignKindHandling(t *testing.T, tiArrays [][]TypeInfo, vaArra
 // makes sure that everything can handle nil and NullValue (if applicable)
 func testTypeInfoNullHandling(t *testing.T, tiArrays [][]TypeInfo) {
 	for _, tiArray := range tiArrays {
-		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
+		t.Run(tiArray[0].ToSqlType().String(), func(t *testing.T) {
 			for _, ti := range tiArray {
 				t.Run(ti.String(), func(t *testing.T) {
 					t.Run("ConvertNomsValueToValue", func(t *testing.T) {
@@ -270,7 +174,7 @@ func testTypeInfoNullHandling(t *testing.T, tiArrays [][]TypeInfo) {
 // smoke test checking that the returned NomsKind is consistent and matches the values.
 func testTypeInfoNomsKind(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]types.Value) {
 	for rowIndex, tiArray := range tiArrays {
-		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
+		t.Run(tiArray[0].ToSqlType().String(), func(t *testing.T) {
 			nomsKind := tiArray[0].NomsKind()
 			for _, ti := range tiArray {
 				t.Run("Equality "+ti.String(), func(t *testing.T) {
@@ -289,7 +193,7 @@ func testTypeInfoNomsKind(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]type
 // smoke test so that there are no obvious panics when returning SQL types
 func testTypeInfoToSqlType(t *testing.T, tiArrays [][]TypeInfo) {
 	for _, tiArray := range tiArrays {
-		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
+		t.Run(tiArray[0].ToSqlType().String(), func(t *testing.T) {
 			for _, ti := range tiArray {
 				t.Run(ti.String(), func(t *testing.T) {
 					_ = ti.ToSqlType()
@@ -306,7 +210,7 @@ func testTypeInfoConversionsExist(t *testing.T, tiArrays [][]TypeInfo) {
 		for _, tiArray2 := range tiArrays {
 			ti1 := tiArray1[0]
 			ti2 := tiArray2[0]
-			t.Run(fmt.Sprintf("%s -> %s", ti1.GetTypeIdentifier().String(), ti2.GetTypeIdentifier().String()), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s -> %s", ti1.ToSqlType().String(), ti2.ToSqlType().String()), func(t *testing.T) {
 				_, _, err := GetTypeConverter(context.Background(), ti1, ti2)
 				require.False(t, UnhandledTypeConversion.Is(err))
 			})

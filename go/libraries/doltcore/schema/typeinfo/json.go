@@ -87,7 +87,8 @@ func (ti *jsonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 
 // Equals implements TypeInfo interface.
 func (ti *jsonType) Equals(other TypeInfo) bool {
-	return ti.GetTypeIdentifier() == other.GetTypeIdentifier()
+	_, ok := other.(*jsonType)
+	return ok
 }
 
 // FormatValue implements TypeInfo interface.

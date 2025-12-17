@@ -111,9 +111,6 @@ type TypeInfo interface {
 	// FormatValue returns the stringified version of the value.
 	FormatValue(v types.Value) (*string, error)
 
-	// GetTypeIdentifier returns an identifier for this type used for serialization.
-	GetTypeIdentifier() Identifier
-
 	// IsValid takes in a types.Value and returns whether it is valid for this type.
 	IsValid(v types.Value) bool
 
@@ -291,68 +288,6 @@ func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
 	return typ, nil
 }
 
-// FromTypeParams constructs a TypeInfo from the given identifier and parameters.
-func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
-	switch id {
-	case BitTypeIdentifier:
-		return CreateBitTypeFromParams(params)
-	case BlobStringTypeIdentifier:
-		return CreateBlobStringTypeFromParams(params)
-	case BoolTypeIdentifier:
-		return BoolType, nil
-	case ExtendedTypeIdentifier:
-		return CreateExtendedTypeFromParams(params)
-	case DatetimeTypeIdentifier:
-		return CreateDatetimeTypeFromParams(params)
-	case DecimalTypeIdentifier:
-		return CreateDecimalTypeFromParams(params)
-	case EnumTypeIdentifier:
-		return CreateEnumTypeFromParams(params)
-	case FloatTypeIdentifier:
-		return CreateFloatTypeFromParams(params)
-	case GeometryCollectionTypeIdentifier:
-		return CreateGeomCollTypeFromParams(params)
-	case GeometryTypeIdentifier:
-		return CreateGeometryTypeFromParams(params)
-	case InlineBlobTypeIdentifier:
-		return CreateInlineBlobTypeFromParams(params)
-	case IntTypeIdentifier:
-		return CreateIntTypeFromParams(params)
-	case JSONTypeIdentifier:
-		return JSONType, nil
-	case LineStringTypeIdentifier:
-		return CreateLineStringTypeFromParams(params)
-	case MultiPointTypeIdentifier:
-		return CreateMultiPointTypeFromParams(params)
-	case MultiLineStringTypeIdentifier:
-		return CreateMultiLineStringTypeFromParams(params)
-	case MultiPolygonTypeIdentifier:
-		return CreateMultiPolygonTypeFromParams(params)
-	case PointTypeIdentifier:
-		return CreatePointTypeFromParams(params)
-	case PolygonTypeIdentifier:
-		return CreatePolygonTypeFromParams(params)
-	case SetTypeIdentifier:
-		return CreateSetTypeFromParams(params)
-	case TimeTypeIdentifier:
-		return TimeType, nil
-	case TupleTypeIdentifier:
-		return TupleType, nil
-	case UintTypeIdentifier:
-		return CreateUintTypeFromParams(params)
-	case UuidTypeIdentifier:
-		return UuidType, nil
-	case VarBinaryTypeIdentifier:
-		return CreateVarBinaryTypeFromParams(params)
-	case VarStringTypeIdentifier:
-		return CreateVarStringTypeFromParams(params)
-	case YearTypeIdentifier:
-		return YearType, nil
-	default:
-		return nil, fmt.Errorf(`"%v" cannot be made from an identifier and params`, id)
-	}
-}
-
 // FromKind returns the default TypeInfo for a given types.Value.
 func FromKind(kind types.NomsKind) TypeInfo {
 	switch kind {
@@ -395,17 +330,6 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}
-}
-
-// ParseIdentifier takes in an Identifier in string form and returns the matching Identifier.
-// Returns UnknownTypeIdentifier when the string match is not found.
-func ParseIdentifier(name string) Identifier {
-	id := Identifier(name)
-	_, ok := Identifiers[id]
-	if ok {
-		return id
-	}
-	return UnknownTypeIdentifier
 }
 
 // String returns a string representation of the identifier. This may later be used in parsing to
