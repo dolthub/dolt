@@ -114,10 +114,6 @@ type TypeInfo interface {
 	// GetTypeIdentifier returns an identifier for this type used for serialization.
 	GetTypeIdentifier() Identifier
 
-	// GetTypeParams returns a map[string]string containing the type parameters.  This is used for
-	// serialization and deserialization of type information.
-	GetTypeParams() map[string]string
-
 	// IsValid takes in a types.Value and returns whether it is valid for this type.
 	IsValid(v types.Value) bool
 
