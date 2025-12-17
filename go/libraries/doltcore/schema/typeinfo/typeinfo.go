@@ -25,71 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type Identifier string
-
-const (
-	UnknownTypeIdentifier            Identifier = "unknown"
-	BitTypeIdentifier                Identifier = "bit"
-	BlobStringTypeIdentifier         Identifier = "blobstring"
-	BoolTypeIdentifier               Identifier = "bool"
-	DatetimeTypeIdentifier           Identifier = "datetime"
-	DecimalTypeIdentifier            Identifier = "decimal"
-	EnumTypeIdentifier               Identifier = "enum"
-	FloatTypeIdentifier              Identifier = "float"
-	JSONTypeIdentifier               Identifier = "json"
-	InlineBlobTypeIdentifier         Identifier = "inlineblob"
-	IntTypeIdentifier                Identifier = "int"
-	SetTypeIdentifier                Identifier = "set"
-	TimeTypeIdentifier               Identifier = "time"
-	TupleTypeIdentifier              Identifier = "tuple"
-	UintTypeIdentifier               Identifier = "uint"
-	UuidTypeIdentifier               Identifier = "uuid"
-	VarBinaryTypeIdentifier          Identifier = "varbinary"
-	VarStringTypeIdentifier          Identifier = "varstring"
-	VectorTypeIdentifier             Identifier = "vector"
-	YearTypeIdentifier               Identifier = "year"
-	GeometryTypeIdentifier           Identifier = "geometry"
-	PointTypeIdentifier              Identifier = "point"
-	LineStringTypeIdentifier         Identifier = "linestring"
-	PolygonTypeIdentifier            Identifier = "polygon"
-	MultiPointTypeIdentifier         Identifier = "multipoint"
-	MultiLineStringTypeIdentifier    Identifier = "multilinestring"
-	MultiPolygonTypeIdentifier       Identifier = "multipolygon"
-	GeometryCollectionTypeIdentifier Identifier = "geometrycollection"
-	ExtendedTypeIdentifier           Identifier = "extended"
-)
-
-var Identifiers = map[Identifier]struct{}{
-	UnknownTypeIdentifier:            {},
-	BitTypeIdentifier:                {},
-	BlobStringTypeIdentifier:         {},
-	BoolTypeIdentifier:               {},
-	DatetimeTypeIdentifier:           {},
-	DecimalTypeIdentifier:            {},
-	EnumTypeIdentifier:               {},
-	FloatTypeIdentifier:              {},
-	JSONTypeIdentifier:               {},
-	InlineBlobTypeIdentifier:         {},
-	IntTypeIdentifier:                {},
-	SetTypeIdentifier:                {},
-	TimeTypeIdentifier:               {},
-	TupleTypeIdentifier:              {},
-	UintTypeIdentifier:               {},
-	UuidTypeIdentifier:               {},
-	VarBinaryTypeIdentifier:          {},
-	VarStringTypeIdentifier:          {},
-	YearTypeIdentifier:               {},
-	GeometryTypeIdentifier:           {},
-	PointTypeIdentifier:              {},
-	LineStringTypeIdentifier:         {},
-	PolygonTypeIdentifier:            {},
-	MultiPointTypeIdentifier:         {},
-	MultiLineStringTypeIdentifier:    {},
-	MultiPolygonTypeIdentifier:       {},
-	GeometryCollectionTypeIdentifier: {},
-	ExtendedTypeIdentifier:           {},
-}
-
 // TypeInfo is an interface used for encoding type information.
 type TypeInfo interface {
 	// ConvertNomsValueToValue converts a Noms value to a go value. The expected NomsKind of the given
@@ -330,10 +265,4 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}
-}
-
-// String returns a string representation of the identifier. This may later be used in parsing to
-// retrieve the original identifier.
-func (i Identifier) String() string {
-	return string(i)
 }
