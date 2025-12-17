@@ -107,11 +107,6 @@ func (ti *jsonType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *jsonType) GetTypeIdentifier() Identifier {
-	return JSONTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *jsonType) IsValid(v types.Value) bool {
 	if v == nil {

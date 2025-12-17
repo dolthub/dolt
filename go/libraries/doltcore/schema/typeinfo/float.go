@@ -146,11 +146,6 @@ func (ti *floatType) FormatValue(v types.Value) (*string, error) {
 	}
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *floatType) GetTypeIdentifier() Identifier {
-	return FloatTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *floatType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter

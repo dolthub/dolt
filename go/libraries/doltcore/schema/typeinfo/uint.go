@@ -177,11 +177,6 @@ func (ti *uintType) FormatValue(v types.Value) (*string, error) {
 	}
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *uintType) GetTypeIdentifier() Identifier {
-	return UintTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *uintType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter to IsValid, or delete the typeinfo package

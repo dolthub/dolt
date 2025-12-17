@@ -105,11 +105,6 @@ func (ti *yearType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *yearType) GetTypeIdentifier() Identifier {
-	return YearTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *yearType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter or delete typeinfo package

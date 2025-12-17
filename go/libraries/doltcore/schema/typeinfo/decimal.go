@@ -150,11 +150,6 @@ func (ti *decimalType) FormatValue(v types.Value) (*string, error) {
 	return &val, nil
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *decimalType) GetTypeIdentifier() Identifier {
-	return DecimalTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *decimalType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter

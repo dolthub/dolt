@@ -107,11 +107,6 @@ func (ti *multipointType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *multipointType) GetTypeIdentifier() Identifier {
-	return MultiPointTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *multipointType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.MultiPoint); ok {

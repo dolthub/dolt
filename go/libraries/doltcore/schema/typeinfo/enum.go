@@ -141,11 +141,6 @@ func (ti *enumType) FormatValue(v types.Value) (*string, error) {
 	return &val, nil
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *enumType) GetTypeIdentifier() Identifier {
-	return EnumTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *enumType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {

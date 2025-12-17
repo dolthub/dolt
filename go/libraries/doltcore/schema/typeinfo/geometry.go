@@ -189,11 +189,6 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 	}
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *geometryType) GetTypeIdentifier() Identifier {
-	return GeometryTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *geometryType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.Null); ok || v == nil {

@@ -107,11 +107,6 @@ func (ti *multipolygonType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *multipolygonType) GetTypeIdentifier() Identifier {
-	return MultiPolygonTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *multipolygonType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.MultiPolygon); ok {

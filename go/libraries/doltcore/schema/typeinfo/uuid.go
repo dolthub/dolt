@@ -98,11 +98,6 @@ func (ti *uuidType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *uuidType) GetTypeIdentifier() Identifier {
-	return UuidTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *uuidType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.UUID); ok {

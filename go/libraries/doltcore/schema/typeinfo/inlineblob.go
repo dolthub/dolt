@@ -153,11 +153,6 @@ func (ti *inlineBlobType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *inlineBlobType) GetTypeIdentifier() Identifier {
-	return InlineBlobTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *inlineBlobType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.InlineBlob); ok {

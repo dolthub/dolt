@@ -140,11 +140,6 @@ func (ti *setType) FormatValue(v types.Value) (*string, error) {
 	return &val, nil
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *setType) GetTypeIdentifier() Identifier {
-	return SetTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *setType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {

@@ -141,11 +141,6 @@ func (ti *boolType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *boolType) GetTypeIdentifier() Identifier {
-	return BoolTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *boolType) IsValid(v types.Value) bool {
 	_, err := ti.ConvertNomsValueToValue(v)

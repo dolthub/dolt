@@ -129,11 +129,6 @@ func (ti *bitType) FormatValue(v types.Value) (*string, error) {
 	return &res, nil
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *bitType) GetTypeIdentifier() Identifier {
-	return BitTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *bitType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {

@@ -169,11 +169,6 @@ func (ti *datetimeType) FormatValue(v types.Value) (*string, error) {
 	}
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *datetimeType) GetTypeIdentifier() Identifier {
-	return DatetimeTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *datetimeType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Timestamp); ok {

@@ -115,11 +115,6 @@ func (ti *vectorType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti, v.Kind())
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *vectorType) GetTypeIdentifier() Identifier {
-	return VectorTypeIdentifier
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *vectorType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Blob); ok {
