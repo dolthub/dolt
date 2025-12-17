@@ -21,8 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -237,7 +235,7 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 		err := ie.DeleteRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
 			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
-				"attempted to undo previous insertion but encountered the following error: %v",
+					"attempted to undo previous insertion but encountered the following error: %v",
 				ie.idx.Name(), err)
 			return
 		}
@@ -245,7 +243,7 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 		err := ie.InsertRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
 			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
-				"attempted to undo previous deletion but encountered the following error: %v",
+					"attempted to undo previous deletion but encountered the following error: %v",
 				ie.idx.Name(), err)
 			return
 		}
@@ -290,120 +288,4 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 // Close is a no-op for an IndexEditor.
 func (ie *IndexEditor) Close() error {
 	return ie.permanentErr
-}
-
-func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts Options) (types.Map, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	tableRowData, err := tbl.GetNomsRowData(ctx)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	index := sch.Indexes().GetByName(indexName)
-	if index == nil {
-		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
-	}
-
-	tf := tupleFactories.Get().(*types.TupleFactory)
-	tf.Reset(tbl.Format())
-	defer tupleFactories.Put(tf)
-
-	opts = opts.WithDeaf(NewBulkImportTEAFactory(tbl.ValueReadWriter(), opts.Tempdir))
-	rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index, opts, tf)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	return rebuiltIndexData, nil
-}
-
-func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*doltdb.Table, error) {
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if sch.Indexes().Count() == 0 {
-		return t, nil
-	}
-
-	tableRowData, err := t.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	indexes, err := t.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	tf := tupleFactories.Get().(*types.TupleFactory)
-	tf.Reset(t.Format())
-	defer tupleFactories.Put(tf)
-
-	opts = opts.WithDeaf(NewBulkImportTEAFactory(t.ValueReadWriter(), opts.Tempdir))
-	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index, opts, tf)
-		if err != nil {
-			return nil, err
-		}
-
-		indexes, err = indexes.PutNomsIndex(ctx, index.Name(), rebuiltIndexRowData)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return t.SetIndexSet(ctx, indexes)
-}
-
-func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index, opts Options, tf *types.TupleFactory) (types.Map, error) {
-	emptyIndexMap, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	var rowNumber int64
-	indexEditor := NewIndexEditor(ctx, index, emptyIndexMap, sch, opts)
-	err = tblRowData.IterAll(ctx, func(key, value types.Value) error {
-		dRow, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-		if err != nil {
-			return err
-		}
-
-		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index, tf)
-		if err != nil {
-			return err
-		}
-
-		err = indexEditor.InsertRow(ctx, fullKey, partialKey, keyVal)
-		if err != nil {
-			return err
-		}
-
-		rowNumber++
-		if rowNumber%rebuildIndexFlushInterval == 0 {
-			rebuiltIndexMap, err := indexEditor.Map(ctx)
-			if err != nil {
-				return err
-			}
-
-			indexEditor = NewIndexEditor(ctx, index, rebuiltIndexMap, sch, opts)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	rebuiltIndexMap, err := indexEditor.Map(ctx)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	return rebuiltIndexMap, nil
 }
