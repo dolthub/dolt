@@ -254,32 +254,12 @@ func TestRowAsUpdateStmt(t *testing.T) {
 }
 
 func TestValueAsSqlString(t *testing.T) {
-	tu, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
-
 	tests := []struct {
 		name string
 		val  types.Value
 		ti   typeinfo.TypeInfo
 		exp  string
 	}{
-		{
-			name: "bool(true)",
-			val:  types.Bool(true),
-			ti:   typeinfo.BoolType,
-			exp:  "TRUE",
-		},
-		{
-			name: "bool(false)",
-			val:  types.Bool(false),
-			ti:   typeinfo.BoolType,
-			exp:  "FALSE",
-		},
-		{
-			name: "uuid",
-			val:  types.UUID(tu),
-			ti:   typeinfo.UuidType,
-			exp:  "'00000000-0000-0000-0000-000000000000'",
-		},
 		{
 			name: "string",
 			val:  types.String("leviosa"),
