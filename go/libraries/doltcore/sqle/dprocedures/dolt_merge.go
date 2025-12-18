@@ -492,7 +492,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.CommitFlag) {
 		return nil, errors.New("cannot define both 'commit' and 'no-commit' flags at the same time")
 	}
-	
+
 	// Determine FastForwardMode based on flags. validation of mutually exclusive flags done earlier
 	var ffMode merge.FastForwardMode = merge.FastForwardDefault
 	if apr.Contains(cli.NoFFParam) {
