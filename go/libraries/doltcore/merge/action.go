@@ -29,6 +29,14 @@ import (
 
 var ErrFailedToDetermineMergeability = errors.New("failed to determine mergeability")
 
+type FastForwardMode int
+
+const (
+	FastForwardDefault FastForwardMode = iota
+	FastForwardOnly
+	NoFastForward
+)
+
 type MergeSpec struct {
 	HeadH           hash.Hash
 	MergeH          hash.Hash
@@ -38,7 +46,7 @@ type MergeSpec struct {
 	StompedTblNames []doltdb.TableName
 	WorkingDiffs    map[doltdb.TableName]hash.Hash
 	Squash          bool
-	NoFF            bool
+	FFMode          FastForwardMode
 	NoCommit        bool
 	NoEdit          bool
 	Force           bool
@@ -49,9 +57,9 @@ type MergeSpec struct {
 
 type MergeSpecOpt func(*MergeSpec)
 
-func WithNoFF(noFF bool) MergeSpecOpt {
+func WithFastForwardMode(mode FastForwardMode) MergeSpecOpt {
 	return func(ms *MergeSpec) {
-		ms.NoFF = noFF
+		ms.FFMode = mode
 	}
 }
 
