@@ -21,10 +21,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
