@@ -96,6 +96,14 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 		return noConflictsOrViolations, threeWayMerge, "", actions.ErrInvalidPullArgs
 	}
 
+	// Validate conflicting flags
+	if apr.ContainsAll(cli.FFOnlyParam, cli.NoFFParam) {
+		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.FFOnlyParam, cli.NoFFParam)
+	}
+	if apr.ContainsAll(cli.FFOnlyParam, cli.SquashParam) {
+		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.FFOnlyParam, cli.SquashParam)
+	}
+
 	var remoteName, remoteRefName string
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
