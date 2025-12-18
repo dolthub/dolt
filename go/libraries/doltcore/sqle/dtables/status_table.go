@@ -115,6 +115,14 @@ type statusTableRow struct {
 	// of this table when you are using local vs remote sql connections.
 }
 
+// statusRowData contains the data for a single status row.
+type statusRowData struct {
+	tableName string
+	status    string
+	isStaged  byte
+}
+
+// containsTableName checks if a table name is in the list of table names.
 func containsTableName(name string, names []doltdb.TableName) bool {
 	for _, s := range names {
 		if s.String() == name {
@@ -124,21 +132,26 @@ func containsTableName(name string, names []doltdb.TableName) bool {
 	return false
 }
 
-func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
-	// If no roots provider was set, then there is no status to report
-	rp := st.rootsProvider
+// getStatusRowsData collects all status data from the given roots and working set.
+// This is the shared logic used by both dolt_status and dolt_status_ignored tables.
+// Returns the rows data along with the unstaged table deltas (needed for ignore checking).
+func getStatusRowsData(
+	ctx *sql.Context,
+	rp env.RootsProvider[*sql.Context],
+	ws *doltdb.WorkingSet,
+) ([]statusRowData, []diff.TableDelta, error) {
 	if rp == nil {
-		return &StatusItr{rows: nil}, nil
+		return nil, nil, nil
 	}
 
 	roots, err := rp.GetRoots(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Some tables may differ only in column tags and/or recorded conflicts.
@@ -147,7 +160,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	for _, unstagedTableDiff := range unstagedTables {
 		changed, err := unstagedTableDiff.HasChangesIgnoringColumnTags(ctx)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if changed {
 			changedUnstagedTables = append(changedUnstagedTables, unstagedTableDiff)
@@ -157,35 +170,35 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 	stagedSchemas, unstagedSchemas, err := diff.GetStagedUnstagedDatabaseSchemaDeltas(ctx, roots)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	rows := make([]statusTableRow, 0, len(stagedTables)+len(unstagedTables)+len(stagedSchemas)+len(unstagedSchemas))
+	rows := make([]statusRowData, 0, len(stagedTables)+len(unstagedTables)+len(stagedSchemas)+len(unstagedSchemas))
 
 	cvTables, err := doltdb.TablesWithConstraintViolations(ctx, roots.Working)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, tbl := range cvTables {
-		rows = append(rows, statusTableRow{
+		rows = append(rows, statusRowData{
 			tableName: tbl.String(),
 			status:    "constraint violation",
 		})
 	}
 
-	if st.workingSet.MergeActive() {
-		ms := st.workingSet.MergeState()
+	if ws.MergeActive() {
+		ms := ws.MergeState()
 		for _, tbl := range ms.TablesWithSchemaConflicts() {
-			rows = append(rows, statusTableRow{
+			rows = append(rows, statusRowData{
 				tableName: tbl.String(),
 				isStaged:  byte(0),
-				status:    "schema conflict",
+				status:    mergedStatus,
 			})
 		}
 
 		for _, tbl := range ms.MergedTables() {
-			rows = append(rows, statusTableRow{
+			rows = append(rows, statusRowData{
 				tableName: tbl.String(),
 				isStaged:  byte(1),
 				status:    mergedStatus,
@@ -195,10 +208,10 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 	cnfTables, err := doltdb.TablesWithDataConflicts(ctx, roots.Working)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, tbl := range cnfTables {
-		rows = append(rows, statusTableRow{
+		rows = append(rows, statusRowData{
 			tableName: tbl.String(),
 			status:    mergeConflictStatus,
 		})
@@ -212,12 +225,13 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		if containsTableName(tblName, cvTables) {
 			continue
 		}
-		rows = append(rows, statusTableRow{
+		rows = append(rows, statusRowData{
 			tableName: tblName,
 			isStaged:  byte(1),
 			status:    statusString(td),
 		})
 	}
+
 	for _, td := range unstagedTables {
 		tblName := tableName(td)
 		if doltdb.IsFullTextTable(tblName) {
@@ -226,7 +240,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		if containsTableName(tblName, cvTables) {
 			continue
 		}
-		rows = append(rows, statusTableRow{
+		rows = append(rows, statusRowData{
 			tableName: tblName,
 			isStaged:  byte(0),
 			status:    statusString(td),
@@ -234,7 +248,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 
 	for _, sd := range stagedSchemas {
-		rows = append(rows, statusTableRow{
+		rows = append(rows, statusRowData{
 			tableName: sd.CurName(),
 			isStaged:  byte(1),
 			status:    schemaStatusString(sd),
@@ -242,11 +256,36 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 
 	for _, sd := range unstagedSchemas {
-		rows = append(rows, statusTableRow{
+		rows = append(rows, statusRowData{
 			tableName: sd.CurName(),
 			isStaged:  byte(0),
 			status:    schemaStatusString(sd),
 		})
+	}
+
+	return rows, unstagedTables, nil
+}
+
+func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
+	// If no roots provider was set, then there is no status to report
+	if st.rootsProvider == nil {
+		return &StatusItr{rows: nil}, nil
+	}
+
+	// Get status data using the shared function
+	statusRows, _, err := getStatusRowsData(ctx, st.rootsProvider, st.workingSet)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert statusRowData to statusTableRow
+	rows := make([]statusTableRow, len(statusRows))
+	for i, row := range statusRows {
+		rows[i] = statusTableRow{
+			tableName: row.tableName,
+			isStaged:  row.isStaged,
+			status:    row.status,
+		}
 	}
 
 	return &StatusItr{rows: rows}, nil
