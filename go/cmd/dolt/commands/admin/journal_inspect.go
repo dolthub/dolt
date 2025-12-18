@@ -18,6 +18,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -116,7 +117,27 @@ func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []s
 
 	// Handle filter mode
 	if filterRootsStr != "" || filterChunksStr != "" {
-		return nbs.JournalFilter(absPath, filterRootsStr, filterChunksStr)
+		result, exitCode := nbs.JournalFilter(absPath, filterRootsStr, filterChunksStr)
+		if exitCode != 0 {
+			return exitCode
+		}
+
+		// Only print shell commands if a filtered file was actually created
+		if result.OutputPath != "" && result.FilteredRecords > 0 {
+			// Print shell commands to replace the journal file
+			now := time.Now()
+			dateString := now.Format("2006_01_02_150405")
+
+			cli.Println("")
+			cli.Printf("Filtered file: %s\n", result.OutputPath)
+			cli.Println("")
+			cli.Println("To replace the original journal file, run these commands:")
+			cli.Printf("cp %s %s_saved_%s\n", result.OriginalPath, result.OriginalPath, dateString)
+			cli.Printf("mv %s %s\n", result.OutputPath, result.OriginalPath)
+			cli.Printf("rm %s\n", filepath.Join(filepath.Dir(result.OriginalPath), "journal.idx"))
+		}
+
+		return 0
 	}
 
 	// JournalInspect returns an exit code. It's entire purpose it to print errors, after all.
