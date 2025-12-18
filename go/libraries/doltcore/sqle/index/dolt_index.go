@@ -1343,7 +1343,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				inclusive := expr.UpperBound.BoundType == sql.Above || expr.UpperBound.BoundType == sql.AboveNull
 				fields[i].Hi = prolly.Bound{
 					Binding:   true,
-					Inclusive: inclusive,
+					Inclusive: inclusive || nv != v,
 				}
 			} else {
 				fields[i].Hi = prolly.Bound{}
