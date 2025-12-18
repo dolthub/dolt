@@ -124,6 +124,9 @@ func (p *CommitIndex) CanSupport(c *sql.Context, ranges ...sql.Range) bool {
 			return false
 		}
 		uk, isStr := ub.Key.(string)
+		if !isStr {
+			return false
+		}
 		if uk != lk {
 			return false
 		}
@@ -1510,6 +1513,9 @@ func LookupToPointSelectStr(lookup sql.IndexLookup) ([]string, bool) {
 			continue
 		}
 		uk, isStr := ub.Key.(string)
+		if !isStr {
+			return nil, false
+		}
 		if uk != lk {
 			return nil, false
 		}
