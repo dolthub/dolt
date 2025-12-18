@@ -88,6 +88,7 @@ func CreateMergeArgParser() *argparser.ArgParser {
 		return errors.New("Error: Dolt does not support merging from multiple commits. You probably meant to checkout one and then merge from the other.")
 	}
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsFlag(FFOnlyParam, "", "Refuse to merge unless the current HEAD is already up to date or the merge can be resolved as a fast-forward.")
 	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(AbortParam, "", "Abort the in-progress merge and return the working set to the state before the merge started.")
@@ -218,6 +219,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remoteBranch", "The name of a branch on the specified remote to be merged into the current working set."})
 	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsFlag(FFOnlyParam, "", "Refuse to merge unless the current HEAD is already up to date or the merge can be resolved as a fast-forward.")
 	ap.SupportsFlag(ForceFlag, "f", "Update from the remote HEAD even if there are errors.")
 	ap.SupportsFlag(CommitFlag, "", "Perform the merge and commit the result. This is the default option, but can be overridden with the --no-commit flag. Note that this option does not affect fast-forward merges, which don't create a new merge commit, and if any merge conflicts or constraint violations are detected, no commit will be attempted.")
 	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
