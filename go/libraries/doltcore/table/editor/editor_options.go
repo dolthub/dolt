@@ -18,16 +18,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-const tfApproxCapacity = 64
-
-var tupleFactories = &sync.Pool{New: func() interface{} {
-	return types.NewTupleFactory(tfApproxCapacity)
-}}
 
 type PKDuplicateCb func(newKeyString, indexName string, existingKey, existingVal types.Tuple, isPk bool) error
 
