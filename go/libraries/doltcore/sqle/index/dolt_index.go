@@ -111,19 +111,19 @@ func (p *CommitIndex) CanSupport(c *sql.Context, ranges ...sql.Range) bool {
 		if len(mysqlRange) != 1 {
 			return false
 		}
-		lb, ok := mysqlRange[0].LowerBound.(sql.Below)
-		if !ok {
+		lb := mysqlRange[0].LowerBound
+		if lb.BoundType != sql.Below {
 			return false
 		}
-		lk, ok := lb.Key.(string)
-		if !ok {
+		lk, isStr := lb.Key.(string)
+		if !isStr {
 			return false
 		}
-		ub, ok := mysqlRange[0].UpperBound.(sql.Above)
-		if !ok {
+		ub := mysqlRange[0].UpperBound
+		if ub.BoundType != sql.Above {
 			return false
 		}
-		uk, ok := ub.Key.(string)
+		uk, isStr := ub.Key.(string)
 		if uk != lk {
 			return false
 		}
@@ -754,14 +754,14 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 	return ret, nil
 }
 
-func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ...sql.MySQLRange) ([]prolly.Range, error) {
+func (di *doltIndex) prollyRanges(ctx context.Context, ns tree.NodeStore, ranges ...sql.MySQLRange) ([]prolly.Range, error) {
 	//todo(max): it is important that *doltIndexLookup maintains a reference
 	// to empty sqlRanges, otherwise the analyzer will dismiss the index and
 	// chose a less optimal lookup index. This is a GMS concern, so GMS should
 	// really not rely on the integrator to maintain this tenuous relationship.
 	var err error
 	if !di.spatial {
-		ranges, err = pruneEmptyRanges(ranges)
+		ranges, err = pruneEmptyRanges(ctx, ranges)
 		if err != nil {
 			return nil, err
 		}
@@ -773,7 +773,7 @@ func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ..
 	return pranges, nil
 }
 
-func (di *doltIndex) nomsRanges(ctx *sql.Context, iranges ...sql.MySQLRange) ([]*noms.ReadRange, error) {
+func (di *doltIndex) nomsRanges(ctx context.Context, iranges ...sql.MySQLRange) ([]*noms.ReadRange, error) {
 	// This might remain nil if the given nomsRanges each contain an EmptyRange for one of the columns. This will just
 	// cause the lookup to return no rows, which is the desired behavior.
 	var readRanges []*noms.ReadRange
@@ -784,7 +784,7 @@ func (di *doltIndex) nomsRanges(ctx *sql.Context, iranges ...sql.MySQLRange) ([]
 		ranges[i] = DropTrailingAllColumnExprs(iranges[i])
 	}
 
-	ranges, err := SplitNullsFromRanges(ranges)
+	ranges, err := SplitNullsFromRanges(ctx, ranges)
 	if err != nil {
 		return nil, err
 	}
@@ -797,8 +797,8 @@ RangeLoop:
 
 		var lowerKeys []interface{}
 		for _, rangeColumnExpr := range rang {
-			if rangeColumnExpr.HasLowerBound() {
-				lowerKeys = append(lowerKeys, sql.GetMySQLRangeCutKey(rangeColumnExpr.LowerBound))
+			if rangeColumnExpr.LowerBound.IsBinding() {
+				lowerKeys = append(lowerKeys, rangeColumnExpr.LowerBound.Key)
 			} else {
 				break
 			}
@@ -812,7 +812,7 @@ RangeLoop:
 		for i, rangeColumnExpr := range rang {
 			// An empty column expression will mean that no values for this column can be matched, so we can discard the
 			// entire range.
-			if ok, err := rangeColumnExpr.IsEmpty(); err != nil {
+			if ok, err := rangeColumnExpr.IsEmpty(ctx); err != nil {
 				return nil, err
 			} else if ok {
 				continue RangeLoop
@@ -821,13 +821,13 @@ RangeLoop:
 			cb := columnBounds{}
 			// We promote each type as the value has already been validated against the type
 			promotedType := di.columns[i].TypeInfo.Promote()
-			if rangeColumnExpr.HasLowerBound() {
-				key := sql.GetMySQLRangeCutKey(rangeColumnExpr.LowerBound)
+			if rangeColumnExpr.LowerBound.IsBinding() {
+				key := rangeColumnExpr.LowerBound.Key
 				val, err := promotedType.ConvertValueToNomsValue(ctx, di.vrw, key)
 				if err != nil {
 					return nil, err
 				}
-				if rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed {
+				if rangeColumnExpr.LowerBound.BoundType == sql.Below {
 					// For each lowerbound case, we set the upperbound to infinity, as the upperbound can increment to
 					// get to the desired overall case while retaining whatever was set for the lowerbound.
 					cb.boundsCase = boundsCase_greaterEquals_infinity
@@ -838,13 +838,13 @@ RangeLoop:
 			} else {
 				cb.boundsCase = boundsCase_infinity_infinity
 			}
-			if rangeColumnExpr.HasUpperBound() {
-				key := sql.GetMySQLRangeCutKey(rangeColumnExpr.UpperBound)
+			if rangeColumnExpr.UpperBound.IsBinding() {
+				key := rangeColumnExpr.UpperBound.Key
 				val, err := promotedType.ConvertValueToNomsValue(ctx, di.vrw, key)
 				if err != nil {
 					return nil, err
 				}
-				if rangeColumnExpr.UpperBound.TypeAsUpperBound() == sql.Closed {
+				if rangeColumnExpr.UpperBound.BoundType == sql.Above || rangeColumnExpr.UpperBound.BoundType == sql.AboveNull {
 					// Bounds cases are enum aliases on bytes, and they're arranged such that we can increment the case
 					// that was previously set when evaluating the lowerbound to get the proper overall case.
 					cb.boundsCase += 1
@@ -1127,7 +1127,7 @@ func (di *doltIndex) FullTextKeyColumns(ctx *sql.Context) (fulltext.KeyColumns, 
 
 // keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to
 // start at the very beginning.
-func (di *doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tuple, error) {
+func (di *doltIndex) keysToTuple(ctx context.Context, keys []interface{}) (types.Tuple, error) {
 	nbf := di.vrw.Format()
 	if len(keys) > len(di.columns) {
 		return types.EmptyTuple(nbf), errors.New("too many keys for the column count")
@@ -1159,12 +1159,12 @@ func maybeGetKeyBuilder(idx durable.Index) *val.TupleBuilder {
 	return nil
 }
 
-func pruneEmptyRanges(sqlRanges []sql.MySQLRange) (pruned []sql.MySQLRange, err error) {
+func pruneEmptyRanges(ctx context.Context, sqlRanges []sql.MySQLRange) (pruned []sql.MySQLRange, err error) {
 	pruned = make([]sql.MySQLRange, 0, len(sqlRanges))
 	for _, sr := range sqlRanges {
 		empty := false
 		for _, colExpr := range sr {
-			empty, err = colExpr.IsEmpty()
+			empty, err = colExpr.IsEmpty(ctx)
 			if err != nil {
 				return nil, err
 			} else if empty {
@@ -1174,7 +1174,7 @@ func pruneEmptyRanges(sqlRanges []sql.MySQLRange) (pruned []sql.MySQLRange, err 
 			}
 		}
 		for _, ce := range sr {
-			if lb, ok := ce.LowerBound.(sql.Below); ok && lb.Key == nil {
+			if ce.LowerBound.BoundType == sql.Below && ce.LowerBound.Key == nil {
 				empty = true
 				break
 			}
@@ -1217,7 +1217,7 @@ func (di *doltIndex) valueReadWriter() types.ValueReadWriter {
 func (di *doltIndex) prollySpatialRanges(ranges []sql.MySQLRange) ([]prolly.Range, error) {
 	// should be exactly one range
 	rng := ranges[0][0]
-	lower, upper := sql.GetMySQLRangeCutKey(rng.LowerBound), sql.GetMySQLRangeCutKey(rng.UpperBound)
+	lower, upper := rng.LowerBound.Key, rng.UpperBound.Key
 
 	minPoint, ok := lower.(sqltypes.Point)
 	if !ok {
@@ -1270,7 +1270,7 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.MySQLRange) ([]prolly.Rang
 func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.NodeStore, ranges []sql.MySQLRange, tb *val.TupleBuilder) ([]prolly.Range, error) {
 	var err error
 	if !di.spatial {
-		ranges, err = pruneEmptyRanges(ranges)
+		ranges, err = pruneEmptyRanges(ctx, ranges)
 		if err != nil {
 			return nil, err
 		}
@@ -1291,9 +1291,9 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				// comparison is required.
 				skipRangeMatchCallback = false
 			}
-			if rangeCutIsBinding(expr.LowerBound) {
+			if expr.LowerBound.IsBinding() {
 				// accumulate bound values in |tb|
-				v, err := getRangeCutValue(ctx, expr.LowerBound, rng[j].Typ)
+				v, err := getBoundKey(ctx, expr.LowerBound, rng[j].Typ)
 				if err != nil {
 					return nil, err
 				}
@@ -1301,10 +1301,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				if err = tree.PutField(ctx, ns, tb, j, nv); err != nil {
 					return nil, err
 				}
-				bound := expr.LowerBound.TypeAsLowerBound()
+				inclusive := expr.LowerBound.BoundType == sql.Below || expr.LowerBound.BoundType == sql.BelowNull
 				fields[j].Lo = prolly.Bound{
 					Binding:   true,
-					Inclusive: bound == sql.Closed,
+					Inclusive: inclusive,
 				}
 			} else {
 				fields[j].Lo = prolly.Bound{}
@@ -1320,10 +1320,9 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		}
 
 		for i, expr := range rng {
-			if rangeCutIsBinding(expr.UpperBound) {
-				bound := expr.UpperBound.TypeAsUpperBound()
+			if expr.UpperBound.IsBinding() {
 				// accumulate bound values in |tb|
-				v, err := getRangeCutValue(ctx, expr.UpperBound, rng[i].Typ)
+				v, err := getBoundKey(ctx, expr.UpperBound, rng[i].Typ)
 				if err != nil {
 					return nil, err
 				}
@@ -1338,9 +1337,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 					nv = string(nvv)
 				}
 
+				inclusive := expr.UpperBound.BoundType == sql.Above || expr.UpperBound.BoundType == sql.AboveNull
 				fields[i].Hi = prolly.Bound{
 					Binding:   true,
-					Inclusive: bound == sql.Closed || nv != v,
+					Inclusive: inclusive,
 				}
 			} else {
 				fields[i].Hi = prolly.Bound{}
@@ -1392,22 +1392,8 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 	return pranges, nil
 }
 
-func rangeCutIsBinding(c sql.MySQLRangeCut) bool {
-	switch c.(type) {
-	case sql.Below, sql.Above, sql.AboveNull:
-		return true
-	case sql.BelowNull, sql.AboveAll:
-		return false
-	default:
-		panic(fmt.Errorf("unknown range cut %v", c))
-	}
-}
-
-func getRangeCutValue(ctx context.Context, cut sql.MySQLRangeCut, typ sql.Type) (interface{}, error) {
-	if _, ok := cut.(sql.AboveNull); ok {
-		return nil, nil
-	}
-	ret, inRange, err := typ.Convert(ctx, sql.GetMySQLRangeCutKey(cut))
+func getBoundKey(ctx context.Context, bound *sql.Bound, typ sql.Type) (interface{}, error) {
+	ret, inRange, err := typ.Convert(ctx, bound.Key)
 	// TODO: seems like we should check for error before inRange, but certain tests fail
 	if inRange != sql.InRange {
 		return ret, nil
@@ -1436,41 +1422,42 @@ func DropTrailingAllColumnExprs(r sql.MySQLRange) sql.MySQLRange {
 //
 // This is for building physical scans against storage which does not store
 // NULL contiguous and ordered < non-NULL values.
-func SplitNullsFromRange(r sql.MySQLRange) ([]sql.MySQLRange, error) {
+func SplitNullsFromRange(ctx context.Context, r sql.MySQLRange) ([]sql.MySQLRange, error) {
 	res := []sql.MySQLRange{{}}
 
 	for _, rce := range r {
-		if _, ok := rce.LowerBound.(sql.BelowNull); ok {
-			// May include NULL. Split it and add each non-empty range.
-			withnull, nullok, err := rce.TryIntersect(sql.NullRangeColumnExpr(rce.Typ))
-			if err != nil {
-				return nil, err
-			}
-			fornull := res[:]
-			withoutnull, withoutnullok, err := rce.TryIntersect(sql.NotNullRangeColumnExpr(rce.Typ))
-			if err != nil {
-				return nil, err
-			}
-			forwithoutnull := res[:]
-			if withoutnullok && nullok {
-				n := len(res)
-				res = append(res, res...)
-				fornull = res[:n]
-				forwithoutnull = res[n:]
-			}
-			if nullok {
-				for j := range fornull {
-					fornull[j] = append(fornull[j], withnull)
-				}
-			}
-			if withoutnullok {
-				for j := range forwithoutnull {
-					forwithoutnull[j] = append(forwithoutnull[j], withoutnull)
-				}
-			}
-		} else {
+		if rce.LowerBound.BoundType != sql.BelowNull {
 			for j := range res {
 				res[j] = append(res[j], rce)
+			}
+			continue
+		}
+
+		// May include NULL. Split it and add each non-empty range.
+		withnull, nullok, err := rce.TryIntersect(ctx, sql.NullRangeColumnExpr(rce.Typ))
+		if err != nil {
+			return nil, err
+		}
+		fornull := res[:]
+		withoutnull, withoutnullok, err := rce.TryIntersect(ctx, sql.NotNullRangeColumnExpr(rce.Typ))
+		if err != nil {
+			return nil, err
+		}
+		forwithoutnull := res[:]
+		if withoutnullok && nullok {
+			n := len(res)
+			res = append(res, res...)
+			fornull = res[:n]
+			forwithoutnull = res[n:]
+		}
+		if nullok {
+			for j := range fornull {
+				fornull[j] = append(fornull[j], withnull)
+			}
+		}
+		if withoutnullok {
+			for j := range forwithoutnull {
+				forwithoutnull[j] = append(forwithoutnull[j], withoutnull)
 			}
 		}
 	}
@@ -1479,10 +1466,10 @@ func SplitNullsFromRange(r sql.MySQLRange) ([]sql.MySQLRange, error) {
 }
 
 // SplitNullsFromRanges splits nulls from ranges.
-func SplitNullsFromRanges(rs []sql.MySQLRange) ([]sql.MySQLRange, error) {
+func SplitNullsFromRanges(ctx context.Context, rs []sql.MySQLRange) ([]sql.MySQLRange, error) {
 	var ret []sql.MySQLRange
 	for _, r := range rs {
-		nr, err := SplitNullsFromRange(r)
+		nr, err := SplitNullsFromRange(ctx, r)
 		if err != nil {
 			return nil, err
 		}
@@ -1504,25 +1491,25 @@ func LookupToPointSelectStr(lookup sql.IndexLookup) ([]string, bool) {
 		if len(r) != 1 {
 			return nil, false
 		}
-		lb, ok := r[0].LowerBound.(sql.Below)
-		if !ok {
+		lb := r[0].LowerBound
+		if lb.BoundType != sql.Below {
 			return nil, false
 		}
 		if lb.Key == nil {
 			continue
 		}
-		lk, ok := lb.Key.(string)
-		if !ok {
+		lk, isStr := lb.Key.(string)
+		if !isStr {
 			return nil, false
 		}
-		ub, ok := r[0].UpperBound.(sql.Above)
-		if !ok {
+		ub := r[0].UpperBound
+		if ub.BoundType != sql.Above {
 			return nil, false
 		}
 		if ub.Key == nil {
 			continue
 		}
-		uk, ok := ub.Key.(string)
+		uk, isStr := ub.Key.(string)
 		if uk != lk {
 			return nil, false
 		}
