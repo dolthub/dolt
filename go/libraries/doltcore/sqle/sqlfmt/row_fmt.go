@@ -555,12 +555,21 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 		default:
 			return "", fmt.Errorf("unexpected type for binary value: %T (SQL type info: %v)", value, ti)
 		}
+	case querypb.Type_TEXT:
+		value, ok, err := sql.Unwrap[string](ctx, value)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", fmt.Errorf("expected string, got %T", value)
+		}
+		return quoteAndEscapeString(value), nil
 	case querypb.Type_JSON, querypb.Type_ENUM, querypb.Type_SET, querypb.Type_BLOB:
 		return quoteAndEscapeString(str), nil
 	case querypb.Type_VARCHAR:
 		s, ok := value.(string)
 		if !ok {
-			return "", fmt.Errorf("typeinfo.VarStringTypeIdentifier is not types.String")
+			return "", fmt.Errorf("expected string, got %T", value)
 		}
 		return quoteAndEscapeString(s), nil
 	case querypb.Type_GEOMETRY:
