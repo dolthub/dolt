@@ -235,7 +235,7 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 		err := ie.DeleteRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
 			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
-					"attempted to undo previous insertion but encountered the following error: %v",
+				"attempted to undo previous insertion but encountered the following error: %v",
 				ie.idx.Name(), err)
 			return
 		}
@@ -243,7 +243,7 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 		err := ie.InsertRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
 			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
-					"attempted to undo previous deletion but encountered the following error: %v",
+				"attempted to undo previous deletion but encountered the following error: %v",
 				ie.idx.Name(), err)
 			return
 		}
