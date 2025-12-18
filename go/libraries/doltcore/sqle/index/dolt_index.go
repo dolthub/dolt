@@ -1294,7 +1294,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				// comparison is required.
 				skipRangeMatchCallback = false
 			}
-			if expr.LowerBound.IsBinding() {
+			if expr.LowerBound.IsBinding() || expr.LowerBound.BoundType == sql.AboveNull {
 				// accumulate bound values in |tb|
 				v, err := getBoundKey(ctx, expr.LowerBound, rng[j].Typ)
 				if err != nil {
@@ -1323,7 +1323,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		}
 
 		for i, expr := range rng {
-			if expr.UpperBound.IsBinding() {
+			if expr.UpperBound.IsBinding() || expr.UpperBound.BoundType == sql.AboveNull {
 				// accumulate bound values in |tb|
 				v, err := getBoundKey(ctx, expr.UpperBound, rng[i].Typ)
 				if err != nil {
