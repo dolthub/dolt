@@ -115,13 +115,6 @@ type statusTableRow struct {
 	// of this table when you are using local vs remote sql connections.
 }
 
-// statusRowData contains the data for a single status row.
-type statusRowData struct {
-	tableName string
-	status    string
-	isStaged  byte
-}
-
 // containsTableName checks if a table name is in the list of table names.
 func containsTableName(name string, names []doltdb.TableName) bool {
 	for _, s := range names {
@@ -139,7 +132,7 @@ func getStatusRowsData(
 	ctx *sql.Context,
 	rp env.RootsProvider[*sql.Context],
 	ws *doltdb.WorkingSet,
-) ([]statusRowData, []diff.TableDelta, error) {
+) ([]statusTableRow, []diff.TableDelta, error) {
 	if rp == nil {
 		return nil, nil, nil
 	}
@@ -173,7 +166,7 @@ func getStatusRowsData(
 		return nil, nil, err
 	}
 
-	rows := make([]statusRowData, 0, len(stagedTables)+len(unstagedTables)+len(stagedSchemas)+len(unstagedSchemas))
+	rows := make([]statusTableRow, 0, len(stagedTables)+len(unstagedTables)+len(stagedSchemas)+len(unstagedSchemas))
 
 	cvTables, err := doltdb.TablesWithConstraintViolations(ctx, roots.Working)
 	if err != nil {
@@ -181,7 +174,7 @@ func getStatusRowsData(
 	}
 
 	for _, tbl := range cvTables {
-		rows = append(rows, statusRowData{
+		rows = append(rows, statusTableRow{
 			tableName: tbl.String(),
 			status:    "constraint violation",
 		})
@@ -190,15 +183,15 @@ func getStatusRowsData(
 	if ws.MergeActive() {
 		ms := ws.MergeState()
 		for _, tbl := range ms.TablesWithSchemaConflicts() {
-			rows = append(rows, statusRowData{
+			rows = append(rows, statusTableRow{
 				tableName: tbl.String(),
 				isStaged:  byte(0),
-				status:    mergedStatus,
+				status:    "schema conflict",
 			})
 		}
 
 		for _, tbl := range ms.MergedTables() {
-			rows = append(rows, statusRowData{
+			rows = append(rows, statusTableRow{
 				tableName: tbl.String(),
 				isStaged:  byte(1),
 				status:    mergedStatus,
@@ -211,7 +204,7 @@ func getStatusRowsData(
 		return nil, nil, err
 	}
 	for _, tbl := range cnfTables {
-		rows = append(rows, statusRowData{
+		rows = append(rows, statusTableRow{
 			tableName: tbl.String(),
 			status:    mergeConflictStatus,
 		})
@@ -225,7 +218,7 @@ func getStatusRowsData(
 		if containsTableName(tblName, cvTables) {
 			continue
 		}
-		rows = append(rows, statusRowData{
+		rows = append(rows, statusTableRow{
 			tableName: tblName,
 			isStaged:  byte(1),
 			status:    statusString(td),
@@ -240,7 +233,7 @@ func getStatusRowsData(
 		if containsTableName(tblName, cvTables) {
 			continue
 		}
-		rows = append(rows, statusRowData{
+		rows = append(rows, statusTableRow{
 			tableName: tblName,
 			isStaged:  byte(0),
 			status:    statusString(td),
@@ -248,7 +241,7 @@ func getStatusRowsData(
 	}
 
 	for _, sd := range stagedSchemas {
-		rows = append(rows, statusRowData{
+		rows = append(rows, statusTableRow{
 			tableName: sd.CurName(),
 			isStaged:  byte(1),
 			status:    schemaStatusString(sd),
@@ -256,7 +249,7 @@ func getStatusRowsData(
 	}
 
 	for _, sd := range unstagedSchemas {
-		rows = append(rows, statusRowData{
+		rows = append(rows, statusTableRow{
 			tableName: sd.CurName(),
 			isStaged:  byte(0),
 			status:    schemaStatusString(sd),
@@ -272,20 +265,9 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return &StatusItr{rows: nil}, nil
 	}
 
-	// Get status data using the shared function
-	statusRows, _, err := getStatusRowsData(ctx, st.rootsProvider, st.workingSet)
+	rows, _, err := getStatusRowsData(ctx, st.rootsProvider, st.workingSet)
 	if err != nil {
 		return nil, err
-	}
-
-	// Convert statusRowData to statusTableRow
-	rows := make([]statusTableRow, len(statusRows))
-	for i, row := range statusRows {
-		rows[i] = statusTableRow{
-			tableName: row.tableName,
-			isStaged:  row.isStaged,
-			status:    row.status,
-		}
 	}
 
 	return &StatusItr{rows: rows}, nil

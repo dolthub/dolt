@@ -8670,6 +8670,7 @@ var DoltSystemVariables = []queries.ScriptTest{
 					{"dolt_remotes"},
 					{"dolt_stashes"},
 					{"dolt_status"},
+					{"dolt_status_ignored"},
 					{"dolt_workspace_test"},
 					{"test"},
 				},
