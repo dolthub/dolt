@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/adapters"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
@@ -82,8 +83,19 @@ func (st StatusIgnoredTable) PartitionRows(context *sql.Context, _ sql.Partition
 	return newStatusIgnoredItr(context, &st)
 }
 
-// NewStatusIgnoredTable creates a new StatusIgnoredTable.
-func NewStatusIgnoredTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
+// NewStatusIgnoredTable creates a new StatusIgnoredTable using either an integrators' [adapters.TableAdapter] or the
+// NewStatusIgnoredTableWithNoAdapter constructor (the default implementation provided by Dolt).
+func NewStatusIgnoredTable(ctx *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
+	adapter, ok := adapters.DoltTableAdapterRegistry.GetAdapter(tableName)
+	if ok {
+		return adapter.NewTable(ctx, tableName, ddb, ws, rp)
+	}
+
+	return NewStatusIgnoredTableWithNoAdapter(ctx, tableName, ddb, ws, rp)
+}
+
+// NewStatusIgnoredTableWithNoAdapter returns a new StatusIgnoredTable.
+func NewStatusIgnoredTableWithNoAdapter(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
 	return &StatusIgnoredTable{
 		tableName:     tableName,
 		ddb:           ddb,
@@ -131,7 +143,11 @@ func newStatusIgnoredItr(ctx *sql.Context, st *StatusIgnoredTable) (*StatusIgnor
 		ignored := byte(0)
 		// Only check ignore patterns for unstaged tables
 		if row.isStaged == byte(0) && unstagedTableNames[row.tableName] {
-			ignored = checkIfIgnored(row.tableName, ignorePatterns)
+			var err error
+			ignored, err = checkIfIgnored(row.tableName, ignorePatterns)
+			if err != nil {
+				return nil, err
+			}
 		}
 		rows[i] = statusIgnoredTableRow{
 			tableName: row.tableName,
@@ -168,16 +184,16 @@ func buildUnstagedTableNameSet(unstagedTables []diff.TableDelta) map[string]bool
 }
 
 // checkIfIgnored returns 1 if the table name matches an ignore pattern, 0 otherwise.
-func checkIfIgnored(tableName string, ignorePatterns doltdb.IgnorePatterns) byte {
+func checkIfIgnored(tableName string, ignorePatterns doltdb.IgnorePatterns) (byte, error) {
 	tblNameObj := doltdb.TableName{Name: tableName}
 	result, err := ignorePatterns.IsTableNameIgnored(tblNameObj)
 	if err != nil {
-		return byte(0)
+		return byte(0), err
 	}
 	if result == doltdb.Ignore {
-		return byte(1)
+		return byte(1), nil
 	}
-	return byte(0)
+	return byte(0), nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
