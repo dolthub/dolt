@@ -168,17 +168,13 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 	}
 	to := ranges[0][0]
 	from := ranges[0][1]
-	switch to.UpperBound.(type) {
-	case sql.Above, sql.Below:
-	default:
+	if !to.UpperBound.IsBinding() {
 		return nil, ErrInvalidCommitDiffTableArgs
 	}
-	switch from.UpperBound.(type) {
-	case sql.Above, sql.Below:
-	default:
+	if !from.UpperBound.IsBinding() {
 		return nil, ErrInvalidCommitDiffTableArgs
 	}
-	toCommit, _, err := to.Typ.Convert(ctx, sql.GetMySQLRangeCutKey(to.UpperBound))
+	toCommit, _, err := to.Typ.Convert(ctx, to.UpperBound.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +182,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 	if !ok {
 		return nil, fmt.Errorf("to_commit must be string, found %T", toCommit)
 	}
-	fromCommit, _, err := from.Typ.Convert(ctx, sql.GetMySQLRangeCutKey(from.UpperBound))
+	fromCommit, _, err := from.Typ.Convert(ctx, from.UpperBound.Key)
 	if err != nil {
 		return nil, err
 	}

@@ -561,7 +561,7 @@ func TestMergeableIndexes(t *testing.T) {
 			"v1 != 11 AND v1 <= 15",
 			[]*noms.ReadRange{
 				index.LessThanRange(idxv1.tuple(11)),
-				index.CustomRange(idxv1.tuple(11), idxv1.tuple(15), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(11), idxv1.tuple(15), sql.Above, sql.Above),
 			},
 			[]int64{0, 2, 3, 4, 5},
 		},
@@ -591,7 +591,7 @@ func TestMergeableIndexes(t *testing.T) {
 			[]*noms.ReadRange{
 				index.LessThanRange(idxv1.tuple(11)),
 				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
-				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Above, sql.Above),
 			},
 			[]int64{0, 2, 3, 4, 6, 7, 8, 9},
 		},
@@ -731,7 +731,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 > 11 AND v1 <= 15",
 			[]*noms.ReadRange{
-				index.CustomRange(idxv1.tuple(11), idxv1.tuple(15), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(11), idxv1.tuple(15), sql.Above, sql.Above),
 			},
 			[]int64{2, 3, 4, 5},
 		},
@@ -759,14 +759,14 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 > 11 AND v1 > 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Above, sql.Above),
 			},
 			[]int64{6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Above, sql.Above),
 			},
 			[]int64{6, 7, 8, 9},
 		},
@@ -830,7 +830,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 >= 11 AND v1 < 15",
 			[]*noms.ReadRange{
-				index.CustomRange(idxv1.tuple(11), idxv1.tuple(15), sql.Closed, sql.Open),
+				index.CustomRange(idxv1.tuple(11), idxv1.tuple(15), sql.Below, sql.Below),
 			},
 			[]int64{1, 2, 3, 4},
 		},
@@ -858,7 +858,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 >= 11 AND v1 >= 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Closed, sql.Open),
+				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Below, sql.Below),
 			},
 			[]int64{5, 6, 7, 8},
 		},
@@ -1136,8 +1136,8 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 BETWEEN 11 AND 15 AND v1 != 13",
 			[]*noms.ReadRange{
-				index.CustomRange(idxv1.tuple(11), idxv1.tuple(13), sql.Closed, sql.Open),
-				index.CustomRange(idxv1.tuple(13), idxv1.tuple(15), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(11), idxv1.tuple(13), sql.Below, sql.Below),
+				index.CustomRange(idxv1.tuple(13), idxv1.tuple(15), sql.Above, sql.Above),
 			},
 			[]int64{1, 2, 4, 5},
 		},
@@ -1199,7 +1199,7 @@ func TestMergeableIndexes(t *testing.T) {
 			[]*noms.ReadRange{
 				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
 				index.ClosedRange(idxv1.tuple(12), idxv1.tuple(12)),
-				index.CustomRange(idxv1.tuple(13), idxv1.tuple(15), sql.Closed, sql.Open),
+				index.CustomRange(idxv1.tuple(13), idxv1.tuple(15), sql.Below, sql.Below),
 			},
 			[]int64{1, 2, 3, 4},
 		},

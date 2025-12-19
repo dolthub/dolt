@@ -1461,8 +1461,9 @@ func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
 }
 
 func TestSplitNullsFromRange(t *testing.T) {
+	ctx := sql.NewEmptyContext()
 	t.Run("EmptyRange", func(t *testing.T) {
-		r, err := index.SplitNullsFromRange(sql.MySQLRange{})
+		r, err := index.SplitNullsFromRange(ctx, sql.MySQLRange{})
 		assert.NoError(t, err)
 		assert.NotNil(t, r)
 		assert.Len(t, r, 1)
@@ -1471,7 +1472,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("ThreeColumnNoNullsRange", func(t *testing.T) {
 		r := sql.MySQLRange{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NotNullRangeColumnExpr(types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(ctx, r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 1)
@@ -1481,7 +1482,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("LastColumnOnlyNull", func(t *testing.T) {
 		r := sql.MySQLRange{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NullRangeColumnExpr(types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(ctx, r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 1)
@@ -1491,7 +1492,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("LastColumnAll", func(t *testing.T) {
 		r := sql.MySQLRange{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.AllRangeColumnExpr(types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(ctx, r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 2)
@@ -1505,7 +1506,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("FirstColumnAll", func(t *testing.T) {
 		r := sql.MySQLRange{sql.AllRangeColumnExpr(types.Int8), sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(ctx, r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 2)
@@ -1519,7 +1520,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("AllColumnAll", func(t *testing.T) {
 		r := sql.MySQLRange{sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(ctx, r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 8)

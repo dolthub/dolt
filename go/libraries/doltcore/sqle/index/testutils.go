@@ -23,20 +23,20 @@ import (
 )
 
 func ClosedRange(tpl1, tpl2 types.Tuple) *noms.ReadRange {
-	return CustomRange(tpl1, tpl2, sql.Closed, sql.Closed)
+	return CustomRange(tpl1, tpl2, sql.Below, sql.Above)
 }
 
 func OpenRange(tpl1, tpl2 types.Tuple) *noms.ReadRange {
-	return CustomRange(tpl1, tpl2, sql.Open, sql.Open)
+	return CustomRange(tpl1, tpl2, sql.Above, sql.Below)
 }
 
-func CustomRange(tpl1, tpl2 types.Tuple, bt1, bt2 sql.MySQLRangeBoundType) *noms.ReadRange {
+func CustomRange(tpl1, tpl2 types.Tuple, bt1, bt2 sql.BoundType) *noms.ReadRange {
 	var nrc nomsRangeCheck
 	_ = tpl1.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
 		if tupleIndex%2 == 0 {
 			return false, nil
 		}
-		if bt1 == sql.Closed {
+		if bt1 == sql.Below {
 			nrc = append(nrc, columnBounds{
 				boundsCase: boundsCase_greaterEquals_infinity,
 				lowerbound: tupleVal,
@@ -54,7 +54,7 @@ func CustomRange(tpl1, tpl2 types.Tuple, bt1, bt2 sql.MySQLRangeBoundType) *noms
 			return false, nil
 		}
 		idx := (tupleIndex - 1) / 2
-		if bt2 == sql.Closed {
+		if bt2 == sql.Above {
 			// Bounds cases are enum aliases on bytes, and they're arranged such that we can increment the case
 			// that was previously set when evaluating the lowerbound to get the proper overall case.
 			nrc[idx].boundsCase += 1

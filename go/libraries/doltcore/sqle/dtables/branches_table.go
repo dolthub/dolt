@@ -72,11 +72,11 @@ func (bt *BranchesTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLook
 			lowerBoundInclusive := false
 			noLowerBoundResults := false
 			var lowerBoundValue any
-			switch x := rangeExpr.LowerBound.(type) {
+			switch rangeExpr.LowerBound.BoundType {
 			case sql.Above:
-				lowerBoundValue = x.Key
+				lowerBoundValue = rangeExpr.LowerBound.Key
 			case sql.Below:
-				lowerBoundValue = x.Key
+				lowerBoundValue = rangeExpr.LowerBound.Key
 				lowerBoundInclusive = true
 			case sql.BelowNull, sql.AboveNull:
 				// BelowNull and AboveNull for a lower bound means no lower bound
@@ -92,12 +92,12 @@ func (bt *BranchesTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLook
 			upperBoundInclusive := false
 			noUpperBoundResults := false
 			var upperBoundValue any
-			switch x := rangeExpr.UpperBound.(type) {
+			switch rangeExpr.UpperBound.BoundType {
 			case sql.Above:
-				upperBoundValue = x.Key
+				upperBoundValue = rangeExpr.UpperBound.Key
 				upperBoundInclusive = true
 			case sql.Below:
-				upperBoundValue = x.Key
+				upperBoundValue = rangeExpr.UpperBound.Key
 			case sql.AboveAll:
 				noUpperBoundResults = true
 				upperBoundValue = ""
