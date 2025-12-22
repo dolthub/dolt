@@ -16,6 +16,7 @@ package index
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -74,6 +75,9 @@ func NewKeyedProllyRowIter(
 	ns tree.NodeStore,
 ) sql.RowIter {
 	keyProj, valProj, ordProj := projectionMappings(sch, projections)
+
+	// TODO: create worker pool here?
+	// TODO: ideally we'd create a global one for all iters right?
 
 	return prollyRowIter{
 		iter:    iter,
@@ -173,6 +177,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
+	// TODO: Send GetField requests as a job to the worker pool, wait for all results
 	row := make(sql.Row, it.rowLen)
 	for i, idx := range it.keyProj {
 		outputIdx := it.ordProj[i]
@@ -198,22 +203,36 @@ func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 		return nil, err
 	}
 
+	// TODO: use a worker pool? limit number of go routines?
+	eg, subCtx := errgroup.WithContext(ctx)
 	row := make(sql.ValueRow, it.rowLen)
 	for i, idx := range it.keyProj {
-		outIdx := it.ordProj[i]
-		row[outIdx], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
-		if err != nil {
-			return nil, err
-		}
+		eg.Go(func() (err error) {
+			outIdx := it.ordProj[i]
+			row[outIdx], err = tree.GetFieldValue(subCtx, it.keyDesc, idx, key, it.ns)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 	}
 
 	for i, idx := range it.valProj {
-		outIdx := it.ordProj[len(it.keyProj)+i]
-		row[outIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
-		if err != nil {
-			return nil, err
-		}
+		eg.Go(func() (err error) {
+			outIdx := it.ordProj[len(it.keyProj)+i]
+			row[outIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 	}
+
+	err = eg.Wait()
+	if err != nil {
+		return nil, err
+	}
+
 	return row, nil
 }
 
