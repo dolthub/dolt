@@ -206,27 +206,27 @@ func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 	// TODO: use a worker pool? limit number of go routines?
 	eg, subCtx := errgroup.WithContext(ctx)
 	row := make(sql.ValueRow, it.rowLen)
-	for i, idx := range it.keyProj {
-		eg.Go(func() (err error) {
+	eg.Go(func() (err error) {
+		for i, idx := range it.keyProj {
 			outIdx := it.ordProj[i]
 			row[outIdx], err = tree.GetFieldValue(subCtx, it.keyDesc, idx, key, it.ns)
 			if err != nil {
 				return err
 			}
-			return nil
-		})
-	}
+		}
+		return nil
+	})
 
-	for i, idx := range it.valProj {
-		eg.Go(func() (err error) {
+	eg.Go(func() (err error) {
+		for i, idx := range it.valProj {
 			outIdx := it.ordProj[len(it.keyProj)+i]
 			row[outIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
 			if err != nil {
 				return err
 			}
-			return nil
-		})
-	}
+		}
+		return nil
+	})
 
 	err = eg.Wait()
 	if err != nil {
