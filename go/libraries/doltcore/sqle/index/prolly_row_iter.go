@@ -15,13 +15,11 @@
 package index
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type prollyRowIter struct {
@@ -204,7 +202,7 @@ func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 	}
 
 	// TODO: use a worker pool? limit number of go routines?
-	eg, subCtx := errgroup.WithContext(ctx)
+	eg, subCtx := ctx.NewErrgroup()
 	row := make(sql.ValueRow, it.rowLen)
 	eg.Go(func() (err error) {
 		for i, idx := range it.keyProj {
