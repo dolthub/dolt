@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"io"
 	"math"
 	"time"
@@ -175,20 +176,84 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 
 // GetFieldValue reads the value from the ith field of the Tuple as a sql.Value
 func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (v sql.Value, err error) {
-	enc := td.Types[i].Enc
-	v.Typ = val.EncToType[enc]
-	switch enc {
-	case val.Int8Enc, val.Int16Enc, val.Int32Enc, val.Int64Enc,
-		val.Uint8Enc, val.Uint16Enc, val.Uint32Enc, val.Uint64Enc,
-		val.Float32Enc, val.Float64Enc, val.DecimalEnc, val.Bit64Enc,
-		val.DateEnc, val.DatetimeEnc, val.TimeEnc,
-		val.EnumEnc, val.SetEnc,
-		val.JSONEnc, val.GeometryEnc,
-		val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
+	switch td.Types[i].Enc {
+	case val.Int8Enc:
+		v.Typ = querypb.Type_INT8
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Int16Enc:
+		v.Typ = querypb.Type_INT16
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Int32Enc:
+		v.Typ = querypb.Type_INT32
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Int64Enc:
+		v.Typ = querypb.Type_INT64
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Uint8Enc:
+		v.Typ = querypb.Type_UINT8
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Uint16Enc:
+		v.Typ = querypb.Type_UINT16
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Uint32Enc:
+		v.Typ = querypb.Type_UINT32
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Uint64Enc:
+		v.Typ = querypb.Type_UINT64
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Float32Enc:
+		v.Typ = querypb.Type_FLOAT32
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Float64Enc:
+		v.Typ = querypb.Type_FLOAT64
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.DecimalEnc:
+		v.Typ = querypb.Type_DECIMAL
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Bit64Enc:
+		v.Typ = querypb.Type_INT64
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.DateEnc:
+		v.Typ = querypb.Type_DATE
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.DatetimeEnc:
+		v.Typ = querypb.Type_DATETIME
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.TimeEnc:
+		v.Typ = querypb.Type_TIME
 		v.Val = td.GetField(i, tup)
 		return v, nil
 
 	case val.YearEnc:
+		v.Typ = querypb.Type_YEAR
 		year, ok := td.GetYear(i, tup)
 		if !ok {
 			return v, nil
@@ -197,7 +262,33 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		binary.LittleEndian.PutUint16(v.Val, uint16(year))
 		return v, nil
 
+	case val.EnumEnc:
+		v.Typ = querypb.Type_ENUM
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.SetEnc:
+		v.Typ = querypb.Type_SET
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.JSONEnc:
+		v.Typ = querypb.Type_JSON
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.GeometryEnc:
+		v.Typ = querypb.Type_GEOMETRY
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
+		v.Typ = querypb.Type_BLOB
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
 	case val.StringEnc, val.ByteStringEnc:
+		v.Typ = querypb.Type_TEXT
 		v.Val = td.GetField(i, tup)
 		if len(v.Val) == 0 {
 			return v, nil
@@ -206,16 +297,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		return v, nil
 
 	case val.GeomAddrEnc:
-		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
-		var ok bool
-		v.Val, ok = td.GetGeometry(i, tup)
-		if ok {
-			_, err = deserializeGeometry(v.Val) // TODO: on successful deserialize, this work is wasted
-			if err == nil {
-				return v, nil
-			}
-		}
-		// TODO: have GeometryAddr implement TextStorage
+		v.Typ = querypb.Type_GEOMETRY
 		h, ok := td.GetGeometryAddr(i, tup)
 		if ok {
 			v.Val, err = ns.ReadBytes(ctx, h)
@@ -226,6 +308,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		return v, nil
 
 	case val.StringAddrEnc, val.BytesAddrEnc:
+		v.Typ = querypb.Type_BLOB
 		h, ok := td.GetAddr(i, tup)
 		if !ok {
 			return v, nil
@@ -234,6 +317,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		return v, nil
 
 	case val.JSONAddrEnc:
+		v.Typ = querypb.Type_BLOB
 		h, ok := td.GetAddr(i, tup)
 		if !ok {
 			return v, nil
@@ -245,6 +329,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		return v, nil
 
 	case val.BytesAdaptiveEnc, val.StringAdaptiveEnc:
+		v.Typ = querypb.Type_BLOB
 		b := td.GetField(i, tup)
 		// null value
 		if len(b) == 0 {
