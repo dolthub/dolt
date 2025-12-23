@@ -15,8 +15,6 @@ RUN rm -rf /usr/share/zoneinfo
 
 COPY --from=dolt-build /tmp/bin/dolt /usr/local/bin/
 RUN /usr/local/bin/dolt version
-RUN dolt config --global --add user.email "bats@email.fake" && \
-    dolt config --global --add user.name "Bats Tests"
 
 VOLUME /var/lib/dolt
 EXPOSE 3306 33060 7007
