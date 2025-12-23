@@ -39,7 +39,7 @@ dolt config --global --add user.name 'Bats Tests'
 dolt init"
 }
 
-#bats test_tags=no_lambda
+# bats test_tags=no_lambda
 @test "tzdata: CONVERT_TZ works without timezone database" {
     # See https://pkg.go.dev/time#LoadLocation for IANA database locations checked. Here want to see Dolt always embed
     # the IANA database for environments without it (otherwise NULL is returned).
