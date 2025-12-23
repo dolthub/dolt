@@ -40,7 +40,9 @@ dolt init"
 }
 
 #bats test_tags=no_lambda
-@test "tzdata: CONVERT_TZ works without timezone data directories" {
+@test "tzdata: CONVERT_TZ works without timezone database" {
+    # See https://pkg.go.dev/time#LoadLocation for where IANA database locations checked. Here we assume Dolt always
+    # embeds the timezone database for environments without it.
     run dolt sql -q "SELECT CONVERT_TZ('2023-01-01 12:00:00','UTC','America/New_York') AS iana_ok;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "iana_ok" ]] || false
