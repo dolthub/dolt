@@ -21,13 +21,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"io"
 	"math"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/mohae/uvarint"
 	"github.com/shopspring/decimal"
 
