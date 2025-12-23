@@ -1,0 +1,24 @@
+#syntax=docker/dockerfile:1.3
+FROM golang:1.25-bookworm AS dolt-build
+RUN apt-get update -y && apt-get install -y libicu-dev
+
+COPY dolt/go/go.mod /tmp/dolt/go/
+WORKDIR /tmp/dolt/go/
+RUN go mod download
+
+COPY dolt/go/ .
+RUN go build -o /tmp/bin/dolt ./cmd/dolt
+
+FROM debian:bookworm-slim
+RUN apt-get update -y && apt-get install -y libicu-dev && rm -rf /var/lib/apt/lists/*;
+RUN rm -rf /usr/share/zoneinfo
+
+COPY --from=dolt-build /tmp/bin/dolt /usr/local/bin/
+RUN /usr/local/bin/dolt version
+RUN dolt config --global --add user.email "bats@email.fake" && \
+    dolt config --global --add user.name "Bats Tests"
+
+VOLUME /var/lib/dolt
+EXPOSE 3306 33060 7007
+WORKDIR /var/lib/dolt
+
