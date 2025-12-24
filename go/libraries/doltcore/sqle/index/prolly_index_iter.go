@@ -38,6 +38,7 @@ type prollyIndexIter struct {
 	// into primary index keys
 	pkMap val.OrdinalMapping
 	pkBld *val.TupleBuilder
+	pkBuf fakePool
 
 	// keyMap and valMap transform tuples from
 	// primary row storage into sql.Row's
@@ -49,6 +50,20 @@ type prollyIndexIter struct {
 }
 
 var _ sql.RowIter = prollyIndexIter{}
+
+type fakePool []byte
+
+func NewFakePool() fakePool {
+	return make(fakePool, val.MaxTupleDataSize)
+}
+
+func (p fakePool) Get(size uint64) []byte {
+	return p[:size]
+}
+
+func (p fakePool) GetSlices(size uint64) [][]byte {
+	panic("not used")
+}
 
 // NewProllyIndexIter returns a new prollyIndexIter.
 func newProllyIndexIter(

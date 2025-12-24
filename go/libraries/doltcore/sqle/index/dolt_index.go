@@ -1149,6 +1149,7 @@ func (di *doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tu
 }
 
 var sharePool = pool.NewBuffPool()
+var realPool = pool.NewRealBuffPool()
 
 func maybeGetKeyBuilder(idx durable.Index) *val.TupleBuilder {
 	if types.IsFormat_DOLT(idx.Format()) {
