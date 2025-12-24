@@ -84,20 +84,6 @@ func (ti *extendedType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" is not valid in the old format`, ti.String())
 }
 
-// GetTypeIdentifier implements the TypeInfo interface.
-func (ti *extendedType) GetTypeIdentifier() Identifier {
-	return ExtendedTypeIdentifier
-}
-
-// GetTypeParams implements the TypeInfo interface.
-func (ti *extendedType) GetTypeParams() map[string]string {
-	serializedString, err := gmstypes.SerializeTypeToString(ti.sqlExtendedType)
-	if err != nil {
-		panic(err)
-	}
-	return map[string]string{extendedTypeParams_string_encoded: serializedString}
-}
-
 // IsValid implements the TypeInfo interface.
 func (ti *extendedType) IsValid(v types.Value) bool {
 	return true

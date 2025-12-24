@@ -107,6 +107,30 @@ func mergeProllyTable(
 	return mergeTbl, stats, nil
 }
 
+func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *doltdb.Table) (*doltdb.Table, error) {
+	// only need to check one table, no PK changes yet
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !schema.HasAutoIncrement(sch) {
+		return resultTbl, nil
+	}
+
+	autoVal, err := tbl.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mergeAutoVal, err := otherTbl.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if autoVal < mergeAutoVal {
+		autoVal = mergeAutoVal
+	}
+	return resultTbl.SetAutoIncrementValue(ctx, autoVal)
+}
+
 func computeProllyTreePatches(
 	ctx *sql.Context,
 	tm *TableMerger,

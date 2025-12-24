@@ -27,7 +27,25 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
+
+// NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
+// locations that do not have a root at the time of this call. However, a root must be set through SetWorkingRoot before any
+// table editors are returned.
+func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) dsess.WriteSession {
+	if types.IsFormat_DOLT(nbf) {
+		return &prollyWriteSession{
+			workingSet:    ws,
+			tables:        make(map[doltdb.TableName]*prollyTableWriter),
+			aiTracker:     aiTracker,
+			mut:           &sync.RWMutex{},
+			targetStaging: opts.TargetStaging,
+		}
+	}
+
+	panic("only __DOLT__ format is supported")
+}
 
 // prollyWriteSession handles all edit operations on a table that may also update other tables.
 // Serves as coordination for SessionedTableEditors.

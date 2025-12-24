@@ -54,16 +54,6 @@ func (ti *unknownType) FormatValue(types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"Unknown" cannot convert any Noms value to a string`)
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *unknownType) GetTypeIdentifier() Identifier {
-	return UnknownTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *unknownType) GetTypeParams() map[string]string {
-	panic("cannot persist unknown type")
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *unknownType) IsValid(types.Value) bool {
 	return false
