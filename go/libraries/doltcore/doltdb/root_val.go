@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -241,7 +242,7 @@ func LoadRootValueFromRootIshAddr(ctx context.Context, vrw types.ValueReadWriter
 }
 
 func decodeRootNomsValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, val types.Value) (RootValue, error) {
-	if val == nil {
+	if types.IsNull(val) {
 		return nil, ErrNoRootValAtHash
 	}
 
@@ -520,9 +521,11 @@ func (root *rootValue) GetTableHash(ctx context.Context, tName TableName) (hash.
 
 func (root *rootValue) SetTableHash(ctx context.Context, tName TableName, h hash.Hash) (RootValue, error) {
 	val, err := root.vrw.ReadValue(ctx, h)
-
 	if err != nil {
 		return nil, err
+	}
+	if types.IsNull(val) {
+		return nil, blobstore.NewMissingChunkError(h)
 	}
 
 	ref, err := types.NewRef(val, root.vrw.Format())

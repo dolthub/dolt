@@ -236,13 +236,7 @@ func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value
 		}
 	case SerialMessage:
 		if serial.GetFileID(v) == serial.CommitFileID && fp.Name == "value" {
-			var msg serial.Commit
-			err := serial.InitCommitRoot(&msg, v, serial.MessagePrefixSz)
-			if err != nil {
-				return nil, err
-			}
-			addr := hash.New(msg.RootBytes())
-			return vr.ReadValue(ctx, addr)
+			panic("Is code executed ever in testing. NM4.")
 		}
 	case *Type:
 		if desc, ok := v.Desc.(StructDesc); ok {
