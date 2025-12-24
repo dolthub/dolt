@@ -205,7 +205,6 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 				break
 			}
 			for h := range hs {
-				h := h
 				addrs = append(addrs, h[:])
 			}
 		case thisResCh <- thisRes:
