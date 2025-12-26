@@ -2,18 +2,14 @@
 
 load "$BATS_TEST_DIRNAME"/helper/common.bash
 
-TEST_PREFIX="dolt-tzdata"
-TEST_IMAGE="$TEST_PREFIX:bookworm-slim"
+TEST_NAME="dolt-tzdata"
+TEST_IMAGE="$TEST_NAME:bookworm-slim"
 
 setup_file() {
     WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
     export WORKSPACE_ROOT
 
     docker build -f "$BATS_TEST_DIRNAME/tzdataDockerfile" -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
-}
-
-teardown_file() {
-    docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
 }
 
 # The 'c' prefixes avoid conflicts with binaries on the local bats runner machine.
@@ -30,7 +26,7 @@ dolt1791() {
 }
 
 setup() {
-    export TEST_CONTAINER="${TEST_PREFIX}-$$"
+    export TEST_CONTAINER="${TEST_NAME}-$$"
     export DOLT_REPOSITORY="/var/lib/dolt/tzdata"
 
     docker run -d --name "$TEST_CONTAINER" "$TEST_IMAGE" sh -lc 'sleep infinity' >/dev/null
@@ -42,6 +38,10 @@ cd $DOLT_REPOSITORY
 dolt config --global --add user.email 'bats@email.fake'
 dolt config --global --add user.name 'Bats Tests'
 dolt init"
+}
+
+teardown() {
+    docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1
 }
 
 # bats test_tags=no_lambda

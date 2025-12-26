@@ -30,11 +30,6 @@ import (
 	"strings"
 	"time"
 
-	// For environments that don't provide IANA time zone database for [time.LoadLocation] in go-mysql-server. This can
-	// be overwritten with the ZONEINFO environment variable in the future for explicit changes in timezone tables.
-	// See https://github.com/dolthub/dolt/issues/10238
-	_ "time/tzdata"
-
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
 	"github.com/tidwall/gjson"
