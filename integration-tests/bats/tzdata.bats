@@ -16,6 +16,7 @@ teardown_file() {
     docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
 }
 
+# The 'c' prefixes avoid conflicts with binaries on the local bats runner machine.
 csh() {
     docker exec -i "$TEST_CONTAINER" sh -lc "$@"
 }
@@ -24,9 +25,13 @@ cdolt() {
     docker exec -i -w "$DOLT_REPOSITORY" "$TEST_CONTAINER" dolt "$@"
 }
 
+dolt1791() {
+    docker exec -i -w "$DOLT_REPOSITORY" "$TEST_CONTAINER" dolt1791 "$@"
+}
+
 setup() {
     export TEST_CONTAINER="${TEST_PREFIX}-$$"
-    export DOLT_REPOSITORY="/var/lib/dolt/tzdata-repo"
+    export DOLT_REPOSITORY="/var/lib/dolt/tzdata"
 
     docker run -d --name "$TEST_CONTAINER" "$TEST_IMAGE" sh -lc 'sleep infinity' >/dev/null
 
@@ -40,7 +45,15 @@ dolt init"
 }
 
 # bats test_tags=no_lambda
-@test "tzdata: CONVERT_TZ works without timezone database" {
+@test "tzdata: the docker environment has no time zone database" {
+    run dolt1791 sql -q "SELECT CONVERT_TZ('2023-01-01 12:00:00','UTC','America/New_York') AS iana_ok;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "iana_ok" ]] || false
+    [[ "$output" =~ "NULL" ]] || false
+}
+
+# bats test_tags=no_lambda
+@test "tzdata: source build works without time zone database" {
     # See https://pkg.go.dev/time#LoadLocation for IANA database locations checked. Here want to see Dolt always embed
     # the IANA database for environments without it (otherwise NULL is returned).
     run cdolt sql -q "SELECT CONVERT_TZ('2023-01-01 12:00:00','UTC','America/New_York') AS iana_ok;"

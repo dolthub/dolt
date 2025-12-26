@@ -2,6 +2,9 @@
 FROM golang:1.25-bookworm AS dolt-build
 RUN apt-get update -y && apt-get install -y libicu-dev
 
+RUN curl -L "https://github.com/dolthub/dolt/releases/download/v1.79.1/install.sh" | bash
+RUN mkdir /tmp/bin/ && mv /usr/local/bin/dolt* /tmp/bin/dolt1791
+
 COPY dolt/go/go.mod /tmp/dolt/go/
 WORKDIR /tmp/dolt/go/
 RUN go mod download
@@ -13,6 +16,7 @@ FROM debian:bookworm-slim
 RUN apt-get update -y && apt-get install -y libicu-dev && rm -rf /var/lib/apt/lists/*;
 RUN rm -rf /usr/share/zoneinfo
 
+COPY --from=dolt-build /tmp/bin/dolt1791 /usr/local/bin/dolt1791
 COPY --from=dolt-build /tmp/bin/dolt /usr/local/bin/
 RUN /usr/local/bin/dolt version
 
