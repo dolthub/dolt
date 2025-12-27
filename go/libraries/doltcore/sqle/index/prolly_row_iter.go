@@ -16,6 +16,7 @@ package index
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -198,22 +199,43 @@ func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 		return nil, err
 	}
 
+	wg := sync.WaitGroup{}
 	row := make(sql.ValueRow, it.rowLen)
 	for i, idx := range it.keyProj {
-		outIdx := it.ordProj[i]
-		row[outIdx], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
-		if err != nil {
-			return nil, err
-		}
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			outIdx := it.ordProj[i]
+			row[outIdx], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
+			if err != nil {
+				panic(err)
+			}
+		}()
+		//outIdx := it.ordProj[i]
+		//row[outIdx], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
+		//if err != nil {
+		//	return nil, err
+		//}
 	}
 
 	for i, idx := range it.valProj {
-		outIdx := it.ordProj[len(it.keyProj)+i]
-		row[outIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
-		if err != nil {
-			return nil, err
-		}
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			outIdx := it.ordProj[len(it.keyProj)+i]
+			row[outIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+			if err != nil {
+				panic(err)
+			}
+		}()
+		//outIdx := it.ordProj[len(it.keyProj)+i]
+		//row[outIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+		//if err != nil {
+		//	return nil, err
+		//}
 	}
+
+	wg.Wait()
 	return row, nil
 }
 
