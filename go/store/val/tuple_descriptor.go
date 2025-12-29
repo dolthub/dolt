@@ -121,22 +121,16 @@ func IterAdaptiveFields(td *TupleDesc, cb func(int, Type)) {
 	}
 }
 
-type FixedAccess [][2]ByteSize
+type FixedAccess []ByteSize
 
 func makeFixedAccess(types []Type) (acc FixedAccess) {
 	if disableFixedAccess {
 		return nil
 	}
 
-	acc = make(FixedAccess, 0, len(types))
-
-	// TODO: extracts a prefix for quick comparison
-	// TODO: we should be able to do it in one large chunk?
-	//  the problem is knowing which section is larger/smaller...
-	//  start of one is always end of the next
-	//  if we just compare bytes we can quickly deterine if two descs ar exactly the same, but how can we dectect where the difference is and how to handle it??
 	off := ByteSize(0)
-	for _, typ := range types {
+	acc = make(FixedAccess, 0, len(types))
+	for i, typ := range types {
 		if typ.Nullable {
 			break
 		}
@@ -144,9 +138,13 @@ func makeFixedAccess(types []Type) (acc FixedAccess) {
 		if !ok {
 			break
 		}
-		acc = append(acc, [2]ByteSize{off, off + sz})
+		if i == 0 {
+			acc = append(acc, off)
+		}
 		off += sz
+		acc = append(acc, off)
 	}
+
 	return
 }
 
@@ -167,12 +165,12 @@ func (td *TupleDesc) PrefixDesc(n int) *TupleDesc {
 
 // GetField returns the ith field of |tup|.
 func (td *TupleDesc) GetField(i int, tup Tuple) []byte {
-	if i < len(td.fast) {
+	if i < len(td.fast)-1 {
 		cnt := tup.Count()
 		if i >= cnt {
 			return nil
 		}
-		start, stop := td.fast[i][0], td.fast[i][1]
+		start, stop := td.fast[i], td.fast[i+1]
 		return tup[start:stop]
 	}
 	return tup.GetField(i)
@@ -186,8 +184,8 @@ func (td *TupleDesc) Compare(ctx context.Context, left, right Tuple) (cmp int) {
 // CompareField compares |value| with the ith field of |tup|.
 func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup Tuple) (cmp int) {
 	var v []byte
-	if i < len(td.fast) {
-		start, stop := td.fast[i][0], td.fast[i][1]
+	if i < len(td.fast)-1 {
+		start, stop := td.fast[i], td.fast[i+1]
 		v = tup[start:stop]
 	} else {
 		v = tup.GetField(i)
