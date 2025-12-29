@@ -30,13 +30,15 @@ var _ TupleComparator = ExtendedTupleComparator{}
 // Compare implements the TupleComparator interface.
 func (c ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
 	fast := desc.GetFixedAccess()
-	off := len(fast) - 1
+	off := len(fast)
+	var start, stop ByteSize
 	for i := 0; i < off; i++ {
-		start, stop := fast[i], fast[i+1]
+		stop = fast[i]
 		cmp = c.CompareValues(ctx, i, left[start:stop], right[start:stop], desc.Types[i])
 		if cmp != 0 {
 			return cmp
 		}
+		start = stop
 	}
 
 	for i, typ := range desc.Types[off:] {

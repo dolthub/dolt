@@ -130,16 +130,13 @@ func makeFixedAccess(types []Type) (acc FixedAccess) {
 
 	off := ByteSize(0)
 	acc = make(FixedAccess, 0, len(types))
-	for i, typ := range types {
+	for _, typ := range types {
 		if typ.Nullable {
 			break
 		}
 		sz, ok := sizeFromType(typ)
 		if !ok {
 			break
-		}
-		if i == 0 {
-			acc = append(acc, off)
 		}
 		off += sz
 		acc = append(acc, off)
@@ -165,12 +162,16 @@ func (td *TupleDesc) PrefixDesc(n int) *TupleDesc {
 
 // GetField returns the ith field of |tup|.
 func (td *TupleDesc) GetField(i int, tup Tuple) []byte {
-	if i < len(td.fast)-1 {
+	if i < len(td.fast) {
 		cnt := tup.Count()
 		if i >= cnt {
 			return nil
 		}
-		start, stop := td.fast[i], td.fast[i+1]
+		var start, stop ByteSize
+		if i != 0 {
+			start = td.fast[i-1]
+		}
+		stop = td.fast[i]
 		return tup[start:stop]
 	}
 	return tup.GetField(i)
@@ -184,8 +185,12 @@ func (td *TupleDesc) Compare(ctx context.Context, left, right Tuple) (cmp int) {
 // CompareField compares |value| with the ith field of |tup|.
 func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup Tuple) (cmp int) {
 	var v []byte
-	if i < len(td.fast)-1 {
-		start, stop := td.fast[i], td.fast[i+1]
+	if i < len(td.fast) {
+		var start, stop ByteSize
+		if i != 0 {
+			start = td.fast[i-1]
+		}
+		stop = td.fast[i]
 		v = tup[start:stop]
 	} else {
 		v = tup.GetField(i)

@@ -44,15 +44,16 @@ var _ TupleComparator = &DefaultTupleComparator{}
 
 // Compare implements TupleComparator
 func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
-	off := len(desc.fast) - 1
-	fast := desc.fast
+	off := len(desc.fast)
+	var start, stop ByteSize
 	for i := 0; i < off; i++ {
 		// TODO: use unsafe comparison?
-		start, stop := fast[i], fast[i+1]
+		stop = desc.fast[i]
 		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
 		if cmp != 0 {
 			return cmp
 		}
+		start = stop
 	}
 
 	for i, typ := range desc.Types[off:] {
