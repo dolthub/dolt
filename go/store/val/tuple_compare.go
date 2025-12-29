@@ -44,7 +44,7 @@ var _ TupleComparator = &DefaultTupleComparator{}
 
 // Compare implements TupleComparator
 func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
-	for i := range desc.fast {
+	for i := 0; i < len(desc.fast); i++ {
 		start, stop := desc.fast[i][0], desc.fast[i][1]
 		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
 		if cmp != 0 {
