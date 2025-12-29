@@ -40,10 +40,10 @@ type TupleComparator interface {
 
 type DefaultTupleComparator struct{}
 
-var _ TupleComparator = DefaultTupleComparator{}
+var _ TupleComparator = &DefaultTupleComparator{}
 
 // Compare implements TupleComparator
-func (d DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
+func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
 	for i := range desc.fast {
 		start, stop := desc.fast[i][0], desc.fast[i][1]
 		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
@@ -64,22 +64,22 @@ func (d DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, 
 }
 
 // CompareValues implements TupleComparator
-func (d DefaultTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (cmp int) {
+func (d *DefaultTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (cmp int) {
 	return compare(typ, left, right)
 }
 
 // Prefix implements TupleComparator
-func (d DefaultTupleComparator) Prefix(n int) TupleComparator {
+func (d *DefaultTupleComparator) Prefix(n int) TupleComparator {
 	return d
 }
 
 // Suffix implements TupleComparator
-func (d DefaultTupleComparator) Suffix(n int) TupleComparator {
+func (d *DefaultTupleComparator) Suffix(n int) TupleComparator {
 	return d
 }
 
 // Validated implements TupleComparator
-func (d DefaultTupleComparator) Validated(types []Type) TupleComparator {
+func (d *DefaultTupleComparator) Validated(types []Type) TupleComparator {
 	return d
 }
 

@@ -111,7 +111,7 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 	if typ.Enc == val.StringEnc {
 		return compareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
 	} else {
-		return val.DefaultTupleComparator{}.CompareValues(ctx, 0, left, right, typ)
+		return (&val.DefaultTupleComparator{}).CompareValues(ctx, 0, left, right, typ)
 	}
 }
 
