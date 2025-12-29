@@ -253,9 +253,13 @@ func newLookupKeyMapping(
 	litTb := val.NewTupleBuilder(litDesc, ns)
 	for i, j := range litMappings {
 		colTyp := typs[j]
-		val, _, err := convertLiteralKeyValue(ctx, colTyp, keyExprs[j].(*expression.Literal))
+		literal := keyExprs[j].(*expression.Literal)
+		val, inRange, err := convertLiteralKeyValue(ctx, colTyp, literal)
 		if err != nil && !sql.ErrTruncatedIncorrect.Is(err) {
 			return nil, err
+		}
+		if inRange != sql.InRange {
+			val = literal.Value()
 		}
 
 		if err := tree.PutField(ctx, ns, litTb, i, val); err != nil {
