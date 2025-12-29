@@ -214,12 +214,22 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 		return nil, err
 	}
 
+	totalLen := 0
+	parts := make([][]byte, 0)
 	err = WalkNodes(ctx, n, ns, func(ctx context.Context, n *Node) error {
 		if n.IsLeaf() {
-			result = append(result, n.GetValue(0)...)
+			v := n.GetValue(0)
+			parts = append(parts, v)
+			totalLen += len(v)
 		}
 		return nil
 	})
+
+	result = make([]byte, 0, totalLen)
+	for _, part := range parts {
+		result = append(result, part...)
+	}
+
 	return result, err
 }
 
