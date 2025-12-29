@@ -44,17 +44,16 @@ var _ TupleComparator = &DefaultTupleComparator{}
 
 // Compare implements TupleComparator
 func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
-	for i := 0; i < len(desc.fast); i++ { // TODO: if binary data is the same... then there's no reason to check
-		start, stop := desc.fast[i][0], desc.fast[i][1] // TODO: use unsafe here? similar to ItemAccess
-		if bytes.Compare(left[start:stop], right[start:stop]) != 0 {
-			cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
-			if cmp != 0 {
-				return cmp
-			}
+	off := len(desc.fast)
+	fast := desc.fast
+	for i := 0; i < off; i++ {
+		start, stop := fast[i][0], fast[i][1] // TODO: use unsafe here? similar to ItemAccess
+		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
+		if cmp != 0 {
+			return cmp
 		}
 	}
 
-	off := len(desc.fast)
 	for i, typ := range desc.Types[off:] {
 		j := i + off
 		cmp = compare(typ, left.GetField(j), right.GetField(j))

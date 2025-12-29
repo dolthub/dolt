@@ -130,6 +130,11 @@ func makeFixedAccess(types []Type) (acc FixedAccess) {
 
 	acc = make(FixedAccess, 0, len(types))
 
+	// TODO: extracts a prefix for quick comparison
+	// TODO: we should be able to do it in one large chunk?
+	//  the problem is knowing which section is larger/smaller...
+	//  start of one is always end of the next
+	//  if we just compare bytes we can quickly deterine if two descs ar exactly the same, but how can we dectect where the difference is and how to handle it??
 	off := ByteSize(0)
 	for _, typ := range types {
 		if typ.Nullable {
