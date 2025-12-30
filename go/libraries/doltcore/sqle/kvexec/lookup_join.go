@@ -253,12 +253,15 @@ func newLookupKeyMapping(
 	litTb := val.NewTupleBuilder(litDesc, ns)
 	for i, j := range litMappings {
 		colTyp := typs[j]
-		val, _, err := convertLiteralKeyValue(ctx, colTyp, keyExprs[j].(*expression.Literal))
+		value, inRange, err := convertLiteralKeyValue(ctx, colTyp, keyExprs[j].(*expression.Literal))
 		if err != nil && !sql.ErrTruncatedIncorrect.Is(err) {
 			return nil, err
 		}
+		if inRange != sql.InRange {
+			return nil, nil
+		}
 
-		if err := tree.PutField(ctx, ns, litTb, i, val); err != nil {
+		if err := tree.PutField(ctx, ns, litTb, i, value); err != nil {
 			return nil, err
 		}
 	}
@@ -289,18 +292,17 @@ func newLookupKeyMapping(
 
 // convertLiteralKeyValue converts a literal expression value to the appropriate type for the reference column
 // in a key lookup
-func convertLiteralKeyValue(ctx *sql.Context, colTyp sql.ColumnExpressionType, val *expression.Literal) (any, sql.ConvertInRange, error) {
-	srcType := val.Type()
+func convertLiteralKeyValue(ctx *sql.Context, colTyp sql.ColumnExpressionType, literal *expression.Literal) (any, sql.ConvertInRange, error) {
+	srcType := literal.Type()
 	destType := colTyp.Type
 
 	// For extended types, use the rich type conversion methods
 	if srcEt, ok := srcType.(sql.ExtendedType); ok {
 		if destEt, ok := destType.(sql.ExtendedType); ok {
-			return destEt.ConvertToType(ctx, srcEt, val.Value())
+			return destEt.ConvertToType(ctx, srcEt, literal.Value())
 		}
 	}
-
-	return destType.Convert(ctx, val.Value())
+	return destType.Convert(ctx, literal.Value())
 }
 
 // valid returns whether the source and destination key types
