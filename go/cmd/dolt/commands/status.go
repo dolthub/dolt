@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -93,6 +94,7 @@ func (cmd StatusCmd) Docs() *cli.CommandDocumentation {
 func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(cli.ShowIgnoredFlag, "", "Show tables that are ignored (according to dolt_ignore)")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format status output. Valid values are tabular, json. Defaults to tabular.")
 	return ap
 }
 
@@ -109,6 +111,14 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	showIgnoredTables := apr.Contains(cli.ShowIgnoredFlag)
 
+	// validate format flag
+	f, _ := apr.GetValue(FormatFlag)
+	switch strings.ToLower(f) {
+	case "tabular", "json", "":
+	default:
+		return handleStatusVErr(fmt.Errorf("invalid output format: %s", f))
+	}
+
 	// configure SQL engine
 	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
@@ -121,7 +131,14 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleStatusVErr(err)
 	}
 
-	err = printEverything(pd)
+	// output based on format flag
+	outputFormat := strings.ToLower(apr.GetValueOrDefault(FormatFlag, "tabular"))
+	switch outputFormat {
+	case "json":
+		err = printJSON(pd)
+	default:
+		err = printEverything(pd)
+	}
 	if err != nil {
 		return handleStatusVErr(err)
 	}
@@ -675,6 +692,105 @@ and have %v and %v different commits each, respectively.
 		cli.Println("nothing to commit, working tree clean")
 	}
 
+	return nil
+}
+
+// StatusTableChange represents a single table status change for JSON output
+type StatusTableChange struct {
+	TableName string `json:"table_name"`
+	Status    string `json:"status"`
+}
+
+// StatusJSON represents the structured JSON output for dolt status
+type StatusJSON struct {
+	BranchName           string              `json:"branch_name"`
+	RemoteName           string              `json:"remote_name,omitempty"`
+	RemoteBranchName     string              `json:"remote_branch_name,omitempty"`
+	Ahead                int64               `json:"ahead"`
+	Behind               int64               `json:"behind"`
+	MergeActive          bool                `json:"merge_active"`
+	ConflictsPresent     bool                `json:"conflicts_present"`
+	StagedTables         []StatusTableChange `json:"staged_tables,omitempty"`
+	UnstagedTables       []StatusTableChange `json:"unstaged_tables,omitempty"`
+	UntrackedTables      []StatusTableChange `json:"untracked_tables,omitempty"`
+	SchemaConflicts      []string            `json:"schema_conflicts,omitempty"`
+	DataConflicts        []string            `json:"data_conflicts,omitempty"`
+	ConstraintViolations []string            `json:"constraint_violations,omitempty"`
+	IgnoredTables        []string            `json:"ignored_tables,omitempty"`
+}
+
+func printJSON(data *printData) error {
+	output := StatusJSON{
+		BranchName:       data.branchName,
+		RemoteName:       data.remoteName,
+		RemoteBranchName: data.remoteBranchName,
+		Ahead:            data.ahead,
+		Behind:           data.behind,
+		MergeActive:      data.mergeActive,
+		ConflictsPresent: data.conflictsPresent,
+	}
+
+	// staged tables
+	for tableName, status := range data.stagedTables {
+		if !doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: tableName}) {
+			output.StagedTables = append(output.StagedTables, StatusTableChange{
+				TableName: tableName,
+				Status:    status,
+			})
+		}
+	}
+
+	// unstaged tables (filtered for conflicts/violations)
+	for tableName, status := range data.unstagedTables {
+		hasConflicts := data.dataConflictTables[tableName] || data.schemaConflictTables[tableName]
+		hasViolations := data.constraintViolationTables[tableName]
+		if hasConflicts || hasViolations {
+			continue
+		}
+		output.UnstagedTables = append(output.UnstagedTables, StatusTableChange{
+			TableName: tableName,
+			Status:    status,
+		})
+	}
+
+	// untracked tables (filtered)
+	for tableName, status := range data.filteredUntrackedTables {
+		output.UntrackedTables = append(output.UntrackedTables, StatusTableChange{
+			TableName: tableName,
+			Status:    status,
+		})
+	}
+
+	// schema conflicts
+	for tableName := range data.schemaConflictTables {
+		output.SchemaConflicts = append(output.SchemaConflicts, tableName)
+	}
+
+	// data conflicts
+	for tableName := range data.dataConflictTables {
+		output.DataConflicts = append(output.DataConflicts, tableName)
+	}
+
+	// constraint violations
+	for tableName := range data.constraintViolationTables {
+		hasConflicts := data.dataConflictTables[tableName] || data.schemaConflictTables[tableName]
+		if !hasConflicts {
+			output.ConstraintViolations = append(output.ConstraintViolations, tableName)
+		}
+	}
+
+	// ignored tables
+	if data.showIgnoredTables {
+		for _, tableName := range data.ignoredTables.Ignore {
+			output.IgnoredTables = append(output.IgnoredTables, tableName.Name)
+		}
+	}
+
+	jsonBytes, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return err
+	}
+	cli.Println(string(jsonBytes))
 	return nil
 }
 
