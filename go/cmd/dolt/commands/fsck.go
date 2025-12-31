@@ -694,7 +694,7 @@ func (ts *treeScanner) validateSerialMsgTree(
 // walkCommitDAGFromRefs loads all branches/tags and walks the commit DAG to find reachable commits
 // This is lightweight - only validates commit objects, parent closures, and parent hashes (no trees)
 func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allCommits *hash.HashSet, progress chan string, appendErr func(error)) (hash.HashSet, error) {
-	startingCommits, err := getRawReferencesFromStoreRoot(ctx, gs, progress)
+	startingCommits, err := getRawReferencesFromStoreRoot(ctx, gs, progress, appendErr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get raw references from store root: %w", err)
 	}
@@ -767,7 +767,7 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 
 // getRawReferencesFromStoreRoot accesses raw references from the chunk store root.
 // Returns a map from commit hash to list of reference names that point to it.
-func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, progress chan string) (map[hash.Hash][]string, error) {
+func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, progress chan string, appendErr func(error)) (map[hash.Hash][]string, error) {
 	// Get the root hash from the chunk store
 	rootHash, err := cs.Root(ctx)
 	if err != nil {
@@ -831,8 +831,9 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, pr
 				// Address is the commit id.
 				refs[addr] = append(refs[addr], name)
 			case ref.TagRefType:
-				progress <- fmt.Sprintf("Found tag ref: %s -> %s", name, addr.String())
-				refs[addr] = append(refs[addr], name)
+				if commitHash, ok := resolveTagToCommit(ctx, cs, name, addr, progress, appendErr); ok {
+					refs[commitHash] = append(refs[commitHash], name)
+				}
 			default:
 				// NM4 - probably shouldn't skip silently. TBD.
 				progress <- fmt.Sprintf("Skipping ref type %s: %s", refType, name)
@@ -848,7 +849,46 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, pr
 		return nil, fmt.Errorf("failed to iterate address map: %w", err)
 	}
 
-	panic("wtf")
-
 	return refs, nil
+}
+
+// resolveTagToCommit reads a tag object and extracts the commit hash it points to
+// Returns the commit hash and true if successful, or zero hash and false if there was an error
+func resolveTagToCommit(ctx context.Context, cs chunks.ChunkStore, tagName string, tagAddr hash.Hash, progress chan string, appendErr func(error)) (hash.Hash, bool) {
+	// Get the tag object from the chunk store
+	tagChunk, err := cs.Get(ctx, tagAddr)
+	if err != nil {
+		appendErr(fmt.Errorf("failed to read tag object %s: %w", tagAddr.String(), err))
+		return hash.Hash{}, false
+	}
+
+	if tagChunk.IsEmpty() {
+		appendErr(fmt.Errorf("tag object %s is empty", tagAddr.String()))
+		return hash.Hash{}, false
+	}
+
+	// Parse the tag object to get the commit hash it points to
+	tagData := tagChunk.Data()
+	if serial.GetFileID(tagData) != serial.TagFileID {
+		appendErr(fmt.Errorf("tag object %s has incorrect file ID: expected %s, got %s", tagAddr.String(), serial.TagFileID, serial.GetFileID(tagData)))
+		return hash.Hash{}, false
+	}
+
+	var tag serial.Tag
+	err = serial.InitTagRoot(&tag, tagData, serial.MessagePrefixSz)
+	if err != nil {
+		appendErr(fmt.Errorf("failed to parse tag object %s: %w", tagAddr.String(), err))
+		return hash.Hash{}, false
+	}
+
+	// Extract the commit hash from the tag
+	commitBytes := tag.CommitAddrBytes()
+	if len(commitBytes) != hash.ByteLen {
+		appendErr(fmt.Errorf("tag %s has invalid commit address length: %d", tagName, len(commitBytes)))
+		return hash.Hash{}, false
+	}
+
+	commitHash := hash.New(commitBytes)
+	progress <- fmt.Sprintf("Tag %s points to commit %s", tagName, commitHash.String())
+	return commitHash, true
 }
