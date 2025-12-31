@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -812,16 +813,47 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, pr
 		return nil, err
 	}
 
-	// Extract references into a map[hash.Hash][]string
+	// Extract references into a map[hash.Hash][]string, filtering for commit-pointing refs only
 	refs := make(map[hash.Hash][]string)
 	err = addressMap.IterAll(ctx, func(name string, addr hash.Hash) error {
-		progress <- fmt.Sprintf("Found ref: %s -> %s", name, addr.String())
-		refs[addr] = append(refs[addr], name)
+		// Parse the reference using the ref package to determine its type
+		if ref.IsRef(name) {
+			doltRef, err := ref.Parse(name)
+			if err != nil {
+				// NM4 - probably shouldn't skip silently. TBD.
+				progress <- fmt.Sprintf("Skipping invalid ref: %s (parse error: %v)", name, err)
+				return nil
+			}
+
+			refType := doltRef.GetType()
+			switch refType {
+			case ref.BranchRefType, ref.RemoteRefType:
+				// Address is the commit id.
+				refs[addr] = append(refs[addr], name)
+			case ref.TagRefType:
+				progress <- fmt.Sprintf("Found tag ref: %s -> %s", name, addr.String())
+				refs[addr] = append(refs[addr], name)
+			case ref.InternalRefType:
+				progress <- fmt.Sprintf("Found internal ref: %s -> %s", name, addr.String())
+				refs[addr] = append(refs[addr], name)
+			case ref.WorkspaceRefType:
+				progress <- fmt.Sprintf("Found workspace ref: %s -> %s", name, addr.String())
+				refs[addr] = append(refs[addr], name)
+			default:
+				progress <- fmt.Sprintf("Skipping ref type %s: %s", refType, name)
+			}
+		} else if ref.IsWorkingSet(name) {
+			// skip.
+		} else {
+			return fmt.Errorf("invalid ref name found in root address map: %s", name)
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to iterate address map: %w", err)
 	}
+
+	panic("wtf")
 
 	return refs, nil
 }
