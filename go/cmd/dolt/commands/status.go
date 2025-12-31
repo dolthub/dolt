@@ -94,7 +94,7 @@ func (cmd StatusCmd) Docs() *cli.CommandDocumentation {
 func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(cli.ShowIgnoredFlag, "", "Show tables that are ignored (according to dolt_ignore)")
-	ap.SupportsString(FormatFlag, "r", "result output format", "How to format status output. Valid values are tabular, json. Defaults to tabular.")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format status output. Valid values are tabular (human readable) and json. Defaults to tabular.")
 	return ap
 }
 
