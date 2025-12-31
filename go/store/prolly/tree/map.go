@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/skip"
-	"golang.org/x/sync/errgroup"
 	"io"
 )
 
@@ -468,26 +467,28 @@ func (t StaticMap[K, V, O]) GetKeyRangeCardinality(ctx context.Context, start, s
 }
 
 func (t StaticMap[K, V, O]) getKeyRangeCursors(ctx context.Context, startInclusive, stopExclusive K) (lo, hi *cursor, err error) {
-	errGp := errgroup.Group{}
-	errGp.Go(func() error {
-		if len(startInclusive) == 0 {
-			lo, err = newCursorAtStart(ctx, t.NodeStore, t.Root)
-		} else {
-			lo, err = newCursorAtKey(ctx, t.NodeStore, t.Root, startInclusive, t.Order)
+	if len(startInclusive) == 0 {
+		lo, err = newCursorAtStart(ctx, t.NodeStore, t.Root)
+		if err != nil {
+			return nil, nil, err
 		}
-		return err
-	})
-	errGp.Go(func() error {
-		if len(stopExclusive) == 0 {
-			hi, err = newCursorPastEnd(ctx, t.NodeStore, t.Root)
-		} else {
-			hi, err = newCursorAtKey(ctx, t.NodeStore, t.Root, stopExclusive, t.Order)
+	} else {
+		lo, err = newCursorAtKey(ctx, t.NodeStore, t.Root, startInclusive, t.Order)
+		if err != nil {
+			return nil, nil, err
 		}
-		return err
-	})
-	err = errGp.Wait()
-	if err != nil {
-		return nil, nil, err
+	}
+
+	if len(stopExclusive) == 0 {
+		hi, err = newCursorPastEnd(ctx, t.NodeStore, t.Root)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		hi, err = newCursorAtKey(ctx, t.NodeStore, t.Root, stopExclusive, t.Order)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	return
 }
