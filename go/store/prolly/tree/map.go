@@ -17,10 +17,11 @@ package tree
 import (
 	"context"
 	"fmt"
+	"io"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/skip"
-	"io"
 )
 
 type KeyValueFn[K, V ~[]byte] func(key K, value V) error
