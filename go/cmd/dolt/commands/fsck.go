@@ -212,7 +212,7 @@ func printFSCKReport(report *FSCKReport) int {
 	} else {
 		for _, e := range *(report.Problems) {
 			cli.Println(color.RedString("------ Corruption Found ------"))
-			cli.PrintErrln(e.Error())
+			cli.Println(e.Error())
 		}
 
 		return 1
@@ -288,12 +288,10 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]erro
 		// NM4 - hmmm. Not sure if we should fail here. TBD.
 		appendErr(fmt.Errorf("commit DAG walking failed: %w", err))
 	}
-	progress <- fmt.Sprintf("Found %d commit objects reachable from branch/tag references", len(reachableCommits))
 
 	// Phase 3: Tree validation for commits (performance heavy)
 	if len(reachableCommits) > 0 {
-		progress <- "--------------- Phase 3: Tree validation for commits ---------------"
-		progress <- fmt.Sprintf("Starting tree validation for %d commit objects...", len(allCommitsSet))
+		progress <- fmt.Sprintf("Starting tree validation for %d commit objects...", len(reachableCommits))
 
 		vs := types.NewValueStore(gs)
 
@@ -310,8 +308,10 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]erro
 				unreachableCommits++
 			}
 		}
+		unreachableChunks := chunkCount - uint32(commitReachableChunks.Size())
+
 		progress <- fmt.Sprintf("Found %d unreachable commits (not reachable from any branch/tag)", unreachableCommits)
-		progress <- fmt.Sprintf("Validated %d commits and their reachable chunks", len(*commitReachableChunks))
+		progress <- fmt.Sprintf("Validated %d chunks reachable by branches and tags (unreachable: %d)", commitReachableChunks.Size(), unreachableChunks)
 	} else {
 		progress <- "No commit objects found - skipping tree validation"
 	}
@@ -388,8 +388,22 @@ func (rt *roundTripper) roundTripAndCategorizeChunk(chunk chunks.Chunk) {
 	raw := chunk.Data()
 	calcChkSum := hash.Of(raw)
 
-	// Add chunk to our set of all found chunks
-	rt.allChunks.Insert(h)
+	if h != calcChkSum {
+		fuzzyMatch := false
+		// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
+		if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
+			// Now we'll just verify that the first 16 bytes match.
+			ln := hash.ByteLen - 4
+			fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
+		}
+		if !fuzzyMatch {
+			hrs := rt.decodeMsg(chunk)
+			rt.appendErr(errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s\n%s", h.String(), calcChkSum.String(), hrs)))
+			chunkOk = false
+		}
+
+		h = calcChkSum
+	}
 
 	var chunkType string
 	if len(raw) >= serial.MessagePrefixSz+4 { // Check if we have enough bytes for a serial message
@@ -405,20 +419,8 @@ func (rt *roundTripper) roundTripAndCategorizeChunk(chunk chunks.Chunk) {
 
 	rt.chunksByType[chunkType] = append(rt.chunksByType[chunkType], h)
 
-	if h != calcChkSum {
-		fuzzyMatch := false
-		// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
-		if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
-			// Now we'll just verify that the first 16 bytes match.
-			ln := hash.ByteLen - 4
-			fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
-		}
-		if !fuzzyMatch {
-			hrs := rt.decodeMsg(chunk)
-			rt.appendErr(errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s\n%s", h.String(), calcChkSum.String(), hrs)))
-			chunkOk = false
-		}
-	}
+	// Add chunk to our set of all found chunks
+	rt.allChunks.Insert(h)
 
 	if chunkOk {
 		// Round trip validation. Ensure that the top level store returns the same data.
@@ -597,8 +599,6 @@ func (ts *treeScanner) validateTreeRoot(
 	commitHash, // Use just for error messages.
 	treeHash hash.Hash,
 ) error {
-	ts.progress <- fmt.Sprintf("Validating commit %s's data tree: %s", commitHash.String(), treeHash.String())
-
 	// Skip if already processed. Root hashes rarely repeat, but possible if you revert to a previous state.
 	if e, ok := ts.history[treeHash]; ok {
 		if e != nil {
@@ -621,9 +621,8 @@ func (ts *treeScanner) validateTreeRoot(
 	}
 
 	// Handle SerialMessage trees only
-	if serialMsg, ok := treeValue.(types.SerialMessage); ok {
-		id := serial.GetFileID(serialMsg)
-		ts.progress <- fmt.Sprintf("Processing tree object (%s): %s", id, treeHash.String())
+	if _, ok := treeValue.(types.SerialMessage); ok {
+		// id := serial.GetFileID(serialMsg)
 		err = ts.validateSerialMsgTree(ctx, commitHash, treeHash)
 		if err != nil {
 			// NM4 - not sure if we should return here or continue. TBD.
@@ -652,7 +651,11 @@ func (ts *treeScanner) validateSerialMsgTree(
 		workQueue = workQueue[1:]
 		value, err := ts.vs.ReadValue(ctx, currentChunkHash)
 		if err != nil || value == nil {
-			err2 := fmt.Errorf("commit::%s: failed to read chunk %s: %w", commitHash.String(), currentChunkHash.String(), err)
+			err2 := fmt.Errorf("commit::%s: missing chunk %s", commitHash.String(), currentChunkHash.String())
+			if err != nil {
+				err2 = fmt.Errorf("commit::%s: failed to read chunk %s: %w", commitHash.String(), currentChunkHash.String(), err)
+			}
+
 			ts.history[currentChunkHash] = &err2
 			ts.appendErr(err2)
 			continue
@@ -664,9 +667,8 @@ func (ts *treeScanner) validateSerialMsgTree(
 
 				if e, ok := ts.history[addr]; ok {
 					if e != nil {
-						// Previously processed this chunk and found an error
-						// NM4 - customize error message?
-						ts.appendErr(*e)
+						newErr := fmt.Errorf("commit::%s: referenced chunk %s (duplicate error)", commitHash.String(), addr.String())
+						ts.appendErr(newErr)
 					}
 					// Already processed this chunk
 					return nil
@@ -682,10 +684,14 @@ func (ts *treeScanner) validateSerialMsgTree(
 				return fmt.Errorf("failed to walk references in tree %s: %w", treeHash.String(), err)
 			}
 
+			// We managed to load the current value and walk its references without error. Mark it as successfully processed.
+			ts.history[currentChunkHash] = nil
+
 		} else {
-			// This should never happen.
 			panic(fmt.Sprintf("commit::%s: referenced chunk %s from tree %s is not a SerialMessage, got type %T", commitHash.String(), currentChunkHash.String(), treeHash.String(), value))
 		}
+
+		//
 	}
 
 	return nil
@@ -717,14 +723,16 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 		commitQueue = append(commitQueue, commitHash)
 	}
 
+	vs := types.NewValueStore(gs)
+
 	for len(commitQueue) > 0 {
 		commitHash := commitQueue[0]
 		commitQueue = commitQueue[1:]
 
-		// Skip if already processed
 		if reachableCommits.Has(commitHash) {
 			continue
 		}
+		reachableCommits.Insert(commitHash)
 
 		// Skip if this commit doesn't exist in our found commits
 		if !allCommits.Has(commitHash) {
@@ -732,11 +740,6 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 			continue
 		}
 
-		reachableCommits.Insert(commitHash)
-		//		progress <- fmt.Sprintf("Reached commit: %s", commitHash.String())
-
-		// Get parent commits and add to queue (DAG traversal)
-		vs := types.NewValueStore(gs)
 		commitValue, err := vs.ReadValue(ctx, commitHash)
 		if err != nil {
 			appendErr(fmt.Errorf("commit %s is missing or corrupted", commitHash.String()))
@@ -752,10 +755,12 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 
 			// Add parents to queue for processing
 			for _, parentHash := range parentAddrs {
-				commitQueue = append(commitQueue, parentHash)
+				if !reachableCommits.Has(parentHash) {
+					commitQueue = append(commitQueue, parentHash)
+				}
 			}
 		} else {
-			appendErr(fmt.Errorf("commit %s is not a SerialMessage, got type %T", commitHash.String(), commitValue))
+			panic(fmt.Sprintf("commit %s is not a SerialMessage, got type %T", commitHash.String(), commitValue))
 		}
 	}
 
@@ -889,6 +894,5 @@ func resolveTagToCommit(ctx context.Context, cs chunks.ChunkStore, tagName strin
 	}
 
 	commitHash := hash.New(commitBytes)
-	progress <- fmt.Sprintf("Tag %s points to commit %s", tagName, commitHash.String())
 	return commitHash, true
 }
