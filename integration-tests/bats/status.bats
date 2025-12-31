@@ -56,6 +56,25 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
+@test "status: result-format json clean" {
+    run dolt status --result-format json
+    [ "$status" -eq 0 ]
+
+    python3 - <<'PY' <<<"$output"
+import json
+import sys
+
+data = json.load(sys.stdin)
+assert data["branch_name"] == "main"
+assert data["ahead"] == 0
+assert data["behind"] == 0
+assert data["conflicts_present"] is False
+assert "staged_tables" not in data
+assert "unstaged_tables" not in data
+assert "untracked_tables" not in data
+PY
+}
+
 @test "status: staged, unstaged, untracked, ignored tables" {
     dolt sql <<SQL
 CREATE TABLE t (pk int PRIMARY KEY);
@@ -84,6 +103,44 @@ SQL
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
     [[ "$output" =~ "	new table:        v" ]] || false
     ! [[ "$output" =~ "   new table:        generated_foo" ]] || false
+}
+
+@test "status: result-format json with changes and ignored tables" {
+    dolt sql <<SQL
+CREATE TABLE t (pk int PRIMARY KEY);
+CREATE TABLE u (pk int PRIMARY KEY);
+INSERT INTO dolt_ignore VALUES ('generated_*', 1);
+SQL
+    dolt add -A && dolt commit -m "tables t, u"
+    dolt sql <<SQL
+INSERT INTO  t VALUES (1),(2),(3);
+INSERT INTO  u VALUES (1),(2),(3);
+CREATE TABLE v (pk int PRIMARY KEY);
+CREATE TABLE generated_foo (pk int PRIMARY KEY);
+SQL
+    dolt add t
+
+    run dolt status --result-format json --ignored
+    [ "$status" -eq 0 ]
+
+    python3 - <<'PY' <<<"$output"
+import json
+import sys
+
+data = json.load(sys.stdin)
+
+def as_map(entries):
+    return {entry["table_name"]: entry["status"] for entry in entries}
+
+staged = as_map(data.get("staged_tables", []))
+unstaged = as_map(data.get("unstaged_tables", []))
+untracked = as_map(data.get("untracked_tables", []))
+
+assert staged.get("t") == "modified"
+assert unstaged.get("u") == "modified"
+assert untracked.get("v") == "new table"
+assert "generated_foo" in set(data.get("ignored_tables", []))
+PY
 }
 
 @test "status: deleted table" {
