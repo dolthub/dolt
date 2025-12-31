@@ -827,19 +827,14 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, pr
 
 			refType := doltRef.GetType()
 			switch refType {
-			case ref.BranchRefType, ref.RemoteRefType:
+			case ref.BranchRefType, ref.RemoteRefType, ref.InternalRefType, ref.WorkspaceRefType, ref.StashRefType: // NM4 - not sure about stash type...
 				// Address is the commit id.
 				refs[addr] = append(refs[addr], name)
 			case ref.TagRefType:
 				progress <- fmt.Sprintf("Found tag ref: %s -> %s", name, addr.String())
 				refs[addr] = append(refs[addr], name)
-			case ref.InternalRefType:
-				progress <- fmt.Sprintf("Found internal ref: %s -> %s", name, addr.String())
-				refs[addr] = append(refs[addr], name)
-			case ref.WorkspaceRefType:
-				progress <- fmt.Sprintf("Found workspace ref: %s -> %s", name, addr.String())
-				refs[addr] = append(refs[addr], name)
 			default:
+				// NM4 - probably shouldn't skip silently. TBD.
 				progress <- fmt.Sprintf("Skipping ref type %s: %s", refType, name)
 			}
 		} else if ref.IsWorkingSet(name) {
