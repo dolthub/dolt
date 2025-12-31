@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/fatih/color"
 
@@ -40,6 +41,27 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+// FsckProgressMessageType indicates the type of progress message
+type FsckProgressMessageType int
+
+const (
+	// Milestone messages that should always be displayed
+	FsckProgressMilestone FsckProgressMessageType = iota
+	// Ephemeral chunk scanning progress with percentage
+	FsckProgressChunkScan
+	// Ephemeral tree validation progress
+	FsckProgressTreeValidation
+)
+
+// FsckProgressMessage represents a structured progress update during fsck
+type FsckProgressMessage struct {
+	Type       FsckProgressMessageType
+	Message    string
+	Percentage *float64 // Optional percentage for progress tracking
+	Current    *int     // Optional current item count
+	Total      *int     // Optional total item count
+}
 
 type FsckCmd struct{}
 
@@ -121,7 +143,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	// Information is presented to users in two forms: progress messages, and an error report. The progress messages are sent
 	// over a channel to a separate goroutine that handles printing them (so that progress can be reported while fsck is running).
 	// The error report is built up in a slice of errors that is passed around and appended to as issues are found.
-	progress := make(chan string, 32)
+	progress := make(chan FsckProgressMessage, 32)
 	var errs []error
 
 	params := make(map[string]interface{})
@@ -219,11 +241,69 @@ func printFSCKReport(report *FSCKReport) int {
 	}
 }
 
-func fsckHandleProgress(ctx context.Context, progress <-chan string, quiet bool) {
-	for item := range progress {
-		// when ctx is canceled, keep draining but stop printing
-		if !quiet && ctx.Err() == nil {
-			cli.Println(item)
+func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage, quiet bool) {
+	if quiet {
+		// Just drain the progress channel without displaying anything
+		for range progress {
+			// when ctx is canceled, keep draining but stop printing
+			if ctx.Err() != nil {
+				return
+			}
+		}
+		return
+	}
+
+	rotation := 0
+	p := cli.NewEphemeralPrinter()
+	lastUpdateTime := time.Now()
+	currentEphemeralMsg := ""
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-progress:
+			if !ok {
+				return
+			}
+			
+			switch msg.Type {
+			case FsckProgressMilestone:
+				// Clear any existing ephemeral message and print the persistent message
+				if currentEphemeralMsg != "" {
+					p.Printf("\n")
+					p.Display()
+					currentEphemeralMsg = ""
+				}
+				cli.Println(msg.Message)
+				
+			case FsckProgressChunkScan, FsckProgressTreeValidation:
+				// Store ephemeral message for in-line updates
+				currentEphemeralMsg = msg.Message
+			}
+			
+		// Update ephemeral display every second
+		case <-time.After(1 * time.Second):
+		}
+		
+		// Update spinner and ephemeral message
+		if currentEphemeralMsg != "" && time.Since(lastUpdateTime) > 1*time.Second {
+			rotation++
+			var spinner string
+			switch rotation % 4 {
+			case 0:
+				spinner = "-"
+			case 1:
+				spinner = "\\"
+			case 2:
+				spinner = "|"
+			case 3:
+				spinner = "/"
+			}
+			
+			p.Printf("%s %s", spinner, currentEphemeralMsg)
+			p.Display()
+			lastUpdateTime = time.Now()
 		}
 	}
 }
@@ -246,7 +326,7 @@ type FSCKReport struct {
 //  3. Commit tree validation: For each commit found in phase 2, we validate its tree structure and all referenced objects.
 //
 // NM4 - review when done.....
-func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]error, progress chan string) (*FSCKReport, error) {
+func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]error, progress chan FsckProgressMessage) (*FSCKReport, error) {
 	appendErr := func(err error) {
 		*errs = append(*errs, err)
 	}
@@ -264,13 +344,13 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]erro
 	chunksByType := rt.chunksByType
 
 	// Report chunk type summary
-	progress <- "--------------- Chunk Type Summary ---------------"
+	progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "--------------- Chunk Type Summary ---------------"}
 	for chunkType, chunks := range chunksByType {
-		progress <- fmt.Sprintf("Found %d chunks of type: %s", len(chunks), chunkType)
+		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d chunks of type: %s", len(chunks), chunkType)}
 	}
 
 	// Perform commit DAG validation from all branch HEADs and tags to identify unreachable chunks
-	progress <- "--------------- All Objects scanned. Starting commit validation ---------------"
+	progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "--------------- All Objects scanned. Starting commit validation ---------------"}
 
 	// Find all commit objects from our scanned chunks
 	allCommitsSet := make(hash.HashSet)
@@ -278,9 +358,9 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]erro
 		for _, commitHash := range commitChunks {
 			allCommitsSet.Insert(commitHash)
 		}
-		progress <- fmt.Sprintf("Found %d commit objects", len(allCommitsSet))
+		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d commit objects", len(allCommitsSet))}
 	} else {
-		progress <- "No commit objects found during chunk scan"
+		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "No commit objects found during chunk scan"}
 	}
 
 	reachableCommits, err := walkCommitDAGFromRefs(ctx, gs, &allCommitsSet, progress, appendErr)
@@ -291,7 +371,7 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]erro
 
 	// Phase 3: Tree validation for commits (performance heavy)
 	if len(reachableCommits) > 0 {
-		progress <- fmt.Sprintf("Starting tree validation for %d commit objects...", len(reachableCommits))
+		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Starting tree validation for %d commit objects...", len(reachableCommits))}
 
 		vs := types.NewValueStore(gs)
 
@@ -310,10 +390,10 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]erro
 		}
 		unreachableChunks := chunkCount - uint32(commitReachableChunks.Size())
 
-		progress <- fmt.Sprintf("Found %d unreachable commits (not reachable from any branch/tag)", unreachableCommits)
-		progress <- fmt.Sprintf("Validated %d chunks reachable by branches and tags (unreachable: %d)", commitReachableChunks.Size(), unreachableChunks)
+		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d unreachable commits (not reachable from any branch/tag)", unreachableCommits)}
+		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Validated %d chunks reachable by branches and tags (unreachable: %d)", commitReachableChunks.Size(), unreachableChunks)}
 	} else {
-		progress <- "No commit objects found - skipping tree validation"
+		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "No commit objects found - skipping tree validation"}
 	}
 
 	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
@@ -327,14 +407,14 @@ type roundTripper struct {
 	vs            *types.ValueStore
 	gs            *nbs.GenerationalNBS
 	chunkCount    uint32
-	progress      chan string
+	progress      chan FsckProgressMessage
 	appendErr     func(error)
 	allChunks     hash.HashSet
 	chunksByType  map[string][]hash.Hash
 	proccessedCnt uint32
 }
 
-func newRoundTripper(gs *nbs.GenerationalNBS, progress chan string, appendErr func(error)) (*roundTripper, error) {
+func newRoundTripper(gs *nbs.GenerationalNBS, progress chan FsckProgressMessage, appendErr func(error)) (*roundTripper, error) {
 	chunkCount, err := gs.OldGen().Count()
 	if err != nil {
 		return nil, err
@@ -436,14 +516,21 @@ func (rt *roundTripper) roundTripAndCategorizeChunk(chunk chunks.Chunk) {
 	}
 
 	percentage := (float64(rt.proccessedCnt) * 100) / float64(rt.chunkCount)
-	result := fmt.Sprintf("(%4.1f%% done)", percentage)
 
-	progStr := "OK: " + h.String()
+	status := "OK"
 	if !chunkOk {
-		progStr = "FAIL: " + h.String()
+		status = "FAIL"
 	}
-	progStr = result + " " + progStr
-	rt.progress <- progStr
+	current := int(rt.proccessedCnt)
+	total := int(rt.chunkCount)
+	
+	rt.progress <- FsckProgressMessage{
+		Type:       FsckProgressChunkScan,
+		Message:    fmt.Sprintf("%s: %s", status, h.String()),
+		Percentage: &percentage,
+		Current:    &current,
+		Total:      &total,
+	}
 }
 
 // validateTreeAndTrackChunks validates each commit's content and structure (trees, referenced objects)
@@ -452,7 +539,7 @@ func validateTreeAndTrackChunks(
 	ctx context.Context,
 	vs *types.ValueStore,
 	reachableCommits *hash.HashSet,
-	progress chan string,
+	progress chan FsckProgressMessage,
 	appendErr func(error),
 ) (*hash.HashSet, error) {
 
@@ -493,10 +580,10 @@ type treeScanner struct {
 	history         map[hash.Hash]*error
 	appendErr       func(error)
 	reachableChunks *hash.HashSet
-	progress        chan string
+	progress        chan FsckProgressMessage
 }
 
-func newTreeScanner(vs *types.ValueStore, reachableChunks *hash.HashSet, appendErr func(error), progress chan string) *treeScanner {
+func newTreeScanner(vs *types.ValueStore, reachableChunks *hash.HashSet, appendErr func(error), progress chan FsckProgressMessage) *treeScanner {
 	if reachableChunks == nil {
 		panic("wtf")
 	}
@@ -536,7 +623,10 @@ func (ts *treeScanner) processCommitContent(
 	rootBytes := commit.RootBytes()
 	if len(rootBytes) == hash.ByteLen {
 		rootHash := hash.New(rootBytes)
-		ts.progress <- fmt.Sprintf("Validating commit %s's tree: %s", commitHash.String(), rootHash.String())
+		ts.progress <- FsckProgressMessage{
+			Type:    FsckProgressTreeValidation,
+			Message: fmt.Sprintf("Validating commit %s's tree: %s", commitHash.String(), rootHash.String()),
+		}
 
 		err = ts.validateTreeRoot(ctx, commitHash, rootHash)
 		if err != nil {
@@ -699,7 +789,7 @@ func (ts *treeScanner) validateSerialMsgTree(
 
 // walkCommitDAGFromRefs loads all branches/tags and walks the commit DAG to find reachable commits
 // This is lightweight - only validates commit objects, parent closures, and parent hashes (no trees)
-func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allCommits *hash.HashSet, progress chan string, appendErr func(error)) (hash.HashSet, error) {
+func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allCommits *hash.HashSet, progress chan FsckProgressMessage, appendErr func(error)) (hash.HashSet, error) {
 	startingCommits, err := getRawReferencesFromStoreRoot(ctx, gs, progress, appendErr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get raw references from store root: %w", err)
@@ -709,10 +799,10 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 	for _, refs := range startingCommits {
 		refCount += len(refs)
 	}
-	progress <- fmt.Sprintf("Found %d refs pointing to %d unique starting commits", refCount, len(startingCommits))
+	progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d refs pointing to %d unique starting commits", refCount, len(startingCommits))}
 
 	if len(startingCommits) == 0 {
-		progress <- "No refs found - no commits are reachable"
+		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "No refs found - no commits are reachable"}
 		return make(hash.HashSet), nil
 	}
 
@@ -766,13 +856,13 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 
 	// NM4 - do we want to report which commit objects were unreachable from branches/tags?
 
-	progress <- fmt.Sprintf("Found %d commits reachable from branches/tags", len(reachableCommits))
+	progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d commits reachable from branches/tags", len(reachableCommits))}
 	return reachableCommits, nil
 }
 
 // getRawReferencesFromStoreRoot accesses raw references from the chunk store root.
 // Returns a map from commit hash to list of reference names that point to it.
-func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, progress chan string, appendErr func(error)) (map[hash.Hash][]string, error) {
+func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, progress chan FsckProgressMessage, appendErr func(error)) (map[hash.Hash][]string, error) {
 	// Get the root hash from the chunk store
 	rootHash, err := cs.Root(ctx)
 	if err != nil {
@@ -826,7 +916,7 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, pr
 			doltRef, err := ref.Parse(name)
 			if err != nil {
 				// NM4 - probably shouldn't skip silently. TBD.
-				progress <- fmt.Sprintf("Skipping invalid ref: %s (parse error: %v)", name, err)
+				progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Skipping invalid ref: %s (parse error: %v)", name, err)}
 				return nil
 			}
 
@@ -841,7 +931,7 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, pr
 				}
 			default:
 				// NM4 - probably shouldn't skip silently. TBD.
-				progress <- fmt.Sprintf("Skipping ref type %s: %s", refType, name)
+				progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Skipping ref type %s: %s", refType, name)}
 			}
 		} else if ref.IsWorkingSet(name) {
 			// skip.
@@ -859,7 +949,7 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, pr
 
 // resolveTagToCommit reads a tag object and extracts the commit hash it points to
 // Returns the commit hash and true if successful, or zero hash and false if there was an error
-func resolveTagToCommit(ctx context.Context, cs chunks.ChunkStore, tagName string, tagAddr hash.Hash, progress chan string, appendErr func(error)) (hash.Hash, bool) {
+func resolveTagToCommit(ctx context.Context, cs chunks.ChunkStore, tagName string, tagAddr hash.Hash, progress chan FsckProgressMessage, appendErr func(error)) (hash.Hash, bool) {
 	// Get the tag object from the chunk store
 	tagChunk, err := cs.Get(ctx, tagAddr)
 	if err != nil {
