@@ -245,7 +245,6 @@ func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage
 	if quiet {
 		// Just drain the progress channel without displaying anything
 		for range progress {
-			// when ctx is canceled, keep draining but stop printing
 			if ctx.Err() != nil {
 				return
 			}
@@ -256,8 +255,8 @@ func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage
 	rotation := 0
 	p := cli.NewEphemeralPrinter()
 	lastUpdateTime := time.Now()
-	currentEphemeralMsg := ""
-	
+	var currentEphemeralMsg *FsckProgressMessage
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -266,28 +265,28 @@ func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage
 			if !ok {
 				return
 			}
-			
+
 			switch msg.Type {
 			case FsckProgressMilestone:
 				// Clear any existing ephemeral message and print the persistent message
-				if currentEphemeralMsg != "" {
+				if currentEphemeralMsg != nil {
 					p.Printf("\n")
 					p.Display()
-					currentEphemeralMsg = ""
+					currentEphemeralMsg = nil
 				}
 				cli.Println(msg.Message)
-				
+
 			case FsckProgressChunkScan, FsckProgressTreeValidation:
 				// Store ephemeral message for in-line updates
-				currentEphemeralMsg = msg.Message
+				currentEphemeralMsg = &msg
 			}
-			
+
 		// Update ephemeral display every second
 		case <-time.After(1 * time.Second):
 		}
-		
+
 		// Update spinner and ephemeral message
-		if currentEphemeralMsg != "" && time.Since(lastUpdateTime) > 1*time.Second {
+		if currentEphemeralMsg != nil && time.Since(lastUpdateTime) > 1*time.Second {
 			rotation++
 			var spinner string
 			switch rotation % 4 {
@@ -300,8 +299,25 @@ func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage
 			case 3:
 				spinner = "/"
 			}
+
+			// Display with percentage and/or count information if available
+			var operation string
+			switch currentEphemeralMsg.Type {
+			case FsckProgressChunkScan:
+				operation = "Scanning chunks"
+			case FsckProgressTreeValidation:
+				operation = "Validating trees"
+			default:
+				operation = ""
+			}
 			
-			p.Printf("%s %s", spinner, currentEphemeralMsg)
+			if operation != "" && currentEphemeralMsg.Percentage != nil && currentEphemeralMsg.Current != nil && currentEphemeralMsg.Total != nil {
+				p.Printf("%s %s: %d/%d (%.1f%% complete)", spinner, operation, *currentEphemeralMsg.Current, *currentEphemeralMsg.Total, *currentEphemeralMsg.Percentage)
+			} else if operation != "" && currentEphemeralMsg.Percentage != nil {
+				p.Printf("%s %s: %.1f%% complete", spinner, operation, *currentEphemeralMsg.Percentage)
+			} else {
+				p.Printf("%s %s", spinner, currentEphemeralMsg.Message)
+			}
 			p.Display()
 			lastUpdateTime = time.Now()
 		}
@@ -523,7 +539,7 @@ func (rt *roundTripper) roundTripAndCategorizeChunk(chunk chunks.Chunk) {
 	}
 	current := int(rt.proccessedCnt)
 	total := int(rt.chunkCount)
-	
+
 	rt.progress <- FsckProgressMessage{
 		Type:       FsckProgressChunkScan,
 		Message:    fmt.Sprintf("%s: %s", status, h.String()),
@@ -546,7 +562,21 @@ func validateTreeAndTrackChunks(
 	reachableChunks := &hash.HashSet{}
 	treeScnr := newTreeScanner(vs, reachableChunks, appendErr, progress)
 
+	totalCommits := len(*reachableCommits)
+	processedCommits := 0
+
 	for commitHash := range *reachableCommits {
+		processedCommits++
+		percentage := (float64(processedCommits) * 100) / float64(totalCommits)
+
+		// Send progress update for tree validation
+		progress <- FsckProgressMessage{
+			Type:       FsckProgressTreeValidation,
+			Message:    fmt.Sprintf("Validating commit %s", commitHash.String()),
+			Percentage: &percentage,
+			Current:    &processedCommits,
+			Total:      &totalCommits,
+		}
 		// Load and validate the commit
 		commitValue, err := vs.ReadValue(ctx, commitHash)
 		if err != nil {
@@ -623,11 +653,6 @@ func (ts *treeScanner) processCommitContent(
 	rootBytes := commit.RootBytes()
 	if len(rootBytes) == hash.ByteLen {
 		rootHash := hash.New(rootBytes)
-		ts.progress <- FsckProgressMessage{
-			Type:    FsckProgressTreeValidation,
-			Message: fmt.Sprintf("Validating commit %s's tree: %s", commitHash.String(), rootHash.String()),
-		}
-
 		err = ts.validateTreeRoot(ctx, commitHash, rootHash)
 		if err != nil {
 			// Any Errors here are unexpected. appendErr should be used for things we expect to possibly fail.
