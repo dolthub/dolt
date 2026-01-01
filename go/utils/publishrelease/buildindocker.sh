@@ -107,7 +107,7 @@ for tuple in $OS_ARCH_TUPLES; do
       go build \
         $GO_BUILD_FLAGS \
         -ldflags="${platform_go_ldflags[${tuple}]}" \
-        -tags icu_static \
+        -tags="icu_static,timetzdata" \
         -trimpath \
         -o "$o/bin/$obin" "./cmd/$bin/"
   done
