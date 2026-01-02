@@ -153,6 +153,9 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 	schCols := t.sch.GetAllCols()
 	for _, c := range lookupCols {
 		col := schCols.LowerNameToCol[c.Col]
+		if !sql.IsConvertibleKeyType(col.TypeInfo.ToSqlType(), c.Lit.Type()) {
+			return sql.IndexLookup{}, nil, nil, false, nil
+		}
 		idx := schCols.TagToIdx[col.Tag]
 		colset.Add(idx + 1)
 	}
