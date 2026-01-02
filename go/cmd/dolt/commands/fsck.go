@@ -227,7 +227,6 @@ func reviveJournalWithDataLoss(dEnv *env.DoltEnv) int {
 }
 
 func printFSCKReport(report *FSCKReport) int {
-	cli.Printf("Chunks Scanned: %d\n", report.ChunkCount)
 	if len(*(report.Problems)) == 0 {
 		cli.Println("No problems found.")
 		return 0
@@ -310,7 +309,7 @@ func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage
 			default:
 				operation = ""
 			}
-			
+
 			if operation != "" && currentEphemeralMsg.Percentage != nil && currentEphemeralMsg.Current != nil && currentEphemeralMsg.Total != nil {
 				p.Printf("%s %s: %d/%d (%.1f%% complete)", spinner, operation, *currentEphemeralMsg.Current, *currentEphemeralMsg.Total, *currentEphemeralMsg.Percentage)
 			} else if operation != "" && currentEphemeralMsg.Percentage != nil {
