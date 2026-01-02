@@ -119,7 +119,6 @@ func (mt *memTable) addGetChildRefs(getAddrs chunks.GetAddrsCb) {
 
 func (mt *memTable) addChildRefs(addrs hash.HashSet) {
 	for h := range addrs {
-		h := h
 		mt.pendingRefs = append(mt.pendingRefs, hasRecord{
 			a:      &h,
 			prefix: h.Prefix(),
