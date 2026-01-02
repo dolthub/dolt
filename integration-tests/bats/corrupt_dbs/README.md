@@ -35,8 +35,12 @@ and perhaps other tools in the future. Please catalog the contents of each datab
   Original journal preserved in: vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv_saved_2025_12_11_113641
 
 ## missing_fk_object
-  Manually mangles DB. It has two tables, one with a FK constraint on the other. the object was removed
+  Manually mangled DB. It has two tables, one with a FK constraint on the other. the object was removed
   with the following command:
   `dolt admin journal-inspect --filter-chunks g0a5tikh3d9rnb9olelkffpukalc4v7o .dolt/noms/vvvvvvv*
 
   Original: vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv_saved_2025_12_11_164648
+
+## missing_table_object
+  Manually mangled DB. The root content of a commit was removed with:
+  `dolt admin journal-inspect --filter-chunks fthj68monkbgkrb6g4c11php7ht2dibd ./dolt/noms/vvvvvv*`
