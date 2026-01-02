@@ -159,7 +159,7 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
   run dolt fsck
   [ "$status" -eq 1 ]
-  [[ "$output" =~ "commit::gub2hagj8cp2mcdlp95l90sisp37iupd: tree 2dr5okftnc3velmrt0191j479jiel7de -> (missing) 8tsjiu5fcsvchoo4re8bgftuuogl7ko1" ]] || false
+  [[ "$output" =~ "commit::gub2hagj8cp2mcdlp95l90sisp37iupd: missing chunk 8tsjiu5fcsvchoo4re8bgftuuogl7ko1" ]] || false
 }
 
 @test "fsck: missing fk object" {
@@ -168,6 +168,14 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
     run dolt fsck
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "commit::sf9a4d6i5pg2uds56s18qpsfmv7v8r11: tree 6rod0jjp8j8d6rgjsrlo3vga490r9hg3 -> (missing) g0a5tikh3d9rnb9olelkffpukalc4v7o" ]] || false
+    [[ "$output" =~ "commit::sf9a4d6i5pg2uds56s18qpsfmv7v8r11: missing chunk g0a5tikh3d9rnb9olelkffpukalc4v7o" ]] || false
 }
 
+@test "fsck: missing table object" {
+    mkdir .dolt
+    cp -R $BATS_CWD/corrupt_dbs/missing_table_object/* .dolt/
+
+    run dolt fsck
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "commit::0vh56jekvb9hs0kqf8e8dc5208s0o0mi: missing chunk fthj68monkbgkrb6g4c11php7ht2dibd" ]] || false
+}
