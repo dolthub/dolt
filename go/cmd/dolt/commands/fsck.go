@@ -546,7 +546,7 @@ func (rt *roundTripper) decodeMsg(chk chunks.Chunk) string {
 }
 
 // validateCommitTrees validates each commit's content and structure (trees, referenced objects)
-// but does NOT follow parent hashes (no DAG traversal). Parent hashes are validated but not followed.
+// but does not follow parent hashes (no DAG traversal). Parent hashes are validated but not followed.
 func validateCommitTrees(
 	ctx context.Context,
 	vs *types.ValueStore,
@@ -746,8 +746,6 @@ func (ts *treeScanner) validateTreeRoot(
 		return nil
 	}
 
-	ts.reachableChunks.Insert(treeHash)
-
 	treeValue, err := ts.vs.ReadValue(ctx, treeHash)
 	if err != nil || treeValue == nil {
 		err2 := fmt.Errorf("commit::%s: failed to read tree %s: %w", commitHash.String(), treeHash.String(), err)
@@ -849,7 +847,7 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 		return hash.HashSet{}, nil
 	}
 
-	// commitQueue us used as the work queue, and reachableCommits tracks all commits we've put in the queue (to avoid double enqueueing)
+	// commitQueue is used as the work queue, and reachableCommits tracks all commits we've put in the queue (to avoid double enqueueing)
 	var commitQueue []hash.Hash
 	reachableCommits := hash.HashSet{}
 	for commitHash := range startingCommits {
@@ -885,6 +883,7 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 			for _, parentHash := range parentAddrs {
 				if !reachableCommits.Has(parentHash) {
 					commitQueue = append(commitQueue, parentHash)
+					reachableCommits.Insert(parentHash)
 				}
 			}
 		} else {
