@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -49,6 +50,13 @@ func createTestSchema() schema.Schema {
 	sch := schema.MustSchemaFromCols(colColl)
 	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
 	return sch
+}
+
+func TestSchemaUnmarshal(t *testing.T) {
+	_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_Default, nil, nil)
+	val, err := UnmarshalSchemaAtAddr(context.Background(), vrw, hash.Parse("badaddrvvvvvvvvvvvvvvvvvvvvvvvvv"))
+	require.Error(t, err)
+	require.Nil(t, val)
 }
 
 func TestNomsMarshalling(t *testing.T) {

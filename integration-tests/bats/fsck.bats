@@ -143,3 +143,39 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "recovermenoloss" ]] || false
 }
+
+@test "fsck: missing closure object" {
+    mkdir .dolt
+    cp -R $BATS_CWD/corrupt_dbs/missing_closure_object/* .dolt/
+
+    run dolt fsck
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Commit 00apprui1m4mtcs8umenpt8e2lkjmihc is missing data. Failed to read commit closure d92u2dpnhocp5pv4pn7vgm9fs30vdv94" ]] || false
+}
+
+@test "fsck: missing schema object" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/missing_schema_object/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "commit::gub2hagj8cp2mcdlp95l90sisp37iupd: missing chunk 8tsjiu5fcsvchoo4re8bgftuuogl7ko1" ]] || false
+}
+
+@test "fsck: missing fk object" {
+    mkdir .dolt
+    cp -R $BATS_CWD/corrupt_dbs/missing_fk_object/* .dolt/
+
+    run dolt fsck
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "commit::sf9a4d6i5pg2uds56s18qpsfmv7v8r11: missing chunk g0a5tikh3d9rnb9olelkffpukalc4v7o" ]] || false
+}
+
+@test "fsck: missing table object" {
+    mkdir .dolt
+    cp -R $BATS_CWD/corrupt_dbs/missing_table_object/* .dolt/
+
+    run dolt fsck
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "commit::0vh56jekvb9hs0kqf8e8dc5208s0o0mi: missing chunk fthj68monkbgkrb6g4c11php7ht2dibd" ]] || false
+}
