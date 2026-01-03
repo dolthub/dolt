@@ -338,6 +338,10 @@ func (r fbRvStorage) GetForeignKeys(ctx context.Context, vr types.ValueReader) (
 	if err != nil {
 		return types.SerialMessage{}, false, err
 	}
+	if v == nil {
+		return types.SerialMessage{}, false, fmt.Errorf("malformed database: foreign key object %s not found", addr.String())
+	}
+
 	return v.(types.SerialMessage), true, nil
 }
 

@@ -632,9 +632,10 @@ func LoadRootNomsValueFromRootIshAddr(ctx context.Context, vr types.ValueReader,
 	}
 }
 
+// newHead constructs a dsHead from a types.Value representing the head and its address. head must be non-nil
 func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, error) {
 	if head == nil {
-		return nil, nil
+		return nil, fmt.Errorf("head value is nil for address %s", addr.String())
 	}
 
 	if sm, ok := head.(types.SerialMessage); ok {
@@ -856,7 +857,8 @@ func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 		if err != nil {
 			return nil, false, err
 		}
-		return v, v != nil, nil
+
+		return v, !types.IsNull(v), nil
 	}
 	return nil, false, nil
 }

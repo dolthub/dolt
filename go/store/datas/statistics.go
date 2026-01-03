@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
@@ -120,6 +121,10 @@ func parse_Statistics(ctx context.Context, bs []byte, ns tree.NodeStore, vr type
 	value, err := vr.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
+	}
+
+	if types.IsNull(value) {
+		return nil, blobstore.NewMissingChunkError(addr)
 	}
 
 	m, err := shim.MapFromValue(value, schema.StatsTableDoltSchema, ns, false)

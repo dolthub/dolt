@@ -564,7 +564,7 @@ func OutputVectorIndexNodeBytes(w io.Writer, msg serial.Message) error {
 	return nil
 }
 
-func (sm SerialMessage) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (sm SerialMessage) Less(ctx context.Context, _ *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(SerialMessage); ok {
 		return bytes.Compare(sm, v2) == -1, nil
 	}
@@ -588,7 +588,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 	switch serial.GetFileID(sm) {
 	case serial.StoreRootFileID:
 		var msg serial.StoreRoot
-		err := serial.InitStoreRootRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		err := serial.InitStoreRootRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
 			return err
 		}
@@ -598,7 +598,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		}
 	case serial.StashListFileID:
 		var msg serial.StashList
-		err := serial.InitStashListRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		err := serial.InitStashListRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
 			return err
 		}
@@ -608,14 +608,14 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		}
 	case serial.StatisticFileID:
 		var msg serial.Statistic
-		err := serial.InitStatisticRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		err := serial.InitStatisticRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
 			return err
 		}
 		return cb(hash.New(msg.RootBytes()))
 	case serial.StashFileID:
 		var msg serial.Stash
-		err := serial.InitStashRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		err := serial.InitStashRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
 			return err
 		}
@@ -627,14 +627,14 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		}
 	case serial.TagFileID:
 		var msg serial.Tag
-		err := serial.InitTagRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		err := serial.InitTagRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
 			return err
 		}
 		return cb(hash.New(msg.CommitAddrBytes()))
 	case serial.WorkingSetFileID:
 		var msg serial.WorkingSet
-		err := serial.InitWorkingSetRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		err := serial.InitWorkingSetRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
 			return err
 		}
@@ -660,7 +660,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		}
 	case serial.RootValueFileID:
 		var msg serial.RootValue
-		err := serial.InitRootValueRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		err := serial.InitRootValueRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
 			return err
 		}
@@ -681,7 +681,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 		return DoltgresRootValueWalkAddrs(sm, cb)
 	case serial.TableFileID:
 		var msg serial.Table
-		err := serial.InitTableRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		err := serial.InitTableRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
 			return err
 		}
@@ -754,7 +754,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 			}
 		}
 		var msg serial.Commit
-		err = serial.InitCommitRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		err = serial.InitCommitRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
 			return err
 		}
@@ -782,9 +782,9 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 	return nil
 }
 
-func SerialCommitParentAddrs(nbf *NomsBinFormat, sm SerialMessage) ([]hash.Hash, error) {
+func SerialCommitParentAddrs(_ *NomsBinFormat, sm SerialMessage) ([]hash.Hash, error) {
 	var msg serial.Commit
-	err := serial.InitCommitRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+	err := serial.InitCommitRoot(&msg, sm, serial.MessagePrefixSz)
 	if err != nil {
 		return nil, err
 	}
@@ -813,7 +813,7 @@ func (sm SerialMessage) typeOf() (*Type, error) {
 	return PrimitiveTypeMap[SerialMessageKind], nil
 }
 
-func (sm SerialMessage) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+func (sm SerialMessage) writeTo(w nomsWriter, _ *NomsBinFormat) error {
 	w.writeRaw(sm)
 	return nil
 }

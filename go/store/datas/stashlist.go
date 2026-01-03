@@ -23,6 +23,7 @@ import (
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -207,9 +208,8 @@ func LoadStashList(ctx context.Context, nbf *types.NomsBinFormat, ns tree.NodeSt
 	if err != nil {
 		return nil, err
 	}
-
-	if val == nil {
-		return nil, errors.New("root hash doesn't exist")
+	if types.IsNull(val) {
+		return nil, blobstore.NewMissingChunkError(rootHash)
 	}
 
 	return getExistingStashList(ctx, ns, val)

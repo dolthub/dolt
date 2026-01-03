@@ -30,6 +30,7 @@ import (
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -249,8 +250,8 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 		if err != nil {
 			return nil, err
 		}
-		if commitSt == nil {
-			panic("parent not found " + h.String())
+		if types.IsNull(commitSt) {
+			return nil, blobstore.NewMissingChunkError(h)
 		}
 		ref, err := types.NewRef(commitSt, vrw.Format())
 		if err != nil {
@@ -613,6 +614,7 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	}
 }
 
+// GetCommittedValue returns the value of a commit. If the commit isn't found, nil is returned.
 func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value) (types.Value, error) {
 	if sm, ok := cv.(types.SerialMessage); ok {
 		data := []byte(sm)
@@ -628,6 +630,7 @@ func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value
 		copy(roothash[:], cmsg.RootBytes())
 		return vr.ReadValue(ctx, roothash)
 	}
+
 	c, ok := cv.(types.Struct)
 	if !ok {
 		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
