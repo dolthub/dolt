@@ -680,6 +680,10 @@ func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, err
 }
 
 func newDataset(ctx context.Context, db *database, id string, head types.Value, addr hash.Hash) (Dataset, error) {
+	if types.IsNull(head) && addr.IsEmpty() {
+		return Dataset{nil, db, id}, nil
+	}
+
 	h, err := newHead(ctx, head, addr)
 	if err != nil {
 		return Dataset{}, err
