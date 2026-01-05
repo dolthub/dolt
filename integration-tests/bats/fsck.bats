@@ -150,7 +150,7 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
     run dolt fsck
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Commit 00apprui1m4mtcs8umenpt8e2lkjmihc is missing data. Failed to read commit closure d92u2dpnhocp5pv4pn7vgm9fs30vdv94" ]] || false
+    [[ "$output" =~ "::commit:00apprui1m4mtcs8umenpt8e2lkjmihc: missing data. failed to read commit closure d92u2dpnhocp5pv4pn7vgm9fs30vdv94" ]] || false
 }
 
 @test "fsck: missing schema object" {
