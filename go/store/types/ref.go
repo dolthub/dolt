@@ -26,7 +26,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -178,13 +177,12 @@ func (r Ref) Height() uint64 {
 	return dec.readCount()
 }
 
+// TargetValue retrieves the value pointed to by the Ref from the provided ValueReader. It can return a nil Value
+// and a nil error if the target value is not found.
 func (r Ref) TargetValue(ctx context.Context, vr ValueReader) (Value, error) {
 	val, err := vr.ReadValue(ctx, r.TargetHash())
 	if err != nil {
 		return nil, err
-	}
-	if IsNull(val) {
-		return nil, blobstore.NewMissingChunkError(r.TargetHash())
 	}
 	return val, nil
 }
