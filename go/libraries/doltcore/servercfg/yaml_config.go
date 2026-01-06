@@ -194,7 +194,7 @@ func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
 		return nil, fmt.Errorf("Failed to read file '%s'. Error: %s", path, err.Error())
 	}
 
-	data, err = interpolateEnv(data, nil)
+	data, err = interpolateEnv(data)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to interpolate environment variables in yaml file '%s'. Error: %s", path, err.Error())
 	}

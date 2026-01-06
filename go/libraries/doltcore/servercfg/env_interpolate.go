@@ -15,62 +15,64 @@
 package servercfg
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 )
 
 type envPlaceholder struct {
 	varName      string
-	def          []byte
-	hasDefault   bool
 	closingBrace int
 }
 
 // interpolateEnv expands environment variable placeholders in |data|.
 //
 // Supported syntax:
-// - ${VAR}            : expands to VAR's value; error if unset or empty
-// - ${VAR:-default}   : expands to VAR's value if set and non-empty; otherwise to default
+// - ${VAR}            : expands to VAR's value; error if VAR is unset or empty
 // - $$               : escapes to a literal '$'
 //
 // Notes:
 // - Expansion is applied to the input text only (env var values are inserted literally).
-// - Default expressions are expanded (i.e. nested placeholders inside defaults are supported).
 func interpolateEnv(data []byte) ([]byte, error) {
 	out := make([]byte, 0, len(data))
-	for i := 0; i < len(data); i++ {
-		b := data[i]
-		if b != '$' {
-			out = append(out, data[i])
-			continue
+	for i := 0; i < len(data); {
+		relDollar := bytes.IndexByte(data[i:], '$')
+		if relDollar == -1 {
+			out = append(out, data[i:]...)
+			break
 		}
 
+		dollarIdx := i + relDollar
+		out = append(out, data[i:dollarIdx]...)
+
 		// Escape sequence: $$ -> $
-		if i+1 < len(data) && data[i+1] == '$' {
+		if dollarIdx+1 < len(data) && data[dollarIdx+1] == '$' {
 			out = append(out, '$')
-			i++
+			i = dollarIdx + 2
 			continue
 		}
 
 		// Placeholder: ${...}
-		if i+1 >= len(data) || data[i+1] != '{' {
-			// Leave stray '$' untouched
-			out = append(out, '$')
+		if dollarIdx+1 < len(data) && data[dollarIdx+1] == '{' {
+			ph, err := parseEnvPlaceholder(data, dollarIdx)
+			if err != nil {
+				return nil, err
+			}
+
+			out, err = appendEnvExpansion(out, ph)
+			if err != nil {
+				return nil, err
+			}
+
+			// Continue after the closing brace.
+			i = ph.closingBrace + 1
 			continue
 		}
 
-		ph, err := parseEnvPlaceholder(data, i)
-		if err != nil {
-			return nil, err
-		}
-
-		out, err = appendEnvExpansion(out, ph)
-		if err != nil {
-			return nil, err
-		}
-
-		// Skip to closing brace.
-		i = ph.closingBrace
+		// Leave stray '$' untouched
+		out = append(out, '$')
+		i = dollarIdx + 1
 	}
 
 	return out, nil
@@ -80,82 +82,110 @@ func parseEnvPlaceholder(data []byte, dollarIdx int) (envPlaceholder, error) {
 	// data[dollarIdx] == '$' and data[dollarIdx+1] == '{' expected.
 	start := dollarIdx + 2 // after ${
 
-	closingBrace := start
-	for ; closingBrace < len(data) && data[closingBrace] != '}'; closingBrace++ {
-	}
-	if closingBrace >= len(data) {
-		return envPlaceholder{}, fmt.Errorf("unterminated environment placeholder starting at byte %d", dollarIdx)
+	rest := data[start:]
+
+	relBrace := bytes.IndexByte(rest, '}')
+	relNL := bytes.IndexByte(rest, '\n')
+	relCR := bytes.IndexByte(rest, '\r')
+
+	relLineEnd := minPositive(relNL, relCR)
+	if relLineEnd != -1 && (relBrace == -1 || relLineEnd < relBrace) {
+		// Placeholders must be on a single line. This prevents bad/missing braces from
+		// consuming the rest of the file and producing giant error messages.
+		return envPlaceholder{}, envErrorAt(data, dollarIdx, "unterminated environment placeholder")
 	}
 
+	if relBrace == -1 {
+		return envPlaceholder{}, envErrorAt(data, dollarIdx, "unterminated environment placeholder")
+	}
+
+	closingBrace := start + relBrace
+
 	expr := data[start:closingBrace]
-	varName, def, hasDefault, err := parseEnvExpr(expr)
+	varName, err := parseEnvExpr(expr)
 	if err != nil {
-		return envPlaceholder{}, err
+		return envPlaceholder{}, envErrorAt(data, dollarIdx, err.Error())
 	}
 
 	return envPlaceholder{
 		varName:      varName,
-		def:          def,
-		hasDefault:   hasDefault,
 		closingBrace: closingBrace,
 	}, nil
 }
 
+func minPositive(a, b int) int {
+	if a == -1 {
+		return b
+	}
+	if b == -1 {
+		return a
+	}
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func appendEnvExpansion(out []byte, ph envPlaceholder) ([]byte, error) {
 	val, ok := os.LookupEnv(ph.varName)
-	if ok && val != "" {
-		return append(out, []byte(val)...), nil
+	if !ok || val == "" {
+		return nil, fmt.Errorf("environment variable %q is not set or empty", ph.varName)
 	}
-
-	if ph.hasDefault {
-		expandedDef, err := interpolateEnv(ph.def)
-		if err != nil {
-			return nil, err
-		}
-		return append(out, expandedDef...), nil
-	}
-
-	return nil, fmt.Errorf("environment variable %q is not set", ph.varName)
+	return append(out, []byte(val)...), nil
 }
 
-func parseEnvExpr(expr []byte) (varName string, def []byte, hasDefault bool, err error) {
-	// Split on the first occurrence of ":-"
-	varPart := expr
-	var defPart []byte
-	for k := 0; k+1 < len(expr); k++ {
-		if expr[k] == ':' && expr[k+1] == '-' {
-			varPart = expr[:k]
-			defPart = expr[k+2:]
-			hasDefault = true
-			break
-		}
+func parseEnvExpr(expr []byte) (varName string, err error) {
+	// Default expressions are intentionally unsupported to avoid silently masking misconfiguration.
+	if bytes.Contains(expr, []byte(":-")) {
+		return "", fmt.Errorf("environment variable default expressions are not supported (found %q)", string(expr))
 	}
 
-	if len(varPart) == 0 {
-		return "", nil, false, fmt.Errorf("invalid environment placeholder: empty variable name")
+	if len(expr) == 0 {
+		return "", fmt.Errorf("invalid environment placeholder: empty variable name")
 	}
-	if !isValidEnvVarName(varPart) {
-		return "", nil, false, fmt.Errorf("invalid environment variable name %q", string(varPart))
+	if !isValidEnvVarName(expr) {
+		return "", fmt.Errorf("invalid environment variable name %q", string(expr))
 	}
 
-	return string(varPart), defPart, hasDefault, nil
+	return string(expr), nil
 }
+
+var envVarRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func isValidEnvVarName(b []byte) bool {
-	if len(b) == 0 {
-		return false
+	return envVarRe.Match(b)
+}
+
+func envErrorAt(data []byte, idx int, msg string) error {
+	line, col := lineAndColAt(data, idx)
+	return fmt.Errorf("%s (line %d, column %d)", msg, line, col)
+}
+
+func lineAndColAt(data []byte, idx int) (line int, col int) {
+	if idx < 0 {
+		idx = 0
 	}
-	for i := range b {
-		c := b[i]
-		if i == 0 {
-			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
-				return false
+	if idx > len(data) {
+		idx = len(data)
+	}
+
+	line = 1
+	col = 1
+	for i := 0; i < idx; i++ {
+		switch data[i] {
+		case '\n':
+			line++
+			col = 1
+		case '\r':
+			line++
+			col = 1
+			// Handle CRLF as a single newline.
+			if i+1 < idx && data[i+1] == '\n' {
+				i++
 			}
-		} else {
-			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
-				return false
-			}
+		default:
+			col++
 		}
 	}
-	return true
+	return line, col
 }

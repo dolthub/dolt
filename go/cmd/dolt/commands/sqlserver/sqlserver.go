@@ -88,7 +88,6 @@ ENVIRONMENT VARIABLE INTERPOLATION:
 SQL server yaml configs support environment variable interpolation:
 
   ${VAR}             Expands to the value of VAR (error if VAR is unset or empty)
-  ${VAR:-default}    Expands to VAR if set and non-empty; otherwise expands to default
   $$                Escapes to a literal '$'
 
 Notes:

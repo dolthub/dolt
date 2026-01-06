@@ -63,28 +63,22 @@ EOF
 }
 
 # bats test_tags=no_lambda
-@test "sql-server-config-env-interpolation: default expression uses default when unset/empty" {
+@test "sql-server-config-env-interpolation: default expression syntax fails clearly" {
   cd repo1
 
   SQL_PORT=$(definePORT)
-  unset DOLT_TEST_SQLSERVER_PORT
 
-  # Leave ${DOLT_TEST_SQLSERVER_PORT:-<default>} unexpanded for Dolt, but expand $SQL_PORT here.
-  cat > config.yml <<EOF
+  # Use a single-quoted heredoc so bash does not expand ${...}
+  cat > config.yml <<'EOF'
 listener:
   host: "0.0.0.0"
-  port: \${DOLT_TEST_SQLSERVER_PORT:-$SQL_PORT}
+  port: ${DOLT_TEST_SQLSERVER_PORT:-15200}
 EOF
 
-  if [ "$IS_WINDOWS" == true ]; then
-    PORT=$SQL_PORT dolt sql-server --config ./config.yml &
-  else
-    PORT=$SQL_PORT dolt sql-server --config ./config.yml --socket "dolt.$SQL_PORT.sock" &
-  fi
-  SERVER_PID=$!
-
-  run wait_for_connection "$SQL_PORT" 8500
-  [ $status -eq 0 ]
+  run dolt sql-server --config ./config.yml
+  [ $status -ne 0 ]
+  log_output_has "Failed to interpolate environment variables in yaml file"
+  log_output_has "default expressions"
 }
 
 # bats test_tags=no_lambda

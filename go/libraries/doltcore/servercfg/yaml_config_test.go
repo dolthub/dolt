@@ -238,24 +238,8 @@ listener:
 	require.Equal(t, 15200, cfg.Port())
 }
 
-func TestYamlConfigFromFileEnvInterpolation_Default(t *testing.T) {
-	// Empty env vars are treated as missing for interpolation purposes.
-	t.Setenv("DOLT_TEST_SQLSERVER_PORT", "")
-
-	fs := filesys.EmptyInMemFS("/")
-	err := fs.WriteFile("config.yaml", []byte(`
-listener:
-  port: ${DOLT_TEST_SQLSERVER_PORT:-15200}
-`), 0o644)
-	require.NoError(t, err)
-
-	cfg, err := YamlConfigFromFile(fs, "config.yaml")
-	require.NoError(t, err)
-	require.Equal(t, 15200, cfg.Port())
-}
-
 func TestYamlConfigFromFileEnvInterpolation_MissingVarErrors(t *testing.T) {
-	// Empty env vars are treated as missing for interpolation purposes.
+	// Empty env vars result in an interpolation error.
 	t.Setenv("DOLT_TEST_SQLSERVER_MISSING", "")
 
 	fs := filesys.EmptyInMemFS("/")
@@ -270,6 +254,32 @@ listener:
 	require.Contains(t, err.Error(), "DOLT_TEST_SQLSERVER_MISSING")
 }
 
+func TestYamlConfigFromFileEnvInterpolation_UnsetVarErrors(t *testing.T) {
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+listener:
+  port: ${DOLT_TEST_SQLSERVER_UNSET}
+`), 0o644)
+	require.NoError(t, err)
+
+	_, err = YamlConfigFromFile(fs, "config.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "DOLT_TEST_SQLSERVER_UNSET")
+}
+
+func TestYamlConfigFromFileEnvInterpolation_DefaultSyntaxErrors(t *testing.T) {
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+listener:
+  port: ${DOLT_TEST_SQLSERVER_PORT:-15200}
+`), 0o644)
+	require.NoError(t, err)
+
+	_, err = YamlConfigFromFile(fs, "config.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "default expressions")
+}
+
 func TestYamlConfigFromFileEnvInterpolation_EscapeDollar(t *testing.T) {
 	fs := filesys.EmptyInMemFS("/")
 	err := fs.WriteFile("config.yaml", []byte(`
@@ -282,6 +292,24 @@ golden_mysql_conn: "$$dollar"
 	yc, ok := cfg.(*YAMLConfig)
 	require.True(t, ok)
 	require.Equal(t, "$dollar", yc.GoldenMysqlConnectionString())
+}
+
+func TestYamlConfigFromFileEnvInterpolation_UnterminatedStopsAtNewline(t *testing.T) {
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+listener:
+  port: ${DOLT_TEST_SQLSERVER_PORT
+behavior:
+  read_only: true
+junk: "}"
+`), 0o644)
+	require.NoError(t, err)
+
+	_, err = YamlConfigFromFile(fs, "config.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unterminated environment placeholder")
+	require.Contains(t, err.Error(), "line 3")
+	require.Contains(t, err.Error(), "column")
 }
 
 func TestValidateClusterConfig(t *testing.T) {
