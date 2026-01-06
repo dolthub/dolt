@@ -1,3 +1,17 @@
+// Copyright 2025 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package servercfg
 
 import (
@@ -8,6 +22,13 @@ import (
 // envLookupFunc returns (value, true) if the env var exists.
 // Note that an env var may exist but be empty.
 type envLookupFunc func(string) (string, bool)
+
+type envPlaceholder struct {
+	varName      string
+	def          []byte
+	hasDefault   bool
+	closingBrace int
+}
 
 // interpolateEnv expands environment variable placeholders in |data|.
 //
@@ -26,7 +47,8 @@ func interpolateEnv(data []byte, lookup envLookupFunc) ([]byte, error) {
 
 	out := make([]byte, 0, len(data))
 	for i := 0; i < len(data); i++ {
-		if data[i] != '$' {
+		b := data[i]
+		if b != '$' {
 			out = append(out, data[i])
 			continue
 		}
@@ -45,39 +67,63 @@ func interpolateEnv(data []byte, lookup envLookupFunc) ([]byte, error) {
 			continue
 		}
 
-		// Find closing brace.
-		start := i + 2 // after ${
-		j := start
-		for ; j < len(data) && data[j] != '}'; j++ {
-		}
-		if j >= len(data) {
-			return nil, fmt.Errorf("unterminated environment placeholder starting at byte %d", i)
-		}
-
-		expr := data[start:j]
-		varName, def, hasDefault, err := parseEnvExpr(expr)
+		ph, err := parseEnvPlaceholder(data, i)
 		if err != nil {
 			return nil, err
 		}
 
-		val, ok := lookup(varName)
-		if ok && val != "" {
-			out = append(out, []byte(val)...)
-		} else if hasDefault {
-			expandedDef, err := interpolateEnv(def, lookup)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, expandedDef...)
-		} else {
-			return nil, fmt.Errorf("environment variable %q is not set", varName)
+		out, err = appendEnvExpansion(out, lookup, ph)
+		if err != nil {
+			return nil, err
 		}
 
 		// Skip to closing brace.
-		i = j
+		i = ph.closingBrace
 	}
 
 	return out, nil
+}
+
+func parseEnvPlaceholder(data []byte, dollarIdx int) (envPlaceholder, error) {
+	// data[dollarIdx] == '$' and data[dollarIdx+1] == '{' expected.
+	start := dollarIdx + 2 // after ${
+
+	closingBrace := start
+	for ; closingBrace < len(data) && data[closingBrace] != '}'; closingBrace++ {
+	}
+	if closingBrace >= len(data) {
+		return envPlaceholder{}, fmt.Errorf("unterminated environment placeholder starting at byte %d", dollarIdx)
+	}
+
+	expr := data[start:closingBrace]
+	varName, def, hasDefault, err := parseEnvExpr(expr)
+	if err != nil {
+		return envPlaceholder{}, err
+	}
+
+	return envPlaceholder{
+		varName:      varName,
+		def:          def,
+		hasDefault:   hasDefault,
+		closingBrace: closingBrace,
+	}, nil
+}
+
+func appendEnvExpansion(out []byte, lookup envLookupFunc, ph envPlaceholder) ([]byte, error) {
+	val, ok := lookup(ph.varName)
+	if ok && val != "" {
+		return append(out, []byte(val)...), nil
+	}
+
+	if ph.hasDefault {
+		expandedDef, err := interpolateEnv(ph.def, lookup)
+		if err != nil {
+			return nil, err
+		}
+		return append(out, expandedDef...), nil
+	}
+
+	return nil, fmt.Errorf("environment variable %q is not set", ph.varName)
 }
 
 func parseEnvExpr(expr []byte) (varName string, def []byte, hasDefault bool, err error) {
@@ -121,4 +167,3 @@ func isValidEnvVarName(b []byte) bool {
 	}
 	return true
 }
-
