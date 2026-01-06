@@ -61,8 +61,8 @@ type DiffTableFunction struct {
 	toDate           *types.Timestamp
 	sqlSch           sql.Schema
 	showSkinny       bool
-	includeCols      map[string]struct{}
 	overriddenSchema schema.Schema
+	includeCols      map[string]struct{}
 }
 
 // NewInstance creates a new instance of TableFunction interface
