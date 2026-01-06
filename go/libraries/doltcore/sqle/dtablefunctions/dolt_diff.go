@@ -55,14 +55,14 @@ type DiffTableFunction struct {
 	dotCommitExpr    sql.Expression
 	tableNameExpr    sql.Expression
 	database         sql.Database
+	overriddenSchema schema.Schema
 	ctx              *sql.Context
 	joiner           *rowconv.Joiner
 	fromDate         *types.Timestamp
 	toDate           *types.Timestamp
+	includeCols      map[string]struct{}
 	sqlSch           sql.Schema
 	showSkinny       bool
-	overriddenSchema schema.Schema
-	includeCols      map[string]struct{}
 }
 
 // NewInstance creates a new instance of TableFunction interface
