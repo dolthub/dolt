@@ -38,6 +38,7 @@ const (
 	PushCmdRef  = "push"
 	PopCmdRef   = "pop"
 	DropCmdRef  = "drop"
+	ApplyCmdRef = "apply"
 	ClearCmdRef = "clear"
 	ListCmdRef  = "list"
 )
@@ -121,6 +122,8 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		err = stashPush(queryist.Queryist, queryist.Context, apr, subcommand)
 	case PopCmdRef, DropCmdRef:
 		err = stashRemove(queryist.Queryist, queryist.Context, cliCtx, apr, subcommand, idx)
+	case ApplyCmdRef:
+		err = stashApply(queryist.Queryist, queryist.Context, cliCtx, apr, subcommand, idx)
 	case ListCmdRef:
 		err = stashList(ctx, cliCtx)
 	case ClearCmdRef:
@@ -155,16 +158,50 @@ func stashPush(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPar
 	return err
 }
 
-func stashRemove(queryist cli.Queryist, sqlCtx *sql.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string, idx int) error {
+// validateStashAtIdx verifies that the given number is within the range of stashes, then returns the stash at that id.
+func validateStashAtIdx(queryist cli.Queryist, sqlCtx *sql.Context, idx int) (*doltdb.Stash, error) {
 	stashes, err := getStashesSQL(sqlCtx, queryist, 0)
+	if err != nil {
+		return nil, err
+	}
+	if len(stashes) == 0 {
+		return nil, fmt.Errorf("no stash entries found")
+	}
+	if len(stashes)-1 < idx {
+		return nil, fmt.Errorf("stash index stash@{%d} does not exist", idx)
+	}
+
+	return stashes[idx], nil
+}
+
+func stashApply(queryist cli.Queryist, sqlCtx *sql.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string, idx int) error {
+	_, err := validateStashAtIdx(queryist, sqlCtx, idx)
 	if err != nil {
 		return err
 	}
-	if len(stashes) == 0 {
-		return fmt.Errorf("No stash entries found.")
+
+	interpolatedQuery, err := generateStashSql(apr, subcommand)
+	if err != nil {
+		return err
 	}
-	if len(stashes)-1 < idx {
-		return fmt.Errorf("stash index stash@{%d} does not exist", idx)
+	_, rowIter, _, err := queryist.Query(sqlCtx, interpolatedQuery)
+	if err != nil {
+		return err
+	}
+
+	ret := StatusCmd{}.Exec(sqlCtx, StatusCmd{}.Name(), []string{}, nil, cliCtx)
+	if ret != 0 {
+		cli.Println("The stash entry is kept in case you need it again.")
+		return err
+	}
+	_, err = sql.RowIterToRows(sqlCtx, rowIter)
+	return err
+}
+
+func stashRemove(queryist cli.Queryist, sqlCtx *sql.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string, idx int) error {
+	stash, err := validateStashAtIdx(queryist, sqlCtx, idx)
+	if err != nil {
+		return err
 	}
 
 	interpolatedQuery, err := generateStashSql(apr, subcommand)
@@ -184,7 +221,7 @@ func stashRemove(queryist cli.Queryist, sqlCtx *sql.Context, cliCtx cli.CliConte
 		}
 	}
 
-	cli.Println(fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, stashes[idx].CommitHash))
+	cli.Println(fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, stash.CommitHash))
 	_, err = sql.RowIterToRows(sqlCtx, rowIter)
 	return err
 }
