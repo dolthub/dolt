@@ -1,5 +1,8 @@
 #!/usr/bin/env bats
 
+# tzdata.bats requires a Docker container in order to test an environment with no Go time zone database information is
+# available. This includes the Unix file system information, which we remove in our tzdataDockerfile. You can find all
+# locations and properties in the tests below in the documentation links.
 load "$BATS_TEST_DIRNAME"/helper/common.bash
 
 TEST_NAME="dolt-tzdata"
@@ -12,7 +15,8 @@ setup_file() {
     docker build -f "$BATS_TEST_DIRNAME/tzdataDockerfile" -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
 }
 
-# The 'c' prefixes avoid conflicts with binaries on the local bats runner machine.
+# The 'c' prefixes avoid conflicts with binaries on the local bats runner machine. The normal binaries are still
+# available for normal tests for when time zone tables are added.
 csh() {
     docker exec -i "$TEST_CONTAINER" sh -lc "$@"
 }

@@ -25,6 +25,8 @@ jobs:
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
+      # Docker entrypoint and docker tests in general may use more space than is available in the GitHub default runner,
+      # so we remove unused pre-installed programs.
       - name: Free disk space
         run: |
           NAME="DISK-CLEANUP"
