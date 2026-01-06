@@ -1349,11 +1349,9 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 		},
 	},
-
-	// DOLT_DIFF() TABLE FUNCTION TEST CASE
 	{
-		Name: "dolt_diff() table function: schema overrides should apply to dolt_diff() table function",
-		Skip: true, // TODO: dolt_diff() table function does not respect schema overrides
+		// https://github.com/dolthub/dolt/issues/10269
+		Name: "dolt_diff(): schema overrides should apply",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(255));",
 			"insert into t (pk, c1) values (1, 'one');",
@@ -1422,6 +1420,85 @@ var SchemaOverrideTests = []queries.ScriptTest{
 						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 16),
 					},
 				},
+			},
+		},
+	},
+	{
+		Name: "dolt_diff(): override commit missing table",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(255));",
+			"insert into t (pk, c1) values (1, 'one');",
+			"call dolt_commit('-Am', 'adding table t');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t add column c2 varchar(255);",
+			"insert into t (pk, c1, c2) values (2, 'two', 'val2');",
+			"call dolt_commit('-am', 'adding column c2');",
+			"SET @commit2 = hashof('HEAD');",
+
+			"drop table t;",
+			"create table other_t (pk int primary key);",
+			"insert into other_t (pk) values (1);",
+			"call dolt_commit('-am', 'dropping t, adding other_t');",
+			"SET @commit3 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SET @@dolt_override_schema=@commit3;",
+				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+			},
+			{
+				Query:          "select from_pk, from_c1, to_pk, to_c2, diff_type from dolt_diff(@commit1, @commit2, 't');",
+				ExpectedErrStr: "unable to find table 't' at overridden schema root",
+			},
+		},
+	},
+	{
+		Name: "dolt_diff(): override commit between from and to",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(255));",
+			"insert into t (pk, c1) values (1, 'one');",
+			"call dolt_commit('-Am', 'commit1: pk, c1');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t drop column c1;",
+			"call dolt_commit('-am', 'commit2: drop c1');",
+			"SET @commit2 = hashof('HEAD');",
+
+			"alter table t add column c2 varchar(255);",
+			"insert into t (pk, c2) values (2, 'two');",
+			"call dolt_commit('-am', 'commit3: add c2');",
+			"SET @commit3 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SET @@dolt_override_schema=@commit2;",
+				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+			},
+			{
+				Query: "select from_pk, to_pk, diff_type from dolt_diff(@commit1, @commit3, 't');",
+				Expected: []sql.Row{
+					{1, 1, "modified"},
+					{nil, 2, "added"},
+				},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "from_pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "to_pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "diff_type",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 16),
+					},
+				},
+			},
+			{
+				Query:          "select from_c1, diff_type from dolt_diff(@commit1, @commit2, 't');",
+				ExpectedErrStr: "column \"from_c1\" could not be found in any table in scope",
 			},
 		},
 	},
