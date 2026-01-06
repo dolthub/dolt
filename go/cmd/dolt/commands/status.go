@@ -104,24 +104,32 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	showIgnoredTables := apr.Contains(cli.ShowIgnoredFlag)
 
-	// configure SQL engine
-	queryist, err := cliCtx.QueryEngine(ctx)
-	if err != nil {
-		return handleStatusVErr(err)
-	}
-
-	// get status information from the database
-	pd, err := createPrintData(err, queryist.Queryist, queryist.Context, showIgnoredTables, cliCtx)
-	if err != nil {
-		return handleStatusVErr(err)
-	}
-
-	err = printEverything(pd)
+	err := PrintStatus(ctx, showIgnoredTables, cliCtx)
 	if err != nil {
 		return handleStatusVErr(err)
 	}
 
 	return 0
+}
+
+func PrintStatus(ctx context.Context, showIgnoredTables bool, cliCtx cli.CliContext) error {
+	// configure SQL engine
+	queryist, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return err
+	}
+
+	// get status information from the database
+	pd, err := createPrintData(nil, queryist.Queryist, queryist.Context, showIgnoredTables, cliCtx)
+	if err != nil {
+		return err
+	}
+
+	err = printEverything(pd)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTables bool, cliCtx cli.CliContext) (*printData, error) {
