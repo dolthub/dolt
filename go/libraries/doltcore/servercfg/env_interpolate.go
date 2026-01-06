@@ -19,10 +19,6 @@ import (
 	"os"
 )
 
-// envLookupFunc returns (value, true) if the env var exists.
-// Note that an env var may exist but be empty.
-type envLookupFunc func(string) (string, bool)
-
 type envPlaceholder struct {
 	varName      string
 	def          []byte
@@ -40,11 +36,7 @@ type envPlaceholder struct {
 // Notes:
 // - Expansion is applied to the input text only (env var values are inserted literally).
 // - Default expressions are expanded (i.e. nested placeholders inside defaults are supported).
-func interpolateEnv(data []byte, lookup envLookupFunc) ([]byte, error) {
-	if lookup == nil {
-		lookup = os.LookupEnv
-	}
-
+func interpolateEnv(data []byte) ([]byte, error) {
 	out := make([]byte, 0, len(data))
 	for i := 0; i < len(data); i++ {
 		b := data[i]
@@ -72,7 +64,7 @@ func interpolateEnv(data []byte, lookup envLookupFunc) ([]byte, error) {
 			return nil, err
 		}
 
-		out, err = appendEnvExpansion(out, lookup, ph)
+		out, err = appendEnvExpansion(out, ph)
 		if err != nil {
 			return nil, err
 		}
@@ -109,14 +101,14 @@ func parseEnvPlaceholder(data []byte, dollarIdx int) (envPlaceholder, error) {
 	}, nil
 }
 
-func appendEnvExpansion(out []byte, lookup envLookupFunc, ph envPlaceholder) ([]byte, error) {
-	val, ok := lookup(ph.varName)
+func appendEnvExpansion(out []byte, ph envPlaceholder) ([]byte, error) {
+	val, ok := os.LookupEnv(ph.varName)
 	if ok && val != "" {
 		return append(out, []byte(val)...), nil
 	}
 
 	if ph.hasDefault {
-		expandedDef, err := interpolateEnv(ph.def, lookup)
+		expandedDef, err := interpolateEnv(ph.def)
 		if err != nil {
 			return nil, err
 		}
