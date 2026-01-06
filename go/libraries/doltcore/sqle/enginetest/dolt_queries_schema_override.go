@@ -1502,4 +1502,69 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 		},
 	},
+	// TODO(elianddb): Enable when schema override is implemented for dolt_patch()
+	{
+		Skip: true,
+		Name: "dolt_patch(): schema overrides should apply",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(255));",
+			"insert into t (pk, c1) values (1, 'one');",
+			"call dolt_commit('-Am', 'adding table t on main');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t drop column c1;",
+			"call dolt_commit('-am', 'dropping column c1 on main');",
+			"SET @commit2 = hashof('HEAD');",
+
+			"alter table t add column c2 varchar(255);",
+			"insert into t (pk, c2) values (2, 'two');",
+			"call dolt_commit('-am', 'adding column c2 on main');",
+			"SET @commit3 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SET @@dolt_override_schema=@commit1;",
+				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+			},
+			{
+				Query: "select statement from dolt_patch(@commit1, @commit3, 't');",
+				Expected: []sql.Row{
+					{"UPDATE `t` SET `c1`=NULL WHERE `pk`=1;"},
+					{"INSERT INTO `t` (`pk`,`c1`) VALUES (2,NULL);"},
+				},
+			},
+		},
+	},
+	// TODO(elianddb): Enable when schema override is implemented for dolt_diff_summary()
+	{
+		Skip: true,
+		Name: "dolt_diff_summary(): schema overrides should apply",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(255));",
+			"insert into t (pk, c1) values (1, 'one');",
+			"call dolt_commit('-Am', 'adding table t on main');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t drop column c1;",
+			"call dolt_commit('-am', 'dropping column c1 on main');",
+			"SET @commit2 = hashof('HEAD');",
+
+			"alter table t add column c2 varchar(255);",
+			"insert into t (pk, c2) values (2, 'two');",
+			"call dolt_commit('-am', 'adding column c2 on main');",
+			"SET @commit3 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SET @@dolt_override_schema=@commit1;",
+				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+			},
+			{
+				Query: "select from_table_name, to_table_name, diff_type, data_change, schema_change from dolt_diff_summary(@commit1, @commit3, 't');",
+				Expected: []sql.Row{
+					{"t", "t", "modified", true, false},
+				},
+			},
+		},
+	},
 }
