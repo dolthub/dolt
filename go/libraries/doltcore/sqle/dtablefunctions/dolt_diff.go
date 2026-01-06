@@ -49,19 +49,20 @@ var _ sql.ExecSourceRel = (*DiffTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*DiffTableFunction)(nil)
 
 type DiffTableFunction struct {
-	tableDelta     diff.TableDelta
-	fromCommitExpr sql.Expression
-	toCommitExpr   sql.Expression
-	dotCommitExpr  sql.Expression
-	tableNameExpr  sql.Expression
-	database       sql.Database
-	ctx            *sql.Context
-	joiner         *rowconv.Joiner
-	fromDate       *types.Timestamp
-	toDate         *types.Timestamp
-	sqlSch         sql.Schema
-	showSkinny     bool
-	includeCols    map[string]struct{}
+	tableDelta       diff.TableDelta
+	fromCommitExpr   sql.Expression
+	toCommitExpr     sql.Expression
+	dotCommitExpr    sql.Expression
+	tableNameExpr    sql.Expression
+	database         sql.Database
+	ctx              *sql.Context
+	joiner           *rowconv.Joiner
+	fromDate         *types.Timestamp
+	toDate           *types.Timestamp
+	sqlSch           sql.Schema
+	showSkinny       bool
+	includeCols      map[string]struct{}
+	overriddenSchema schema.Schema
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -220,7 +221,17 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	}
 
 	ddb := sqledb.DbData().Ddb
-	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toCommitStr, fromCommitStr, dtf.toDate, dtf.fromDate, dtf.tableDelta.ToSch, dtf.tableDelta.FromSch, nil)
+
+	// Diff computation uses the original schemas obtained via [doltdb.Table.GetSchema]. Row converters map from the
+	// original schema to the overridden schema for output formatting.
+	fromSchForPartition := dtf.tableDelta.FromSch
+	toSchForPartition := dtf.tableDelta.ToSch
+	if dtf.overriddenSchema != nil {
+		fromSchForPartition = dtf.overriddenSchema
+		toSchForPartition = dtf.overriddenSchema
+	}
+
+	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toCommitStr, fromCommitStr, dtf.toDate, dtf.fromDate, toSchForPartition, fromSchForPartition, nil)
 
 	return dtables.NewDiffPartitionRowIter(dp, ddb, dtf.joiner), nil
 }
@@ -585,6 +596,72 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		delta = *skDelta
 	}
 
+	// Resolve schema override if |@@dolt_override_schema| session variable is set. This is an inline implementation
+	// to avoid importing the [sqle] package, which would create an import cycle ([sqle] imports [dtablefunctions] for
+	// table function registration).
+	// TODO(elianddb): Refactor to centralize this logic in the [dsess] package to avoid duplication
+	//  with [sqle/schema_override.go] also switch helper function parameters to use interfaces.
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	doltOverrideSchemaSessVar, err := doltSession.GetSessionVariable(ctx, dsess.DoltOverrideSchema)
+	if err != nil {
+		return err
+	}
+
+	var rootVal doltdb.RootValue
+	if commitStr, ok := doltOverrideSchemaSessVar.(string); commitStr != "" && ok {
+		commitSpec, err := doltdb.NewCommitSpec(commitStr)
+		if err != nil {
+			return fmt.Errorf("invalid commit spec specified in %s: %s", dsess.DoltOverrideSchema, err.Error())
+		}
+		doltDBs := sqledb.DoltDatabases()
+		if len(doltDBs) == 0 {
+			return fmt.Errorf("no DoltDB available for database")
+		}
+		doltDB := doltDBs[0]
+
+		headRef, _ := doltSession.CWBHeadRef(ctx, sqledb.Name())
+
+		optionalCommit, err := doltDB.Resolve(ctx, commitSpec, headRef)
+		if err != nil {
+			return fmt.Errorf("unable to resolve schema override value: %s", err.Error())
+		}
+
+		commit, ok := optionalCommit.ToCommit()
+		if !ok {
+			return fmt.Errorf("unable to resolve schema override: "+
+				"commit '%s' is not present locally in the commit graph", optionalCommit.Addr.String())
+		}
+
+		rootVal, err = commit.GetRootValue(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to load root value for schema override commit: %s", err.Error())
+		}
+	}
+
+	var overriddenSchema schema.Schema
+	if rootVal != nil {
+		overriddenTable, _, ok, err := doltdb.GetTableInsensitive(ctx, rootVal, doltdb.TableName{Name: tableName})
+		if err != nil {
+			return fmt.Errorf("unable to find table '%s' at overridden schema root: %s", tableName, err.Error())
+		}
+		if !ok {
+			return fmt.Errorf("unable to find table '%s' at overridden schema root", tableName)
+		}
+
+		overriddenSchema, err = overriddenTable.GetSchema(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to load overridden schema for table '%s': %s", tableName, err.Error())
+		}
+
+		// The original schemas in |delta| are preserved for diff computation, which requires the original schemas to
+		// compare rows. The overridden schema is applied when creating the [joiner] and when constructing
+		// [DiffPartition] at execution time, where row converters map from the original schema to the overridden
+		// schema.
+		dtf.overriddenSchema = overriddenSchema
+	} else {
+		dtf.overriddenSchema = nil
+	}
+
 	fromTable, fromTableExists := delta.FromTable, delta.FromTable != nil
 	toTable, toTableExists := delta.ToTable, delta.ToTable != nil
 
@@ -597,7 +674,14 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(format, delta.FromSch, delta.ToSch)
+	fromSchForJoiner := delta.FromSch
+	toSchForJoiner := delta.ToSch
+	if dtf.overriddenSchema != nil {
+		fromSchForJoiner = dtf.overriddenSchema
+		toSchForJoiner = dtf.overriddenSchema
+	}
+
+	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(format, fromSchForJoiner, toSchForJoiner)
 	if err != nil {
 		return err
 	}

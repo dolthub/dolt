@@ -1349,11 +1349,9 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 		},
 	},
-
-	// DOLT_DIFF() TABLE FUNCTION TEST CASE
 	{
-		Name: "dolt_diff() table function: schema overrides should apply to dolt_diff() table function",
-		Skip: true, // TODO: dolt_diff() table function does not respect schema overrides
+		// https://github.com/dolthub/dolt/issues/10269
+		Name: "dolt_diff(): schema overrides should apply to dolt_diff() table function",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(255));",
 			"insert into t (pk, c1) values (1, 'one');",
