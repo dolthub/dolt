@@ -117,7 +117,7 @@ teardown() {
 
     run dolt stash pop
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "No stash entries found." ]] || false
+    [[ "$output" =~ "no stash entries found" ]] || false
 
     dolt sql -q "INSERT INTO test VALUES (2, 'b')"
     dolt stash
@@ -674,4 +674,17 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
     [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
+}
+
+@test "stash: can apply stashes as specific indices" {
+    dolt sql -q "create table test1 (i int)"
+    dolt stash -a
+    dolt sql -q "create table test2 (i int)"
+    dolt stash -a
+    dolt sql -q "create table test3 (i int)"
+    dolt stash -a
+    run dolt stash apply 1
+    [ "$status" -eq 0 ]
+    run dolt stash apply 2
+    [ "$status" -eq 0 ]
 }
