@@ -638,7 +638,6 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		}
 	}
 
-	var overriddenSchema schema.Schema
 	if rootVal != nil {
 		overriddenTable, _, ok, err := doltdb.GetTableInsensitive(ctx, rootVal, doltdb.TableName{Name: tableName})
 		if err != nil {
@@ -648,7 +647,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 			return fmt.Errorf("unable to find table '%s' at overridden schema root", tableName)
 		}
 
-		overriddenSchema, err = overriddenTable.GetSchema(ctx)
+		overriddenSchema, err := overriddenTable.GetSchema(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to load overridden schema for table '%s': %s", tableName, err.Error())
 		}
@@ -658,8 +657,6 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		// [DiffPartition] at execution time, where row converters map from the original schema to the overridden
 		// schema.
 		dtf.overriddenSchema = overriddenSchema
-	} else {
-		dtf.overriddenSchema = nil
 	}
 
 	fromTable, fromTableExists := delta.FromTable, delta.FromTable != nil
