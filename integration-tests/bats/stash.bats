@@ -676,7 +676,7 @@ teardown() {
     [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
 }
 
-@test "stash: can apply stashes as specific indices" {
+@test "stash: can apply stashes at specific indices" {
     dolt sql -q "create table test1 (i int)"
     dolt stash -a
     dolt sql -q "create table test2 (i int)"
@@ -685,6 +685,6 @@ teardown() {
     dolt stash -a
     run dolt stash apply 1
     [ "$status" -eq 0 ]
-    run dolt stash apply 2
+    run dolt stash apply stash@{2}
     [ "$status" -eq 0 ]
 }
