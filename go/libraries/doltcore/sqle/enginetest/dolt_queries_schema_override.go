@@ -1423,7 +1423,6 @@ var SchemaOverrideTests = []queries.ScriptTest{
 					},
 				},
 			},
-
 		},
 	},
 }
