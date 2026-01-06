@@ -161,9 +161,3 @@ EOF
   [ "$found" -eq 1 ]
 }
 
-# Tests to add:
-# - ${VAR} expands into typed fields (listener.port) and server starts
-# - ${VAR:-default} uses default when unset/empty
-# - missing ${VAR} fails with clear error
-# - $$ escaping and $$${VAR} composition (verify via metrics labels and /metrics scrape)
-
