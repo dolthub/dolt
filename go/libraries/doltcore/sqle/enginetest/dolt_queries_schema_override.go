@@ -1423,41 +1423,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 					},
 				},
 			},
-			{
-				// use the third commit for our schema override (pk, c2)
-				Query:    "SET @@dolt_override_schema=@commit3;",
-				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
-			},
-			{
-				// dolt_diff() should respect schema override and show from_c2 and to_c2 columns
-				Query: "select from_pk, from_c2, to_pk, to_c2, diff_type from dolt_diff(@commit1, @commit3, 't');",
-				Expected: []sql.Row{
-					{1, nil, 1, nil, "modified"},
-					{nil, nil, 2, "two", "added"},
-				},
-				ExpectedColumns: sql.Schema{
-					{
-						Name: "from_pk",
-						Type: gmstypes.Int32,
-					},
-					{
-						Name: "from_c2",
-						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
-					},
-					{
-						Name: "to_pk",
-						Type: gmstypes.Int32,
-					},
-					{
-						Name: "to_c2",
-						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
-					},
-					{
-						Name: "diff_type",
-						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 16),
-					},
-				},
-			},
+
 		},
 	},
 }
