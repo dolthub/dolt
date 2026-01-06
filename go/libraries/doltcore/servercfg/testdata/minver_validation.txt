@@ -31,6 +31,7 @@ ListenerConfig servercfg.ListenerYAMLConfig 0.0.0 listener,omitempty
 -TLSCert *string 0.0.0 tls_cert,omitempty
 -CACert *string 1.77.0 ca_cert,omitempty
 -RequireSecureTransport *bool 0.0.0 require_secure_transport,omitempty
+-RequireClientCert *bool 1.78.3 require_client_cert,omitempty
 -AllowCleartextPasswords *bool 0.0.0 allow_cleartext_passwords,omitempty
 -Socket *string 0.0.0 socket,omitempty
 PerformanceConfig *servercfg.PerformanceYAMLConfig 0.0.0 performance,omitempty
@@ -61,6 +62,15 @@ MetricsConfig servercfg.MetricsYAMLConfig 0.0.0 metrics,omitempty
 -Labels map[string]string 0.0.0 labels
 -Host *string 0.0.0 host,omitempty
 -Port *int 0.0.0 port,omitempty
+-TlsCert *string 1.78.2 tls_cert,omitempty
+-TlsKey *string 1.78.2 tls_key,omitempty
+-TlsCa *string 1.78.2 tls_ca,omitempty
+-Jwks *servercfg.JwksConfig 1.79.0 jwks,omitempty
+--Name string 0.0.0 name
+--LocationUrl string 0.0.0 location_url
+--Claims map[string]string 0.0.0 claims
+--FieldsToLog []string 0.0.0 fields_to_log
+-JWTRequiredForLocalhost *bool 1.79.0 jwt_required_for_localhost,omitempty
 ClusterCfg *servercfg.ClusterYAMLConfig 0.0.0 cluster,omitempty
 -StandbyRemotes_ []servercfg.StandbyRemoteYAMLConfig 0.0.0 standby_remotes
 --Name_ string 0.0.0 name

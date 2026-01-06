@@ -29,14 +29,14 @@ import (
 const HashOfTableFuncName = "dolt_hashof_table"
 
 type HashOfTable struct {
-	expression.UnaryExpression
+	expression.UnaryExpressionStub
 }
 
 var _ sql.FunctionExpression = (*HashOfTable)(nil)
 
 // NewHashOfTable creates a new HashOfTable expression.
 func NewHashOfTable(e sql.Expression) sql.Expression {
-	return &HashOfTable{expression.UnaryExpression{Child: e}}
+	return &HashOfTable{expression.UnaryExpressionStub{Child: e}}
 }
 
 // Eval implements the Expression interface.

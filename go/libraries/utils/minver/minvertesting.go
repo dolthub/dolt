@@ -166,7 +166,19 @@ func ValidateAgainstFile(t *testing.T, path string, st any) {
 
 	rd.Advance()
 
+	// if the last field is TBD, we need to skip any nested TBD fields
+	var lastIsTBD bool
+	var tbdDepth int
 	err = structwalk.Walk(st, func(field reflect.StructField, depth int) error {
+		if lastIsTBD {
+			if depth > tbdDepth {
+				// skip this field as it is nested under a TBD field
+				return nil
+			}
+		}
+
+		lastIsTBD = false
+
 		fi := FieldInfoFromStructField(field, depth)
 		prevFI, err := rd.Current()
 		if err != nil && !errors.Is(err, io.EOF) {
@@ -179,6 +191,8 @@ func ValidateAgainstFile(t *testing.T, path string, st any) {
 		}
 
 		if fi.MinVer == "TBD" {
+			lastIsTBD = true
+			tbdDepth = depth
 			return nil
 		}
 

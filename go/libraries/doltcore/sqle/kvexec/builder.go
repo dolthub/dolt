@@ -54,23 +54,53 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 		case n.Op.IsPartial() || len(r) != 0:
 			return nil, nil
 		case n.Op.IsLookup():
-			if ita, ok := getIta(n.Right()); ok && len(r) == 0 && simpleLookupExpressions(ita.Expressions()) {
-				if _, _, _, dstIter, _, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstIter != nil {
-					if srcMap, _, srcIter, _, srcSchema, _, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
-						if keyLookupMapper, err := newLookupKeyMapping(ctx, srcSchema, dstIter.InputKeyDesc(), ita.Expressions(), ita.Index().ColumnExpressionTypes(), srcMap.NodeStore()); err == nil && keyLookupMapper.valid() {
-							// conditions:
-							// (1) lookup or left lookup join
-							// (2) left-side is something we read KVs from (table or indexscan, ex: no subqueries)
-							// (3) right-side is an index lookup, by definition
-							// (4) the key expressions for the lookup are literals or columns (ex: no arithmetic yet)
-							split := len(srcTags)
-							projections := append(srcTags, dstTags...)
-							rowJoiner := newRowJoiner([]schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
-							return newLookupKvIter(srcIter, dstIter, keyLookupMapper, rowJoiner, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
-						}
-					}
-				}
+			// conditions to use this fast path for lookup joins:
+			// (1) lookup or left lookup join
+			// (2) left-side is something we read KVs from (table or indexscan, ex: no subqueries)
+			// (3) right-side is an index lookup, by definition
+			// (4) the key expressions for the lookup are literals or columns (ex: no arithmetic yet)
+
+			ita, ok := getIta(n.Right())
+			if !ok || len(r) > 0 || !simpleLookupExpressions(ita.Expressions()) {
+				return nil, nil
 			}
+
+			_, _, _, dstIter, _, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false)
+			if err != nil || dstIter == nil {
+				return nil, nil
+			}
+
+			srcMap, _, srcIter, _, srcSchema, _, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true)
+			if err != nil || srcSchema == nil {
+				return nil, nil
+			}
+
+			keyLookupMapper, err := newLookupKeyMapping(
+				ctx,
+				srcSchema,
+				dstIter.InputKeyDesc(),
+				ita.Expressions(),
+				ita.Index().ColumnExpressionTypes(),
+				srcMap.NodeStore(),
+			)
+			if err != nil || !keyLookupMapper.valid() {
+				return nil, nil
+			}
+
+			split := len(srcTags)
+			projections := append(srcTags, dstTags...)
+			rowJoiner := newRowJoiner([]schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
+			return newLookupKvIter(
+				srcIter,
+				dstIter,
+				keyLookupMapper,
+				rowJoiner,
+				srcFilter,
+				dstFilter,
+				n.Filter,
+				n.Op.IsLeftOuter(),
+				n.Op.IsExcludeNulls(),
+			)
 		case n.Op.IsMerge():
 			if leftState, err := getMergeKv(ctx, n.Left()); err == nil {
 				if rightState, err := getMergeKv(ctx, n.Right()); err == nil {
@@ -107,7 +137,9 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 			}
 		}
 	default:
+		return nil, nil
 	}
+
 	return nil, nil
 }
 
@@ -352,7 +384,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 			if err != nil {
 				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
-		//case *dtables.DiffTable:
+		// case *dtables.DiffTable:
 		// TODO: add interface to include system tables
 		default:
 			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, nil
@@ -373,7 +405,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		priSch = lb.OutputSchema()
 
 		if isSrc {
-			l, err := n.GetLookup(ctx, nil)
+			l, _, err := n.GetLookup(ctx, nil)
 			if err != nil {
 				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
@@ -528,7 +560,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 			idx = dt.Index()
 			doltTable = dt.DoltTable
 
-		//case *dtables.DiffTable:
+		// case *dtables.DiffTable:
 		// TODO: add interface to include system tables
 		default:
 			return ms, fmt.Errorf("non-standard indexed table not supported")
@@ -553,7 +585,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		ms.tags = doltTable.ProjectedTags()
 		ms.idxSch = idx.IndexSchema()
 		ms.priSch = idx.Schema()
-		l, err := n.GetLookup(ctx, nil)
+		l, _, err := n.GetLookup(ctx, nil)
 		if err != nil {
 			return ms, err
 		}
@@ -589,7 +621,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 			// projections satisfied by idxSch
 			ms.priSch = ms.idxSch
 			return ms, nil
-			//return secMap, iter, idxSch, idxSch, tags, nil, nil, nil
+			// return secMap, iter, idxSch, idxSch, tags, nil, nil, nil
 		}
 
 		priIndex, err := table.GetRowData(ctx)

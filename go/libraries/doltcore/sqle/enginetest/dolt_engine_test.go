@@ -1595,6 +1595,16 @@ func TestLogTableFunctionPrepared(t *testing.T) {
 	RunLogTableFunctionTestsPrepared(t, harness)
 }
 
+func TestJsonDiffTableFunction(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunJsonDiffTableFunctionTests(t, harness)
+}
+
+func TestJsonDiffTableFunctionPrepared(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunJsonDiffTableFunctionTestsPrepared(t, harness)
+}
+
 func TestBranchStatusTableFunction(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunBranchStatusTableFunctionTests(t, harness)
@@ -2190,4 +2200,37 @@ func TestBranchActivity(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	RunBranchActivityTests(t, h)
+}
+
+// TestDriverExecution verifies that queries work in dolt driver, where the MySQLDb is not initialized.
+func TestDriverExecution(t *testing.T) {
+	h := newDoltHarness(t)
+	h.UseLocalFileSystem()
+	defer h.Close()
+
+	engine, err := h.NewEngine(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+
+	// Simulate driver environment. The MySQLDb is initialized but with no users (not even root). The context user is
+	// "root" still though. This mimics the dolthub/driver initialization of the engine (no PrivFilePath provided).
+	engine.EngineAnalyzer().Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
+	ctx := enginetest.NewContextWithClient(h, sql.Client{
+		User:    "root",
+		Address: "localhost",
+	})
+
+	q := "call dolt_backup('add', 'backup1', 'file:///tmp/backup1');"
+	enginetest.TestQueryWithContext(t, ctx, engine, h, q, []sql.Row{{0}}, nil, nil, nil)
+
+	q = "select name from dolt_backups where name = 'backup1'"
+	enginetest.TestQueryWithContext(t, ctx, engine, h, q, []sql.Row{{"backup1"}}, nil, nil, nil)
+
+	q = "call dolt_backup('sync-url', 'file:///tmp/backup_sync_url');"
+	enginetest.TestQueryWithContext(t, ctx, engine, h, q, []sql.Row{{0}}, nil, nil, nil)
+
+	q = "call dolt_backup('remove', 'backup1');"
+	enginetest.TestQueryWithContext(t, ctx, engine, h, q, []sql.Row{{0}}, nil, nil, nil)
 }

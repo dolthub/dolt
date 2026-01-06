@@ -176,7 +176,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"aTable", false, "constraint violation"},
+					{"aTable", byte(0), "constraint violation"},
 				},
 			},
 			{
@@ -513,7 +513,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "modified"}},
+				Expected: []sql.Row{{"test", byte(1), "modified"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
@@ -577,7 +577,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "modified"}, {"test", byte(0), "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
@@ -605,7 +605,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "modified"}},
+				Expected: []sql.Row{{"test", byte(0), "modified"}},
 			},
 			{
 				Query:    "SELECT * from test ORDER BY pk",
@@ -682,7 +682,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
@@ -775,7 +775,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Skip:     true,
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "schema conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "schema conflict"}},
 			},
 			{
 				Skip:     true,
@@ -810,7 +810,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Skip:     true,
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "merged"}},
+				Expected: []sql.Row{{"test", byte(1), "merged"}},
 			},
 			{
 				Skip:             true,
@@ -856,7 +856,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * FROM DOLT_STATUS",
-				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "modified"}, {"test", byte(0), "conflict"}},
 			},
 			{
 				// errors because creating a new branch implicitly commits the current transaction
@@ -1331,7 +1331,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "modified"}, {"test", byte(0), "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
@@ -1580,7 +1580,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"child", false, "constraint violation"},
+					{"child", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -1670,7 +1670,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"t", false, "constraint violation"},
+					{"t", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -1708,7 +1708,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"t", false, "constraint violation"},
+					{"t", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -1746,7 +1746,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"t", false, "constraint violation"},
+					{"t", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -1784,7 +1784,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"t", false, "constraint violation"},
+					{"t", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -2962,6 +2962,116 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:          "CALL dolt_merge('b1');",
 				ExpectedErrStr: "could not map primary key column pk",
+			},
+		},
+	},
+	{
+		Name: "--ff-only flag success when fast-forward is possible",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'main1'), (2, 'main2');",
+			"CALL dolt_commit('-Am', 'main commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"INSERT INTO t VALUES (3, 'feature1');",
+			"CALL dolt_commit('-am', 'feature commit');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('--ff-only', 'feature');",
+				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, "main1"}, {2, "main2"}, {3, "feature1"}},
+			},
+		},
+	},
+	{
+		Name: "--ff-only flag failure when fast-forward is not possible",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'main1'), (2, 'main2');",
+			"CALL dolt_commit('-Am', 'main commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"INSERT INTO t VALUES (3, 'feature1');",
+			"CALL dolt_commit('-am', 'feature commit');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t VALUES (4, 'main3');",
+			"CALL dolt_commit('-am', 'main commit 2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL dolt_merge('--ff-only', 'feature');",
+				ExpectedErrStr: "fatal: Not possible to fast-forward, aborting",
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, "main1"}, {2, "main2"}, {4, "main3"}}, // No changes
+			},
+		},
+	},
+	{
+		Name: "--ff-only flag with already up-to-date branch",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'main1'), (2, 'main2');",
+			"CALL dolt_commit('-Am', 'main commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('--ff-only', 'feature');",
+				Expected: []sql.Row{{"", 0, 0, "Everything up-to-date"}},
+			},
+		},
+	},
+	{
+		Name: "--ff-only conflicts with --no-ff",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"CALL dolt_commit('-Am', 'initial commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL dolt_merge('--ff-only', '--no-ff', 'feature');",
+				ExpectedErrStr: "error: Flags '--ff-only' and '--no-ff' cannot be used together",
+			},
+		},
+	},
+	{
+		Name: "--ff-only conflicts with --squash",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"CALL dolt_commit('-Am', 'initial commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL dolt_merge('--ff-only', '--squash', 'feature');",
+				ExpectedErrStr: "error: Flags '--ff-only' and '--squash' cannot be used together",
+			},
+		},
+	},
+	{
+		Name: "--ff-only with no-commit flag should work",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'main1');",
+			"CALL dolt_commit('-Am', 'main commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"INSERT INTO t VALUES (2, 'feature1');",
+			"CALL dolt_commit('-am', 'feature commit');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('--ff-only', '--no-commit', 'feature');",
+				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}}, // Fast-forward merge with commit hash
 			},
 		},
 	},
@@ -4343,7 +4453,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"t", false, "schema conflict"},
+					{"t", byte(0), "schema conflict"},
 				},
 			},
 		},

@@ -25,7 +25,6 @@ import (
 	"runtime/debug"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -91,7 +90,8 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 		return 0, 0, err
 	}
 
-	footer, err := iohelp.ReadNBytes(rd, int(footerSize))
+	footer := make([]byte, footerSize)
+	_, err = io.ReadFull(rd, footer)
 
 	if err != nil {
 		return 0, 0, err

@@ -804,7 +804,7 @@ func executeQueryResults(ctx *sql.Context, eng *gms.Engine, query string) ([]sql
 }
 
 func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads *sql.BackgroundThreads) (*gms.Engine, *sql.Context) {
-	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil)
+	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil, sql.EngineOverrides{})
 	if err != nil {
 		panic(err)
 	}

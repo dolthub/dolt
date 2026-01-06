@@ -150,7 +150,8 @@ func NewTupleReader(nbf *NomsBinFormat, vrw ValueReadWriter, rd io.Reader) Tuple
 
 // Read reades the next tuple from the TupleReader
 func (trd *tupleReaderImpl) Read() (*Tuple, error) {
-	sizeBytes, err := iohelp.ReadNBytes(trd.rd, 4)
+	sizeBytes := make([]byte, 4)
+	_, err := io.ReadFull(trd.rd, sizeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +162,8 @@ func (trd *tupleReaderImpl) Read() (*Tuple, error) {
 		return nil, nil
 	}
 
-	data, err := iohelp.ReadNBytes(trd.rd, int(size))
+	data := make([]byte, size)
+	_, err = io.ReadFull(trd.rd, data)
 	if err != nil {
 		if err == io.EOF {
 			return nil, errors.New("corrupt tuple stream")

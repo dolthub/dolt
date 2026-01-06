@@ -44,10 +44,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/adapters"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -478,8 +480,11 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 		} else if err != nil {
 			return nil, false, err
 		}
-
-		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), tname, db.ddb, root, stagedRoot)
+		headRef, err := db.rsr.CWBHeadRef(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), tname, db.ddb, root, stagedRoot, headRef)
 		if err != nil {
 			return nil, false, err
 		}
@@ -618,7 +623,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 	var dt sql.Table
 	found := false
 	tname := doltdb.TableName{Name: lwrName, Schema: db.schemaName}
-	switch lwrName {
+	switch adapters.DoltTableAdapterRegistry.NormalizeName(lwrName) {
 	case doltdb.GetLogTableName(), doltdb.LogTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
@@ -747,7 +752,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), lwrName, db.ddb), true
 		}
-	case doltdb.GetStatusTableName(), doltdb.StatusTableName:
+	case doltdb.StatusTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
@@ -2670,7 +2675,7 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx), nil)
+	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx))
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
 	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), nil, false)
 	if err != nil {
@@ -3027,7 +3032,8 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 		Column: expression.NewGetField(0, rebaseSchema[0].Type, "rebase_order", false),
 		Order:  sql.Ascending,
 	}}, resolvedTable)
-	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
+	engOverrides := overrides.EngineOverridesFromContext(ctx)
+	iter, err := rowexec.NewBuilder(nil, engOverrides).Build(ctx, sort, nil)
 	if err != nil {
 		return nil, err
 	}

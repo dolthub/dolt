@@ -185,6 +185,10 @@ type ServerConfig interface {
 	CACert() string
 	// RequireSecureTransport is true if the server should reject non-TLS connections.
 	RequireSecureTransport() bool
+	// RequireClientCert is true if the server should reject any connections that don't present a certificate. When
+	// enabled, a client certificate is always required, and if a CA cert is also configured, then the client cert
+	// will also be verified. Enabling this option also means that non-TLS connections are not allowed.
+	RequireClientCert() bool
 	// MaxLoggedQueryLen is the max length of queries written to the logs.  Queries longer than this number are truncated.
 	// If this value is 0 then the query is not truncated and will be written to the logs in its entirety.  If the value
 	// is less than 0 then the queries will be omitted from the logs completely
@@ -201,6 +205,12 @@ type ServerConfig interface {
 	MetricsLabels() map[string]string
 	MetricsHost() string
 	MetricsPort() int
+	MetricsTLSCert() string
+	MetricsTLSKey() string
+	MetricsTLSCA() string
+	MetricsJwksConfig() *JwksConfig
+	MetricsJWTRequiredForLocalhost() bool
+
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
 	PrivilegeFilePath() string
@@ -239,6 +249,8 @@ type ServerConfig interface {
 	ValueSet(value string) bool
 	// AutoGCBehavior defines parameters around how auto-GC works for the running server.
 	AutoGCBehavior() AutoGCBehavior
+	// Overrides returns any overrides that are defined. This is primarily used by Doltgres.
+	Overrides() sql.EngineOverrides
 }
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
@@ -324,43 +336,48 @@ func ValidateConfig(config ServerConfig) error {
 }
 
 const (
-	HostKey                         = "host"
-	PortKey                         = "port"
-	UserKey                         = "user"
-	PasswordKey                     = "password"
-	ReadTimeoutKey                  = "net_read_timeout"
-	WriteTimeoutKey                 = "net_write_timeout"
-	ReadOnlyKey                     = "read_only"
-	LogLevelKey                     = "log_level"
-	LogFormatKey                    = "log_format"
-	AutoCommitKey                   = "autocommit"
-	DoltTransactionCommitKey        = "dolt_transaction_commit"
-	BranchActivityTrackingKey       = "branch_activity_tracking"
-	DataDirKey                      = "data_dir"
-	CfgDirKey                       = "cfg_dir"
-	MaxConnectionsKey               = "max_connections"
-	MaxWaitConnectionsKey           = "back_log"
-	MaxWaitConnectionsTimeoutKey    = "max_connections_timeout"
-	TLSKeyKey                       = "tls_key"
-	TLSCertKey                      = "tls_cert"
-	RequireSecureTransportKey       = "require_secure_transport"
-	MaxLoggedQueryLenKey            = "max_logged_query_len"
-	ShouldEncodeLoggedQueryKey      = "should_encode_logged_query"
-	DisableClientMultiStatementsKey = "disable_client_multi_statements"
-	MetricsLabelsKey                = "metrics_labels"
-	MetricsHostKey                  = "metrics_host"
-	MetricsPortKey                  = "metrics_port"
-	PrivilegeFilePathKey            = "privilege_file_path"
-	BranchControlFilePathKey        = "branch_control_file_path"
-	UserVarsKey                     = "user_vars"
-	SystemVarsKey                   = "system_vars"
-	JwksConfigKey                   = "jwks_config"
-	AllowCleartextPasswordsKey      = "allow_cleartext_passwords"
-	SocketKey                       = "socket"
-	RemotesapiPortKey               = "remotesapi_port"
-	RemotesapiReadOnlyKey           = "remotesapi_read_only"
-	ClusterConfigKey                = "cluster_config"
-	EventSchedulerKey               = "event_scheduler"
+	HostKey                           = "host"
+	PortKey                           = "port"
+	UserKey                           = "user"
+	PasswordKey                       = "password"
+	ReadTimeoutKey                    = "net_read_timeout"
+	WriteTimeoutKey                   = "net_write_timeout"
+	ReadOnlyKey                       = "read_only"
+	LogLevelKey                       = "log_level"
+	LogFormatKey                      = "log_format"
+	AutoCommitKey                     = "autocommit"
+	DoltTransactionCommitKey          = "dolt_transaction_commit"
+	BranchActivityTrackingKey         = "branch_activity_tracking"
+	DataDirKey                        = "data_dir"
+	CfgDirKey                         = "cfg_dir"
+	MaxConnectionsKey                 = "max_connections"
+	MaxWaitConnectionsKey             = "back_log"
+	MaxWaitConnectionsTimeoutKey      = "max_connections_timeout"
+	TLSKeyKey                         = "tls_key"
+	TLSCertKey                        = "tls_cert"
+	RequireSecureTransportKey         = "require_secure_transport"
+	MaxLoggedQueryLenKey              = "max_logged_query_len"
+	ShouldEncodeLoggedQueryKey        = "should_encode_logged_query"
+	DisableClientMultiStatementsKey   = "disable_client_multi_statements"
+	MetricsLabelsKey                  = "metrics_labels"
+	MetricsHostKey                    = "metrics_host"
+	MetricsPortKey                    = "metrics_port"
+	MetricsTLSCertKey                 = "metrics_tls_cert"
+	MetricsTLSKeyKey                  = "metrics_tls_key"
+	MetricsTLSCAKey                   = "metrics_tls_ca"
+	MetricsJwksConfigKey              = "metrics_jwks_config"
+	MetricsJWTRequiredForLocalhostKey = "metrics_jwt_required_for_localhost"
+	PrivilegeFilePathKey              = "privilege_file_path"
+	BranchControlFilePathKey          = "branch_control_file_path"
+	UserVarsKey                       = "user_vars"
+	SystemVarsKey                     = "system_vars"
+	JwksConfigKey                     = "jwks_config"
+	AllowCleartextPasswordsKey        = "allow_cleartext_passwords"
+	SocketKey                         = "socket"
+	RemotesapiPortKey                 = "remotesapi_port"
+	RemotesapiReadOnlyKey             = "remotesapi_read_only"
+	ClusterConfigKey                  = "cluster_config"
+	EventSchedulerKey                 = "event_scheduler"
 )
 
 type SystemVariableTarget interface {
@@ -467,26 +484,42 @@ func ConfigInfo(config ServerConfig) string {
 		config.ReadTimeout(), config.ReadOnly(), config.LogLevel(), socket)
 }
 
-// LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns
-// a *tls.Config configured for its use. Returns `nil` if key and cert are `""`.
-func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
-	if cfg.TLSKey() == "" && cfg.TLSCert() == "" {
-		return nil, nil
+func getTLSConfig(cert, key, ca string, requireClientCert bool) (*tls.Config, error) {
+	if key == "" && cert == "" {
+		if requireClientCert {
+			return nil, fmt.Errorf("must supply tls_cert and tls_key when require_client_cert is enabled")
+		} else {
+			// No TLS configuration needed
+			return nil, nil
+		}
 	}
-	c, err := tls.LoadX509KeyPair(cfg.TLSCert(), cfg.TLSKey())
+
+	c, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("tls.LoadX509KeyPair(%v, %v) failed: %w", cert, key, err)
 	}
 
 	var caCertPool *x509.CertPool
-	if cfg.CACert() != "" {
-		caCertPEM, err := os.ReadFile(cfg.CACert())
+	if ca != "" {
+		caCertPEM, err := os.ReadFile(ca)
 		if err != nil {
-			return nil, fmt.Errorf("unable to read CA file at: %s", cfg.CACert())
+			return nil, fmt.Errorf("unable to read CA file at %s: %w", ca, err)
 		}
+
 		caCertPool = x509.NewCertPool()
 		if ok := caCertPool.AppendCertsFromPEM(caCertPEM); !ok {
 			return nil, fmt.Errorf("unable to add CA cert to cert pool")
+		}
+	}
+
+	clientAuthType := tls.VerifyClientCertIfGiven
+	if requireClientCert {
+		// If a CA cert has been specified, then in addition to requiring
+		// a client cert, also verify it, otherwise allow any client cert.
+		if ca != "" {
+			clientAuthType = tls.RequireAndVerifyClientCert
+		} else {
+			clientAuthType = tls.RequireAnyClientCert
 		}
 	}
 
@@ -494,9 +527,19 @@ func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
 		Certificates: []tls.Certificate{c},
 		// tlsVerifyClientCertIfGiven will request a client cert from the client,
 		// and if provided, will validate it against the specified client CAs.
-		ClientAuth: tls.VerifyClientCertIfGiven,
+		ClientAuth: clientAuthType,
 		ClientCAs:  caCertPool,
 	}, nil
+}
+
+// LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns
+// a *tls.Config configured for its use. Returns `nil` if key and cert are `""`.
+func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
+	return getTLSConfig(cfg.TLSCert(), cfg.TLSKey(), cfg.CACert(), cfg.RequireClientCert())
+}
+
+func LoadMetricsTLSConfig(cfg ServerConfig) (*tls.Config, error) {
+	return getTLSConfig(cfg.MetricsTLSCert(), cfg.MetricsTLSKey(), cfg.MetricsTLSCA(), false)
 }
 
 // CheckForUnixSocket evaluates ServerConfig for whether the unix socket is to be used or not.

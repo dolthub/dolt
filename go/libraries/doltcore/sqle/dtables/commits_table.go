@@ -76,7 +76,7 @@ func (ct *CommitsTable) Schema() sql.Schema {
 		{Name: "commit_hash", Type: types.Text, Source: ct.tableName, PrimaryKey: true, DatabaseSource: ct.dbName},
 		{Name: "committer", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
 		{Name: "email", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
-		{Name: "date", Type: types.Datetime, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "date", Type: types.Datetime3, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
 		{Name: "message", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
 	}
 }

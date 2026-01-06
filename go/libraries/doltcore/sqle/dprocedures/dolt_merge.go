@@ -118,7 +118,13 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 	}
 
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
-		return "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
+		return "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.SquashParam, cli.NoFFParam)
+	}
+	if apr.ContainsAll(cli.FFOnlyParam, cli.NoFFParam) {
+		return "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.FFOnlyParam, cli.NoFFParam)
+	}
+	if apr.ContainsAll(cli.FFOnlyParam, cli.SquashParam) {
+		return "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.FFOnlyParam, cli.SquashParam)
 	}
 
 	ws, err := sess.WorkingSet(ctx, dbName)
@@ -226,7 +232,7 @@ func performMerge(
 	}
 
 	if canFF {
-		if spec.NoFF {
+		if spec.FFMode == merge.NoFastForward {
 			var commit *doltdb.Commit
 			ws, commit, err = executeNoFFMerge(ctx, sess, spec, msg, dbName, ws, noCommit)
 			if err == doltdb.ErrUnresolvedConflictsOrViolations {
@@ -262,6 +268,10 @@ func performMerge(
 			return ws, "", noConflictsOrViolations, fastForwardMerge, "", err
 		}
 		return ws, h.String(), noConflictsOrViolations, fastForwardMerge, "merge successful", nil
+	}
+
+	if spec.FFMode == merge.FastForwardOnly {
+		return ws, "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fatal: Not possible to fast-forward, aborting")
 	}
 
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
@@ -482,6 +492,15 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.CommitFlag) {
 		return nil, errors.New("cannot define both 'commit' and 'no-commit' flags at the same time")
 	}
+
+	// Determine FastForwardMode based on flags. validation of mutually exclusive flags done earlier
+	var ffMode merge.FastForwardMode = merge.FastForwardDefault
+	if apr.Contains(cli.NoFFParam) {
+		ffMode = merge.NoFastForward
+	} else if apr.Contains(cli.FFOnlyParam) {
+		ffMode = merge.FastForwardOnly
+	}
+
 	return merge.NewMergeSpec(
 		ctx,
 		dbData.Rsr,
@@ -492,7 +511,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		commitSpecStr,
 		t,
 		merge.WithSquash(apr.Contains(cli.SquashParam)),
-		merge.WithNoFF(apr.Contains(cli.NoFFParam)),
+		merge.WithFastForwardMode(ffMode),
 		merge.WithForce(apr.Contains(cli.ForceFlag)),
 		merge.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
 		merge.WithNoEdit(apr.Contains(cli.NoEditFlag)),

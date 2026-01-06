@@ -53,6 +53,8 @@ const (
 	tempTablesDir = "temptf"
 
 	TmpDirName = "tmp"
+
+	InvalidRemoteNameCharacters = " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|"
 )
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -64,15 +66,15 @@ var ErrRemoteAlreadyExists = errors.New("remote already exists")
 var ErrInvalidRemoteURL = errors.New("remote URL invalid")
 var ErrRemoteNotFound = errors.New("remote not found")
 var ErrInvalidRemoteName = errors.New("remote name invalid")
-var ErrBackupAlreadyExists = errors.New("backup already exists")
-var ErrInvalidBackupURL = errors.New("backup URL invalid")
-var ErrBackupNotFound = errors.New("backup not found")
-var ErrInvalidBackupName = errors.New("backup name invalid")
-var ErrFailedToDeleteBackup = errors.New("failed to delete backup")
+var ErrBackupAlreadyExists = goerrors.NewKind("backup '%s' already exists")
+var ErrBackupInvalidUrl = goerrors.NewKind("backup URL '%s' is invalid")
+var ErrBackupNotFound = goerrors.NewKind("backup '%s' not found")
+var ErrBackupInvalidName = goerrors.NewKind("backup name '%s' is invalid")
+var ErrBackupFailedDelete = goerrors.NewKind("backup '%s' failed to delete")
 var ErrFailedToReadFromDb = errors.New("failed to read from db")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToWriteRepoState = errors.New("failed to write repo state")
-var ErrRemoteAddressConflict = errors.New("address conflict with a remote")
+var ErrRemoteAddressConflict = goerrors.NewKind("address conflict with a remote: '%s' -> %s")
 var ErrDoltRepositoryNotFound = errors.New("can no longer find .dolt dir on disk")
 var ErrFailedToAccessDB = goerrors.NewKind("failed to access '%s' database: can no longer find .dolt dir on disk")
 var ErrDatabaseIsLocked = errors.New("the database is locked by another dolt process")
@@ -1023,7 +1025,7 @@ func (dEnv *DoltEnv) AddRemote(r Remote) error {
 		return ErrRemoteAlreadyExists
 	}
 
-	if strings.IndexAny(r.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+	if strings.IndexAny(r.Name, InvalidRemoteNameCharacters) != -1 {
 		return ErrInvalidRemoteName
 	}
 
@@ -1034,7 +1036,7 @@ func (dEnv *DoltEnv) AddRemote(r Remote) error {
 
 	// can have multiple remotes with the same address, but no conflicting backups
 	if rem, found := CheckRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
-		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
+		return ErrRemoteAddressConflict.New(rem.Name, rem.Url)
 	}
 
 	r.Url = absRemoteUrl
@@ -1052,21 +1054,21 @@ func (dEnv *DoltEnv) GetBackups() (*concurrentmap.Map[string, Remote], error) {
 
 func (dEnv *DoltEnv) AddBackup(r Remote) error {
 	if _, ok := dEnv.RepoState.Backups.Get(r.Name); ok {
-		return ErrBackupAlreadyExists
+		return ErrBackupAlreadyExists.New(r.Name)
 	}
 
-	if strings.IndexAny(r.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
-		return ErrInvalidBackupName
+	if strings.IndexAny(r.Name, InvalidRemoteNameCharacters) != -1 {
+		return ErrBackupInvalidName.New(r.Name)
 	}
 
 	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, r.Url)
 	if err != nil {
-		return fmt.Errorf("%w; %s", ErrInvalidBackupURL, err.Error())
+		return ErrBackupInvalidUrl.New(r.Url, err.Error())
 	}
 
 	// no conflicting remote or backup addresses
-	if rem, found := CheckRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
-		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, rem.Name, rem.Url)
+	if conflict, found := CheckRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
+		return ErrRemoteAddressConflict.New(conflict.Name, conflict.Url)
 	}
 
 	r.Url = absRemoteUrl
@@ -1110,7 +1112,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 func (dEnv *DoltEnv) RemoveBackup(ctx context.Context, name string) error {
 	backup, ok := dEnv.RepoState.Backups.Get(name)
 	if !ok {
-		return ErrBackupNotFound
+		return ErrBackupNotFound.New(name)
 	}
 
 	dEnv.RepoState.RemoveBackup(backup)

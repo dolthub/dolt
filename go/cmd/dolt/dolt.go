@@ -70,7 +70,6 @@ var dumpZshCommand = &commands.GenZshCompCmd{}
 
 var commandsWithoutCliCtx = []cli.Command{
 	commands.CloneCmd{},
-	commands.BackupCmd{},
 	commands.LoginCmd{},
 	credcmds.Commands,
 	cvcmds.Commands,
@@ -115,6 +114,14 @@ var commandsWithoutCurrentDirWrites = []cli.Command{
 	commands.ProfileCmd{},
 }
 
+// commands that specifically skip the env.MultiEnvForDirectory loading step. These commands work in a context where
+// we expect the database to fail loading, but we need to get through to the Exec call anyway. The dEnv created with LoadWithoutDB
+// will be passed to these commands, so we can determine where the data root is, but commands will need to load the database
+// on terms that make sense for their purpose.
+var commandsSkippingDBLoad = []cli.Command{
+	commands.FsckCmd{},
+}
+
 func initCliContext(commandName string) bool {
 	for _, command := range commandsWithoutCliCtx {
 		if command.Name() == commandName {
@@ -135,6 +142,15 @@ func supportsGlobalArgs(commandName string) bool {
 
 func needsWriteAccess(commandName string) bool {
 	for _, command := range commandsWithoutCurrentDirWrites {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
+func needsDBLoad(commandName string) bool {
+	for _, command := range commandsSkippingDBLoad {
 		if command.Name() == commandName {
 			return false
 		}
@@ -472,21 +488,23 @@ func runMain() int {
 	// will be lost. This is particularly confusing for database specific system
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
+	var mrEnv *env.MultiRepoEnv
+	if needsDBLoad(cfg.subCommand) {
+		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), cfg.dataDirFS, dEnv.Version, dEnv)
+		if err != nil {
+			cli.PrintErrln("failed to load database names")
+			return 1
+		}
+		_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
+			dsess.DefineSystemVariablesForDB(dbName)
+			return false, nil
+		})
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), cfg.dataDirFS, dEnv.Version, dEnv)
-	if err != nil {
-		cli.PrintErrln("failed to load database names")
-		return 1
-	}
-	_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
-		dsess.DefineSystemVariablesForDB(dbName)
-		return false, nil
-	})
-
-	// TODO: we set persisted vars here, and this should be deferred until after we know what command line arguments might change them
-	err = dsess.InitPersistedSystemVars(dEnv)
-	if err != nil {
-		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
+		// TODO: we set persisted vars here, and this should be deferred until after we know what command line arguments might change them
+		err = dsess.InitPersistedSystemVars(dEnv)
+		if err != nil {
+			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
+		}
 	}
 
 	var cliCtx cli.CliContext = nil
@@ -623,8 +641,11 @@ If you're interested in running this command against a remote host, hit us up on
 		if !hasPort {
 			port = 3306
 		}
-		useTLS := !apr.Contains(cli.NoTLSFlag)
-		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
+		tlsMode := sqlserver.QueryistTLSMode_Enabled
+		if apr.Contains(cli.NoTLSFlag) {
+			tlsMode = sqlserver.QueryistTLSMode_Disabled
+		}
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, tlsMode, useDb)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
 		if hasPort {
@@ -659,8 +680,14 @@ If you're interested in running this command against a remote host, hit us up on
 	//
 	// This is also allowed when --help is passed. So we defer the error
 	// until the caller tries to use the cli.LateBindQueryist.
-	isValidRepositoryRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
-
+	commandsNotRequiringRepo := map[string]bool{
+		"init":                         true,
+		"sql":                          true,
+		"sql-server":                   true,
+		"sql-client":                   true,
+		commands.DoltBackupCommandName: true,
+	}
+	isValidRepositoryRequired := !commandsNotRequiringRepo[subcommandName]
 	if noValidRepository && isValidRepositoryRequired {
 		return func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 			err = errors.New("The current directory is not a valid dolt repository.")
@@ -712,7 +739,7 @@ If you're interested in running this command against a remote host, hit us up on
 			if !creds.Specified {
 				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: localCreds.Secret, Specified: false}
 			}
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, false, useDb)
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb)
 		}
 	}
 

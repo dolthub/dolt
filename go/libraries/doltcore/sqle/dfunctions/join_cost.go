@@ -79,7 +79,7 @@ func (c *JoinCost) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	pro := dSess.Provider()
 	eng := gms.NewDefault(pro)
 
-	binder := planbuilder.New(ctx, eng.Analyzer.Catalog, eng.EventScheduler, eng.Parser)
+	binder := planbuilder.New(ctx, eng.Analyzer.Catalog, eng.EventScheduler)
 	parsed, _, _, qFlags, err := binder.Parse(q, nil, false)
 	if err != nil {
 		return nil, err

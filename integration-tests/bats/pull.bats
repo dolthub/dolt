@@ -581,3 +581,68 @@ SQL
     # Verify that the remote branch was deleted.
     [[ ! "$output" =~ "origin/new-branch" ]] || false
 }
+
+@test "pull: --ff-only succeeds when fast-forward is possible" {
+    cd repo2
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]  # Only header, no tables
+
+    run dolt pull --ff-only origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]] || false
+
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+}
+
+@test "pull: --ff-only fails when fast-forward is not possible" {
+    cd repo2
+
+    # Make a local commit that diverges from remote
+    dolt sql -q "create table divergent (id int primary key);"
+    dolt commit -Am "local divergent commit"
+    
+    run dolt pull --ff-only origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: Not possible to fast-forward, aborting" ]] || false
+}
+
+@test "pull: --ff-only conflicts with --no-ff" {
+    cd repo2
+    run dolt pull --ff-only --no-ff origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Flags '--ff-only' and '--no-ff' cannot be used together" ]] || false
+}
+
+@test "pull: --ff-only conflicts with --squash" {
+    cd repo2
+    run dolt pull --ff-only --squash origin  
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Flags '--ff-only' and '--squash' cannot be used together" ]] || false
+}
+
+@test "pull: --ff-only with already up-to-date branch" {
+    cd repo2
+    # First pull normally to get up to date
+    dolt pull origin
+    
+    # Now pull again with --ff-only - should succeed with "up-to-date" message
+    run dolt pull --ff-only origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+}
+
+@test "pull: --ff-only works with --no-commit" {
+    cd repo2
+
+    run dolt pull --ff-only --no-commit origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]] || false
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+}

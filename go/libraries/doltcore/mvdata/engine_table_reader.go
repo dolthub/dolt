@@ -37,7 +37,7 @@ type sqlEngineTableReader struct {
 }
 
 func NewSqlEngineReader(ctx *sql.Context, engine *sqle.Engine, root doltdb.RootValue, tableName string) (*sqlEngineTableReader, error) {
-	binder := planbuilder.New(ctx, engine.Analyzer.Catalog, engine.EventScheduler, engine.Parser)
+	binder := planbuilder.New(ctx, engine.Analyzer.Catalog, engine.EventScheduler)
 	ret, _, _, _, err := binder.Parse(fmt.Sprintf("show create table `%s`", tableName), nil, false)
 	if err != nil {
 		return nil, err

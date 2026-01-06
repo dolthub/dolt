@@ -33,15 +33,17 @@ var _ val.TupleComparator = CollationTupleComparator{}
 // Compare implements TupleComparator
 func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.Tuple, desc *val.TupleDesc) (cmp int) {
 	fast := desc.GetFixedAccess()
-	for i := range fast {
-		start, stop := fast[i][0], fast[i][1]
+	off := len(fast)
+	var start, stop val.ByteSize
+	for i := 0; i < off; i++ {
+		stop = fast[i]
 		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop])
 		if cmp != 0 {
 			return cmp
 		}
+		start = stop
 	}
 
-	off := len(fast)
 	for i, typ := range desc.Types[off:] {
 		j := i + off
 		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j))
@@ -111,7 +113,7 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 	if typ.Enc == val.StringEnc {
 		return compareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
 	} else {
-		return val.DefaultTupleComparator{}.CompareValues(ctx, 0, left, right, typ)
+		return (&val.DefaultTupleComparator{}).CompareValues(ctx, 0, left, right, typ)
 	}
 }
 

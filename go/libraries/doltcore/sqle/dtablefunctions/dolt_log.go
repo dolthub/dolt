@@ -177,7 +177,7 @@ var logTableSchema = sql.Schema{
 	&sql.Column{Name: "commit_hash", Type: types.Text},
 	&sql.Column{Name: "committer", Type: types.Text},
 	&sql.Column{Name: "email", Type: types.Text},
-	&sql.Column{Name: "date", Type: types.Datetime},
+	&sql.Column{Name: "date", Type: types.Datetime3},
 	&sql.Column{Name: "message", Type: types.Text},
 	&sql.Column{Name: "commit_order", Type: types.Uint64},
 }

@@ -184,7 +184,7 @@ func TestLookupJoin(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			binder := planbuilder.New(sqlCtx, engine.EngineAnalyzer().Catalog, engine.EventScheduler, engine.Parser)
+			binder := planbuilder.New(sqlCtx, engine.EngineAnalyzer().Catalog, engine.EventScheduler)
 			node, _, _, qFlags, err := binder.Parse(tt.join, nil, false)
 			require.NoError(t, err)
 			node, err = engine.EngineAnalyzer().Analyze(sqlCtx, node, nil, qFlags)

@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
@@ -41,9 +42,9 @@ import (
 // diffWriter is an interface that lets us write diffs in a variety of output formats
 type diffWriter interface {
 	// BeginTable is called when a new table is about to be written, before any schema or row diffs are written
-	BeginTable(fromTableName, toTableName string, isAdd, isDrop bool) error
+	BeginTable(ctx context.Context, fromTableName, toTableName string, isAdd, isDrop bool) error
 	// WriteTableSchemaDiff is called to write a schema diff for the table given (if requested by args)
-	WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error
+	WriteTableSchemaDiff(ctx context.Context, fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error
 	// WriteEventDiff is called to write an event diff
 	WriteEventDiff(ctx context.Context, eventName, oldDefn, newDefn string) error
 	// WriteTriggerDiff is called to write a trigger diff
@@ -51,10 +52,10 @@ type diffWriter interface {
 	// WriteViewDiff is called to write a view diff
 	WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error
 	// WriteTableDiffStats is called to write the diff stats for the table given
-	WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error
+	WriteTableDiffStats(ctx context.Context, diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error
 	// RowWriter returns a row writer for the table delta provided, which will have Close() called on it when rows are
 	// done being written.
-	RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error)
+	RowWriter(ctx context.Context, fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error)
 	// Close finalizes the work of the writer
 	Close(ctx context.Context) error
 }
@@ -91,7 +92,7 @@ func (t tabularDiffWriter) Close(ctx context.Context) error {
 	return nil
 }
 
-func (t tabularDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, isDrop bool) error {
+func (t tabularDiffWriter) BeginTable(ctx context.Context, fromTableName, toTableName string, isAdd, isDrop bool) error {
 	bold := color.New(color.Bold)
 	if isDrop {
 		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", fromTableName, fromTableName)
@@ -107,7 +108,7 @@ func (t tabularDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, 
 	return nil
 }
 
-func (t tabularDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
+func (t tabularDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
 	var fromCreateStmt = ""
 	if fromTableInfo != nil {
 		fromCreateStmt = fromTableInfo.CreateStmt
@@ -141,7 +142,7 @@ func (t tabularDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn,
 	return nil
 }
 
-func (t tabularDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
+func (t tabularDiffWriter) WriteTableDiffStats(ctx context.Context, diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
 	acc := diff.DiffStatProgress{}
 	eP := cli.NewEphemeralPrinter()
 	var pos int
@@ -221,7 +222,7 @@ func (t tabularDiffWriter) printKeylessStat(acc diff.DiffStatProgress) {
 	cli.Printf("%s\n", deletions)
 }
 
-func (t tabularDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
+func (t tabularDiffWriter) RowWriter(ctx context.Context, fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	return tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100), nil
 }
 
@@ -233,16 +234,17 @@ func (s sqlDiffWriter) Close(ctx context.Context) error {
 	return nil
 }
 
-func (s sqlDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, isDrop bool) error {
+func (s sqlDiffWriter) BeginTable(ctx context.Context, fromTableName, toTableName string, isAdd, isDrop bool) error {
 	return nil
 }
 
-func (s sqlDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
+func (s sqlDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
 	stmts := tds.AlterStmts
 	if tds.IsAdd() {
 		stmts = []string{toTableInfo.CreateStmt}
 	} else if tds.IsDrop() {
-		stmts = []string{sqlfmt.DropTableStmt(fromTableInfo.Name)}
+		formatter := overrides.SchemaFormatterFromContext(ctx)
+		stmts = []string{sqlfmt.DropTableStmt(formatter, fromTableInfo.Name)}
 	}
 	for _, stmt := range stmts {
 		if len(stmt) == 0 {
@@ -256,12 +258,13 @@ func (s sqlDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.Tab
 
 func (s sqlDiffWriter) WriteEventDiff(ctx context.Context, eventName, oldDefn, newDefn string) error {
 	// definitions will already be semicolon terminated, no need to add additional ones
+	formatter := overrides.SchemaFormatterFromContext(ctx)
 	if oldDefn == "" {
 		cli.Println(newDefn)
 	} else if newDefn == "" {
-		cli.Println(fmt.Sprintf("DROP EVENT %s;", sql.QuoteIdentifier(eventName)))
+		cli.Println(fmt.Sprintf("DROP EVENT %s;", formatter.QuoteIdentifier(eventName)))
 	} else {
-		cli.Println(fmt.Sprintf("DROP EVENT %s;", sql.QuoteIdentifier(eventName)))
+		cli.Println(fmt.Sprintf("DROP EVENT %s;", formatter.QuoteIdentifier(eventName)))
 		cli.Println(newDefn)
 	}
 
@@ -270,12 +273,13 @@ func (s sqlDiffWriter) WriteEventDiff(ctx context.Context, eventName, oldDefn, n
 
 func (s sqlDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
 	// definitions will already be semicolon terminated, no need to add additional ones
+	formatter := overrides.SchemaFormatterFromContext(ctx)
 	if oldDefn == "" {
 		cli.Println(newDefn)
 	} else if newDefn == "" {
-		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", sql.QuoteIdentifier(triggerName)))
+		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", formatter.QuoteIdentifier(triggerName)))
 	} else {
-		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", sql.QuoteIdentifier(triggerName)))
+		cli.Println(fmt.Sprintf("DROP TRIGGER %s;", formatter.QuoteIdentifier(triggerName)))
 		cli.Println(newDefn)
 	}
 
@@ -284,23 +288,24 @@ func (s sqlDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDef
 
 func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
 	// definitions will already be semicolon terminated, no need to add additional ones
+	formatter := overrides.SchemaFormatterFromContext(ctx)
 	if oldDefn == "" {
 		cli.Println(newDefn)
 	} else if newDefn == "" {
-		cli.Println(fmt.Sprintf("DROP VIEW %s;", sql.QuoteIdentifier(viewName)))
+		cli.Println(fmt.Sprintf("DROP VIEW %s;", formatter.QuoteIdentifier(viewName)))
 	} else {
-		cli.Println(fmt.Sprintf("DROP VIEW %s;", sql.QuoteIdentifier(viewName)))
+		cli.Println(fmt.Sprintf("DROP VIEW %s;", formatter.QuoteIdentifier(viewName)))
 		cli.Println(newDefn)
 	}
 
 	return nil
 }
 
-func (s sqlDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
+func (s sqlDiffWriter) WriteTableDiffStats(ctx context.Context, diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
 	return errors.New("invalid output format: sql. SQL format diffs only rendered for schema or data changes")
 }
 
-func (s sqlDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
+func (s sqlDiffWriter) RowWriter(ctx context.Context, fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	var targetSch schema.Schema
 	if toTableInfo != nil {
 		targetSch = toTableInfo.Sch
@@ -345,7 +350,7 @@ func (j *jsonDiffWriter) beginDocumentIfNecessary() error {
 	return nil
 }
 
-func (j *jsonDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, isDrop bool) error {
+func (j *jsonDiffWriter) BeginTable(ctx context.Context, fromTableName, toTableName string, isAdd, isDrop bool) error {
 	err := j.beginDocumentIfNecessary()
 	if err != nil {
 		return err
@@ -375,7 +380,7 @@ func (j *jsonDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, is
 	return err
 }
 
-func (j *jsonDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
+func (j *jsonDiffWriter) WriteTableSchemaDiff(ctx context.Context, fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
 	jsonSchDiffWriter, err := json.NewSchemaDiffWriter(iohelp.NopWrCloser(j.wr))
 	if err != nil {
 		return err
@@ -385,7 +390,8 @@ func (j *jsonDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.T
 	if tds.IsAdd() {
 		stmts = []string{toTableInfo.CreateStmt}
 	} else if tds.IsDrop() {
-		stmts = []string{sqlfmt.DropTableStmt(fromTableInfo.Name)}
+		formatter := overrides.SchemaFormatterFromContext(ctx)
+		stmts = []string{sqlfmt.DropTableStmt(formatter, fromTableInfo.Name)}
 	}
 
 	for _, stmt := range stmts {
@@ -401,7 +407,7 @@ func (j *jsonDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.T
 	return jsonSchDiffWriter.Close()
 }
 
-func (j *jsonDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
+func (j *jsonDiffWriter) RowWriter(ctx context.Context, fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	err := iohelp.WriteAll(j.wr, []byte(jsonDiffDataDiffHeader))
 	if err != nil {
 		return nil, err
@@ -590,7 +596,7 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 const jsonDiffStatsHeader = `"stats":{`
 const jsonDiffStatsFooter = `}`
 
-func (j *jsonDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
+func (j *jsonDiffWriter) WriteTableDiffStats(ctx context.Context, diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
 	acc := diff.DiffStatProgress{}
 	for _, diffStat := range diffStats {
 		acc.Adds += diffStat.RowsAdded

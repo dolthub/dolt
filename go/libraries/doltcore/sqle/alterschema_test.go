@@ -292,11 +292,7 @@ func makePeopleTable(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 }
 
 func mustStringToColumnDefault(defaultString string) *sql.ColumnDefaultValue {
-	def, err := planbuilder.StringToColumnDefaultValue(sql.NewEmptyContext(), defaultString)
-	if err != nil {
-		panic(err)
-	}
-	return def
+	return planbuilder.MustStringToColumnDefaultValue(sql.NewEmptyContext(), defaultString, nil, true)
 }
 
 func schemaNewColumnWithDefault(name string, tag uint64, kind types.NomsKind, partOfPK bool, defaultVal string, constraints ...schema.ColConstraint) schema.Column {

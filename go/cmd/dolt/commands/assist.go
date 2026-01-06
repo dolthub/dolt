@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -581,6 +582,7 @@ func jsonMessage(role string, content string) ([]byte, error) {
 }
 
 func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.DoltEnv) (string, error) {
+	formatter := overrides.SchemaFormatterFromContext(ctx)
 	sb := strings.Builder{}
 
 	root, err := dEnv.WorkingRoot(ctx)
@@ -590,7 +592,7 @@ func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEn
 
 	tables, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 	for _, table := range tables {
-		_, iter, _, err := sqlEngine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", sql.QuoteIdentifier(table)))
+		_, iter, _, err := sqlEngine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", formatter.QuoteIdentifier(table)))
 		if err != nil {
 			return "", err
 		}

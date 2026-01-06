@@ -22,6 +22,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/yaml.v2"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -95,6 +96,9 @@ type ListenerYAMLConfig struct {
 	CACert *string `yaml:"ca_cert,omitempty" minver:"1.77.0"`
 	// RequireSecureTransport can enable a mode where non-TLS connections are turned away.
 	RequireSecureTransport *bool `yaml:"require_secure_transport,omitempty"`
+	// RequireClientCert enables a mode where all clients must present a certificate. If a CA
+	// cert is also provided, the client cert will also be verified.
+	RequireClientCert *bool `yaml:"require_client_cert,omitempty" minver:"1.78.3"`
 	// AllowCleartextPasswords enables use of cleartext passwords.
 	AllowCleartextPasswords *bool `yaml:"allow_cleartext_passwords,omitempty"`
 	// Socket is unix socket file path
@@ -108,9 +112,14 @@ type PerformanceYAMLConfig struct {
 }
 
 type MetricsYAMLConfig struct {
-	Labels map[string]string `yaml:"labels"`
-	Host   *string           `yaml:"host,omitempty"`
-	Port   *int              `yaml:"port,omitempty"`
+	Labels                  map[string]string `yaml:"labels"`
+	Host                    *string           `yaml:"host,omitempty"`
+	Port                    *int              `yaml:"port,omitempty"`
+	TlsCert                 *string           `yaml:"tls_cert,omitempty" minver:"1.78.2"`
+	TlsKey                  *string           `yaml:"tls_key,omitempty" minver:"1.78.2"`
+	TlsCa                   *string           `yaml:"tls_ca,omitempty" minver:"1.78.2"`
+	Jwks                    *JwksConfig       `yaml:"jwks,omitempty" minver:"1.79.0"`
+	JWTRequiredForLocalhost *bool             `yaml:"jwt_required_for_localhost,omitempty" minver:"1.79.0"`
 }
 
 type RemotesapiYAMLConfig struct {
@@ -227,9 +236,14 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels: cfg.MetricsLabels(),
-			Host:   nillableStrPtr(cfg.MetricsHost()),
-			Port:   ptr(cfg.MetricsPort()),
+			Labels:                  cfg.MetricsLabels(),
+			Host:                    nillableStrPtr(cfg.MetricsHost()),
+			Port:                    ptr(cfg.MetricsPort()),
+			TlsCert:                 ptr(cfg.MetricsTLSCert()),
+			TlsKey:                  ptr(cfg.MetricsTLSKey()),
+			TlsCa:                   ptr(cfg.MetricsTLSCA()),
+			Jwks:                    cfg.MetricsJwksConfig(),
+			JWTRequiredForLocalhost: ptr(cfg.MetricsJWTRequiredForLocalhost()),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     cfg.RemotesapiPort(),
@@ -300,9 +314,14 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: zeroIf(ptr(cfg.DataDir()), !cfg.ValueSet(DataDirKey)),
 		CfgDirStr:  zeroIf(ptr(cfg.CfgDir()), !cfg.ValueSet(CfgDirKey)),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels: zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
-			Host:   zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
-			Port:   zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
+			Labels:                  zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
+			Host:                    zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
+			Port:                    zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
+			TlsCert:                 zeroIf(ptr(cfg.MetricsTLSCert()), !cfg.ValueSet(MetricsTLSCertKey)),
+			TlsKey:                  zeroIf(ptr(cfg.MetricsTLSKey()), !cfg.ValueSet(MetricsTLSKeyKey)),
+			TlsCa:                   zeroIf(ptr(cfg.MetricsTLSCA()), !cfg.ValueSet(MetricsTLSCAKey)),
+			Jwks:                    zeroIf(cfg.MetricsJwksConfig(), !cfg.ValueSet(MetricsJwksConfigKey)),
+			JWTRequiredForLocalhost: zeroIf(ptr(cfg.MetricsJWTRequiredForLocalhost()), !cfg.ValueSet(MetricsJWTRequiredForLocalhostKey)),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     zeroIf(cfg.RemotesapiPort(), !cfg.ValueSet(RemotesapiPortKey)),
@@ -402,6 +421,15 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 	}
 	if withPlaceholders.MetricsConfig.Port == nil {
 		withPlaceholders.MetricsConfig.Port = ptr(9091)
+	}
+	if withPlaceholders.MetricsConfig.TlsCert == nil {
+		withPlaceholders.MetricsConfig.TlsCert = ptr("")
+	}
+	if withPlaceholders.MetricsConfig.TlsKey == nil {
+		withPlaceholders.MetricsConfig.TlsKey = ptr("")
+	}
+	if withPlaceholders.MetricsConfig.TlsCa == nil {
+		withPlaceholders.MetricsConfig.TlsCa = ptr("")
 	}
 
 	if withPlaceholders.RemotesapiConfig.Port_ == nil {
@@ -759,6 +787,40 @@ func (cfg YAMLConfig) MetricsPort() int {
 	return *cfg.MetricsConfig.Port
 }
 
+func (cfg YAMLConfig) MetricsTLSCert() string {
+	if cfg.MetricsConfig.TlsCert == nil {
+		return ""
+	}
+
+	return *cfg.MetricsConfig.TlsCert
+}
+
+func (cfg YAMLConfig) MetricsTLSKey() string {
+	if cfg.MetricsConfig.TlsKey == nil {
+		return ""
+	}
+	return *cfg.MetricsConfig.TlsKey
+}
+
+func (cfg YAMLConfig) MetricsTLSCA() string {
+	if cfg.MetricsConfig.TlsCa == nil {
+		return ""
+	}
+	return *cfg.MetricsConfig.TlsCa
+}
+
+func (cfg YAMLConfig) MetricsJwksConfig() *JwksConfig {
+	return cfg.MetricsConfig.Jwks
+}
+
+func (cfg YAMLConfig) MetricsJWTRequiredForLocalhost() bool {
+	if cfg.MetricsConfig.JWTRequiredForLocalhost == nil {
+		return false
+	}
+
+	return *cfg.MetricsConfig.JWTRequiredForLocalhost
+}
+
 func (cfg YAMLConfig) RemotesapiPort() *int {
 	return cfg.RemotesapiConfig.Port_
 }
@@ -873,6 +935,16 @@ func (cfg YAMLConfig) CACert() string {
 	return *cfg.ListenerConfig.CACert
 }
 
+// RequireClientCert is true if the server should reject any connections that don't present a certificate. When
+// enabled, a client certificate is always required, and if a CA cert is also configured, then the client cert
+// will also be verified. Enabling this option also means that non-TLS connections are not allowed.
+func (cfg YAMLConfig) RequireClientCert() bool {
+	if cfg.ListenerConfig.RequireClientCert == nil {
+		return false
+	}
+	return *cfg.ListenerConfig.RequireClientCert
+}
+
 // RequireSecureTransport is true if the server should reject non-TLS connections.
 func (cfg YAMLConfig) RequireSecureTransport() bool {
 	if cfg.ListenerConfig.RequireSecureTransport == nil {
@@ -961,6 +1033,10 @@ func (cfg YAMLConfig) EventSchedulerStatus() string {
 	default:
 		return strings.ToUpper(*cfg.BehaviorConfig.EventSchedulerStatus)
 	}
+}
+
+func (cfg YAMLConfig) Overrides() sql.EngineOverrides {
+	return sql.EngineOverrides{}
 }
 
 type ClusterYAMLConfig struct {

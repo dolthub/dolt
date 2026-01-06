@@ -58,6 +58,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	httputils "github.com/dolthub/dolt/go/libraries/utils/http"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 	"github.com/dolthub/dolt/go/store/chunks"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
@@ -251,6 +252,7 @@ func ConfigureServices(
 				ClusterController:          clusterController,
 				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
 				SkipRootUserInitialization: cfg.SkipRootUserInit,
+				EngineOverrides:            cfg.ServerConfig.Overrides(),
 			}
 			return nil
 		},
@@ -601,7 +603,6 @@ func ConfigureServices(
 	}
 
 	var metSrv SQLMetricsService
-
 	RunMetricsServer := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
 			if cfg.ServerConfig.MetricsHost() != "" && cfg.ServerConfig.MetricsPort() > 0 {
@@ -613,19 +614,72 @@ func ConfigureServices(
 					return err
 				}
 
-				mux := http.NewServeMux()
-				mux.Handle("/metrics", promhttp.Handler())
-				metSrv.srv = &http.Server{
-					Addr:    addr,
-					Handler: mux,
+				tlsConfig, err := servercfg.LoadMetricsTLSConfig(cfg.ServerConfig)
+				if err != nil {
+					return err
 				}
 
+				mux := http.NewServeMux()
+				metricsHandler := promhttp.Handler()
+				jwksConfig := cfg.ServerConfig.MetricsJwksConfig()
+				enableMetricsAuth := jwksConfig != nil
+				requireLocalhostAuth := cfg.ServerConfig.MetricsJWTRequiredForLocalhost()
+
+				logrus.Infof("Starting metrics server. auth_enabled = %t, addr = %s, require_localhost_auth = %t", enableMetricsAuth, addr, requireLocalhostAuth)
+
+				if enableMetricsAuth {
+					mux.Handle("/metrics", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						if !requireLocalhostAuth {
+							isLocal, err := httputils.IsLocalRequest(r)
+							logrus.Info("Metrics JWT not required for localhost isLocal:", isLocal, "err:", err)
+							if err != nil {
+								logrus.Warnf("error checking if request is local for /metrics (assuming remote) request: %v.", err)
+							} else if isLocal {
+								metricsHandler.ServeHTTP(w, r)
+								return
+							}
+						}
+
+						auth := r.Header.Get("Authorization")
+						if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+							w.Header().Set("WWW-Authenticate", `Bearer realm="metrics"`)
+							http.Error(w, "unauthorized", http.StatusUnauthorized)
+							return
+						}
+
+						valid, _, err := validateJWT(jwksConfig, strings.TrimPrefix(auth, "Bearer "), time.Now())
+						if err != nil {
+							logrus.Warnf("JWT validation error for /metrics: %v", err)
+							http.Error(w, "auth failed", http.StatusUnauthorized)
+							return
+						} else if !valid {
+							logrus.Warnf("JWT validation error for /metrics: JWT token is invalid")
+							http.Error(w, "invalid token", http.StatusUnauthorized)
+							return
+						}
+
+						metricsHandler.ServeHTTP(w, r)
+					}))
+
+				} else {
+					mux.Handle("/metrics", metricsHandler)
+				}
+
+				metSrv.srv = &http.Server{
+					Addr:      addr,
+					Handler:   mux,
+					TLSConfig: tlsConfig,
+				}
 			}
 			return nil
 		},
 		RunF: func(context.Context) {
 			if metSrv.state.CompareAndSwap(svcs.ServiceState_Init, svcs.ServiceState_Run) {
-				_ = metSrv.srv.Serve(metSrv.lis)
+				if metSrv.srv.TLSConfig != nil {
+					_ = metSrv.srv.ServeTLS(metSrv.lis, "", "")
+				} else {
+					_ = metSrv.srv.Serve(metSrv.lis)
+				}
 			}
 		},
 		StopF: func() error {
@@ -1156,6 +1210,11 @@ func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.P
 	serverConf.MaxLoggedQueryLen = serverConfig.MaxLoggedQueryLen()
 	serverConf.EncodeLoggedQuery = serverConfig.ShouldEncodeLoggedQuery()
 	serverConf.ProtocolListenerFactory = plf
+
+	// If client certs are required, then TLS connections are implicitly required
+	if serverConfig.RequireClientCert() {
+		serverConf.RequireSecureTransport = true
+	}
 
 	return serverConf, nil
 }

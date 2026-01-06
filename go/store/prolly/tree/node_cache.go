@@ -25,31 +25,28 @@ const (
 	numStripes = 256
 )
 
-func newChunkCache(maxSize int) (c nodeCache) {
-	sz := maxSize / numStripes
-	for i := range c.stripes {
-		c.stripes[i] = newStripe(sz)
-	}
-	return
-}
+type nodeCache []*stripe
 
-type nodeCache struct {
-	stripes [numStripes]*stripe
+func newChunkCache(maxSize int) nodeCache {
+	cache := make(nodeCache, numStripes)
+	sz := maxSize / numStripes
+	for i := range cache {
+		cache[i] = newStripe(sz)
+	}
+	return cache
 }
 
 func (c nodeCache) get(addr hash.Hash) (*Node, bool) {
-	s := c.stripes[addr[0]]
-	return s.get(addr)
+	return c[addr[0]].get(addr)
 }
 
 func (c nodeCache) insert(addr hash.Hash, node *Node) {
-	s := c.stripes[addr[0]]
-	s.insert(addr, node)
+	c[addr[0]].insert(addr, node)
 }
 
 func (c nodeCache) purge() {
-	for _, s := range c.stripes {
-		s.purge()
+	for i := range c {
+		c[i].purge()
 	}
 }
 

@@ -47,7 +47,7 @@ func TestGenNewFormatQueryPlans(t *testing.T) {
 	for _, tt := range queries.PlanTests {
 		_, _ = w.WriteString("\t{\n")
 		ctx := enginetest.NewContext(harness)
-		binder := planbuilder.New(ctx, engine.EngineAnalyzer().Catalog, engine.EngineEventScheduler(), nil)
+		binder := planbuilder.New(ctx, engine.EngineAnalyzer().Catalog, engine.EngineEventScheduler())
 		parsed, _, _, qFlags, err := binder.Parse(tt.Query, nil, false)
 		require.NoError(t, err)
 

@@ -19,8 +19,6 @@ import (
 	"io"
 	"math"
 
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -100,5 +98,7 @@ func readNFrom(rd io.ReadSeeker, offset uint64, length uint32) ([]byte, error) {
 		return nil, err
 	}
 
-	return iohelp.ReadNBytes(rd, int(length))
+	buf := make([]byte, length)
+	_, err = io.ReadFull(rd, buf)
+	return buf, err
 }

@@ -117,7 +117,7 @@ func TestIndexedJsonDocument_ValidateChunks(t *testing.T) {
 	for _, boundary := range largeDocumentChunkBoundaries {
 		t.Run(fmt.Sprintf("validate %v at chunk %v", jsonPathTypeNames[boundary.pathType], boundary.chunkId), func(t *testing.T) {
 			expectedKey := jsonLocationFromMySqlPath(t, boundary.path, boundary.pathType)
-			actualKey := []byte(largeDoc.m.Root.GetKey(boundary.chunkId))
+			actualKey := jsonLocationKey(largeDoc.m.Root.GetKey(boundary.chunkId))
 			require.Equal(t, expectedKey.key, actualKey)
 		})
 	}
@@ -322,7 +322,7 @@ func TestJsonCompare(t *testing.T) {
 		if right != nil {
 			rightJSON, inRange, err := types.JSON.Convert(ctx, right)
 			require.NoError(t, err)
-			require.True(t, bool(inRange))
+			require.True(t, inRange == sql.InRange)
 			rightInterface, err := rightJSON.(sql.JSONWrapper).ToInterface(ctx)
 			require.NoError(t, err)
 			right = types.JSONDocument{Val: rightInterface}

@@ -1251,6 +1251,20 @@ var jsonMergeTests = []schemaMergeTest{
 				dataConflict: true,
 			},
 			{
+				name:         `divergent modification with NULL ancestor`,
+				ancestor:     singleRow(1, 1, 1, nil),
+				left:         singleRow(1, 2, 1, `{ "key1": "value2" }`),
+				right:        singleRow(1, 1, 2, `{ "key1": "value3" }`),
+				dataConflict: true,
+			},
+			{
+				name:         `divergent modification with NULL child`,
+				ancestor:     singleRow(1, 1, 1, `{ "key1": "value1"}`),
+				left:         singleRow(1, 2, 1, nil),
+				right:        singleRow(1, 1, 2, `{ "key1": "value3" }`),
+				dataConflict: true,
+			},
+			{
 				name:         `divergent modification and deletion`,
 				ancestor:     singleRow(1, 1, 1, `{ "key1": "value1"}`),
 				left:         singleRow(1, 2, 1, `{ "key1": "value2" }`),
@@ -1428,7 +1442,7 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 	insert := func(document sqltypes.MutableJSON, path string, val interface{}) sqltypes.MutableJSON {
 		jsonVal, inRange, err := sqltypes.JSON.Convert(ctx, val)
 		require.NoError(t, err)
-		require.True(t, (bool)(inRange))
+		require.True(t, inRange == sql.InRange)
 		newDoc, changed, err := document.Insert(ctx, path, jsonVal.(sql.JSONWrapper))
 		require.NoError(t, err)
 		require.True(t, changed)
@@ -1438,7 +1452,7 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 	set := func(document sqltypes.MutableJSON, path string, val interface{}) sqltypes.MutableJSON {
 		jsonVal, inRange, err := sqltypes.JSON.Convert(ctx, val)
 		require.NoError(t, err)
-		require.True(t, (bool)(inRange))
+		require.True(t, inRange == sql.InRange)
 		newDoc, changed, err := document.Replace(ctx, path, jsonVal.(sql.JSONWrapper))
 		require.NoError(t, err)
 		require.True(t, changed)

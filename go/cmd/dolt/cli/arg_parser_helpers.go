@@ -46,15 +46,6 @@ func ParseAuthor(authorStr string) (string, string, error) {
 	return name, email, nil
 }
 
-const (
-	SyncBackupId        = "sync"
-	SyncBackupUrlId     = "sync-url"
-	RestoreBackupId     = "restore"
-	AddBackupId         = "add"
-	RemoveBackupId      = "remove"
-	RemoveBackupShortId = "rm"
-)
-
 var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
 
 // CreateCommitArgParser creates the argparser shared dolt commit cli and DOLT_COMMIT.
@@ -97,6 +88,7 @@ func CreateMergeArgParser() *argparser.ArgParser {
 		return errors.New("Error: Dolt does not support merging from multiple commits. You probably meant to checkout one and then merge from the other.")
 	}
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsFlag(FFOnlyParam, "", "Refuse to merge unless the current HEAD is already up to date or the merge can be resolved as a fast-forward.")
 	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(AbortParam, "", "Abort the in-progress merge and return the working set to the state before the merge started.")
@@ -227,6 +219,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"remoteBranch", "The name of a branch on the specified remote to be merged into the current working set."})
 	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsFlag(FFOnlyParam, "", "Refuse to merge unless the current HEAD is already up to date or the merge can be resolved as a fast-forward.")
 	ap.SupportsFlag(ForceFlag, "f", "Update from the remote HEAD even if there are errors.")
 	ap.SupportsFlag(CommitFlag, "", "Perform the merge and commit the result. This is the default option, but can be overridden with the --no-commit flag. Note that this option does not affect fast-forward merges, which don't create a new merge commit, and if any merge conflicts or constraint violations are detected, no commit will be attempted.")
 	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
@@ -320,6 +313,7 @@ func CreateDiffArgParser(isTableFunction bool) *argparser.ArgParser {
 		ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
 		ap.SupportsString(WhereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 		ap.SupportsInt(LimitParam, "", "record_count", "limits to the first N diffs.")
+		ap.SupportsString(FilterParam, "", "diff_type", "filters results based on the type of change (added, modified, renamed, dropped). 'removed' is accepted as an alias for 'dropped'.")
 		ap.SupportsFlag(StagedFlag, "", "Show only the staged data changes.")
 		ap.SupportsFlag(CachedFlag, "c", "Synonym for --staged")
 		ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
@@ -391,36 +385,21 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	return ap
 }
 
-var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
+var AwsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
 var ossParams = []string{dbfactory.OSSCredsFileParam, dbfactory.OSSCredsProfile}
-
-func ProcessBackupArgs(apr *argparser.ArgParseResults, scheme, backupUrl string) (map[string]string, error) {
-	params := map[string]string{}
-
-	var err error
-	switch scheme {
-	case dbfactory.AWSScheme:
-		err = AddAWSParams(backupUrl, apr, params)
-	case dbfactory.OSSScheme:
-		err = AddOSSParams(backupUrl, apr, params)
-	default:
-		err = VerifyNoAwsParams(apr)
-	}
-	return params, err
-}
 
 func AddAWSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) error {
 	isAWS := strings.HasPrefix(remoteUrl, "aws")
 
 	if !isAWS {
-		for _, p := range awsParams {
+		for _, p := range AwsParams {
 			if _, ok := apr.GetValue(p); ok {
 				return fmt.Errorf("%s param is only valid for aws cloud remotes in the format aws://dynamo-table:s3-bucket/database", p)
 			}
 		}
 	}
 
-	for _, p := range awsParams {
+	for _, p := range AwsParams {
 		if val, ok := apr.GetValue(p); ok {
 			params[p] = val
 		}
@@ -450,7 +429,7 @@ func AddOSSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[s
 }
 
 func VerifyNoAwsParams(apr *argparser.ArgParseResults) error {
-	if awsParams := apr.GetValues(awsParams...); len(awsParams) > 0 {
+	if awsParams := apr.GetValues(AwsParams...); len(awsParams) > 0 {
 		awsParamKeys := make([]string, 0, len(awsParams))
 		for k := range awsParams {
 			awsParamKeys = append(awsParamKeys, k)

@@ -158,6 +158,7 @@ var BranchActivityTests = []queries.ScriptTest{
 			"SELECT last_write INTO @lw FROM dolt_branch_activity WHERE branch = 'other_branch'",
 			"SELECT SLEEP(2)", // Ensure time stamp difference is noticeable
 			"UPDATE `mydb/other_branch`.t SET v='baz' WHERE id=1",
+			"SELECT SLEEP(0.5)", // branch activity update is async, give it a moment.
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{

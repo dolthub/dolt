@@ -116,7 +116,7 @@ func TestCountAgg(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			binder := planbuilder.New(sqlCtx, engine.EngineAnalyzer().Catalog, engine.EngineEventScheduler(), engine.Parser)
+			binder := planbuilder.New(sqlCtx, engine.EngineAnalyzer().Catalog, engine.EngineEventScheduler())
 			node, _, _, qFlags, err := binder.Parse(tt.query, nil, false)
 			require.NoError(t, err)
 			node, err = engine.EngineAnalyzer().Analyze(sqlCtx, node, nil, qFlags)

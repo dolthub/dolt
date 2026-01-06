@@ -171,7 +171,7 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 	var base string
 	if baseSch != nil {
 		var err error
-		base, err = getCreateTableStatement(table.Name, baseSch, baseFKs, bs)
+		base, err = getCreateTableStatement(ctx, table.Name, baseSch, baseFKs, bs)
 		if err != nil {
 			return schemaConflict{}, err
 		}
@@ -182,7 +182,7 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 	var ours string
 	if c.ToSch != nil {
 		var err error
-		ours, err = getCreateTableStatement(table.Name, c.ToSch, c.ToFks, c.ToParentSchemas)
+		ours, err = getCreateTableStatement(ctx, table.Name, c.ToSch, c.ToFks, c.ToParentSchemas)
 		if err != nil {
 			return schemaConflict{}, err
 		}
@@ -199,7 +199,7 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 	var theirs string
 	if c.FromSch != nil {
 		var err error
-		theirs, err = getCreateTableStatement(table.Name, c.FromSch, c.FromFks, c.FromParentSchemas)
+		theirs, err = getCreateTableStatement(ctx, table.Name, c.FromSch, c.FromFks, c.FromParentSchemas)
 		if err != nil {
 			return schemaConflict{}, err
 		}
@@ -237,8 +237,8 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 	}, nil
 }
 
-func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[doltdb.TableName]schema.Schema) (string, error) {
-	return sqlfmt.GenerateCreateTableStatement(table, sch, fks, parents)
+func getCreateTableStatement(ctx *sql.Context, table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[doltdb.TableName]schema.Schema) (string, error) {
+	return sqlfmt.GenerateCreateTableStatement(ctx, table, sch, fks, parents)
 }
 
 func getSchemaConflictDescription(ctx *sql.Context, table doltdb.TableName, base, ours, theirs schema.Schema) (string, error) {

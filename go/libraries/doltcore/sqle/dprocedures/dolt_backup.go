@@ -15,260 +15,340 @@
 package dprocedures
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
-	DoltBackupFuncName = "dolt_backup"
+	DoltBackupProcedureName = "dolt_backup"
 
-	statusOk  = 0
-	statusErr = 1
+	DoltBackupParamAdd     = "add"
+	DoltBackupParamRemove  = "remove"
+	DoltBackupParamRm      = "rm"
+	DoltBackupParamSync    = "sync"
+	DoltBackupParamSyncUrl = "sync-url"
+	DoltBackupParamRestore = "restore"
 )
 
-// doltBackup is the stored procedure version for the CLI command `dolt backup`.
+var awsParamsUsage = []string{
+	fmt.Sprintf("--%s=<region>", dbfactory.AWSRegionParam),
+	fmt.Sprintf("--%s=<type>", dbfactory.AWSCredsTypeParam),
+	fmt.Sprintf("--%s=<file>", dbfactory.AWSCredsFileParam),
+	fmt.Sprintf("--%s=<profile>", dbfactory.AWSCredsProfile),
+}
+
+// doltBackup implements backup operations for Dolt databases. It routes |args| to the appropriate operation handler
+// based on the first argument. The procedure requires superuser privileges and write access to the current database.
+// Supported operations are: add, remove/rm, sync, sync-url, and restore.
 func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := doDoltBackup(ctx, args)
+	apr, err := cli.CreateBackupArgParser().Parse(args)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(int64(res)), nil
-}
 
-func doDoltBackup(ctx *sql.Context, args []string) (int, error) {
-	dbName := ctx.GetCurrentDatabase()
-	if len(dbName) == 0 {
-		return statusErr, fmt.Errorf("Empty database name.")
-	}
-	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return statusErr, err
+	if apr.NArg() == 0 || (apr.NArg() == 1 && apr.Contains(cli.VerboseFlag)) {
+		return nil, fmt.Errorf("use '%s' table to list backups", doltdb.BackupsTableName)
 	}
 
-	apr, err := cli.CreateBackupArgParser().Parse(args)
+	var dbName string
+	funcParam := apr.Arg(0)
+	if funcParam != DoltBackupParamRestore {
+		dbName = ctx.GetCurrentDatabase()
+		if dbName == "" {
+			return nil, fmt.Errorf("empty database name")
+		}
+	}
+
+	err = branch_control.CheckAccess(ctx, branch_control.Permissions_Write)
 	if err != nil {
-		return statusErr, err
+		return nil, err
 	}
 
-	invalidParams := []string{dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile, dbfactory.AWSCredsTypeParam, dbfactory.AWSRegionParam}
-	for _, param := range invalidParams {
-		if apr.Contains(param) {
-			return statusErr, fmt.Errorf("parameter '%s' is not supported when running this command via SQL", param)
-		}
+	if sqlserver.RunningInServerMode() && apr.ContainsAny(cli.AwsParams...) {
+		return nil, fmt.Errorf("AWS parameters are unavailable when running in server mode")
 	}
 
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(ctx, dbName)
-	if !ok {
-		return statusErr, sql.ErrDatabaseNotFound.New(dbName)
+	doltSess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := doltSess.GetDbData(ctx, dbName)
+	if !ok && funcParam != DoltBackupParamRestore {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	if apr.NArg() == 0 {
-		return statusErr, fmt.Errorf("listing existing backup endpoints in sql is not currently implemented. Let us know if you need this by opening a GitHub issue: https://github.com/dolthub/dolt/issues")
-
-	}
-	switch apr.Arg(0) {
-	case cli.AddBackupId:
-		err = addBackup(ctx, dbData, apr)
-		if err != nil {
-			return statusErr, fmt.Errorf("error adding backup: %w", err)
+	switch funcParam {
+	case DoltBackupParamAdd:
+		if apr.NArg() != 3 {
+			return nil, errDoltBackupUsage(funcParam, []string{"name", "url"}, awsParamsUsage)
 		}
-	case cli.RemoveBackupId, cli.RemoveBackupShortId:
-		err = removeBackup(ctx, dbData, apr)
-		if err != nil {
-			return statusErr, fmt.Errorf("error removing backup: %w", err)
+		err = doltBackupAdd(ctx, dbData, doltSess, apr)
+	case DoltBackupParamRemove, DoltBackupParamRm:
+		if apr.NArg() != 2 {
+			return nil, errDoltBackupUsage(funcParam, []string{"name"}, nil)
 		}
-	case cli.RestoreBackupId:
-		if err = restoreBackup(ctx, dbData, apr); err != nil {
-			return statusErr, fmt.Errorf("error restoring backup: %w", err)
+		name := apr.Arg(1)
+		err = dbData.Rsw.RemoveBackup(ctx, name)
+	case DoltBackupParamSync:
+		if apr.NArg() != 2 {
+			return nil, errDoltBackupUsage(funcParam, []string{"name"}, nil)
 		}
-	case cli.SyncBackupUrlId:
-		err = syncBackupViaUrl(ctx, dbData, sess, apr)
-		if err != nil {
-			return statusErr, fmt.Errorf("error syncing backup url: %w", err)
+		name := apr.Arg(1)
+		err = doltBackupSync(ctx, dbData, doltSess, name)
+	case DoltBackupParamSyncUrl:
+		if apr.NArg() != 2 {
+			return nil, errDoltBackupUsage(funcParam, []string{"remote_url"}, awsParamsUsage)
 		}
-	case cli.SyncBackupId:
-		err = syncBackupViaName(ctx, dbData, sess, apr)
-		if err != nil {
-			return statusErr, fmt.Errorf("error syncing backup: %w", err)
+		err = doltBackupSyncUrl(ctx, dbData, doltSess, apr)
+	case DoltBackupParamRestore:
+		if apr.NArg() != 3 {
+			forceParamUsage := []string{fmt.Sprintf("--%s", cli.ForceFlag)}
+			return nil, errDoltBackupUsage(funcParam, []string{"remote_url", "new_db_name"}, append(forceParamUsage, awsParamsUsage...))
 		}
+		err = doltBackupRestore(ctx, dbData, doltSess, apr)
 	default:
-		return statusErr, fmt.Errorf("unrecognized dolt_backup parameter: %s", apr.Arg(0))
+		return nil, fmt.Errorf("unrecognized %s parameter '%s'", DoltBackupProcedureName, funcParam)
 	}
 
-	return statusOk, nil
+	return rowToIter(int64(0)), err
 }
 
-func addBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults) error {
-	if apr.NArg() != 3 {
-		return fmt.Errorf("usage: dolt_backup('add', 'backup_name', 'backup-url')")
-	}
-
-	backupName := strings.TrimSpace(apr.Arg(1))
-	backupUrl := apr.Arg(2)
-	cfg := loadConfig(ctx)
-	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(filesys.LocalFS, cfg, backupUrl)
-	if err != nil {
-		return fmt.Errorf("error: '%s' is not valid, %s", backupUrl, err.Error())
-	} else if scheme == dbfactory.HTTPScheme || scheme == dbfactory.HTTPSScheme {
-		// not sure how to get the dialer so punting on this
-		return fmt.Errorf("sync-url does not support http or https backup locations currently")
-	}
-
-	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
+// doltBackupAdd adds a new backup entry with the name and URL specified in |apr|. The URL is normalized to an absolute
+// path. AWS parameters are extracted from command-line flags in |apr| if present, otherwise they are loaded from
+// session variables if the URL scheme matches.
+func doltBackupAdd(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
+	backupName := apr.Arg(1)
+	backupUrlScheme, backupUrl, err := newAbsRemoteUrl(dsess, apr.Arg(2))
 	if err != nil {
 		return err
 	}
 
-	r := env.NewRemote(backupName, absBackupUrl, params)
-	err = dbData.Rsw.AddBackup(r)
-	switch err {
-	case nil:
-		return nil
-	case env.ErrBackupAlreadyExists:
-		return fmt.Errorf("error: a backup named '%s' already exists, remove it before running this command again", r.Name)
-	case env.ErrBackupNotFound:
-		return fmt.Errorf("error: unknown backup: '%s' ", r.Name)
-	case env.ErrInvalidBackupURL:
-		return fmt.Errorf("error: '%s' is not valid, cause: %s", r.Url, err.Error())
-	case env.ErrInvalidBackupName:
-		return fmt.Errorf("error: invalid backup name: '%s'", r.Name)
-	default:
-		return fmt.Errorf("error: Unable to save changes, cause: %s", err.Error())
-	}
-}
-
-func restoreBackup(ctx *sql.Context, _ env.DbData[*sql.Context], apr *argparser.ArgParseResults) error {
-	if apr.NArg() != 3 {
-		return fmt.Errorf("usage: dolt_backup('restore', 'backup_url', 'database_name')")
-	}
-
-	// Only allow admins to restore a database
-	if err := checkBackupRestorePrivs(ctx); err != nil {
-		return err
-	}
-
-	backupUrl := strings.TrimSpace(apr.Arg(1))
-	dbName := strings.TrimSpace(apr.Arg(2))
-	force := apr.Contains(cli.ForceFlag)
-
-	sess := dsess.DSessFromSess(ctx.Session)
-
-	params, err := loadAwsParams(ctx, sess, apr, backupUrl, "restore")
+	backupParams, err := newParams(apr, backupUrl, backupUrlScheme)
 	if err != nil {
 		return err
 	}
 
-	r := env.NewRemote("", backupUrl, params)
-	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, nil)
-	if err != nil {
-		return err
-	}
-
-	existingDbData, restoringExistingDb := sess.GetDbData(ctx, dbName)
-	if restoringExistingDb {
-		if !force {
-			return fmt.Errorf("error: cannot restore backup into %s. "+
-				"A database with that name already exists. Did you mean to supply --force?", dbName)
-		}
-
-		return syncRootsFromBackup(ctx, existingDbData, sess, r)
-	} else {
-		// Track whether the db directory existed before we tried to create it, so we can clean up on errors
-		userDirExisted, _ := sess.Provider().FileSystem().Exists(dbName)
-
-		// Create a new Dolt env for the clone; use env.NoRemote to avoid origin upstream
-		clonedEnv, err := actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, dbName,
-			sess.Provider().FileSystem(), doltversion.Version, env.GetCurrentUserHomeDir)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-
-		// make empty repo state
-		_, err = env.CreateRepoState(clonedEnv.FS, env.DefaultInitBranch)
+	if len(backupParams) == 0 && backupUrlScheme == dbfactory.AWSScheme {
+		backupParams, err = newParamsWithAwsSessionVars(ctx, backupUrlScheme)
 		if err != nil {
 			return err
 		}
+	}
 
-		if err = syncRootsFromBackup(ctx, clonedEnv.DbData(ctx), sess, r); err != nil {
-			// If we're cloning into a directory that already exists do not erase it.
-			// Otherwise, make a best effort to delete any directory we created.
-			if userDirExisted {
-				_ = clonedEnv.FS.Delete(dbfactory.DoltDir, true)
-			} else {
-				_ = clonedEnv.FS.Delete(".", true)
-			}
-		}
+	backupRemote := env.NewRemote(backupName, backupUrl, backupParams)
+	err = dbData.Rsw.AddBackup(backupRemote)
+	return err
+}
+
+// doltBackupSync syncs the current database to an existing backup identified by name in |apr|. The backup is looked up
+// from the repository state via |dbData.Rsr|. The sync operation copies all roots from the current database to the
+// backup location, overwriting any existing data.
+func doltBackupSync(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, backupName string) error {
+	backups, err := dbData.Rsr.GetBackups()
+	if err != nil {
 		return err
 	}
-}
 
-func removeBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults) error {
-	if apr.NArg() != 2 {
-		return fmt.Errorf("usage: dolt_backup('remove', 'backup_name')")
+	backupRemote, ok := backups.Get(backupName)
+	if !ok {
+		return env.ErrBackupNotFound.New(backupName)
 	}
 
-	backupName := strings.TrimSpace(apr.Arg(1))
-	err := dbData.Rsw.RemoveBackup(ctx, backupName)
-	switch err {
-	case nil:
-		return nil
-	case env.ErrFailedToWriteRepoState:
-		return fmt.Errorf("error: failed to save change to repo state, cause: %s", err.Error())
-	case env.ErrFailedToDeleteBackup:
-		return fmt.Errorf("error: failed to delete backup tracking ref, cause: %s", err.Error())
-	case env.ErrFailedToReadFromDb:
-		return fmt.Errorf("error: failed to read from db, cause: %s", err.Error())
-	case env.ErrBackupNotFound:
-		return fmt.Errorf("error: unknown backup: '%s' ", backupName)
-	default:
-		return fmt.Errorf("error: unknown error, cause: %s", err.Error())
-	}
+	return syncRemote(ctx, dbData, dsess, backupRemote)
 }
 
-func loadAwsParams(ctx *sql.Context, sess *dsess.DoltSession, apr *argparser.ArgParseResults, backupUrl, backupCmd string) (map[string]string, error) {
-	cfg := loadConfig(ctx)
-	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(filesys.LocalFS, cfg, backupUrl)
+// doltBackupSyncUrl syncs the current database to a remote URL specified in |apr| without requiring the remote to exist
+// in the backups list. The URL is normalized to an absolute path. AWS parameters are extracted from command-line flags
+// in |apr| if present, otherwise they are loaded from session variables if the URL scheme matches. The sync operation
+// copies all roots from the current database to the remote location, overwriting any existing data.
+func doltBackupSyncUrl(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
+	remoteUrlScheme, remoteUrl, err := newAbsRemoteUrl(dsess, apr.Arg(1))
 	if err != nil {
-		return nil, fmt.Errorf("error: '%s' is not valid.", backupUrl)
-	} else if scheme == dbfactory.HTTPScheme || scheme == dbfactory.HTTPSScheme {
-		// not sure how to get the dialer so punting on this
-		return nil, fmt.Errorf("%s does not support http or https backup locations currently", backupCmd)
+		return err
 	}
 
-	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
+	remoteParams, err := newParams(apr, remoteUrl, remoteUrlScheme)
+	if err != nil {
+		return err
+	}
+
+	if len(remoteParams) == 0 && remoteUrlScheme == dbfactory.AWSScheme {
+		remoteParams, err = newParamsWithAwsSessionVars(ctx, remoteUrlScheme)
+		if err != nil {
+			return err
+		}
+	}
+
+	remote := env.NewRemote(DoltBackupParamSyncUrl, remoteUrl, remoteParams)
+	return syncRemote(ctx, dbData, dsess, remote)
+}
+
+// doltBackupRestore clones a database from the remote URL specified in |apr| into a new database with the name
+// specified. The URL is normalized to an absolute path. AWS parameters are extracted from command-line flags in |apr|
+// if present. If no command-line parameters are provided, AWS parameters are loaded from session variables if the URL
+// scheme matches.
+//
+// If the target database already exists, the restore operation fails unless the --force flag is provided, in which case
+// the existing database is dropped before cloning.
+func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
+	remoteUrlScheme, remoteUrl, err := newAbsRemoteUrl(dsess, apr.Arg(1))
+	if err != nil {
+		return err
+	}
+
+	remoteParams, err := newParams(apr, remoteUrl, remoteUrlScheme)
+	if err != nil {
+		return err
+	}
+
+	if len(remoteParams) == 0 && remoteUrlScheme == dbfactory.AWSScheme {
+		remoteParams, err = newParamsWithAwsSessionVars(ctx, remoteUrlScheme)
+		if err != nil {
+			return err
+		}
+	}
+
+	remote := env.NewRemote(DoltBackupParamRestore, remoteUrl, remoteParams)
+
+	// Use default format if no database context is available (e.g., when run from invalid directory).
+	format := types.Format_Default
+	if dbData.Ddb != nil {
+		format = dbData.Ddb.Format()
+	}
+
+	remoteDb, err := dsess.Provider().GetRemoteDB(ctx, format, remote, true)
+	if err != nil {
+		return err
+	}
+
+	lookupDbName := apr.Arg(2)
+	hasLookupDb := dsess.Provider().HasDatabase(ctx, lookupDbName)
+	// We can't only check the databases from memory since this command can be run from subdirectories.
+	fileSys := dsess.GetFileSystem()
+	lookupDbInFileSys, _ := fileSys.Exists(lookupDbName)
+	forceRestore := apr.Contains(cli.ForceFlag)
+	if (hasLookupDb || lookupDbInFileSys) && !forceRestore {
+		return fmt.Errorf("database '%s' already exists, use '--%s' to overwrite", lookupDbName, cli.ForceFlag)
+	}
+
+	if hasLookupDb {
+		err = dsess.Provider().DropDatabase(ctx, lookupDbName)
+		if err != nil {
+			return err
+		}
+	}
+
+	if lookupDbInFileSys && !hasLookupDb {
+		err = fileSys.Delete(lookupDbName, forceRestore)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = dsess.Provider().CreateDatabase(ctx, lookupDbName)
+	if err != nil {
+		return err
+	}
+
+	newDb, _, err := dsess.Provider().SessionDatabase(ctx, lookupDbName)
+	if err != nil {
+		return err
+	}
+
+	// Unlike CloneDatabaseFromRemote which clones tracking branches (remote refs), we need all local changes.
+	return actions.SyncRoots(ctx, remoteDb, newDb.DbData().Ddb, fileSys.TempDir(), runProgFuncs, stopProgFuncs)
+}
+
+// syncRemote syncs the roots from |dbData| to the remote specified by |remote|. It prepares the remote database
+// location using PrepareDB, which creates directories for file:// URLs if they do not exist. The sync operation copies
+// all chunks from the source database to the destination, effectively overwriting the destination to match the source.
+func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, remote env.Remote) error {
+	// Commit the current session's working set to the persistent chunk store. This ensures that uncommitted transaction
+	// changes (e.g. INSERTs) are usually visible to the backup procedure, which reads directly from the roots.
+	err := dsess.CommitWorkingSet(ctx, ctx.GetCurrentDatabase(), ctx.GetTransaction())
+	if err != nil {
+		return err
+	}
+
+	params := map[string]interface{}{}
+	for k, v := range remote.Params {
+		params[k] = v
+	}
+
+	// This fails with unsupported schemes (i.e. http[s]), but in such cases we shouldn't have to prepare the database.
+	// We primarily use this to initialize the directory for file URLs without a directory.
+	_ = dbfactory.PrepareDB(ctx, dbData.Ddb.Format(), remote.Url, params)
+	destDb, err := dsess.Provider().GetRemoteDB(ctx, dbData.Ddb.Format(), remote, true)
+	if err != nil {
+		return err
+	}
+
+	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), runProgFuncs, stopProgFuncs)
+	if err != nil && !errors.Is(err, pull.ErrDBUpToDate) {
+		return err
+	}
+
+	return nil
+}
+
+// newParams extracts AWS-specific parameters from command-line flags in |apr| if |urlScheme| is AWS. If the scheme is
+// not AWS, it verifies that no AWS parameters are present in |apr|.
+func newParams(apr *argparser.ArgParseResults, url string, urlScheme string) (map[string]string, error) {
+	params := map[string]string{}
+	var err error
+	switch urlScheme {
+	case dbfactory.AWSScheme:
+		err = cli.AddAWSParams(url, apr, params)
+	case dbfactory.OSSScheme:
+		// TODO(elianddb): This func mainly interfaces with apr to set the OSS key-vals in params, but the backup arg
+		//  parser does not include any OSS-related flags? I'm guessing they must be processed elsewhere?
+		err = cli.AddOSSParams(url, apr, params)
+	default:
+		err = cli.VerifyNoAwsParams(apr)
+	}
+	return params, err
+}
+
+// newParamsWithAwsSessionVars extracts AWS-specific parameters from read-only session variables in |ctx|. It reads
+// aws_credentials_file, aws_credentials_profile, and aws_credentials_region session variables and builds a parameter
+// map. If URL scheme is not AWS, an empty parameter map is returned.
+func newParamsWithAwsSessionVars(ctx *sql.Context, urlScheme string) (map[string]string, error) {
+	params := map[string]string{}
+
+	credsFile, err := ctx.Session.GetSessionVariable(ctx, dsess.AwsCredsFile)
 	if err != nil {
 		return nil, err
 	}
-
-	credsFile, _ := sess.GetSessionVariable(ctx, dsess.AwsCredsFile)
 	credsFileStr, isStr := credsFile.(string)
 	if isStr && len(credsFileStr) > 0 {
 		params[dbfactory.AWSCredsFileParam] = credsFileStr
 	}
 
-	credsProfile, err := sess.GetSessionVariable(ctx, dsess.AwsCredsProfile)
+	credsProfile, err := ctx.Session.GetSessionVariable(ctx, dsess.AwsCredsProfile)
+	if err != nil {
+		return nil, err
+	}
 	profStr, isStr := credsProfile.(string)
 	if isStr && len(profStr) > 0 {
 		params[dbfactory.AWSCredsProfile] = profStr
 	}
 
-	credsRegion, err := sess.GetSessionVariable(ctx, dsess.AwsCredsRegion)
+	credsRegion, err := ctx.Session.GetSessionVariable(ctx, dsess.AwsCredsRegion)
+	if err != nil {
+		return nil, err
+	}
 	regionStr, isStr := credsRegion.(string)
 	if isStr && len(regionStr) > 0 {
 		params[dbfactory.AWSRegionParam] = regionStr
@@ -277,104 +357,46 @@ func loadAwsParams(ctx *sql.Context, sess *dsess.DoltSession, apr *argparser.Arg
 	return params, nil
 }
 
-func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
-	if apr.NArg() != 2 {
-		return fmt.Errorf("usage: dolt_backup('sync-url', BACKUP_URL)")
+// newAbsRemoteUrl normalizes the |url| to an absolute path and returns the URL scheme and the normalized URL. It loads
+// the Dolt CLI configuration from the filesystem accessible via |dsess| and uses GetAbsRemoteUrl to perform the
+// normalization. HTTPS URLs without an explicit scheme default to the configured remotes API host.
+func newAbsRemoteUrl(dsess *dsess.DoltSession, url string) (string, string, error) {
+	if url == "" {
+		return "", "", env.ErrBackupInvalidUrl.New(url)
 	}
-
-	backupUrl := strings.TrimSpace(apr.Arg(1))
-	params, err := loadAwsParams(ctx, sess, apr, backupUrl, "sync-url")
+	config, err := env.LoadDoltCliConfig(env.GetCurrentUserHomeDir, dsess.GetFileSystem())
 	if err != nil {
-		return err
+		return "", "", err
 	}
-
-	b := env.NewRemote("__temp__", backupUrl, params)
-
-	return syncRootsToBackup(ctx, dbData, sess, b)
+	return env.GetAbsRemoteUrl(dsess.GetFileSystem(), config, url)
 }
 
-func syncBackupViaName(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
-	if apr.NArg() != 2 {
-		return fmt.Errorf("usage: dolt_backup('sync', BACKUP_NAME)")
+// errDoltBackupUsage constructs a usage error message for the dolt_backup procedure. It formats |funcParam| as the
+// operation, |requiredParams| as required positional arguments, and |optionalParams| as optional flag arguments. The
+// resulting error message follows the format:
+// "usage: dolt_backup('<param>', '<required1>', ..., ['<optional1>'], ...)".
+func errDoltBackupUsage(funcParam string, requiredParams, optionalParams []string) error {
+	var builder strings.Builder
+
+	builder.WriteString("usage: ")
+	builder.WriteString(DoltBackupProcedureName)
+	builder.WriteString("('")
+	builder.WriteString(funcParam)
+	builder.WriteByte('\'')
+
+	for _, req := range requiredParams {
+		builder.WriteString(", '")
+		builder.WriteString(req)
+		builder.WriteByte('\'')
 	}
 
-	backupName := strings.TrimSpace(apr.Arg(1))
-	backups, err := dbData.Rsr.GetBackups()
-	if err != nil {
-		return err
+	for _, opt := range optionalParams {
+		builder.WriteString(", ['")
+		builder.WriteString(opt)
+		builder.WriteString("']")
 	}
 
-	b, ok := backups.Get(backupName)
-	if !ok {
-		return fmt.Errorf("error: unknown backup: '%s'; %v", backupName, backups)
-	}
+	builder.WriteByte(')')
 
-	return syncRootsToBackup(ctx, dbData, sess, b)
-}
-
-// syncRootsToBackup syncs the roots from |dbData| to the backup specified by |backup|.
-func syncRootsToBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *dsess.DoltSession, backup env.Remote) error {
-	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), backup, true)
-	if err != nil {
-		return fmt.Errorf("error loading backup destination: %w", err)
-	}
-
-	tmpDir, err := dbData.Rsw.TempTableFilesDir()
-	if err != nil {
-		return err
-	}
-
-	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, tmpDir, runProgFuncs, stopProgFuncs)
-	if err != nil && err != pull.ErrDBUpToDate {
-		return fmt.Errorf("error syncing backup: %w", err)
-	}
-
-	return nil
-}
-
-// syncRootsFromBackup syncs the roots from the backup specified by |backup| to |dbData|.
-func syncRootsFromBackup[C doltdb.Context](ctx *sql.Context, dbData env.DbData[C], sess *dsess.DoltSession, backup env.Remote) error {
-	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), backup, true)
-	if err != nil {
-		return fmt.Errorf("error loading backup destination: %w", err)
-	}
-
-	tmpDir, err := dbData.Rsw.TempTableFilesDir()
-	if err != nil {
-		return err
-	}
-
-	err = actions.SyncRoots(ctx, destDb, dbData.Ddb, tmpDir, runProgFuncs, stopProgFuncs)
-	if err != nil && err != pull.ErrDBUpToDate {
-		return fmt.Errorf("error syncing backup: %w", err)
-	}
-
-	return nil
-}
-
-// UserHasSuperAccess returns whether the current user has SUPER access. This is used by
-// Doltgres to check the user role by its own authentication methods.
-var UserHasSuperAccess = userHasSuperAccess
-
-func userHasSuperAccess(ctx *sql.Context) (bool, error) {
-	privs, counter := ctx.GetPrivilegeSet()
-	if counter == 0 {
-		return false, fmt.Errorf("unable to check user privileges")
-	}
-	return privs.Has(sql.PrivilegeType_Super) == true, nil
-}
-
-// checkBackupRestorePrivs returns an error if the user requesting to restore a database
-// does not have SUPER access. Since this is a potentially destructive operation, we restrict it to admins,
-// even though the SUPER privilege has been deprecated, since there isn't another appropriate global privilege.
-func checkBackupRestorePrivs(ctx *sql.Context) error {
-	isSuper, err := UserHasSuperAccess(ctx)
-	if err != nil {
-		return fmt.Errorf("error in dolt_backup() restore subcommand: %w", err)
-	}
-	if !isSuper {
-		return sql.ErrPrivilegeCheckFailed.New(ctx.Session.Client().User)
-	}
-
-	return nil
+	return errors.New(builder.String())
 }

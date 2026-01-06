@@ -21,12 +21,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 type commandLineServerConfig struct {
@@ -49,6 +50,7 @@ type commandLineServerConfig struct {
 	tlsKey                  string
 	tlsCert                 string
 	caCert                  string
+	requireClientCert       bool
 	requireSecureTransport  bool
 	maxLoggedQueryLen       int
 	shouldEncodeLoggedQuery bool
@@ -321,6 +323,13 @@ func (cfg *commandLineServerConfig) CACert() string {
 	return cfg.caCert
 }
 
+// RequireClientCert is true if the server should reject any connections that don't present a certificate. When
+// enabled, a client certificate is always required, and if a CA cert is also configured, then the client cert
+// will also be verified. Enabling this option also means that non-TLS connections are not allowed.
+func (cfg *commandLineServerConfig) RequireClientCert() bool {
+	return cfg.requireClientCert
+}
+
 // RequireSecureTransport is true if the server should reject non-TLS connections.
 func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 	return cfg.requireSecureTransport
@@ -358,6 +367,26 @@ func (cfg *commandLineServerConfig) MetricsHost() string {
 
 func (cfg *commandLineServerConfig) MetricsPort() int {
 	return servercfg.DefaultMetricsPort
+}
+
+func (cfg *commandLineServerConfig) MetricsTLSCert() string {
+	return ""
+}
+
+func (cfg *commandLineServerConfig) MetricsTLSKey() string {
+	return ""
+}
+
+func (cfg *commandLineServerConfig) MetricsTLSCA() string {
+	return ""
+}
+
+func (cfg *commandLineServerConfig) MetricsJwksConfig() *servercfg.JwksConfig {
+	return nil
+}
+
+func (cfg *commandLineServerConfig) MetricsJWTRequiredForLocalhost() bool {
+	return false
 }
 
 func (cfg *commandLineServerConfig) RemotesapiPort() *int {
@@ -573,6 +602,10 @@ func (cfg *commandLineServerConfig) ValueSet(value string) bool {
 
 func (cfg *commandLineServerConfig) AutoGCBehavior() servercfg.AutoGCBehavior {
 	return stubAutoGCBehavior{}
+}
+
+func (cfg *commandLineServerConfig) Overrides() sql.EngineOverrides {
+	return sql.EngineOverrides{}
 }
 
 // DoltServerConfigReader is the default implementation of ServerConfigReader suitable for parsing Dolt config files
