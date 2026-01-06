@@ -1349,4 +1349,80 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 		},
 	},
+
+	// DOLT_DIFF() TABLE FUNCTION TEST CASE
+	{
+		Name: "dolt_diff() table function: schema overrides should apply to dolt_diff() table function",
+		Skip: true, // TODO: dolt_diff() table function does not respect schema overrides
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(255));",
+			"insert into t (pk, c1) values (1, 'one');",
+			"call dolt_commit('-Am', 'adding table t on main');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t drop column c1;",
+			"call dolt_commit('-am', 'dropping column c1 on main');",
+			"SET @commit2 = hashof('HEAD');",
+
+			"alter table t add column c2 varchar(255);",
+			"insert into t (pk, c2) values (2, 'two');",
+			"call dolt_commit('-am', 'adding column c2 on main');",
+			"SET @commit3 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// use the first commit for our schema override (pk, c1)
+				Query:    "SET @@dolt_override_schema=@commit1;",
+				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+			},
+			{
+				// sanity check that the schema override is working on regular tables
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, nil},
+					{2, nil},
+				},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+			{
+				// dolt_diff() should respect schema override and show from_c1 and to_c1 columns
+				Query: "select from_pk, from_c1, to_pk, to_c1, diff_type from dolt_diff(@commit1, @commit3, 't');",
+				Expected: []sql.Row{
+					{1, "one", 1, nil, "modified"},
+					{nil, nil, 2, nil, "added"},
+				},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "from_pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "from_c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "to_pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "to_c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "diff_type",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 16),
+					},
+				},
+			},
+		},
+	},
 }
