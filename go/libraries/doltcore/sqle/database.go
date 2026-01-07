@@ -1864,10 +1864,10 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 // back to 1 if this table only exists in the working set given, or to the highest value in all other working sets
 // otherwise. This operation is expensive if the
 func (db Database) removeTableFromAutoIncrementTracker(
-	ctx *sql.Context,
-	tableName string,
-	ddb *doltdb.DoltDB,
-	ws ref.WorkingSetRef,
+		ctx *sql.Context,
+		tableName string,
+		ddb *doltdb.DoltDB,
+		ws ref.WorkingSetRef,
 ) error {
 	branches, err := ddb.GetBranches(ctx)
 	if err != nil {
@@ -2171,6 +2171,14 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	ds := dsess.DSessFromSess(ctx.Session)
 	ds.AddTemporaryTable(ctx, db.Name(), tmp)
 	return nil
+}
+
+// SupportsDatabaseSchemas implements sql.SchemaDatabase
+// TODO: this interface is only necessary because we don't have a separate sql.Database implementation for doltgres,
+// which has additional capabilities (like schema creation). Dolt technically can create schemas (multiple DBs in
+// the same commit graph), but there's no way for users to access this functionality currently.
+func (db Database) SupportsDatabaseSchemas() bool {
+	return resolve.UseSearchPath
 }
 
 // CreateSchema implements sql.SchemaDatabase

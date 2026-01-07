@@ -152,6 +152,10 @@ func (db *UserSpaceDatabase) GetSchema(ctx *sql.Context, schemaName string) (sql
 	panic(fmt.Sprintf("GetSchema is not implemented for database %T", db))
 }
 
+func (db UserSpaceDatabase) SupportsDatabaseSchemas() bool {
+	return false
+}
+
 func (db *UserSpaceDatabase) CreateSchema(ctx *sql.Context, schemaName string) error {
 	panic(fmt.Sprintf("CreateSchema is not implemented for database %T", db))
 }
