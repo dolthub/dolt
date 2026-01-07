@@ -1864,10 +1864,10 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 // back to 1 if this table only exists in the working set given, or to the highest value in all other working sets
 // otherwise. This operation is expensive if the
 func (db Database) removeTableFromAutoIncrementTracker(
-		ctx *sql.Context,
-		tableName string,
-		ddb *doltdb.DoltDB,
-		ws ref.WorkingSetRef,
+	ctx *sql.Context,
+	tableName string,
+	ddb *doltdb.DoltDB,
+	ws ref.WorkingSetRef,
 ) error {
 	branches, err := ddb.GetBranches(ctx)
 	if err != nil {
