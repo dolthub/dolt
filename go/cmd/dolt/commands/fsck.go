@@ -41,6 +41,8 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+
+	"container/list"
 )
 
 // FsckProgressMessageType indicates the type of progress message
@@ -777,12 +779,13 @@ func (ts *treeScanner) validateTree(
 	commitHash hash.Hash, // Uses for error messages only.
 	treeHash hash.Hash,
 ) error {
-	var workQueue []hash.Hash
-	workQueue = append(workQueue, treeHash)
+	workQueue := list.New()
+	workQueue.PushBack(treeHash)
 
-	for len(workQueue) > 0 {
-		currentChunkHash := workQueue[0]
-		workQueue = workQueue[1:]
+	for workQueue.Len() > 0 {
+		elem := workQueue.Front()
+		currentChunkHash := elem.Value.(hash.Hash)
+		workQueue.Remove(elem)
 
 		ts.reachableChunks.Insert(currentChunkHash)
 
@@ -809,8 +812,7 @@ func (ts *treeScanner) validateTree(
 					return nil
 				}
 
-				// Add to the work queue for further processing
-				workQueue = append(workQueue, addr)
+				workQueue.PushBack(addr)
 
 				return nil
 			})
@@ -850,18 +852,19 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 	}
 
 	// commitQueue is used as the work queue, and reachableCommits tracks all commits we've put in the queue (to avoid double enqueueing)
-	var commitQueue []hash.Hash
+	commitQueue := list.New()
 	reachableCommits := hash.HashSet{}
 	for commitHash := range startingCommits {
-		commitQueue = append(commitQueue, commitHash)
+		commitQueue.PushBack(commitHash)
 		reachableCommits.Insert(commitHash)
 	}
 
 	vs := types.NewValueStore(gs)
 
-	for len(commitQueue) > 0 {
-		commitHash := commitQueue[0]
-		commitQueue = commitQueue[1:]
+	for commitQueue.Len() > 0 {
+		elem := commitQueue.Front()
+		commitHash := elem.Value.(hash.Hash)
+		commitQueue.Remove(elem)
 
 		// Skip if this commit doesn't exist in our found commits
 		if !allCommits.Has(commitHash) {
@@ -884,7 +887,7 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 
 			for _, parentHash := range parentAddrs {
 				if !reachableCommits.Has(parentHash) {
-					commitQueue = append(commitQueue, parentHash)
+					commitQueue.PushBack(parentHash)
 					reachableCommits.Insert(parentHash)
 				}
 			}
