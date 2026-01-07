@@ -2203,6 +2203,36 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 	return db.SetRoot(ctx, root)
 }
 
+// DropSchema implements sql.SchemaDatabase
+func (db Database) DropSchema(ctx *sql.Context, schemaName string) error {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, exists, err := doltdb.ResolveDatabaseSchema(ctx, root, schemaName)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return sql.ErrDatabaseSchemaNotFound.New(schemaName)
+	}
+
+	root, err = root.DropDatabaseSchema(ctx, schema.DatabaseSchema{
+		Name: schemaName,
+	})
+	if err != nil {
+		return err
+	}
+
+	return db.SetRoot(ctx, root)
+}
+
 // GetSchema implements sql.SchemaDatabase
 func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseSchema, bool, error) {
 	// For doltgres, the information_schema database should be a schema.
@@ -2558,13 +2588,13 @@ func (db Database) CreateTrigger(ctx *sql.Context, definition sql.TriggerDefinit
 		definition.Name,
 		definition.CreateStatement,
 		definition.CreatedAt,
-		fmt.Errorf("triggers `%s` already exists", definition.Name), //TODO: add a sql error and return that instead
+		fmt.Errorf("triggers `%s` already exists", definition.Name), // TODO: add a sql error and return that instead
 	)
 }
 
 // DropTrigger implements sql.TriggerDatabase.
 func (db Database) DropTrigger(ctx *sql.Context, name string) error {
-	//TODO: add a sql error and use that as the param error instead
+	// TODO: add a sql error and use that as the param error instead
 	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
 }
 

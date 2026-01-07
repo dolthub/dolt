@@ -57,9 +57,10 @@ var DoltFeatureVersion FeatureVersion = 7 // last bumped when fixing bug related
 // RootValue is the value of the Database and is the committed value in every Dolt or Doltgres commit.
 type RootValue interface {
 	Rootish
-
 	// CreateDatabaseSchema creates the given schema. This differs from a table's schema.
 	CreateDatabaseSchema(ctx context.Context, dbSchema schema.DatabaseSchema) (RootValue, error)
+	// DropDatabaseSchema drops the given schema. This differs from a table's schema.
+	DropDatabaseSchema(ctx context.Context, dbSchema schema.DatabaseSchema) (RootValue, error)
 	// DebugString returns a human readable string with the contents of this root. If |transitive| is true, row data from
 	// all tables is also included. This method is very expensive for large root values, so |transitive| should only be used
 	// when debugging tests.
@@ -385,12 +386,12 @@ func GenerateTagsForNewColColl(ctx context.Context, root RootValue, tableName st
 // GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
 // the new columns are used to see the tag generator.
 func GenerateTagsForNewColumns(
-	ctx context.Context,
-	root RootValue,
-	tableName TableName,
-	newColNames []string,
-	newColKinds []types.NomsKind,
-	headRoot RootValue,
+		ctx context.Context,
+		root RootValue,
+		tableName TableName,
+		newColNames []string,
+		newColKinds []types.NomsKind,
+		headRoot RootValue,
 ) ([]uint64, error) {
 	if len(newColNames) != len(newColKinds) {
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
@@ -412,7 +413,7 @@ func GenerateTagsForNewColumns(
 			// Only re-use tags if the noms kind didn't change
 			// TODO: revisit this when new storage format is further along
 			if strings.EqualFold(newColNames[i], col.Name) &&
-				newColKinds[i] == col.TypeInfo.NomsKind() {
+					newColKinds[i] == col.TypeInfo.NomsKind() {
 				newTags[i] = &col.Tag
 				break
 			}
@@ -445,11 +446,11 @@ func GenerateTagsForNewColumns(
 }
 
 func GetExistingColumns(
-	ctx context.Context,
-	root, headRoot RootValue,
-	tableName TableName,
-	newColNames []string,
-	newColKinds []types.NomsKind,
+		ctx context.Context,
+		root, headRoot RootValue,
+		tableName TableName,
+		newColNames []string,
+		newColKinds []types.NomsKind,
 ) ([]schema.Column, error) {
 
 	var existingCols []schema.Column
@@ -1053,6 +1054,54 @@ func (root *rootValue) CreateDatabaseSchema(ctx context.Context, dbSchema schema
 	})
 
 	r, err := root.st.SetSchemas(ctx, existingSchemas)
+	if err != nil {
+		return nil, err
+	}
+
+	return root.withStorage(r), nil
+}
+
+// DropDatabaseSchema drops a database schema from the root value.
+// This is currently unused in Dolt because dolt always has only a single (unnamed) schema. But it's implemented
+// because technically Dolt can support multiple schemas whenever we decide to.
+func (root *rootValue) DropDatabaseSchema(ctx context.Context, dbSchema schema.DatabaseSchema) (RootValue, error) {
+	schemas, err := root.st.GetSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	found := false
+	schemaName := dbSchema.Name
+	for i, s := range schemas {
+		if strings.EqualFold(s.Name, dbSchema.Name) {
+			found = true
+			schemaName = s.Name
+			// remove this element in the slice
+			schemas = append(schemas[:i], schemas[i+1:]...)
+			break
+		}
+	}
+
+	if !found {
+		return nil, fmt.Errorf("No schema with the name %s exists", dbSchema.Name)
+	}
+
+	tableMap, err := root.getTableMap(ctx, schemaName)
+	if err != nil {
+		return nil, err
+	}
+
+	tablesInSchema := false
+	tableMap.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
+		tablesInSchema = true
+		return true, nil
+	})
+
+	if tablesInSchema {
+		return nil, fmt.Errorf("Cannot drop schema %s because it still contains tables", schemaName)
+	}
+
+	r, err := root.st.SetSchemas(ctx, schemas)
 	if err != nil {
 		return nil, err
 	}

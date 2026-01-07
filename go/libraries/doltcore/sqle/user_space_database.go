@@ -156,6 +156,10 @@ func (db *UserSpaceDatabase) CreateSchema(ctx *sql.Context, schemaName string) e
 	panic(fmt.Sprintf("CreateSchema is not implemented for database %T", db))
 }
 
+func (db *UserSpaceDatabase) DropSchema(ctx *sql.Context, schemaName string) error {
+	panic(fmt.Sprintf("DropSchema is not implemented for database %T", db))
+}
+
 func (db *UserSpaceDatabase) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 	panic(fmt.Sprintf("AllSchemas is not implemented for database %T", db))
 }

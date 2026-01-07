@@ -209,6 +209,10 @@ func (db database) CreateSchema(ctx *sql.Context, schemaName string) error {
 	panic(fmt.Sprintf("CreateSchema is not implemented for database %T", db))
 }
 
+func (db database) DropSchema(ctx *sql.Context, schemaName string) error {
+	panic(fmt.Sprintf("DropSchema is not implemented for database %T", db))
+}
+
 func (db database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 	panic(fmt.Sprintf("AllSchemas is not implemented for database %T", db))
 }
