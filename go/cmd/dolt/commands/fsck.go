@@ -45,6 +45,16 @@ import (
 	"container/list"
 )
 
+type ProgressReporter chan FsckProgressMessage
+
+func (pr ProgressReporter) Milestonef(msg string, args ...any) {
+	pr <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf(msg, args...)}
+}
+
+func (pr ProgressReporter) Milestone(msg string) {
+	pr <- FsckProgressMessage{Type: FsckProgressMilestone, Message: msg}
+}
+
 // FsckProgressMessageType indicates the type of progress message
 type FsckProgressMessageType int
 
@@ -349,7 +359,7 @@ func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage
 // so that a full report can be generated. Errors encountered during processing are appended to the |errs| slice passed in. Only
 // when there is an unexpected failure (such as inability to read from storage) is an error returned. In that situation,
 // we halt processing.
-func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *Errs, progress chan FsckProgressMessage) error {
+func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *Errs, progress ProgressReporter) error {
 	rt, err := newRoundTripper(ctx, gs, progress, errs)
 	if err != nil {
 		return fmt.Errorf("failed to initialize FSCK round tripper: %w", err)
@@ -363,13 +373,13 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *Errs, 
 	chunksByType := rt.chunksByType
 
 	// Report chunk type summary
-	progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "--------------- Chunk Type Summary ---------------"}
+	progress.Milestone("--------------- Chunk Type Summary ---------------")
 	for chunkType, hashes := range chunksByType {
-		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d chunks of type: %s", len(hashes), chunkType)}
+		progress.Milestonef("Found %d chunks of type: %s", len(hashes), chunkType)
 	}
 
 	// Perform commit DAG validation from all branch HEADs and tags to identify unreachable chunks
-	progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "--------------- All Objects scanned. Starting commit validation ---------------"}
+	progress.Milestone("--------------- All Objects scanned. Starting commit validation ---------------")
 
 	// Find all commit objects from our scanned chunks
 	allCommitsSet := make(hash.HashSet)
@@ -377,9 +387,9 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *Errs, 
 		for _, commitHash := range commitChunks {
 			allCommitsSet.Insert(commitHash)
 		}
-		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d commit objects", len(allCommitsSet))}
+		progress.Milestonef("Found %d commit objects", len(allCommitsSet))
 	} else {
-		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "No commit objects found during chunk scan"}
+		progress.Milestone("No commit objects found during chunk scan")
 	}
 
 	reachableCommits, err := walkCommitDAGFromRefs(ctx, gs, &allCommitsSet, progress, errs)
@@ -389,7 +399,7 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *Errs, 
 
 	// Phase 3: Tree validation for commits (performance heavy)
 	if len(reachableCommits) > 0 {
-		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Starting tree validation for %d commit objects...", len(reachableCommits))}
+		progress.Milestonef("Starting tree validation for %d commit objects...", len(reachableCommits))
 
 		vs := types.NewValueStore(gs)
 
@@ -407,10 +417,10 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *Errs, 
 		}
 		unreachableChunks := chunkCount - uint32(commitReachableChunks.Size())
 
-		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d unreachable commits (not reachable from any branch/tag)", unreachableCommits)}
-		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Validated %d chunks reachable by branches and tags (unreachable: %d)", commitReachableChunks.Size(), unreachableChunks)}
+		progress.Milestonef("Found %d unreachable commits (not reachable from any branch/tag)", unreachableCommits)
+		progress.Milestonef("Validated %d chunks reachable by branches and tags (unreachable: %d)", commitReachableChunks.Size(), unreachableChunks)
 	} else {
-		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "No branches or tags found. Skipping tree validation."}
+		progress.Milestone("No branches or tags found. Skipping tree validation.")
 	}
 
 	return nil
@@ -422,7 +432,7 @@ type roundTripper struct {
 	vs            *types.ValueStore
 	gs            *nbs.GenerationalNBS
 	chunkCount    uint32
-	progress      chan FsckProgressMessage
+	progress      ProgressReporter
 	errs          *Errs
 	allChunks     hash.HashSet
 	chunksByType  map[string][]hash.Hash
@@ -558,7 +568,7 @@ func validateCommitTrees(
 	vs *types.ValueStore,
 	cs chunks.ChunkStore,
 	reachableCommits *hash.HashSet,
-	progress chan FsckProgressMessage,
+	progress ProgressReporter,
 	errs *Errs,
 ) (*hash.HashSet, error) {
 
@@ -824,7 +834,7 @@ func (ts *treeScanner) validateTree(
 
 // walkCommitDAGFromRefs loads all branches/tags and walks the commit DAG to find reachable commits
 // This is lightweight - only validates commit objects, parent closures, and parent hashes (no trees)
-func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allCommits *hash.HashSet, progress chan FsckProgressMessage, errs *Errs) (hash.HashSet, error) {
+func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allCommits *hash.HashSet, progress ProgressReporter, errs *Errs) (hash.HashSet, error) {
 	startingCommits, err := getRawReferencesFromStoreRoot(ctx, gs, errs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get references from store root: %w", err)
@@ -834,10 +844,10 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 	for _, refs := range startingCommits {
 		refCount += len(refs)
 	}
-	progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d refs pointing to %d unique starting commits", refCount, len(startingCommits))}
+	progress.Milestonef("Found %d refs pointing to %d unique starting commits", refCount, len(startingCommits))
 
 	if len(startingCommits) == 0 {
-		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "No refs found - no commits are reachable"}
+		progress.Milestone("No refs found - no commits are reachable")
 		return hash.HashSet{}, nil
 	}
 
@@ -885,11 +895,8 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 			panic(fmt.Sprintf("::commit:%s: is not a SerialMessage, got type %T", commitHash.String(), commitValue))
 		}
 	}
+	progress.Milestonef("Found %d commits reachable from branches/tags", len(reachableCommits))
 
-	progress <- FsckProgressMessage{
-		Type:    FsckProgressMilestone,
-		Message: fmt.Sprintf("Found %d commits reachable from branches/tags", len(reachableCommits)),
-	}
 	return reachableCommits, nil
 }
 
