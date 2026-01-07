@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -54,12 +53,9 @@ func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWrit
 	for i, stashHash := range stashHashes {
 		var s Stash
 		s.Name = fmt.Sprintf("stash@{%v}", i)
-		stashVal, err := vrw.ReadValue(ctx, stashHash)
+		stashVal, err := vrw.MustReadValue(ctx, stashHash)
 		if err != nil {
 			return nil, err
-		}
-		if types.IsNull(stashVal) {
-			return nil, blobstore.NewMissingChunkError(stashHash)
 		}
 
 		_, headCommitAddr, meta, err := datas.GetStashData(stashVal)
@@ -117,12 +113,9 @@ func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWri
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	stashVal, err := vrw.ReadValue(ctx, stashHash)
+	stashVal, err := vrw.MustReadValue(ctx, stashHash)
 	if err != nil {
 		return nil, nil, nil, err
-	}
-	if types.IsNull(stashVal) {
-		return nil, nil, nil, blobstore.NewMissingChunkError(stashHash)
 	}
 
 	stashRootAddr, headCommitAddr, meta, err := datas.GetStashData(stashVal)
@@ -144,12 +137,9 @@ func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWri
 		return nil, nil, nil, err
 	}
 
-	stashRootVal, err := vrw.ReadValue(ctx, stashRootAddr)
+	stashRootVal, err := vrw.MustReadValue(ctx, stashRootAddr)
 	if err != nil {
 		return nil, nil, nil, err
-	}
-	if types.IsNull(stashRootVal) {
-		return nil, nil, nil, blobstore.NewMissingChunkError(stashRootAddr)
 	}
 
 	stashRoot, err := NewRootValue(ctx, vrw, ns, stashRootVal)

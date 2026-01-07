@@ -22,7 +22,6 @@ import (
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -34,12 +33,9 @@ const (
 // NewStash creates a new stash object.
 func NewStash(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, stashRef types.Ref, headAddr hash.Hash, meta *StashMeta) (hash.Hash, types.Ref, error) {
 	if nbf.UsesFlatbuffers() {
-		headCommit, err := vrw.ReadValue(ctx, headAddr)
+		headCommit, err := vrw.MustReadValue(ctx, headAddr)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
-		}
-		if types.IsNull(headCommit) {
-			return hash.Hash{}, types.Ref{}, blobstore.NewMissingChunkError(headAddr)
 		}
 
 		isCommit, err := IsCommit(headCommit)

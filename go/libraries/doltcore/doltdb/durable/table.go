@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -181,12 +180,9 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 
 // TableFromAddr deserializes the table in the chunk at |addr|.
 func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, addr hash.Hash) (Table, error) {
-	val, err := vrw.ReadValue(ctx, addr)
+	val, err := vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
-	}
-	if types.IsNull(val) {
-		return nil, blobstore.NewMissingChunkError(addr)
 	}
 
 	if !vrw.Format().UsesFlatbuffers() {
@@ -1083,12 +1079,9 @@ func (t doltDevTable) GetConstraintViolations(ctx context.Context) (types.Map, e
 	if addr.IsEmpty() {
 		return types.NewMap(ctx, t.vrw)
 	}
-	v, err := t.vrw.ReadValue(ctx, addr)
+	v, err := t.vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return types.Map{}, err
-	}
-	if types.IsNull(v) {
-		return types.Map{}, blobstore.NewMissingChunkError(addr)
 	}
 
 	return v.(types.Map), nil

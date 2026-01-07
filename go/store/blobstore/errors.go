@@ -14,13 +14,6 @@
 
 package blobstore
 
-import (
-	"errors"
-	"fmt"
-
-	"github.com/dolthub/dolt/go/store/hash"
-)
-
 // NotFound is an error type used only when a storage artifact is not found - like a table file.
 // This is not used for missing chunks, see |MissingChunkError| below.
 type NotFound struct {
@@ -60,28 +53,4 @@ func IsCheckAndPutError(err error) bool {
 	_, ok := err.(CheckAndPutError)
 
 	return ok
-}
-
-var ErrMissingChunk = errors.New("missing chunk")
-
-// MissingObjectError implements the error interface and holds dynamic data regarding which object was missing.
-type MissingChunkError struct {
-	h hash.Hash
-}
-
-func (e *MissingChunkError) Error() string {
-	return fmt.Sprintf("malformed database: chunk %s required but not found", e.h.String())
-}
-
-// Unwrap ensures that errors.Is(err, ErrMissingObject) works correctly
-// by pointing back to the package-level sentinel error.
-func (e *MissingChunkError) Unwrap() error {
-	return ErrMissingChunk
-}
-
-// NewMissingObjectError is a constructor function for convenience.
-func NewMissingChunkError(h hash.Hash) *MissingChunkError {
-	return &MissingChunkError{
-		h: h,
-	}
 }

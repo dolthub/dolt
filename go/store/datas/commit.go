@@ -30,7 +30,6 @@ import (
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -246,12 +245,9 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 
 	refs := make([]types.Value, len(opts.Parents))
 	for i, h := range opts.Parents {
-		commitSt, err := vrw.ReadValue(ctx, h)
+		commitSt, err := vrw.MustReadValue(ctx, h)
 		if err != nil {
 			return nil, err
-		}
-		if types.IsNull(commitSt) {
-			return nil, blobstore.NewMissingChunkError(h)
 		}
 		ref, err := types.NewRef(commitSt, vrw.Format())
 		if err != nil {

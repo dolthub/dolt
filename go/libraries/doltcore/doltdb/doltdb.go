@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
@@ -990,12 +989,9 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 }
 
 func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *datas.CommitMeta) (*Commit, error) {
-	val, err := ddb.vrw.ReadValue(ctx, valHash)
+	val, err := ddb.vrw.MustReadValue(ctx, valHash)
 	if err != nil {
 		return nil, err
-	}
-	if types.IsNull(val) {
-		return nil, blobstore.NewMissingChunkError(valHash)
 	}
 
 	if !isRootValue(ddb.vrw.Format(), val) {
@@ -1065,12 +1061,9 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 // dangling commits are unreferenced by any branch or ref. They are created in the course of programmatic updates
 // such as rebase. You must create a ref to a dangling commit for it to be reachable
 func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *datas.CommitMeta) (*Commit, error) {
-	val, err := ddb.vrw.ReadValue(ctx, valHash)
+	val, err := ddb.vrw.MustReadValue(ctx, valHash)
 	if err != nil {
 		return nil, err
-	}
-	if types.IsNull(val) {
-		return nil, blobstore.NewMissingChunkError(valHash)
 	}
 
 	if !isRootValue(ddb.vrw.Format(), val) {

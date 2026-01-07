@@ -462,12 +462,9 @@ func UnmarshalSchemaAtAddr(ctx context.Context, vr types.ValueReader, addr hash.
 		return cachedSch.Copy(), nil
 	}
 
-	schemaVal, err := vr.ReadValue(ctx, addr)
+	schemaVal, err := vr.MustReadValue(ctx, addr)
 	if err != nil {
-		return nil, err
-	}
-	if schemaVal == nil {
-		return nil, fmt.Errorf("database malformed: no schema found at address %s", addr.String())
+		return nil, fmt.Errorf("failed to read schema object %s: %w", addr.String(), err)
 	}
 
 	sch, err := UnmarshalSchema(ctx, vr.Format(), schemaVal)

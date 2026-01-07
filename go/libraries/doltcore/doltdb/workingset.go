@@ -23,7 +23,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -437,12 +436,9 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 	}
 
-	workingRootVal, err := vrw.ReadValue(ctx, dsws.WorkingAddr)
+	workingRootVal, err := vrw.MustReadValue(ctx, dsws.WorkingAddr)
 	if err != nil {
 		return nil, err
-	}
-	if types.IsNull(workingRootVal) {
-		return nil, blobstore.NewMissingChunkError(dsws.WorkingAddr)
 	}
 
 	workingRoot, err := NewRootValue(ctx, vrw, ns, workingRootVal)
@@ -452,12 +448,9 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 
 	var stagedRoot RootValue
 	if dsws.StagedAddr != nil {
-		stagedRootVal, err := vrw.ReadValue(ctx, *dsws.StagedAddr)
+		stagedRootVal, err := vrw.MustReadValue(ctx, *dsws.StagedAddr)
 		if err != nil {
 			return nil, err
-		}
-		if types.IsNull(stagedRootVal) {
-			return nil, blobstore.NewMissingChunkError(*dsws.StagedAddr)
 		}
 
 		stagedRoot, err = NewRootValue(ctx, vrw, ns, stagedRootVal)
@@ -490,12 +483,9 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		preMergeWorkingV, err := vrw.ReadValue(ctx, preMergeWorkingAddr)
+		preMergeWorkingV, err := vrw.MustReadValue(ctx, preMergeWorkingAddr)
 		if err != nil {
 			return nil, err
-		}
-		if types.IsNull(preMergeWorkingV) {
-			return nil, blobstore.NewMissingChunkError(preMergeWorkingAddr)
 		}
 
 		preMergeWorkingRoot, err := NewRootValue(ctx, vrw, ns, preMergeWorkingV)
@@ -527,12 +517,9 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	var rebaseState *RebaseState
 	if dsws.RebaseState != nil {
 		preRebaseWorkingAddr := dsws.RebaseState.PreRebaseWorkingAddr()
-		preRebaseWorkingV, err := vrw.ReadValue(ctx, preRebaseWorkingAddr)
+		preRebaseWorkingV, err := vrw.MustReadValue(ctx, preRebaseWorkingAddr)
 		if err != nil {
 			return nil, err
-		}
-		if types.IsNull(preRebaseWorkingV) {
-			return nil, blobstore.NewMissingChunkError(preRebaseWorkingAddr)
 		}
 
 		preRebaseWorkingRoot, err := NewRootValue(ctx, vrw, ns, preRebaseWorkingV)

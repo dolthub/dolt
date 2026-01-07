@@ -63,7 +63,7 @@ func LoadTuple(ctx context.Context, nbf *types.NomsBinFormat, ns tree.NodeStore,
 		return nil, err
 	}
 
-	if types.IsNull(val) {
+	if val == nil {
 		return nil, ErrNoBranchStats
 	}
 

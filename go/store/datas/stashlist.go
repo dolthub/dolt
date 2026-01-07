@@ -23,7 +23,6 @@ import (
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -204,12 +203,9 @@ func LoadStashList(ctx context.Context, nbf *types.NomsBinFormat, ns tree.NodeSt
 		return &StashList{nam, nam.HashOf(), -1}, nil
 	}
 
-	val, err := vr.ReadValue(ctx, rootHash)
+	val, err := vr.MustReadValue(ctx, rootHash)
 	if err != nil {
 		return nil, err
-	}
-	if types.IsNull(val) {
-		return nil, blobstore.NewMissingChunkError(rootHash)
 	}
 
 	return getExistingStashList(ctx, ns, val)

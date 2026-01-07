@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
@@ -105,12 +104,9 @@ func indexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeSt
 }
 
 func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, addr hash.Hash, isKeylessTable bool) (Index, error) {
-	v, err := vrw.ReadValue(ctx, addr)
+	v, err := vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
-	}
-	if types.IsNull(v) {
-		return nil, blobstore.NewMissingChunkError(addr)
 	}
 
 	switch vrw.Format() {

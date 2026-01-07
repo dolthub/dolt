@@ -680,7 +680,7 @@ func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, err
 }
 
 func newDataset(ctx context.Context, db *database, id string, head types.Value, addr hash.Hash) (Dataset, error) {
-	if types.IsNull(head) && addr.IsEmpty() {
+	if head == nil && addr.IsEmpty() {
 		return Dataset{nil, db, id}, nil
 	}
 
@@ -862,7 +862,7 @@ func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 			return nil, false, err
 		}
 
-		return v, !types.IsNull(v), nil
+		return v, v != nil, nil
 	}
 	return nil, false, nil
 }
