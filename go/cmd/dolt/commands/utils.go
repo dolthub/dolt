@@ -1032,3 +1032,14 @@ func execEditor(initialMsg string, suffix string, cliCtx cli.CliContext) (edited
 
 	return editedMsg, nil
 }
+
+var SpinnerChars = []string{"-", "\\", "|", "/"}
+
+type Spinner int
+
+func (s *Spinner) Tick() {
+	*s++
+}
+func (s *Spinner) Text() string {
+	return SpinnerChars[int(*s)%len(SpinnerChars)]
+}

@@ -166,7 +166,7 @@ func handleProgress(ctx context.Context, wg *sync.WaitGroup, progress chan inter
 	go func() {
 		defer wg.Done()
 
-		rotation := 0
+		var spinner Spinner
 		p := cli.NewEphemeralPrinter()
 		currentMessage := "Starting Archive Build"
 		var lastProgressMsg *nbs.ArchiveBuildProgressMsg
@@ -201,17 +201,8 @@ func handleProgress(ctx context.Context, wg *sync.WaitGroup, progress chan inter
 			}
 
 			if now := time.Now(); now.Sub(lastUpdateTime) > 1*time.Second {
-				rotation++
-				switch rotation % 4 {
-				case 0:
-					p.Printf("- ")
-				case 1:
-					p.Printf("\\ ")
-				case 2:
-					p.Printf("| ")
-				case 3:
-					p.Printf("/ ")
-				}
+				spinner.Tick()
+				p.Printf(fmt.Sprintf("%s ", spinner.Text()))
 
 				if lastProgressMsg != nil {
 					percentDone := 0.0

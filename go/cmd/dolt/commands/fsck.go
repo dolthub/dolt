@@ -271,7 +271,7 @@ func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage
 		return
 	}
 
-	rotation := 0
+	var spinney Spinner
 	p := cli.NewEphemeralPrinter()
 	lastUpdateTime := time.Now()
 	var currentEphemeralMsg *FsckProgressMessage
@@ -306,18 +306,8 @@ func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage
 
 		// Update spinner and ephemeral message
 		if currentEphemeralMsg != nil && time.Since(lastUpdateTime) > 1*time.Second {
-			rotation++
-			var spinner string
-			switch rotation % 4 {
-			case 0:
-				spinner = "-"
-			case 1:
-				spinner = "\\"
-			case 2:
-				spinner = "|"
-			case 3:
-				spinner = "/"
-			}
+			spinney.Tick()
+			spinChr := spinney.Text()
 
 			// Display with percentage and/or count information if available
 			var operation string
@@ -331,11 +321,11 @@ func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage
 			}
 
 			if operation != "" && currentEphemeralMsg.Percentage > 0.0 && currentEphemeralMsg.Total > 0 {
-				p.Printf("%s %s: %d/%d (%.1f%% complete)", spinner, operation, currentEphemeralMsg.Current, currentEphemeralMsg.Total, currentEphemeralMsg.Percentage)
+				p.Printf("%s %s: %d/%d (%.1f%% complete)", spinChr, operation, currentEphemeralMsg.Current, currentEphemeralMsg.Total, currentEphemeralMsg.Percentage)
 			} else if operation != "" && currentEphemeralMsg.Percentage > 0.0 {
-				p.Printf("%s %s: %.1f%% complete", spinner, operation, currentEphemeralMsg.Percentage)
+				p.Printf("%s %s: %.1f%% complete", spinChr, operation, currentEphemeralMsg.Percentage)
 			} else {
-				p.Printf("%s %s", spinner, currentEphemeralMsg.Message)
+				p.Printf("%s %s", spinChr, currentEphemeralMsg.Message)
 			}
 			p.Display()
 			lastUpdateTime = time.Now()
