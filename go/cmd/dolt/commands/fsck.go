@@ -45,45 +45,6 @@ import (
 	"container/list"
 )
 
-type ProgressReporter chan FsckProgressMessage
-
-func (pr ProgressReporter) Milestonef(ctx context.Context, msg string, args ...any) {
-	pr.Progress(ctx, FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf(msg, args...)})
-}
-
-func (pr ProgressReporter) Milestone(ctx context.Context, msg string) {
-	pr.Progress(ctx, FsckProgressMessage{Type: FsckProgressMilestone, Message: msg})
-}
-
-func (pr ProgressReporter) Progress(ctx context.Context, msg FsckProgressMessage) {
-	select {
-	case <-ctx.Done():
-		return
-	case pr <- msg:
-	}
-}
-
-// FsckProgressMessageType indicates the type of progress message
-type FsckProgressMessageType int
-
-const (
-	// Milestone messages that should always be displayed
-	FsckProgressMilestone FsckProgressMessageType = iota
-	// Ephemeral chunk scanning progress with percentage
-	FsckProgressChunkScan
-	// Ephemeral tree validation progress
-	FsckProgressTreeValidation
-)
-
-// FsckProgressMessage represents a structured progress update during fsck
-type FsckProgressMessage struct {
-	Type       FsckProgressMessageType
-	Message    string
-	Percentage float64 // Optional percentage for progress tracking
-	Current    int     // Optional current item count
-	Total      int     // Optional total item count
-}
-
 type FsckCmd struct{}
 
 var _ cli.Command = FsckCmd{}
@@ -179,7 +140,6 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			cli.PrintErrln("WARNING: Chunk journal is corrupted and some data may be lost.")
 			cli.PrintErrln("Run `dolt fsck --revive-journal-with-data-loss` to attempt to recover the journal by")
 			cli.PrintErrln("discarding invalid data blocks. Your original data will be preserved in a backup file.")
-			return 1
 		} else {
 			cli.PrintErrln(fmt.Sprintf("Could not open dolt database: %s", err.Error()))
 		}
@@ -224,7 +184,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
-	return printErrors(errs)
+	return errs.PrintAll()
 }
 
 func reviveJournalWithDataLoss(dEnv *env.DoltEnv) int {
@@ -246,6 +206,7 @@ func reviveJournalWithDataLoss(dEnv *env.DoltEnv) int {
 	return 0
 }
 
+// Errs is a slice of errors encountered during fsck processing. It has helper for adding to it and printing it.
 type Errs []error
 
 func (e *Errs) AppendF(msg string, args ...any) {
@@ -264,21 +225,63 @@ func (e *Errs) AppendE(err error) {
 	*e = append(*e, err)
 }
 
-func printErrors(errors []error) int {
-	if len(errors) == 0 {
+func (e *Errs) PrintAll() int {
+	if len(*e) == 0 {
 		cli.Println("No problems found.")
 		return 0
 	} else {
-		for _, e := range errors {
+		for _, err := range *e {
 			cli.Println(color.RedString("------ Corruption Found ------"))
-			cli.Println(e.Error())
+			cli.Println(err.Error())
 		}
 
 		return 1
 	}
 }
 
-func fsckHandleProgress(ctx context.Context, progress <-chan FsckProgressMessage, quiet bool) {
+// ProgressReporter is a channel for reporting progress messages during fsck. There is a dedicated goroutine that
+// pulls off messages and displays them to the user. FSCK can be a long process, so progress reporting is important.
+type ProgressReporter chan FsckProgressMessage
+
+func (pr ProgressReporter) Milestonef(ctx context.Context, msg string, args ...any) {
+	pr.Insert(ctx, FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf(msg, args...)})
+}
+
+func (pr ProgressReporter) Milestone(ctx context.Context, msg string) {
+	pr.Insert(ctx, FsckProgressMessage{Type: FsckProgressMilestone, Message: msg})
+}
+
+func (pr ProgressReporter) Insert(ctx context.Context, msg FsckProgressMessage) {
+	select {
+	case <-ctx.Done():
+		return
+	case pr <- msg:
+	}
+}
+
+// FsckProgressMessageType indicates the type of progress message
+type FsckProgressMessageType int
+
+const (
+	// Milestone messages that should always be displayed
+	FsckProgressMilestone FsckProgressMessageType = iota
+	// Ephemeral chunk scanning progress with percentage
+	FsckProgressChunkScan
+	// Ephemeral tree validation progress
+	FsckProgressTreeValidation
+)
+
+// FsckProgressMessage represents a structured progress update during fsck
+type FsckProgressMessage struct {
+	Type       FsckProgressMessageType
+	Message    string
+	Percentage float64 // Optional percentage for progress tracking
+	Current    int     // Optional current item count
+	Total      int     // Optional total item count
+}
+
+// fsckHandleProgress processes progress messages from the fsck operation and displays them to the user.
+func fsckHandleProgress(ctx context.Context, progress ProgressReporter, quiet bool) {
 	if quiet {
 		// Just drain the progress channel without displaying anything
 		for range progress {
@@ -548,7 +551,7 @@ func (rt *roundTripper) roundTripAndCategorizeChunk(chunk chunks.Chunk) {
 		status = "FAIL"
 	}
 
-	rt.progress.Progress(rt.ctx, FsckProgressMessage{
+	rt.progress.Insert(rt.ctx, FsckProgressMessage{
 		Type:       FsckProgressChunkScan,
 		Message:    fmt.Sprintf("%s: %s", status, h.String()),
 		Percentage: percentage,
@@ -592,7 +595,7 @@ func validateCommitTrees(
 		percentage := (float64(processedCommits) * 100) / float64(totalCommits)
 
 		// Send progress update for tree validation
-		progress.Progress(ctx, FsckProgressMessage{
+		progress.Insert(ctx, FsckProgressMessage{
 			Type:       FsckProgressTreeValidation,
 			Message:    fmt.Sprintf("Validating commit %s", commitHash.String()),
 			Percentage: percentage,
