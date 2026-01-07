@@ -346,7 +346,7 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]erro
 		*errs = append(*errs, err)
 	}
 
-	rt, err := newRoundTripper(gs, progress, appendErr)
+	rt, err := newRoundTripper(ctx, gs, progress, appendErr)
 	if err != nil {
 		return fmt.Errorf("failed to initialize FSCK round tripper: %w", err)
 	}
@@ -406,7 +406,7 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]erro
 		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Found %d unreachable commits (not reachable from any branch/tag)", unreachableCommits)}
 		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: fmt.Sprintf("Validated %d chunks reachable by branches and tags (unreachable: %d)", commitReachableChunks.Size(), unreachableChunks)}
 	} else {
-		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "No commit objects found - skipping tree validation"}
+		progress <- FsckProgressMessage{Type: FsckProgressMilestone, Message: "No branches or tags found. Skipping tree validation."}
 	}
 
 	return nil
@@ -414,6 +414,7 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs *[]erro
 
 // roundTripper performs a full scan of all chunks, verifying that their hashes match their content.
 type roundTripper struct {
+	ctx           context.Context
 	vs            *types.ValueStore
 	gs            *nbs.GenerationalNBS
 	chunkCount    uint32
@@ -424,7 +425,7 @@ type roundTripper struct {
 	proccessedCnt uint32
 }
 
-func newRoundTripper(gs *nbs.GenerationalNBS, progress chan FsckProgressMessage, appendErr func(error)) (*roundTripper, error) {
+func newRoundTripper(ctx context.Context, gs *nbs.GenerationalNBS, progress chan FsckProgressMessage, appendErr func(error)) (*roundTripper, error) {
 	chunkCount, err := gs.OldGen().Count()
 	if err != nil {
 		return nil, err
@@ -438,6 +439,7 @@ func newRoundTripper(gs *nbs.GenerationalNBS, progress chan FsckProgressMessage,
 	vs := types.NewValueStore(gs)
 
 	return &roundTripper{
+		ctx:          ctx,
 		vs:           vs,
 		gs:           gs,
 		chunkCount:   chunkCount,
@@ -479,7 +481,7 @@ func (rt *roundTripper) roundTripAndCategorizeChunk(chunk chunks.Chunk) {
 		}
 		if !fuzzyMatch {
 			hrs := rt.decodeMsg(chunk)
-			rt.appendErr(errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s\n%s", h.String(), calcChkSum.String(), hrs)))
+			rt.appendErr(fmt.Errorf("Chunk: %s content hash mismatch: %s\n%s", h.String(), calcChkSum.String(), hrs))
 			chunkOk = false
 		}
 
@@ -506,13 +508,13 @@ func (rt *roundTripper) roundTripAndCategorizeChunk(chunk chunks.Chunk) {
 
 	if chunkOk {
 		// Round trip validation. Ensure that the top level store returns the same data.
-		c, err := rt.gs.Get(context.TODO(), h)
+		c, err := rt.gs.Get(rt.ctx, h)
 		if err != nil {
-			rt.appendErr(errors.New(fmt.Sprintf("Chunk: %s load failed with error: %s", h.String(), err.Error())))
+			rt.appendErr(fmt.Errorf("Chunk: %s load failed with error: %s", h.String(), err.Error()))
 			chunkOk = false
 		} else if bytes.Compare(raw, c.Data()) != 0 {
 			hrs := rt.decodeMsg(chunk)
-			rt.appendErr(errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s\n%s", h.String(), c.Hash().String(), hrs)))
+			rt.appendErr(fmt.Errorf("Chunk: %s read with incorrect ID: %s\n%s", h.String(), c.Hash().String(), hrs))
 			chunkOk = false
 		}
 	}
