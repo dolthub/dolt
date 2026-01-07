@@ -20,6 +20,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
+
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var trueValue = true
@@ -204,6 +206,110 @@ cluster:
 	require.Equal(t, 0, config.ClusterConfig().BootstrapEpoch())
 	require.Equal(t, "standby", config.ClusterConfig().StandbyRemotes()[0].Name())
 	require.Equal(t, "http://doltdb-1.doltdb:50051/{database}", config.ClusterConfig().StandbyRemotes()[0].RemoteURLTemplate())
+}
+
+func TestYamlConfigFromFileEnvInterpolation_String(t *testing.T) {
+	t.Setenv("DOLT_TEST_SQLSERVER_HOST", "127.0.0.1")
+
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+listener:
+  host: ${DOLT_TEST_SQLSERVER_HOST}
+`), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := YamlConfigFromFile(fs, "config.yaml")
+	require.NoError(t, err)
+	require.Equal(t, "127.0.0.1", cfg.Host())
+}
+
+func TestYamlConfigFromFileEnvInterpolation_Int(t *testing.T) {
+	t.Setenv("DOLT_TEST_SQLSERVER_PORT", "15200")
+
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+listener:
+  port: ${DOLT_TEST_SQLSERVER_PORT}
+`), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := YamlConfigFromFile(fs, "config.yaml")
+	require.NoError(t, err)
+	require.Equal(t, 15200, cfg.Port())
+}
+
+func TestYamlConfigFromFileEnvInterpolation_MissingVarErrors(t *testing.T) {
+	// Empty env vars result in an interpolation error.
+	t.Setenv("DOLT_TEST_SQLSERVER_MISSING", "")
+
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+listener:
+  port: ${DOLT_TEST_SQLSERVER_MISSING}
+`), 0o644)
+	require.NoError(t, err)
+
+	_, err = YamlConfigFromFile(fs, "config.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "DOLT_TEST_SQLSERVER_MISSING")
+}
+
+func TestYamlConfigFromFileEnvInterpolation_UnsetVarErrors(t *testing.T) {
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+listener:
+  port: ${DOLT_TEST_SQLSERVER_UNSET}
+`), 0o644)
+	require.NoError(t, err)
+
+	_, err = YamlConfigFromFile(fs, "config.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "DOLT_TEST_SQLSERVER_UNSET")
+}
+
+func TestYamlConfigFromFileEnvInterpolation_DefaultSyntaxErrors(t *testing.T) {
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+listener:
+  port: ${DOLT_TEST_SQLSERVER_PORT:-15200}
+`), 0o644)
+	require.NoError(t, err)
+
+	_, err = YamlConfigFromFile(fs, "config.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "default expressions")
+}
+
+func TestYamlConfigFromFileEnvInterpolation_EscapeDollar(t *testing.T) {
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+golden_mysql_conn: "$$dollar"
+`), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := YamlConfigFromFile(fs, "config.yaml")
+	require.NoError(t, err)
+	yc, ok := cfg.(*YAMLConfig)
+	require.True(t, ok)
+	require.Equal(t, "$dollar", yc.GoldenMysqlConnectionString())
+}
+
+func TestYamlConfigFromFileEnvInterpolation_UnterminatedStopsAtNewline(t *testing.T) {
+	fs := filesys.EmptyInMemFS("/")
+	err := fs.WriteFile("config.yaml", []byte(`
+listener:
+  port: ${DOLT_TEST_SQLSERVER_PORT
+behavior:
+  read_only: true
+junk: "}"
+`), 0o644)
+	require.NoError(t, err)
+
+	_, err = YamlConfigFromFile(fs, "config.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unterminated environment placeholder")
+	require.Contains(t, err.Error(), "line 3")
+	require.Contains(t, err.Error(), "column")
 }
 
 func TestValidateClusterConfig(t *testing.T) {
