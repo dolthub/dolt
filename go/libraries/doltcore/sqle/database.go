@@ -1690,6 +1690,7 @@ func (db Database) GetAllTableNames(ctx *sql.Context, showSystemTables bool) ([]
 func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool, includeRootObjects bool, includeNonlocalTables readNonlocalTablesFlag) ([]string, error) {
 	var err error
 	var result []string
+	localNameSet := map[string]struct{}{}
 	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
 	// schemas in the search_path
 	if resolve.UseSearchPath && db.schemaName == "" {
@@ -1704,6 +1705,9 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, inc
 		result, err = root.GetTableNames(ctx, db.schemaName, includeRootObjects)
 		if err != nil {
 			return nil, err
+		}
+		for _, nameStr := range result {
+			localNameSet[nameStr] = struct{}{}
 		}
 	}
 
@@ -1722,7 +1726,15 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, inc
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, nonlocalTableNames...)
+		for _, nonLocalTableName := range nonlocalTableNames {
+			_, ok := localNameSet[nonLocalTableName]
+			// The semantics here are a little backwards, in reality the non-local table is prioritized. Since the names
+			// happen to match, we avoid the extra modification of shifting the name position. This does result in some
+			// non-local table names to not be grouped together, however.
+			if !ok {
+				result = append(result, nonLocalTableName)
+			}
+		}
 	}
 
 	return result, nil
