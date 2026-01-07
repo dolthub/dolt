@@ -40,10 +40,6 @@ func (cmd ArchiveInspectCmd) Description() string {
 	return "Inspect a Dolt archive (.darc) file and display basic information about it."
 }
 
-func (cmd ArchiveInspectCmd) RequiresRepo() bool {
-	return false
-}
-
 func (cmd ArchiveInspectCmd) Docs() *cli.CommandDocumentation {
 	return &cli.CommandDocumentation{
 		ShortDesc: "Inspect a Dolt archive (.darc) file and display information about it",

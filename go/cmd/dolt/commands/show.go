@@ -97,10 +97,6 @@ func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd ShowCmd) RequiresRepo() bool {
-	return false
-}
-
 // Exec executes the command
 func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()

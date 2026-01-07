@@ -65,12 +65,6 @@ func (cmd BlameCmd) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd BlameCmd) RequiresRepo() bool {
-	return false
-}
-
-var _ cli.RepoNotRequiredCommand = BlameCmd{}
-
 // EventType returns the type of the event to log
 func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_BLAME

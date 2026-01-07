@@ -86,10 +86,6 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_MERGE
 }
 
-func (cmd MergeCmd) RequiresRepo() bool {
-	return false
-}
-
 // Exec executes the command
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateMergeArgParser()

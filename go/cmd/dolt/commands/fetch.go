@@ -70,10 +70,6 @@ func (cmd FetchCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateFetchArgParser()
 }
 
-func (cmd FetchCmd) RequiresRepo() bool {
-	return false
-}
-
 // Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateFetchArgParser()
