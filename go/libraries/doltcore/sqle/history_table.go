@@ -270,10 +270,10 @@ func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.Co
 			return false, err
 		}
 
-		r := sql.Row{h.String(), meta.CommitterName, meta.CommitterTime()}
+		row := sql.Row{h.String(), meta.CommitterName, meta.CommitterTime()}
 
 		for _, filter := range filters {
-			res, err := filter.Eval(ctx, r)
+			res, err := filter.Eval(ctx, row)
 			if err != nil {
 				return false, err
 			}

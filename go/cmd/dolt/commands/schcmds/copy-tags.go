@@ -287,8 +287,8 @@ func doltCommitUpdatedTags(ctx *sql.Context, tableResolver doltdb.TableResolver,
 	}
 
 	doltDB := dEnv.DoltDB(ctx)
-	csp := actions.NewCommitStagedProps(name, email, datas.AuthorDate(), "Syncing column tags from "+fromBranchName+" branch")
-	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, workingSet, nil, doltDB, csp)
+	commitStagedProps := actions.NewCommitStagedProps(name, email, datas.AuthorDate(), "Syncing column tags from "+fromBranchName+" branch")
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, workingSet, nil, doltDB, commitStagedProps)
 	if err != nil {
 		return err
 	}

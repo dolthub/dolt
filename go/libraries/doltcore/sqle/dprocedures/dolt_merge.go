@@ -448,9 +448,9 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	csp := actions.NewCommitStagedProps(spec.Name, spec.Email, spec.Date, msg)
-	csp.Force = spec.Force
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, csp)
+	committerStagedProps := actions.NewCommitStagedProps(spec.Name, spec.Email, spec.Date, msg)
+	committerStagedProps.Force = spec.Force
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, committerStagedProps)
 	pendingCommit.SkipVerification = skipVerification
 	if err != nil {
 		return nil, nil, err

@@ -712,22 +712,22 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	authorColumnsSupport, err := cli.HasSystemVariable(queryist, sqlCtx, dsess.DoltLogCommitterOnly)
+	supportsAuthorColumns, err := cli.HasSystemVariable(queryist, sqlCtx, dsess.DoltLogCommitterOnly)
 	if err != nil {
 		return nil, fmt.Errorf("error checking for author column support: %v", err)
 	}
-	if authorColumnsSupport {
+	if supportsAuthorColumns {
 		_ = sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0))
 	}
 
-	authorColOffset := 0
+	authorColumnsOffset := 0
 	var q string
 	if opts.showSignature {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
 			return nil, fmt.Errorf("error interpolating query: %v", err)
 		}
-		authorColOffset++
+		authorColumnsOffset++
 	} else {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
@@ -744,8 +744,8 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, nil
 	}
 
-	// row: 0-5 committer columns, 6 parents, 7 refs, 8 signature (opt), then author columns at the end to be backward
-	// compatible with old client sys commands fixed indices.
+	// Author-specific columns appear at the end of the dolt log schema to remain compatible with hard-coded indices of
+	// older dolt clients.
 	row := rows[0]
 	commitHashStr, ok := row[0].(string)
 	if !ok {
@@ -794,22 +794,22 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		signature = row[8].(string)
 	}
 
-	// Older Dolt versions store author data within committer related columns
+	// Older Dolt versions store author metadata in the committer columns so we offer this default.
 	authorName := committerName
 	authorEmail := committerEmail
 	authorTs := committerTs
-	if authorColumnsSupport {
-		authorName, ok = row[8+authorColOffset].(string)
+	if supportsAuthorColumns {
+		authorName, ok = row[8+authorColumnsOffset].(string)
 		if !ok {
-			return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColOffset])
+			return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColumnsOffset])
 		}
-		authorEmail, ok = row[9+authorColOffset].(string)
+		authorEmail, ok = row[9+authorColumnsOffset].(string)
 		if !ok {
-			return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColOffset])
+			return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColumnsOffset])
 		}
-		authorTs, err = getTimestampColAsUint64(row[10+authorColOffset])
+		authorTs, err = getTimestampColAsUint64(row[10+authorColumnsOffset])
 		if err != nil {
-			return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColOffset], err)
+			return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColumnsOffset], err)
 		}
 	}
 
