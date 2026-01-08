@@ -37,6 +37,10 @@ func (cmd ZstdCmd) Description() string {
 	return "A temporary admin command for taking a dependency on gozstd and working out tooling dependencies."
 }
 
+func (cmd ZstdCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd ZstdCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
