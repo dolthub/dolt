@@ -37,55 +37,55 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 }
 
 @test "fsck: bad commit" {
-    mkdir .dolt
-    cp -R $BATS_CWD/corrupt_dbs/bad_commit/* .dolt/
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_commit/* .dolt/
 
-    # validate that cp worked.
-    dolt status
+  # validate that cp worked.
+  dolt status
 
-    run dolt fsck
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Chunk: rlmgv0komq0oj7qu4osdo759vs4c5pvg content hash mismatch: gpphmuvegiedtjtbfku4ru8jalfdk21u" ]] || false
-    [[ "$output" =~ "hacky@hackypants.com" ]] || false
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Chunk: rlmgv0komq0oj7qu4osdo759vs4c5pvg content hash mismatch: gpphmuvegiedtjtbfku4ru8jalfdk21u" ]] || false
+  [[ "$output" =~ "hacky@hackypants.com" ]] || false
 }
 
 @test "fsck: good archive" {
-    dolt init
-    dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
-    dolt commit -A -m "create tbl"
+  dolt init
+  dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
+  dolt commit -A -m "create tbl"
 
-    stmt=""
-    for ((j=1; j<=10; j++))
-    do
-        stmt="$stmt $(insert_statement)"
-        stmt="$stmt $(update_statement)"
-    done
-    dolt sql -q "$stmt"
+  stmt=""
+  for ((j=1; j<=10; j++))
+  do
+      stmt="$stmt $(insert_statement)"
+      stmt="$stmt $(update_statement)"
+  done
+  dolt sql -q "$stmt"
 
-    dolt gc
-    dolt archive
+  dolt gc
+  dolt archive
 
-    dolt fsck
+  dolt fsck
 }
 
 @test "fsck: good journal" {
-    dolt init
-    dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
-    dolt commit -Am "Create table tbl"
+  dolt init
+  dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
+  dolt commit -Am "Create table tbl"
 
-    dolt sql -q "$(insert_statement)"
+  dolt sql -q "$(insert_statement)"
 
-    # Objects are in the journal. Don't gc.
-    dolt fsck
+  # Objects are in the journal. Don't gc.
+  dolt fsck
 }
 
 @test "fsck: bad journal crc" {
-    mkdir .dolt
-    cp -R $BATS_CWD/corrupt_dbs/bad_journal_crc/* .dolt/
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_crc/* .dolt/
 
-    run dolt fsck
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 content hash mismatch: hitg0bb0hsakip96qvu2hts0hkrrla9o" ]] || false
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 content hash mismatch: hitg0bb0hsakip96qvu2hts0hkrrla9o" ]] || false
 }
 
 @test "fsck: bad journal crc, suggests data loss recovery" {
@@ -142,4 +142,40 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   run dolt show
   [ "$status" -eq 0 ]
   [[ "$output" =~ "recovermenoloss" ]] || false
+}
+
+@test "fsck: missing closure object" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/missing_closure_object/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "::commit:00apprui1m4mtcs8umenpt8e2lkjmihc: missing data. failed to read commit closure d92u2dpnhocp5pv4pn7vgm9fs30vdv94" ]] || false
+}
+
+@test "fsck: missing schema object" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/missing_schema_object/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "::commit:gub2hagj8cp2mcdlp95l90sisp37iupd: read failure of 8tsjiu5fcsvchoo4re8bgftuuogl7ko1" ]] || false
+}
+
+@test "fsck: missing fk object" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/missing_fk_object/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "::commit:sf9a4d6i5pg2uds56s18qpsfmv7v8r11: read failure of g0a5tikh3d9rnb9olelkffpukalc4v7o" ]] || false
+}
+
+@test "fsck: missing table object" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/missing_table_object/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "::commit:0vh56jekvb9hs0kqf8e8dc5208s0o0mi: read failure of fthj68monkbgkrb6g4c11php7ht2dib" ]] || false
 }

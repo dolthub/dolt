@@ -2204,7 +2204,7 @@ EOF
     [ $status -eq 0 ]
     run dolt -u root -p "" sql -q "create user __dolt_local_user__@localhost"
     [ $status -eq 0 ]
-    run dolt sql
+    run dolt sql -q "select current_user"
     [ $status -ne 0 ]
     [[ "$output" =~ "Error 1045 (28000): Access denied for user" ]] || false
 

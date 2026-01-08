@@ -360,57 +360,6 @@ func addCommit(t *testing.T, db *database, datasetID string, val string, parents
 	return mustHead(ds), mustHeadAddr(ds)
 }
 
-func assertClosureMapValue(t *testing.T, vrw types.ValueReadWriter, v types.Value, h hash.Hash) bool {
-	cv, err := vrw.ReadValue(context.Background(), h)
-	if !assert.NoError(t, err) {
-		return false
-	}
-	s, ok := cv.(types.Struct)
-	if !assert.True(t, ok) {
-		return false
-	}
-	plv, ok, err := s.MaybeGet(parentsListField)
-	if !assert.NoError(t, err) {
-		return false
-	}
-	if !assert.True(t, ok) {
-		return false
-	}
-	pl, ok := plv.(types.List)
-	if !assert.True(t, ok) {
-		return false
-	}
-	gl, ok := v.(types.List)
-	if !assert.True(t, ok) {
-		return false
-	}
-	if !assert.Equal(t, pl.Len(), gl.Len()) {
-		return false
-	}
-	for i := 0; i < int(pl.Len()); i++ {
-		piv, err := pl.Get(context.Background(), uint64(i))
-		if !assert.NoError(t, err) {
-			return false
-		}
-		giv, err := gl.Get(context.Background(), uint64(i))
-		if !assert.NoError(t, err) {
-			return false
-		}
-		pir, ok := piv.(types.Ref)
-		if !assert.True(t, ok) {
-			return false
-		}
-		gir, ok := giv.(types.Ref)
-		if !assert.True(t, ok) {
-			return false
-		}
-		if !assert.Equal(t, pir.TargetHash(), gir.TargetHash()) {
-			return false
-		}
-	}
-	return true
-}
-
 func TestCommitParentsClosure(t *testing.T) {
 	assert := assert.New(t)
 

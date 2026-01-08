@@ -520,8 +520,7 @@ func (root *rootValue) GetTableHash(ctx context.Context, tName TableName) (hash.
 }
 
 func (root *rootValue) SetTableHash(ctx context.Context, tName TableName, h hash.Hash) (RootValue, error) {
-	val, err := root.vrw.ReadValue(ctx, h)
-
+	val, err := root.vrw.MustReadValue(ctx, h)
 	if err != nil {
 		return nil, err
 	}

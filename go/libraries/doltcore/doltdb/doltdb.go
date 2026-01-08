@@ -832,6 +832,7 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (RootValue, e
 	if err != nil {
 		return nil, err
 	}
+	// decodeRootNomsValue handles val != nil.
 	return decodeRootNomsValue(ctx, ddb.vrw, ddb.ns, val)
 }
 
@@ -988,8 +989,7 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 }
 
 func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *datas.CommitMeta) (*Commit, error) {
-	val, err := ddb.vrw.ReadValue(ctx, valHash)
-
+	val, err := ddb.vrw.MustReadValue(ctx, valHash)
 	if err != nil {
 		return nil, err
 	}
@@ -1061,10 +1061,11 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 // dangling commits are unreferenced by any branch or ref. They are created in the course of programmatic updates
 // such as rebase. You must create a ref to a dangling commit for it to be reachable
 func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *datas.CommitMeta) (*Commit, error) {
-	val, err := ddb.vrw.ReadValue(ctx, valHash)
+	val, err := ddb.vrw.MustReadValue(ctx, valHash)
 	if err != nil {
 		return nil, err
 	}
+
 	if !isRootValue(ddb.vrw.Format(), val) {
 		return nil, errors.New("can't commit a value that is not a valid root value")
 	}
