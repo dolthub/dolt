@@ -165,8 +165,8 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 	}
 
 	if opts.Meta.Timestamp == nil {
-		ts := uint64(CommitterDate().UnixMilli())
-		opts.Meta.Timestamp = &ts
+		committerTimestamp := uint64(CommitterDate().UnixMilli())
+		opts.Meta.Timestamp = &committerTimestamp
 	}
 
 	r, err := vrw.WriteValue(ctx, v)
@@ -448,12 +448,12 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	ret.UserTimestamp = cmsg.UserTimestampMillis()
 	ret.CommitterName = ret.Name
 	ret.Signature = string(cmsg.Signature())
-	if cnBytes := cmsg.CommitterName(); cnBytes != nil {
-		ret.CommitterName = string(cnBytes)
+	if commiterNameBytes := cmsg.CommitterName(); commiterNameBytes != nil {
+		ret.CommitterName = string(commiterNameBytes)
 	}
 	ret.CommitterEmail = ret.Email
-	if ceBytes := cmsg.CommitterEmail(); ceBytes != nil {
-		ret.CommitterEmail = string(ceBytes)
+	if committerEmailBytes := cmsg.CommitterEmail(); committerEmailBytes != nil {
+		ret.CommitterEmail = string(committerEmailBytes)
 	}
 	return ret, nil
 }

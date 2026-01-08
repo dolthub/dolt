@@ -262,7 +262,7 @@ func assertEqualHashes(t *testing.T, lc, rc interface{}) {
 }
 
 func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash, parents ...*doltdb.Commit) *doltdb.Commit {
-	cm, err := datas.NewCommitMetaWithUserTS("Bill Billerson", "bill@billerson.com", "A New Commit.", MonotonicNow())
+	commitMeta, err := datas.NewCommitMetaWithUserTimestamp("Bill Billerson", "bill@billerson.com", "A New Commit.", MonotonicNow())
 	require.NoError(t, err)
 	pcs := make([]*doltdb.CommitSpec, 0, len(parents))
 	for _, parent := range parents {
@@ -271,7 +271,7 @@ func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash
 		pcs = append(pcs, cs)
 	}
 	bref := ref.NewBranchRef(bn)
-	commit, err := ddb.CommitWithParentSpecs(context.Background(), rvh, bref, pcs, cm)
+	commit, err := ddb.CommitWithParentSpecs(context.Background(), rvh, bref, pcs, commitMeta)
 	require.NoError(t, err)
 	return commit
 }
