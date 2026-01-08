@@ -91,6 +91,10 @@ func (cmd ConfigCmd) Description() string {
 	return "Dolt configuration."
 }
 
+func (cmd ConfigCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd ConfigCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.NewCommandDocumentation(cfgDocs, ap)
