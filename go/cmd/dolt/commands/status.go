@@ -68,11 +68,6 @@ var statusDocs = cli.CommandDocumentationContent{
 
 type StatusCmd struct{}
 
-func (cmd StatusCmd) RequiresRepo() bool {
-	return false
-}
-
-var _ cli.RepoNotRequiredCommand = StatusCmd{}
 var _ cli.EventMonitoredCommand = StatusCmd{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command

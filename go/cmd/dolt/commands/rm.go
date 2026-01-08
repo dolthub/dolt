@@ -43,10 +43,6 @@ The dolt status command can be used to obtain a summary of which tables have cha
 
 type RmCmd struct{}
 
-func (cmd RmCmd) RequiresRepo() bool {
-	return false
-}
-
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd RmCmd) Name() string {
 	return "rm"

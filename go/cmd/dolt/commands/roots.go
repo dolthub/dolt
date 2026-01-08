@@ -54,12 +54,6 @@ func (cmd RootsCmd) Hidden() bool {
 	return true
 }
 
-// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
-// that it be run from within a data repository directory
-func (cmd RootsCmd) RequiresRepo() bool {
-	return false
-}
-
 // Description returns a description of the command
 func (cmd RootsCmd) Description() string {
 	return "Displays store root values (or potential store root values) that we find in the current database."
