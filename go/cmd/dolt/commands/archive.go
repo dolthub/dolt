@@ -202,7 +202,7 @@ func handleProgress(ctx context.Context, wg *sync.WaitGroup, progress chan inter
 
 			if now := time.Now(); now.Sub(lastUpdateTime) > 1*time.Second {
 				spinner.Tick()
-				p.Printf(fmt.Sprintf("%s ", spinner.Text()))
+				p.Printf("%s ", spinner.Text())
 
 				if lastProgressMsg != nil {
 					percentDone := 0.0
