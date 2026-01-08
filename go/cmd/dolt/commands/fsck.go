@@ -16,6 +16,7 @@ package commands
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"errors"
 	"fmt"
@@ -41,8 +42,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-
-	"container/list"
 )
 
 type FsckCmd struct{}
