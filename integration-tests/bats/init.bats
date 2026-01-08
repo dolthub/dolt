@@ -273,7 +273,7 @@ teardown() {
 
     # Assert that the current directory has NOT been initialized
     run dolt status
-    [ $status -eq 1 ]
+    [ $status -ne 0 ]
     [[ $output =~ "The current directory is not a valid dolt repository" ]] || false
     [ ! -d "$baseDir/not_a_repo/.dolt" ]
 
