@@ -66,6 +66,10 @@ func (cmd ReadTablesCmd) Docs() *cli.CommandDocumentation {
 	return cli.NewCommandDocumentation(readTablesDocs, ap)
 }
 
+func (cmd ReadTablesCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd ReadTablesCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	ap.ArgListHelp = [][2]string{

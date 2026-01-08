@@ -35,43 +35,43 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 # All commands that require a repo should fail consistently from parent directory
 # =============================================================================
 
-@test "parent-directory: dolt status from parent dir without server fails" {
+@test "requires-repo: dolt status from parent dir without server fails" {
     run dolt status
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "parent-directory: dolt checkout from parent dir without server fails" {
+@test "requires-repo: dolt checkout from parent dir without server fails" {
     run dolt checkout -b new_branch
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "parent-directory: dolt branch from parent dir without server fails" {
+@test "requires-repo: dolt branch from parent dir without server fails" {
     run dolt branch
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "parent-directory: dolt log from parent dir without server fails" {
+@test "requires-repo: dolt log from parent dir without server fails" {
     run dolt log
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "parent-directory: dolt diff from parent dir without server fails" {
+@test "requires-repo: dolt diff from parent dir without server fails" {
     run dolt diff
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "parent-directory: dolt add from parent dir without server fails" {
+@test "requires-repo: dolt add from parent dir without server fails" {
     run dolt add .
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "parent-directory: dolt commit from parent dir without server fails" {
+@test "requires-repo: dolt commit from parent dir without server fails" {
     run dolt commit -m "test"
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
@@ -82,7 +82,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 # Commands should still fail from parent directory - they require a local repo
 # =============================================================================
 
-@test "parent-directory: dolt status from parent dir with running server fails" {
+@test "requires-repo: dolt status from parent dir with running server fails" {
     start_multi_db_server child_db
 
     # Status should fail - it requires being in a dolt repo directory
@@ -91,7 +91,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "$NOT_VALID_REPO_ERROR" ]] || false
 }
 
-@test "parent-directory: dolt checkout from parent dir with running server fails" {
+@test "requires-repo: dolt checkout from parent dir with running server fails" {
     start_multi_db_server child_db
 
     run dolt checkout -b new_branch
@@ -99,7 +99,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "$NOT_VALID_REPO_ERROR" ]] || false
 }
 
-@test "parent-directory: dolt branch from parent dir with running server fails" {
+@test "requires-repo: dolt branch from parent dir with running server fails" {
     start_multi_db_server child_db
 
     run dolt branch
@@ -107,7 +107,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "$NOT_VALID_REPO_ERROR" ]] || false
 }
 
-@test "parent-directory: dolt log from parent dir with running server fails" {
+@test "requires-repo: dolt log from parent dir with running server fails" {
     start_multi_db_server child_db
 
     run dolt log
@@ -115,7 +115,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "$NOT_VALID_REPO_ERROR" ]] || false
 }
 
-@test "parent-directory: dolt diff from parent dir with running server fails" {
+@test "requires-repo: dolt diff from parent dir with running server fails" {
     start_multi_db_server child_db
 
     run dolt diff
@@ -127,7 +127,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 # Commands that do NOT require a repo should work from parent directory
 # =============================================================================
 
-@test "parent-directory: dolt sql from parent dir with running server succeeds" {
+@test "requires-repo: dolt sql from parent dir with running server succeeds" {
     start_multi_db_server child_db
 
     # SQL commands should work by connecting to the running server
@@ -135,23 +135,28 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$status" -eq 0 ]
 }
 
-@test "parent-directory: dolt version from parent dir succeeds" {
+@test "requires-repo: dolt version from parent dir succeeds" {
     run dolt version
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt version" ]] || false
 }
 
-@test "parent-directory: dolt init in parent dir succeeds" {
+@test "requires-repo: dolt init in new dir succeeds" {
+    # Test that dolt init works in a new directory (doesn't require existing repo)
+    mkdir new_init_test
+    cd new_init_test
     run dolt init
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully initialized dolt data repository" ]] || false
+    cd ..
+    rm -rf new_init_test
 }
 
 # =============================================================================
 # Commands should work correctly when run from within the child database directory
 # =============================================================================
 
-@test "parent-directory: commands in child directory work normally" {
+@test "requires-repo: commands in child directory work normally" {
     cd child_db
 
     run dolt status
@@ -178,11 +183,41 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 # Test consistent behavior - all repo-requiring commands should fail the same way
 # =============================================================================
 
-@test "parent-directory: all repo-requiring commands fail consistently" {
+@test "requires-repo: all repo-requiring commands fail consistently" {
     # All these commands should fail with the same error
     for cmd in "status" "branch" "log" "diff" "add ." "commit -m test" "checkout -b test"; do
         run dolt $cmd
         [ "$status" -ne 0 ]
         [[ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]] || false
     done
+}
+
+# =============================================================================
+# Tests with --use-db or --host flags bypass repo requirement
+# These flags indicate a manual database/server connection, so the local
+# directory check should be bypassed.
+# =============================================================================
+
+@test "requires-repo: --host and --use-db flags bypass repo requirement for log" {
+    start_multi_db_server child_db
+
+    # With --host and --use-db, log should work from parent directory
+    run dolt --host 127.0.0.1 --port $PORT --no-tls --use-db child_db log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Initial commit" ]] || false
+}
+
+@test "requires-repo: --host and --use-db flags bypass repo requirement for branch" {
+    start_multi_db_server child_db
+
+    run dolt --host 127.0.0.1 --port $PORT --no-tls --use-db child_db branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+}
+
+@test "requires-repo: --host and --use-db flags bypass repo requirement for diff" {
+    start_multi_db_server child_db
+
+    run dolt --host 127.0.0.1 --port $PORT --no-tls --use-db child_db diff
+    [ "$status" -eq 0 ]
 }
