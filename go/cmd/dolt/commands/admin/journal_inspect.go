@@ -39,6 +39,10 @@ func (cmd JournalInspectCmd) Description() string {
 	return "Inspect a Dolt journal file and display information about it."
 }
 
+func (cmd JournalInspectCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd JournalInspectCmd) Docs() *cli.CommandDocumentation {
 	return &cli.CommandDocumentation{
 		ShortDesc: "Inspect a Dolt journal file and display information about it",
