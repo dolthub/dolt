@@ -227,8 +227,8 @@ func TestRepeatableFlagsWithOtherOptions(t *testing.T) {
 	ap.SupportsFlag("flag", "f", "flag")
 
 	testCases := []struct {
-		name          string
-		args          []string
+		name            string
+		args            []string
 		expectedVerbose int
 		expectedParam   string
 		expectedFlag    bool
@@ -255,7 +255,7 @@ func TestRepeatableFlagsWithOtherOptions(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			
+
 			// Check verbose count
 			verboseCount, ok := apr.GetFlagCount("verbose")
 			if test.expectedVerbose > 0 {
@@ -265,7 +265,7 @@ func TestRepeatableFlagsWithOtherOptions(t *testing.T) {
 				assert.False(t, ok)
 				assert.Equal(t, 0, verboseCount)
 			}
-			
+
 			// Check param value
 			if test.expectedParam != "" {
 				paramValue, exists := apr.GetValue("param")
@@ -274,10 +274,10 @@ func TestRepeatableFlagsWithOtherOptions(t *testing.T) {
 			} else {
 				assert.False(t, apr.Contains("param"))
 			}
-			
+
 			// Check flag
 			assert.Equal(t, test.expectedFlag, apr.Contains("flag"))
-			
+
 			// Check positional arguments
 			assert.Equal(t, test.expectedArgs, apr.Args)
 		})

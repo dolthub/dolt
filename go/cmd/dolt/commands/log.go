@@ -147,7 +147,7 @@ func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sql
 	}
 
 	if apr.Contains(cli.AllFlag) {
-		branches, err := getBranches(sqlCtx, queryist, false)
+		branches, err := getBranches(sqlCtx, queryist)
 		if err != nil {
 			return nil, 0, err
 		}

@@ -89,7 +89,7 @@ func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
 	ap := cli.CreateBranchArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	ap.SupportsFlag(cli.ListFlag, "", "List branches")
-	ap.SupportsFlag(cli.VerboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
+	ap.SupportsRepeatableFlag(cli.VerboseFlag, "v", "When in list mode, show the hash and commit subject line for each head, along with relationship to upstream branch (if any). If given twice, print the name of the upstream branch as well")
 	ap.SupportsFlag(cli.AllFlag, "a", "When in list mode, shows remote tracked branches")
 	ap.SupportsFlag(datasetsFlag, "", "List all datasets in the database")
 	ap.SupportsFlag(cli.RemoteParam, "r", "When in list mode, show only remote tracked branches. When with -d, delete a remote tracking branch.")
@@ -146,20 +146,18 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 }
 
 type branchMeta struct {
-	name   string
-	hash   string
-	remote bool
+	name        string
+	hash        string
+	remote      bool
+	upstream    string
+	aheadCount  uint
+	behindCount uint
+	message     string
 }
 
-func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]branchMeta, error) {
-	var command string
-	if remote {
-		command = "SELECT name, hash from dolt_remote_branches"
-	} else {
-		command = "SELECT name, hash from dolt_branches"
-	}
-
-	schema, rowIter, _, err := queryEngine.Query(sqlCtx, command)
+func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist) ([]branchMeta, error) {
+	qry := "SELECT b.name, b.hash, b.remote, b.branch, c.message FROM dolt_branches b LEFT JOIN dolt_commits c ON b.hash = c.commit_hash"
+	schema, rowIter, _, err := queryEngine.Query(sqlCtx, qry)
 	if err != nil {
 		return nil, err
 	}
@@ -169,13 +167,14 @@ func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]
 	for {
 		row, err := rowIter.Next(sqlCtx)
 		if err == io.EOF {
-			return branches, nil
+			break
 		}
 		if err != nil {
 			return nil, err
 		}
-		if len(row) != 2 {
-			return nil, fmt.Errorf("unexpectedly received multiple columns in '%s': %s", command, row)
+
+		if len(row) != 5 {
+			return nil, fmt.Errorf("unexpectedly received wrong column count '%s': %s", qry, row)
 		}
 
 		rowStrings, err := sqlfmt.SqlRowAsStrings(sqlCtx, row, schema)
@@ -183,32 +182,141 @@ func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]
 			return nil, err
 		}
 
-		branches = append(branches, branchMeta{name: rowStrings[0], hash: rowStrings[1], remote: remote})
+		upstream := ""
+		if rowStrings[2] != "" && rowStrings[3] != "" {
+			upstream = rowStrings[2] + "/" + rowStrings[3]
+		}
+
+		message := ""
+		if rowStrings[4] != "" {
+			message = rowStrings[4]
+		}
+
+		branch := branchMeta{
+			name:     rowStrings[0],
+			hash:     rowStrings[1],
+			remote:   false, // All branches from dolt_branches are local
+			upstream: upstream,
+			message:  message,
+		}
+
+		branches = append(branches, branch)
 	}
+
+	qry = "SELECT b.name, b.hash, c.message from dolt_remote_branches b LEFT JOIN dolt_commits c ON b.hash = c.commit_hash"
+	schema, rowIter, _, err = queryEngine.Query(sqlCtx, qry)
+	if err != nil {
+		return branches, nil // Continue even if remote branches query fails
+	}
+
+	for {
+		row, err := rowIter.Next(sqlCtx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if len(row) != 3 {
+			return nil, fmt.Errorf("unexpectedly received wrong column count '%s': %s", qry, row)
+		}
+
+		rowStrings, err := sqlfmt.SqlRowAsStrings(sqlCtx, row, schema)
+		if err != nil {
+			return nil, err
+		}
+
+		branch := branchMeta{
+			name:    rowStrings[0],
+			hash:    rowStrings[1],
+			remote:  true,
+			message: rowStrings[2],
+		}
+
+		branches = append(branches, branch)
+	}
+
+	return branches, nil
+}
+
+func getBranchStatus(sqlCtx *sql.Context, queryEngine cli.Queryist, branches []branchMeta) ([]branchMeta, error) {
+	// Calculate ahead/behind for local branches that have upstream tracking
+	var updatedBranches []branchMeta
+	for _, branch := range branches {
+		if branch.remote || branch.upstream == "" {
+			updatedBranches = append(updatedBranches, branch)
+			continue
+		}
+
+		// Query dolt_branch_status to get ahead/behind counts
+		// The function shows upstream commits_ahead/behind relative to local branch
+		// So upstream commits_behind means local is ahead
+		query := fmt.Sprintf("SELECT commits_behind, commits_ahead FROM dolt_branch_status('%s', '%s')", branch.name, branch.upstream)
+		_, rowIter, _, err := queryEngine.Query(sqlCtx, query)
+		if err != nil {
+			// If branch status fails, just continue without status info
+			updatedBranches = append(updatedBranches, branch)
+			continue
+		}
+
+		row, err := rowIter.Next(sqlCtx)
+		if err != nil {
+			// If no results, just continue without status info
+			updatedBranches = append(updatedBranches, branch)
+			continue
+		}
+
+		if len(row) >= 2 {
+			if aheadVal, err := getUint64ColAsUint64(row[0]); err == nil {
+				branch.aheadCount = uint(aheadVal)
+			}
+			if behindVal, err := getUint64ColAsUint64(row[1]); err == nil {
+				branch.behindCount = uint(behindVal)
+			}
+		}
+
+		updatedBranches = append(updatedBranches, branch)
+	}
+
+	return updatedBranches, nil
 }
 
 func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, _ cli.UsagePrinter) int {
 	branchSet := set.NewStrSet(apr.Args)
 
-	verbose := apr.Contains(cli.VerboseFlag)
+	verbosity, _ := apr.GetFlagCount(cli.VerboseFlag)
 	printRemote := apr.Contains(cli.RemoteParam)
 	printAll := apr.Contains(cli.AllFlag)
 
-	var branches []branchMeta
-	if printAll || printRemote {
-		remoteBranches, err := getBranches(sqlCtx, queryEngine, true)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read remote branches from db").AddCause(err).Build(), nil)
-		}
-		branches = append(branches, remoteBranches...)
+	// Get all branches (both local and remote) in one call
+	allBranches, err := getBranches(sqlCtx, queryEngine)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read branches from db").AddCause(err).Build(), nil)
 	}
 
-	if printAll || !printRemote {
-		localBranches, err := getBranches(sqlCtx, queryEngine, false)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read local branches from db").AddCause(err).Build(), nil)
+	// Filter branches based on what the user requested
+	var branches []branchMeta
+	for _, branch := range allBranches {
+		if printAll {
+			// Show both local and remote branches
+			branches = append(branches, branch)
+		} else if printRemote && branch.remote {
+			// Show only remote branches
+			branches = append(branches, branch)
+		} else if !printRemote && !branch.remote {
+			// Show only local branches
+			branches = append(branches, branch)
 		}
-		branches = append(branches, localBranches...)
+	}
+
+	// Get branch status information for -v and -vv (both need ahead/behind)
+	if verbosity >= 1 {
+		updatedBranches, err := getBranchStatus(sqlCtx, queryEngine, branches)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("error: failed to get branch status").AddCause(err).Build(), nil)
+		}
+		branches = updatedBranches
 	}
 
 	currentBranch, err := getActiveBranchName(sqlCtx, queryEngine)
@@ -234,8 +342,46 @@ func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser
 			branchName = "  " + color.RedString(branch.name)
 		}
 
-		if verbose {
+		if verbosity > 0 {
 			commitStr = branch.hash
+
+			// Add ahead/behind status for both -v and -vv
+			if branch.upstream != "" && (branch.aheadCount > 0 || branch.behindCount > 0) {
+				var statusInfo string
+				if branch.aheadCount > 0 && branch.behindCount > 0 {
+					statusInfo = fmt.Sprintf(" [ahead %d, behind %d]", branch.aheadCount, branch.behindCount)
+				} else if branch.aheadCount > 0 {
+					statusInfo = fmt.Sprintf(" [ahead %d]", branch.aheadCount)
+				} else if branch.behindCount > 0 {
+					statusInfo = fmt.Sprintf(" [behind %d]", branch.behindCount)
+				}
+				commitStr += statusInfo
+			}
+
+			// For -vv, also add upstream branch name
+			if verbosity >= 2 && branch.upstream != "" {
+				if branch.aheadCount > 0 || branch.behindCount > 0 {
+					// Replace the earlier [ahead/behind] with [upstream: ahead/behind]
+					var statusInfo string
+					if branch.aheadCount > 0 && branch.behindCount > 0 {
+						statusInfo = fmt.Sprintf(" [%s: ahead %d, behind %d]", branch.upstream, branch.aheadCount, branch.behindCount)
+					} else if branch.aheadCount > 0 {
+						statusInfo = fmt.Sprintf(" [%s: ahead %d]", branch.upstream, branch.aheadCount)
+					} else if branch.behindCount > 0 {
+						statusInfo = fmt.Sprintf(" [%s: behind %d]", branch.upstream, branch.behindCount)
+					}
+					// Replace the status info that was added earlier
+					commitStr = branch.hash + statusInfo
+				} else {
+					// No ahead/behind, just show upstream
+					commitStr += fmt.Sprintf(" [%s]", branch.upstream)
+				}
+			}
+
+			// Add commit message for both -v and -vv
+			if branch.message != "" {
+				commitStr += " " + branch.message
+			}
 		}
 
 		// This silliness is requires to properly support color characters in branch names.
