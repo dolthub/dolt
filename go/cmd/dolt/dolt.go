@@ -105,6 +105,7 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	commands.ConfigCmd{},
 	ci.Commands,
 	commands.DebugCmd{},
+	commands.TransferCmd{},
 }
 
 // commands that do not need write access for the current directory

@@ -658,6 +658,10 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 
 			return u.Scheme, absUrl, err
 		}
+		
+		if u.Scheme == dbfactory.SSHScheme {
+			return u.Scheme, urlArg, nil
+		}
 
 		return u.Scheme, urlArg, nil
 	} else if u.Host != "" {
