@@ -33,6 +33,35 @@ type CommitStagedProps struct {
 	Force      bool
 	Name       string
 	Email      string
+
+	CommitterDate  *time.Time
+	CommitterName  string
+	CommitterEmail string
+}
+
+// NewCommitStagedProps creates a new CommitStagedProps with the given author information. Committer fields are
+// automatically populated from environment variables (DOLT_COMMITTER_NAME, DOLT_COMMITTER_EMAIL, DOLT_COMMITTER_DATE)
+// if set, otherwise they default to the author values.
+func NewCommitStagedProps(name, email string, date time.Time, message string) CommitStagedProps {
+	committerName := datas.CommitterName
+	if committerName == "" {
+		committerName = name
+	}
+	committerEmail := datas.CommitterEmail
+	if committerEmail == "" {
+		committerEmail = email
+	}
+
+	return CommitStagedProps{
+		Message:        message,
+		Date:           date,
+		Name:           name,
+		Email:          email,
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
+		// CommitterDate if defined overrides time.Now or env var set by CommitterDate(). Caller is responsible for
+		// setting this field explicitly atm.
+	}
 }
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.
@@ -107,10 +136,10 @@ func GetCommitStaged(
 		}
 	}
 
-	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	commitMeta, err := datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail, props.CommitterDate)
 	if err != nil {
 		return nil, err
 	}
 
-	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
+	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, commitMeta)
 }

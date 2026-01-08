@@ -144,33 +144,30 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	t := ctx.QueryTime()
+	commitStagedProps := actions.NewCommitStagedProps(name, email, t, msg)
+	commitStagedProps.AllowEmpty = apr.Contains(cli.AllowEmptyFlag)
+	commitStagedProps.SkipEmpty = apr.Contains(cli.SkipEmptyFlag)
+	commitStagedProps.Amend = amend
+
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
 		t, err = dconfig.ParseDate(commitTimeStr)
-
+		commitStagedProps.Date = t
+		commitStagedProps.CommitterDate = &t
 		if err != nil {
 			return "", false, err
 		}
 	} else if datas.CustomAuthorDate {
 		t = datas.AuthorDate()
+		commitStagedProps.Date = t
 	}
 
 	if apr.Contains(cli.ForceFlag) {
+		commitStagedProps.Force = true
 		err = ctx.SetSessionVariable(ctx, "dolt_force_transaction_commit", 1)
 		if err != nil {
 			return "", false, err
 		}
-	}
-
-	csp := actions.CommitStagedProps{
-		Message:    msg,
-		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
-		SkipEmpty:  apr.Contains(cli.SkipEmptyFlag),
-		Amend:      amend,
-		Force:      apr.Contains(cli.ForceFlag),
-		Name:       name,
-		Email:      email,
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
@@ -178,7 +175,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		return "", false, fmt.Errorf("failed to get gpgsign: %w", err)
 	}
 
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, csp)
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, commitStagedProps)
 	if err != nil {
 		return "", false, err
 	}
@@ -202,7 +199,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 			}
 		}
 
-		strToSign, err := commitSignatureStr(ctx, dbName, roots, csp)
+		strToSign, err := commitSignatureStr(ctx, dbName, roots, commitStagedProps)
 		if err != nil {
 			return "", false, err
 		}
