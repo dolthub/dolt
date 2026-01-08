@@ -263,9 +263,9 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 	if err != nil {
 		panic("couldn't get roots: " + err.Error())
 	}
-	csp := actions.NewCommitStagedProps(name, email, t, "auto commit")
-	csp.AllowEmpty = true
-	pendingCommit, err := actions.GetCommitStaged(ctx, doltdb.SimpleTableResolver{}, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, csp)
+	commitStagedProps := actions.NewCommitStagedProps(name, email, t, "auto commit")
+	commitStagedProps.AllowEmpty = true
+	pendingCommit, err := actions.GetCommitStaged(ctx, doltdb.SimpleTableResolver{}, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, commitStagedProps)
 	if err != nil {
 		panic("pending commit error: " + err.Error())
 	}

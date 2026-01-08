@@ -136,10 +136,10 @@ func GetCommitStaged(
 		}
 	}
 
-	meta, err := datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail, props.CommitterDate)
+	commitMeta, err := datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail, props.CommitterDate)
 	if err != nil {
 		return nil, err
 	}
 
-	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
+	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, commitMeta)
 }
