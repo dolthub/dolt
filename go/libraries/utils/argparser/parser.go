@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -121,6 +122,14 @@ func (ap *ArgParser) SupportsFlag(name, abbrev, desc string) *ArgParser {
 	return ap
 }
 
+// SupportsRepeatableFlag configures a flag that can be repeated (e.g., -v vs -vv).
+func (ap *ArgParser) SupportsRepeatableFlag(name, abbrev, desc string) *ArgParser {
+	opt := &Option{name, abbrev, "", OptionalRepeatableFlag, desc, nil, false}
+	ap.SupportOption(opt)
+
+	return ap
+}
+
 // SupportsAlias adds support for an alias for an existing option. The alias can be used in place of the original option.
 func (ap *ArgParser) SupportsAlias(alias, original string) *ArgParser {
 	opt, ok := ap.nameOrAbbrevToOpt[original]
@@ -193,7 +202,7 @@ func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) *ArgParser 
 func (ap *ArgParser) sortedModalOptions() []string {
 	smo := make([]string, 0, len(ap.Supported))
 	for s, opt := range ap.nameOrAbbrevToOpt {
-		if opt.OptType == OptionalFlag && s != "" {
+		if (opt.OptType == OptionalFlag || opt.OptType == OptionalRepeatableFlag) && s != "" {
 			smo = append(smo, s)
 		}
 	}
@@ -229,13 +238,16 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 				m := ap.nameOrAbbrevToOpt[on]
 				matches = append(matches, m)
 
-				// only match options once
-				head := candidateFlagNames[:i]
-				var tail []string
-				if i+1 < len(candidateFlagNames) {
-					tail = candidateFlagNames[i+1:]
+				// if this is a repeatable flag, keep it in the candidates
+				// otherwise, only match options once
+				if m.OptType != OptionalRepeatableFlag {
+					head := candidateFlagNames[:i]
+					var tail []string
+					if i+1 < len(candidateFlagNames) {
+						tail = candidateFlagNames[i+1:]
+					}
+					candidateFlagNames = append(head, tail...)
 				}
-				candidateFlagNames = append(head, tail...)
 
 				kontinue = true
 				break
@@ -389,12 +401,28 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 
 	modalOpts, rest := ap.matchModalOptions(arg)
 
+	// Count occurrences of each option for repeatable flags
+	optCounts := make(map[string]int)
 	for _, opt := range modalOpts {
-		if _, exists := namedArgs[opt.Name]; exists {
+		optCounts[opt.Name]++
+	}
+
+	for optName, count := range optCounts {
+		opt := ap.nameOrAbbrevToOpt[optName]
+		if _, exists := namedArgs[opt.Name]; exists && opt.OptType != OptionalRepeatableFlag {
 			return 0, nil, nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
 		}
 
-		namedArgs[opt.Name] = ""
+		if opt.OptType == OptionalRepeatableFlag {
+			// For repeatable flags, store the total count (including previous occurrences)
+			existingCount := 0
+			if existingValue, exists := namedArgs[opt.Name]; exists && existingValue != "" {
+				existingCount, _ = strconv.Atoi(existingValue)
+			}
+			namedArgs[opt.Name] = strconv.Itoa(existingCount + count)
+		} else {
+			namedArgs[opt.Name] = ""
+		}
 	}
 
 	opt, value := ap.matchValueOption(rest, isLongFormFlag)

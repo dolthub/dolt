@@ -26,6 +26,7 @@ const (
 	OptionalValue
 	OptionalEmptyValue
 	RequiredValue
+	OptionalRepeatableFlag
 )
 
 type ValidationFunc func(string) error
