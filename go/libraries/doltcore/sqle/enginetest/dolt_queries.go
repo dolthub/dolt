@@ -778,19 +778,19 @@ var DoltScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// Non-ignored unstaged table has ignored=0
+				// Non-ignored unstaged table has ignored=false
 				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored WHERE table_name = 't';",
-				Expected: []sql.Row{{"t", byte(0), "new table", byte(0)}},
+				Expected: []sql.Row{{"t", byte(0), "new table", false}},
 			},
 			{
-				// Ignored unstaged table has ignored=1
+				// Ignored unstaged table has ignored=true
 				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored WHERE table_name = 'ignored_test';",
-				Expected: []sql.Row{{"ignored_test", byte(0), "new table", byte(1)}},
+				Expected: []sql.Row{{"ignored_test", byte(0), "new table", true}},
 			},
 			{
 				// dolt_ignore table itself shows as not ignored
 				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'dolt_ignore';",
-				Expected: []sql.Row{{"dolt_ignore", byte(0)}},
+				Expected: []sql.Row{{"dolt_ignore", false}},
 			},
 		},
 	},
@@ -805,9 +805,9 @@ var DoltScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// Staged table has ignored=0 even if name matches ignore pattern
+				// Staged table has ignored=false even if name matches ignore pattern
 				Query:    "SELECT table_name, staged, ignored FROM dolt_status_ignored WHERE table_name = 'staged_test';",
-				Expected: []sql.Row{{"staged_test", byte(1), byte(0)}},
+				Expected: []sql.Row{{"staged_test", byte(1), false}},
 			},
 		},
 	},
@@ -826,7 +826,7 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored;",
-				Expected: []sql.Row{{"t", byte(0), "new table", byte(0)}},
+				Expected: []sql.Row{{"t", byte(0), "new table", false}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_status_ignored AS OF 'tag1';",
@@ -838,11 +838,11 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored AS OF 'branch1';",
-				Expected: []sql.Row{{"abc", byte(1), "new table", byte(0)}},
+				Expected: []sql.Row{{"abc", byte(1), "new table", false}},
 			},
 			{
 				Query:    "SELECT table_name, staged, status, ignored FROM `mydb/branch1`.dolt_status_ignored;",
-				Expected: []sql.Row{{"abc", byte(1), "new table", byte(0)}},
+				Expected: []sql.Row{{"abc", byte(1), "new table", false}},
 			},
 		},
 	},
@@ -858,15 +858,15 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'temp_data';",
-				Expected: []sql.Row{{"temp_data", byte(1)}},
+				Expected: []sql.Row{{"temp_data", true}},
 			},
 			{
 				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'users_backup';",
-				Expected: []sql.Row{{"users_backup", byte(1)}},
+				Expected: []sql.Row{{"users_backup", true}},
 			},
 			{
 				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'normal_table';",
-				Expected: []sql.Row{{"normal_table", byte(0)}},
+				Expected: []sql.Row{{"normal_table", false}},
 			},
 		},
 	},
@@ -878,11 +878,11 @@ var DoltScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// With no ignore patterns, all tables should have ignored=0
+				// With no ignore patterns, all tables should have ignored=false
 				Query: "SELECT table_name, ignored FROM dolt_status_ignored ORDER BY table_name;",
 				Expected: []sql.Row{
-					{"t1", byte(0)},
-					{"t2", byte(0)},
+					{"t1", false},
+					{"t2", false},
 				},
 			},
 		},
@@ -901,12 +901,12 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				// test_normal matches ignore pattern
 				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'test_normal';",
-				Expected: []sql.Row{{"test_normal", byte(1)}},
+				Expected: []sql.Row{{"test_normal", true}},
 			},
 			{
 				// test_special is explicitly not ignored (false overrides wildcard)
 				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'test_special';",
-				Expected: []sql.Row{{"test_special", byte(0)}},
+				Expected: []sql.Row{{"test_special", false}},
 			},
 		},
 	},

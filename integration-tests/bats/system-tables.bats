@@ -1196,12 +1196,12 @@ SQL
     # Verify ignored column correctly identifies ignored tables
     run dolt sql -r csv -q "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'ignored_table'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "ignored_table,1" ]] || false
+    [[ "$output" =~ "ignored_table,true" ]] || false
 
-    # Verify non-ignored table has ignored = 0
+    # Verify non-ignored table has ignored = false
     run dolt sql -r csv -q "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'test'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test,0" ]] || false
+    [[ "$output" =~ "test,false" ]] || false
 
     # Verify schema has 4 columns
     run dolt sql -q "DESCRIBE dolt_status_ignored"
