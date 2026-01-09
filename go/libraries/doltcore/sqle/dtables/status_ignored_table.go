@@ -1,4 +1,4 @@
-// Copyright 2025 Dolthub, Inc.
+// Copyright 2026 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,7 +113,7 @@ type statusIgnoredTableRow struct {
 	tableName string
 	status    string
 	isStaged  byte // not a bool bc wire protocol confuses bools and tinyint(1)
-	ignored   byte
+	ignored   bool
 }
 
 func newStatusIgnoredItr(ctx *sql.Context, st *StatusIgnoredTable) (*StatusIgnoredItr, error) {
@@ -140,13 +140,18 @@ func newStatusIgnoredItr(ctx *sql.Context, st *StatusIgnoredTable) (*StatusIgnor
 	// Convert status rows to status_ignored rows, adding the ignored column
 	rows := make([]statusIgnoredTableRow, len(statusRows))
 	for i, row := range statusRows {
-		ignored := byte(0)
-		// Only check ignore patterns for unstaged tables
-		if row.isStaged == byte(0) && unstagedTableNames[row.tableName] {
-			var err error
-			ignored, err = checkIfIgnored(row.tableName, ignorePatterns)
+		ignored := false
+		// Only check ignore patterns for unstaged NEW tables (same as Git behavior).
+		// Tables that are modified, deleted, or renamed are already tracked,
+		// so ignore patterns don't apply to them.
+		if row.isStaged == byte(0) && row.status == newTableStatus && unstagedTableNames[row.tableName] {
+			tblNameObj := doltdb.TableName{Name: row.tableName}
+			result, err := ignorePatterns.IsTableNameIgnored(tblNameObj)
 			if err != nil {
 				return nil, err
+			}
+			if result == doltdb.Ignore {
+				ignored = true
 			}
 		}
 		rows[i] = statusIgnoredTableRow{
@@ -181,19 +186,6 @@ func buildUnstagedTableNameSet(unstagedTables []diff.TableDelta) map[string]bool
 		result[td.CurName()] = true
 	}
 	return result
-}
-
-// checkIfIgnored returns 1 if the table name matches an ignore pattern, 0 otherwise.
-func checkIfIgnored(tableName string, ignorePatterns doltdb.IgnorePatterns) (byte, error) {
-	tblNameObj := doltdb.TableName{Name: tableName}
-	result, err := ignorePatterns.IsTableNameIgnored(tblNameObj)
-	if err != nil {
-		return byte(0), err
-	}
-	if result == doltdb.Ignore {
-		return byte(1), nil
-	}
-	return byte(0), nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.

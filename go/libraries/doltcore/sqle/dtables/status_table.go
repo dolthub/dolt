@@ -176,7 +176,7 @@ func getStatusRowsData(
 	for _, tbl := range cvTables {
 		rows = append(rows, statusTableRow{
 			tableName: tbl.String(),
-			status:    "constraint violation",
+			status:    constraintViolationStatus,
 		})
 	}
 
@@ -186,7 +186,7 @@ func getStatusRowsData(
 			rows = append(rows, statusTableRow{
 				tableName: tbl.String(),
 				isStaged:  byte(0),
-				status:    "schema conflict",
+				status:    schemaConflictStatus,
 			})
 		}
 
@@ -293,7 +293,7 @@ func tableName(td diff.TableDelta) string {
 
 func statusString(td diff.TableDelta) string {
 	if td.IsAdd() {
-		return "new table"
+		return newTableStatus
 	} else if td.IsDrop() {
 		return "deleted"
 	} else if td.IsRename() {
@@ -305,6 +305,9 @@ func statusString(td diff.TableDelta) string {
 
 const mergeConflictStatus = "conflict"
 const mergedStatus = "merged"
+const schemaConflictStatus = "schema conflict"
+const constraintViolationStatus = "constraint violation"
+const newTableStatus = "new table"
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
