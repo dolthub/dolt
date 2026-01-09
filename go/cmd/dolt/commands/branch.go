@@ -328,54 +328,55 @@ func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser
 		return branches[i].name < branches[j].name
 	})
 
+	// Calculate the maximum width needed for branch names
+	maxWidth := 0
+	filteredBranches := []branchMeta{}
 	for _, branch := range branches {
 		if branchSet.Size() > 0 && !branchSet.Contains(branch.name) {
 			continue
 		}
+		filteredBranches = append(filteredBranches, branch)
 
+		// Calculate display width (2 chars for "* " or "  " plus branch name)
+		displayName := "  " + branch.name
+		if len(displayName) > maxWidth {
+			maxWidth = len(displayName)
+		}
+	}
+
+	for _, branch := range filteredBranches {
 		commitStr := ""
-		branchName := "  " + branch.name
-		branchLen := len(branchName)
+		var branchName string
+
 		if branch.name == currentBranch {
 			branchName = "* " + color.GreenString(branch.name)
 		} else if branch.remote {
 			branchName = "  " + color.RedString(branch.name)
+		} else {
+			branchName = "  " + branch.name
 		}
 
 		if verbosity > 0 {
 			commitStr = branch.hash
 
-			// Add ahead/behind status for both -v and -vv
+			// Add status brackets if there's upstream tracking
 			if branch.upstream != "" && (branch.aheadCount > 0 || branch.behindCount > 0) {
-				var statusInfo string
-				if branch.aheadCount > 0 && branch.behindCount > 0 {
-					statusInfo = fmt.Sprintf(" [ahead %d, behind %d]", branch.aheadCount, branch.behindCount)
-				} else if branch.aheadCount > 0 {
-					statusInfo = fmt.Sprintf(" [ahead %d]", branch.aheadCount)
-				} else if branch.behindCount > 0 {
-					statusInfo = fmt.Sprintf(" [behind %d]", branch.behindCount)
+				// For -vv, include upstream name; for -v, use empty string
+				upstreamPrefix := ""
+				if verbosity >= 2 {
+					upstreamPrefix = branch.upstream + ": "
 				}
-				commitStr += statusInfo
-			}
 
-			// For -vv, also add upstream branch name
-			if verbosity >= 2 && branch.upstream != "" {
-				if branch.aheadCount > 0 || branch.behindCount > 0 {
-					// Replace the earlier [ahead/behind] with [upstream: ahead/behind]
-					var statusInfo string
-					if branch.aheadCount > 0 && branch.behindCount > 0 {
-						statusInfo = fmt.Sprintf(" [%s: ahead %d, behind %d]", branch.upstream, branch.aheadCount, branch.behindCount)
-					} else if branch.aheadCount > 0 {
-						statusInfo = fmt.Sprintf(" [%s: ahead %d]", branch.upstream, branch.aheadCount)
-					} else if branch.behindCount > 0 {
-						statusInfo = fmt.Sprintf(" [%s: behind %d]", branch.upstream, branch.behindCount)
-					}
-					// Replace the status info that was added earlier
-					commitStr = branch.hash + statusInfo
-				} else {
-					// No ahead/behind, just show upstream
-					commitStr += fmt.Sprintf(" [%s]", branch.upstream)
+				if branch.aheadCount > 0 && branch.behindCount > 0 {
+					commitStr += fmt.Sprintf(" [%sahead %d, behind %d]", upstreamPrefix, branch.aheadCount, branch.behindCount)
+				} else if branch.aheadCount > 0 {
+					commitStr += fmt.Sprintf(" [%sahead %d]", upstreamPrefix, branch.aheadCount)
+				} else if branch.behindCount > 0 {
+					commitStr += fmt.Sprintf(" [%sbehind %d]", upstreamPrefix, branch.behindCount)
 				}
+			} else if verbosity >= 2 && branch.upstream != "" {
+				// No ahead/behind, but -vv should still show upstream
+				commitStr += fmt.Sprintf(" [%s]", branch.upstream)
 			}
 
 			// Add commit message for both -v and -vv
@@ -384,8 +385,15 @@ func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser
 			}
 		}
 
-		// This silliness is requires to properly support color characters in branch names.
-		fmtStr := fmt.Sprintf("%%s%%%ds\t%%s", 48-branchLen)
+		// All branch names have exactly 2 chars prefix, so calculate padding from that
+		displayLen := 2 + len(branch.name)
+		padding := maxWidth - displayLen + 1
+		if padding < 1 {
+			padding = 1
+		}
+
+		// This silliness is required to properly support color characters in branch names.
+		fmtStr := fmt.Sprintf("%%s%%%ds%%s", padding)
 		line := fmt.Sprintf(fmtStr, branchName, "", commitStr)
 
 		cli.Println(line)
