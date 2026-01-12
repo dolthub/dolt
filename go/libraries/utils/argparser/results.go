@@ -280,7 +280,7 @@ func (res *ArgParseResults) FlagsEqualTo(names []string, val bool) *set.StrSet {
 func (res *ArgParseResults) GetFlagCount(name string) (int, bool) {
 	opt, ok := res.parser.nameOrAbbrevToOpt[name]
 	if !ok {
-		return 0, false
+		panic("runtime error: attempted to get flag count for unsupported option: " + name)
 	}
 
 	val, exists := res.options[name]

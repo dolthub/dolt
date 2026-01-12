@@ -199,6 +199,8 @@ func TestRepeatableFlags(t *testing.T) {
 		{[]string{"-vvvv"}, 4, false},
 		{[]string{"--verbose"}, 1, false},
 		{[]string{"--verbose", "--verbose"}, 2, false},
+		{[]string{"--verbose", "-v"}, 2, false},
+		{[]string{"--verbose", "-vv"}, 3, false},
 		{[]string{"-v", "-v"}, 2, false},
 		{[]string{"-v", "-vv"}, 3, false},
 		{[]string{"-vv", "-v"}, 3, false},
@@ -233,26 +235,21 @@ func TestRepeatableFlagsWithOtherOptions(t *testing.T) {
 		expectedParam   string
 		expectedFlag    bool
 		expectedArgs    []string
-		expectError     bool
 	}{
-		{"verbose with param", []string{"-v", "-p", "value"}, 1, "value", false, []string{}, false},
-		{"double verbose with param", []string{"-vv", "-p", "value"}, 2, "value", false, []string{}, false},
-		{"interleaved verbose and flag", []string{"-v", "-f", "-v"}, 2, "", true, []string{}, false},
-		{"verbose with flag and param", []string{"-vv", "-f", "-p", "test", "-v"}, 3, "test", true, []string{}, false},
-		{"combined flags", []string{"-vfp", "value"}, 1, "value", true, []string{}, false},
-		{"combined repeatable flags", []string{"-vvf", "-p", "data"}, 2, "data", true, []string{}, false},
-		{"verbose with positional args", []string{"-vv", "arg1", "arg2"}, 2, "", false, []string{"arg1", "arg2"}, false},
-		{"mixed order", []string{"-p", "value", "-vv", "-f", "-v", "arg1"}, 3, "value", true, []string{"arg1"}, false},
-		{"long form mixed", []string{"--verbose", "--param", "test", "--flag", "--verbose"}, 2, "test", true, []string{}, false},
+		{"verbose with param", []string{"-v", "-p", "value"}, 1, "value", false, []string{}},
+		{"double verbose with param", []string{"-vv", "-p", "value"}, 2, "value", false, []string{}},
+		{"interleaved verbose and flag", []string{"-v", "-f", "-v"}, 2, "", true, []string{}},
+		{"verbose with flag and param", []string{"-vv", "-f", "-p", "test", "-v"}, 3, "test", true, []string{}},
+		{"combined flags", []string{"-vfp", "value"}, 1, "value", true, []string{}},
+		{"combined repeatable flags", []string{"-vvf", "-p", "data"}, 2, "data", true, []string{}},
+		{"verbose with positional args", []string{"-vv", "arg1", "arg2"}, 2, "", false, []string{"arg1", "arg2"}},
+		{"mixed order", []string{"-p", "value", "-vv", "-f", "-v", "arg1"}, 3, "value", true, []string{"arg1"}},
+		{"long form mixed", []string{"-v", "--param", "test", "--flag", "--verbose"}, 2, "test", true, []string{}},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			apr, err := ap.Parse(test.args)
-			if test.expectError {
-				require.Error(t, err)
-				return
-			}
 
 			require.NoError(t, err)
 

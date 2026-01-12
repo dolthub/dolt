@@ -155,7 +155,7 @@ type branchMeta struct {
 	message     string
 }
 
-func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist) ([]branchMeta, error) {
+func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, printRemote, printAll bool) ([]branchMeta, error) {
 	qry := "SELECT name, hash, remote, branch, latest_commit_message FROM dolt_branches"
 	schema, rowIter, _, err := queryEngine.Query(sqlCtx, qry)
 	if err != nil {
@@ -164,77 +164,81 @@ func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist) ([]branchMeta, e
 
 	var branches []branchMeta
 
-	for {
-		row, err := rowIter.Next(sqlCtx)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
+	if printAll || !printRemote {
+		for {
+			row, err := rowIter.Next(sqlCtx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
 
-		if len(row) != 5 {
-			return nil, fmt.Errorf("unexpectedly received wrong column count '%s': %s", qry, row)
-		}
+			if len(row) != 5 {
+				return nil, fmt.Errorf("unexpectedly received wrong column count '%s': %s", qry, row)
+			}
+			rowStrings, err := sqlfmt.SqlRowAsStrings(sqlCtx, row, schema)
+			if err != nil {
+				return nil, err
+			}
+			name := rowStrings[0]
+			hash := rowStrings[1]
+			remote := rowStrings[2]
+			branch := rowStrings[3]
+			commitMessage := rowStrings[4]
 
-		rowStrings, err := sqlfmt.SqlRowAsStrings(sqlCtx, row, schema)
-		if err != nil {
-			return nil, err
-		}
+			upstream := ""
+			if remote != "" && branch != "" {
+				upstream = remote + "/" + branch
+			}
 
-		upstream := ""
-		if rowStrings[2] != "" && rowStrings[3] != "" {
-			upstream = rowStrings[2] + "/" + rowStrings[3]
-		}
+			branchM := branchMeta{
+				name:     name,
+				hash:     hash,
+				remote:   false,
+				upstream: upstream,
+				message:  commitMessage,
+			}
 
-		message := ""
-		if rowStrings[4] != "" {
-			message = rowStrings[4]
+			branches = append(branches, branchM)
 		}
-
-		branch := branchMeta{
-			name:     rowStrings[0],
-			hash:     rowStrings[1],
-			remote:   false,
-			upstream: upstream,
-			message:  message,
-		}
-
-		branches = append(branches, branch)
 	}
 
-	qry = "SELECT name, hash, latest_commit_message from dolt_remote_branches"
-	schema, rowIter, _, err = queryEngine.Query(sqlCtx, qry)
-	if err != nil {
-		return branches, nil // Continue even if remote branches query fails
-	}
-
-	for {
-		row, err := rowIter.Next(sqlCtx)
-		if err == io.EOF {
-			break
-		}
+	if printRemote || printAll {
+		qry = "SELECT name, hash, latest_commit_message from dolt_remote_branches"
+		schema, rowIter, _, err = queryEngine.Query(sqlCtx, qry)
 		if err != nil {
 			return nil, err
 		}
+		for {
+			row, err := rowIter.Next(sqlCtx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
 
-		if len(row) != 3 {
-			return nil, fmt.Errorf("unexpectedly received wrong column count '%s': %s", qry, row)
+			if len(row) != 3 {
+				return nil, fmt.Errorf("unexpectedly received wrong column count '%s': %s", qry, row)
+			}
+			rowStrings, err := sqlfmt.SqlRowAsStrings(sqlCtx, row, schema)
+			if err != nil {
+				return nil, err
+			}
+			name := rowStrings[0]
+			hash := rowStrings[1]
+			commitMessage := rowStrings[2]
+
+			branch := branchMeta{
+				name:    name,
+				hash:    hash,
+				remote:  true,
+				message: commitMessage,
+			}
+
+			branches = append(branches, branch)
 		}
-
-		rowStrings, err := sqlfmt.SqlRowAsStrings(sqlCtx, row, schema)
-		if err != nil {
-			return nil, err
-		}
-
-		branch := branchMeta{
-			name:    rowStrings[0],
-			hash:    rowStrings[1],
-			remote:  true,
-			message: rowStrings[2],
-		}
-
-		branches = append(branches, branch)
 	}
 
 	return branches, nil
@@ -289,25 +293,9 @@ func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser
 	printRemote := apr.Contains(cli.RemoteParam)
 	printAll := apr.Contains(cli.AllFlag)
 
-	// Get all branches (both local and remote) in one call
-	allBranches, err := getBranches(sqlCtx, queryEngine)
+	branches, err := getBranches(sqlCtx, queryEngine, printRemote, printAll)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read branches from db").AddCause(err).Build(), nil)
-	}
-
-	// Filter branches based on what the user requested
-	var branches []branchMeta
-	for _, branch := range allBranches {
-		if printAll {
-			// Show both local and remote branches
-			branches = append(branches, branch)
-		} else if printRemote && branch.remote {
-			// Show only remote branches
-			branches = append(branches, branch)
-		} else if !printRemote && !branch.remote {
-			// Show only local branches
-			branches = append(branches, branch)
-		}
 	}
 
 	// Get branch status information for -v and -vv (both need ahead/behind)
