@@ -299,9 +299,9 @@ func TestGetFlagCountErrorHandling(t *testing.T) {
 	assert.Equal(t, 1, count)
 
 	// Test non-existent flag
-	count, ok = apr.GetFlagCount("nonexistent")
-	assert.False(t, ok)
-	assert.Equal(t, 0, count)
+	assert.Panics(t, func() {
+		_, _ = apr.GetFlagCount("nonexistent")
+	})
 
 	// Test flag that wasn't set
 	ap.SupportsRepeatableFlag("debug", "d", "Debug output")
