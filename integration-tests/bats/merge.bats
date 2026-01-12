@@ -132,13 +132,15 @@ call dolt_commit('-Am', 'added a column to the primary key with value 6');
 
 SQL
 
-    dolt merge b1
+    # After the SQL block, the shell session is still on main.
+    # Checkout b2 to set up the merge scenario where both branches
+    # changed the primary key from the ancestor.
+    dolt checkout b2
 
-    skip "merge hangs"
-        
-    run dolt merge b2
+    # Both branches changed the primary key from the ancestor, so merge should fail
+    run dolt merge b1
     log_status_eq 1
-    [[ "$output" =~ "cause: error: cannot merge table t1 because its different primary keys differ" ]] || false
+    [[ "$output" =~ "error: cannot merge because table t1 has different primary keys in its common ancestor" ]] || false
 }
 
 
