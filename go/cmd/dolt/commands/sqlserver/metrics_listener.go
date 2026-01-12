@@ -16,11 +16,16 @@ package sqlserver
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/mem"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
@@ -28,7 +33,7 @@ import (
 )
 
 const (
-	clusterUpdateInterval = time.Second * 5
+	metricsUpdateInterval = time.Second * 5
 
 	dbLabel     = "database"
 	roleLabel   = "role"
@@ -51,6 +56,13 @@ type metricsListener struct {
 	isReplicaGauges      *prometheus.GaugeVec
 	replicationLagGauges *prometheus.GaugeVec
 
+	// sys metrics
+	cpuUsage  prometheus.Gauge
+	diskUsage prometheus.Gauge
+	memUsage  prometheus.Gauge
+
+	mountPoint string
+
 	// used in updating cluster metrics
 	clusterStatus  clusterdb.ClusterStatusProvider
 	mu             *sync.Mutex
@@ -58,7 +70,28 @@ type metricsListener struct {
 	clusterSeenDbs map[string]struct{}
 }
 
-func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStatus clusterdb.ClusterStatusProvider) (*metricsListener, error) {
+func newMetricsListener(labels prometheus.Labels, versionStr, path string, clusterStatus clusterdb.ClusterStatusProvider) (*metricsListener, error) {
+	mountPoint := ""
+
+	if path != "" {
+		partitions, err := disk.Partitions(false)
+
+		if err != nil {
+			logrus.Info(fmt.Sprintf("Error getting disk partitions: %v", err))
+		} else {
+			for _, partition := range partitions {
+				if strings.HasPrefix(path, partition.Mountpoint) {
+					mountPoint = partition.Mountpoint
+					break
+				}
+			}
+
+			if mountPoint == "" {
+				logrus.Info(fmt.Sprintf("Could not find mount point for path '%s'", path))
+			}
+		}
+	}
+
 	ml := &metricsListener{
 		labels: labels,
 		cntConnections: prometheus.NewCounter(prometheus.CounterOpts{
@@ -102,9 +135,25 @@ func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStat
 			Help:        "one if the server is currently in this role, zero otherwise",
 			ConstLabels: labels,
 		}, []string{dbLabel}),
+		cpuUsage: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name:        "sys_cpu_usage",
+			Help:        "The percentage of CPU used by the system",
+			ConstLabels: labels,
+		}),
+		diskUsage: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name:        "sys_disk_usage",
+			Help:        "The percentage of disk used by the system",
+			ConstLabels: labels,
+		}),
+		memUsage: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name:        "sys_mem_usage",
+			Help:        "The percentage of memory used by the system",
+			ConstLabels: labels,
+		}),
 		clusterStatus:  clusterStatus,
 		mu:             &sync.Mutex{},
 		clusterSeenDbs: make(map[string]struct{}),
+		mountPoint:     mountPoint,
 	}
 
 	u32Version, err := version.Encode(versionStr)
@@ -126,10 +175,13 @@ func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStat
 	prometheus.MustRegister(ml.histQueryDur)
 	prometheus.MustRegister(ml.replicationLagGauges)
 	prometheus.MustRegister(ml.isReplicaGauges)
+	prometheus.MustRegister(ml.cpuUsage)
+	prometheus.MustRegister(ml.diskUsage)
+	prometheus.MustRegister(ml.memUsage)
 
 	go func() {
-		for ml.updateReplMetrics() {
-			time.Sleep(clusterUpdateInterval)
+		for ml.pollMetrics() {
+			time.Sleep(metricsUpdateInterval)
 		}
 	}()
 
@@ -137,7 +189,7 @@ func newMetricsListener(labels prometheus.Labels, versionStr string, clusterStat
 	return ml, nil
 }
 
-func (ml *metricsListener) updateReplMetrics() bool {
+func (ml *metricsListener) pollMetrics() bool {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 
@@ -145,9 +197,16 @@ func (ml *metricsListener) updateReplMetrics() bool {
 		return false
 	}
 
+	ml.pollReplicationMetrics()
+	ml.pollSysMetrics()
+
+	return true
+}
+
+func (ml *metricsListener) pollReplicationMetrics() {
 	perDbStatus := ml.clusterStatus.GetClusterStatus()
 	if perDbStatus == nil {
-		return true
+		return
 	}
 
 	dbNames := make(map[string]struct{})
@@ -177,8 +236,36 @@ func (ml *metricsListener) updateReplMetrics() bool {
 		}
 	}
 	ml.clusterSeenDbs = dbNames
+}
 
-	return true
+func (ml *metricsListener) pollSysMetrics() {
+	percentages, err := cpu.Percent(0, false)
+
+	if err != nil {
+		logrus.Info(fmt.Sprintf("Error getting CPU diskUsage: %v", err))
+	} else if len(percentages) == 1 {
+		ml.cpuUsage.Set(percentages[0])
+	} else {
+		logrus.Info("Unexpected number of CPU diskUsage percentages returned: %d", len(percentages))
+	}
+
+	memStats, err := mem.VirtualMemory()
+
+	if err != nil {
+		logrus.Info(fmt.Sprintf("Error getting memory diskUsage: %v", err))
+	} else {
+		ml.memUsage.Set(memStats.UsedPercent)
+	}
+
+	diskUsage, err := disk.Usage(ml.mountPoint)
+
+	if err != nil {
+		logrus.Info(fmt.Sprintf("Error getting disk diskUsage for mount point '%s': %v", ml.mountPoint, err))
+	} else {
+		ml.diskUsage.Set(diskUsage.UsedPercent)
+	}
+
+	logrus.Info(fmt.Sprintf("Cpu: %.2f%%, Mem: %.2f%%, Disk: %.2f%%", percentages[0], memStats.UsedPercent, diskUsage.UsedPercent))
 }
 
 func (ml *metricsListener) ClientConnected() {
@@ -201,6 +288,11 @@ func (ml *metricsListener) QueryCompleted(success bool, duration time.Duration) 
 }
 
 func (ml *metricsListener) Close() {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
+	ml.done = true
+
 	prometheus.Unregister(ml.gaugeVersion)
 	prometheus.Unregister(ml.cntConnections)
 	prometheus.Unregister(ml.cntDisconnects)
@@ -209,14 +301,16 @@ func (ml *metricsListener) Close() {
 	prometheus.Unregister(ml.histQueryDur)
 
 	ml.closeReplicationMetrics()
+	ml.closeSysMetrics()
 }
 
 func (ml *metricsListener) closeReplicationMetrics() {
-	ml.mu.Lock()
-	defer ml.mu.Unlock()
-
 	prometheus.Unregister(ml.replicationLagGauges)
 	prometheus.Unregister(ml.isReplicaGauges)
+}
 
-	ml.done = true
+func (ml *metricsListener) closeSysMetrics() {
+	prometheus.Unregister(ml.cpuUsage)
+	prometheus.Unregister(ml.diskUsage)
+	prometheus.Unregister(ml.memUsage)
 }
