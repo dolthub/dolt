@@ -79,10 +79,15 @@ func newMetricsListener(labels prometheus.Labels, versionStr, path string, clust
 		if err != nil {
 			logrus.Info(fmt.Sprintf("Error getting disk partitions: %v", err))
 		} else {
+			bestMatchLen := 0
 			for _, partition := range partitions {
-				if strings.HasPrefix(path, partition.Mountpoint) {
-					mountPoint = partition.Mountpoint
-					break
+				mp := partition.Mountpoint
+				if mp == "" {
+					continue
+				}
+				if strings.HasPrefix(path, mp) && len(mp) > bestMatchLen {
+					mountPoint = mp
+					bestMatchLen = len(mp)
 				}
 			}
 
