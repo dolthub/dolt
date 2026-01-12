@@ -270,7 +270,7 @@ func (ml *metricsListener) pollSysMetrics() {
 		ml.diskUsage.Set(diskUsage.UsedPercent)
 	}
 
-	logrus.Info(fmt.Sprintf("Cpu: %.2f%%, Mem: %.2f%%, Disk: %.2f%%", percentages[0], memStats.UsedPercent, diskUsage.UsedPercent))
+	//logrus.Infof("Cpu: %.2f%%, Mem: %.2f%%, Disk: %.2f%%", percentages[0], memStats.UsedPercent, diskUsage.UsedPercent)
 }
 
 func (ml *metricsListener) ClientConnected() {
