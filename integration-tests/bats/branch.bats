@@ -550,3 +550,79 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "branch not found: 'HEAD~1'" ]] || false
 }
+
+@test "branch: -v shows commit hash and message" {
+    dolt sql -q "create table t (c int primary key)"
+    dolt add t
+    dolt commit -m "initial commit"
+    
+    # Create test branch
+    dolt branch test_branch
+    
+    # Test -v shows hash and commit message for main branch
+    run dolt branch -v
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ [0-9a-v]{32} ]] || false  # Hash should be present (Dolt uses base32)
+    [[ "$output" =~ "initial commit" ]] || false  # Commit message should be present
+    
+    # Test -v --list shows hash and message for specific branch  
+    run dolt branch -v --list main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ [0-9a-v]{32} ]] || false
+    [[ "$output" =~ "initial commit" ]] || false
+}
+
+@test "branch: -v and -vv show square brackets in ahead/behind format" {
+  mkdir remote_dir
+
+  # Add remote and push to create upstream tracking
+  dolt remote add origin file://remote_dir
+  dolt push origin main
+  dolt branch --set-upstream-to=origin/main main
+
+  # Make 2 local commits (ahead by 2)
+  dolt commit --allow-empty -m "commit AAA"
+  dolt commit --allow-empty -m "commit BBB"
+
+  run dolt branch -v
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main" ]] || false
+  [[ "$output" =~ [0-9a-v]{32} ]] || false  # Hash
+  [[ "$output" == *"[ahead 2]"* ]] || false
+  [[ "$output" =~ "commit BBB" ]] || false
+
+  run dolt branch -vv
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "main" ]] || false
+  [[ "$output" =~ [0-9a-v]{32} ]] || false
+  [[ "$output" == *"[origin/main: ahead 2]"* ]] || false
+  [[ "$output" =~ "commit BBB" ]] || false
+
+  # move remote to HEAD, the roll ourselves back
+  dolt push origin main
+  dolt reset --hard HEAD~2
+
+  run dolt branch -v
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[behind 2]"* ]] || false
+  [[ "$output" =~ "Initialize data repository" ]] || false
+
+  run dolt branch -vv
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[origin/main: behind 2]"* ]] || false
+  [[ "$output" =~ "Initialize data repository" ]] || false
+
+  dolt commit --allow-empty -m "deviated commit"
+
+  run dolt branch -v
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[ahead 1, behind 2]"* ]] || false
+  [[ "$output" =~ "deviated commit" ]] || false
+
+  run dolt branch -vv
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[origin/main: ahead 1, behind 2]"* ]] || false
+  [[ "$output" =~ "deviated commit" ]] || false
+}

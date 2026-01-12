@@ -245,7 +245,7 @@ func (res *ArgParseResults) Arg(idx int) string {
 func (res *ArgParseResults) AnyFlagsEqualTo(val bool) *set.StrSet {
 	results := make([]string, 0, len(res.parser.Supported))
 	for _, opt := range res.parser.Supported {
-		if opt.OptType == OptionalFlag {
+		if opt.OptType == OptionalFlag || opt.OptType == OptionalRepeatableFlag {
 			name := opt.Name
 			_, ok := res.options[name]
 
@@ -262,7 +262,7 @@ func (res *ArgParseResults) FlagsEqualTo(names []string, val bool) *set.StrSet {
 	results := make([]string, 0, len(res.parser.Supported))
 	for _, name := range names {
 		opt, ok := res.parser.nameOrAbbrevToOpt[name]
-		if ok && opt.OptType == OptionalFlag {
+		if ok && (opt.OptType == OptionalFlag || opt.OptType == OptionalRepeatableFlag) {
 			_, ok := res.options[name]
 
 			if ok == val {
@@ -272,4 +272,30 @@ func (res *ArgParseResults) FlagsEqualTo(names []string, val bool) *set.StrSet {
 	}
 
 	return set.NewStrSet(results)
+}
+
+// GetFlagCount returns the count for a repeatable flag (e.g., -v returns 1, -vv returns 2).
+// For non-repeatable flags, returns 1 if set, 0 if not set.
+// The second return value indicates whether the flag exists and parsing was successful.
+func (res *ArgParseResults) GetFlagCount(name string) (int, bool) {
+	opt, ok := res.parser.nameOrAbbrevToOpt[name]
+	if !ok {
+		panic("runtime error: attempted to get flag count for unsupported option: " + name)
+	}
+
+	val, exists := res.options[name]
+	if !exists {
+		return 0, false
+	}
+
+	if opt.OptType == OptionalRepeatableFlag && val != "" {
+		count, err := strconv.Atoi(val)
+		if err != nil {
+			return 0, false
+		}
+		return count, true
+	}
+
+	// For non-repeatable flags, return 1 if set
+	return 1, true
 }
