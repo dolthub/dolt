@@ -1224,7 +1224,7 @@ SQL
     # Staged tables should never be marked as ignored
     run dolt sql -r csv -q "SELECT ignored FROM dolt_status_ignored WHERE staged = true AND table_name = 'staged_test'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "false" ]] || false
 }
 
 @test "system-tables: dolt_status_ignored shows in dolt ls --system" {
