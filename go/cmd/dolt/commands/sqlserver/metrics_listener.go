@@ -70,10 +70,10 @@ type metricsListener struct {
 	clusterSeenDbs map[string]struct{}
 }
 
-func newMetricsListener(labels prometheus.Labels, versionStr, path string, clusterStatus clusterdb.ClusterStatusProvider) (*metricsListener, error) {
+func newMetricsListener(labels prometheus.Labels, versionStr, storagePath string, clusterStatus clusterdb.ClusterStatusProvider) (*metricsListener, error) {
 	mountPoint := ""
 
-	if path != "" {
+	if storagePath != "" {
 		partitions, err := disk.Partitions(false)
 
 		if err != nil {
@@ -85,14 +85,14 @@ func newMetricsListener(labels prometheus.Labels, versionStr, path string, clust
 				if mp == "" {
 					continue
 				}
-				if strings.HasPrefix(path, mp) && len(mp) > bestMatchLen {
+				if strings.HasPrefix(storagePath, mp) && len(mp) > bestMatchLen {
 					mountPoint = mp
 					bestMatchLen = len(mp)
 				}
 			}
 
 			if mountPoint == "" {
-				logrus.Info(fmt.Sprintf("Could not find mount point for path '%s'", path))
+				logrus.Info(fmt.Sprintf("Could not find mount point for storage path '%s'", storagePath))
 			}
 		}
 	}
