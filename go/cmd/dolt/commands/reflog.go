@@ -72,10 +72,6 @@ func (cmd ReflogCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateReflogArgParser()
 }
 
-func (cmd ReflogCmd) RequiresRepo() bool {
-	return false
-}
-
 // Exec executes the command
 func (cmd ReflogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()

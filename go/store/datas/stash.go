@@ -33,7 +33,7 @@ const (
 // NewStash creates a new stash object.
 func NewStash(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, stashRef types.Ref, headAddr hash.Hash, meta *StashMeta) (hash.Hash, types.Ref, error) {
 	if nbf.UsesFlatbuffers() {
-		headCommit, err := vrw.ReadValue(ctx, headAddr)
+		headCommit, err := vrw.MustReadValue(ctx, headAddr)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}

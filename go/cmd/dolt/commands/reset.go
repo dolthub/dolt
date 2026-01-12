@@ -84,10 +84,6 @@ func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateResetArgParser()
 }
 
-func (cmd ResetCmd) RequiresRepo() bool {
-	return false
-}
-
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateResetArgParser()

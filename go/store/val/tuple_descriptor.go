@@ -86,12 +86,12 @@ func NewTupleDescriptorWithArgs(args TupleDescriptorArgs, types ...Type) (td *Tu
 		}
 	}
 	if args.Comparator == nil {
-		args.Comparator = DefaultTupleComparator{}
+		args.Comparator = &DefaultTupleComparator{}
 	}
-	args.Comparator = ExtendedTupleComparator{
+	args.Comparator = (&ExtendedTupleComparator{
 		innerCmp: args.Comparator,
 		handlers: args.Handlers,
-	}.Validated(types)
+	}).Validated(types)
 
 	td = &TupleDesc{
 		Types:    types,
@@ -121,16 +121,15 @@ func IterAdaptiveFields(td *TupleDesc, cb func(int, Type)) {
 	}
 }
 
-type FixedAccess [][2]ByteSize
+type FixedAccess []ByteSize
 
 func makeFixedAccess(types []Type) (acc FixedAccess) {
 	if disableFixedAccess {
 		return nil
 	}
 
-	acc = make(FixedAccess, 0, len(types))
-
 	off := ByteSize(0)
+	acc = make(FixedAccess, 0, len(types))
 	for _, typ := range types {
 		if typ.Nullable {
 			break
@@ -139,9 +138,10 @@ func makeFixedAccess(types []Type) (acc FixedAccess) {
 		if !ok {
 			break
 		}
-		acc = append(acc, [2]ByteSize{off, off + sz})
 		off += sz
+		acc = append(acc, off)
 	}
+
 	return
 }
 
@@ -167,7 +167,11 @@ func (td *TupleDesc) GetField(i int, tup Tuple) []byte {
 		if i >= cnt {
 			return nil
 		}
-		start, stop := td.fast[i][0], td.fast[i][1]
+		var start, stop ByteSize
+		if i != 0 {
+			start = td.fast[i-1]
+		}
+		stop = td.fast[i]
 		return tup[start:stop]
 	}
 	return tup.GetField(i)
@@ -182,7 +186,11 @@ func (td *TupleDesc) Compare(ctx context.Context, left, right Tuple) (cmp int) {
 func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup Tuple) (cmp int) {
 	var v []byte
 	if i < len(td.fast) {
-		start, stop := td.fast[i][0], td.fast[i][1]
+		var start, stop ByteSize
+		if i != 0 {
+			start = td.fast[i-1]
+		}
+		stop = td.fast[i]
 		v = tup[start:stop]
 	} else {
 		v = tup.GetField(i)

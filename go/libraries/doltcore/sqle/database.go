@@ -1717,6 +1717,7 @@ func (db Database) GetAllTableNames(ctx *sql.Context, showSystemTables bool) ([]
 func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool, includeRootObjects bool, includeNonlocalTables readNonlocalTablesFlag) ([]string, error) {
 	var err error
 	var result []string
+	localNameSet := map[string]struct{}{}
 	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
 	// schemas in the search_path
 	if resolve.UseSearchPath && db.schemaName == "" {
@@ -1731,6 +1732,9 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, inc
 		result, err = root.GetTableNames(ctx, db.schemaName, includeRootObjects)
 		if err != nil {
 			return nil, err
+		}
+		for _, nameStr := range result {
+			localNameSet[nameStr] = struct{}{}
 		}
 	}
 
@@ -1749,7 +1753,15 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, inc
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, nonlocalTableNames...)
+		for _, nonLocalTableName := range nonlocalTableNames {
+			_, ok := localNameSet[nonLocalTableName]
+			// The semantics here are a little backwards, in reality the non-local table is prioritized. Since the names
+			// happen to match, we avoid the extra modification of shifting the name position. This does result in some
+			// non-local table names to not be grouped together, however.
+			if !ok {
+				result = append(result, nonLocalTableName)
+			}
+		}
 	}
 
 	return result, nil
@@ -2200,6 +2212,14 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	return nil
 }
 
+// SupportsDatabaseSchemas implements sql.SchemaDatabase
+// TODO: this interface is only necessary because we don't have a separate sql.Database implementation for doltgres,
+// which has additional capabilities (like schema creation). Dolt technically can create schemas (multiple DBs in
+// the same commit graph), but there's no way for users to access this functionality currently.
+func (db Database) SupportsDatabaseSchemas() bool {
+	return resolve.UseSearchPath
+}
+
 // CreateSchema implements sql.SchemaDatabase
 func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
@@ -2221,6 +2241,36 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 	}
 
 	root, err = root.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+		Name: schemaName,
+	})
+	if err != nil {
+		return err
+	}
+
+	return db.SetRoot(ctx, root)
+}
+
+// DropSchema implements sql.SchemaDatabase
+func (db Database) DropSchema(ctx *sql.Context, schemaName string) error {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, exists, err := doltdb.ResolveDatabaseSchema(ctx, root, schemaName)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return sql.ErrDatabaseSchemaNotFound.New(schemaName)
+	}
+
+	root, err = root.DropDatabaseSchema(ctx, schema.DatabaseSchema{
 		Name: schemaName,
 	})
 	if err != nil {
@@ -2585,13 +2635,13 @@ func (db Database) CreateTrigger(ctx *sql.Context, definition sql.TriggerDefinit
 		definition.Name,
 		definition.CreateStatement,
 		definition.CreatedAt,
-		fmt.Errorf("triggers `%s` already exists", definition.Name), //TODO: add a sql error and return that instead
+		fmt.Errorf("triggers `%s` already exists", definition.Name), // TODO: add a sql error and return that instead
 	)
 }
 
 // DropTrigger implements sql.TriggerDatabase.
 func (db Database) DropTrigger(ctx *sql.Context, name string) error {
-	//TODO: add a sql error and use that as the param error instead
+	// TODO: add a sql error and use that as the param error instead
 	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
 }
 

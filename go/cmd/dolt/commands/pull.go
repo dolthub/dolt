@@ -91,6 +91,14 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		verr := errhand.VerboseErrorFromError(errors.New(fmt.Sprintf(ErrConflictingFlags, cli.SquashParam, cli.NoFFParam)))
 		return HandleVErrAndExitCode(verr, usage)
 	}
+	if apr.ContainsAll(cli.FFOnlyParam, cli.NoFFParam) {
+		verr := errhand.VerboseErrorFromError(errors.New(fmt.Sprintf(ErrConflictingFlags, cli.FFOnlyParam, cli.NoFFParam)))
+		return HandleVErrAndExitCode(verr, usage)
+	}
+	if apr.ContainsAll(cli.FFOnlyParam, cli.SquashParam) {
+		verr := errhand.VerboseErrorFromError(errors.New(fmt.Sprintf(ErrConflictingFlags, cli.FFOnlyParam, cli.SquashParam)))
+		return HandleVErrAndExitCode(verr, usage)
+	}
 	// This command may create a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		bdr := errhand.BuildDError("Could not determine name and/or email.")
@@ -252,6 +260,9 @@ func constructInterpolatedDoltPullQuery(apr *argparser.ArgParseResults) (string,
 	}
 	if apr.Contains(cli.NoFFParam) {
 		args = append(args, "'--no-ff'")
+	}
+	if apr.Contains(cli.FFOnlyParam) {
+		args = append(args, "'--ff-only'")
 	}
 	if apr.Contains(cli.ForceFlag) {
 		args = append(args, "'--force'")

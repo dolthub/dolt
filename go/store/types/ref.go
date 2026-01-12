@@ -177,8 +177,14 @@ func (r Ref) Height() uint64 {
 	return dec.readCount()
 }
 
+// TargetValue retrieves the value pointed to by the Ref from the provided ValueReader. It can return a nil Value
+// and a nil error if the target value is not found.
 func (r Ref) TargetValue(ctx context.Context, vr ValueReader) (Value, error) {
-	return vr.ReadValue(ctx, r.TargetHash())
+	val, err := vr.ReadValue(ctx, r.TargetHash())
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
 }
 
 func (r Ref) TargetType() (*Type, error) {

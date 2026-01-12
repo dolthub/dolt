@@ -53,6 +53,7 @@ const (
 	NoCommitFlag         = "no-commit"
 	NoEditFlag           = "no-edit"
 	NoFFParam            = "no-ff"
+	FFOnlyParam          = "ff-only"
 	NoPrettyFlag         = "no-pretty"
 	NoTLSFlag            = "no-tls"
 	NoJsonMergeFlag      = "dont-merge-json"

@@ -53,7 +53,7 @@ func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWrit
 	for i, stashHash := range stashHashes {
 		var s Stash
 		s.Name = fmt.Sprintf("stash@{%v}", i)
-		stashVal, err := vrw.ReadValue(ctx, stashHash)
+		stashVal, err := vrw.MustReadValue(ctx, stashHash)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +113,7 @@ func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWri
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	stashVal, err := vrw.ReadValue(ctx, stashHash)
+	stashVal, err := vrw.MustReadValue(ctx, stashHash)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -137,10 +137,11 @@ func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWri
 		return nil, nil, nil, err
 	}
 
-	stashRootVal, err := vrw.ReadValue(ctx, stashRootAddr)
+	stashRootVal, err := vrw.MustReadValue(ctx, stashRootAddr)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
 	stashRoot, err := NewRootValue(ctx, vrw, ns, stashRootVal)
 	if err != nil {
 		return nil, nil, nil, err

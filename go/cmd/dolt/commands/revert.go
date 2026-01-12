@@ -52,10 +52,6 @@ func (cmd RevertCmd) Name() string {
 	return "revert"
 }
 
-func (cmd RevertCmd) RequiresRepo() bool {
-	return false
-}
-
 // Description implements the interface cli.Command.
 func (cmd RevertCmd) Description() string {
 	return "Undo the changes introduced in a commit."
