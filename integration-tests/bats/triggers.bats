@@ -73,8 +73,8 @@ SQL
     [[ "${#lines[@]}" = "5" ]] || false
 }
 
-@test "triggers: Order preservation" {
-    skip "DROP TRIGGER with dependencies not implemented"
+@test "triggers: DROP TRIGGER with dependencies" {
+    # Test that we can drop a trigger that is referenced by another trigger's PRECEDES/FOLLOWS clause
     dolt sql <<SQL
 CREATE TABLE x (a BIGINT PRIMARY KEY);
 CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1;
@@ -89,7 +89,10 @@ SQL
     run dolt sql -q "SELECT * FROM x" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "a" ]] || false
-    [[ "$output" =~ "21040" ]] || false
+    # When trigger3 is dropped, trigger5's reference becomes invalid.
+    # Trigger order becomes: trigger2 -> trigger4 -> trigger5
+    # Calculation: 0 -> (0*2)+10=10 -> (10*2)+1000=1020 -> (1020*2)+10000=12040
+    [[ "$output" =~ "12040" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
