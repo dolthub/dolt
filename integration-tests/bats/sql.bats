@@ -1589,11 +1589,6 @@ SQL
     mkdir -p decoy/.dolt/noms/temptf
     echo '{}' > decoy/config.json
 
-    # Not doing this cd ../ results in the teardown method failing on
-    # a skip, not sure why. It's not part of the actual test
-    cd ../
-    skip "This results in a panic right now"
-
     run dolt sql -q "show databases" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

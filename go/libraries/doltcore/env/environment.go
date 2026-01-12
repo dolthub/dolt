@@ -277,7 +277,7 @@ func GetDefaultInitBranch(cfg config.ReadableConfig) string {
 // Valid returns whether this environment has been properly initialized. This is useful because although every command
 // gets a DoltEnv, not all of them require it, and we allow invalid dolt envs to be passed around for this reason.
 func (dEnv *DoltEnv) Valid() bool {
-	return dEnv != nil && dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
+	return dEnv != nil && dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.RSLoadErr == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
