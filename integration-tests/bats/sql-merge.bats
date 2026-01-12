@@ -870,8 +870,6 @@ SQL
 }
 
 @test "sql-merge: different check constraints on same column throw conflict" {
-    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
-
     dolt sql -q "create table t (i int)"
     dolt add .
     dolt commit -am "initial commit"
@@ -898,11 +896,13 @@ SQL
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
     [[ "$output" =~ "1" ]] || false
-    dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
-    dolt sql -q "show create table t"
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
+
+    # Auto-resolution of schema conflicts is blocked until data merging is properly handled.
+    # See https://github.com/dolthub/dolt/issues/6616
+    run dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
+    log_status_eq 1
+    [[ "$output" =~ "Unable to automatically resolve schema conflicts" ]] || false
+    [[ "$output" =~ "6616" ]] || false
 }
 
 @test "sql-merge: dropping constraint on both branches merges successfully" {
@@ -934,8 +934,6 @@ SQL
 }
 
 @test "sql-merge: dropping constraint in one branch and modifying same in other results in conflict" {
-    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
-
     dolt sql -q "create table t (i int)"
     dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
@@ -963,10 +961,13 @@ SQL
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
     [[ "$output" =~ "1" ]] || false
-    dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+
+    # Auto-resolution of schema conflicts is blocked until data merging is properly handled.
+    # See https://github.com/dolthub/dolt/issues/6616
+    run dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
+    log_status_eq 1
+    [[ "$output" =~ "Unable to automatically resolve schema conflicts" ]] || false
+    [[ "$output" =~ "6616" ]] || false
 }
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {
@@ -1004,8 +1005,6 @@ SQL
 }
 
 @test "sql-merge: check constraint with name collision" {
-    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
-
     dolt sql -q "create table t (i int)"
     dolt add .
     dolt commit -am "initial commit"
@@ -1037,15 +1036,16 @@ SQL
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
     [[ "$output" =~ "1" ]] || false
-    dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))" ]] || false
+
+    # Auto-resolution of schema conflicts is blocked until data merging is properly handled.
+    # See https://github.com/dolthub/dolt/issues/6616
+    run dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
+    log_status_eq 1
+    [[ "$output" =~ "Unable to automatically resolve schema conflicts" ]] || false
+    [[ "$output" =~ "6616" ]] || false
 }
 
 @test "sql-merge: check constraint for deleted column in another table" {
-    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
-
     dolt sql -q "create table t (i int primary key, j int)"
     dolt add .
     dolt commit -am "initial commit"
@@ -1074,10 +1074,13 @@ SQL
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
     [[ "$output" =~ "1" ]] || false
-    dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
-    run dolt sql -q "show create table t"
-    log_status_eq 0
-    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`j\` > 0))" ]] || false
+
+    # Auto-resolution of schema conflicts is blocked until data merging is properly handled.
+    # See https://github.com/dolthub/dolt/issues/6616
+    run dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
+    log_status_eq 1
+    [[ "$output" =~ "Unable to automatically resolve schema conflicts" ]] || false
+    [[ "$output" =~ "6616" ]] || false
 }
 
 @test "sql-merge: DOLT_MERGE with author flag specified" {
