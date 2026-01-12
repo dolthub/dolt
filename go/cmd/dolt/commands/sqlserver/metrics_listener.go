@@ -242,7 +242,7 @@ func (ml *metricsListener) pollSysMetrics() {
 	percentages, err := cpu.Percent(0, false)
 
 	if err != nil {
-		logrus.Info(fmt.Sprintf("Error getting CPU diskUsage: %v", err))
+		logrus.Info(fmt.Sprintf("Error getting CPU usage: %v", err))
 	} else if len(percentages) == 1 {
 		ml.cpuUsage.Set(percentages[0])
 	} else {
@@ -252,7 +252,7 @@ func (ml *metricsListener) pollSysMetrics() {
 	memStats, err := mem.VirtualMemory()
 
 	if err != nil {
-		logrus.Info(fmt.Sprintf("Error getting memory diskUsage: %v", err))
+		logrus.Info(fmt.Sprintf("Error getting memory usage: %v", err))
 	} else {
 		ml.memUsage.Set(memStats.UsedPercent)
 	}
@@ -260,7 +260,7 @@ func (ml *metricsListener) pollSysMetrics() {
 	diskUsage, err := disk.Usage(ml.mountPoint)
 
 	if err != nil {
-		logrus.Info(fmt.Sprintf("Error getting disk diskUsage for mount point '%s': %v", ml.mountPoint, err))
+		logrus.Info(fmt.Sprintf("Error getting disk usage for mount point '%s': %v", ml.mountPoint, err))
 	} else {
 		ml.diskUsage.Set(diskUsage.UsedPercent)
 	}
