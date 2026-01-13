@@ -2265,3 +2265,25 @@ EOF
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "Empty database name" ]] || false
 }
+
+@test "sql-server: read permission failure clearly communicated" {
+  start_sql_server > server_log.txt 2>&1 && sleep 0.5
+
+  stop_sql_server 1 && sleep 0.5
+
+  # Server log should say nothing about permissions.
+  run grep -F "permission denied" server_log.txt
+  [ $status -eq 1 ]
+
+  chmod 0000 repo1/.dolt/noms/manifest
+  start_sql_server > server_log.txt 2>&1 && sleep 0.5
+
+  grep -F "permission denied" server_log.txt
+
+  # revert, and do the same with the journal file.
+  chmod 0600 repo1/.dolt/noms/manifest
+  chmod 0000 repo1/.dolt/noms/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+
+  start_sql_server > server_log.txt 2>&1 && sleep 0.5
+  grep -F "permission denied" server_log.txt
+}
