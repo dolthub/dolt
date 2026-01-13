@@ -195,8 +195,6 @@ github.com/dolthub/fslock v0.0.0-20251215194149-ef20baba2318 h1:n+vdH5G5Db+1qnDC
 github.com/dolthub/fslock v0.0.0-20251215194149-ef20baba2318/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
 github.com/dolthub/go-icu-regex v0.0.0-20250916051405-78a38d478790 h1:zxMsH7RLiG+dlZ/y0LgJHTV26XoiSJcuWq+em6t6VVc=
 github.com/dolthub/go-icu-regex v0.0.0-20250916051405-78a38d478790/go.mod h1:F3cnm+vMRK1HaU6+rNqQrOCyR03HHhR1GWG2gnPOqaE=
-github.com/dolthub/go-mysql-server v0.20.1-0.20260109215716-eb63e475be4b h1:EscJfWZ3ZAPuH+DNrBdfT+h7PzvVWDgDWWCkYtDXREM=
-github.com/dolthub/go-mysql-server v0.20.1-0.20260109215716-eb63e475be4b/go.mod h1:2bgnal91FRGVdJyirmUSMCd1Tp3Ci8dTDsrJWkTp/hs=
 github.com/dolthub/go-mysql-server v0.20.1-0.20260113221238-fe7e21a7710f h1:WowUVUsv0lNOQN+yfANJ44UgZYSz1S/dtcyLuuCzAGo=
 github.com/dolthub/go-mysql-server v0.20.1-0.20260113221238-fe7e21a7710f/go.mod h1:ZODUC6XlqCx3DgHl6x7cWwMR0uq7XzVU0adsJvjZJTY=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63 h1:OAsXLAPL4du6tfbBgK0xXHZkOlos63RdKYS3Sgw/dfI=
@@ -207,8 +205,6 @@ github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 h1:bMGS25NWAGTE
 github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71/go.mod h1:2/2zjLQ/JOOSbbSboojeg+cAwcRV0fDLzIiWch/lhqI=
 github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81 h1:7/v8q9XGFa6q5Ap4Z/OhNkAMBaK5YeuEzwJt+NZdhiE=
 github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81/go.mod h1:siLfyv2c92W1eN/R4QqG/+RjjX5W2+gCTRjZxBjI3TY=
-github.com/dolthub/vitess v0.0.0-20260108222406-f8a2587c4954 h1:VN2ZjnYPyxcAN/XetvcdumFbI2Ad/Gb47Qwdo9REY3A=
-github.com/dolthub/vitess v0.0.0-20260108222406-f8a2587c4954/go.mod h1:FLWqdXsAeeBQyFwDjmBVu0GnbjI2MKeRf3tRVdJEKlI=
 github.com/dolthub/vitess v0.0.0-20260109110924-205efc8530f1 h1:souetbYNBRHrt9y990VGD1jkzCIQ0jC+gxMdFOEjL+g=
 github.com/dolthub/vitess v0.0.0-20260109110924-205efc8530f1/go.mod h1:FLWqdXsAeeBQyFwDjmBVu0GnbjI2MKeRf3tRVdJEKlI=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
