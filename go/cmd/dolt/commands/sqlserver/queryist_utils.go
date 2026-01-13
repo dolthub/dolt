@@ -30,6 +30,7 @@ import (
 	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -101,6 +102,11 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 	var lateBind cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 		sqlCtx := sql.NewContext(ctx)
 		sqlCtx.SetCurrentDatabase(dbRev)
+
+		if err := engine.InitCommitIdentitySessionVars(queryist, sqlCtx); err != nil {
+			cli.PrintErr(err.Error())
+		}
+
 		res.Queryist = queryist
 		res.Context = sqlCtx
 		res.Closer = func() {

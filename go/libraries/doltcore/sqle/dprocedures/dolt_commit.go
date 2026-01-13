@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
-	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // doltCommit is the stored procedure version for the CLI command `dolt commit`.
@@ -111,19 +110,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return "", false, err
-		}
-	} else {
-		// In SQL mode, use the current SQL user as the commit author, instead of the `dolt config` configured values.
-		// We won't have an email address for the SQL user though, so instead use the MySQL user@address notation.
-		name = ctx.Client().User
-		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
-	}
-
 	amend := apr.Contains(cli.AmendFlag)
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
@@ -143,24 +129,36 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	t := ctx.QueryTime()
-	commitStagedProps := actions.NewCommitStagedProps(name, email, t, msg)
+	commitStagedProps, err := dSess.NewCommitStagedPropsFromSession(ctx, msg)
+	if err != nil {
+		return "", false, err
+	}
 	commitStagedProps.AllowEmpty = apr.Contains(cli.AllowEmptyFlag)
 	commitStagedProps.SkipEmpty = apr.Contains(cli.SkipEmptyFlag)
 	commitStagedProps.Amend = amend
 	commitStagedProps.SkipVerification = apr.Contains(cli.SkipVerificationFlag)
 
-	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		var err error
-		t, err = dconfig.ParseDate(commitTimeStr)
-		commitStagedProps.Date = t
-		commitStagedProps.CommitterDate = &t
+	// Override author if --author flag is provided.
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err := cli.ParseAuthor(authorStr)
 		if err != nil {
 			return "", false, err
 		}
-	} else if datas.CustomAuthorDate {
-		t = datas.AuthorDate()
-		commitStagedProps.Date = t
+		commitStagedProps.Name = name
+		commitStagedProps.Email = email
+	}
+
+	// Override author date if --date flag is provided.
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+		t, err := dconfig.ParseDate(commitTimeStr)
+		if err != nil {
+			return "", false, err
+		}
+		commitStagedProps.Date = &t
+	} else if commitStagedProps.Date == nil {
+		temp := ctx.QueryTime()
+		commitStagedProps.Date = &temp
+		commitStagedProps.CommitterDate = &temp
 	}
 
 	if apr.Contains(cli.ForceFlag) {

@@ -33,9 +33,10 @@ const CommitVerificationFailedPrefix = "commit verification failed:"
 
 var ErrCommitVerificationFailed = goerrors.NewKind(CommitVerificationFailedPrefix + " %s")
 
+// CommitStagedProps contains the parameters for a staged commit operation.
 type CommitStagedProps struct {
 	Message    		 string
-	Date       		 time.Time
+	Date       		 *time.Time
 	AllowEmpty 		 bool
 	SkipEmpty  		 bool
 	Amend      		 bool
@@ -44,9 +45,9 @@ type CommitStagedProps struct {
 	Email      		 string
 	SkipVerification bool
 
-	CommitterDate  *time.Time
-	CommitterName  string
-	CommitterEmail string
+	CommitterDate    *time.Time
+	CommitterName    string
+	CommitterEmail   string
 }
 
 const (
@@ -77,25 +78,16 @@ func getCommitRunTestGroups() []string {
 }
 
 // NewCommitStagedProps creates a new CommitStagedProps with the given author information. Committer fields are
-// automatically populated from environment variables (DOLT_COMMITTER_NAME, DOLT_COMMITTER_EMAIL, DOLT_COMMITTER_DATE)
-// if set, otherwise they default to the author values.
-func NewCommitStagedProps(name, email string, date time.Time, message string) CommitStagedProps {
-	committerName := datas.CommitterName
-	if committerName == "" {
-		committerName = name
-	}
-	committerEmail := datas.CommitterEmail
-	if committerEmail == "" {
-		committerEmail = email
-	}
-
+// automatically populated with the author information. The committer date is left empty to indicate it should be
+// written before serialization.
+func NewCommitStagedProps(name, email string, date *time.Time, message string) CommitStagedProps {
 	return CommitStagedProps{
 		Message:        message,
 		Date:           date,
 		Name:           name,
 		Email:          email,
-		CommitterName:  committerName,
-		CommitterEmail: committerEmail,
+		CommitterName:  name,
+		CommitterEmail: email,
 		// CommitterDate if defined overrides time.Now or env var set by CommitterDate(). Caller is responsible for
 		// setting this field explicitly atm.
 	}
