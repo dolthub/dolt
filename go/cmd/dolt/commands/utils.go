@@ -323,6 +323,10 @@ func newLateBindingEngine(
 		// database set when you begin using them.
 		sqlCtx.SetCurrentDatabase(database)
 
+		if err := engine.InitCommitIdentitySessionVars(se, sqlCtx); err != nil {
+			cli.PrintErr(err.Error())
+		}
+
 		// For now, we treat the entire lifecycle of this
 		// sqlCtx as one big session-in-use window.
 		sql.SessionCommandBegin(sqlCtx.Session)
@@ -760,7 +764,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	if !ok {
 		return nil, fmt.Errorf("unexpected type for committer email: %T", row[2])
 	}
-	committerTs, err := getTimestampColAsUint64(row[3])
+	committerDate, err := getTimestampColAsUint64(row[3])
 	if err != nil {
 		return nil, fmt.Errorf("error parsing committer timestamp '%v': %w", row[3], err)
 	}
@@ -797,7 +801,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	// Older Dolt versions store author metadata in the committer columns so we offer this default.
 	authorName := committerName
 	authorEmail := committerEmail
-	authorTs := committerTs
+	authorDate := committerDate
 	if supportsAuthorColumns {
 		authorName, ok = row[8+authorColumnsOffset].(string)
 		if !ok {
@@ -807,19 +811,20 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColumnsOffset])
 		}
-		authorTs, err = getTimestampColAsUint64(row[10+authorColumnsOffset])
+		authorDate, err = getTimestampColAsUint64(row[10+authorColumnsOffset])
 		if err != nil {
 			return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColumnsOffset], err)
 		}
 	}
 
+	i64AuthorDate := int64(authorDate)
 	commitMeta := &datas.CommitMeta{
 		Name:           authorName,
 		Email:          authorEmail,
 		Description:    message,
 		Signature:      signature,
-		Timestamp:      &committerTs,
-		UserTimestamp:  int64(authorTs),
+		Timestamp:      &committerDate,
+		UserTimestamp:  &i64AuthorDate,
 		CommitterName:  committerName,
 		CommitterEmail: committerEmail,
 	}
