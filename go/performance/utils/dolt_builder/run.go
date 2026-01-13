@@ -82,6 +82,7 @@ func Run(parentCtx context.Context, commitList []string, profilePath string) err
 	}()
 
 	for _, commit := range commitList {
+		commit := commit
 		g.Go(func() error {
 			return buildBinaries(ctx, tempDir, repoDir, doltBin, profilePath, commit)
 		})
@@ -135,25 +136,28 @@ func getDoltBin() (string, error) {
 func buildBinaries(ctx context.Context, tempDir, repoDir, doltBinDir, profilePath, commit string) error {
 	checkoutDir := filepath.Join(tempDir, commit)
 	if err := os.MkdirAll(checkoutDir, os.ModePerm); err != nil {
-		return err
+		return fmt.Errorf("build %s: %w", commit, err)
 	}
 
 	err := GitCheckoutTree(ctx, repoDir, checkoutDir, commit)
 	if err != nil {
-		return err
+		return fmt.Errorf("build %s: checkout failed: %w", commit, err)
 	}
 
 	commitDir := filepath.Join(doltBinDir, commit)
 	if err := os.MkdirAll(commitDir, os.ModePerm); err != nil {
-		return err
+		return fmt.Errorf("build %s: %w", commit, err)
 	}
 
 	command, err := goBuild(ctx, checkoutDir, commitDir, profilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("build %s: go build failed: %w", commit, err)
 	}
 
-	return doltVersion(ctx, commitDir, command)
+	if err := doltVersion(ctx, commitDir, command); err != nil {
+		return fmt.Errorf("build %s: dolt version failed: %w", commit, err)
+	}
+	return nil
 }
 
 // goBuild builds the dolt binary and returns the filename
@@ -176,8 +180,7 @@ func goBuild(ctx context.Context, source, dest, profilePath string) (string, err
 
 	build := ExecCommand(ctx, "go", args...)
 	build.Dir = goDir
-	build.Stderr = os.Stderr
-	err := build.Run()
+	err := RunCommand(build)
 	if err != nil {
 		return "", err
 	}
@@ -187,8 +190,17 @@ func goBuild(ctx context.Context, source, dest, profilePath string) (string, err
 // doltVersion prints dolt version of binary
 func doltVersion(ctx context.Context, dir, command string) error {
 	doltVersion := ExecCommand(ctx, command, "version")
-	doltVersion.Stderr = os.Stderr
-	doltVersion.Stdout = os.Stdout
 	doltVersion.Dir = dir
-	return doltVersion.Run()
+	if Debug {
+		doltVersion.Stdout = os.Stdout
+		doltVersion.Stderr = os.Stderr
+		return doltVersion.Run()
+	}
+
+	out, err := RunCommandOutput(doltVersion)
+	if err != nil {
+		return err
+	}
+	_, _ = os.Stdout.Write(out)
+	return nil
 }
