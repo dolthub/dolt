@@ -707,11 +707,10 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 			return fmt.Errorf("unable to get roots for database %s", name)
 		}
 
-		t := ctx.QueryTime()
-		userName := ctx.Client().User
-		userEmail := fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
-
-		commitStagedProps := actions.NewCommitStagedProps(userName, userEmail, t, "CREATE DATABASE")
+		commitStagedProps, err := sess.NewCommitStagedPropsFromSession(ctx, "CREATE DATABASE")
+		if err != nil {
+			return err
+		}
 		pendingCommit, err := sess.NewPendingCommit(ctx, name, roots, commitStagedProps)
 		if err != nil {
 			return err

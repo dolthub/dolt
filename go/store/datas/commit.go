@@ -26,6 +26,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
@@ -200,7 +201,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
 	serial.CommitAddTimestampMillis(builder, *opts.Meta.Timestamp)
-	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
+	serial.CommitAddUserTimestampMillis(builder, *opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
 	serial.CommitAddCommitterName(builder, committerNameOff)
 	serial.CommitAddCommitterEmail(builder, committerEmailOff)
@@ -218,14 +219,19 @@ var commitValueTupleDesc = val.NewTupleDescriptor()
 func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
-		// Noms testing relies on deterministic init value from empty CommitMeta
-		ts := uint64(0)
-		opts.Meta.Timestamp = &ts
+		// Noms testing relies on deterministic values when [datas.CommitMeta] is not provided.
+		committerDate := uint64(0)
+		opts.Meta.Timestamp = &committerDate
 	}
 
 	if opts.Meta.Timestamp == nil {
-		committerTimestamp := uint64(CommitterDate().UnixMilli())
+		committerTimestamp := uint64(time.Now().UnixMilli())
 		opts.Meta.Timestamp = &committerTimestamp
+	}
+
+	if opts.Meta.UserTimestamp == nil {
+		authorTimestamp := int64(*opts.Meta.Timestamp)
+		opts.Meta.UserTimestamp = &authorTimestamp
 	}
 
 	if vrw.Format().UsesFlatbuffers() {
@@ -596,25 +602,26 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		if serial.GetFileID(data) != serial.CommitFileID {
 			return nil, errors.New("GetCommitMeta: provided value is not a commit.")
 		}
-		var cmsg serial.Commit
-		err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
+		var serializedCommit serial.Commit
+		err := serial.InitCommitRoot(&serializedCommit, data, serial.MessagePrefixSz)
 		if err != nil {
 			return nil, err
 		}
 		ret := &CommitMeta{}
-		ret.Name = string(cmsg.Name())
-		ret.Email = string(cmsg.Email())
-		ret.Description = string(cmsg.Description())
-		tsm := cmsg.TimestampMillis()
-		ret.Timestamp = &tsm
-		ret.UserTimestamp = cmsg.UserTimestampMillis()
-		ret.Signature = string(cmsg.Signature())
+		ret.Name = string(serializedCommit.Name())
+		ret.Email = string(serializedCommit.Email())
+		ret.Description = string(serializedCommit.Description())
+		committerDate := serializedCommit.TimestampMillis()
+		ret.Timestamp = &committerDate
+		authorDate := serializedCommit.UserTimestampMillis()
+		ret.UserTimestamp = &authorDate
+		ret.Signature = string(serializedCommit.Signature())
 		ret.CommitterName = ret.Name
-		if commiterNameBytes := cmsg.CommitterName(); commiterNameBytes != nil {
+		if commiterNameBytes := serializedCommit.CommitterName(); commiterNameBytes != nil {
 			ret.CommitterName = string(commiterNameBytes)
 		}
 		ret.CommitterEmail = ret.Email
-		if committerEmailBytes := cmsg.CommitterEmail(); committerEmailBytes != nil {
+		if committerEmailBytes := serializedCommit.CommitterEmail(); committerEmailBytes != nil {
 			ret.CommitterEmail = string(committerEmailBytes)
 		}
 

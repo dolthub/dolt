@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -516,7 +518,10 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 		dbName := ctx.GetCurrentDatabase()
 		var pendingCommit *doltdb.PendingCommit
-		committerStagedProps := actions.NewCommitStagedProps(d.Username(), d.Email(), ctx.QueryTime(), message)
+		committerStagedProps, err := d.NewCommitStagedPropsFromSession(ctx, message)
+		if err != nil {
+			return err
+		}
 		pendingCommit, err = d.PendingCommitAllStaged(ctx, dirtyBranchState, committerStagedProps)
 		if err != nil {
 			return err
@@ -1500,6 +1505,83 @@ func (d *DoltSession) Username() string {
 
 func (d *DoltSession) Email() string {
 	return d.email
+}
+
+// NewCommitStagedPropsFromSession creates a [actions.CommitStagedProps] using session variables for author and
+// committer identity. It reads [DoltAuthorName], [DoltAuthorEmail], [DoltAuthorDate], [DoltCommitterName],
+// [DoltCommitterEmail], and [DoltCommitterDate] if set. If a session variable is not set, it falls back to the
+// corresponding OS environment variable (e.g. DOLT_AUTHOR_NAME), then to the dolt config values, then to the SQL
+// client identity. Committer fields fall back to the resolved author values. Date fields left nil are assumed to be
+// filled at serialization.
+func (d *DoltSession) NewCommitStagedPropsFromSession(ctx *sql.Context, message string) (actions.CommitStagedProps, error) {
+	getStringVar := func(sessionVar, envVar, configFallback string) (string, error) {
+		val, err := d.Session.GetSessionVariable(ctx, sessionVar)
+		if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {
+			return "", err
+		}
+		if strVal, ok := val.(string); ok && strVal != "" {
+			return strVal, nil
+		}
+		if envVal := os.Getenv(envVar); envVal != "" {
+			return envVal, nil
+		}
+		return configFallback, nil
+	}
+
+	getDateVar := func(sessionVar, envVar string) (*time.Time, error) {
+		strVal, err := getStringVar(sessionVar, envVar, "")
+		if err != nil {
+			return nil, err
+		}
+		if strVal == "" {
+			return nil, nil
+		}
+		date, err := dconfig.ParseDate(strVal)
+		return &date, err
+	}
+
+	authorName, err := getStringVar(DoltAuthorName, dconfig.EnvDoltAuthorName, d.Username())
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	authorEmail, err := getStringVar(DoltAuthorEmail, dconfig.EnvDoltAuthorEmail, d.Email())
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+
+	if authorName == "" {
+		authorName = ctx.Client().User
+	}
+	if authorEmail == "" {
+		authorEmail = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+	}
+	authorDate, err := getDateVar(DoltAuthorDate, dconfig.EnvDoltAuthorDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+
+	committerName, err := getStringVar(DoltCommitterName, dconfig.EnvDoltCommitterName, authorName)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	committerEmail, err := getStringVar(DoltCommitterEmail, dconfig.EnvDoltCommitterEmail, authorEmail)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	committerDate, err := getDateVar(DoltCommitterDate, dconfig.EnvDoltCommitterDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+
+	return actions.CommitStagedProps{
+		Message:        message,
+		Date:           authorDate,
+		Name:           authorName,
+		Email:          authorEmail,
+		CommitterDate:  committerDate,
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
+	}, nil
 }
 
 // setDbSessionVars updates the three session vars that track the value of the session root hashes

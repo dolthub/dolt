@@ -575,22 +575,22 @@ teardown() {
 }
 
 @test "cherry-pick: author and timestamp preserved during cherry-pick" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-      skip "see: https://github.com/dolthub/dolt/issues/10116"
-    fi
+#    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+#      skip "see: https://github.com/dolthub/dolt/issues/10116"
+#    fi
 
     dolt --branch branch1 sql -q "INSERT INTO test VALUES (99, 'auth')"
     dolt --branch branch1 add .
     
     # Create commit with specific author and timestamp
     DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt --branch branch1 commit --author="Original Author <original@example.com>" -m "commit with specific author"
-    COMMIT_HASH=$(get_head_commit branch1)
+    commit_hash=$(get_head_commit branch1)
     
     run dolt --branch branch1 log -n 1
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author <original@example.com>" ]] || false
     
-    run dolt cherry-pick $COMMIT_HASH
+    run dolt cherry-pick $commit_hash
     [ $status -eq 0 ]
     
     run dolt log -n 1
@@ -663,15 +663,12 @@ teardown() {
 }
 
 @test "cherry-pick: committer environment variables set committer meta" {
-  dolt checkout branch1
-  dolt sql -q "INSERT INTO test VALUES (100, 'cherry')"
-  dolt add test
-  dolt commit --author="Original Author <original@example.com>" -m "Commit with different author and committer"
-  COMMIT_HASH=$(get_head_commit)
+  dolt --branch branch1 sql -q "INSERT INTO test VALUES (100, 'cherry')"
+  dolt --branch branch1 add .
+  dolt --branch branch1 commit --author="Original Author <original@example.com>" -m "Commit with different author and committer"
+  commit_hash=$(get_head_commit branch1)
 
-  dolt checkout main
-
-  DOLT_COMMITTER_NAME="Test Committer" DOLT_COMMITTER_EMAIL="committer@test.com" dolt cherry-pick $COMMIT_HASH
+  DOLT_COMMITTER_NAME="Test Committer" DOLT_COMMITTER_EMAIL="committer@test.com" dolt cherry-pick "$commit_hash"
 
   run dolt sql -r csv -q "SELECT author, author_email, committer, email FROM dolt_log WHERE message = 'Commit with different author and committer'"
   [ "$status" -eq 0 ]
@@ -683,14 +680,12 @@ teardown() {
   [[ "$output" =~ committer,email ]] || false
   [[ "$output" =~ "Test Committer,committer@test.com" ]] || false
 
-  dolt checkout branch1
-  dolt sql -q "INSERT INTO test VALUES (101, 'date')"
-  dolt add test
-  DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt commit --author="Date Test Author <date@test.com>" -m "Commit with different committer timestamp"
-  COMMIT_HASH2=$(get_head_commit)
+  dolt --branch branch1 sql -q "INSERT INTO test VALUES (101, 'date')"
+  dolt --branch branch1 add test
+  DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt --branch branch1 commit --author="Date Test Author <date@test.com>" -m "Commit with different committer timestamp"
+  commit_hash2=$(get_head_commit branch1)
 
-  dolt checkout main
-  TZ=PST+8 DOLT_COMMITTER_NAME="Bats Tests" DOLT_COMMITTER_EMAIL="bats@email.fake" DOLT_COMMITTER_DATE='2023-09-26T12:34:56' dolt cherry-pick $COMMIT_HASH2
+  TZ=PST+8 DOLT_COMMITTER_NAME="Bats Tests" DOLT_COMMITTER_EMAIL="bats@email.fake" DOLT_COMMITTER_DATE='2023-09-26T12:34:56' dolt cherry-pick "$commit_hash2"
 
   run dolt sql -r csv -q "SELECT committer, email, date FROM dolt_commits WHERE message = 'Commit with different committer timestamp'"
   [ "$status" -eq 0 ]

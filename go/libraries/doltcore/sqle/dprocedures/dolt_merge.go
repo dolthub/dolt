@@ -448,7 +448,14 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	committerStagedProps := actions.NewCommitStagedProps(spec.Name, spec.Email, spec.Date, msg)
+	committerStagedProps, err := dSess.NewCommitStagedPropsFromSession(ctx, msg)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Override author from spec (already resolved via --author flag or session/env/config fallback).
+	committerStagedProps.Name = spec.Name
+	committerStagedProps.Email = spec.Email
+	committerStagedProps.Date = &spec.Date
 	committerStagedProps.Force = spec.Force
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, committerStagedProps)
 	pendingCommit.SkipVerification = skipVerification
@@ -521,18 +528,16 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 }
 
 func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, string, error) {
-	var err error
-	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return "", "", err
-		}
-	} else {
-		name = ctx.Client().User
-		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+		return cli.ParseAuthor(authorStr)
 	}
-	return name, email, nil
+	// Fall back to session/env/config values.
+	dSess := dsess.DSessFromSess(ctx.Session)
+	props, err := dSess.NewCommitStagedPropsFromSession(ctx, "")
+	if err != nil {
+		return "", "", err
+	}
+	return props.Name, props.Email, nil
 }
 
 func mergeRootToWorking(

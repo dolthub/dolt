@@ -73,6 +73,13 @@ const (
 	DoltAutoGCEnabled = "dolt_auto_gc_enabled"
 
 	DoltLogCommitterOnly = "dolt_log_committer_only"
+
+	DoltAuthorName     = "dolt_author_name"
+	DoltAuthorEmail    = "dolt_author_email"
+	DoltAuthorDate     = "dolt_author_date"
+	DoltCommitterName  = "dolt_committer_name"
+	DoltCommitterEmail = "dolt_committer_email"
+	DoltCommitterDate  = "dolt_committer_date"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"
