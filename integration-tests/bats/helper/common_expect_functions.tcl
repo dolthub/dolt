@@ -7,54 +7,86 @@ proc expect_with_defaults {pattern action} {
         }
         timeout {
             puts "<<Timeout>>";
+            puts "Expected: $pattern"
+            if {[info exists expect_out(buffer)] && $debug_matches == 1} {
+                puts "Buffer: $expect_out(buffer)"
+            }
             exit 1
         }
         eof {
             puts "<<End of File reached>>";
+            puts "Expected: $pattern"
+            if {[info exists expect_out(buffer)] && $debug_matches == 1} {
+                puts "Buffer: $expect_out(buffer)"
+            }
             exit 1
         }
         failed {
             puts "<<Failed>>";
+            puts "Expected: $pattern"
             exit 1
         }
     }
 }
 
 proc expect_with_defaults_2 {patternA patternB action} {
+    global debug_matches
     # First, match patternA
     expect {
         -re $patternA {
-            puts "<<Matched expected pattern A: $patternA>>"
+            if {[info exists debug_matches] && $debug_matches == 1} {
+                puts "<<Matched expected pattern A: $patternA>>"
+            }
             # Now match patternB
             expect {
                 -re $patternB {
-                    puts "<<Matched expected pattern B: $patternB>>"
+                    if {[info exists debug_matches] && $debug_matches == 1} {
+                        puts "<<Matched expected pattern B: $patternB>>"
+                    }
                     eval $action
                 }
                 timeout {
                     puts "<<Timeout waiting for pattern B>>"
+                    puts "Expected: $patternB"
+                    if {[info exists expect_out(buffer)] && $debug_matches == 1} {
+                        puts "Buffer: $expect_out(buffer)"
+                    }
                     exit 1
                 }
                 eof {
                     puts "<<End of File reached while waiting for pattern B>>"
+                    puts "Expected: $patternB"
+                    if {[info exists expect_out(buffer)] && $debug_matches == 1} {
+                        puts "Buffer: $expect_out(buffer)"
+                    }
                     exit 1
                 }
                 failed {
                     puts "<<Failed while waiting for pattern B>>"
+                    puts "Expected: $patternB"
                     exit 1
                 }
             }
         }
         timeout {
             puts "<<Timeout waiting for pattern A>>"
+            puts "Expected: $patternA"
+            if {[info exists expect_out(buffer)] && $debug_matches == 1} {
+                puts "Buffer: $expect_out(buffer)"
+            }
             exit 1
         }
         eof {
             puts "<<End of File reached while waiting for pattern A>>"
+            puts "Expected: $patternA"
+            if {[info exists expect_out(buffer)] && $debug_matches == 1} {
+                puts "Buffer: $expect_out(buffer)"
+            }
             exit 1
         }
         failed {
             puts "<<Failed while waiting for pattern A>>"
+            puts "Expected: $patternA"
             exit 1
         }
     }
