@@ -251,7 +251,7 @@ func (ml *metricsListener) pollSysMetrics() {
 	} else if len(percentages) == 1 {
 		ml.cpuUsage.Set(percentages[0])
 	} else {
-		logrus.Infof("Unexpected number of CPU diskUsage percentages returned: %d", len(percentages)
+		logrus.Infof("Unexpected number of CPU diskUsage percentages returned: %d", len(percentages))
 	}
 
 	memStats, err := mem.VirtualMemory()
