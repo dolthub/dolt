@@ -24,7 +24,7 @@ import (
 // GitVersion runs git version
 func GitVersion(ctx context.Context) error {
 	checkGit := ExecCommand(ctx, "git", "version")
-	err := checkGit.Run()
+	err := RunCommand(checkGit)
 	if err != nil {
 		helpStr := "dolt-builder requires git.\n" +
 			"Make sure git is installed and on your PATH.\n" +
@@ -38,7 +38,7 @@ func GitVersion(ctx context.Context) error {
 func GitCloneBare(ctx context.Context, dir, url string) error {
 	clone := ExecCommand(ctx, "git", "clone", "--bare", url)
 	clone.Dir = dir
-	return clone.Run()
+	return RunCommand(clone)
 }
 
 func CommitArg(c string) string {
@@ -67,14 +67,14 @@ func GitCheckoutTree(ctx context.Context, repoDir string, toDir string, commit s
 	read := ExecCommand(ctx, "git", "read-tree", CommitArg(commit))
 	read.Dir = toDir
 	read.Env = env
-	if err := read.Run(); err != nil {
+	if err := RunCommand(read); err != nil {
 		return err
 	}
 
 	checkout := ExecCommand(ctx, "git", "checkout-index", "-a")
 	checkout.Dir = toDir
 	checkout.Env = env
-	return checkout.Run()
+	return RunCommand(checkout)
 }
 
 // IsCommit returns true if a commit is not a tag
