@@ -129,7 +129,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	commitStagedProps, err := dSess.NewCommitStagedPropsFromSession(ctx, msg)
+	commitStagedProps, err := dSess.NewCommitStagedPropsFromSession(ctx, msg, dsess.FallbackToSQLClient)
 	if err != nil {
 		return "", false, err
 	}
@@ -138,14 +138,11 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	commitStagedProps.Amend = amend
 	commitStagedProps.SkipVerification = apr.Contains(cli.SkipVerificationFlag)
 
-	// Override author if --author flag is provided.
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err := cli.ParseAuthor(authorStr)
+		commitStagedProps.Name, commitStagedProps.Email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
 			return "", false, err
 		}
-		commitStagedProps.Name = name
-		commitStagedProps.Email = email
 	}
 
 	// Override author date if --date flag is provided.
