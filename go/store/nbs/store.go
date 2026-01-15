@@ -656,7 +656,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 		return nil, fmt.Errorf("cannot create NBS store for directory containing chunk journal: %s", dir)
 	}
 
-	m, err := getFileManifest(ctx, dir, asyncFlush)
+	m, err := getFileManifest(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
