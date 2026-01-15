@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -135,24 +136,82 @@ func (fact SSHRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFo
 
 // CreateDB creates a database backed by an SSH remote using dolt transfer over stdin/stdout
 func (fact SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	// For now, we'll use a local dolt transfer process instead of SSH
-	// This allows testing the transport without actual SSH in the way
+	// Extract host, user, and path from URL
+	// URL format can be:
+	//   ssh://user@host/path
+	//   ssh://host/path
+	//   user@host:path (parsed as ssh://user@host/path)
 	
-	
-	// Extract path from URL - keep it absolute
+	host := urlObj.Host
 	path := urlObj.Path
+	user := ""
 	
-	// Start dolt transfer process with absolute path
-	// Use the same binary that's currently running
-	doltPath, err := os.Executable()
-	if err != nil {
-		// Fall back to "dolt" in PATH
-		doltPath = "dolt"
+	// Check if user is specified in the URL (user@host format)
+	if urlObj.User != nil {
+		user = urlObj.User.Username()
 	}
-	// Use exec.Command instead of CommandContext to avoid the subprocess being killed when context is cancelled
-	cmd := exec.Command(doltPath, "transfer", path)
-	// Tell the transfer command to skip IO redirection
-	cmd.Env = append(os.Environ(), "DOLT_SKIP_IO_REDIRECT=1")
+	
+	// Check for user@host in the Host field (git-style URLs)
+	if atIdx := strings.LastIndex(host, "@"); atIdx != -1 {
+		user = host[:atIdx]
+		host = host[atIdx+1:]
+	}
+	
+	var cmd *exec.Cmd
+	
+	// Check for DOLT_SSH environment variable
+	sshCommand := os.Getenv("DOLT_SSH")
+	
+	if host == "localhost" && sshCommand == "" {
+		// Local testing mode - run dolt transfer directly
+		doltPath, err := os.Executable()
+		if err != nil {
+			// Fall back to "dolt" in PATH
+			doltPath = "dolt"
+		}
+		cmd = exec.Command(doltPath, "transfer", path)
+		// Tell the transfer command to skip IO redirection
+		cmd.Env = append(os.Environ(), "DOLT_SKIP_IO_REDIRECT=1")
+		
+		// Log the command for debugging
+		f, _ := os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Local mode: running %s transfer %s\n", doltPath, path))
+			f.Close()
+		}
+	} else {
+		// Real SSH mode
+		if sshCommand == "" {
+			sshCommand = "ssh"
+		}
+		
+		// Build the SSH target
+		sshTarget := host
+		if user != "" {
+			sshTarget = user + "@" + host
+		}
+		
+		// Build the remote command
+		// The remote side needs to run: dolt transfer <path>
+		remoteCmd := fmt.Sprintf("dolt transfer %s", path)
+		
+		// Parse the SSH command in case it has arguments (like GIT_SSH)
+		sshArgs := strings.Fields(sshCommand)
+		if len(sshArgs) == 0 {
+			return nil, nil, nil, fmt.Errorf("invalid DOLT_SSH command: %s", sshCommand)
+		}
+		
+		// Build full command: ssh [ssh-args] user@host "dolt transfer /path"
+		args := append(sshArgs[1:], sshTarget, remoteCmd)
+		cmd = exec.Command(sshArgs[0], args...)
+		
+		// Log the SSH command for debugging
+		f, _ := os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("SSH mode: running %s %s\n", sshArgs[0], strings.Join(args, " ")))
+			f.Close()
+		}
+	}
 	
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
