@@ -35,19 +35,19 @@ var ErrCommitVerificationFailed = goerrors.NewKind(CommitVerificationFailedPrefi
 
 // CommitStagedProps contains the parameters for a staged commit operation.
 type CommitStagedProps struct {
-	Message    		 string
-	Date       		 *time.Time
-	AllowEmpty 		 bool
-	SkipEmpty  		 bool
-	Amend      		 bool
-	Force      		 bool
-	Name       		 string
-	Email      		 string
+	Message          string
+	Date             *time.Time
+	AllowEmpty       bool
+	SkipEmpty        bool
+	Amend            bool
+	Force            bool
+	Name             string
+	Email            string
 	SkipVerification bool
 
-	CommitterDate    *time.Time
-	CommitterName    string
-	CommitterEmail   string
+	CommitterDate  *time.Time
+	CommitterName  string
+	CommitterEmail string
 }
 
 const (
@@ -88,8 +88,7 @@ func NewCommitStagedProps(name, email string, date *time.Time, message string) C
 		Email:          email,
 		CommitterName:  name,
 		CommitterEmail: email,
-		// CommitterDate if defined overrides time.Now or env var set by CommitterDate(). Caller is responsible for
-		// setting this field explicitly atm.
+		// CommitterDate if defined overrides CommitterDate() call during serialization in [datas.NewCommitForValue]
 	}
 }
 

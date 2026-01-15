@@ -18,11 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/dolthub/dolt/go/store/types"
-	"github.com/sirupsen/logrus"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 )
 
 const (
@@ -46,7 +41,8 @@ var ErrEmptyCommitMessage = errors.New("Aborting commit due to empty commit mess
 var ErrEmptyCommitterName = errors.New("aborting construction of commit metadata, missing committer name in constructor")
 var ErrEmptyCommitterEmail = errors.New("aborting construction of commit metadata, missing committer email in constructor")
 
-// CommitterDate is the function used to get the committer time when creating commits.
+// CommitterDate is the function used to get the committer time when creating commits. Tests rely on this function to
+// produce deterministic hash values and results.
 var CommitterDate = time.Now
 var CommitLoc = time.Local
 
@@ -120,86 +116,6 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, description strin
 	return &CommitMeta{authorName, authorEmail, description, "", committerDateMillis, authorDateMillis, committerName, committerEmail}, nil
 }
 
-func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
-	if v, ok, err := st.MaybeGet(k); err != nil {
-		return nil, err
-	} else if ok {
-		return v, nil
-	}
-
-	return nil, errors.New("Missing required field \"" + k + "\".")
-}
-
-func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
-	authorEmail, err := getRequiredFromSt(st, commitMetaEmailKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	authorName, err := getRequiredFromSt(st, commitMetaNameKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	authorDescription, err := getRequiredFromSt(st, commitMetaDescKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	committerTimestamp, err := getRequiredFromSt(st, commitMetaTimestampKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	authorTimestamp, ok, err := st.MaybeGet(commitMetaUserTSKey)
-
-	if err != nil {
-		return nil, err
-	} else if !ok {
-		authorTimestamp = types.Int(int64(committerTimestamp.(types.Uint)))
-	}
-
-	signature, ok, err := st.MaybeGet(commitMetaSignature)
-
-	if err != nil {
-		return nil, err
-	} else if !ok {
-		signature = types.String("")
-	}
-
-	committerDate := uint64(committerTimestamp.(types.Uint))
-	authorDate := int64(authorTimestamp.(types.Int))
-	return &CommitMeta{
-		Name:          string(authorName.(types.String)),
-		Email:         string(authorEmail.(types.String)),
-		Description:   string(authorDescription.(types.String)),
-		Signature:     string(signature.(types.String)),
-		Timestamp:     &committerDate,
-		UserTimestamp: &authorDate,
-		// Committer identity came after Noms storage, so assume these commits have the same author and committer.
-		CommitterName:  string(authorName.(types.String)),
-		CommitterEmail: string(authorEmail.(types.String)),
-	}, nil
-}
-
-func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
-	metadata := types.StructData{
-		commitMetaNameKey:      types.String(cm.Name),
-		commitMetaEmailKey:     types.String(cm.Email),
-		commitMetaDescKey:      types.String(cm.Description),
-		commitMetaTimestampKey: types.Uint(*cm.Timestamp),
-		commitMetaVersionKey:   types.String(commitMetaVersion),
-		commitMetaUserTSKey:    types.Int(*cm.UserTimestamp),
-		commitMetaSignature:    types.String(cm.Signature),
-	}
-
-	return types.NewStruct(nbf, commitMetaStName, metadata)
-}
-
 // Time returns the time at which the commit was authored
 // This does not preserve timezone information, and returns the time in the system's local timezone
 func (cm *CommitMeta) Time() time.Time {
@@ -255,4 +171,28 @@ func (*simpleCommitMetaGenerator) IsGoodCommit(*Commit) bool {
 
 func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
 	return &simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage, alreadyGenerated: false}
+}
+
+// SignaturePayloadV1 generates the legacy signature payload format that includes only author information.
+// This format is used for backward compatibility with commits created before committer metadata was added.
+func SignaturePayloadV1(dbName string, meta *CommitMeta, headHash, stagedHash string) string {
+	return fmt.Sprintf("db: %s\nMessage: %s\nName: %s\nEmail: %s\nDate: %s\nHead: %s\nStaged: %s",
+		dbName,
+		meta.Description,
+		meta.Name,
+		meta.Email,
+		meta.Time().String(),
+		headHash,
+		stagedHash,
+	)
+}
+
+// SignaturePayloadV2 generates the new signature payload format that includes both author and committer information.
+// This format appends committer fields at the end to maintain V1 as a prefix for easier compatibility checks.
+func SignaturePayloadV2(dbName string, meta *CommitMeta, headHash, stagedHash string) string {
+	return fmt.Sprintf("%s\n CommitterName: %s\nCommitterEmail: %s\nCommitterDate: %s",
+		SignaturePayloadV1(dbName, meta, headHash, stagedHash),
+		meta.CommitterName,
+		meta.CommitterEmail,
+		meta.CommitterTime().String())
 }

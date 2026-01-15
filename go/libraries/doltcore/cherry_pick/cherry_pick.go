@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // ErrCherryPickUncommittedChanges is returned when a cherry-pick is attempted without a clean working set.
@@ -179,7 +178,7 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 
 // CreateCommitStagedPropsFromCherryPickOptions converts the specified cherry-pick |options| into a CommitStagedProps
 // instance that can be used to create a pending commit. The author identity comes from the original commit being
-// cherry-picked (to preserve authorship), while the committer identity comes from session/env/config.
+// cherry-picked (to preserve authorship), while the committer identity comes from [dsess.DoltSession].
 func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options CherryPickOptions, originalCommit *doltdb.Commit) (*actions.CommitStagedProps, error) {
 	originalMeta, err := originalCommit.GetCommitMeta(ctx)
 	if err != nil {
@@ -187,8 +186,7 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 	}
 
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	commitProps, err := doltSession.NewCommitStagedPropsFromSession(ctx, "", dsess.FallbackToSQLClient)
-	commitProps.SkipVerification = options.SkipVerification
+	commitProps, err := doltSession.NewCommitStagedProps(ctx, "", dsess.FallbackToSQLClient)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +195,7 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 	commitProps.Email = originalMeta.Email
 	temp := originalMeta.Time()
 	commitProps.Date = &temp
+	commitProps.SkipVerification = options.SkipVerification
 
 	if options.CommitMessage != "" {
 		commitProps.Message = options.CommitMessage
@@ -324,14 +323,9 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 		return "", 0, 0, 0, fmt.Errorf("error: unable to get commit metadata: %w", err)
 	}
 
-	// Create the commit with the original commit's metadata
-	commitProps := actions.CommitStagedProps{
-		Message:    cherryCommitMeta.Description,
-		Date:       cherryCommitMeta.Time(),
-		AllowEmpty: false, // in a conflict workflow, never will be 'true'
-		Name:       cherryCommitMeta.Name,
-		Email:      cherryCommitMeta.Email,
-	}
+	// Create the commit with the original commit's metadata. In a conflict workflow, AllowEmpty is always false.
+	authorDate := cherryCommitMeta.Time()
+	commitProps := actions.NewCommitStagedProps(cherryCommitMeta.Name, cherryCommitMeta.Email, &authorDate, cherryCommitMeta.Description)
 
 	roots, ok := doltSession.GetRoots(ctx, dbName)
 	if !ok {

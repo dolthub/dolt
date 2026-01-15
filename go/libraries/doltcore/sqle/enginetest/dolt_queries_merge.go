@@ -1058,7 +1058,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query:    "select message from dolt_log order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
