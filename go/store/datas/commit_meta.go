@@ -46,7 +46,6 @@ var ErrEmptyCommitterEmail = errors.New("aborting construction of commit metadat
 // CommitterDate is the function used to get the committer time when creating commits.
 var CommitterDate = time.Now
 var CommitLoc = time.Local
-var AuthorDate = time.Now
 
 // CommitMeta contains all the metadata that is associated with a commit within a data repository to be serialized into
 // the database. This does not include control flags for the commit process like [actions.CommitStagedProps].
@@ -60,9 +59,8 @@ type CommitMeta struct {
 	// UserTimestamp is the author date. The author date is represented as [int64] which indicates it can represent
 	// dates before 1970. When we create a [datas.Commit] object we retrieve and cast the author and committer dates
 	// from Timestamp as a result to avoid these out of range values.
-	// TODO(elianddb): Environment variables can overwrite this and allow out of range values to be written to
-	//  Timestamp. Timestamp can also have its own out of range values on the upper range, but they are so far
-	//  away into the future.
+	// TODO(elianddb): Config variables can overwrite this behavior, allowing out of range values to be written to
+	//  Timestamp. Decide on how to clamp the value.
 	UserTimestamp  *int64
 	CommitterName  string
 	CommitterEmail string
