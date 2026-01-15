@@ -518,11 +518,11 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 		dbName := ctx.GetCurrentDatabase()
 		var pendingCommit *doltdb.PendingCommit
-		commitStagedProps, err := d.NewCommitStagedPropsFromSession(ctx, message, FallbackToSQLClient)
+		commitStagedProps, err := d.NewCommitStagedProps(ctx, message, FallbackToSQLClient)
 		if err != nil {
 			return err
 		}
-		pendingCommit, err = d.PendingCommitAllStaged(ctx, dirtyBranchState, commitStagedProps)
+		pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, commitStagedProps)
 		if err != nil {
 			return err
 		}
@@ -1507,12 +1507,12 @@ func (d *DoltSession) Email() string {
 	return d.email
 }
 
-// NewCommitStagedPropsFromSession creates a [actions.CommitStagedProps] using session variables for author and
-// committer identity. It reads [DoltAuthorName], [DoltAuthorEmail], [DoltAuthorDate], [DoltCommitterName],
-// [DoltCommitterEmail], and [DoltCommitterDate] if set. If a session variable is not set, it falls back to the
-// corresponding OS environment variable (e.g. DOLT_AUTHOR_NAME), then to either the SQL client identity or dolt config
-// values depending on the [IdentityFallback] parameter.
-func (d *DoltSession) NewCommitStagedPropsFromSession(ctx *sql.Context, message string, fallback IdentityFallback) (actions.CommitStagedProps, error) {
+// NewCommitStagedProps creates a [actions.CommitStagedProps] using session variables for author and committer identity.
+// It reads [DoltAuthorName], [DoltAuthorEmail], [DoltAuthorDate], [DoltCommitterName], [DoltCommitterEmail], and
+// [DoltCommitterDate] if set. If a session variable is not set, it falls back to the corresponding OS environment
+// variable (e.g. DOLT_AUTHOR_NAME), then to either the SQL client identity or dolt config values depending on the
+// [IdentityFallback] parameter.
+func (d *DoltSession) NewCommitStagedProps(ctx *sql.Context, message string, fallback IdentityFallback) (actions.CommitStagedProps, error) {
 	getStringVar := func(sessionVar, envVar string) (string, error) {
 		val, err := d.Session.GetSessionVariable(ctx, sessionVar)
 		if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {

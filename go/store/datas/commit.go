@@ -26,7 +26,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
@@ -181,7 +180,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	}
 
 	// Author and committer data is normalized in commit meta constructor, i.e. author name and email is used for
-	// committer if not provided. Optional build prevents different hash values from older versions.
+	// committer if not provided. Optional build prevents incompatible hash values with older versions.
 	var committerNameOff flatbuffers.UOffsetT
 	if opts.Meta.CommitterName != opts.Meta.Name {
 		committerNameOff = builder.CreateString(opts.Meta.CommitterName)
@@ -225,13 +224,27 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 	}
 
 	if opts.Meta.Timestamp == nil {
-		committerTimestamp := uint64(time.Now().UnixMilli())
+		committerTimestamp := uint64(CommitterDate().UnixMilli())
 		opts.Meta.Timestamp = &committerTimestamp
 	}
 
 	if opts.Meta.UserTimestamp == nil {
 		authorTimestamp := int64(*opts.Meta.Timestamp)
 		opts.Meta.UserTimestamp = &authorTimestamp
+	}
+
+	if opts.Signing != nil && opts.Signing.Key != "" && opts.Signing.SignFunc != nil {
+		payload := SignaturePayloadV2(
+			opts.Signing.DBName,
+			opts.Meta,
+			opts.Signing.HeadHash.String(),
+			opts.Signing.StagedHash.String(),
+		)
+		sig, err := opts.Signing.SignFunc(ctx, opts.Signing.Key, []byte(payload))
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign commit: %w", err)
+		}
+		opts.Meta.Signature = string(sig)
 	}
 
 	if vrw.Format().UsesFlatbuffers() {
@@ -256,6 +269,7 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 		if err != nil {
 			return nil, err
 		}
+
 		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights, parentClosureAddr)
 		v := types.SerialMessage(bs)
 		addr, err := v.Hash(vrw.Format())

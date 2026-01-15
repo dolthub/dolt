@@ -2410,8 +2410,8 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select de, fr, commit_hash=@commit1, commit_hash=@commit2, commit_hash=@commit3, commit_hash=@commit4" +
-					" from dolt_history_T1 where n=2 order by commit_date",
+				Query: "select de, fr, h.commit_hash=@commit1, h.commit_hash=@commit2, h.commit_hash=@commit3, h.commit_hash=@commit4" +
+					" from dolt_history_T1 h join dolt_log l on h.commit_hash = l.commit_hash where n=2 order by l.author_date",
 				Expected: []sql.Row{
 					{"Zwei", nil, true, false, false, false},
 					{"Zwei", nil, false, true, false, false},

@@ -17,7 +17,6 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -25,10 +24,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // doltCommit is the stored procedure version for the CLI command `dolt commit`.
@@ -110,11 +109,15 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	amend := apr.Contains(cli.AmendFlag)
-
 	msg, msgOk := apr.GetValue(cli.MessageArg)
+	commitStagedProps, err := dSess.NewCommitStagedProps(ctx, msg, dsess.FallbackToSQLClient)
+	if err != nil {
+		return "", false, err
+	}
+
+	commitStagedProps.Amend = apr.Contains(cli.AmendFlag)
 	if !msgOk {
-		if amend {
+		if commitStagedProps.Amend {
 			commit, err := dSess.GetHeadCommit(ctx, dbName)
 			if err != nil {
 				return "", false, err
@@ -129,13 +132,8 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	commitStagedProps, err := dSess.NewCommitStagedPropsFromSession(ctx, msg, dsess.FallbackToSQLClient)
-	if err != nil {
-		return "", false, err
-	}
 	commitStagedProps.AllowEmpty = apr.Contains(cli.AllowEmptyFlag)
 	commitStagedProps.SkipEmpty = apr.Contains(cli.SkipEmptyFlag)
-	commitStagedProps.Amend = amend
 	commitStagedProps.SkipVerification = apr.Contains(cli.SkipVerificationFlag)
 
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
@@ -152,10 +150,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 			return "", false, err
 		}
 		commitStagedProps.Date = &t
-	} else if commitStagedProps.Date == nil {
-		temp := ctx.QueryTime()
-		commitStagedProps.Date = &temp
-		commitStagedProps.CommitterDate = &temp
 	}
 
 	if apr.Contains(cli.ForceFlag) {
@@ -183,6 +177,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		return "", false, errors.New("nothing to commit")
 	}
 
+	// Set up signing context if signing is requested.
 	if apr.Contains(cli.SignFlag) || shouldSign {
 		keyId := apr.GetValueOrDefault(cli.SignFlag, "")
 
@@ -195,17 +190,22 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 			}
 		}
 
-		strToSign, err := commitSignatureStr(ctx, dbName, roots, commitStagedProps)
+		headHash, err := roots.Head.HashOf()
+		if err != nil {
+			return "", false, err
+		}
+		stagedHash, err := roots.Staged.HashOf()
 		if err != nil {
 			return "", false, err
 		}
 
-		signature, err := gpg.Sign(ctx, keyId, []byte(strToSign))
-		if err != nil {
-			return "", false, err
+		pendingCommit.CommitOptions.Signing = &datas.SigningContext{
+			Key:        keyId,
+			SignFunc:   gpg.Sign,
+			DBName:     dbName,
+			HeadHash:   headHash,
+			StagedHash: stagedHash,
 		}
-
-		pendingCommit.CommitOptions.Meta.Signature = string(signature)
 	}
 
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
@@ -240,28 +240,4 @@ func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]st
 	}
 
 	return args, nil
-}
-
-func commitSignatureStr(ctx *sql.Context, dbName string, roots doltdb.Roots, csp actions.CommitStagedProps) (string, error) {
-	var lines []string
-	lines = append(lines, fmt.Sprint("db: ", dbName))
-	lines = append(lines, fmt.Sprint("Message: ", csp.Message))
-	lines = append(lines, fmt.Sprint("Name: ", csp.Name))
-	lines = append(lines, fmt.Sprint("Email: ", csp.Email))
-	lines = append(lines, fmt.Sprint("Date: ", csp.Date.String()))
-
-	head, err := roots.Head.HashOf()
-	if err != nil {
-		return "", err
-	}
-
-	staged, err := roots.Staged.HashOf()
-	if err != nil {
-		return "", err
-	}
-
-	lines = append(lines, fmt.Sprint("Head: ", head.String()))
-	lines = append(lines, fmt.Sprint("Staged: ", staged.String()))
-
-	return strings.Join(lines, "\n"), nil
 }
