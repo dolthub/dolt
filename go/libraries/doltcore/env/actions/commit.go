@@ -24,15 +24,35 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
+// CommitStagedProps contains the parameters for a staged commit operation.
 type CommitStagedProps struct {
 	Message    string
-	Date       time.Time
+	Date       *time.Time
 	AllowEmpty bool
 	SkipEmpty  bool
 	Amend      bool
 	Force      bool
 	Name       string
 	Email      string
+
+	CommitterDate  *time.Time
+	CommitterName  string
+	CommitterEmail string
+}
+
+// NewCommitStagedProps creates a new CommitStagedProps with the given author information. Committer fields are
+// automatically populated with the author information. The committer date is left empty to indicate it should be
+// written before serialization.
+func NewCommitStagedProps(name, email string, date *time.Time, message string) CommitStagedProps {
+	return CommitStagedProps{
+		Message:        message,
+		Date:           date,
+		Name:           name,
+		Email:          email,
+		CommitterName:  name,
+		CommitterEmail: email,
+		// CommitterDate if defined overrides CommitterDate() call during serialization in [datas.NewCommitForValue]
+	}
 }
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.
@@ -107,10 +127,10 @@ func GetCommitStaged(
 		}
 	}
 
-	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	commitMeta, err := datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail, props.CommitterDate)
 	if err != nil {
 		return nil, err
 	}
 
-	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
+	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, commitMeta)
 }
