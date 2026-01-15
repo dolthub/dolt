@@ -43,7 +43,8 @@ var ErrEmptyCommitMessage = errors.New("Aborting commit due to empty commit mess
 var ErrEmptyCommitterName = errors.New("aborting construction of commit metadata, missing committer name in constructor")
 var ErrEmptyCommitterEmail = errors.New("aborting construction of commit metadata, missing committer email in constructor")
 
-// CommitterDate is the function used to get the committer time when creating commits.
+// CommitterDate is the function used to get the committer time when creating commits. Tests rely on this function to
+// produce deterministic hash values and results.
 var CommitterDate = time.Now
 var CommitLoc = time.Local
 
@@ -252,4 +253,28 @@ func (*simpleCommitMetaGenerator) IsGoodCommit(*Commit) bool {
 
 func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
 	return &simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage, alreadyGenerated: false}
+}
+
+// SignaturePayloadV1 generates the legacy signature payload format that includes only author information.
+// This format is used for backward compatibility with commits created before committer metadata was added.
+func SignaturePayloadV1(dbName string, meta *CommitMeta, headHash, stagedHash string) string {
+	return fmt.Sprintf("db: %s\nMessage: %s\nName: %s\nEmail: %s\nDate: %s\nHead: %s\nStaged: %s",
+		dbName,
+		meta.Description,
+		meta.Name,
+		meta.Email,
+		meta.Time().String(),
+		headHash,
+		stagedHash,
+	)
+}
+
+// SignaturePayloadV2 generates the new signature payload format that includes both author and committer information.
+// This format appends committer fields at the end to maintain V1 as a prefix for easier compatibility checks.
+func SignaturePayloadV2(dbName string, meta *CommitMeta, headHash, stagedHash string) string {
+	return fmt.Sprintf("%s\n CommitterName: %s\nCommitterEmail: %s\nCommitterDate: %s",
+		SignaturePayloadV1(dbName, meta, headHash, stagedHash),
+		meta.CommitterName,
+		meta.CommitterEmail,
+		meta.CommitterTime().String())
 }

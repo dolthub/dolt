@@ -152,7 +152,7 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 
 // CreateCommitStagedPropsFromCherryPickOptions converts the specified cherry-pick |options| into a CommitStagedProps
 // instance that can be used to create a pending commit. The author identity comes from the original commit being
-// cherry-picked (to preserve authorship), while the committer identity comes from session/env/config.
+// cherry-picked (to preserve authorship), while the committer identity comes from [dsess.DoltSession].
 func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options CherryPickOptions, originalCommit *doltdb.Commit) (*actions.CommitStagedProps, error) {
 	originalMeta, err := originalCommit.GetCommitMeta(ctx)
 	if err != nil {
@@ -160,7 +160,7 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 	}
 
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	commitProps, err := doltSession.NewCommitStagedPropsFromSession(ctx, "", dsess.FallbackToSQLClient)
+	commitProps, err := doltSession.NewCommitStagedProps(ctx, "", dsess.FallbackToSQLClient)
 	if err != nil {
 		return nil, err
 	}

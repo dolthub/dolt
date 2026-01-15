@@ -443,15 +443,15 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	committerStagedProps, err := dSess.NewCommitStagedPropsFromSession(ctx, msg, dsess.FallbackToSQLClient)
+	commitStagedProps, err := dSess.NewCommitStagedProps(ctx, msg, dsess.FallbackToSQLClient)
 	if err != nil {
 		return nil, nil, err
 	}
-	committerStagedProps.Name = spec.Name
-	committerStagedProps.Email = spec.Email
-	committerStagedProps.Date = &spec.Date
-	committerStagedProps.Force = spec.Force
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, committerStagedProps)
+	commitStagedProps.Name = spec.Name
+	commitStagedProps.Email = spec.Email
+	commitStagedProps.Date = &spec.Date
+	commitStagedProps.Force = spec.Force
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, commitStagedProps)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -525,7 +525,7 @@ func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, 
 		return cli.ParseAuthor(authorStr)
 	}
 	dSess := dsess.DSessFromSess(ctx.Session)
-	props, err := dSess.NewCommitStagedPropsFromSession(ctx, "", dsess.FallbackToSQLClient)
+	props, err := dSess.NewCommitStagedProps(ctx, "", dsess.FallbackToSQLClient)
 	if err != nil {
 		return "", "", err
 	}
