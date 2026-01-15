@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -43,21 +42,18 @@ type printData struct {
 
 	conflictsPresent,
 	showIgnoredTables,
-	statusPresent,
 	mergeActive bool
 
 	stagedTables,
 	unstagedTables,
 	untrackedTables,
-	filteredUntrackedTables,
-	unmergedTables map[string]string
+	filteredUntrackedTables map[string]string
 
 	constraintViolationTables,
 	dataConflictTables,
 	schemaConflictTables map[string]bool
 
-	ignorePatterns doltdb.IgnorePatterns
-	ignoredTables  doltdb.IgnoredTables
+	ignoredTables doltdb.IgnoredTables
 }
 
 var statusDocs = cli.CommandDocumentationContent{
@@ -114,13 +110,13 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 func PrintStatus(ctx context.Context, showIgnoredTables bool, cliCtx cli.CliContext) error {
 	// configure SQL engine
-	queryist, err := cliCtx.QueryEngine(ctx)
+	qe, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return err
 	}
 
 	// get status information from the database
-	pd, err := createPrintData(nil, queryist.Queryist, queryist.Context, showIgnoredTables, cliCtx)
+	pd, err := createPrintData(qe.Queryist, qe.Context, showIgnoredTables, cliCtx)
 	if err != nil {
 		return err
 	}
@@ -132,7 +128,7 @@ func PrintStatus(ctx context.Context, showIgnoredTables bool, cliCtx cli.CliCont
 	return nil
 }
 
-func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTables bool, cliCtx cli.CliContext) (*printData, error) {
+func createPrintData(queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTables bool, cliCtx cli.CliContext) (*printData, error) {
 	var branchName string
 
 	if brName, hasBranch := cliCtx.GlobalArgs().GetValue(cli.BranchParam); hasBranch {
@@ -177,7 +173,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 		return nil, err
 	}
 
-	ahead, behind, err := getUpstreamInfo(queryist, sqlCtx, branchName, remoteName, remoteBranchName, currentBranchCommit)
+	ahead, behind, err := getUpstreamInfo(queryist, sqlCtx, remoteName, remoteBranchName, currentBranchCommit)
 	if err != nil {
 		return nil, err
 	}
@@ -187,8 +183,6 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 		return nil, err
 	}
 	statusPresent := len(statusRows) > 0
-
-	conflictedTables := getConflictedTables(statusRows)
 
 	// sort tables into categories
 	conflictsPresent := false
@@ -256,13 +250,10 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 				if isStaged {
 					stagedTables[tableName] = status
 				} else {
-					isTableConflicted := conflictedTables[tableName]
-					if !isTableConflicted {
-						if status == "new table" {
-							untrackedTables[tableName] = status
-						} else {
-							unstagedTables[tableName] = status
-						}
+					if status == "new table" {
+						untrackedTables[tableName] = status
+					} else {
+						unstagedTables[tableName] = status
 					}
 				}
 			case "schema conflict":
@@ -305,35 +296,20 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 		behind:                    behind,
 		conflictsPresent:          conflictsPresent,
 		showIgnoredTables:         showIgnoredTables,
-		statusPresent:             statusPresent,
 		mergeActive:               mergeActive,
 		stagedTables:              stagedTables,
 		unstagedTables:            unstagedTables,
 		untrackedTables:           untrackedTables,
 		filteredUntrackedTables:   filteredUntrackedTables,
-		unmergedTables:            unmergedTables,
 		ignoredTables:             ignoredTables,
 		constraintViolationTables: constraintViolationTables,
 		schemaConflictTables:      schemaConflictTables,
-		ignorePatterns:            ignorePatterns,
 		dataConflictTables:        dataConflictTables,
 	}
 	return &pd, nil
 }
 
-func getConflictedTables(statusRows []sql.Row) map[string]bool {
-	conflictedTables := make(map[string]bool)
-	for _, row := range statusRows {
-		tableName := row[0].(string)
-		status := row[2].(string)
-		if status == "conflict" {
-			conflictedTables[tableName] = true
-		}
-	}
-	return conflictedTables
-}
-
-func getUpstreamInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string, remoteName string, upstreamBranchName string, currentBranchCommit string) (ahead int64, behind int64, err error) {
+func getUpstreamInfo(queryist cli.Queryist, sqlCtx *sql.Context, remoteName string, upstreamBranchName string, currentBranchCommit string) (ahead int64, behind int64, err error) {
 	ahead = 0
 	behind = 0
 	if len(remoteName) > 0 || len(upstreamBranchName) > 0 {
@@ -686,22 +662,4 @@ func handleStatusVErr(err error) int {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
 	}
 	return 1
-}
-
-// getJsonDocumentColAsString returns the value of a JSONDocument column as a string
-// This is necessary because Queryist may return a tinyint column as a bool (when using SQLEngine)
-// or as a string (when using ConnectionQueryist).
-func getJsonDocumentColAsString(sqlCtx *sql.Context, col interface{}) (string, error) {
-	switch v := col.(type) {
-	case string:
-		return v, nil
-	case types.JSONDocument:
-		text, err := v.JSONString()
-		if err != nil {
-			return "", err
-		}
-		return text, nil
-	default:
-		return "", fmt.Errorf("unexpected type %T, was expecting JSONDocument or string", v)
-	}
 }
