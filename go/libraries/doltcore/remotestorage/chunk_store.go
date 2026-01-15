@@ -68,7 +68,7 @@ var defaultTransport = &http.Transport{
 }
 
 var globalHttpFetcher HTTPFetcher = &http.Client{
-	Transport: defaultTransport,
+	Transport: globalInterceptor, // Use the interceptor instead of defaultTransport directly
 }
 
 var _ chunks.TableFileStore = (*DoltChunkStore)(nil)
@@ -1254,6 +1254,9 @@ func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, uint64
 		n, _ := io.ReadFull(resp.Body, body)
 		return nil, 0, fmt.Errorf("%w: status code: %d;\nurl: %s\n\nbody:\n\n%s\n", ErrRemoteTableFileGet, resp.StatusCode, sanitizeSignedUrl(drtf.info.Url), string(body[0:n]))
 	}
+
+	// Log response details for debugging
+	fmt.Printf("HTTP response received: status=%d, content-length=%d, url=%s\n", resp.StatusCode, resp.ContentLength, drtf.info.Url)
 
 	return resp.Body, uint64(resp.ContentLength), nil
 }

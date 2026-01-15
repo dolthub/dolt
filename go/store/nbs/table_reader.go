@@ -26,7 +26,9 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"os"
 	"sort"
 	"sync/atomic"
 
@@ -69,7 +71,22 @@ func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
 	chksum := binary.BigEndian.Uint32(buff[dataLen:])
 	compressedData := buff[:dataLen]
 
-	if chksum != crc(compressedData) {
+	calculatedCrc := crc(compressedData)
+	if chksum != calculatedCrc {
+		// Write debug info to file
+		f, _ := os.OpenFile("/tmp/checksum_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Checksum mismatch: expected=%x, calculated=%x, buffLen=%d, dataLen=%d\n", 
+				chksum, calculatedCrc, len(buff), dataLen))
+			// Print first and last 32 bytes of buff for debugging
+			if len(buff) >= 32 {
+				f.WriteString(fmt.Sprintf("First 32 bytes: %x\n", buff[:32]))
+			}
+			if len(buff) >= 32 {
+				f.WriteString(fmt.Sprintf("Last 32 bytes: %x\n", buff[len(buff)-32:]))
+			}
+			f.Close()
+		}
 		return CompressedChunk{}, errors.New("checksum error")
 	}
 

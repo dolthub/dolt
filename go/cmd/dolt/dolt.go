@@ -415,8 +415,19 @@ func runMain() int {
 
 	seedGlobalRand()
 
-	restoreIO := cli.InitIO()
-	defer restoreIO()
+	// Skip IO redirection for transfer command to allow gRPC over stdio
+	var restoreIO func()
+	if os.Getenv("DOLT_SKIP_IO_REDIRECT") != "1" {
+		restoreIO = cli.InitIO()
+		defer func() {
+			if restoreIO != nil {
+				restoreIO()
+			}
+		}()
+	} else {
+		// Still need to set up IO streams even if not redirecting
+		cli.SetIOStreams(os.Stdin, os.Stdout)
+	}
 
 	warnIfMaxFilesTooLow()
 

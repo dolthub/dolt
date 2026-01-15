@@ -15,13 +15,18 @@
 package commands
 
 import (
-	"bufio"
 	"context"
+	"crypto/md5"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -37,6 +42,17 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
+
+// identitySealer is a no-op sealer for local stdio transport
+type identitySealer struct{}
+
+func (identitySealer) Seal(u *url.URL) (*url.URL, error) {
+	return u, nil
+}
+
+func (identitySealer) Unseal(u *url.URL) (*url.URL, error) {
+	return u, nil
+}
 
 type TransferCmd struct{}
 
@@ -61,6 +77,11 @@ func (cmd TransferCmd) Hidden() bool {
 	return true
 }
 
+// InstallsSignalHandlers tells the framework not to install signal handlers
+func (cmd TransferCmd) InstallsSignalHandlers() bool {
+	return true  // We don't want signal handlers interfering with stdio
+}
+
 func (cmd TransferCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
@@ -72,54 +93,128 @@ func (cmd TransferCmd) ArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	// Debug logging to file
-	ioutil.WriteFile("/tmp/transfer_start.log", []byte(fmt.Sprintf("Transfer started with args: %v\n", args)), 0644)
-
+	// Ignore all signals to prevent being killed
+	signal.Ignore(syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP, syscall.SIGPIPE)
+	
+	// Catch any panic and log it
+	defer func() {
+		if r := recover(); r != nil {
+			f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if f != nil {
+				f.WriteString(fmt.Sprintf("PANIC in transfer command: %v\n", r))
+				f.Close()
+			}
+			panic(r) // Re-panic after logging
+		}
+	}()
+	
+	// Log the start
+	f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("Transfer starting with args: %v, env DOLT_SKIP_IO_REDIRECT=%s\n", args, os.Getenv("DOLT_SKIP_IO_REDIRECT")))
+		f.Close()
+	}
+	
 	ap := cmd.ArgParser()
 	apr, err := ap.Parse(args)
 	if err != nil {
-		ioutil.WriteFile("/tmp/transfer_error.log", []byte(fmt.Sprintf("Parse error: %v\n", err)), 0644)
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("ArgParser error: %v\n", err))
+			f.Close()
+		}
 		return 1
 	}
 
 	// Get the repository path from arguments and change to that directory
 	if len(apr.Args) > 0 {
 		repoPath := apr.Args[0]
-		ioutil.WriteFile("/tmp/transfer_path.log", []byte(fmt.Sprintf("Changing to: %s\n", repoPath)), 0644)
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Changing to directory: %s\n", repoPath))
+			f.Close()
+		}
 		// Change to the repository directory
 		if err := os.Chdir(repoPath); err != nil {
-			ioutil.WriteFile("/tmp/transfer_error.log", []byte(fmt.Sprintf("Chdir error: %v\n", err)), 0644)
+			f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if f != nil {
+				f.WriteString(fmt.Sprintf("Failed to chdir: %v\n", err))
+				f.Close()
+			}
 			return 1
 		}
 		// Create a new filesystem for the new directory
 		fs, err := filesys.LocalFilesysWithWorkingDir(".")
 		if err != nil {
-			ioutil.WriteFile("/tmp/transfer_error.log", []byte(fmt.Sprintf("Filesys error: %v\n", err)), 0644)
+			f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if f != nil {
+				f.WriteString(fmt.Sprintf("Failed to create filesystem: %v\n", err))
+				f.Close()
+			}
 			return 1
 		}
 		// Reload environment in the new directory
 		dEnv = env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "dolt")
+		f, _ = os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Environment loaded, HasDoltDataDir: %v\n", dEnv.HasDoltDataDir()))
+			f.Close()
+		}
 	}
 
 	// Load the database
+	f2, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f2 != nil {
+		f2.WriteString("About to load DoltDB...\n")
+		f2.Close()
+	}
 	ddb := dEnv.DoltDB(ctx)
 	if ddb == nil || dEnv.DBLoadError != nil {
-		// Write error to a debug file since we can't use stderr
+		// Write to stderr for debugging (not stdout!)
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			if dEnv.DBLoadError != nil {
+				f.WriteString(fmt.Sprintf("DBLoadError: %v\n", dEnv.DBLoadError))
+			} else {
+				f.WriteString("DoltDB is nil\n")
+			}
+			f.Close()
+		}
 		if dEnv.DBLoadError != nil {
-			ioutil.WriteFile("/tmp/transfer_error.log", []byte(fmt.Sprintf("DBLoadError: %v\n", dEnv.DBLoadError)), 0644)
+			os.Stderr.WriteString("Failed to load database: " + dEnv.DBLoadError.Error() + "\n")
 		} else {
-			ioutil.WriteFile("/tmp/transfer_error.log", []byte("DoltDB is nil\n"), 0644)
+			os.Stderr.WriteString("Failed to load database: DoltDB is nil\n")
 		}
 		return 1
 	}
+	
+	f3, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f3 != nil {
+		f3.WriteString("DoltDB loaded successfully\n")
+		f3.Close()
+	}
+
+	// Create SMUX session over stdio for multiplexing
+	stdioConn := &stdioConn{r: os.Stdin, w: os.Stdout}
+	smuxConfig := smux.DefaultConfig()
+	smuxConfig.MaxReceiveBuffer = 128 * 1024 * 1024
+	smuxConfig.MaxStreamBuffer = 128 * 1024 * 1024
+	
+	session, err := smux.Server(stdioConn, smuxConfig)
+	if err != nil {
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Failed to create SMUX session: %v\n", err))
+			f.Close()
+		}
+		return 1
+	}
+	defer session.Close()
 
 	// Create a gRPC server for the remote API
-	// Use larger buffer sizes to handle chunked data
 	grpcServer := grpc.NewServer(
 		grpc.MaxRecvMsgSize(128*1024*1024),
 		grpc.MaxSendMsgSize(128*1024*1024),
-		grpc.InitialWindowSize(1<<20),
-		grpc.InitialConnWindowSize(1<<20),
 	)
 
 	// Get the chunk store from the database
@@ -128,74 +223,174 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	dbCache := &singletonDBCache{cs: cs.(remotesrv.RemoteSrvStore)}
 
 	// Create and register the chunk store service
-	// Disable logging to avoid interfering with stdio communication
 	logger := logrus.New()
-	logger.SetOutput(ioutil.Discard)
+	logger.SetOutput(io.Discard)
 	logEntry := logrus.NewEntry(logger)
 
-	// Create a wrapper service that logs calls
-	origService := remotesrv.NewHttpFSBackedChunkStore(logEntry, "", dbCache, dEnv.FS, "stdio", remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED, nil)
-	chunkStoreService := &debugChunkStoreService{ChunkStoreServiceServer: origService}
+	// Use identity sealer since we don't need URL sealing for local stdio transport
+	sealer := &identitySealer{}
+	// Use virtual host for HTTP - will be served by our embedded HTTP server
+	chunkStoreService := remotesrv.NewHttpFSBackedChunkStore(logEntry, "transfer.local", dbCache, dEnv.FS, "http", remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED, sealer)
 
 	remotesapi.RegisterChunkStoreServiceServer(grpcServer, chunkStoreService)
 
-	// Create a buffered stdio connection to prevent deadlocks
-	stdioConn := &bufferedStdioConn{
-		stdin:  os.Stdin,
-		stdout: os.Stdout,
-		reader: bufio.NewReader(os.Stdin),
-		writer: bufio.NewWriter(os.Stdout),
+	// Create HTTP server for serving chunk files
+	// We need to create our own handler since newFileHandler is not exported
+	httpHandler := &fileHandler{
+		dbCache: dbCache,
+		fs:      dEnv.FS,
+		lgr:     logEntry,
+		sealer:  sealer,
+	}
+	httpServer := &http.Server{
+		Handler: httpHandler,
 	}
 
-	// Create SMUX server over stdio with default config
-	ioutil.WriteFile("/tmp/transfer_smux.log", []byte("Creating SMUX server\n"), 0644)
-	session, err := smux.Server(stdioConn, nil)
-	if err != nil {
-		ioutil.WriteFile("/tmp/transfer_error.log", []byte(fmt.Sprintf("SMUX error: %v\n", err)), 0644)
+	// Create listeners for both gRPC and HTTP on SMUX streams
+	grpcListener := &smuxListener{session: session, name: "grpc"}
+	httpListener := &smuxListener{session: session, name: "http"}
+	
+	f4, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f4 != nil {
+		f4.WriteString("About to start gRPC server...\n")
+		f4.Close()
+	}
+	
+	// Add a goroutine to monitor if we're still running
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
+			f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if f != nil {
+				f.WriteString(fmt.Sprintf("Server still running at %v (iteration %d)\n", time.Now(), i))
+				f.Close()
+			}
+		}
+	}()
+	
+	// Serve gRPC directly over stdio
+	f8, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f8 != nil {
+		f8.WriteString("Calling grpcServer.Serve...\n")
+		f8.Close()
+	}
+	
+	// Start both servers in goroutines
+	errCh := make(chan error, 2)
+	
+	go func() {
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString("Starting gRPC server...\n")
+			f.Close()
+		}
+		if err := grpcServer.Serve(grpcListener); err != nil {
+			errCh <- fmt.Errorf("gRPC server error: %w", err)
+		}
+	}()
+	
+	go func() {
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString("Starting HTTP server...\n")
+			f.Close()
+		}
+		if err := httpServer.Serve(httpListener); err != nil && err != http.ErrServerClosed {
+			errCh <- fmt.Errorf("HTTP server error: %w", err)
+		}
+	}()
+	
+	// Wait for either server to error, session to close, or context to be done
+	select {
+	case err := <-errCh:
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Server error: %v\n", err))
+			f.Close()
+		}
 		return 1
+	case <-session.CloseChan():
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString("SMUX session closed\n")
+			f.Close()
+		}
+		return 0
+	case <-ctx.Done():
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Context done: %v\n", ctx.Err()))
+			f.Close()
+		}
+		return 0
 	}
-	defer session.Close()
-
-	// Create a listener that accepts SMUX streams as connections
-	listener := &smuxListener{
-		session: session,
-		closed:  make(chan struct{}),
-	}
-
-	// Serve gRPC over the SMUX session
-	// This will block until the listener is closed or an error occurs
-	ioutil.WriteFile("/tmp/transfer_serve.log", []byte("Starting gRPC server\n"), 0644)
-	err = grpcServer.Serve(listener)
-	if err != nil && err != grpc.ErrServerStopped {
-		ioutil.WriteFile("/tmp/transfer_serve_error.log", []byte(fmt.Sprintf("Serve error: %v\n", err)), 0644)
-		return 1
-	}
-
-	return 0
 }
 
-// smuxListener implements net.Listener for SMUX sessions
-type smuxListener struct {
-	session *smux.Session
-	closed  chan struct{}
+// oneConnListener implements net.Listener that returns exactly one connection
+type oneConnListener struct {
+	conn net.Conn
+	once sync.Once
+	done chan struct{}
 }
 
-func (l *smuxListener) Accept() (net.Conn, error) {
-	stream, err := l.session.AcceptStream()
-	if err != nil {
-		ioutil.WriteFile("/tmp/transfer_accept_error.log", []byte(fmt.Sprintf("Accept error: %v\n", err)), 0644)
-		return nil, err
+func newOneConnListener(conn net.Conn) *oneConnListener {
+	return &oneConnListener{conn: conn, done: make(chan struct{})}
+}
+
+func (l *oneConnListener) Accept() (net.Conn, error) {
+	f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("Accept called at %v\n", time.Now()))
+		f.Close()
 	}
-	ioutil.WriteFile("/tmp/transfer_accept.log", []byte("Accepted SMUX stream\n"), 0644)
-	return stream, nil
+	
+	var c net.Conn
+	l.once.Do(func() { 
+			c = l.conn 
+			f2, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if f2 != nil {
+				f2.WriteString("oneConnListener.Accept returning connection (first call)\n")
+				f2.Close()
+			}
+	})
+	if c != nil {
+		// Monitor what happens after we return the connection
+		go func() {
+			for i := 0; i < 5; i++ {
+				time.Sleep(100 * time.Millisecond)
+				f3, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+				if f3 != nil {
+					f3.WriteString(fmt.Sprintf("After Accept return: %dms\n", (i+1)*100))
+					f3.Close()
+				}
+			}
+		}()
+		return c, nil
+	}
+	f5, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f5 != nil {
+		f5.WriteString("Accept: About to block on <-l.done\n")
+		f5.Close()
+	}
+	<-l.done
+	f4, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f4 != nil {
+		f4.WriteString("oneConnListener.Accept returning net.ErrClosed\n")
+		f4.Close()
+	}
+	return nil, net.ErrClosed
 }
 
-func (l *smuxListener) Close() error {
-	close(l.closed)
-	return l.session.Close()
+func (l *oneConnListener) Close() error {
+	select {
+	case <-l.done:
+	default:
+		close(l.done)
+	}
+	return nil
 }
 
-func (l *smuxListener) Addr() net.Addr {
+func (l *oneConnListener) Addr() net.Addr {
 	return &stdioAddr{}
 }
 
@@ -208,33 +403,211 @@ func (s *singletonDBCache) Get(ctx context.Context, path, nbfVerStr string) (rem
 	return s.cs, nil
 }
 
-// bufferedStdioConn implements net.Conn over buffered stdin/stdout
-type bufferedStdioConn struct {
-	stdin  io.Reader
-	stdout io.Writer
-	reader *bufio.Reader
-	writer *bufio.Writer
+// fileHandler serves chunk files over HTTP
+type fileHandler struct {
+	dbCache remotesrv.DBCache
+	fs      filesys.Filesys
+	lgr     *logrus.Entry
+	sealer  remotesrv.Sealer
 }
 
-func (c *bufferedStdioConn) Read(b []byte) (n int, err error) {
-	return c.reader.Read(b)
-}
-
-func (c *bufferedStdioConn) Write(b []byte) (n int, err error) {
-	n, err = c.writer.Write(b)
-	if err != nil {
-		return n, err
+func (fh *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Log the request to debug file
+	f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("HTTP request: %s %s\n", r.Method, r.URL.Path))
+		f.Close()
 	}
-	// Flush to ensure data is sent immediately
-	return n, c.writer.Flush()
+	
+	// Unseal the URL if needed
+	url, err := fh.sealer.Unseal(r.URL)
+	if err != nil {
+		fh.lgr.WithError(err).Warn("could not unseal URL")
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	
+	path := strings.TrimLeft(url.Path, "/")
+	
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	// For SSH transport, the path includes the database path
+	// Just use the full path as the file path
+	filePath := path
+	
+	// Read the file from the filesystem
+	// The paths are in the format: .dolt/noms/XXXX
+	f2, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f2 != nil {
+		f2.WriteString(fmt.Sprintf("Trying to open file: %s\n", filePath))
+		f2.Close()
+	}
+	
+	reader, err := fh.fs.OpenForRead(filePath)
+	if err != nil {
+		f3, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f3 != nil {
+			f3.WriteString(fmt.Sprintf("File not found: %s (error: %v)\n", filePath, err))
+			f3.Close()
+		}
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+	defer reader.Close()
+	
+	// Check if this is a range request
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader != "" {
+		// Parse the range header (format: bytes=start-end)
+		var start, end int64
+		if _, err := fmt.Sscanf(rangeHeader, "bytes=%d-%d", &start, &end); err == nil {
+			// Read the full file to get its size
+			data, err := io.ReadAll(reader)
+			if err != nil {
+				fh.lgr.WithError(err).Error("failed to read file")
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			
+			fileSize := int64(len(data))
+			
+			// Validate range
+			if start < 0 || start >= fileSize || end >= fileSize || start > end {
+				http.Error(w, "Requested Range Not Satisfiable", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+			
+			// Extract the requested range
+			rangeData := data[start:end+1]
+			
+			// Log what we're sending
+			f4, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if f4 != nil {
+				f4.WriteString(fmt.Sprintf("Sending range %d-%d of %s, size: %d\n", start, end, filePath, len(rangeData)))
+				f4.Close()
+			}
+			
+			// Send partial content response
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(rangeData)))
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(rangeData)
+			return
+		}
+	}
+	
+	// No range request, send the full file
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		fh.lgr.WithError(err).Error("failed to read file")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	
+	// Log the checksum of what we're sending
+	checksum := md5.Sum(data)
+	f4, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f4 != nil {
+		f4.WriteString(fmt.Sprintf("Sending full file: %s, size: %d, md5: %x\n", filePath, len(data), checksum))
+		f4.Close()
+	}
+	
+	// Serve the file content
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	w.Write(data)
 }
 
-func (c *bufferedStdioConn) Close() error {
-	// Flush any remaining buffered data
-	c.writer.Flush()
-	// Don't actually close stdin/stdout - they belong to the process
+// smuxListener wraps an SMUX session to implement net.Listener
+type smuxListener struct {
+	session *smux.Session
+	name    string
+}
+
+func (l *smuxListener) Accept() (net.Conn, error) {
+	stream, err := l.session.AcceptStream()
+	if err != nil {
+		return nil, err
+	}
+	f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("%s listener accepted stream\n", l.name))
+		f.Close()
+	}
+	return stream, nil
+}
+
+func (l *smuxListener) Close() error {
+	return nil // Session close is handled elsewhere
+}
+
+func (l *smuxListener) Addr() net.Addr {
+	return &stdioAddr{}
+}
+
+// stdioConn implements net.Conn over stdin/stdout
+type stdioConn struct {
+	r io.Reader
+	w io.Writer
+}
+
+func (c *stdioConn) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	// Log all reads to see what's happening
+	f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		if err != nil {
+			f.WriteString(fmt.Sprintf("stdioConn.Read: n=%d, err=%v at %v\n", n, err, time.Now()))
+			if err == io.EOF || err == io.ErrClosedPipe {
+				// Instead of exiting, just keep blocking
+				f.WriteString("Got EOF/closed pipe on stdin, blocking forever\n")
+				f.Close()
+				// Block forever instead of returning EOF
+				select {}
+			}
+		} else if n > 0 {
+			f.WriteString(fmt.Sprintf("stdioConn.Read: n=%d (success)\n", n))
+		}
+		f.Close()
+	}
+	return n, err
+}
+
+func (c *stdioConn) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	// Log all writes and errors
+	f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		if err != nil {
+			f.WriteString(fmt.Sprintf("stdioConn.Write error: n=%d, err=%v at %v\n", n, err, time.Now()))
+			// If we get an error writing to stdout, block forever instead of exiting
+			if err == io.ErrClosedPipe || err == syscall.EPIPE {
+				f.WriteString("Got closed pipe/EPIPE on stdout, blocking forever\n")
+				f.Close()
+				select {}
+			}
+		} else if n > 0 {
+			f.WriteString(fmt.Sprintf("stdioConn.Write: n=%d (success)\n", n))
+		}
+		f.Close()
+	}
+	return n, err
+}
+
+func (c *stdioConn) Close() error {
+	// Don't close stdin/stdout
 	return nil
 }
+
+func (c *stdioConn) LocalAddr() net.Addr                { return &stdioAddr{} }
+func (c *stdioConn) RemoteAddr() net.Addr               { return &stdioAddr{} }
+func (c *stdioConn) SetDeadline(t time.Time) error      { return nil }
+func (c *stdioConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c *stdioConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // stdioAddr implements net.Addr for stdio connections
 type stdioAddr struct{}
@@ -242,19 +615,3 @@ type stdioAddr struct{}
 func (a *stdioAddr) Network() string { return "stdio" }
 func (a *stdioAddr) String() string  { return "stdio" }
 
-// debugChunkStoreService wraps the real service to log calls
-type debugChunkStoreService struct {
-	remotesapi.ChunkStoreServiceServer
-}
-
-func (d *debugChunkStoreService) GetRepoMetadata(ctx context.Context, req *remotesapi.GetRepoMetadataRequest) (*remotesapi.GetRepoMetadataResponse, error) {
-	ioutil.WriteFile("/tmp/transfer_metadata.log", []byte("GetRepoMetadata called\n"), 0644)
-	return d.ChunkStoreServiceServer.GetRepoMetadata(ctx, req)
-}
-
-// These are required for net.Conn but not used by gRPC
-func (c *bufferedStdioConn) LocalAddr() net.Addr                { return &stdioAddr{} }
-func (c *bufferedStdioConn) RemoteAddr() net.Addr               { return &stdioAddr{} }
-func (c *bufferedStdioConn) SetDeadline(t time.Time) error      { return nil }
-func (c *bufferedStdioConn) SetReadDeadline(t time.Time) error  { return nil }
-func (c *bufferedStdioConn) SetWriteDeadline(t time.Time) error { return nil }

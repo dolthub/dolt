@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"syscall"
 	"time"
 
 	"github.com/xtaci/smux"
@@ -38,6 +40,94 @@ import (
 
 // SSHRemoteFactory is a DBFactory implementation for creating databases backed by SSH remotes
 type SSHRemoteFactory struct{}
+
+// smuxTransport implements http.RoundTripper over SMUX streams
+type smuxTransport struct {
+	session *smux.Session
+}
+
+// RoundTrip sends an HTTP request over a new SMUX stream
+func (t *smuxTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Open a new SMUX stream for this HTTP request
+	stream, err := t.session.OpenStream()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open SMUX stream for HTTP: %w", err)
+	}
+	// Don't close the stream here - it needs to stay open for the response body to be read
+	
+	// Log the request headers for debugging
+	f, _ := os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("HTTP request: %s %s, Range: %s\n", req.Method, req.URL.Path, req.Header.Get("Range")))
+		f.Close()
+	}
+	
+	// Write the HTTP request directly to the stream
+	// The stream is already connected to the HTTP server
+	err = req.Write(stream)
+	if err != nil {
+		stream.Close()
+		return nil, fmt.Errorf("failed to write HTTP request: %w", err)
+	}
+	
+	// Read the HTTP response from the stream
+	// Use the stream directly, no buffering that could cause data loss
+	resp, err := http.ReadResponse(bufio.NewReader(stream), req)
+	if err != nil {
+		stream.Close()
+		return nil, fmt.Errorf("failed to read HTTP response: %w", err)
+	}
+	
+	// Wrap the response body to close the stream when the body is closed
+	// The response body already reads from the correct source
+	resp.Body = &streamCloser{
+		ReadCloser: resp.Body,
+		stream:     stream,
+		path:       req.URL.Path,
+	}
+	
+	// Log for debugging
+	f2, _ := os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f2 != nil {
+		f2.WriteString(fmt.Sprintf("HTTP response from %s: status %d, Content-Length: %s\n", 
+			req.URL.Path, resp.StatusCode, resp.Header.Get("Content-Length")))
+		f2.Close()
+	}
+	
+	return resp, nil
+}
+
+// streamCloser wraps a response body and closes the underlying stream when closed  
+type streamCloser struct {
+	io.ReadCloser
+	stream net.Conn
+	path   string
+}
+
+func (sc *streamCloser) Read(p []byte) (n int, err error) {
+	n, err = sc.ReadCloser.Read(p)
+	// Log reads for debugging
+	f, _ := os.OpenFile("/tmp/ssh_reads.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("Read %d bytes from %s, err=%v, bufsize=%d\n", n, sc.path, err, len(p)))
+		f.Close()
+	}
+	return n, err
+}
+
+func (sc *streamCloser) Close() error {
+	err := sc.ReadCloser.Close()
+	sc.stream.Close()
+	return err
+}
+
+// Global variables to keep pipes alive across function returns
+// This is a hack to prevent the pipes from being closed by GC
+var (
+	globalStdin io.WriteCloser
+	globalStdout io.ReadCloser
+	globalCmd *exec.Cmd
+)
 
 func (fact SSHRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
 	return fmt.Errorf("ssh scheme cannot support this operation")
@@ -59,29 +149,32 @@ func (fact SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		// Fall back to "dolt" in PATH
 		doltPath = "dolt"
 	}
-	cmd := exec.CommandContext(ctx, doltPath, "transfer", path)
+	// Use exec.Command instead of CommandContext to avoid the subprocess being killed when context is cancelled
+	cmd := exec.Command(doltPath, "transfer", path)
+	// Tell the transfer command to skip IO redirection
+	cmd.Env = append(os.Environ(), "DOLT_SKIP_IO_REDIRECT=1")
 	
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
+	globalStdin = stdin  // Keep global reference
 	
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
+	globalStdout = stdout  // Keep global reference
+	globalCmd = cmd  // Keep global reference
 	
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	// Capture stderr to a file for debugging
+	stderrFile, err := os.Create("/tmp/transfer_stderr.log")
+	if err == nil {
+		cmd.Stderr = stderrFile
+		defer stderrFile.Close()
+	} else {
+		cmd.Stderr = os.Stderr
 	}
-
-	// Capture stderr in background
-	errChan := make(chan []byte, 1)
-	go func() {
-		errOut, _ := io.ReadAll(stderr)
-		errChan <- errOut
-	}()
 	
 	if err := cmd.Start(); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to start dolt transfer: %w", err)
@@ -92,59 +185,68 @@ func (fact SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	processDone := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
-		processDone <- err
-		select {
-		case errOut := <-errChan:
-			if len(errOut) > 0 {
-				fmt.Fprintf(os.Stderr, "[dolt transfer stderr]: %s\n", errOut)
-			}
-		default:
+		// Log when process exits
+		f, _ := os.OpenFile("/tmp/process_exit.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Transfer process exited at %v with error: %v\n", time.Now(), err))
+			f.Close()
 		}
+		processDone <- err
 	}()
 	
-	// Give the server time to start and check if it's still running
+	// Give the server a moment to start
+	time.Sleep(500 * time.Millisecond)
+	
+	// Check if process exited early (non-blocking)
 	select {
 	case err := <-processDone:
 		// Process exited early, this is a problem
 		return nil, nil, nil, fmt.Errorf("dolt transfer exited early: %w", err)
-	case <-time.After(500 * time.Millisecond):
+	default:
 		// Process still running, continue
 	}
 	
-	// Create a stdio connection wrapper with buffering
-	// Buffering helps prevent deadlocks and early pipe closing
-	conn := &bufferedPipeConn{
-		stdin:  stdin,
-		stdout: stdout,
-		reader: bufio.NewReader(stdout),
-		writer: bufio.NewWriter(stdin),
-	}
 	
-	// Wait a moment for the server to be ready for SMUX handshake
-	time.Sleep(100 * time.Millisecond)
+	// Create SMUX client session over stdio
+	stdioConn := &pipeConn{r: stdout, w: stdin, cmd: cmd, stdin: stdin, stdout: stdout}
+	smuxConfig := smux.DefaultConfig()
+	smuxConfig.MaxReceiveBuffer = 128 * 1024 * 1024
+	smuxConfig.MaxStreamBuffer = 128 * 1024 * 1024
 	
-	// Create SMUX client session with default config
-	session, err := smux.Client(conn, nil)
+	session, err := smux.Client(stdioConn, smuxConfig)
 	if err != nil {
 		cmd.Process.Kill()
-		return nil, nil, nil, fmt.Errorf("failed to create smux session: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to create SMUX client session: %w", err)
 	}
-	// Don't close the session here - it needs to stay alive for the connection to work
 	
-	// Create gRPC client connection using SMUX streams
-	grpcConn, err := grpc.Dial("stdio",
+	// Register custom transport for transfer.local to route HTTP requests through SMUX
+	smuxTransport := &smuxTransport{session: session}
+	remotestorage.RegisterCustomTransport("transfer.local", smuxTransport)
+	
+	// Note: We should unregister this transport when the connection is closed,
+	// but we don't have a good hook for that currently. The transport will
+	// remain registered until the process exits.
+	
+	// Create gRPC client connection through SMUX
+	grpcConn, err := grpc.NewClient(
+		"passthrough:///stdio",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
-			// Open a new stream for each connection
+			// Open a new SMUX stream for gRPC
 			stream, err := session.OpenStream()
 			if err != nil {
-				return nil, fmt.Errorf("failed to open smux stream: %w", err)
+				return nil, fmt.Errorf("failed to open SMUX stream for gRPC: %w", err)
+			}
+			f, _ := os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if f != nil {
+				f.WriteString("Opened gRPC stream\n")
+				f.Close()
 			}
 			return stream, nil
 		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDisableHealthCheck(),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(128 * 1024 * 1024),
-			grpc.MaxCallSendMsgSize(128 * 1024 * 1024),
+			grpc.WaitForReady(true),
 		),
 	)
 	if err != nil {
@@ -155,12 +257,26 @@ func (fact SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	// Create chunk store client
 	client := remotesapi.NewChunkStoreServiceClient(grpcConn)
 	// Use the path as the database name, not the SSH host
+	f, _ := os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("Creating chunk store with path: %s\n", urlObj.Path))
+		f.Close()
+	}
 	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, nbf, urlObj.Path, path, false, client)
 	if err != nil {
+		f, _ := os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Failed to create chunk store, killing process: %v\n", err))
+			f.Close()
+		}
 		cmd.Process.Kill()
 		grpcConn.Close()
-		session.Close()
 		return nil, nil, nil, fmt.Errorf("failed to create chunk store: %w", err)
+	}
+	f, _ = os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString("Successfully created chunk store\n")
+		f.Close()
 	}
 	
 	// Store the command process in the context so it can be cleaned up later
@@ -169,46 +285,78 @@ func (fact SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 	
+	f, _ = os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString("About to return from NewRemoteDB, sleeping 2s first\n")
+		f.Close()
+	}
+	
+	// Sleep before returning to see if it's a timing issue
+	time.Sleep(2 * time.Second)
+	
+	// Keep the subprocess and session alive by monitoring in the background
+	go func() {
+		for {
+			time.Sleep(100 * time.Millisecond)
+			if cmd.Process == nil {
+				break
+			}
+			// Check if the process is still running
+			if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+				f, _ := os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+				if f != nil {
+					f.WriteString(fmt.Sprintf("Subprocess died: %v\n", err))
+					f.Close()
+				}
+				// Close the session if process dies
+				session.Close()
+				break
+			}
+		}
+	}()
+	
 	return db, vrw, ns, nil
 }
 
-// bufferedPipeConn implements net.Conn over buffered stdin/stdout pipes
-type bufferedPipeConn struct {
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-	reader *bufio.Reader
-	writer *bufio.Writer
+// pipeConn implements net.Conn over exec.Command pipes
+type pipeConn struct {
+	r io.ReadCloser
+	w io.WriteCloser
+	cmd *exec.Cmd  // Keep a reference to prevent GC
+	stdin io.WriteCloser  // Keep stdin alive
+	stdout io.ReadCloser  // Keep stdout alive
 }
 
-func (c *bufferedPipeConn) Read(b []byte) (n int, err error) {
-	return c.reader.Read(b)
+func (c *pipeConn) Read(p []byte) (int, error) {
+	return c.r.Read(p)
 }
 
-func (c *bufferedPipeConn) Write(b []byte) (n int, err error) {
-	n, err = c.writer.Write(b)
-	if err != nil {
-		return n, err
+func (c *pipeConn) Write(p []byte) (int, error) {
+	return c.w.Write(p)
+}
+
+func (c *pipeConn) Close() error {
+	// Log when Close is called
+	f, _ := os.OpenFile("/tmp/pipe_close.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("pipeConn.Close() called at %v\n", time.Now()))
+		f.Close()
 	}
-	// Flush to ensure data is sent immediately
-	return n, c.writer.Flush()
-}
-
-func (c *bufferedPipeConn) Close() error {
-	// Flush any remaining buffered data
-	c.writer.Flush()
-	// Don't close the pipes here - they will be closed when the process exits
+	// Don't actually close the pipes - they need to stay open
+	// for the duration of the connection
 	return nil
 }
 
-// These are required for net.Conn but not used by gRPC
-func (c *bufferedPipeConn) LocalAddr() net.Addr  { return &pipeAddr{} }
-func (c *bufferedPipeConn) RemoteAddr() net.Addr { return &pipeAddr{} }
-func (c *bufferedPipeConn) SetDeadline(t time.Time) error     { return nil }
-func (c *bufferedPipeConn) SetReadDeadline(t time.Time) error  { return nil }
-func (c *bufferedPipeConn) SetWriteDeadline(t time.Time) error { return nil }
+func (c *pipeConn) LocalAddr() net.Addr                { return &pipeAddr{} }
+func (c *pipeConn) RemoteAddr() net.Addr               { return &pipeAddr{} }
+func (c *pipeConn) SetDeadline(t time.Time) error      { return nil }
+func (c *pipeConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c *pipeConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // pipeAddr implements net.Addr for pipe connections
 type pipeAddr struct{}
 
 func (a *pipeAddr) Network() string { return "pipe" }
 func (a *pipeAddr) String() string  { return "pipe" }
+
+

@@ -1,4 +1,4 @@
-#!/usr/bin/env bats
+
 load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
