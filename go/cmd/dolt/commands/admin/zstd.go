@@ -22,8 +22,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 
-	"github.com/dolthub/gozstd"
 	"github.com/fatih/color"
+	"github.com/dolthub/dolt/go/store/nbs/zstd"
 )
 
 type ZstdCmd struct {
@@ -55,7 +55,7 @@ func (cmd ZstdCmd) Hidden() bool {
 }
 
 func (cmd ZstdCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	fmt.Fprintf(color.Error, "Hello, world! compressed is %v\n", gozstd.Compress(nil, []byte("Hello, world!")))
+	fmt.Fprintf(color.Error, "Hello, world! compressed is %v\n", zstd.Compress(nil, []byte("Hello, world!")))
 
 	return 0
 }

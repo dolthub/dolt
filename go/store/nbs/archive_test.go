@@ -25,19 +25,19 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dolthub/gozstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs/zstd"
 )
 
 // There are many tests which don't actually use the dictionary to compress. But some dictionary is required, so
 // we'll use this one.
 var defaultDict []byte
-var defaultCDict *gozstd.CDict
+var defaultCDict *zstd.CDict
 var defaultId hash.Hash
 
 func init() {
@@ -269,16 +269,16 @@ func TestArchiveDictDecompression(t *testing.T) {
 		samples[i] = c.Data()
 	}
 
-	dict := gozstd.BuildDict(samples, 2048)
-	cDict, err := gozstd.NewCDict(dict)
+	dict := zstd.BuildDict(samples, 2048)
+	cDict, err := zstd.NewCDict(dict)
 	assert.NoError(t, err)
 
 	aw := newArchiveWriterWithSink(writer)
 
-	cmpDict := gozstd.Compress(nil, dict)
+	cmpDict := zstd.Compress(nil, dict)
 	dictId, err := aw.writeByteSpan(cmpDict)
 	for _, chk := range chks {
-		cmp := gozstd.CompressDict(nil, chk.Data(), cDict)
+		cmp := zstd.CompressDict(nil, chk.Data(), cDict)
 
 		chId, err := aw.writeByteSpan(cmp)
 		assert.NoError(t, err)
@@ -372,20 +372,20 @@ func TestArchiveMixedTypesToChunkers(t *testing.T) {
 
 	// Build zStd dictionary. This will be a decent dictionary for all chunks, but we will only
 	// use it for even chunks.
-	dict := gozstd.BuildDict(samples, 2048)
-	cDict, err := gozstd.NewCDict(dict)
+	dict := zstd.BuildDict(samples, 2048)
+	cDict, err := zstd.NewCDict(dict)
 	assert.NoError(t, err)
 
 	aw := newArchiveWriterWithSink(writer)
 
-	cmpDict := gozstd.Compress(nil, dict)
+	cmpDict := zstd.Compress(nil, dict)
 	dictId, err := aw.writeByteSpan(cmpDict)
 	assert.NoError(t, err)
 
 	for _, chk := range chks {
 		if isEven(chk.Hash()) {
 			// Use zStd compression for even  chunks
-			cmp := gozstd.CompressDict(nil, chk.Data(), cDict)
+			cmp := zstd.CompressDict(nil, chk.Data(), cDict)
 
 			chId, err := aw.writeByteSpan(cmp)
 			assert.NoError(t, err)
@@ -1189,15 +1189,15 @@ func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 
 // Most tests need a test dictionary. We generate a terrible one because we don't care about the actual compression.
 // We return both the raw form and the CDict form.
-func generateTerribleDefaultDictionary() ([]byte, *gozstd.CDict) {
+func generateTerribleDefaultDictionary() ([]byte, *zstd.CDict) {
 	return generateDictionary(1977)
 }
 
-func generateDictionary(seed int64) ([]byte, *gozstd.CDict) {
+func generateDictionary(seed int64) ([]byte, *zstd.CDict) {
 	chks, _, _ := generateSimilarChunks(seed, 10)
 	rawDict := buildDictionary(chks)
-	cDict, _ := gozstd.NewCDict(rawDict)
-	rawDict = gozstd.Compress(nil, rawDict)
+	cDict, _ := zstd.NewCDict(rawDict)
+	rawDict = zstd.Compress(nil, rawDict)
 	return rawDict, cDict
 }
 
@@ -1361,7 +1361,7 @@ func createTestArchiveWithHashes(t *testing.T, chunkData [][]byte, hashes []hash
 			assert.NoError(t, err)
 		} else {
 			// Use zStd compression with dictionary
-			compressedData := gozstd.CompressDict(nil, data, defaultCDict)
+			compressedData := zstd.CompressDict(nil, data, defaultCDict)
 			bsId, err := aw.writeByteSpan(compressedData)
 			assert.NoError(t, err)
 
