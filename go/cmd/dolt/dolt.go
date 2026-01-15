@@ -708,7 +708,15 @@ If you're interested in running this command against a remote host, hit us up on
 	}
 
 	var lookForServer bool
-	if targetEnv.DoltDB(ctx) != nil && targetEnv.IsAccessModeReadOnly(ctx) {
+	readOnly, err := targetEnv.IsAccessModeReadOnly(ctx)
+	if err != nil {
+		// Missing dolt data dir is expected if we are in a top level server directory. Other errors are not.
+		if !errors.Is(err, doltdb.ErrMissingDoltDataDir) {
+			return nil, err
+		}
+	}
+
+	if readOnly {
 		// If the loaded target environment has a doltDB and we do not
 		// have access to it, we look for a server.
 		lookForServer = true
@@ -718,12 +726,21 @@ If you're interested in running this command against a remote host, hit us up on
 		// repositories in our MultiEnv are ReadOnly. This includes the
 		// case where there are no repositories in our MultiEnv
 		var allReposAreReadOnly bool = true
-		mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-			if dEnv.DoltDB(ctx) != nil {
-				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly(ctx)
+		err = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+			readOnly, err := dEnv.IsAccessModeReadOnly(ctx)
+			if err != nil {
+				return true, fmt.Errorf("Failed to load database %s due to error: %w", name, err)
 			}
+
+			allReposAreReadOnly = allReposAreReadOnly && readOnly
+
 			return !allReposAreReadOnly, nil
 		})
+
+		if err != nil {
+			return nil, err
+		}
+
 		lookForServer = allReposAreReadOnly
 	}
 	if lookForServer {
