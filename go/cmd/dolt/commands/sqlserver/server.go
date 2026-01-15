@@ -526,7 +526,13 @@ func ConfigureServices(
 	InitMetricsListener := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
 			labels := cfg.ServerConfig.MetricsLabels()
-			metListener, err = newMetricsListener(labels, cfg.Version, clusterController)
+			path, err := cfg.DoltEnv.FS.Abs(".")
+			if err != nil {
+				logrus.Debug(fmt.Sprintf("Error getting absolute path for metrics listener: %v", err))
+				path = ""
+			}
+
+			metListener, err = newMetricsListener(labels, cfg.Version, path, clusterController)
 			return err
 		},
 		StopF: func() error {

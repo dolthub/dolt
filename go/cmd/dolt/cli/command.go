@@ -60,6 +60,22 @@ func hasHelpFlag(args []string) bool {
 	return false
 }
 
+// globalArgsSpecifyDB checks if the global arguments contain --use-db or --host flags,
+// which indicate that the user is manually specifying a database connection
+// rather than relying on the current directory being a dolt repository.
+func globalArgsSpecifyDB(cliCtx CliContext) bool {
+	if cliCtx == nil {
+		return false
+	}
+	globalArgs := cliCtx.GlobalArgs()
+	if globalArgs == nil {
+		return false
+	}
+	_, hasUseDb := globalArgs.GetValue("use-db")
+	_, hasHost := globalArgs.GetValue(HostFlag)
+	return hasUseDb || hasHost
+}
+
 // Command is the interface which defines a Dolt cli command
 type Command interface {
 	// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -220,7 +236,9 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		cmdRequiresRepo = rnrCmd.RequiresRepo()
 	}
 
-	if cmdRequiresRepo && !hasHelpFlag(args) {
+	// If --use-db or --host is specified, the user is manually specifying a database/server
+	// connection, so we don't require the current directory to be a valid dolt repository.
+	if cmdRequiresRepo && !hasHelpFlag(args) && !globalArgsSpecifyDB(cliCtx) {
 		isValid := CheckEnvIsValid(dEnv)
 		if !isValid {
 			return 2

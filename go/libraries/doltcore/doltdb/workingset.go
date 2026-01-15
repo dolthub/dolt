@@ -436,10 +436,11 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 	}
 
-	workingRootVal, err := vrw.ReadValue(ctx, dsws.WorkingAddr)
+	workingRootVal, err := vrw.MustReadValue(ctx, dsws.WorkingAddr)
 	if err != nil {
 		return nil, err
 	}
+
 	workingRoot, err := NewRootValue(ctx, vrw, ns, workingRootVal)
 	if err != nil {
 		return nil, err
@@ -447,7 +448,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 
 	var stagedRoot RootValue
 	if dsws.StagedAddr != nil {
-		stagedRootVal, err := vrw.ReadValue(ctx, *dsws.StagedAddr)
+		stagedRootVal, err := vrw.MustReadValue(ctx, *dsws.StagedAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -482,7 +483,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		preMergeWorkingV, err := vrw.ReadValue(ctx, preMergeWorkingAddr)
+		preMergeWorkingV, err := vrw.MustReadValue(ctx, preMergeWorkingAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -516,7 +517,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	var rebaseState *RebaseState
 	if dsws.RebaseState != nil {
 		preRebaseWorkingAddr := dsws.RebaseState.PreRebaseWorkingAddr()
-		preRebaseWorkingV, err := vrw.ReadValue(ctx, preRebaseWorkingAddr)
+		preRebaseWorkingV, err := vrw.MustReadValue(ctx, preRebaseWorkingAddr)
 		if err != nil {
 			return nil, err
 		}

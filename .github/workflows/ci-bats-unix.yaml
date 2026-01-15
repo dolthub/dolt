@@ -25,6 +25,17 @@ jobs:
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
+      # Docker entrypoint and docker tests in general may use more space than is available in the GitHub default runner,
+      # so we remove unused pre-installed programs.
+      - name: Free disk space
+        run: |
+          NAME="DISK-CLEANUP"
+          echo "[${NAME}] Starting background cleanup..."
+          [ -d /usr/share/dotnet ] && sudo rm -rf /usr/share/dotnet &
+          [ -d /usr/local/lib/android ] && sudo rm -rf /usr/local/lib/android &
+          [ -d /opt/ghc ] && sudo rm -rf /opt/ghc &
+          [ -d /usr/local/share/boost ] && sudo rm -rf /usr/local/share/boost &
+
       - name: Conditionally Set ENV VARS for AWS tests
         run: |
           if [[ $use_credentials == true ]]; then
@@ -94,9 +105,9 @@ jobs:
       - name: Install Maven
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.11/binaries/apache-maven-3.9.11-bin.tar.gz
-          tar -xf apache-maven-3.9.11-bin.tar.gz
-          echo "$(pwd)/apache-maven-3.9.11/bin" >> $GITHUB_PATH
+          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.12/binaries/apache-maven-3.9.12-bin.tar.gz
+          tar -xf apache-maven-3.9.12-bin.tar.gz
+          echo "$(pwd)/apache-maven-3.9.12/bin" >> $GITHUB_PATH
       - name: Install Hadoop
         working-directory: ./.ci_bin
         run: |

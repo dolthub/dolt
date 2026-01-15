@@ -25,20 +25,22 @@ type ExtendedTupleComparator struct {
 }
 
 // TODO: compare performance of rolling this logic into the DefaultTupleComparator (nil check or generic handlers that call compare)
-var _ TupleComparator = ExtendedTupleComparator{}
+var _ TupleComparator = &ExtendedTupleComparator{}
 
 // Compare implements the TupleComparator interface.
-func (c ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
+func (c *ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
 	fast := desc.GetFixedAccess()
-	for i := range fast {
-		start, stop := fast[i][0], fast[i][1]
+	off := len(fast)
+	var start, stop ByteSize
+	for i := 0; i < off; i++ {
+		stop = fast[i]
 		cmp = c.CompareValues(ctx, i, left[start:stop], right[start:stop], desc.Types[i])
 		if cmp != 0 {
 			return cmp
 		}
+		start = stop
 	}
 
-	off := len(fast)
 	for i, typ := range desc.Types[off:] {
 		j := i + off
 		cmp = c.CompareValues(ctx, j, left.GetField(j), right.GetField(j), typ)
@@ -50,7 +52,7 @@ func (c ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple,
 }
 
 // CompareValues implements the TupleComparator interface.
-func (c ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
+func (c *ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
 	switch typ.Enc {
 	case ExtendedEnc, ExtendedAddrEnc, ExtendedAdaptiveEnc:
 		cmp, err := c.handlers[index].SerializedCompare(ctx, left, right)
@@ -64,20 +66,20 @@ func (c ExtendedTupleComparator) CompareValues(ctx context.Context, index int, l
 }
 
 // Prefix implements the TupleComparator interface.
-func (c ExtendedTupleComparator) Prefix(n int) TupleComparator {
-	return ExtendedTupleComparator{c.innerCmp.Prefix(n), c.handlers[:n]}
+func (c *ExtendedTupleComparator) Prefix(n int) TupleComparator {
+	return &ExtendedTupleComparator{c.innerCmp.Prefix(n), c.handlers[:n]}
 }
 
 // Suffix implements the TupleComparator interface.
-func (c ExtendedTupleComparator) Suffix(n int) TupleComparator {
-	return ExtendedTupleComparator{c.innerCmp.Suffix(n), c.handlers[n:]}
+func (c *ExtendedTupleComparator) Suffix(n int) TupleComparator {
+	return &ExtendedTupleComparator{c.innerCmp.Suffix(n), c.handlers[n:]}
 }
 
 // Validated implements the TupleComparator interface.
-func (c ExtendedTupleComparator) Validated(types []Type) TupleComparator {
+func (c *ExtendedTupleComparator) Validated(types []Type) TupleComparator {
 	// If our inner comparator is an ExtendedTupleComparator, then we should use its inner comparator to reduce redundancy.
 	var innerCmp TupleComparator
-	if extendedInner, ok := c.innerCmp.(ExtendedTupleComparator); ok {
+	if extendedInner, ok := c.innerCmp.(*ExtendedTupleComparator); ok {
 		innerCmp = extendedInner.innerCmp.Validated(types)
 	} else {
 		innerCmp = c.innerCmp.Validated(types)
@@ -101,5 +103,5 @@ func (c ExtendedTupleComparator) Validated(types []Type) TupleComparator {
 	if !hasHandler {
 		return innerCmp
 	}
-	return ExtendedTupleComparator{innerCmp, c.handlers}
+	return &ExtendedTupleComparator{innerCmp, c.handlers}
 }

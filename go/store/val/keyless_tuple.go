@@ -67,7 +67,7 @@ var keySuffix = [...]byte{1, 0}
 
 var KeylessTupleDesc = &TupleDesc{
 	Types: []Type{{Enc: Hash128Enc, Nullable: false}},
-	cmp:   keylessCompare{},
+	cmp:   &keylessCompare{},
 }
 
 var KeylessCardType = Type{
@@ -77,28 +77,28 @@ var KeylessCardType = Type{
 
 type keylessCompare struct{}
 
-var _ TupleComparator = keylessCompare{}
+var _ TupleComparator = &keylessCompare{}
 
 // Compare implements TupleComparator
-func (k keylessCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) int {
+func (k *keylessCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) int {
 	return bytes.Compare(left, right)
 }
 
 // CompareValues implements TupleComparator
-func (k keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
+func (k *keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
 	return compare(typ, left, right)
 }
 
 // Prefix implements TupleComparator
-func (k keylessCompare) Prefix(n int) TupleComparator {
+func (k *keylessCompare) Prefix(n int) TupleComparator {
 	return k
 }
 
 // Suffix implements TupleComparator
-func (k keylessCompare) Suffix(n int) TupleComparator {
+func (k *keylessCompare) Suffix(n int) TupleComparator {
 	return k
 }
 
-func (k keylessCompare) Validated(types []Type) TupleComparator {
+func (k *keylessCompare) Validated(types []Type) TupleComparator {
 	return k
 }

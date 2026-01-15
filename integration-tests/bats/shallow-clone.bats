@@ -63,6 +63,7 @@ seed_and_start_serial_remote() {
     cd clones
 
     dolt sql -q "call dolt_clone('--depth', '1','http://localhost:50051/test-org/test-repo')"
+    cd test-repo
 
     run dolt log --oneline --decorate=no
     [ "$status" -eq 0 ]
@@ -85,6 +86,7 @@ seed_and_start_serial_remote() {
     cd clones
     run dolt sql -q "call dolt_clone('--depth', '2','http://localhost:50051/test-org/test-repo')"
     [ "$status" -eq 0 ]
+    cd test-repo
 
     run dolt log --oneline --decorate=no
     [ "$status" -eq 0 ]
@@ -111,6 +113,7 @@ seed_and_start_serial_remote() {
     cd clones
     run dolt sql -q "call dolt_clone('--depth', '1','file://../file-remote')"
     [ "$status" -eq 0 ]
+    cd file-remote
 
     run dolt log --oneline --decorate=no
     [ "$status" -eq 0 ]

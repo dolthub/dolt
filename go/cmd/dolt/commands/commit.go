@@ -80,10 +80,6 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateCommitArgParser(false)
 }
 
-func (cmd CommitCmd) RequiresRepo() bool {
-	return false
-}
-
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	res, skipped := performCommit(ctx, commandStr, args, cliCtx, dEnv)

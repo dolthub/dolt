@@ -180,7 +180,7 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 
 // TableFromAddr deserializes the table in the chunk at |addr|.
 func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, addr hash.Hash) (Table, error) {
-	val, err := vrw.ReadValue(ctx, addr)
+	val, err := vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -1079,10 +1079,11 @@ func (t doltDevTable) GetConstraintViolations(ctx context.Context) (types.Map, e
 	if addr.IsEmpty() {
 		return types.NewMap(ctx, t.vrw)
 	}
-	v, err := t.vrw.ReadValue(ctx, addr)
+	v, err := t.vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return types.Map{}, err
 	}
+
 	return v.(types.Map), nil
 }
 

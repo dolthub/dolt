@@ -53,6 +53,7 @@ The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be 
 	Synopsis: []string{
 		"[--squash] {{.LessThan}}branch{{.GreaterThan}}",
 		"--no-ff [-m message] {{.LessThan}}branch{{.GreaterThan}}",
+		"--ff-only {{.LessThan}}branch{{.GreaterThan}}",
 		"--abort",
 	},
 }
@@ -83,10 +84,6 @@ func (cmd MergeCmd) ArgParser() *argparser.ArgParser {
 // EventType returns the type of the event to log
 func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_MERGE
-}
-
-func (cmd MergeCmd) RequiresRepo() bool {
-	return false
 }
 
 // Exec executes the command
@@ -197,6 +194,12 @@ func validateDoltMergeArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinte
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
 		return HandleVErrAndExitCode(errhand.BuildDError(ErrConflictingFlags, cli.SquashParam, cli.NoFFParam).Build(), usage)
 	}
+	if apr.ContainsAll(cli.FFOnlyParam, cli.NoFFParam) {
+		return HandleVErrAndExitCode(errhand.BuildDError(ErrConflictingFlags, cli.FFOnlyParam, cli.NoFFParam).Build(), usage)
+	}
+	if apr.ContainsAll(cli.FFOnlyParam, cli.SquashParam) {
+		return HandleVErrAndExitCode(errhand.BuildDError(ErrConflictingFlags, cli.FFOnlyParam, cli.SquashParam).Build(), usage)
+	}
 
 	// This command may create a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
@@ -266,6 +269,8 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults, cliCtx 
 		params = append(params, apr.Arg(0))
 	} else if apr.Contains(cli.NoFFParam) {
 		writeToBuffer("--no-ff", false)
+	} else if apr.Contains(cli.FFOnlyParam) {
+		writeToBuffer("--ff-only", false)
 	} else if apr.Contains(cli.AbortParam) {
 		writeToBuffer("--abort", false)
 	}

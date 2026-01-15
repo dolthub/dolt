@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -91,7 +90,7 @@ func artifactIndexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tre
 }
 
 func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema, addr hash.Hash) (ArtifactIndex, error) {
-	v, err := vrw.ReadValue(ctx, addr)
+	v, err := vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

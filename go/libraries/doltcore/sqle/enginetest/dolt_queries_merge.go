@@ -2965,6 +2965,116 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "--ff-only flag success when fast-forward is possible",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'main1'), (2, 'main2');",
+			"CALL dolt_commit('-Am', 'main commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"INSERT INTO t VALUES (3, 'feature1');",
+			"CALL dolt_commit('-am', 'feature commit');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('--ff-only', 'feature');",
+				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, "main1"}, {2, "main2"}, {3, "feature1"}},
+			},
+		},
+	},
+	{
+		Name: "--ff-only flag failure when fast-forward is not possible",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'main1'), (2, 'main2');",
+			"CALL dolt_commit('-Am', 'main commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"INSERT INTO t VALUES (3, 'feature1');",
+			"CALL dolt_commit('-am', 'feature commit');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t VALUES (4, 'main3');",
+			"CALL dolt_commit('-am', 'main commit 2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL dolt_merge('--ff-only', 'feature');",
+				ExpectedErrStr: "fatal: Not possible to fast-forward, aborting",
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, "main1"}, {2, "main2"}, {4, "main3"}}, // No changes
+			},
+		},
+	},
+	{
+		Name: "--ff-only flag with already up-to-date branch",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'main1'), (2, 'main2');",
+			"CALL dolt_commit('-Am', 'main commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('--ff-only', 'feature');",
+				Expected: []sql.Row{{"", 0, 0, "Everything up-to-date"}},
+			},
+		},
+	},
+	{
+		Name: "--ff-only conflicts with --no-ff",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"CALL dolt_commit('-Am', 'initial commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL dolt_merge('--ff-only', '--no-ff', 'feature');",
+				ExpectedErrStr: "error: Flags '--ff-only' and '--no-ff' cannot be used together",
+			},
+		},
+	},
+	{
+		Name: "--ff-only conflicts with --squash",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"CALL dolt_commit('-Am', 'initial commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL dolt_merge('--ff-only', '--squash', 'feature');",
+				ExpectedErrStr: "error: Flags '--ff-only' and '--squash' cannot be used together",
+			},
+		},
+	},
+	{
+		Name: "--ff-only with no-commit flag should work",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'main1');",
+			"CALL dolt_commit('-Am', 'main commit');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"INSERT INTO t VALUES (2, 'feature1');",
+			"CALL dolt_commit('-am', 'feature commit');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('--ff-only', '--no-commit', 'feature');",
+				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}}, // Fast-forward merge with commit hash
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
