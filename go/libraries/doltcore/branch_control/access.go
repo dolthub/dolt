@@ -231,10 +231,12 @@ func (tbl *Access) Delete(database string, branch string, user string, host stri
 	if len(host) > math.MaxUint16 {
 		host = string(append([]byte(host[:math.MaxUint16-1]), byte('%')))
 	}
-	// Add the deletion entry to the binlog
-	tbl.binlog.Delete(database, branch, user, host, uint64(Permissions_None))
 	// Remove the entry from the root node
-	removedIndex := tbl.Root.Remove(database, branch, user, host)
+	removedIndex, success := tbl.Root.Remove(database, branch, user, host)
+	// Add the deletion entry to the binlog only if we had something to delete
+	if success {
+		tbl.binlog.Delete(database, branch, user, host, uint64(Permissions_None))
+	}
 	// Remove from the rows
 	if removedIndex != math.MaxUint32 {
 		tbl.freeRows = append(tbl.freeRows, removedIndex)

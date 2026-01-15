@@ -326,7 +326,7 @@ ParentLoop:
 
 // Remove will remove the given expressions to the node hierarchy. If the expressions do not exist, then nothing
 // happens. Assumes that the given expressions have already been folded.
-func (mn *MatchNode) Remove(databaseExpr, branchExpr, userExpr, hostExpr string) uint32 {
+func (mn *MatchNode) Remove(databaseExpr, branchExpr, userExpr, hostExpr string) (removedIndex uint32, success bool) {
 	root := mn
 	allSortOrders := mn.parseExpression(databaseExpr, branchExpr, userExpr, hostExpr)
 	defer func() {
@@ -339,7 +339,8 @@ func (mn *MatchNode) Remove(databaseExpr, branchExpr, userExpr, hostExpr string)
 
 	remainingRootSortOrders := root.SortOrders
 	allSortOrdersMaxIndex := len(allSortOrders) - 1
-	removedIndex := uint32(math.MaxUint32)
+	removedIndex = uint32(math.MaxUint32)
+	success = false
 ParentLoop:
 	for i, sortOrder := range allSortOrders {
 		if remainingRootSortOrders[0] == sortOrder {
@@ -366,6 +367,7 @@ ParentLoop:
 				break
 			} else {
 				// We have no more sort orders on either side so this is an exact match.
+				success = true
 				// If it's a destination node, then we mark it as no longer being one.
 				if root.Data != nil {
 					removedIndex = root.Data.RowIndex
@@ -409,7 +411,7 @@ ParentLoop:
 			break
 		}
 	}
-	return removedIndex
+	return removedIndex, success
 }
 
 // parseExpression parses expressions into a concatenated collection of sort orders. The returned slice belongs to the
