@@ -536,10 +536,19 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 
 	switch sqlType.Type() {
 	case querypb.Type_UINT8:
-		if value.(bool) {
-			return "1", nil
+		switch v := value.(type) {
+		case uint8:
+			return fmt.Sprintf("%d", v), nil
+		case int8:
+			return fmt.Sprintf("%d", uint8(v)), nil
+		case bool:
+			if v {
+				return "1", nil
+			}
+			return "0", nil
+		default:
+			return str, nil
 		}
-		return "0", nil
 	case querypb.Type_TIME, querypb.Type_YEAR, querypb.Type_DATETIME:
 		return singleQuote + str + singleQuote, nil
 	case querypb.Type_BINARY, querypb.Type_VARBINARY, querypb.Type_VECTOR:
