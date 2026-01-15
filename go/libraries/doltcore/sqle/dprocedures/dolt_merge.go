@@ -448,11 +448,10 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	committerStagedProps, err := dSess.NewCommitStagedPropsFromSession(ctx, msg)
+	committerStagedProps, err := dSess.NewCommitStagedPropsFromSession(ctx, msg, dsess.FallbackToSQLClient)
 	if err != nil {
 		return nil, nil, err
 	}
-	// Override author from spec (already resolved via --author flag or session/env/config fallback).
 	committerStagedProps.Name = spec.Name
 	committerStagedProps.Email = spec.Email
 	committerStagedProps.Date = &spec.Date
@@ -531,9 +530,8 @@ func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, 
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		return cli.ParseAuthor(authorStr)
 	}
-	// Fall back to session/env/config values.
 	dSess := dsess.DSessFromSess(ctx.Session)
-	props, err := dSess.NewCommitStagedPropsFromSession(ctx, "")
+	props, err := dSess.NewCommitStagedPropsFromSession(ctx, "", dsess.FallbackToSQLClient)
 	if err != nil {
 		return "", "", err
 	}

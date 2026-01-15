@@ -164,19 +164,17 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 		return nil, err
 	}
 
-	// Get committer identity from session/env/config.
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	commitProps, err := doltSession.NewCommitStagedPropsFromSession(ctx, "")
+	commitProps, err := doltSession.NewCommitStagedPropsFromSession(ctx, "", dsess.FallbackToSQLClient)
 	commitProps.SkipVerification = options.SkipVerification
 	if err != nil {
 		return nil, err
 	}
 
-	// Override author with original commit's author (cherry-pick preserves authorship).
 	commitProps.Name = originalMeta.Name
 	commitProps.Email = originalMeta.Email
-	authorDate := originalMeta.Time()
-	commitProps.Date = &authorDate
+	temp := originalMeta.Time()
+	commitProps.Date = &temp
 
 	if options.CommitMessage != "" {
 		commitProps.Message = options.CommitMessage

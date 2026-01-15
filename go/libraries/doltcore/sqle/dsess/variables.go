@@ -82,6 +82,16 @@ const (
 	DoltCommitterDate  = "dolt_committer_date"
 )
 
+// IdentityFallback specifies what identity source to use when session/env variables are not set.
+type IdentityFallback int
+
+const (
+	// FallbackToSQLClient uses the SQL client identity [sql.Context.Client] as the fallback.
+	FallbackToSQLClient IdentityFallback = iota
+	// FallbackToDoltConfig uses dolt config values from [DoltSession] as the fallback.
+	FallbackToDoltConfig
+)
+
 const URLTemplateDatabasePlaceholder = "{database}"
 
 // DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
