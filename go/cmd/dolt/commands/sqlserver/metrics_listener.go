@@ -74,7 +74,8 @@ func newMetricsListener(labels prometheus.Labels, versionStr, storagePath string
 	mountPoint := ""
 
 	if storagePath != "" {
-		partitions, err := disk.Partitions(false)
+		// Use all=true to include virtual filesystems like overlay in Docker containers.
+		partitions, err := disk.Partitions(true)
 
 		if err != nil {
 			logrus.Info(fmt.Sprintf("Error getting disk partitions: %v", err))
