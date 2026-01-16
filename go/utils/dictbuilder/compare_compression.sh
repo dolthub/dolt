@@ -35,10 +35,10 @@ for db in "$@"; do
     cp -r "$db" "$native_db"
 
     echo "  Running dolt_cgo gc --full on $cgo_db..."
-    (cd "$cgo_db" && dolt_cgo gc --full)
+    (cd "$cgo_db" && time dolt_cgo gc --full)
     
     echo "  Running dolt_native gc --full on $native_db..."
-    (cd "$native_db" && dolt_native gc --full)
+    (cd "$native_db" && time dolt_native gc --full)
     
     # Print disk usage
     echo "  Disk usage for $cgo_db:"
