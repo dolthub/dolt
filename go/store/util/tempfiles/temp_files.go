@@ -80,6 +80,48 @@ func (tfp *TempFileProviderAt) Clean() {
 	}
 }
 
+type LazyTempFileProvider struct {
+	once     sync.Once
+	loader   func() (TempFileProvider, error)
+	provider TempFileProvider
+	perr     error
+}
+
+func NewLazyTempFileProvider(loader func() (TempFileProvider, error)) *LazyTempFileProvider {
+	return &LazyTempFileProvider{
+		loader: loader,
+	}
+}
+
+func (p *LazyTempFileProvider) loadit() {
+	p.once.Do(func() {
+		p.provider, p.perr = p.loader()
+	})
+}
+
+func (p *LazyTempFileProvider) Clean() {
+	// Don't load if we haven't already been loaded.
+	if p.provider != nil {
+		p.provider.Clean()
+	}
+}
+
+func (p *LazyTempFileProvider) GetTempDir() string {
+	p.loadit()
+	if p.perr != nil {
+		return os.TempDir()
+	}
+	return p.provider.GetTempDir()
+}
+
+func (p *LazyTempFileProvider) NewFile(dir, pattern string) (*os.File, error) {
+	p.loadit()
+	if p.perr != nil {
+		return nil, p.perr
+	}
+	return p.provider.NewFile(dir, pattern)
+}
+
 // MovableTemFile is an object that implements TempFileProvider that is used by the nbs to create temp files that
 // ultimately will be renamed.  It is important to use this instance rather than using os.TempDir, or os.CreateTemp
 // directly as those may have errors executing a rename against if the volume the default temporary directory lives on
