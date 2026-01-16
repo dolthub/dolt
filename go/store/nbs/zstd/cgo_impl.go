@@ -1,3 +1,5 @@
+//go:build !zstd_native
+
 // Copyright 2026 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +17,14 @@
 package zstd
 
 import "github.com/dolthub/gozstd"
+
+// IsCGOAvailable indicates whether CGO-based zstd implementation is available
+const IsCGOAvailable = true
+
+// createDefaultCompressor creates the default compressor for this build configuration
+func createDefaultCompressor() Compressor {
+	return NewGozstdCompressor()
+}
 
 // GozstdCompressor implements the Compressor interface using github.com/dolthub/gozstd
 type GozstdCompressor struct{}

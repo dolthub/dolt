@@ -51,7 +51,7 @@ type Compressor interface {
 var DefaultCompressor Compressor
 
 func init() {
-	DefaultCompressor = NewGozstdCompressor()
+	DefaultCompressor = createDefaultCompressor()
 }
 
 // Compress compresses data using the default compressor

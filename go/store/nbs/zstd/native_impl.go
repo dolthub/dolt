@@ -1,3 +1,5 @@
+//go:build zstd_native
+
 // Copyright 2024 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +19,18 @@ package zstd
 import (
 	"github.com/klauspost/compress/zstd"
 )
+
+// IsCGOAvailable indicates whether CGO-based zstd implementation is available
+const IsCGOAvailable = false
+
+// createDefaultCompressor creates the default compressor for this build configuration
+func createDefaultCompressor() Compressor {
+	nativeCompressor, err := NewNativeCompressor()
+	if err != nil {
+		panic("failed to initialize native zstd compressor: " + err.Error())
+	}
+	return nativeCompressor
+}
 
 // nativeDictEncoder wraps a zstd encoder configured with a dictionary
 type nativeDictEncoder struct {

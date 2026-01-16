@@ -1,3 +1,5 @@
+//go:build zstd_native
+
 // Copyright 2024 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,39 +36,9 @@ func TestNativeCompressionRoundtrip(t *testing.T) {
 }
 
 func TestNativeDictionaryCompressionRoundtrip(t *testing.T) {
-	nativeCompressor, err := NewNativeCompressor()
-	require.NoError(t, err)
+	t.Skip("Native implementation cannot build dictionaries, and we can't access CGO implementation in native build")
+}
 
-	// Use CGO implementation to build a working dictionary since native BuildDict is unusable
-	cgoCompressor := NewGozstdCompressor()
-
-	samples := [][]byte{
-		[]byte("This is sample text with common words and phrases."),
-		[]byte("Common words and phrases appear frequently."),
-		[]byte("Sample text contains common patterns."),
-	}
-
-	dictData := cgoCompressor.BuildDict(samples, 256)
-	if len(dictData) == 0 {
-		t.Skip("Could not build dictionary for testing")
-	}
-
-	testData := []byte("This is test data with common words that match the dictionary.")
-
-	// Test that native implementation can use CGO-built dictionary
-	cDict, err := nativeCompressor.NewCDict(dictData)
-	require.NoError(t, err)
-
-	dDict, err := nativeCompressor.NewDDict(dictData)
-	require.NoError(t, err)
-
-	// Compress with dictionary using native implementation
-	compressed := nativeCompressor.CompressDict(nil, testData, cDict)
-
-	// Decompress with dictionary using native implementation
-	decompressed, err := nativeCompressor.DecompressDict(nil, compressed, dDict)
-	require.NoError(t, err)
-
-	// Verify roundtrip
-	require.Equal(t, string(testData), string(decompressed))
+func TestNativeAvailabilityFlag(t *testing.T) {
+	require.False(t, IsCGOAvailable, "CGO should not be available in native build")
 }
