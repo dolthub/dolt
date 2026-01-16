@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -24,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -446,11 +448,20 @@ func (fh *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	
 	path := strings.TrimLeft(url.Path, "/")
 	
-	if r.Method != http.MethodGet {
+	// Handle different HTTP methods
+	switch r.Method {
+	case http.MethodGet:
+		fh.handleGet(w, r, path)
+		
+	case http.MethodPost, http.MethodPut:
+		fh.handleUpload(w, r, path)
+		
+	default:
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
 	}
-	
+}
+
+func (fh *fileHandler) handleGet(w http.ResponseWriter, r *http.Request, path string) {
 	// For SSH transport, the path includes the database path
 	// Just use the full path as the file path
 	filePath := path
@@ -537,6 +548,125 @@ func (fh *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
 	w.Write(data)
+}
+
+func (fh *fileHandler) handleUpload(w http.ResponseWriter, r *http.Request, path string) {
+	// Log the upload request
+	f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("Upload request: %s %s\n", r.Method, path))
+		f.Close()
+	}
+	
+	// Extract the file name from the path
+	i := strings.LastIndex(path, "/")
+	if i < 0 {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	
+	filepath := path[:i]
+	filename := path[i+1:]
+	
+	// Parse query parameters
+	q := r.URL.Query()
+	
+	numChunksStr := q.Get("num_chunks")
+	if numChunksStr == "" {
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString("Missing num_chunks parameter\n")
+			f.Close()
+		}
+		http.Error(w, "Bad Request: num_chunks parameter required", http.StatusBadRequest)
+		return
+	}
+	numChunks, err := strconv.Atoi(numChunksStr)
+	if err != nil {
+		http.Error(w, "Bad Request: invalid num_chunks", http.StatusBadRequest)
+		return
+	}
+	
+	contentLengthStr := q.Get("content_length")
+	if contentLengthStr == "" {
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString("Missing content_length parameter\n")
+			f.Close()
+		}
+		http.Error(w, "Bad Request: content_length parameter required", http.StatusBadRequest)
+		return
+	}
+	contentLength, err := strconv.ParseUint(contentLengthStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Bad Request: invalid content_length", http.StatusBadRequest)
+		return
+	}
+	
+	contentHashStr := q.Get("content_hash")
+	if contentHashStr == "" {
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString("Missing content_hash parameter\n")
+			f.Close()
+		}
+		http.Error(w, "Bad Request: content_hash parameter required", http.StatusBadRequest)
+		return
+	}
+	contentHash, err := base64.RawURLEncoding.DecodeString(contentHashStr)
+	if err != nil {
+		http.Error(w, "Bad Request: invalid content_hash", http.StatusBadRequest)
+		return
+	}
+	
+	// Parse optional split_offset parameter
+	splitOffset := uint64(0)
+	splitOffsetStr := q.Get("split_offset")
+	if splitOffsetStr != "" {
+		splitOffset, err = strconv.ParseUint(splitOffsetStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Bad Request: invalid split_offset", http.StatusBadRequest)
+			return
+		}
+	}
+	
+	// Get the chunk store from the database cache
+	cs, err := fh.dbCache.Get(r.Context(), filepath, "")
+	if err != nil {
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Failed to get chunk store: %v\n", err))
+			f.Close()
+		}
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	
+	// Write the table file using the chunk store
+	err = cs.WriteTableFile(r.Context(), filename, splitOffset, numChunks, contentHash, func() (io.ReadCloser, uint64, error) {
+		return r.Body, contentLength, nil
+	})
+	
+	if err != nil {
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Failed to write table file: %v\n", err))
+			f.Close()
+		}
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	
+	// Log successful upload
+	f2, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f2 != nil {
+		f2.WriteString(fmt.Sprintf("Successfully uploaded: %s/%s (chunks: %d, size: %d, hash: %x)\n", 
+			filepath, filename, numChunks, contentLength, contentHash))
+		f2.Close()
+	}
+	
+	// Send success response
+	w.WriteHeader(http.StatusOK)
 }
 
 // smuxListener wraps an SMUX session to implement net.Listener
