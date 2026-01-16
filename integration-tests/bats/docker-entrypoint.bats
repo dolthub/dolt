@@ -992,7 +992,6 @@ EOF
 
     (
       docker run -d --name "$cname-$cycle" \
-        -v /var/lib/dolt \
         -e DOLT_ROOT_PASSWORD=rootpass \
         -e DOLT_ROOT_HOST=% \
         -e DOLT_DATABASE="$db_name" \
