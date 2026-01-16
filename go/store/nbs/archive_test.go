@@ -278,7 +278,8 @@ func TestArchiveDictDecompression(t *testing.T) {
 	cmpDict := zstd.Compress(nil, dict)
 	dictId, err := aw.writeByteSpan(cmpDict)
 	for _, chk := range chks {
-		cmp := zstd.CompressDict(nil, chk.Data(), cDict)
+		cmp, err := zstd.CompressDict(nil, chk.Data(), cDict)
+		require.NoError(t, err)
 
 		chId, err := aw.writeByteSpan(cmp)
 		assert.NoError(t, err)
@@ -385,7 +386,8 @@ func TestArchiveMixedTypesToChunkers(t *testing.T) {
 	for _, chk := range chks {
 		if isEven(chk.Hash()) {
 			// Use zStd compression for even  chunks
-			cmp := zstd.CompressDict(nil, chk.Data(), cDict)
+			cmp, err := zstd.CompressDict(nil, chk.Data(), cDict)
+		require.NoError(t, err)
 
 			chId, err := aw.writeByteSpan(cmp)
 			assert.NoError(t, err)
@@ -1361,7 +1363,8 @@ func createTestArchiveWithHashes(t *testing.T, chunkData [][]byte, hashes []hash
 			assert.NoError(t, err)
 		} else {
 			// Use zStd compression with dictionary
-			compressedData := zstd.CompressDict(nil, data, defaultCDict)
+			compressedData, err := zstd.CompressDict(nil, data, defaultCDict)
+			require.NoError(t, err)
 			bsId, err := aw.writeByteSpan(compressedData)
 			assert.NoError(t, err)
 

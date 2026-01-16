@@ -724,7 +724,10 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 		return 0, err
 	}
 
-	compressedData := zstd.CompressDict(nil, chk.Data(), asw.snappyDict.cDict)
+	compressedData, err := zstd.CompressDict(nil, chk.Data(), asw.snappyDict.cDict)
+	if err != nil {
+		return 0, err
+	}
 
 	dataId, err := asw.writer.writeByteSpan(compressedData)
 	if err != nil {

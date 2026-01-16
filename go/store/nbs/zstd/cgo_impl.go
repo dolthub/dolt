@@ -16,75 +16,68 @@
 
 package zstd
 
-import "github.com/dolthub/gozstd"
+import (
+	"fmt"
 
-// IsCGOAvailable indicates whether CGO-based zstd implementation is available
-const IsCGOAvailable = true
+	cgozstd "github.com/dolthub/gozstd"
+)
 
-// createDefaultCompressor creates the default compressor for this build configuration
+const BuildDictEnabled = true
+
 func createDefaultCompressor() Compressor {
 	return NewGozstdCompressor()
 }
 
-// GozstdCompressor implements the Compressor interface using github.com/dolthub/gozstd
-type GozstdCompressor struct{}
+type CGOzstdCompressor struct{}
 
-// NewGozstdCompressor creates a new GozstdCompressor
-func NewGozstdCompressor() *GozstdCompressor {
-	return &GozstdCompressor{}
+func NewGozstdCompressor() *CGOzstdCompressor {
+	return &CGOzstdCompressor{}
 }
 
-// Compress compresses data using gozstd
-func (g *GozstdCompressor) Compress(dst, src []byte) []byte {
-	return gozstd.Compress(dst, src)
+func (g *CGOzstdCompressor) Compress(dst, src []byte) []byte {
+	return cgozstd.Compress(dst, src)
 }
 
-// Decompress decompresses data using gozstd
-func (g *GozstdCompressor) Decompress(dst, src []byte) ([]byte, error) {
-	return gozstd.Decompress(dst, src)
+func (g *CGOzstdCompressor) Decompress(dst, src []byte) ([]byte, error) {
+	return cgozstd.Decompress(dst, src)
 }
 
-// CompressDict compresses data using a compression dictionary
-func (g *GozstdCompressor) CompressDict(dst, src []byte, dict *CDict) []byte {
+func (g *CGOzstdCompressor) CompressDict(dst, src []byte, dict *CDict) ([]byte, error) {
 	if dict == nil || dict.impl == nil {
-		panic("runtime error: nil dictionary passed to gozstd compressor")
+		return nil, fmt.Errorf("nil dictionary passed to gozstd compressor")
 	}
-	if gDict, ok := dict.impl.(*gozstd.CDict); ok {
-		return gozstd.CompressDict(dst, src, gDict)
+	if gDict, ok := dict.impl.(*cgozstd.CDict); ok {
+		return cgozstd.CompressDict(dst, src, gDict), nil
 	}
-	panic("runtime error: invalid dictionary type for gozstd compressor")
+	return nil, fmt.Errorf("invalid dictionary type for gozstd compressor")
 }
 
-// DecompressDict decompresses data using a decompression dictionary
-func (g *GozstdCompressor) DecompressDict(dst, src []byte, dict *DDict) ([]byte, error) {
+func (g *CGOzstdCompressor) DecompressDict(dst, src []byte, dict *DDict) ([]byte, error) {
 	if dict == nil || dict.impl == nil {
-		panic("runtime error: nil dictionary passed to gozstd compressor")
+		return nil, fmt.Errorf("nil dictionary passed to gozstd compressor")
 	}
-	if gDict, ok := dict.impl.(*gozstd.DDict); ok {
-		return gozstd.DecompressDict(dst, src, gDict)
+	if gDict, ok := dict.impl.(*cgozstd.DDict); ok {
+		return cgozstd.DecompressDict(dst, src, gDict)
 	}
-	panic("runtime error: invalid dictionary type for gozstd compressor")
+	return nil, fmt.Errorf("invalid dictionary type for gozstd compressor")
 }
 
-// NewCDict creates a new compression dictionary
-func (g *GozstdCompressor) NewCDict(dict []byte) (*CDict, error) {
-	cDict, err := gozstd.NewCDict(dict)
+func (g *CGOzstdCompressor) NewCDict(dict []byte) (*CDict, error) {
+	cDict, err := cgozstd.NewCDict(dict)
 	if err != nil {
 		return nil, err
 	}
 	return &CDict{impl: cDict}, nil
 }
 
-// NewDDict creates a new decompression dictionary
-func (g *GozstdCompressor) NewDDict(dict []byte) (*DDict, error) {
-	dDict, err := gozstd.NewDDict(dict)
+func (g *CGOzstdCompressor) NewDDict(dict []byte) (*DDict, error) {
+	dDict, err := cgozstd.NewDDict(dict)
 	if err != nil {
 		return nil, err
 	}
 	return &DDict{impl: dDict}, nil
 }
 
-// BuildDict builds a dictionary from training samples
-func (g *GozstdCompressor) BuildDict(samples [][]byte, dictSize int) []byte {
-	return gozstd.BuildDict(samples, dictSize)
+func (g *CGOzstdCompressor) BuildDict(samples [][]byte, dictSize int) []byte {
+	return cgozstd.BuildDict(samples, dictSize)
 }

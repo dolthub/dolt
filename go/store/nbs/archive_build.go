@@ -400,7 +400,11 @@ func writeDataToArchive(
 					}
 
 					if !arcW.chunkSeen(cs.chunkId) {
-						cmpBuff = zstd.CompressDict(cmpBuff[:0], c.Data(), cg.cDict)
+						var err error
+						cmpBuff, err = zstd.CompressDict(cmpBuff[:0], c.Data(), cg.cDict)
+						if err != nil {
+							return 0, 0, 0, err
+						}
 
 						dataId, err := arcW.writeByteSpan(cmpBuff)
 						if err != nil {
@@ -478,7 +482,10 @@ func compressChunksInParallel(
 					if err != nil {
 						return err
 					}
-					cmpBuff = zstd.CompressDict(cmpBuff[:0], c.Data(), defaultDict)
+					cmpBuff, err = zstd.CompressDict(cmpBuff[:0], c.Data(), defaultDict)
+					if err != nil {
+						return err
+					}
 					cp := append([]byte{}, cmpBuff...)
 					select {
 					case resultCh <- compressedChunk{h: addr, data: cp}:
@@ -785,8 +792,14 @@ func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *simpleChunkSource
 	scored := make([]chunkCmpScore, len(chks))
 	for i, c := range chks {
 		d := c.Data()
-		comp := zstd.CompressDict(nil, d, cDict)
-		defaultDictComp := zstd.CompressDict(nil, d, defaultDict)
+		comp, err := zstd.CompressDict(nil, d, cDict)
+		if err != nil {
+			return err
+		}
+		defaultDictComp, err := zstd.CompressDict(nil, d, defaultDict)
+		if err != nil {
+			return err
+		}
 
 		ccs := chunkCmpScore{
 			chunkId:            c.Hash(),
@@ -828,7 +841,10 @@ func buildDictionary(chks []*chunks.Chunk) (ans []byte) {
 
 // Returns true if the chunk's compression ratio (using the existing dictionary) is better than the group's worst chunk.
 func (cg *chunkGroup) testChunk(c *chunks.Chunk) (bool, error) {
-	comp := zstd.CompressDict(nil, c.Data(), cg.cDict)
+	comp, err := zstd.CompressDict(nil, c.Data(), cg.cDict)
+	if err != nil {
+		return false, err
+	}
 
 	ratio := float64(len(c.Data())-len(comp)) / float64(len(c.Data()))
 

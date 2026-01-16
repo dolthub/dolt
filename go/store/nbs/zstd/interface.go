@@ -1,4 +1,4 @@
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2026 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,77 +14,75 @@
 
 package zstd
 
-// CDict represents a compression dictionary
+// Based on the build tag |zstd_native| either the CGO-based (github.com/dolthub/gozstd) or native
+// implementation (github.com/klauspost/compress/zstd) will be used.
+//
+// This is a runtime flag |BuildDictEnabled| indicating whether the runtime can create new dictionaries.
+// In the event that it cannot, the build in static dictionaries should be used.
+
+// CDict - compression dictionary
 type CDict struct {
 	impl interface{}
 }
 
-// DDict represents a decompression dictionary  
+// DDict - decompression dictionary
 type DDict struct {
 	impl interface{}
 }
 
-// Compressor provides zstd compression functionality
 type Compressor interface {
-	// Compress compresses data using zstd
 	Compress(dst, src []byte) []byte
-	
-	// Decompress decompresses data using zstd
+
 	Decompress(dst, src []byte) ([]byte, error)
-	
-	// CompressDict compresses data using a compression dictionary
-	CompressDict(dst, src []byte, dict *CDict) []byte
-	
-	// DecompressDict decompresses data using a decompression dictionary
+
+	CompressDict(dst, src []byte, dict *CDict) ([]byte, error)
+
 	DecompressDict(dst, src []byte, dict *DDict) ([]byte, error)
-	
-	// NewCDict creates a new compression dictionary
+
 	NewCDict(dict []byte) (*CDict, error)
-	
-	// NewDDict creates a new decompression dictionary
+
 	NewDDict(dict []byte) (*DDict, error)
-	
-	// BuildDict builds a dictionary from training samples
+
 	BuildDict(samples [][]byte, dictSize int) []byte
 }
 
-var DefaultCompressor Compressor
+var compressor Compressor
 
 func init() {
-	DefaultCompressor = createDefaultCompressor()
+	compressor = createDefaultCompressor()
 }
 
 // Compress compresses data using the default compressor
 func Compress(dst, src []byte) []byte {
-	return DefaultCompressor.Compress(dst, src)
+	return compressor.Compress(dst, src)
 }
 
 // Decompress decompresses data using the default compressor
 func Decompress(dst, src []byte) ([]byte, error) {
-	return DefaultCompressor.Decompress(dst, src)
+	return compressor.Decompress(dst, src)
 }
 
 // CompressDict compresses data using a compression dictionary with the default compressor
-func CompressDict(dst, src []byte, dict *CDict) []byte {
-	return DefaultCompressor.CompressDict(dst, src, dict)
+func CompressDict(dst, src []byte, dict *CDict) ([]byte, error) {
+	return compressor.CompressDict(dst, src, dict)
 }
 
 // DecompressDict decompresses data using a decompression dictionary with the default compressor
 func DecompressDict(dst, src []byte, dict *DDict) ([]byte, error) {
-	return DefaultCompressor.DecompressDict(dst, src, dict)
+	return compressor.DecompressDict(dst, src, dict)
 }
 
 // NewCDict creates a new compression dictionary using the default compressor
 func NewCDict(dict []byte) (*CDict, error) {
-	return DefaultCompressor.NewCDict(dict)
+	return compressor.NewCDict(dict)
 }
 
 // NewDDict creates a new decompression dictionary using the default compressor
 func NewDDict(dict []byte) (*DDict, error) {
-	return DefaultCompressor.NewDDict(dict)
+	return compressor.NewDDict(dict)
 }
 
 // BuildDict builds a dictionary from training samples using the default compressor
 func BuildDict(samples [][]byte, dictSize int) []byte {
-	return DefaultCompressor.BuildDict(samples, dictSize)
+	return compressor.BuildDict(samples, dictSize)
 }

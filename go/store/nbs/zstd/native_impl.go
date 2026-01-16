@@ -1,6 +1,6 @@
 //go:build zstd_native
 
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2026 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,11 @@
 package zstd
 
 import (
-	"github.com/klauspost/compress/zstd"
+	"fmt"
+
+	nativezstd "github.com/klauspost/compress/zstd"
 )
 
-// IsCGOAvailable indicates whether CGO-based zstd implementation is available
-const IsCGOAvailable = false
-
-// createDefaultCompressor creates the default compressor for this build configuration
 func createDefaultCompressor() Compressor {
 	nativeCompressor, err := NewNativeCompressor()
 	if err != nil {
@@ -34,28 +32,28 @@ func createDefaultCompressor() Compressor {
 
 // nativeDictEncoder wraps a zstd encoder configured with a dictionary
 type nativeDictEncoder struct {
-	encoder *zstd.Encoder
+	encoder *nativezstd.Encoder
 }
 
 // nativeDictDecoder wraps a zstd decoder configured with a dictionary
 type nativeDictDecoder struct {
-	decoder *zstd.Decoder
+	decoder *nativezstd.Decoder
 }
 
 // NativeCompressor implements the Compressor interface using github.com/klauspost/compress/zstd
 type NativeCompressor struct {
-	encoder *zstd.Encoder
-	decoder *zstd.Decoder
+	encoder *nativezstd.Encoder
+	decoder *nativezstd.Decoder
 }
 
 // NewNativeCompressor creates a new NativeCompressor
 func NewNativeCompressor() (*NativeCompressor, error) {
-	encoder, err := zstd.NewWriter(nil)
+	encoder, err := nativezstd.NewWriter(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	decoder, err := zstd.NewReader(nil)
+	decoder, err := nativezstd.NewReader(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -77,30 +75,30 @@ func (n *NativeCompressor) Decompress(dst, src []byte) ([]byte, error) {
 }
 
 // CompressDict compresses data using a compression dictionary
-func (n *NativeCompressor) CompressDict(dst, src []byte, dict *CDict) []byte {
+func (n *NativeCompressor) CompressDict(dst, src []byte, dict *CDict) ([]byte, error) {
 	if dict == nil || dict.impl == nil {
-		panic("runtime error: nil dictionary passed to native compressor")
+		return nil, fmt.Errorf("nil dictionary passed to native compressor")
 	}
 	if dictEncoder, ok := dict.impl.(*nativeDictEncoder); ok {
-		return dictEncoder.encoder.EncodeAll(src, dst)
+		return dictEncoder.encoder.EncodeAll(src, dst), nil
 	}
-	panic("runtime error: invalid dictionary type for native compressor")
+	return nil, fmt.Errorf("invalid dictionary type for native compressor")
 }
 
 // DecompressDict decompresses data using a decompression dictionary
 func (n *NativeCompressor) DecompressDict(dst, src []byte, dict *DDict) ([]byte, error) {
 	if dict == nil || dict.impl == nil {
-		panic("runtime error: nil dictionary passed to native compressor")
+		return nil, fmt.Errorf("nil dictionary passed to native compressor")
 	}
 	if dictDecoder, ok := dict.impl.(*nativeDictDecoder); ok {
 		return dictDecoder.decoder.DecodeAll(src, dst)
 	}
-	panic("runtime error: invalid dictionary type for native compressor")
+	return nil, fmt.Errorf("invalid dictionary type for native compressor")
 }
 
 // NewCDict creates a new compression dictionary
 func (n *NativeCompressor) NewCDict(dict []byte) (*CDict, error) {
-	encoder, err := zstd.NewWriter(nil, zstd.WithEncoderDict(dict))
+	encoder, err := nativezstd.NewWriter(nil, nativezstd.WithEncoderDict(dict))
 	if err != nil {
 		return nil, err
 	}
@@ -109,17 +107,22 @@ func (n *NativeCompressor) NewCDict(dict []byte) (*CDict, error) {
 
 // NewDDict creates a new decompression dictionary
 func (n *NativeCompressor) NewDDict(dict []byte) (*DDict, error) {
-	decoder, err := zstd.NewReader(nil, zstd.WithDecoderDicts(dict))
+	decoder, err := nativezstd.NewReader(nil, nativezstd.WithDecoderDicts(dict))
 	if err != nil {
 		return nil, err
 	}
 	return &DDict{impl: &nativeDictDecoder{decoder: decoder}}, nil
 }
 
-// BuildDict builds a dictionary from training samples
-func (n *NativeCompressor) BuildDict(samples [][]byte, dictSize int) []byte {
-	// klauspost/compress/zstd BuildDict is effectively unusable - it fails even with
-	// thousands of samples with obvious repeated patterns. Build logic should prevent us from reaching
-	// this point.
-	panic("runtime error: BuildDict not supported in native implementation - use CGO implementation")
+// BuildDict always return the static dictionary and ignores the samples provided. This allocates a copy
+// of the static dictionary each time it is called.
+func (n *NativeCompressor) BuildDict(_ [][]byte, _ int) []byte {
+	b := make([]byte, len(staticDictionary))
+	copy(b, staticDictionary)
+	return b
+}
+
+var staticDictionary = []byte{
+	0x37, 0x28, 0xB6, 0xCA, 0xAF, 0x2D, 0xE5, 0xA3,
+	0xF3, 0xC5, 0xD4, 0x5B, 0xC1, 0x6E, 0x8E, 0x9E,
 }
