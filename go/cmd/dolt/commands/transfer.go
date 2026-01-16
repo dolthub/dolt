@@ -122,6 +122,9 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, transferDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	
+	// Set environment variable to use longer lock timeout for SSH operations
+	os.Setenv("DOLT_TRANSFER_LONG_TIMEOUT", "1")
+	
 	// After this point, we're actually running the transfer command
 	// Ignore all signals to prevent being killed
 	signal.Ignore(syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP, syscall.SIGPIPE)

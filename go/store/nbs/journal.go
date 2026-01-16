@@ -548,7 +548,14 @@ func newJournalManifest(ctx context.Context, dir string) (m *journalManifest, er
 	lock := fslock.New(filepath.Join(dir, lockFileName))
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
-	err = lock.LockWithTimeout(lockFileTimeout)
+	
+	// For SSH transfer operations, try with a longer timeout
+	timeout := lockFileTimeout
+	if os.Getenv("DOLT_TRANSFER_LONG_TIMEOUT") == "1" {
+		timeout = 5 * time.Second // Much longer timeout for SSH operations
+	}
+	
+	err = lock.LockWithTimeout(timeout)
 	if errors.Is(err, fslock.ErrTimeout) {
 		lock, err = nil, nil // read only
 	} else if err != nil {
