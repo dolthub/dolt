@@ -80,6 +80,12 @@ func (tfp *TempFileProviderAt) Clean() {
 	}
 }
 
+// LazyTempFileProvider will load the TempFileProvider from |loader|
+// on first access and then return temp files based on that result
+// going forward. This is configured for the dolt process's data
+// directory to get our process-wide MovableTempFileProvider early in
+// the Dolt process's life cycle, but the required capabilities are
+// not checked for until first use.
 type LazyTempFileProvider struct {
 	once     sync.Once
 	loader   func() (TempFileProvider, error)
