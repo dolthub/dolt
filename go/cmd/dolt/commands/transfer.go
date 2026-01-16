@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -82,8 +83,29 @@ func (cmd TransferCmd) InstallsSignalHandlers() bool {
 	return true  // We don't want signal handlers interfering with stdio
 }
 
+var transferDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Internal command for SSH remote operations",
+	LongDesc: `The transfer command is used internally by Dolt for SSH remote operations.
+It serves repository data over stdin/stdout using multiplexed gRPC and HTTP protocols.
+
+This command is typically invoked by SSH when cloning or pushing to SSH remotes:
+  ssh user@host "dolt transfer /path/to/repo"
+
+The transfer command:
+  - Loads the Dolt database at the specified path
+  - Starts a gRPC server for chunk store operations
+  - Starts an HTTP server for table file transfers
+  - Multiplexes both protocols over stdin/stdout using SMUX
+
+This is a low-level command not intended for direct use.`,
+	Synopsis: []string{
+		"<path>",
+	},
+}
+
 func (cmd TransferCmd) Docs() *cli.CommandDocumentation {
-	return nil
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(transferDocs, ap)
 }
 
 func (cmd TransferCmd) ArgParser() *argparser.ArgParser {
@@ -93,6 +115,12 @@ func (cmd TransferCmd) ArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	// Parse arguments first
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, transferDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
+	
+	// After this point, we're actually running the transfer command
 	// Ignore all signals to prevent being killed
 	signal.Ignore(syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP, syscall.SIGPIPE)
 	
@@ -114,59 +142,50 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 		f.WriteString(fmt.Sprintf("Transfer starting with args: %v, env DOLT_SKIP_IO_REDIRECT=%s\n", args, os.Getenv("DOLT_SKIP_IO_REDIRECT")))
 		f.Close()
 	}
+
+	// Get the repository path from arguments and change to that directory
+	if len(apr.Args) == 0 {
+		return HandleVErrAndExitCode(errhand.BuildDError("repository path required").SetPrintUsage().Build(), usage)
+	}
 	
-	ap := cmd.ArgParser()
-	apr, err := ap.Parse(args)
+	repoPath := apr.Args[0]
+	f2, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f2 != nil {
+		f2.WriteString(fmt.Sprintf("Changing to directory: %s\n", repoPath))
+		f2.Close()
+	}
+	// Change to the repository directory
+	if err := os.Chdir(repoPath); err != nil {
+		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if f != nil {
+			f.WriteString(fmt.Sprintf("Failed to chdir: %v\n", err))
+			f.Close()
+		}
+		return HandleVErrAndExitCode(errhand.BuildDError("cannot access repository at %s", repoPath).AddCause(err).Build(), usage)
+	}
+	// Create a new filesystem for the new directory
+	fs, err := filesys.LocalFilesysWithWorkingDir(".")
 	if err != nil {
 		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if f != nil {
-			f.WriteString(fmt.Sprintf("ArgParser error: %v\n", err))
+			f.WriteString(fmt.Sprintf("Failed to create filesystem: %v\n", err))
 			f.Close()
 		}
 		return 1
 	}
-
-	// Get the repository path from arguments and change to that directory
-	if len(apr.Args) > 0 {
-		repoPath := apr.Args[0]
-		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if f != nil {
-			f.WriteString(fmt.Sprintf("Changing to directory: %s\n", repoPath))
-			f.Close()
-		}
-		// Change to the repository directory
-		if err := os.Chdir(repoPath); err != nil {
-			f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-			if f != nil {
-				f.WriteString(fmt.Sprintf("Failed to chdir: %v\n", err))
-				f.Close()
-			}
-			return 1
-		}
-		// Create a new filesystem for the new directory
-		fs, err := filesys.LocalFilesysWithWorkingDir(".")
-		if err != nil {
-			f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-			if f != nil {
-				f.WriteString(fmt.Sprintf("Failed to create filesystem: %v\n", err))
-				f.Close()
-			}
-			return 1
-		}
-		// Reload environment in the new directory
-		dEnv = env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "dolt")
-		f, _ = os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if f != nil {
-			f.WriteString(fmt.Sprintf("Environment loaded, HasDoltDataDir: %v\n", dEnv.HasDoltDataDir()))
-			f.Close()
-		}
+	// Reload environment in the new directory
+	dEnv = env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "dolt")
+	f, _ = os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f != nil {
+		f.WriteString(fmt.Sprintf("Environment loaded, HasDoltDataDir: %v\n", dEnv.HasDoltDataDir()))
+		f.Close()
 	}
 
 	// Load the database
-	f2, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if f2 != nil {
-		f2.WriteString("About to load DoltDB...\n")
-		f2.Close()
+	f3, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f3 != nil {
+		f3.WriteString("About to load DoltDB...\n")
+		f3.Close()
 	}
 	ddb := dEnv.DoltDB(ctx)
 	if ddb == nil || dEnv.DBLoadError != nil {
@@ -181,17 +200,15 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 			f.Close()
 		}
 		if dEnv.DBLoadError != nil {
-			os.Stderr.WriteString("Failed to load database: " + dEnv.DBLoadError.Error() + "\n")
-		} else {
-			os.Stderr.WriteString("Failed to load database: DoltDB is nil\n")
+			return HandleVErrAndExitCode(errhand.BuildDError("failed to load database").AddCause(dEnv.DBLoadError).Build(), usage)
 		}
-		return 1
+		return HandleVErrAndExitCode(errhand.BuildDError("failed to load database").Build(), usage)
 	}
 	
-	f3, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if f3 != nil {
-		f3.WriteString("DoltDB loaded successfully\n")
-		f3.Close()
+	f4, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f4 != nil {
+		f4.WriteString("DoltDB loaded successfully\n")
+		f4.Close()
 	}
 
 	// Create SMUX session over stdio for multiplexing
@@ -250,10 +267,10 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	grpcListener := &smuxListener{session: session, name: "grpc"}
 	httpListener := &smuxListener{session: session, name: "http"}
 	
-	f4, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if f4 != nil {
-		f4.WriteString("About to start gRPC server...\n")
-		f4.Close()
+	f5, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if f5 != nil {
+		f5.WriteString("About to start gRPC server...\n")
+		f5.Close()
 	}
 	
 	// Add a goroutine to monitor if we're still running
