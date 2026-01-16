@@ -128,7 +128,7 @@ func (p *LazyTempFileProvider) NewFile(dir, pattern string) (*os.File, error) {
 	return p.provider.NewFile(dir, pattern)
 }
 
-// MovableTemFile is an object that implements TempFileProvider that is used by the nbs to create temp files that
+// MovableTempFile is an object that implements TempFileProvider that is used by the nbs to create temp files that
 // ultimately will be renamed.  It is important to use this instance rather than using os.TempDir, or os.CreateTemp
 // directly as those may have errors executing a rename against if the volume the default temporary directory lives on
 // is different than the volume of the destination of the rename.
