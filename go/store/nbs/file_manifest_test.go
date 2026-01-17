@@ -41,7 +41,7 @@ import (
 func makeFileManifestTempDir(t *testing.T) fileManifest {
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
-	fm, err := getFileManifest(context.Background(), dir, asyncFlush)
+	fm, err := getFileManifest(context.Background(), dir)
 	require.NoError(t, err)
 	return fm.(fileManifest)
 }
@@ -106,7 +106,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
 
-	fm2, err := getFileManifest(context.Background(), fm.dir, asyncFlush) // Open existent, but empty manifest
+	fm2, err := getFileManifest(context.Background(), fm.dir) // Open existent, but empty manifest
 	require.NoError(t, err)
 	exists, upstream, err := fm2.ParseIfExists(context.Background(), stats, nil)
 	require.NoError(t, err)

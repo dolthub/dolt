@@ -85,7 +85,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return nil
 	}
 
-	_, err = updateWithChecker(ctx, dir, syncFlush, check, contents.lock, contents, nil)
+	_, err = updateWithChecker(ctx, dir, check, contents.lock, contents, nil)
 
 	if err != nil {
 		return false, err
@@ -95,9 +95,9 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 }
 
 // getFileManifest makes a new file manifest.
-func getFileManifest(ctx context.Context, dir string, mode updateMode) (m manifest, err error) {
+func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
 	lock := fslock.New(filepath.Join(dir, lockFileName))
-	m = fileManifest{dir: dir, mode: mode, lock: lock}
+	m = fileManifest{dir: dir, lock: lock}
 
 	var f *os.File
 	f, err = openIfExists(filepath.Join(dir, manifestFileName))
@@ -123,17 +123,9 @@ func getFileManifest(ctx context.Context, dir string, mode updateMode) (m manife
 	return
 }
 
-type updateMode byte
-
-const (
-	asyncFlush updateMode = 0
-	syncFlush  updateMode = 1
-)
-
 type fileManifest struct {
 	lock *fslock.Lock
 	dir  string
-	mode updateMode
 }
 
 // Returns nil if path does not exist
@@ -190,7 +182,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock hash.Hash, newConten
 		return nil
 	}
 
-	return updateWithChecker(ctx, fm.dir, fm.mode, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
 }
 
 func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
@@ -207,7 +199,7 @@ func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newC
 		}
 	}()
 
-	return updateWithChecker(ctx, fm.dir, fm.mode, updateGCGenManifestCheck, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, updateGCGenManifestCheck, lastLock, newContents, writeHook)
 }
 
 // parseV5Manifest parses the v5 manifest from the Reader given. Assumes the first field (the manifest version and
@@ -369,7 +361,7 @@ func parseIfExists(_ context.Context, dir string, readHook func() error) (exists
 }
 
 // updateWithChecker updates the manifest if |validate| is satisfied, callers must hold the file lock.
-func updateWithChecker(_ context.Context, dir string, mode updateMode, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+func updateWithChecker(_ context.Context, dir string, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
@@ -394,10 +386,8 @@ func updateWithChecker(_ context.Context, dir string, mode updateMode, validate 
 			return "", ferr
 		}
 
-		if mode == syncFlush {
-			if ferr = temp.Sync(); ferr != nil {
-				return "", ferr
-			}
+		if ferr = temp.Sync(); ferr != nil {
+			return "", ferr
 		}
 
 		return temp.Name(), nil
@@ -473,10 +463,8 @@ func updateWithChecker(_ context.Context, dir string, mode updateMode, validate 
 		return manifestContents{}, err
 	}
 
-	if mode == syncFlush {
-		if err = file.SyncDirectoryHandle(dir); err != nil {
-			return manifestContents{}, err
-		}
+	if err = file.SyncDirectoryHandle(dir); err != nil {
+		return manifestContents{}, err
 	}
 
 	return newContents, nil
