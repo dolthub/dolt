@@ -203,13 +203,9 @@ func LoadStashList(ctx context.Context, nbf *types.NomsBinFormat, ns tree.NodeSt
 		return &StashList{nam, nam.HashOf(), -1}, nil
 	}
 
-	val, err := vr.ReadValue(ctx, rootHash)
+	val, err := vr.MustReadValue(ctx, rootHash)
 	if err != nil {
 		return nil, err
-	}
-
-	if val == nil {
-		return nil, errors.New("root hash doesn't exist")
 	}
 
 	return getExistingStashList(ctx, ns, val)

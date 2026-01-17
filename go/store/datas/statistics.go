@@ -117,7 +117,7 @@ func parse_Statistics(ctx context.Context, bs []byte, ns tree.NodeStore, vr type
 	}
 
 	addr := hash.New(stat.RootBytes())
-	value, err := vr.ReadValue(ctx, addr)
+	value, err := vr.MustReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

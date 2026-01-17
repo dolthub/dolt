@@ -89,10 +89,6 @@ func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateLogArgParser(false)
 }
 
-func (cmd LogCmd) RequiresRepo() bool {
-	return false
-}
-
 // Exec executes the command
 func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	return cmd.logWithLoggerFunc(ctx, commandStr, args, dEnv, cliCtx)
@@ -151,7 +147,7 @@ func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sql
 	}
 
 	if apr.Contains(cli.AllFlag) {
-		branches, err := getBranches(sqlCtx, queryist, false)
+		branches, err := getBranches(sqlCtx, queryist, false, true)
 		if err != nil {
 			return nil, 0, err
 		}

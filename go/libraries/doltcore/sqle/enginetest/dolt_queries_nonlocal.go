@@ -183,4 +183,30 @@ var NonlocalScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "nonlocal table appears once in show tables when local table exists",
+		SetUpScript: []string{
+			"CREATE TABLE foo (id int auto_increment primary key);",
+			"CALL dolt_commit('-Am', 'create table foo');",
+			"CALL dolt_branch('test');",
+			"INSERT INTO foo values (1);",
+			`INSERT INTO dolt_nonlocal_tables (table_name, target_ref, options) VALUES ('foo', 'main', 'immediate');`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show tables;",
+				Expected: []sql.Row{{"foo"}},
+			},
+			{
+				Query: "call dolt_checkout('test');",
+			},
+			// TODO(elianddb): Add an indicator that the current local table (not part of the target reference for the
+			//  non-local pattern) is currently shadowed. This would provide actionable feedback, but for now only show
+			//  a singular name for the non-local table, as it's the only queryable one.
+			{
+				Query:    "show tables;",
+				Expected: []sql.Row{{"foo"}},
+			},
+		},
+	},
 }

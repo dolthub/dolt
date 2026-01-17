@@ -33,12 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func mustGetValue(v types.Value, found bool, err error) types.Value {
-	d.PanicIfError(err)
-	d.PanicIfFalse(found)
-	return v
-}
-
 func mustGetCommittedValue(db *database, v types.Value) types.Value {
 	r, err := GetCommittedValue(context.Background(), db, v)
 	d.PanicIfError(err)

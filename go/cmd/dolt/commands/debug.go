@@ -89,14 +89,6 @@ func (cmd DebugCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SQL
 }
 
-// RequiresRepo indicates that this command does not have to be run from within a dolt data repository directory.
-// In this case it is because this command supports the DataDirFlag which can pass in a directory.  In the event that
-// that parameter is not provided there is additional error handling within this command to make sure that this was in
-// fact run from within a dolt data repository directory.
-func (cmd DebugCmd) RequiresRepo() bool {
-	return false
-}
-
 // Exec executes the command
 // Unlike other commands, sql doesn't set a new working root directly, as the SQL layer updates the working set as
 // necessary when committing work.

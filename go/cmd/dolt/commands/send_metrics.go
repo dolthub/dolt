@@ -54,12 +54,6 @@ func (cmd SendMetricsCmd) Description() string {
 	return "Send events logs to server."
 }
 
-// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
-// that it be run from within a data repository directory
-func (cmd SendMetricsCmd) RequiresRepo() bool {
-	return false
-}
-
 // Hidden should return true if this command should be hidden from the help text
 func (cmd SendMetricsCmd) Hidden() bool {
 	return true

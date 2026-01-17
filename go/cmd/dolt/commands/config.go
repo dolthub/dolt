@@ -91,8 +91,6 @@ func (cmd ConfigCmd) Description() string {
 	return "Dolt configuration."
 }
 
-// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
-// that it be run from within a data repository directory
 func (cmd ConfigCmd) RequiresRepo() bool {
 	return false
 }

@@ -14,7 +14,8 @@
 
 package blobstore
 
-// NotFound is an error type used only when a key is not found in a Blobstore.
+// NotFound is an error type used only when a storage artifact is not found - like a table file.
+// This is not used for missing chunks, see |MissingChunkError| below.
 type NotFound struct {
 	Key string
 }

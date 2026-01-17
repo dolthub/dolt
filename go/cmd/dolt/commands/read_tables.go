@@ -66,8 +66,6 @@ func (cmd ReadTablesCmd) Docs() *cli.CommandDocumentation {
 	return cli.NewCommandDocumentation(readTablesDocs, ap)
 }
 
-// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
-// that it be run from within a data repository directory
 func (cmd ReadTablesCmd) RequiresRepo() bool {
 	return false
 }

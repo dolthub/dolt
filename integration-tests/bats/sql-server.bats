@@ -2204,7 +2204,7 @@ EOF
     [ $status -eq 0 ]
     run dolt -u root -p "" sql -q "create user __dolt_local_user__@localhost"
     [ $status -eq 0 ]
-    run dolt sql
+    run dolt sql -q "select current_user"
     [ $status -ne 0 ]
     [[ "$output" =~ "Error 1045 (28000): Access denied for user" ]] || false
 
@@ -2264,4 +2264,26 @@ EOF
     run dolt --use-db repo1 sql -q "SET @@dolt_show_system_tables=1; SHOW TABLE STATUS FROM \`repo1\` LIKE 'dolt_commits';"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "Empty database name" ]] || false
+}
+
+@test "sql-server: read permission failure clearly communicated" {
+  start_sql_server > server_log.txt 2>&1 && sleep 0.5
+
+  stop_sql_server 1 && sleep 0.5
+
+  # Server log should say nothing about permissions.
+  run grep -F "permission denied" server_log.txt
+  [ $status -eq 1 ]
+
+  chmod 0000 repo1/.dolt/noms/manifest
+  start_sql_server > server_log.txt 2>&1 && sleep 0.5
+
+  grep -F "permission denied" server_log.txt
+
+  # revert, and do the same with the journal file.
+  chmod 0600 repo1/.dolt/noms/manifest
+  chmod 0000 repo1/.dolt/noms/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+
+  start_sql_server > server_log.txt 2>&1 && sleep 0.5
+  grep -F "permission denied" server_log.txt
 }

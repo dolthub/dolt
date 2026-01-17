@@ -42,7 +42,10 @@ func unfilteredHashFunc(_ context.Context, hs hash.HashSet) (hash.HashSet, error
 // package that implements Value reading.
 type ValueReader interface {
 	Format() *NomsBinFormat
+	// ReadValue reads value. If the Value is not found, it will return (nil, nil).
 	ReadValue(ctx context.Context, h hash.Hash) (Value, error)
+	// MustReadValue reads value. Unlike ReadValue, it will return an error if the Value is not found.
+	MustReadValue(ctx context.Context, h hash.Hash) (Value, error)
 	ReadManyValues(ctx context.Context, hashes hash.HashSlice) (ValueSlice, error)
 }
 
@@ -218,6 +221,17 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 	}
 
 	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
+	return v, nil
+}
+
+func (lvs *ValueStore) MustReadValue(ctx context.Context, h hash.Hash) (Value, error) {
+	v, err := lvs.ReadValue(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, chunks.NewMissingChunkError(h)
+	}
 	return v, nil
 }
 

@@ -334,10 +334,11 @@ func (r fbRvStorage) GetForeignKeys(ctx context.Context, vr types.ValueReader) (
 	if addr.IsEmpty() {
 		return types.SerialMessage{}, false, nil
 	}
-	v, err := vr.ReadValue(ctx, addr)
+	v, err := vr.MustReadValue(ctx, addr)
 	if err != nil {
-		return types.SerialMessage{}, false, err
+		return types.SerialMessage{}, false, fmt.Errorf("error reading foreign key %s: %w", addr.String(), err)
 	}
+
 	return v.(types.SerialMessage), true, nil
 }
 

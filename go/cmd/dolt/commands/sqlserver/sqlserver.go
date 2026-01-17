@@ -83,6 +83,17 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 		" other command line arguments are ignored.\n\nThis is an example yaml configuration file showing all supported" +
 		" items and their default values:\n\n" +
 		indentLines(servercfg.ServerConfigAsYAMLConfig(DefaultCommandLineServerConfig()).String()) + "\n\n" + `
+ENVIRONMENT VARIABLE INTERPOLATION:
+
+SQL server yaml configs support environment variable interpolation:
+
+  ${VAR}             Expands to the value of VAR (error if VAR is unset or empty)
+  $$                Escapes to a literal '$'
+
+Notes:
+  - Interpolation happens before YAML parsing.
+  - Quote values for string fields when needed (e.g. values containing ':'), but do not quote placeholders intended for numeric/bool fields.
+
 SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}data_dir{{.EmphasisRight}}: A directory where the server will load dolt databases to serve, and create new ones. Defaults to the current directory.

@@ -192,7 +192,11 @@ func ConfigureServices(
 	AssertNoDatabasesInAccessModeReadOnly := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
 			return mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-				if dEnv.IsAccessModeReadOnly(ctx) {
+				readOnly, err := dEnv.IsAccessModeReadOnly(ctx)
+				if err != nil {
+					return true, err
+				}
+				if readOnly {
 					return true, ErrCouldNotLockDatabase.New(name)
 				}
 				return false, nil
@@ -526,7 +530,13 @@ func ConfigureServices(
 	InitMetricsListener := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
 			labels := cfg.ServerConfig.MetricsLabels()
-			metListener, err = newMetricsListener(labels, cfg.Version, clusterController)
+			path, err := cfg.DoltEnv.FS.Abs(".")
+			if err != nil {
+				logrus.Debug(fmt.Sprintf("Error getting absolute path for metrics listener: %v", err))
+				path = ""
+			}
+
+			metListener, err = newMetricsListener(labels, cfg.Version, path, clusterController)
 			return err
 		},
 		StopF: func() error {

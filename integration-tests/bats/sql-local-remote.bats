@@ -199,9 +199,11 @@ get_commit_hash_at() {
     dolt sql -q "insert into test values (2), (3)"
     dolt add test
     dolt commit -m "insert more values into test"
-    cd ..
 
+    cd ..
     start_sql_server altDB
+    cd altDB
+
     run dolt blame test
     [ "$status" -eq 0 ]
     export out="$output"
@@ -269,6 +271,7 @@ get_commit_hash_at() {
 
 @test "sql-local-remote: test 'status' and switch between server/no server" {
   start_sql_server defaultDB
+  cd defaultDB
 
   run dolt status
   [ "$status" -eq 0 ] || false
@@ -323,9 +326,10 @@ get_commit_hash_at() {
     dolt sql -q "create table test1 (pk int primary key)"
     dolt sql -q "create table test2 (pk int primary key)"
     dolt add test1
-    cd ..
 
+    cd ..
     start_sql_server altDB
+    cd altDB
 
     run dolt --verbose-engine-setup commit -m "committing remotely"
     [ "$status" -eq 0 ]
@@ -333,20 +337,16 @@ get_commit_hash_at() {
 
     stop_sql_server 1
 
-    cd altDB
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "committing remotely" ]] || false
 
     run dolt add test2
     [ "$status" -eq 0 ]
-    cd ..
 
     run dolt --verbose-engine-setup commit -m "committing locally"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
-
-    cd altDB
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "committing locally" ]] || false
@@ -691,6 +691,8 @@ SQL
 
 @test "sql-local-remote: verify simple dolt reset behavior" {
     start_sql_server altDB
+    cd altDB
+
     dolt sql -q "create table test1 (pk int primary key)"
     dolt add test1
     dolt commit -m "create table test1"
@@ -781,20 +783,23 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ 'Revert "Commit ABCDEF"' ]] || false
 
-    dolt reset --hard HEAD~1
+    dolt --use-db altDB reset --hard HEAD~1
 
     stop_sql_server 1
 
-    run dolt revert HEAD
+    run dolt --use-db altDB revert HEAD
     [ $status -eq 0 ]
     [[ $output =~ 'Revert "Commit ABCDEF"' ]] || false
 }
 
 @test "sql-local-remote: Ensure that dolt clean works for each mode" {
+    cd altDB
     dolt reset --hard
     dolt sql -q "create table tbl (pk int primary key)"
 
+    cd ..
     start_sql_server altDB
+    cd altDB
 
     run dolt --verbose-engine-setup clean --dry-run
     [ $status -eq 0 ]

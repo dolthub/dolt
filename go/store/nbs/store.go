@@ -1047,7 +1047,6 @@ func toGetRecords(hashes hash.HashSet) []getRecord {
 	reqs := make([]getRecord, len(hashes))
 	idx := 0
 	for h := range hashes {
-		h := h
 		reqs[idx] = getRecord{
 			a:      &h,
 			prefix: h.Prefix(),
@@ -1272,7 +1271,6 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 	reqs := make([]hasRecord, len(hashes))
 	idx := 0
 	for h := range hashes {
-		h := h
 		reqs[idx] = hasRecord{
 			a:      &h,
 			prefix: h.Prefix(),

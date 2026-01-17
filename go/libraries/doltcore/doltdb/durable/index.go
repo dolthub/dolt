@@ -104,7 +104,7 @@ func indexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeSt
 }
 
 func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, addr hash.Hash, isKeylessTable bool) (Index, error) {
-	v, err := vrw.ReadValue(ctx, addr)
+	v, err := vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
