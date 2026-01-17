@@ -387,7 +387,7 @@ func TestArchiveMixedTypesToChunkers(t *testing.T) {
 		if isEven(chk.Hash()) {
 			// Use zStd compression for even  chunks
 			cmp, err := zstd.CompressDict(nil, chk.Data(), cDict)
-		require.NoError(t, err)
+			require.NoError(t, err)
 
 			chId, err := aw.writeByteSpan(cmp)
 			assert.NoError(t, err)

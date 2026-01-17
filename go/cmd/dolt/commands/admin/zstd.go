@@ -18,11 +18,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/fatih/color"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-
-	"github.com/fatih/color"
 	"github.com/dolthub/dolt/go/store/nbs/zstd"
 )
 

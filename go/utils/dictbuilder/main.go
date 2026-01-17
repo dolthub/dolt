@@ -21,9 +21,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/gozstd"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/gozstd"
 )
 
 const (
