@@ -27,9 +27,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
@@ -139,22 +139,21 @@ func (j *RowWriter) jsonDataForSchema(ctx *sql.Context, row sql.Row) ([]byte, er
 			return false, nil
 		}
 
-		switch col.TypeInfo.GetTypeIdentifier() {
-		case typeinfo.DatetimeTypeIdentifier,
-			typeinfo.DecimalTypeIdentifier,
-			typeinfo.EnumTypeIdentifier,
-			typeinfo.InlineBlobTypeIdentifier,
-			typeinfo.SetTypeIdentifier,
-			typeinfo.TimeTypeIdentifier,
-			typeinfo.TupleTypeIdentifier,
-			typeinfo.UuidTypeIdentifier,
-			typeinfo.VarBinaryTypeIdentifier:
+		switch col.TypeInfo.ToSqlType().Type() {
+		case query.Type_DATETIME,
+			query.Type_DECIMAL,
+			query.Type_ENUM,
+			query.Type_VARBINARY,
+			query.Type_BINARY,
+			query.Type_SET,
+			query.Type_TIME,
+			query.Type_TUPLE:
 			sqlVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, nil, val)
 			if err != nil {
 				return true, err
 			}
 			val = sqlVal.ToString()
-		case typeinfo.JSONTypeIdentifier:
+		case query.Type_JSON:
 			sqlVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, nil, val)
 			if err != nil {
 				return true, err
