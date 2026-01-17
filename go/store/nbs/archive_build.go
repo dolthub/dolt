@@ -35,7 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs/zstd"
 )
 
-const defaultDictionarySize = 1 << 12 // NM4 - maybe just select the largest chunk. TBD.
+const defaultDictionarySize = 1 << 14 // NM4 - maybe just select the largest chunk. TBD.
 const maxSamples = 1000
 const minSamples = 25
 const fourMb = 1 << 22
