@@ -110,6 +110,8 @@ func NewDoltEnv(version string, config *DoltCliConfig, repoState *RepoState, dol
 	}
 }
 
+// DoltDB returns the dolt database for this environment, loading it if necessary. If loading fails,
+// |dEnv.DBLoadError| will be non-nil. The caller is responsible for checking this error.
 func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 	if dEnv.doltDB == nil {
 		LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
@@ -1319,6 +1321,14 @@ func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB(ctx).ValueReadWriter(), tmpDir)
 }
 
-func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) bool {
-	return dEnv.DoltDB(ctx).AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
+func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) (bool, error) {
+	db := dEnv.DoltDB(ctx)
+	if db == nil {
+		if dEnv.DBLoadError != nil {
+			return false, dEnv.DBLoadError
+		}
+		return false, errors.New("DoltDB failed to initialize but no error was recorded")
+	}
+
+	return db.AccessMode() == chunks.ExclusiveAccessMode_ReadOnly, nil
 }
