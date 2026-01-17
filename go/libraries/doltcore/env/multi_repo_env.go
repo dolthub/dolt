@@ -79,7 +79,7 @@ func GetMultiEnvStorageMetadata(ctx context.Context, dataDirFS filesys.Filesys) 
 	dbMap[dbName] = dataDirFS
 
 	// If there are other directories in the directory, try to load them as additional databases
-	dataDirFS.Iter(".", false, func(path string, _ int64, isDir bool) (stop bool) {
+	err = dataDirFS.Iter(".", false, func(path string, _ int64, isDir bool) (stop bool) {
 		if !isDir {
 			return false
 		}
@@ -107,6 +107,9 @@ func GetMultiEnvStorageMetadata(ctx context.Context, dataDirFS filesys.Filesys) 
 
 		return false
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	sms := make(StorageMetadataMap)
 	for _, fs := range dbMap {
@@ -183,7 +186,7 @@ func MultiEnvForDirectory(
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
-	dataDirFS.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
+	err := dataDirFS.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
 		if !isDir {
 			return false
 		}
@@ -221,6 +224,9 @@ func MultiEnvForDirectory(
 		}
 		return false
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	// if the current directory database is in our set, add it first so it will be the current database
 	if env, ok := envSet[dbName]; ok && env.Valid() {

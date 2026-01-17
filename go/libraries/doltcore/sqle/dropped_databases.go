@@ -209,7 +209,9 @@ func (dd *droppedDatabaseManager) validateUndropDatabase(ctx *sql.Context, name 
 		return "", "", "", err
 	}
 
-	if hasCaseInsensitivePath(dd.fs, destinationPath) {
+	if ok, err := hasCaseInsensitivePath(dd.fs, destinationPath); err != nil {
+		return "", "", "", err
+	} else if ok {
 		return "", "", "", fmt.Errorf("unable to undrop database '%s'; "+
 			"another database already exists with the same case-insensitive name", exactCaseName)
 	}
@@ -221,15 +223,18 @@ func (dd *droppedDatabaseManager) validateUndropDatabase(ctx *sql.Context, name 
 // hasCaseInsensitivePath returns true if the specified path |target| already exists on the filesystem |fs|, with
 // a case-insensitive match on the final component of the path. Note that only the final component of the path is
 // checked in a case-insensitive match – the other components of the path must be a case-sensitive match.
-func hasCaseInsensitivePath(fs filesys.Filesys, target string) bool {
+func hasCaseInsensitivePath(fs filesys.Filesys, target string) (bool, error) {
 	found := false
-	fs.Iter(filepath.Dir(target), false, func(path string, size int64, isDir bool) (stop bool) {
+	err := fs.Iter(filepath.Dir(target), false, func(path string, size int64, isDir bool) (stop bool) {
 		if strings.EqualFold(filepath.Base(path), filepath.Base(target)) {
 			found = true
 		}
 		return found
 	})
-	return found
+	if err != nil {
+		return false, err
+	}
+	return found, nil
 }
 
 // hasCaseInsensitiveMatch tests to see if any of |candidates| are a case-insensitive match for |target| and if so,
