@@ -186,6 +186,15 @@ func (lvs *ValueStore) Format() *NomsBinFormat {
 // for the requested chunk to be empty; in this case, the function simply
 // returns nil.
 func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error) {
+	// Block during GC Finalizing phase to prevent race condition with swapTables.
+	// This matches the behavior of WriteValue and Commit.
+	// See: https://github.com/dolthub/dolt/issues/10331
+	finalize, err := lvs.waitForNotFinalizingGC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer finalize()
+
 	lvs.versOnce.Do(lvs.expectVersion)
 	if v, ok := lvs.decodedChunks.Get(h); ok {
 		d.PanicIfTrue(v == nil)
@@ -239,6 +248,15 @@ func (lvs *ValueStore) MustReadValue(ctx context.Context, h hash.Hash) (Value, e
 // returns the found Values in the same order. Any non-present Values will be
 // represented by nil.
 func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) (ValueSlice, error) {
+	// Block during GC Finalizing phase to prevent race condition with swapTables.
+	// This matches the behavior of WriteValue and Commit.
+	// See: https://github.com/dolthub/dolt/issues/10331
+	finalize, err := lvs.waitForNotFinalizingGC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer finalize()
+
 	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk) (Value, error) {
 		if chunk.IsGhost() {
