@@ -633,7 +633,7 @@ func (jm *journalManifest) Update(ctx context.Context, lastLock hash.Hash, newCo
 		}
 		return nil
 	}
-	return updateWithChecker(ctx, jm.dir, syncFlush, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, jm.dir, checker, lastLock, newContents, writeHook)
 }
 
 // UpdateGCGen implements manifest.
@@ -649,7 +649,7 @@ func (jm *journalManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, 
 
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
-	return updateWithChecker(ctx, jm.dir, syncFlush, updateGCGenManifestCheck, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, jm.dir, updateGCGenManifestCheck, lastLock, newContents, writeHook)
 }
 
 func updateGCGenManifestCheck(upstream, contents manifestContents) error {
