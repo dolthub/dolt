@@ -390,7 +390,7 @@ teardown() {
 }
 
 @test "profile: profile doesn't need write permission in current dir" {
-    chmod 111 .
+    chmod 555 .
     dolt profile
     chmod 755 .
 }
