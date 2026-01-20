@@ -116,7 +116,7 @@ func TestProcessJournalRecords(t *testing.T) {
 	}
 
 	var recoverErr error
-	n, err := processJournalRecords(ctx, bytes.NewReader(journal), 0, check, func(e error) { recoverErr = e })
+	n, err := processJournalRecords(ctx, bytes.NewReader(journal), true, 0, check, func(e error) { recoverErr = e })
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestProcessJournalRecords(t *testing.T) {
 	// write a bogus record to the end and verify that we don't get an error
 	i, sum = 0, 0
 	writeCorruptJournalRecord(journal[off:])
-	n, err = processJournalRecords(ctx, bytes.NewReader(journal), 0, check, func(e error) { recoverErr = e })
+	n, err = processJournalRecords(ctx, bytes.NewReader(journal), true, 0, check, func(e error) { recoverErr = e })
 	require.NoError(t, err)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
@@ -227,7 +227,7 @@ func TestJournalForDataLoss(t *testing.T) {
 			}
 
 			var recoverErr error
-			_, err := processJournalRecords(ctx, bytes.NewReader(journal[:off]), 0, check, func(e error) { recoverErr = e })
+			_, err := processJournalRecords(ctx, bytes.NewReader(journal[:off]), true, 0, check, func(e error) { recoverErr = e })
 
 			if td.lossExpected {
 				require.Error(t, err)
@@ -288,7 +288,7 @@ func TestJournalForDataLossOnBoundary(t *testing.T) {
 		// no confidence in the rest of the test.
 		ctx := context.Background()
 		var recoverErr error
-		bytesRead, err := processJournalRecords(ctx, bytes.NewReader(journalBuf[:]), 0, check, func(e error) { recoverErr = e })
+		bytesRead, err := processJournalRecords(ctx, bytes.NewReader(journalBuf[:]), true, 0, check, func(e error) { recoverErr = e })
 		require.NoError(t, err)
 		require.Equal(t, off, uint32(bytesRead))
 		require.Error(t, recoverErr) // We do expect a warning here, but no data loss.
@@ -312,7 +312,7 @@ func TestJournalForDataLossOnBoundary(t *testing.T) {
 				// Copy lost data into journal buffer at the test offset.
 				copy(journalBuf[startPoint:startPoint+uint32(len(lostData))], lostData)
 
-				_, err := processJournalRecords(ctx, bytes.NewReader(journalBuf[:]), 0, check, func(e error) { recoverErr = e })
+				_, err := processJournalRecords(ctx, bytes.NewReader(journalBuf[:]), true, 0, check, func(e error) { recoverErr = e })
 				require.Error(t, err)
 				require.True(t, errors.Is(err, ErrJournalDataLoss))
 				require.Error(t, recoverErr)
@@ -457,7 +457,7 @@ func processJournalAndCollectRecords(t *testing.T, journalData []byte) []testRec
 		t.FailNow()
 	}
 
-	_, err := processJournalRecords(ctx, bytes.NewReader(journalData), 0, func(offset int64, rec journalRec) error {
+	_, err := processJournalRecords(ctx, bytes.NewReader(journalData), true, 0, func(offset int64, rec journalRec) error {
 		records = append(records, testRecord{hash: rec.address, kind: rec.kind})
 		return nil
 	}, warnCb)
