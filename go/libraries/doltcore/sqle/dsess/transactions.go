@@ -48,9 +48,9 @@ var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transact
 var ErrUnresolvedConflictsAutoCommit = errors.New("Merge conflict detected, @autocommit transaction rolled back. @autocommit must be disabled so that merge conflicts can be resolved using the dolt_conflicts and dolt_schema_conflicts tables before manually committing the transaction. Alternatively, to commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
 
 var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
-		"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
-		"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
-		"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
+	"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
+	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
+	"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
 
 // TODO: remove this
 func TransactionsDisabled(ctx *sql.Context) bool {
@@ -98,9 +98,9 @@ type savepoint struct {
 }
 
 func NewDoltTransaction(
-		ctx *sql.Context,
-		dbs []SqlDatabase,
-		tCharacteristic sql.TransactionCharacteristic,
+	ctx *sql.Context,
+	dbs []SqlDatabase,
+	tCharacteristic sql.TransactionCharacteristic,
 ) (*DoltTransaction, error) {
 
 	startPoints := make(map[string]dbRoot)
@@ -175,24 +175,24 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 
 // transactionWrite is the logic to write an updated working set (and optionally a commit) to the database
 type transactionWrite func(ctx *sql.Context,
-		tx *DoltTransaction,           // the transaction being written
-		doltDb *doltdb.DoltDB,         // the database to write to
-		startState *doltdb.WorkingSet, // the starting working set
-		commit *doltdb.PendingCommit,  // optional
-		workingSet *doltdb.WorkingSet, // must be provided
-		hash hash.Hash,                // hash of the current working set to be written
-		mergeOps editor.Options,       // editor options for merges
+	tx *DoltTransaction, // the transaction being written
+	doltDb *doltdb.DoltDB, // the database to write to
+	startState *doltdb.WorkingSet, // the starting working set
+	commit *doltdb.PendingCommit, // optional
+	workingSet *doltdb.WorkingSet, // must be provided
+	hash hash.Hash, // hash of the current working set to be written
+	mergeOps editor.Options, // editor options for merges
 ) (*doltdb.WorkingSet, *doltdb.Commit, error)
 
 // doltCommit is a transactionWrite function that updates the working set and commits a pending commit atomically
 func doltCommit(ctx *sql.Context,
-		tx *DoltTransaction,           // the transaction being written
-		doltDb *doltdb.DoltDB,         // the database to write to
-		startState *doltdb.WorkingSet, // the starting working set
-		commit *doltdb.PendingCommit,  // optional
-		workingSet *doltdb.WorkingSet, // must be provided
-		currHash hash.Hash,            // hash of the current working set to be written
-		mergeOpts editor.Options,      // editor options for merges
+	tx *DoltTransaction, // the transaction being written
+	doltDb *doltdb.DoltDB, // the database to write to
+	startState *doltdb.WorkingSet, // the starting working set
+	commit *doltdb.PendingCommit, // optional
+	workingSet *doltdb.WorkingSet, // must be provided
+	currHash hash.Hash, // hash of the current working set to be written
+	mergeOpts editor.Options, // editor options for merges
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	pending := *commit
 
@@ -276,13 +276,13 @@ func doltCommit(ctx *sql.Context,
 
 // txCommit is a transactionWrite function that updates the working set
 func txCommit(ctx *sql.Context,
-		tx *DoltTransaction,           // the transaction being written
-		doltDb *doltdb.DoltDB,         // the database to write to
-		_ *doltdb.WorkingSet,          // the starting working set
-		_ *doltdb.PendingCommit,       // optional
-		workingSet *doltdb.WorkingSet, // must be provided
-		hash hash.Hash,                // hash of the current working set to be written
-		_ editor.Options,              // editor options for merges
+	tx *DoltTransaction, // the transaction being written
+	doltDb *doltdb.DoltDB, // the database to write to
+	_ *doltdb.WorkingSet, // the starting working set
+	_ *doltdb.PendingCommit, // optional
+	workingSet *doltdb.WorkingSet, // must be provided
+	hash hash.Hash, // hash of the current working set to be written
+	_ editor.Options, // editor options for merges
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	var rsc doltdb.ReplicationStatusController
 	err := doltDb.UpdateWorkingSet(ctx, workingSet.Ref(), workingSet, hash, tx.WorkingSetMeta(ctx), &rsc)
@@ -292,10 +292,10 @@ func txCommit(ctx *sql.Context,
 
 // DoltCommit commits the working set and creates a new DoltCommit as specified, in one atomic write
 func (tx *DoltTransaction) DoltCommit(
-		ctx *sql.Context,
-		workingSet *doltdb.WorkingSet,
-		commit *doltdb.PendingCommit,
-		dbName string,
+	ctx *sql.Context,
+	workingSet *doltdb.WorkingSet,
+	commit *doltdb.PendingCommit,
+	dbName string,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	return tx.doCommit(ctx, workingSet, commit, doltCommit, dbName)
 }
@@ -369,11 +369,11 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 
 // doCommit commits this transaction with the write function provided. It takes the same params as DoltCommit
 func (tx *DoltTransaction) doCommit(
-		ctx *sql.Context,
-		workingSet *doltdb.WorkingSet,
-		commit *doltdb.PendingCommit,
-		writeFn transactionWrite,
-		dbName string,
+	ctx *sql.Context,
+	workingSet *doltdb.WorkingSet,
+	commit *doltdb.PendingCommit,
+	writeFn transactionWrite,
+	dbName string,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	sess := DSessFromSess(ctx.Session)
 	branchState, ok, err := sess.lookupDbState(ctx, dbName)
@@ -491,11 +491,11 @@ func (tx *DoltTransaction) doCommit(
 // working set. Conflicts are automatically resolved with "accept ours" if the session settings dictate it.
 // Currently merges working and staged roots as necessary. HEAD root is only handled by the DoltCommit function.
 func (tx *DoltTransaction) mergeRoots(
-		ctx *sql.Context,
-		startState *doltdb.WorkingSet,
-		existingWorkingSet *doltdb.WorkingSet,
-		workingSet *doltdb.WorkingSet,
-		mergeOpts editor.Options,
+	ctx *sql.Context,
+	startState *doltdb.WorkingSet,
+	existingWorkingSet *doltdb.WorkingSet,
+	workingSet *doltdb.WorkingSet,
+	mergeOpts editor.Options,
 ) (*doltdb.WorkingSet, error) {
 
 	tableResolver, err := GetTableResolver(ctx)
@@ -685,12 +685,12 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 							return err
 						}
 						s = fmt.Sprintf("\n"+
-								"Type: Foreign Key Constraint Violation\n"+
-								"\tForeignKey: %s,\n"+
-								"\tTable: %s,\n"+
-								"\tReferencedTable: %s,\n"+
-								"\tIndex: %s,\n"+
-								"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedTable, m.Index, m.ReferencedIndex)
+							"Type: Foreign Key Constraint Violation\n"+
+							"\tForeignKey: %s,\n"+
+							"\tTable: %s,\n"+
+							"\tReferencedTable: %s,\n"+
+							"\tIndex: %s,\n"+
+							"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedTable, m.Index, m.ReferencedIndex)
 
 					case prolly.ArtifactTypeUniqueKeyViol:
 						var m merge.UniqCVMeta
@@ -699,9 +699,9 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 							return err
 						}
 						s = fmt.Sprintf("\n"+
-								"Type: Unique Key Constraint Violation,\n"+
-								"\tName: %s,\n"+
-								"\tColumns: %v", m.Name, m.Columns)
+							"Type: Unique Key Constraint Violation,\n"+
+							"\tName: %s,\n"+
+							"\tColumns: %v", m.Name, m.Columns)
 
 					case prolly.ArtifactTypeNullViol:
 						var m merge.NullViolationMeta
@@ -710,8 +710,8 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 							return err
 						}
 						s = fmt.Sprintf("\n"+
-								"Type: Null Constraint Violation,\n"+
-								"\tColumns: %v", m.Columns)
+							"Type: Null Constraint Violation,\n"+
+							"\tColumns: %v", m.Columns)
 
 					case prolly.ArtifactTypeChkConsViol:
 						var m merge.CheckCVMeta
@@ -720,9 +720,9 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 							return err
 						}
 						s = fmt.Sprintf("\n"+
-								"Type: Check Constraint Violation,\n"+
-								"\tName: %s,\n"+
-								"\tExpression: %v", m.Name, m.Expression)
+							"Type: Check Constraint Violation,\n"+
+							"\tName: %s,\n"+
+							"\tExpression: %v", m.Name, m.Expression)
 					}
 					if err != nil {
 						return err
@@ -738,7 +738,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 			}
 
 			return fmt.Errorf("%s\n"+
-					"Constraint violations: %s", ErrUnresolvedConstraintViolationsCommit, strings.Join(violations, ", "))
+				"Constraint violations: %s", ErrUnresolvedConstraintViolationsCommit, strings.Join(violations, ", "))
 		}
 	}
 
