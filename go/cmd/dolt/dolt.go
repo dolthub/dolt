@@ -492,7 +492,7 @@ func runMain() int {
 	if needsDBLoad(cfg.subCommand) {
 		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), cfg.dataDirFS, dEnv.Version, dEnv)
 		if err != nil {
-			cli.PrintErrln("failed to load database names")
+			cli.PrintErrln("failed to load database names:", err.Error())
 			return 1
 		}
 		_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
