@@ -117,10 +117,10 @@ func (cmd TransferCmd) ArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	// Parse arguments first
+	// Parse arguments first (for help handling)
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, transferDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+	_ = cli.ParseArgsOrDie(ap, args, help)
 	
 	// Set environment variable to use longer lock timeout for SSH operations
 	os.Setenv("DOLT_TRANSFER_LONG_TIMEOUT", "1")
@@ -148,42 +148,12 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 		f.Close()
 	}
 
-	// Get the repository path from arguments and change to that directory
-	if len(apr.Args) == 0 {
-		return HandleVErrAndExitCode(errhand.BuildDError("repository path required").SetPrintUsage().Build(), usage)
-	}
-	
-	repoPath := apr.Args[0]
+	// The transfer command doesn't need a path argument when --data-dir is used
+	// The dEnv passed to us already has the correct data directory set
 	f2, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if f2 != nil {
-		f2.WriteString(fmt.Sprintf("Changing to directory: %s\n", repoPath))
+		f2.WriteString(fmt.Sprintf("Using dEnv with HasDoltDataDir: %v\n", dEnv.HasDoltDataDir()))
 		f2.Close()
-	}
-	// Change to the repository directory
-	if err := os.Chdir(repoPath); err != nil {
-		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if f != nil {
-			f.WriteString(fmt.Sprintf("Failed to chdir: %v\n", err))
-			f.Close()
-		}
-		return HandleVErrAndExitCode(errhand.BuildDError("cannot access repository at %s", repoPath).AddCause(err).Build(), usage)
-	}
-	// Create a new filesystem for the new directory
-	fs, err := filesys.LocalFilesysWithWorkingDir(".")
-	if err != nil {
-		f, _ := os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if f != nil {
-			f.WriteString(fmt.Sprintf("Failed to create filesystem: %v\n", err))
-			f.Close()
-		}
-		return 1
-	}
-	// Reload environment in the new directory
-	dEnv = env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "dolt")
-	f, _ = os.OpenFile("/tmp/transfer_debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if f != nil {
-		f.WriteString(fmt.Sprintf("Environment loaded, HasDoltDataDir: %v\n", dEnv.HasDoltDataDir()))
-		f.Close()
 	}
 
 	// Load the database

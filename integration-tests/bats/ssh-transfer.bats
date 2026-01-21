@@ -50,8 +50,10 @@ for arg in "$@"; do
     esac
 done
 
-# Execute the command locally
+# Log and execute the command locally  
+echo "Mock SSH executing: $COMMAND" >> "$BATS_TMPDIR/mock_ssh.log"
 eval "$COMMAND"
+echo "Mock SSH command exit code: $?" >> "$BATS_TMPDIR/mock_ssh.log"
 EOF
     chmod +x "$BATS_TMPDIR/mock_ssh"
     

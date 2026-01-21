@@ -169,14 +169,14 @@ func (fact SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 			// Fall back to "dolt" in PATH
 			doltPath = "dolt"
 		}
-		cmd = exec.Command(doltPath, "transfer", path)
+		cmd = exec.Command(doltPath, "--data-dir", path, "transfer")
 		// Tell the transfer command to skip IO redirection
 		cmd.Env = append(os.Environ(), "DOLT_SKIP_IO_REDIRECT=1")
 		
 		// Log the command for debugging
 		f, _ := os.OpenFile("/tmp/ssh_factory.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if f != nil {
-			f.WriteString(fmt.Sprintf("Local mode: running %s transfer %s\n", doltPath, path))
+			f.WriteString(fmt.Sprintf("Local mode: running %s --data-dir %s transfer\n", doltPath, path))
 			f.Close()
 		}
 	} else {
@@ -192,8 +192,8 @@ func (fact SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		}
 		
 		// Build the remote command
-		// The remote side needs to run: dolt transfer <path>
-		remoteCmd := fmt.Sprintf("dolt transfer %s", path)
+		// The remote side needs to run: dolt --data-dir <path> transfer
+		remoteCmd := fmt.Sprintf("dolt --data-dir %s transfer", path)
 		
 		// Parse the SSH command in case it has arguments (like GIT_SSH)
 		sshArgs := strings.Fields(sshCommand)
