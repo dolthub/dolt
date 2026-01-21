@@ -37,7 +37,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "no rebase in progress",
 			}, {
 				Query:          "call dolt_rebase('main');",
-				ExpectedErrStr: "non-interactive rebases not currently supported",
+				ExpectedErrStr: "didn't identify any commits!",
 			}, {
 				Query:          "call dolt_rebase('-i');",
 				ExpectedErrStr: "not enough args",
@@ -119,6 +119,49 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				Query:          "call dolt_rebase('-i', 'main');",
 				ExpectedErrStr: "unable to start rebase while a merge is in progress – abort the current merge before proceeding",
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase: non-interactive rebase successful",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t on main');",
+			"call dolt_branch('feature');",
+			"call dolt_checkout('feature');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'feature commit 1');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'feature commit 2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Non-interactive rebase should now work
+				Query:    "call dolt_rebase('main');",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/feature"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase: interactive mode still requires continue",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t on main');",
+			"call dolt_branch('feature2');",
+			"call dolt_checkout('feature2');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'feature2 commit 1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Interactive rebase should start but not complete automatically
+				Query:    "call dolt_rebase('--interactive', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_feature2; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"}},
+			},
+			{
+				// Should be able to continue the rebase
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/feature2"}},
 			},
 		},
 	},

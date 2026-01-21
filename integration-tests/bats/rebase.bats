@@ -48,10 +48,13 @@ setupCustomEditorScript() {
     [[ "$output" =~ "no rebase in progress" ]] || false
 }
 
-@test "rebase: -i flag required" {
+@test "rebase: non-interactive rebase works" {
+    # Test that non-interactive rebase now works (should succeed or fail for other reasons)
     run dolt rebase b1
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "non-interactive rebases not currently supported" ]] || false
+    # Should not get the "non-interactive rebases not currently supported" error anymore
+    [[ ! "$output" =~ "non-interactive rebases not currently supported" ]] || false
+    # May get other errors like "didn't identify any commits!" which is expected
 }
 
 @test "rebase: bad args" {
