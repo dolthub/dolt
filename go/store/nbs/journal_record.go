@@ -264,16 +264,16 @@ func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) 
 	defer lock.Unlock()
 
 	journalPath := filepath.Join(nomsDir, chunkJournalName)
-	jornalFile, err := os.OpenFile(journalPath, os.O_RDWR, 0666)
+	journalFile, err := os.OpenFile(journalPath, os.O_RDWR, 0666)
 	if err != nil {
 		return "", fmt.Errorf("could not open chunk journal file: %w", err)
 	}
-	defer jornalFile.Close()
+	defer journalFile.Close()
 
 	noOp := func(o int64, r journalRec) error { return nil }
 	// First verify that the journal has data loss.
 	var offset int64
-	offset, err = processJournalRecords(context.Background(), jornalFile, 0, noOp, nil)
+	offset, err = processJournalRecords(context.Background(), journalFile, true /* tryTruncate */, 0, noOp, nil)
 	if err == nil {
 		// No data loss detected, nothing to do.
 		return "", fmt.Errorf("no data loss detected in chunk journal file; no recovery performed")
@@ -283,7 +283,7 @@ func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) 
 	}
 
 	// Seek back to the start, to perform a full copy.
-	if _, err = jornalFile.Seek(0, io.SeekStart); err != nil {
+	if _, err = journalFile.Seek(0, io.SeekStart); err != nil {
 		return "", fmt.Errorf("could not seek to start of chunk journal file: %w", err)
 	}
 
@@ -296,7 +296,7 @@ func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) 
 	if err != nil {
 		return "", fmt.Errorf("could not create backup of corrupted chunk journal file: %w", err)
 	}
-	if _, err = io.Copy(saveFile, jornalFile); err != nil {
+	if _, err = io.Copy(saveFile, journalFile); err != nil {
 		return "", fmt.Errorf("could not backup corrupted chunk journal file: %w", err)
 	}
 
@@ -305,10 +305,10 @@ func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) 
 	}
 
 	// Now truncate the journal file to the last known good offset.
-	if err = jornalFile.Truncate(offset); err != nil {
+	if err = journalFile.Truncate(offset); err != nil {
 		return "", fmt.Errorf("could not truncate corrupted chunk journal file: %w", err)
 	}
-	if err = jornalFile.Sync(); err != nil {
+	if err = journalFile.Sync(); err != nil {
 		return "", fmt.Errorf("could not sync truncated chunk journal file: %w", err)
 	}
 
@@ -327,7 +327,7 @@ func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) 
 //
 // The |warningsCb| callback is called with any errors encountered that we automatically recover from. This allows the caller
 // to handle the situation in a context specific way.
-func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error, warningsCb func(error)) (int64, error) {
+func processJournalRecords(ctx context.Context, r io.ReadSeeker, tryTruncate bool, off int64, cb func(o int64, r journalRec) error, warningsCb func(error)) (int64, error) {
 	var (
 		buf []byte
 		err error
@@ -444,7 +444,7 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 	// When we have a real file, we truncate anything which is beyond the current offset. Historically we put
 	// null bytes there, and there have been cases of garbage data being present instead of nulls. If there is any
 	// data beyond the current offset which we can parse and looks like data loss, we would have errored out above.
-	if f, ok := r.(*os.File); ok {
+	if f, ok := r.(*os.File); ok && tryTruncate {
 		err = f.Truncate(off)
 		if err != nil {
 			return 0, err
