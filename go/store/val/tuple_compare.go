@@ -48,7 +48,10 @@ func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple,
 	var start, stop ByteSize
 	for i := 0; i < off; i++ {
 		stop = desc.fast[i]
-		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
+		t := desc.Types[i]
+		l := left[start:stop]
+		r := right[start:stop]
+		cmp = compare(t, l, r)
 		if cmp != 0 {
 			return cmp
 		}
