@@ -15,6 +15,9 @@
 package enginetest
 
 import (
+	"regexp"
+
+	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -23,6 +26,22 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 )
+
+// editPauseMessageValidator validates edit pause message format
+type editPauseMessageValidator struct{}
+
+var _ enginetest.CustomValueValidator = &editPauseMessageValidator{}
+var editPauseRegex = regexp.MustCompile(`^edit action paused at commit [0-9a-v]{32} \(.+\)\.\s+You can now modify the working directory and stage changes\. When ready, continue the rebase by calling dolt_rebase\('--continue'\)$`)
+
+func (epmv *editPauseMessageValidator) Validate(val interface{}) (bool, error) {
+	message, ok := val.(string)
+	if !ok {
+		return false, nil
+	}
+	return editPauseRegex.MatchString(message), nil
+}
+
+var editPauseMessage = &editPauseMessageValidator{}
 
 var DoltRebaseScriptTests = []queries.ScriptTest{
 	{
@@ -146,6 +165,68 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{42},
 				},
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase: edit action functionality test",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t on main');",
+			"call dolt_branch('feature');",
+			"call dolt_checkout('feature');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'feature commit 1');",
+			"call dolt_rebase('--interactive', 'main');",
+			"update dolt_rebase set action = 'edit' where rebase_order = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Verify edit action was set
+				Query:    "select action from dolt_rebase where rebase_order = 1;",
+				Expected: []sql.Row{{"edit"}},
+			},
+			{
+				// Continue rebase - should pause at the edit action
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, editPauseMessage}},
+			},
+			{
+				// Continue again - should complete since no changes were made
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/feature"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase: multiple edit actions",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t on main');",
+			"call dolt_branch('feature2');",
+			"call dolt_checkout('feature2');",
+			"insert into t values (10);",
+			"call dolt_commit('-am', 'commit 1');",
+			"insert into t values (20);",
+			"call dolt_commit('-am', 'commit 2');",
+			"call dolt_rebase('--interactive', 'main');",
+			"update dolt_rebase set action = 'edit';",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// First edit pause
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, editPauseMessage}},
+			},
+			{
+				// Continue first edit without changes - should pause at second edit
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, editPauseMessage}},
+			},
+			{
+				// Continue second edit to complete rebase
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/feature2"}},
 			},
 		},
 	},
