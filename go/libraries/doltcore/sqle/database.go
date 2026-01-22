@@ -2073,7 +2073,7 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	} else if exists {
 		return sql.ErrTableAlreadyExists.New(tableName.Name)
 	}
-	
+
 	headRoot, err := db.GetHeadRoot(ctx)
 	if err != nil {
 		return err
