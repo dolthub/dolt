@@ -2066,12 +2066,6 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	}
 
 	tableName := doltdb.TableName{Name: table, Schema: schemaName}
-	if exists, err := root.HasTable(ctx, tableName); err != nil {
-		return err
-	} else if exists {
-		return sql.ErrTableAlreadyExists.New(table)
-	}
-
 	headRoot, err := db.GetHeadRoot(ctx)
 	if err != nil {
 		return err
@@ -2118,12 +2112,6 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 	}
 
 	tableName := doltdb.TableName{Name: table, Schema: schemaName}
-	if exists, err := root.HasTable(ctx, tableName); err != nil {
-		return err
-	} else if exists {
-		return sql.ErrTableAlreadyExists.New(tableName.Name)
-	}
-
 	headRoot, err := db.GetHeadRoot(ctx)
 	if err != nil {
 		return err
@@ -2160,6 +2148,10 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 
 // createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
 func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaName string, root doltdb.RootValue, doltSch schema.Schema) error {
+	if _, exists := dsess.DSessFromSess(ctx.Session).GetTemporaryTable(ctx, db.Name(), tableName); exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
+
 	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
 		return err
 	} else if exists {
