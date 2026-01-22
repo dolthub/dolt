@@ -91,6 +91,8 @@ func doDoltStash(ctx *sql.Context, args []string) (int, error) {
 		err = doStashPop(ctx, dbData, stashName, idx)
 	case "drop":
 		err = doStashDrop(ctx, dbData, stashName, idx)
+	case "apply":
+		err = doStashApply(ctx, dbData, stashName, idx)
 	case "clear":
 		if apr.NArg() > 2 { // Clear does not take extra arguments
 			return cmdFailure, fmt.Errorf("error: invalid arguments. Clear takes only subcommand and stash name")
@@ -187,6 +189,32 @@ func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName str
 	}
 
 	return dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
+}
+
+func doStashApply(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) error {
+	headCommit, result, meta, err := handleMerge(ctx, dbData, stashName, idx)
+	if err != nil {
+		return err
+	}
+
+	err = updateWorkingRoot(ctx, dbData, result.Root)
+	if err != nil {
+		return err
+	}
+
+	roots, err := getRoots(ctx, dbData, headCommit)
+	if err != nil {
+		return err
+	}
+
+	// added tables need to be staged
+	// since these tables are coming from a stash, don't filter for ignored table names.
+	roots, err = actions.StageTables(ctx, roots, doltdb.ToTableNames(meta.TablesToStage, doltdb.DefaultSchemaName), false)
+	if err != nil {
+		return err
+	}
+
+	return updateWorkingSetFromRoots(ctx, dbData, roots)
 }
 
 func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) error {
