@@ -690,7 +690,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 							"\tTable: %s,\n"+
 							"\tReferencedTable: %s,\n"+
 							"\tIndex: %s,\n"+
-							"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedIndex, m.Index, m.ReferencedIndex)
+							"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedTable, m.Index, m.ReferencedIndex)
 
 					case prolly.ArtifactTypeUniqueKeyViol:
 						var m merge.UniqCVMeta
