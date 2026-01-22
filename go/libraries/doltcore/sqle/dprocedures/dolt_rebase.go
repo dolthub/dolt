@@ -191,7 +191,6 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		}
 
 		if !apr.Contains(cli.InteractiveFlag) {
-			// For non-interactive rebases, automatically continue with the default plan
 			rebaseBranch, err := continueRebase(ctx)
 			if err != nil {
 				return 1, "", err

@@ -136,14 +136,13 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// Non-interactive rebase should now work
 				Query:    "call dolt_rebase('main');",
 				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/feature"}},
 			},
 		},
 	},
 	{
-		Name: "dolt_rebase: interactive mode still requires continue",
+		Name: "dolt_rebase: interactive mode requires continue",
 		SetUpScript: []string{
 			"create table t (pk int primary key);",
 			"call dolt_commit('-Am', 'creating table t on main');",
@@ -154,12 +153,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// Interactive rebase should start but not complete automatically
 				Query:    "call dolt_rebase('--interactive', 'main');",
 				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_feature2; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
-				// Should be able to continue the rebase
 				Query:    "call dolt_rebase('--continue');",
 				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/feature2"}},
 			},

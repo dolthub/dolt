@@ -49,12 +49,18 @@ setupCustomEditorScript() {
 }
 
 @test "rebase: non-interactive rebase works" {
-    # Test that non-interactive rebase now works (should succeed or fail for other reasons)
+    run dolt sql -r csv -q "select * from dolt_branch_status('main', 'b1');"
+    [ "$status" -eq 0 ]
+    # main and b1 have diverged by 1 commit each
+    [[ "$output" =~ "b1,1,1" ]] || false
+
     run dolt rebase b1
-    [ "$status" -eq 1 ]
-    # Should not get the "non-interactive rebases not currently supported" error anymore
-    [[ ! "$output" =~ "non-interactive rebases not currently supported" ]] || false
-    # May get other errors like "didn't identify any commits!" which is expected
+    [ "$status" -eq 0 ]
+
+    # Main should be 1 ahead of b1 now
+    run dolt sql -r csv -q "select * from dolt_branch_status('main', 'b1');"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b1,0,1" ]] || false
 }
 
 @test "rebase: bad args" {
