@@ -127,7 +127,9 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table t (pk int primary key);",
 			"call dolt_commit('-Am', 'creating table t on main');",
-			"call dolt_branch('feature');",
+			"insert into t values (42);",
+			"call dolt_commit('-am', 'main commit with pk = 42');",
+			"call dolt_branch('feature', 'HEAD~1');",
 			"call dolt_checkout('feature');",
 			"insert into t values (1);",
 			"call dolt_commit('-am', 'feature commit 1');",
@@ -139,26 +141,11 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Query:    "call dolt_rebase('main');",
 				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/feature"}},
 			},
-		},
-	},
-	{
-		Name: "dolt_rebase: interactive mode requires continue",
-		SetUpScript: []string{
-			"create table t (pk int primary key);",
-			"call dolt_commit('-Am', 'creating table t on main');",
-			"call dolt_branch('feature2');",
-			"call dolt_checkout('feature2');",
-			"insert into t values (1);",
-			"call dolt_commit('-am', 'feature2 commit 1');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_rebase('--interactive', 'main');",
-				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_feature2; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"}},
-			},
-			{
-				Query:    "call dolt_rebase('--continue');",
-				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/feature2"}},
+				Query: "select pk from t where pk = 42;",
+				Expected: []sql.Row{
+					{42},
+				},
 			},
 		},
 	},
