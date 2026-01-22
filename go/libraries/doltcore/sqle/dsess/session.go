@@ -64,7 +64,7 @@ type DoltSession struct {
 	branchController      *branch_control.Controller
 	dbCache               *DatabaseCache
 	dbStates              map[string]*DatabaseSessionState
-	tempTables            map[string][]sql.Table
+	tempTables            map[string]map[string]sql.Table
 	gcSafepointController *gcctx.GCSafepointController
 
 	writeSessProv WriteSessFunc
@@ -90,7 +90,7 @@ func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSessi
 		dbStates:         make(map[string]*DatabaseSessionState),
 		dbCache:          newDatabaseCache(),
 		provider:         pro,
-		tempTables:       make(map[string][]sql.Table),
+		tempTables:       make(map[string]map[string]sql.Table),
 		globalsConf:      config.NewMapConfig(make(map[string]string)),
 		branchController: branch_control.CreateDefaultController(context.TODO()), // Default sessions are fine with the default controller
 		mu:               &sync.Mutex{},
@@ -121,7 +121,7 @@ func NewDoltSession(
 		dbStates:              make(map[string]*DatabaseSessionState),
 		dbCache:               newDatabaseCache(),
 		provider:              pro,
-		tempTables:            make(map[string][]sql.Table),
+		tempTables:            make(map[string]map[string]sql.Table),
 		globalsConf:           globals,
 		branchController:      branchController,
 		statsProv:             statsProvider,
@@ -1503,32 +1503,29 @@ func (d *DoltSession) DatabaseCache(ctx *sql.Context) *DatabaseCache {
 }
 
 func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {
-	d.tempTables[strings.ToLower(db)] = append(d.tempTables[strings.ToLower(db)], tbl)
+	db = strings.ToLower(db)
+	if _, exists := d.tempTables[db]; !exists {
+		d.tempTables[db] = make(map[string]sql.Table)
+	}
+	d.tempTables[db][strings.ToLower(tbl.Name())] = tbl
 }
 
 func (d *DoltSession) DropTemporaryTable(ctx *sql.Context, db, name string) {
-	tables := d.tempTables[strings.ToLower(db)]
-	for i, tbl := range d.tempTables[strings.ToLower(db)] {
-		if strings.EqualFold(tbl.Name(), name) {
-			tables = append(tables[:i], tables[i+1:]...)
-			break
-		}
-	}
-	d.tempTables[strings.ToLower(db)] = tables
+	delete(d.tempTables[strings.ToLower(db)], strings.ToLower(name))
 }
 
 func (d *DoltSession) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.Table, bool) {
-	for _, tbl := range d.tempTables[strings.ToLower(db)] {
-		if strings.EqualFold(tbl.Name(), name) {
-			return tbl, true
-		}
-	}
-	return nil, false
+	tmpTbl, exists := d.tempTables[strings.ToLower(db)][strings.ToLower(name)]
+	return tmpTbl, exists
 }
 
 // GetAllTemporaryTables returns all temp tables for this session.
 func (d *DoltSession) GetAllTemporaryTables(ctx *sql.Context, db string) ([]sql.Table, error) {
-	return d.tempTables[strings.ToLower(db)], nil
+	tmpTables := make([]sql.Table, 0)
+	for _, tbl := range d.tempTables[strings.ToLower(db)] {
+		tmpTables = append(tmpTables, tbl)
+	}
+	return tmpTables, nil
 }
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named

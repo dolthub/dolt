@@ -2202,13 +2202,18 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, db.Name(), db.editOpts, collation)
+	ds := dsess.DSessFromSess(ctx.Session)
+	databaseName := db.Name()
+	if _, exists := ds.GetTemporaryTable(ctx, databaseName, tableName); exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
+
+	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, databaseName, db.editOpts, collation)
 	if err != nil {
 		return err
 	}
 
-	ds := dsess.DSessFromSess(ctx.Session)
-	ds.AddTemporaryTable(ctx, db.Name(), tmp)
+	ds.AddTemporaryTable(ctx, databaseName, tmp)
 	return nil
 }
 
