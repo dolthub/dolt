@@ -71,6 +71,25 @@ const (
 	DoltStatsGCEnabled   = "dolt_stats_gc_enabled"
 
 	DoltAutoGCEnabled = "dolt_auto_gc_enabled"
+
+	DoltLogCommitterOnly = "dolt_log_committer_only"
+
+	DoltAuthorName     = "dolt_author_name"
+	DoltAuthorEmail    = "dolt_author_email"
+	DoltAuthorDate     = "dolt_author_date"
+	DoltCommitterName  = "dolt_committer_name"
+	DoltCommitterEmail = "dolt_committer_email"
+	DoltCommitterDate  = "dolt_committer_date"
+)
+
+// IdentityFallback specifies what identity source to use when session/env variables are not set.
+type IdentityFallback int
+
+const (
+	// FallbackToSQLClient uses the SQL client identity [sql.Context.Client] as the fallback.
+	FallbackToSQLClient IdentityFallback = iota
+	// FallbackToDoltConfig uses dolt config values from [DoltSession] as the fallback.
+	FallbackToDoltConfig
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"

@@ -87,7 +87,7 @@ func (q *q) Less(i, j int) bool {
 	}
 
 	if cI.height == cJ.height {
-		return cI.meta.UserTimestamp > cJ.meta.UserTimestamp
+		return *cI.meta.UserTimestamp > *cJ.meta.UserTimestamp
 	}
 	return false
 }
