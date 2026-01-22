@@ -168,8 +168,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	rows, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, "CALL DOLT_REBASE('--continue');")
 	if err != nil {
-		// If the error is a data conflict, don't abort the rebase, but let the caller resolve the conflicts
-		if dprocedures.ErrRebaseDataConflict.Is(err) || strings.Contains(err.Error(), dprocedures.ErrRebaseDataConflict.Message[:40]) {
+		if isRebasePauseError(err) {
 			if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
 			}
@@ -289,6 +288,7 @@ func buildInitialRebaseMsg(sqlCtx *sql.Context, queryist cli.Queryist, rebaseBra
 	buffer.WriteString("# Commands:\n")
 	buffer.WriteString("# p, pick <commit> = use commit\n")
 	buffer.WriteString("# d, drop <commit> = remove commit\n")
+	buffer.WriteString("# e, edit <commit> = use commit, but stop for amending\n")
 	buffer.WriteString("# r, reword <commit> = use commit, but edit the commit message\n")
 	buffer.WriteString("# s, squash <commit> = use commit, but meld into previous commit\n")
 	buffer.WriteString("# f, fixup <commit> = like \"squash\", but discard this commit's message\n")
@@ -365,4 +365,22 @@ func syncCliBranchToSqlSessionBranch(ctx *sql.Context, dEnv *env.DoltEnv) error 
 	}
 
 	return saveHeadBranch(dEnv.FS, currentBranch)
+}
+
+// isRebasePauseError checks if the given error represents a rebase pause condition
+// (data conflicts) that should not abort the rebase but instead allow the user to resolve/continue.
+// Note: Edit action pauses are now returned as success status rather than errors.
+func isRebasePauseError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check typed errors first (for local execution)
+	if dprocedures.ErrRebaseDataConflict.Is(err) {
+		return true
+	}
+
+	// For over-the-wire errors that lose their type, match against error message patterns
+	errMsg := err.Error()
+	return strings.Contains(errMsg, dprocedures.RebaseDataConflictPrefix)
 }
