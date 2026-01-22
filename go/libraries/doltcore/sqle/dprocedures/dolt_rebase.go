@@ -180,9 +180,6 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		} else if apr.NArg() > 1 {
 			return 1, "", fmt.Errorf("too many args")
 		}
-		if !apr.Contains(cli.InteractiveFlag) {
-			return 1, "", fmt.Errorf("non-interactive rebases not currently supported")
-		}
 		err = startRebase(ctx, apr.Arg(0), commitBecomesEmptyHandling, emptyCommitHandling)
 		if err != nil {
 			return 1, "", err
@@ -191,6 +188,14 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		currentBranch, err := currentBranch(ctx)
 		if err != nil {
 			return 1, "", err
+		}
+
+		if !apr.Contains(cli.InteractiveFlag) {
+			rebaseBranch, err := continueRebase(ctx)
+			if err != nil {
+				return 1, "", err
+			}
+			return 0, SuccessfulRebaseMessage + rebaseBranch, nil
 		}
 
 		return 0, fmt.Sprintf("interactive rebase started on branch %s; "+
