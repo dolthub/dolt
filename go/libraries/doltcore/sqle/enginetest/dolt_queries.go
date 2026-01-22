@@ -8841,6 +8841,8 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			"create temporary table t1 (id varchar(100))", // okay to create temporary table with the same name as a non-temporary table
 			"insert into t1 values ('this is a temporary table')",
 			"create temporary table t2 (id int)",
+			"create table t2 (id int)", // okay to create a non-temporary table with the same name as a temporary table
+			"create temporary table t3 (id int)",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -8849,18 +8851,8 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"this is a temporary table"}},
 			},
 			{
-				// cannot create a table with the same name as an existing table, temporary or non-temporary
-				Query:       "create table t1 (id int)",
-				ExpectedErr: sql.ErrTableAlreadyExists,
-			},
-			{
-				// cannot create a table with the same name as a temporary table
-				Query:       "create table t2 (id int)",
-				ExpectedErr: sql.ErrTableAlreadyExists,
-			},
-			{
 				// cannot create a temporary table with the same name as another temporary table
-				Query:       "create temporary table t2 (id int)",
+				Query:       "create temporary table t3 (id int)",
 				ExpectedErr: sql.ErrTableAlreadyExists,
 			},
 			{
@@ -8870,6 +8862,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			},
 			{
 				// should drop temporary table t1
+				Query:    "drop table t1",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{

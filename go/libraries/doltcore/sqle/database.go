@@ -2164,10 +2164,6 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 
 // createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
 func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaName string, root doltdb.RootValue, doltSch schema.Schema) error {
-	if _, exists := dsess.DSessFromSess(ctx.Session).GetTemporaryTable(ctx, db.Name(), tableName); exists {
-		return sql.ErrTableAlreadyExists.New(tableName)
-	}
-
 	// TODO: This check is also done in createSqlTable and createIndexedSqlTable, which both call createDoltTable,
 	// meaning it's done multiple times. Consider refactoring.
 	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
