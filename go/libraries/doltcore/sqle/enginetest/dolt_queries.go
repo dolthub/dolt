@@ -8834,6 +8834,52 @@ var DoltSystemVariables = []queries.ScriptTest{
 // Temporary tables are not supported in GMS, eventually should move those tests there.
 var DoltTempTableScripts = []queries.ScriptTest{
 	{
+		Name: "temporary and non-temporary table name collisions",
+		SetUpScript: []string{
+			"create table t1 (id varchar(100))",
+			"insert into t1 values ('this is a non-temporary table')",
+			"create temporary table t1 (id varchar(100))", // okay to create temporary table with the same name as a non-temporary table
+			"insert into t1 values ('this is a temporary table')",
+			"create temporary table t2 (id int)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// should show temporary table t1
+				Query:    "select * from t1",
+				Expected: []sql.Row{{"this is a temporary table"}},
+			},
+			{
+				// cannot create a table with the same name as an existing table, temporary or non-temporary
+				Query:       "create table t1 (id int)",
+				ExpectedErr: sql.ErrTableAlreadyExists,
+			},
+			{
+				// cannot create a table with the same name as a temporary table
+				Query:       "create table t2 (id int)",
+				ExpectedErr: sql.ErrTableAlreadyExists,
+			},
+			{
+				// cannot create a temporary table with the same name as another temporary table
+				Query:       "create temporary table t2 (id int)",
+				ExpectedErr: sql.ErrTableAlreadyExists,
+			},
+			{
+				// should show temporary table
+				Query:    "show create table t1",
+				Expected: []sql.Row{{"t1", "CREATE TEMPORARY TABLE `t1` (\n  `id` varchar(100)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				// should drop temporary table t1
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				// should show non-temporary table that was created before
+				Query:    "show create table t1",
+				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n  `id` varchar(100)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
 		Name: "temporary table supports auto increment",
 		SetUpScript: []string{
 			"create temporary table t (i int primary key auto_increment)",
