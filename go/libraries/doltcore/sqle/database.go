@@ -2049,7 +2049,7 @@ OuterLoop:
 	}, nil
 }
 
-// createSqlTable is the private version of CreateTable. It doesn't enforce any table name checks.
+// createSqlTable is the private version of CreateTable.
 func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
@@ -2066,6 +2066,13 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	}
 
 	tableName := doltdb.TableName{Name: table, Schema: schemaName}
+	// TODO: This check is also done in createDoltTable, which is called at the end of this function, meaning it's done
+	// multiple times. Consider refactoring out.
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName.Name)
+	}
 	headRoot, err := db.GetHeadRoot(ctx)
 	if err != nil {
 		return err
@@ -2112,6 +2119,14 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 	}
 
 	tableName := doltdb.TableName{Name: table, Schema: schemaName}
+	// TODO: This check is also done in createDoltTable, which is called at the end of this function, meaning it's done
+	// multiple times. Consider refactoring out.
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName.Name)
+	}
+
 	headRoot, err := db.GetHeadRoot(ctx)
 	if err != nil {
 		return err
@@ -2152,6 +2167,8 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
+	// TODO: This check is also done in createSqlTable and createIndexedSqlTable, which both call createDoltTable,
+	// meaning it's done multiple times. Consider refactoring.
 	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
 		return err
 	} else if exists {
