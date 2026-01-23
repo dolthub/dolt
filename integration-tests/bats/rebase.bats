@@ -577,3 +577,124 @@ message"
     [[ "$output" =~ "b1" ]] || false
     ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
 }
+
+@test "rebase: complex edit and conflict scenario" {
+    # Setup: Create conflicting data on main (for commit 2)
+    dolt sql -q "INSERT INTO t1 VALUES (10, 100);"
+    dolt commit -am "main conflicting data"
+
+    # Setup: Create 4 commits on b1 to rebase
+    dolt checkout b1
+
+    # Commit 1: Will be edited (no conflict with main)
+    dolt sql -q "INSERT INTO t1 VALUES (5, 50);"
+    dolt commit -am "b1 commit 1 - to edit"
+    run dolt show head
+    [ "$status" -eq 0 ]
+    COMMIT1=${lines[0]:12:32}
+
+    # Commit 2: Will conflict with main
+    dolt sql -q "INSERT INTO t1 VALUES (10, 200);"  # Conflicts with main's (10, 100)
+    dolt commit -am "b1 commit 2 - will conflict"
+    run dolt show head
+    [ "$status" -eq 0 ]
+    COMMIT2=${lines[0]:12:32}
+
+    # Commit 3: Clean apply after conflict
+    dolt sql -q "INSERT INTO t1 VALUES (20, 300);"
+    dolt commit -am "b1 commit 3 - clean apply"
+    run dolt show head
+    [ "$status" -eq 0 ]
+    COMMIT3=${lines[0]:12:32}
+
+    # Commit 4: Will be edited at the end
+    dolt sql -q "INSERT INTO t1 VALUES (30, 400);"
+    dolt commit -am "b1 commit 4 - edit at end"
+    run dolt show head
+    [ "$status" -eq 0 ]
+    COMMIT4=${lines[0]:12:32}
+
+    # Create rebase plan: edit, pick (conflict), pick, edit
+    setupCustomEditorScript "complex_rebase_plan.txt"
+    touch complex_rebase_plan.txt
+    echo "edit $COMMIT1 b1 commit 1 - to edit" >> complex_rebase_plan.txt
+    echo "pick $COMMIT2 b1 commit 2 - will conflict" >> complex_rebase_plan.txt
+    echo "pick $COMMIT3 b1 commit 3 - clean apply" >> complex_rebase_plan.txt
+    echo "edit $COMMIT4 b1 commit 4 - edit at end" >> complex_rebase_plan.txt
+
+    # Start the rebase - should pause at first edit
+    run dolt rebase -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "edit action paused at commit" ]] || false
+
+    # Assert we're on the rebase working branch
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+    # Make changes during edit pause and add another commit
+    dolt sql -q "UPDATE t1 SET c = 55 WHERE pk = 5;"
+    dolt commit -a --amend -m "edit modification to commit 1"
+
+    dolt sql -q "INSERT INTO t1 VALUES (15, 150);"
+    dolt add t1
+    dolt commit -m "edit modification to commit 1"
+    
+    # Continue rebase - should hit conflict on commit 2
+    run dolt rebase --continue
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+    [[ "$output" =~ "b1 commit 2 - will conflict" ]] || false
+
+    # Resolve the conflict
+    run dolt conflicts cat .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | ours   | 10 | 100 | NULL | NULL | NULL | NULL |" ]] || false
+    [[ "$output" =~ "+  | theirs | 10 | 200 | NULL | NULL | NULL | NULL |" ]] || false
+    dolt conflicts resolve --theirs t1
+    dolt add t1
+
+    # Continue rebase - should proceed to commit 3 then pause at commit 4 edit
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "edit action paused at commit" ]] || false
+    [[ "$output" =~ "b1 commit 4 - edit at end" ]] || false
+
+    # We're still on the rebase working branch
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+    # Continue from edit pause - should complete successfully
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    # Verify we're back on the original branch
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b1" ]] || false
+    ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
+
+    # Count commits between main and HEAD - should be 5
+    # (original 4 commits + 1 edit modification commit)
+    run dolt log --oneline main..HEAD
+    [ "$status" -eq 0 ]
+    # Count the lines (each commit is one line)
+    commit_count=$(echo "$output" | wc -l)
+    [ "$commit_count" -eq 5 ]
+
+    # Verify the data is correct after all operations
+    run dolt sql -q "SELECT * FROM t1 ORDER BY pk;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 1  | 1   |" ]] || false  # Original main data
+    [[ "$output" =~ "| 5  | 55  |" ]] || false  # Modified during edit
+    [[ "$output" =~ "| 10 | 200 |" ]] || false  # Conflict resolved to theirs
+    [[ "$output" =~ "| 20 | 300 |" ]] || false  # From commit 3
+    [[ "$output" =~ "| 30 | 400 |" ]] || false  # From commit 4
+
+    # Verify no rebase state remains
+    run dolt status
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "rebase in progress" ]] || false
+}
