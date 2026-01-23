@@ -390,6 +390,7 @@ message"
     [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
     [[ "$output" =~ "b1 commit 2" ]] || false
 
+
     # Assert that we are on the rebase working branch (not the branch being rebased)
     run dolt sql -q "select active_branch();"
     [ "$status" -eq 0 ]
@@ -539,4 +540,40 @@ message"
     # Make sure the commit that became empty appears in the commit log
     run dolt log
     [[ $output =~ "repeating change from main on b1" ]] || false
+}
+
+@test "rebase: edit action basic functionality" {
+    # Get the commit hash for b1 commit 1 using the established pattern
+    dolt checkout b1
+    run dolt show head
+    [ "$status" -eq 0 ]
+    COMMIT1=${lines[0]:12:32}
+    
+    # Create a rebase plan file with an edit action
+    touch rebase_plan.txt
+    echo "edit $COMMIT1 b1 commit 1" >> rebase_plan.txt
+
+    setupCustomEditorScript rebase_plan.txt
+
+    # Start interactive rebase with edit action - should pause for editing
+    run dolt rebase -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "edit action paused at commit" ]] || false
+    [[ "$output" =~ "You can now modify the working directory" ]] || false
+
+    # Assert that we are on the rebase working branch (not the branch being rebased)
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+    # Continue the rebase after the edit pause
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    # Assert that we are on the original working branch
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b1" ]] || false
+    ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
 }
