@@ -724,7 +724,7 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 	if err != nil {
 		return nil, err
 	}
-	return prollyIndexIter{
+	return &prollyIndexIter{
 		idx:         ib.idx,
 		indexIter:   indexIter,
 		primary:     ib.pri,
