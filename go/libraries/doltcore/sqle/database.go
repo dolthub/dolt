@@ -2049,7 +2049,7 @@ OuterLoop:
 	}, nil
 }
 
-// createSqlTable is the private version of CreateTable. It doesn't enforce any table name checks.
+// createSqlTable is the private version of CreateTable.
 func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
@@ -2066,6 +2066,8 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	}
 
 	tableName := doltdb.TableName{Name: table, Schema: schemaName}
+	// TODO: This check is also done in createDoltTable, which is called at the end of this function, meaning it's done
+	// multiple times. Consider refactoring out.
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -2118,6 +2120,8 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 	}
 
 	tableName := doltdb.TableName{Name: table, Schema: schemaName}
+	// TODO: This check is also done in createDoltTable, which is called at the end of this function, meaning it's done
+	// multiple times. Consider refactoring out.
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -2160,6 +2164,8 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 
 // createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
 func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaName string, root doltdb.RootValue, doltSch schema.Schema) error {
+	// TODO: This check is also done in createSqlTable and createIndexedSqlTable, which both call createDoltTable,
+	// meaning it's done multiple times. Consider refactoring.
 	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
 		return err
 	} else if exists {
@@ -2202,13 +2208,18 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, db.Name(), db.editOpts, collation)
+	ds := dsess.DSessFromSess(ctx.Session)
+	databaseName := db.Name()
+	if _, exists := ds.GetTemporaryTable(ctx, databaseName, tableName); exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
+
+	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, databaseName, db.editOpts, collation)
 	if err != nil {
 		return err
 	}
 
-	ds := dsess.DSessFromSess(ctx.Session)
-	ds.AddTemporaryTable(ctx, db.Name(), tmp)
+	ds.AddTemporaryTable(ctx, databaseName, tmp)
 	return nil
 }
 
