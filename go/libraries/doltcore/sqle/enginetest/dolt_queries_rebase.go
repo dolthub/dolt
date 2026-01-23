@@ -308,8 +308,8 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "update t set val = 'resolved_conflict_row2' where pk = 2;",
-				SkipResultsCheck: true;
+				Query:            "update t set val = 'resolved_conflict_row2' where pk = 2;",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "call dolt_add('t');",
@@ -323,7 +323,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 			{
 				// Verify final state shows our edit and conflict resolution
-				Query:    "select * from t order by pk;",
+				Query: "select * from t order by pk;",
 				Expected: []sql.Row{
 					{1, "feature_updated_row1"},
 					{2, "resolved_conflict_row2"},

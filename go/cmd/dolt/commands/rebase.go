@@ -197,7 +197,17 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
 	}
 
-	cli.Println(rows[0][1].(string))
+	message = rows[0][1].(string)
+
+	// Check if this is an edit pause (successful status but halted for editing)
+	if strings.Contains(message, "edit action paused at commit") {
+		// Sync CLI branch to SQL session branch for edit pauses (like we do for data conflicts)
+		if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
+		}
+	}
+
+	cli.Println(message)
 	return 0
 }
 
