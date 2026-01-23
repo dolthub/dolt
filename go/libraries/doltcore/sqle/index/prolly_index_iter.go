@@ -48,7 +48,7 @@ type prollyIndexIter struct {
 	sqlSch      sql.Schema
 }
 
-var _ sql.RowIter = prollyIndexIter{}
+var _ sql.RowIter = (*prollyIndexIter)(nil)
 
 // NewProllyIndexIter returns a new prollyIndexIter.
 func newProllyIndexIter(
@@ -58,27 +58,27 @@ func newProllyIndexIter(
 	pkSch sql.PrimaryKeySchema,
 	projections []uint64,
 	dprimary, dsecondary durable.Index,
-) (prollyIndexIter, error) {
+) (*prollyIndexIter, error) {
 	secondary, err := durable.ProllyMapFromIndex(dsecondary)
 	if err != nil {
-		return prollyIndexIter{}, err
+		return nil, err
 	}
 
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
-		return prollyIndexIter{}, err
+		return nil, err
 	}
 
 	primary, err := durable.ProllyMapFromIndex(dprimary)
 	if err != nil {
-		return prollyIndexIter{}, err
+		return nil, err
 	}
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(idx)
 	keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
 
-	iter := prollyIndexIter{
+	iter := &prollyIndexIter{
 		idx:         idx,
 		indexIter:   indexIter,
 		primary:     primary,
@@ -90,12 +90,11 @@ func newProllyIndexIter(
 		projections: projections,
 		sqlSch:      pkSch.Schema,
 	}
-
 	return iter, nil
 }
 
 // Next returns the next row from the iterator.
-func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+func (p *prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	idxKey, _, err := p.indexIter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -120,7 +119,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 // NextValueRow implements the sql.ValueRowIter interface.
-func (p prollyIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+func (p *prollyIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 	idxKey, _, err := p.indexIter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -160,7 +159,7 @@ func (p prollyIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 }
 
 // IsValueRowIter implements the sql.ValueRowIter interface.
-func (p prollyIndexIter) IsValueRowIter(ctx *sql.Context) bool {
+func (p *prollyIndexIter) IsValueRowIter(ctx *sql.Context) bool {
 	keyDesc, valDesc := p.primary.Descriptors()
 	for _, typ := range keyDesc.Types {
 		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
@@ -175,7 +174,7 @@ func (p prollyIndexIter) IsValueRowIter(ctx *sql.Context) bool {
 	return true
 }
 
-func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
+func (p *prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
 	keyDesc, valDesc := p.primary.Descriptors()
 
 	for i, idx := range p.keyMap {
@@ -197,7 +196,7 @@ func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple
 	return
 }
 
-func (p prollyIndexIter) Close(*sql.Context) error {
+func (p *prollyIndexIter) Close(*sql.Context) error {
 	return nil
 }
 
