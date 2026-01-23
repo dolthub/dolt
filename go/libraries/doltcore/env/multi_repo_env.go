@@ -146,6 +146,19 @@ func MultiEnvForDirectory(
 	var dbName string = "dolt"
 	var newDEnv *DoltEnv = dEnv
 
+	// Use the process user's home dir provider for loading local filesystem envs. Some tests use a synthetic
+	// HomeDirProvider for in-memory envs (e.g. "/user/bheni"), which must not leak into LocalFS loads.
+	hdp := GetCurrentUserHomeDir
+
+	// Capture any caller-provided DB load params so we can apply them to newly created envs.
+	var dbLoadParams map[string]interface{}
+	if dEnv != nil && len(dEnv.DBLoadParams) > 0 {
+		dbLoadParams = make(map[string]interface{}, len(dEnv.DBLoadParams))
+		for k, v := range dEnv.DBLoadParams {
+			dbLoadParams[k] = v
+		}
+	}
+
 	// InMemFS is used only for testing.
 	// All other FS Types should get a newly created Environment which will serve as the primary env in the MultiRepoEnv
 	if _, ok := dataDirFS.(*filesys.InMemFS); !ok {
@@ -156,11 +169,20 @@ func MultiEnvForDirectory(
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dbfactory.DirToDBName(envName)
 
-		// If a DoltEnv was provided by the caller, prefer it instead of creating a new one.
-		// This allows callers (e.g. embedded SQL engine integrations) to set DB load params before opening.
-		if newDEnv == nil {
-			newDEnv = Load(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
+		// Always create a fresh environment rooted at dataDirFS. The invoking dEnv is not guaranteed to be a
+		// local filesystem env (it may be remote), so reusing it can break DB loading and dial provider setup.
+		newDEnv = LoadWithoutDB(ctx, hdp, dataDirFS, doltdb.LocalDirDoltDB, version)
+
+		// Apply any caller-provided DB load params before we load the DB so they affect dbfactory/storage open.
+		if len(dbLoadParams) > 0 {
+			newDEnv.DBLoadParams = make(map[string]interface{}, len(dbLoadParams))
+			for k, v := range dbLoadParams {
+				newDEnv.DBLoadParams[k] = v
+			}
 		}
+
+		// Preserve historical behavior: eagerly load the primary DB here.
+		LoadDoltDB(ctx, newDEnv.FS, newDEnv.urlStr, newDEnv)
 	}
 
 	mrEnv := &MultiRepoEnv{
@@ -203,12 +225,18 @@ func MultiEnvForDirectory(
 		}
 
 		// TODO: get rid of version altogether
-		version := ""
+		subVersion := ""
 		if dEnv != nil {
-			version = dEnv.Version
+			subVersion = dEnv.Version
 		}
 
-		newEnv := LoadWithoutDB(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
+		newEnv := LoadWithoutDB(ctx, hdp, newFs, doltdb.LocalDirDoltDB, subVersion)
+		if len(dbLoadParams) > 0 {
+			newEnv.DBLoadParams = make(map[string]interface{}, len(dbLoadParams))
+			for k, v := range dbLoadParams {
+				newEnv.DBLoadParams[k] = v
+			}
+		}
 		if newEnv.Valid() {
 			envSet[dbfactory.DirToDBName(dir)] = newEnv
 		} else {
