@@ -229,3 +229,14 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 func (iter prollyFkKeylessRowIter) Close(ctx *sql.Context) error {
 	return nil
 }
+
+// fkDummyPartition is used to return a partition that will be ignored, as a foreign key indexer does not handle
+// partitioning, however a partition must be used in order to retrieve rows.
+type fkDummyPartition struct{}
+
+var _ sql.Partition = fkDummyPartition{}
+
+// Key implements the interface sql.Partition.
+func (n fkDummyPartition) Key() []byte {
+	return nil
+}

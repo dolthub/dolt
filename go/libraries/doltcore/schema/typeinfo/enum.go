@@ -141,26 +141,6 @@ func (ti *enumType) FormatValue(v types.Value) (*string, error) {
 	return &val, nil
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *enumType) GetTypeIdentifier() Identifier {
-	return EnumTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *enumType) GetTypeParams() map[string]string {
-	var sb strings.Builder
-	enc := gob.NewEncoder(&sb)
-	err := enc.Encode(ti.sqlEnumType.Values())
-	// this should never error, encoding an array of strings should always succeed
-	if err != nil {
-		panic(err)
-	}
-	return map[string]string{
-		enumTypeParam_Collation: ti.sqlEnumType.Collation().String(),
-		enumTypeParam_Values:    sb.String(),
-	}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *enumType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {
