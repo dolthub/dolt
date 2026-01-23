@@ -97,6 +97,11 @@ type DoltEnv struct {
 	urlStr string
 	hdp    HomeDirProvider
 
+	// DBLoadParams are optional parameters passed through to doltdb.LoadDoltDBWithParams when this environment
+	// loads its underlying DoltDB. This allows higher layers (e.g. SQL engine / embedded driver) to influence
+	// dbfactory / storage open behavior.
+	DBLoadParams map[string]interface{}
+
 	UserPassConfig *creds.DoltCredsForPass
 }
 
@@ -121,6 +126,15 @@ func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 
 func (dEnv *DoltEnv) LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) error {
 	if dEnv.doltDB == nil {
+		// Merge any environment-level DB load params.
+		if len(dEnv.DBLoadParams) > 0 {
+			if params == nil {
+				params = make(map[string]interface{}, len(dEnv.DBLoadParams))
+			}
+			for k, v := range dEnv.DBLoadParams {
+				params[k] = v
+			}
+		}
 		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
 		if err != nil {
 			return err
@@ -222,6 +236,16 @@ func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *Do
 		var params map[string]interface{}
 		if mmapArchiveIndexes {
 			params = map[string]interface{}{dbfactory.MMapArchiveIndexesParam: struct{}{}}
+		}
+
+		// Merge any environment-level DB load params.
+		if len(dEnv.DBLoadParams) > 0 {
+			if params == nil {
+				params = make(map[string]interface{}, len(dEnv.DBLoadParams))
+			}
+			for k, v := range dEnv.DBLoadParams {
+				params[k] = v
+			}
 		}
 		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
 		dEnv.doltDB = ddb

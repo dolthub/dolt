@@ -156,7 +156,11 @@ func MultiEnvForDirectory(
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dbfactory.DirToDBName(envName)
 
-		newDEnv = Load(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
+		// If a DoltEnv was provided by the caller, prefer it instead of creating a new one.
+		// This allows callers (e.g. embedded SQL engine integrations) to set DB load params before opening.
+		if newDEnv == nil {
+			newDEnv = Load(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
+		}
 	}
 
 	mrEnv := &MultiRepoEnv{
