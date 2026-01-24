@@ -760,6 +760,157 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_status_ignored basic tests",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key);",
+			"INSERT INTO dolt_ignore VALUES ('ignored_*', true);",
+			"CREATE TABLE ignored_test (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Verify schema has 4 columns
+				Query: "DESCRIBE dolt_status_ignored;",
+				Expected: []sql.Row{
+					{"table_name", "text", "NO", "PRI", nil, ""},
+					{"staged", "tinyint(1)", "NO", "PRI", nil, ""},
+					{"status", "text", "NO", "PRI", nil, ""},
+					{"ignored", "tinyint(1)", "NO", "", nil, ""},
+				},
+			},
+			{
+				// Non-ignored unstaged table has ignored=false
+				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored WHERE table_name = 't';",
+				Expected: []sql.Row{{"t", byte(0), "new table", false}},
+			},
+			{
+				// Ignored unstaged table has ignored=true
+				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored WHERE table_name = 'ignored_test';",
+				Expected: []sql.Row{{"ignored_test", byte(0), "new table", true}},
+			},
+			{
+				// dolt_ignore table itself shows as not ignored
+				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'dolt_ignore';",
+				Expected: []sql.Row{{"dolt_ignore", false}},
+			},
+		},
+	},
+	{
+		Name: "dolt_status_ignored staged tables always have ignored=0",
+		SetUpScript: []string{
+			// Create and stage table BEFORE adding ignore pattern
+			"CREATE TABLE staged_test (pk int primary key);",
+			"CALL DOLT_ADD('staged_test');",
+			// Now add pattern that matches the already-staged table name
+			"INSERT INTO dolt_ignore VALUES ('staged_*', true);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Staged table has ignored=false even if name matches ignore pattern
+				Query:    "SELECT table_name, staged, ignored FROM dolt_status_ignored WHERE table_name = 'staged_test';",
+				Expected: []sql.Row{{"staged_test", byte(1), false}},
+			},
+		},
+	},
+	{
+		Name: "dolt_status_ignored with AS OF and branch queries",
+		SetUpScript: []string{
+			"CALL DOLT_COMMIT('--allow-empty', '-m', 'empty commit');",
+			"SET @commit1 = HASHOF('HEAD');",
+			"CALL DOLT_TAG('tag1');",
+			"CALL DOLT_CHECKOUT('-b', 'branch1');",
+			"CREATE TABLE abc (pk int);",
+			"CALL DOLT_ADD('abc');",
+			"CALL DOLT_CHECKOUT('main');",
+			"CREATE TABLE t (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored;",
+				Expected: []sql.Row{{"t", byte(0), "new table", false}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_status_ignored AS OF 'tag1';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * FROM dolt_status_ignored AS OF @commit1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored AS OF 'branch1';",
+				Expected: []sql.Row{{"abc", byte(1), "new table", false}},
+			},
+			{
+				Query:    "SELECT table_name, staged, status, ignored FROM `mydb/branch1`.dolt_status_ignored;",
+				Expected: []sql.Row{{"abc", byte(1), "new table", false}},
+			},
+		},
+	},
+	{
+		Name: "dolt_status_ignored with multiple ignore patterns",
+		SetUpScript: []string{
+			"INSERT INTO dolt_ignore VALUES ('temp_*', true);",
+			"INSERT INTO dolt_ignore VALUES ('*_backup', true);",
+			"CREATE TABLE temp_data (pk int primary key);",
+			"CREATE TABLE users_backup (pk int primary key);",
+			"CREATE TABLE normal_table (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'temp_data';",
+				Expected: []sql.Row{{"temp_data", true}},
+			},
+			{
+				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'users_backup';",
+				Expected: []sql.Row{{"users_backup", true}},
+			},
+			{
+				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'normal_table';",
+				Expected: []sql.Row{{"normal_table", false}},
+			},
+		},
+	},
+	{
+		Name: "dolt_status_ignored with empty dolt_ignore",
+		SetUpScript: []string{
+			"CREATE TABLE t1 (pk int primary key);",
+			"CREATE TABLE t2 (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// With no ignore patterns, all tables should have ignored=false
+				Query: "SELECT table_name, ignored FROM dolt_status_ignored ORDER BY table_name;",
+				Expected: []sql.Row{
+					{"t1", false},
+					{"t2", false},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_status_ignored with conflicting patterns",
+		SetUpScript: []string{
+			// First pattern ignores tables starting with "test_"
+			"INSERT INTO dolt_ignore VALUES ('test_*', true);",
+			// Second pattern un-ignores specific table
+			"INSERT INTO dolt_ignore VALUES ('test_special', false);",
+			"CREATE TABLE test_normal (pk int primary key);",
+			"CREATE TABLE test_special (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// test_normal matches ignore pattern
+				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'test_normal';",
+				Expected: []sql.Row{{"test_normal", true}},
+			},
+			{
+				// test_special is explicitly not ignored (false overrides wildcard)
+				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'test_special';",
+				Expected: []sql.Row{{"test_special", false}},
+			},
+		},
+	},
+	{
 		Name: "dolt_hashof_table tests",
 		SetUpScript: []string{
 			"CREATE TABLE t1 (pk int primary key);",
@@ -8670,6 +8821,7 @@ var DoltSystemVariables = []queries.ScriptTest{
 					{"dolt_remotes"},
 					{"dolt_stashes"},
 					{"dolt_status"},
+					{"dolt_status_ignored"},
 					{"dolt_workspace_test"},
 					{"test"},
 				},
@@ -8681,6 +8833,45 @@ var DoltSystemVariables = []queries.ScriptTest{
 // DoltTempTableScripts tests temporary tables.
 // Temporary tables are not supported in GMS, eventually should move those tests there.
 var DoltTempTableScripts = []queries.ScriptTest{
+	{
+		Name: "temporary and non-temporary table name collisions",
+		SetUpScript: []string{
+			"create table t1 (id varchar(100))",
+			"insert into t1 values ('this is a non-temporary table')",
+			"create temporary table t1 (id varchar(100))", // okay to create temporary table with the same name as a non-temporary table
+			"insert into t1 values ('this is a temporary table')",
+			"create temporary table t2 (id int)",
+			"create table t2 (id int)", // okay to create a non-temporary table with the same name as a temporary table
+			"create temporary table t3 (id int)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// should show temporary table t1
+				Query:    "select * from t1",
+				Expected: []sql.Row{{"this is a temporary table"}},
+			},
+			{
+				// cannot create a temporary table with the same name as another temporary table
+				Query:       "create temporary table t3 (id int)",
+				ExpectedErr: sql.ErrTableAlreadyExists,
+			},
+			{
+				// should show temporary table
+				Query:    "show create table t1",
+				Expected: []sql.Row{{"t1", "CREATE TEMPORARY TABLE `t1` (\n  `id` varchar(100)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				// should drop temporary table t1
+				Query:    "drop table t1",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				// should show non-temporary table that was created before
+				Query:    "show create table t1",
+				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n  `id` varchar(100)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
 	{
 		Name: "temporary table supports auto increment",
 		SetUpScript: []string{

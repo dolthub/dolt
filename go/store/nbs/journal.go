@@ -155,7 +155,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb fu
 			return err
 		}
 
-		_, err = j.wr.bootstrapJournal(ctx, j.reflogRingBuffer, warningsCb)
+		_, err = j.wr.bootstrapJournal(ctx, canCreate, j.reflogRingBuffer, warningsCb)
 		if err != nil {
 			return err
 		}
@@ -183,7 +183,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb fu
 	}
 
 	// parse existing journal file
-	root, err := j.wr.bootstrapJournal(ctx, j.reflogRingBuffer, warningsCb)
+	root, err := j.wr.bootstrapJournal(ctx, canCreate, j.reflogRingBuffer, warningsCb)
 	if err != nil {
 		return err
 	}

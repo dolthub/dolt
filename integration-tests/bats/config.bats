@@ -343,7 +343,7 @@ function no_stdout {
 }
 
 @test "config: config doesn't need write permission in current dir" {
-    chmod 111 .
+    chmod 555 .
     dolt config --list
     chmod 755 .
 }

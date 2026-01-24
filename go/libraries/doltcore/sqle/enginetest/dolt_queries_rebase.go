@@ -37,7 +37,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "no rebase in progress",
 			}, {
 				Query:          "call dolt_rebase('main');",
-				ExpectedErrStr: "non-interactive rebases not currently supported",
+				ExpectedErrStr: "didn't identify any commits!",
 			}, {
 				Query:          "call dolt_rebase('-i');",
 				ExpectedErrStr: "not enough args",
@@ -119,6 +119,33 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				Query:          "call dolt_rebase('-i', 'main');",
 				ExpectedErrStr: "unable to start rebase while a merge is in progress – abort the current merge before proceeding",
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase: non-interactive rebase successful",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t on main');",
+			"insert into t values (42);",
+			"call dolt_commit('-am', 'main commit with pk = 42');",
+			"call dolt_branch('feature', 'HEAD~1');",
+			"call dolt_checkout('feature');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'feature commit 1');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'feature commit 2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_rebase('main');",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/feature"}},
+			},
+			{
+				Query: "select pk from t where pk = 42;",
+				Expected: []sql.Row{
+					{42},
+				},
 			},
 		},
 	},

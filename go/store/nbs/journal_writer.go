@@ -163,7 +163,7 @@ var _ io.Closer = &journalWriter{}
 // are added to the novel ranges map. If the number of novel lookups exceeds |wr.maxNovel|, we
 // extend the journal index with one metadata flush before existing this function to save indexing
 // progress.
-func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer *reflogRingBuffer, warningsCb func(error)) (last hash.Hash, err error) {
+func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, reflogRingBuffer *reflogRingBuffer, warningsCb func(error)) (last hash.Hash, err error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 
@@ -276,7 +276,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 	// process the non-indexed portion of the journal starting at |wr.indexed|,
 	// at minimum the non-indexed portion will include a root hash record.
 	// Index lookups are added to the ongoing batch to re-synchronize.
-	wr.off, err = processJournalRecords(ctx, wr.journal, wr.indexed, func(o int64, r journalRec) error {
+	wr.off, err = processJournalRecords(ctx, wr.journal, canWrite, wr.indexed, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
 			rng := Range{

@@ -15,7 +15,10 @@
 package branch_control
 
 import (
+	"fmt"
 	"math"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -326,7 +329,7 @@ ParentLoop:
 
 // Remove will remove the given expressions to the node hierarchy. If the expressions do not exist, then nothing
 // happens. Assumes that the given expressions have already been folded.
-func (mn *MatchNode) Remove(databaseExpr, branchExpr, userExpr, hostExpr string) uint32 {
+func (mn *MatchNode) Remove(databaseExpr, branchExpr, userExpr, hostExpr string) (removedIndex uint32, success bool) {
 	root := mn
 	allSortOrders := mn.parseExpression(databaseExpr, branchExpr, userExpr, hostExpr)
 	defer func() {
@@ -339,7 +342,8 @@ func (mn *MatchNode) Remove(databaseExpr, branchExpr, userExpr, hostExpr string)
 
 	remainingRootSortOrders := root.SortOrders
 	allSortOrdersMaxIndex := len(allSortOrders) - 1
-	removedIndex := uint32(math.MaxUint32)
+	removedIndex = uint32(math.MaxUint32)
+	success = false
 ParentLoop:
 	for i, sortOrder := range allSortOrders {
 		if remainingRootSortOrders[0] == sortOrder {
@@ -366,6 +370,7 @@ ParentLoop:
 				break
 			} else {
 				// We have no more sort orders on either side so this is an exact match.
+				success = true
 				// If it's a destination node, then we mark it as no longer being one.
 				if root.Data != nil {
 					removedIndex = root.Data.RowIndex
@@ -377,7 +382,7 @@ ParentLoop:
 						// The fact that you gotta do a range + break to get a single map element is silly
 						root.SortOrders = append(root.SortOrders, child.SortOrders...)
 						root.Data = child.Data
-						root.Children = nil
+						root.Children = child.Children
 						break
 					}
 				} else if len(root.Children) == 0 {
@@ -409,7 +414,7 @@ ParentLoop:
 			break
 		}
 	}
-	return removedIndex
+	return removedIndex, success
 }
 
 // parseExpression parses expressions into a concatenated collection of sort orders. The returned slice belongs to the
@@ -453,4 +458,115 @@ func (mn *MatchNode) parseExpression(database, branch, user, host string) []int3
 		}
 	}
 	return allSortOrders
+}
+
+// String returns the node (and all children) as a formatted string. This is intended for debugging purposes, as string
+// creation is extremely heavy. The `largestSortOrder` is the last sort order value that will be converted back to a
+// rune, and all larger sort orders will be replaced with the Unicode replacement character '�'.
+func (mn *MatchNode) String(largestSortOrder rune) string {
+	// Construct the maps that will take a sort order and return their original rune.
+	// Most collations will overwrite entries, but that's fine since we just care about output repeatability.
+	// The first map is used for the initial root sort order, which is why we need 1 more than the sort function count.
+	reverseSortOrders := make([]map[int32]string, len(sortFuncs)+1)
+	for i := range reverseSortOrders {
+		reverseSortOrders[i] = map[int32]string{
+			singleMatch:  `_`,
+			anyMatch:     `%`,
+			columnMarker: `|`,
+		}
+	}
+	for funcIdx, sortFunc := range sortFuncs {
+		// We iterate in reverse to prioritize ASCII values for sort orders that match the same value
+		for r := largestSortOrder; r >= 0; r-- {
+			reverseSortOrders[funcIdx+1][sortFunc(r)] = string(r)
+		}
+		// We do another pass (if applicable) to prioritize lowercase ASCII (primarily for readability)
+		if largestSortOrder >= 'z' {
+			for r := 'z'; r >= 'a'; r-- {
+				reverseSortOrders[funcIdx+1][sortFunc(r)] = string(r)
+			}
+		}
+		// Replace the special markers with their escaped versions
+		reverseSortOrders[funcIdx+1][sortFunc('\\')] = `\\`
+		reverseSortOrders[funcIdx+1][sortFunc('_')] = `\_`
+		reverseSortOrders[funcIdx+1][sortFunc('%')] = `\%`
+		reverseSortOrders[funcIdx+1][sortFunc('|')] = `\|`
+		reverseSortOrders[funcIdx+1][sortFunc('"')] = `\"`
+	}
+	allLines := mn.collectChildren(reverseSortOrders)
+	return strings.Join(allLines, "\n")
+}
+
+// String returns the node, and all children, as a formatted slice of strings.
+func (mn *MatchNode) collectChildren(reverseSortOrders []map[int32]string) []string {
+	// We take and sort the child keys to ensure that the string output is consistent
+	var keys []int32
+	for key := range mn.Children {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i] < keys[j]
+	})
+	// We format the self first so that we get the updated slice to pass to the children
+	formattedSelf, reverseSortOrders := mn.formatSelf(reverseSortOrders)
+	// Now we collect all of the child lines
+	var returnLines []string
+	for _, key := range keys {
+		returnLines = append(returnLines, mn.Children[key].collectChildren(reverseSortOrders)...)
+	}
+	// We need to format the child lines, so we get each line that is a direct child of the current node
+	var directChildren []int
+	for i := range returnLines {
+		if returnLines[i][0] == 'N' {
+			directChildren = append(directChildren, i)
+		}
+	}
+	// We then use the direct children to determine which kind of line to draw, which are just prefixed to the string
+	for i := range returnLines {
+		if len(directChildren) == 0 {
+			returnLines[i] = "    " + returnLines[i]
+		} else if i == directChildren[0] {
+			if len(directChildren) > 1 {
+				returnLines[i] = " ├─ " + returnLines[i]
+			} else {
+				returnLines[i] = " └─ " + returnLines[i]
+			}
+			directChildren = directChildren[1:]
+		} else {
+			returnLines[i] = " │  " + returnLines[i]
+		}
+	}
+	return append([]string{formattedSelf}, returnLines...)
+}
+
+// formatSelf returns only this node as a string. It does not take children into account. This also returns the new
+// slice of reverse sort orders, as we always use the first one. Whenever a column marker is encountered, we move to the
+// next reverse sort order map.
+func (mn *MatchNode) formatSelf(reverseSortOrders []map[int32]string) (string, []map[int32]string) {
+	perms := ""
+	if mn.Data != nil {
+		switch mn.Data.Permissions {
+		case Permissions_Admin:
+			perms = ", admin"
+		case Permissions_Write:
+			perms = ", write"
+		case Permissions_Read, Permissions_None:
+			perms = ", read"
+		default:
+			perms = ", unknown"
+		}
+	}
+	sb := strings.Builder{}
+	for _, sortOrder := range mn.SortOrders {
+		original, ok := reverseSortOrders[0][sortOrder]
+		if ok {
+			_, _ = sb.WriteString(original)
+		} else {
+			_, _ = sb.WriteString("�")
+		}
+		if sortOrder == columnMarker {
+			reverseSortOrders = reverseSortOrders[1:]
+		}
+	}
+	return fmt.Sprintf(`Node("%s"%s)`, sb.String(), perms), reverseSortOrders
 }
