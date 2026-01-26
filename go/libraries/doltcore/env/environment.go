@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -126,13 +127,13 @@ func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 
 func (dEnv *DoltEnv) LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) error {
 	if dEnv.doltDB == nil {
-		// Merge any environment-level DB load params.
+		// Merge any environment-level DB load params without mutating the caller's map.
 		if len(dEnv.DBLoadParams) > 0 {
 			if params == nil {
-				params = make(map[string]interface{}, len(dEnv.DBLoadParams))
-			}
-			for k, v := range dEnv.DBLoadParams {
-				params[k] = v
+				params = maps.Clone(dEnv.DBLoadParams)
+			} else {
+				params = maps.Clone(params)
+				maps.Copy(params, dEnv.DBLoadParams)
 			}
 		}
 		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)

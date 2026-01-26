@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -131,11 +132,10 @@ func NewSqlEngine(
 				return false, nil
 			}
 			if dEnv.DBLoadParams == nil {
-				dEnv.DBLoadParams = make(map[string]interface{}, len(config.DBLoadParams))
+				dEnv.DBLoadParams = maps.Clone(config.DBLoadParams)
+				return false, nil
 			}
-			for k, v := range config.DBLoadParams {
-				dEnv.DBLoadParams[k] = v
-			}
+			maps.Copy(dEnv.DBLoadParams, config.DBLoadParams)
 			return false, nil
 		})
 	}

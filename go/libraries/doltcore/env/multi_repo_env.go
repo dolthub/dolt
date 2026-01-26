@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -153,10 +154,7 @@ func MultiEnvForDirectory(
 	// Capture any caller-provided DB load params so we can apply them to newly created envs.
 	var dbLoadParams map[string]interface{}
 	if dEnv != nil && len(dEnv.DBLoadParams) > 0 {
-		dbLoadParams = make(map[string]interface{}, len(dEnv.DBLoadParams))
-		for k, v := range dEnv.DBLoadParams {
-			dbLoadParams[k] = v
-		}
+		dbLoadParams = maps.Clone(dEnv.DBLoadParams)
 	}
 
 	// InMemFS is used only for testing.
@@ -175,10 +173,7 @@ func MultiEnvForDirectory(
 
 		// Apply any caller-provided DB load params before we load the DB so they affect dbfactory/storage open.
 		if len(dbLoadParams) > 0 {
-			newDEnv.DBLoadParams = make(map[string]interface{}, len(dbLoadParams))
-			for k, v := range dbLoadParams {
-				newDEnv.DBLoadParams[k] = v
-			}
+			newDEnv.DBLoadParams = maps.Clone(dbLoadParams)
 		}
 
 		// Preserve historical behavior: eagerly load the primary DB here.
@@ -232,10 +227,7 @@ func MultiEnvForDirectory(
 
 		newEnv := LoadWithoutDB(ctx, hdp, newFs, doltdb.LocalDirDoltDB, subVersion)
 		if len(dbLoadParams) > 0 {
-			newEnv.DBLoadParams = make(map[string]interface{}, len(dbLoadParams))
-			for k, v := range dbLoadParams {
-				newEnv.DBLoadParams[k] = v
-			}
+			newEnv.DBLoadParams = maps.Clone(dbLoadParams)
 		}
 		if newEnv.Valid() {
 			envSet[dbfactory.DirToDBName(dir)] = newEnv
