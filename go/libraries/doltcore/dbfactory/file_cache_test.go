@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -68,4 +69,30 @@ func TestFileFactory_CreateDB_SingletonCacheAndBypass(t *testing.T) {
 
 		require.True(t, db1 != db2, "expected bypass mode to return different DB instances")
 	})
+}
+
+func TestFileFactory_CreateDB_FailOnJournalLockTimeoutParam(t *testing.T) {
+	ctx := context.Background()
+	nbf := types.Format_Default
+
+	root := t.TempDir()
+	nomsDir := filepath.Join(root, "noms")
+	require.NoError(t, os.MkdirAll(nomsDir, 0o755))
+
+	urlStr := earl.FileUrlFromPath(filepath.ToSlash(nomsDir), os.PathSeparator)
+	params := map[string]interface{}{
+		ChunkJournalParam:             struct{}{},
+		DisableSingletonCacheParam:    struct{}{},
+		FailOnJournalLockTimeoutParam: struct{}{},
+	}
+
+	// First open takes the journal manifest lock and holds it until closed.
+	db1, _, _, err := CreateDB(ctx, nbf, urlStr, params)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db1.Close() })
+
+	// Second open should fail fast when the fail-on-timeout flag is honored.
+	_, _, _, err = CreateDB(ctx, nbf, urlStr, params)
+	require.Error(t, err)
+	require.ErrorIs(t, err, nbs.ErrDatabaseLocked)
 }

@@ -200,7 +200,15 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	if useJournal && chunkJournalFeatureFlag {
-		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb)
+		// Allow higher layers (e.g. embedded driver) to opt into fail-fast lock behavior instead of
+		// falling back to read-only mode on lock timeout.
+		opts := nbs.JournalingStoreOptions{}
+		if params != nil {
+			if _, ok := params[FailOnJournalLockTimeoutParam]; ok {
+				opts.FailOnLockTimeout = true
+			}
+		}
+		newGenSt, err = nbs.NewLocalJournalingStoreWithOptions(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb, opts)
 	} else {
 		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q, mmapArchiveIndexes)
 	}
