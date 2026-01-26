@@ -723,7 +723,7 @@ func continueRebase(ctx *sql.Context) (string, error) {
 	//       branch and updates the working root and staged root for the working set. We may be able
 	//       to fix this race condition by changing doltdb.NewBranchAtCommit to use
 	//       database.CommitWithWorkingSet, since it updates a branch head and working set atomically.
-	err = copyABranch(ctx, dbData, rebaseWorkingBranch, rebaseBranch, true, nil)
+	err = copyABranch(ctx, dbData, rebaseWorkingBranch, rebaseBranch, true, false, nil)
 	if err != nil {
 		return "", err
 	}
