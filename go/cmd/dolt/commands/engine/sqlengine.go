@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -87,6 +88,12 @@ type SqlEngineConfig struct {
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
 	BranchActivityTracking     bool
 	EngineOverrides            sql.EngineOverrides
+
+	// DBLoadParams are optional parameters passed through to database loading for local file-backed databases.
+	// These are merged into the params map used by doltdb/env load routines.
+	//
+	// Intended for embedded-driver use-cases that need to influence dbfactory / storage open behavior.
+	DBLoadParams map[string]interface{}
 }
 
 type SqlEngineConfigOption func(*SqlEngineConfig)
@@ -116,6 +123,22 @@ func NewSqlEngine(
 	defer gcctx.SessionEnd(ctx)
 	gcctx.SessionCommandBegin(ctx)
 	defer gcctx.SessionCommandEnd(ctx)
+
+	// Thread DB load params into each environment before any DB is loaded.
+	// (For already-loaded envs, these will not affect the existing instance.)
+	if config != nil && len(config.DBLoadParams) > 0 {
+		_ = mrEnv.Iter(func(_ string, dEnv *env.DoltEnv) (stop bool, err error) {
+			if dEnv == nil {
+				return false, nil
+			}
+			if dEnv.DBLoadParams == nil {
+				dEnv.DBLoadParams = maps.Clone(config.DBLoadParams)
+				return false, nil
+			}
+			maps.Copy(dEnv.DBLoadParams, config.DBLoadParams)
+			return false, nil
+		})
+	}
 
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
