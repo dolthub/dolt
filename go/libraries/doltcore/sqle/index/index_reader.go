@@ -627,9 +627,19 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 // NewSecondaryIter implements IndexScanBuilder
 func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) (SecondaryLookupIterGen, error) {
 	if strict {
-		return &covStrictSecondaryLookupGen{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cnt), index: ib.idx}, nil
+		return &covStrictSecondaryLookupGen{
+			iter:       &strictLookupIter{},
+			m:          ib.sec,
+			prefixDesc: ib.secKd.PrefixDesc(cnt),
+			index:      ib.idx,
+		}, nil
 	} else {
-		return &covLaxSecondaryLookupGen{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cnt), index: ib.idx, nullSafe: nullSafe}, nil
+		return &covLaxSecondaryLookupGen{
+			m:          ib.sec,
+			prefixDesc: ib.secKd.PrefixDesc(cnt),
+			index:      ib.idx,
+			nullSafe:   nullSafe,
+		}, nil
 	}
 }
 

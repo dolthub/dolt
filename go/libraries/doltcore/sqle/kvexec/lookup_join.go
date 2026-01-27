@@ -117,7 +117,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, err
 			}
 
-			l.dstIter, err = l.dstIterGen.New(ctx, l.dstKey)
+			l.dstIter, err = l.dstIterGen.New(ctx, l.dstKey) // TODO: this essentially just retrieves one key
 			if err != nil {
 				return nil, err
 			}
@@ -129,7 +129,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 
 		if dstKey == nil {
-			l.dstIter = nil
+			l.dstIter = nil // TODO: l.dstIter.Reset()
 			emitLeftJoinNullRow := l.isLeftJoin && !l.returnedARow
 			if !emitLeftJoinNullRow {
 				continue
@@ -147,18 +147,15 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			if err != nil {
 				return nil, err
 			}
-
 			if !sql.IsTrue(res) {
 				continue
 			}
-
 		}
 		if l.dstFilter != nil && l.dstKey != nil {
 			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.joiner.kvSplits[0]:])
 			if err != nil {
 				return nil, err
 			}
-
 			if !sql.IsTrue(res) {
 				continue
 			}
@@ -172,7 +169,8 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				// override default left join behavior
 				l.dstKey = nil
 				continue
-			} else if !sql.IsTrue(res) && dstKey != nil {
+			}
+			if !sql.IsTrue(res) && dstKey != nil {
 				continue
 			}
 		}
