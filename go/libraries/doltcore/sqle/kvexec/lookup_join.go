@@ -117,7 +117,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, err
 			}
 
-			l.dstIter, err = l.dstIterGen.New(ctx, l.dstKey) // TODO: this essentially just retrieves one key
+			l.dstIter, err = l.dstIterGen.New(ctx, l.dstKey)
 			if err != nil {
 				return nil, err
 			}
@@ -129,7 +129,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 
 		if dstKey == nil {
-			l.dstIter = nil // TODO: l.dstIter.Reset()
+			l.dstIter = nil
 			emitLeftJoinNullRow := l.isLeftJoin && !l.returnedARow
 			if !emitLeftJoinNullRow {
 				continue
