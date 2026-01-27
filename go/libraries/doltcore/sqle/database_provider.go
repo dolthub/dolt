@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -51,6 +52,13 @@ import (
 type DoltDatabaseProvider struct {
 	fs           filesys.Filesys
 	remoteDialer dbfactory.GRPCDialProvider // TODO: why isn't this a method defined on the remote object
+
+	// dbLoadParams are optional parameters to apply when loading local file-backed databases created
+	// via provider-managed code paths (e.g. CREATE DATABASE / dolt_clone / undrop). These should match
+	// the params threaded into env.DoltEnv.DBLoadParams by higher layers (e.g. engine.SqlEngineConfig.DBLoadParams).
+	//
+	// Note: these params are only effective if they are set before the underlying DoltDB is loaded.
+	dbLoadParams map[string]interface{}
 
 	// dbLocations maps a database name to its file system root
 	dbLocations            map[string]filesys.Filesys
@@ -195,6 +203,31 @@ func (p *DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvi
 	return &cp
 }
 
+// SetDBLoadParams sets optional DB load params for newly created / registered databases. The provided map is cloned.
+func (p *DoltDatabaseProvider) SetDBLoadParams(params map[string]interface{}) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(params) == 0 {
+		p.dbLoadParams = nil
+		return
+	}
+	p.dbLoadParams = maps.Clone(params)
+}
+
+func (p *DoltDatabaseProvider) applyDBLoadParamsToEnv(dEnv *env.DoltEnv) {
+	if dEnv == nil {
+		return
+	}
+	if len(p.dbLoadParams) == 0 {
+		return
+	}
+	if dEnv.DBLoadParams == nil {
+		dEnv.DBLoadParams = maps.Clone(p.dbLoadParams)
+		return
+	}
+	maps.Copy(dEnv.DBLoadParams, p.dbLoadParams)
+}
+
 // AddInitDatabaseHook adds an InitDatabaseHook to this provider. The hook will be invoked
 // whenever this provider creates a new database.
 func (p *DoltDatabaseProvider) AddInitDatabaseHook(hook InitDatabaseHook) {
@@ -212,8 +245,42 @@ func (p *DoltDatabaseProvider) FileSystem() filesys.Filesys {
 }
 
 func (p *DoltDatabaseProvider) Close() {
+	p.mu.RLock()
+	closeDoltDBs := p.dbLoadParams != nil
+	if closeDoltDBs {
+		_, closeDoltDBs = p.dbLoadParams[dbfactory.DisableSingletonCacheParam]
+	}
+
+	// Copy the databases so we can close outside the lock.
+	dbs := make([]dsess.SqlDatabase, 0, len(p.databases))
 	for _, db := range p.databases {
+		dbs = append(dbs, db)
+	}
+	p.mu.RUnlock()
+
+	for _, db := range dbs {
 		db.Close()
+	}
+
+	// In embedded / nocache mode, the underlying DoltDBs are not tracked by the singleton cache, so
+	// the provider is responsible for closing them to release filesystem locks.
+	if closeDoltDBs {
+		seen := make(map[*doltdb.DoltDB]struct{})
+		for _, db := range dbs {
+			if db == nil {
+				continue
+			}
+			for _, ddb := range db.DoltDatabases() {
+				if ddb == nil {
+					continue
+				}
+				if _, ok := seen[ddb]; ok {
+					continue
+				}
+				seen[ddb] = struct{}{}
+				_ = ddb.Close()
+			}
+		}
 	}
 }
 
@@ -512,7 +579,9 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	}
 
 	// TODO: fill in version appropriately
-	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+	// Use LoadWithoutDB so we can apply db-load params before any DB is opened.
+	newEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+	p.applyDBLoadParamsToEnv(newEnv)
 
 	newDbStorageFormat := types.Format_Default
 	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)
@@ -753,6 +822,7 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 	if err != nil {
 		return err
 	}
+	p.applyDBLoadParamsToEnv(dEnv)
 
 	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, depth, dEnv)
 	if err != nil {
@@ -860,7 +930,9 @@ func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (er
 		return err
 	}
 
-	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+	// Use LoadWithoutDB so we can apply db-load params before any DB is opened.
+	newEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+	p.applyDBLoadParamsToEnv(newEnv)
 	return p.registerNewDatabase(ctx, exactCaseName, newEnv)
 }
 
@@ -881,6 +953,9 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	if err = lockutil.AssertRWMutexIsLocked(p.mu); err != nil {
 		return fmt.Errorf("unable to register new database without database provider mutex being locked")
 	}
+
+	// Ensure any provider-supplied DB load params are applied before any lazy DB load occurs.
+	p.applyDBLoadParamsToEnv(newEnv)
 
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {

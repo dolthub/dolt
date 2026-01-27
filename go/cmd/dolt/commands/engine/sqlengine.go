@@ -186,6 +186,9 @@ func NewSqlEngine(
 		return nil, err
 	}
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
+	if config != nil && len(config.DBLoadParams) > 0 {
+		pro.SetDBLoadParams(config.DBLoadParams)
+	}
 
 	config.ClusterController.RegisterStoredProcedures(pro)
 	if config.ClusterController != nil {
