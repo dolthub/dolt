@@ -127,6 +127,9 @@ func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 
 func (dEnv *DoltEnv) LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) error {
 	if dEnv.doltDB == nil {
+		if nbf == nil {
+			nbf = types.Format_Default
+		}
 		// Merge any environment-level DB load params without mutating the caller's map.
 		if len(dEnv.DBLoadParams) > 0 {
 			if params == nil {
@@ -136,11 +139,14 @@ func (dEnv *DoltEnv) LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBi
 				maps.Copy(params, dEnv.DBLoadParams)
 			}
 		}
-		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
+		ddb, err := doltdb.LoadDoltDBWithParams(ctx, nbf, urlStr, fs, params)
 		if err != nil {
+			dEnv.DBLoadError = err
 			return err
 		}
 		dEnv.doltDB = ddb
+		dEnv.urlStr = urlStr
+		dEnv.DBLoadError = nil
 	}
 	return nil
 }
@@ -506,9 +512,7 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinF
 		return err
 	}
 
-	dEnv.doltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
-
-	return err
+	return dEnv.LoadDoltDBWithParams(ctx, nbf, dEnv.urlStr, dEnv.FS, nil)
 }
 
 var ErrCannotCreateDirDoesNotExist = errors.New("dir does not exist")
@@ -640,13 +644,11 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 }
 
 func (dEnv *DoltEnv) InitDBWithCommitMetaGenerator(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
-	var err error
-	dEnv.doltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
-	if err != nil {
+	if err := dEnv.LoadDoltDBWithParams(ctx, nbf, dEnv.urlStr, dEnv.FS, nil); err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB(ctx).WriteEmptyRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
+	err := dEnv.DoltDB(ctx).WriteEmptyRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
 	if err != nil {
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
