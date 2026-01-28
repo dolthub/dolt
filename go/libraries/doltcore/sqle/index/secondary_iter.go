@@ -49,6 +49,7 @@ func (i *strictLookupIter) Next(_ context.Context) (k, v val.Tuple, err error) {
 }
 
 type covStrictSecondaryLookupGen struct {
+	iter       *strictLookupIter
 	index      *doltIndex
 	prefixDesc *val.TupleDesc
 	m          prolly.Map
@@ -77,21 +78,20 @@ func (c *covStrictSecondaryLookupGen) NodeStore() tree.NodeStore {
 }
 
 func (c *covStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly.MapIter, error) {
-	iter := &strictLookupIter{}
 	for i := 0; i < c.prefixDesc.Count(); i++ {
 		if k.FieldIsNull(i) {
 			// nil field incompatible with strict key lookup
-			return iter, nil
+			return c.iter, nil
 		}
 	}
 	if err := c.m.GetPrefix(ctx, k, c.prefixDesc, func(key val.Tuple, value val.Tuple) error {
-		iter.k = key
-		iter.v = value
+		c.iter.k = key
+		c.iter.v = value
 		return nil
 	}); err != nil {
 		return nil, err
 	}
-	return iter, nil
+	return c.iter, nil
 }
 
 type nonCovStrictSecondaryLookupGen struct {
