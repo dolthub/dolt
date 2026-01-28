@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -275,6 +276,15 @@ func prollyChildSecDiffFkConstraintViolations(
 				}
 			}
 
+			logrus.Warnf("looking for parent sec idx key: %s\n", parentSecIdxDesc.Format(ctx, k))
+			logrus.Warnf("prefix key: %s\n", prefixDesc.Format(ctx, k))
+			fullIdx, err := prolly.DebugFormat(ctx, parentSecIdx)
+			if err != nil {
+				return err
+			}
+
+			logrus.Warnf("sec idx: %s\n", fullIdx)
+
 			ok, err := parentSecIdx.HasPrefix(ctx, k, prefixDesc)
 			if err != nil {
 				return err
@@ -344,6 +354,9 @@ func createCVForSecIdx(
 	})
 	if err != nil {
 		return err
+	}
+	if value == nil {
+		return fmt.Errorf("unable to find row from secondary index in the primary index with key: %v", primaryKD.Format(ctx, primaryIdxKey))
 	}
 
 	return receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)

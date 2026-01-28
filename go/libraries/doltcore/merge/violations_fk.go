@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -426,6 +427,9 @@ func childFkConstraintViolations(
 	if err != nil {
 		return err
 	}
+
+	logrus.Warnf("evaluating prolly child fk constraint violations for table %s, index %s, parent table %s, parent index %s", foreignKey.TableName, foreignKey.TableIndex, foreignKey.ReferencedTableName, foreignKey.ReferencedTableIndex)
+
 	return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 }
 
