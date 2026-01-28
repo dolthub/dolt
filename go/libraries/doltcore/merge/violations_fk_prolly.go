@@ -245,6 +245,7 @@ func prollyChildSecDiffFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildSecIdx prolly.Map,
 	receiver FKViolationReceiver) error {
+
 	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
 		return err
@@ -259,9 +260,20 @@ func prollyChildSecDiffFkConstraintViolations(
 	}
 
 	parentSecIdxDesc, _ := parentSecIdx.Descriptors()
-	prefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
+	parentIdxPrefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	childPriKD, _ := postChildRowData.Descriptors()
+	childIdxDesc, _ := postChildSecIdx.Descriptors()
 	childPriKB := val.NewTupleBuilder(childPriKD, preChildSecIdx.NodeStore())
+
+	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
+	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
+	compatibleTypes := true
+	for i, handler := range childIdxDesc.Handlers {
+		if !handler.SerializationCompatible(parentIdxPrefixDesc.Handlers[i]) {
+			compatibleTypes = false
+			break
+		}
+	}
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -276,8 +288,24 @@ func prollyChildSecDiffFkConstraintViolations(
 				}
 			}
 
+			if !compatibleTypes {
+				tb := val.NewTupleBuilder(parentIdxPrefixDesc, postChildSecIdx.NodeStore())
+				for i, handler := range childIdxDesc.Handlers {
+					serialized, err := handler.ConvertSerialized(ctx, parentIdxPrefixDesc.Handlers[i], k.GetField(i))
+					if err != nil {
+						return err
+					}
+					tb.PutRaw(i, serialized)
+				}
+
+				k, err = tb.Build(parentSecIdx.Pool())
+				if err != nil {
+					return err
+				}
+			}
+
 			logrus.Warnf("looking for parent sec idx key: %s\n", parentSecIdxDesc.Format(ctx, k))
-			logrus.Warnf("prefix key: %s\n", prefixDesc.Format(ctx, k))
+			logrus.Warnf("prefix key: %s\n", parentIdxPrefixDesc.Format(ctx, k))
 			fullIdx, err := prolly.DebugFormat(ctx, parentSecIdx)
 			if err != nil {
 				return err
@@ -285,7 +313,7 @@ func prollyChildSecDiffFkConstraintViolations(
 
 			logrus.Warnf("sec idx: %s\n", fullIdx)
 
-			ok, err := parentSecIdx.HasPrefix(ctx, k, prefixDesc)
+			ok, err := parentSecIdx.HasPrefix(ctx, k, parentIdxPrefixDesc)
 			if err != nil {
 				return err
 			} else if !ok {

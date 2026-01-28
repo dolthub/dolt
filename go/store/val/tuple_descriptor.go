@@ -62,6 +62,10 @@ type TupleTypeHandler interface {
 	DeserializeValue(ctx context.Context, val []byte) (any, error)
 	// FormatValue returns a string version of the value. Primarily intended for display.
 	FormatValue(val any) (string, error)
+	// SerializationCompatible returns true if this TupleTypeHandler is binary compatible with the other TupleTypeHandler.
+	SerializationCompatible(other TupleTypeHandler) bool
+	// ConvertSerialized converts |val| from the type handled by |other| to the type handled by this TupleTypeHandler.
+	ConvertSerialized(ctx context.Context, other TupleTypeHandler, val []byte) ([]byte, error)
 }
 
 // TupleDescriptorArgs are a set of optional arguments for TupleDesc creation.

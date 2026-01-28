@@ -70,7 +70,13 @@ type FKViolationReceiver interface {
 
 // GetForeignKeyViolations returns the violations that have been created as a
 // result of the diff between |baseRoot| and |newRoot|. It sends the violations to |receiver|.
-func GetForeignKeyViolations(ctx *sql.Context, tableResolver doltdb.TableResolver, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet, receiver FKViolationReceiver) error {
+func GetForeignKeyViolations(
+		ctx *sql.Context,
+		tableResolver doltdb.TableResolver,
+		newRoot, baseRoot doltdb.RootValue,
+		tables *doltdb.TableNameSet,
+		receiver FKViolationReceiver,
+) error {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return err
@@ -693,7 +699,13 @@ func childFkConstraintViolationsProcess(
 
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
-func newConstraintViolationsLoadedTable(ctx *sql.Context, tableResolver doltdb.TableResolver, tblName doltdb.TableName, idxName string, root doltdb.RootValue) (*constraintViolationsLoadedTable, bool, error) {
+func newConstraintViolationsLoadedTable(
+		ctx *sql.Context,
+		tableResolver doltdb.TableResolver,
+		tblName doltdb.TableName,
+		idxName string,
+		root doltdb.RootValue,
+) (*constraintViolationsLoadedTable, bool, error) {
 	trueTblName, tbl, ok, err := tableResolver.ResolveTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, false, err
