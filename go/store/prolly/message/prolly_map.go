@@ -60,7 +60,10 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	)
 
 	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
-	b := getFlatbufferBuilder(s.pool, bufSz)
+	b := getFlatbufferBuilder(s.pool, bufSz) // TODO: save this builder somewhere?
+	defer func() {
+		fbBuilderPool.Put(b)
+	}()
 
 	// serialize keys and offStart
 	keyTups = writeItemBytes(b, keys, keySz)
