@@ -1019,8 +1019,8 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_rebase order by rebase_order ASC;",
 				Expected: []sql.Row{
-					{"1", "pick", doltCommit, "inserting row 1 on branch1"},
-					{"2", "pick", doltCommit, "updating row 1 on branch1"},
+					{"1", "pick", doltCommit, "inserting row 1 on branch1"}, // This will be moved to the end.
+					{"2", "pick", doltCommit, "updating row 1 on branch1"},  // so this update is the first picked commit, and it conflicts.
 					{"3", "pick", doltCommit, "updating row 1, again, on branch1"},
 				},
 			},
@@ -1092,6 +1092,8 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				// This will commit the change, and proceed to the next pick, which also modifies row 1
+				// Another conflict.
 				Query:       "call dolt_rebase('--continue');",
 				ExpectedErr: dprocedures.ErrRebaseDataConflict,
 			},
@@ -1412,6 +1414,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Query:       "call dolt_rebase('--continue');",
 				ExpectedErr: dprocedures.ErrRebaseDataConflict,
 			},
+
 			{
 				Query:    "select * from t;",
 				Expected: []sql.Row{{0, "zero"}, {999, "nines"}},
@@ -1862,6 +1865,167 @@ commit
 				Query: "SELECT message FROM dolt_log LIMIT 1;",
 				Expected: []sql.Row{
 					{"empty \ncommit \n2"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase: comprehensive edit and conflict workflow",
+		SetUpScript: []string{
+			"set @@dolt_allow_commit_conflicts = 1;",
+			"create table t1 (pk int primary key, val int);",
+			"insert into t1 values (1, 1), (5, 5);",
+			"call dolt_commit('-Am', 'main commit 1');",
+			"call dolt_branch('b1');",
+
+			// Create commits on b1 branch that will be rebased
+			"call dolt_checkout('b1');",
+			"update t1 set val = 11 where pk = 1;", // Modification of data which should apply without conflict
+			"call dolt_commit('-am', 'b1 commit 1 - to edit');",
+			"insert into t1 values (10, 100);",
+			"call dolt_commit('-am', 'b1 commit 2 - will conflict');",
+			"insert into t1 values (20, 200);",
+			"call dolt_commit('-am', 'b1 commit 3 - clean apply');",
+			"insert into t1 values (30, 300);",
+			"call dolt_commit('-am', 'b1 commit 4 - edit at end');",
+
+			// Add conflicting data to main
+			"call dolt_checkout('main');",
+			"insert into t1 values (10, 999);", // This will conflict with b1 commit 2
+			"call dolt_commit('-am', 'main conflicting data');",
+
+			// Start interactive rebase
+			"call dolt_checkout('b1');",
+			"call dolt_rebase('-i', 'main');",
+
+			// Set up rebase plan: edit, pick (conflict), edit
+			"update dolt_rebase set action = 'edit' where rebase_order = 1;",
+			"update dolt_rebase set action = 'edit' where rebase_order = 4;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Verify rebase plan is set up correctly
+				Query: "select rebase_order, action, commit_message from dolt_rebase order by rebase_order;",
+				Expected: []sql.Row{
+					{"1", "edit", "b1 commit 1 - to edit"},
+					{"2", "pick", "b1 commit 2 - will conflict"},
+					{"3", "pick", "b1 commit 3 - clean apply"},
+					{"4", "edit", "b1 commit 4 - edit at end"},
+				},
+			},
+			{
+				// Start rebase - should pause at first edit
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, editPauseMessage}},
+			},
+			{
+				// Verify we're on the rebase working branch
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"dolt_rebase_b1"}},
+			},
+			{
+				// Verify initial state during first edit - main's data (5,5),(10,999) should be visible,
+				// as well as b1s first edit (1,11).
+				Query: "select pk, val from t1 order by pk;",
+				Expected: []sql.Row{
+					{1, 11}, {5, 5}, {10, 999},
+				},
+			},
+			{
+				// Make an edit during the pause
+				Query:            "update t1 set val = 55 where pk = 5;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_add('t1');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_commit('--amend', '-m', 'b1 commit 1 - to edit (modified)');",
+				SkipResultsCheck: true,
+			},
+			{
+				// Continue from first edit - should hit conflict on step 2
+				Query:       "call dolt_rebase('--continue');",
+				ExpectedErr: dprocedures.ErrRebaseDataConflict,
+				// The error message returned is long, and contains a commit id. We need a better regex
+				// match in the testing harness to validate this error.
+				// ExpectedErrStr: "data conflict detected while rebasing commit sn5pdhug6aaccvoue7ejp759aafbb1jn.....",
+			},
+			{
+				// Verify we have conflicts
+				Query:    "select count(*) from dolt_conflicts;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select our_pk, our_val, their_pk, their_val from dolt_conflicts_t1;",
+				Expected: []sql.Row{{10, 999, 10, 100}},
+			},
+			{
+				// Resolve conflict deleting conflict table row and updating pk=10 to 200.
+				Query:            "delete from dolt_conflicts_t1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "update t1 set val = 200 where pk = 10;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_add('t1');",
+				SkipResultsCheck: true,
+			},
+			{
+				// Continue at this stage will finish the commit, there is another edit after this.
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, editPauseMessage}},
+			},
+			{
+				// Verify we're still on rebase working branch
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"dolt_rebase_b1"}},
+			},
+			{
+				// Verify state includes all changes: edit from step 1, conflict resolution from step 2, and step 3
+				Query: "select pk, val from t1 order by pk;",
+				Expected: []sql.Row{
+					{1, 11}, {5, 55}, {10, 200}, {20, 200}, {30, 300},
+				},
+			},
+			{
+				// We are in the edit state. Create another commit on top, without actually editing the current one.
+				Query:            "insert into t1 values (42, 24);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_add('t1');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_commit('-am', 'b1 commit 5 - additional commit during edit');",
+				SkipResultsCheck: true,
+			},
+			{
+				// Continue from final edit - should complete successfully
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/b1"}},
+			},
+			{
+				// Verify we're back on the original branch
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b1"}},
+			},
+			{
+				// Verify all the log messages we expect are present.
+				Query: "select message from dolt_log;",
+				Expected: []sql.Row{
+					{"b1 commit 5 - additional commit during edit"},
+					{"b1 commit 4 - edit at end"},
+					{"b1 commit 3 - clean apply"},
+					{"b1 commit 2 - will conflict"},
+					{"b1 commit 1 - to edit (modified)"},
+					{"main conflicting data"},
+					{"main commit 1"},
+					{"Initialize data repository"},
 				},
 			},
 		},
