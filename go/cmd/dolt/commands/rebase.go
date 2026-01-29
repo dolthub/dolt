@@ -123,7 +123,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	if status != 0 {
-		cli.Println(fmt.Sprintf("runtime error: unexpected non-zero, non-one status from DOLT_REBASE: %d", status)))
+		cli.Println(fmt.Sprintf("runtime error: unexpected non-zero, non-one status from DOLT_REBASE: %d", status))
 		return 1
 	}
 
