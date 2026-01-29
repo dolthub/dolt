@@ -41,12 +41,15 @@ const (
 var prollyMapFileID = []byte(serial.ProllyTreeNodeFileID)
 
 func NewProllyMapSerializer(valueDesc *val.TupleDesc, pool pool.BuffPool) ProllyMapSerializer {
-	return ProllyMapSerializer{valDesc: valueDesc, pool: pool}
+	return ProllyMapSerializer{
+		valDesc:   valueDesc,
+		fbBuilder: fb.NewBuilder(0),
+	}
 }
 
 type ProllyMapSerializer struct {
-	pool    pool.BuffPool
-	valDesc *val.TupleDesc
+	valDesc   *val.TupleDesc
+	fbBuilder *fb.Builder
 }
 
 var _ Serializer = ProllyMapSerializer{}
@@ -60,51 +63,49 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	)
 
 	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
-	b := getFlatbufferBuilder(s.pool, bufSz) // TODO: save this builder somewhere?
-	defer func() {
-		fbBuilderPool.Put(b)
-	}()
+	s.fbBuilder.Bytes = make([]byte, bufSz)
+	s.fbBuilder.Reset()
 
 	// serialize keys and offStart
-	keyTups = writeItemBytes(b, keys, keySz)
-	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(keys)+1)
-	keyOffs = writeItemOffsets(b, keys, keySz)
+	keyTups = writeItemBytes(s.fbBuilder, keys, keySz)
+	serial.ProllyTreeNodeStartKeyOffsetsVector(s.fbBuilder, len(keys)+1)
+	keyOffs = writeItemOffsets(s.fbBuilder, keys, keySz)
 
 	if level == 0 {
 		// serialize value tuples for leaf nodes
-		valTups = writeItemBytes(b, values, valSz)
-		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)+1)
-		valOffs = writeItemOffsets(b, values, valSz)
+		valTups = writeItemBytes(s.fbBuilder, values, valSz)
+		serial.ProllyTreeNodeStartValueOffsetsVector(s.fbBuilder, len(values)+1)
+		valOffs = writeItemOffsets(s.fbBuilder, values, valSz)
 		// serialize offStart of chunk addresses within |valTups|
 		if s.valDesc.AddressFieldCount() > 0 {
-			serial.ProllyTreeNodeStartValueAddressOffsetsVector(b, countAddresses(values, s.valDesc))
-			valAddrOffs = writeAddressOffsets(b, values, valSz, s.valDesc)
+			serial.ProllyTreeNodeStartValueAddressOffsetsVector(s.fbBuilder, countAddresses(values, s.valDesc))
+			valAddrOffs = writeAddressOffsets(s.fbBuilder, values, valSz, s.valDesc)
 		}
 	} else {
 		// serialize child refs and subtree counts for internal nodes
-		refArr = writeItemBytes(b, values, valSz)
-		cardArr = writeCountArray(b, subtrees)
+		refArr = writeItemBytes(s.fbBuilder, values, valSz)
+		cardArr = writeCountArray(s.fbBuilder, subtrees)
 	}
 
 	// populate the node's vtable
-	serial.ProllyTreeNodeStart(b)
-	serial.ProllyTreeNodeAddKeyItems(b, keyTups)
-	serial.ProllyTreeNodeAddKeyOffsets(b, keyOffs)
+	serial.ProllyTreeNodeStart(s.fbBuilder)
+	serial.ProllyTreeNodeAddKeyItems(s.fbBuilder, keyTups)
+	serial.ProllyTreeNodeAddKeyOffsets(s.fbBuilder, keyOffs)
 	if level == 0 {
-		serial.ProllyTreeNodeAddValueItems(b, valTups)
-		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
-		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(keys)))
-		serial.ProllyTreeNodeAddValueAddressOffsets(b, valAddrOffs)
+		serial.ProllyTreeNodeAddValueItems(s.fbBuilder, valTups)
+		serial.ProllyTreeNodeAddValueOffsets(s.fbBuilder, valOffs)
+		serial.ProllyTreeNodeAddTreeCount(s.fbBuilder, uint64(len(keys)))
+		serial.ProllyTreeNodeAddValueAddressOffsets(s.fbBuilder, valAddrOffs)
 	} else {
-		serial.ProllyTreeNodeAddAddressArray(b, refArr)
-		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
-		serial.ProllyTreeNodeAddTreeCount(b, sumSubtrees(subtrees))
+		serial.ProllyTreeNodeAddAddressArray(s.fbBuilder, refArr)
+		serial.ProllyTreeNodeAddSubtreeCounts(s.fbBuilder, cardArr)
+		serial.ProllyTreeNodeAddTreeCount(s.fbBuilder, sumSubtrees(subtrees))
 	}
-	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
-	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
-	serial.ProllyTreeNodeAddTreeLevel(b, uint8(level))
+	serial.ProllyTreeNodeAddKeyType(s.fbBuilder, serial.ItemTypeTupleFormatAlpha)
+	serial.ProllyTreeNodeAddValueType(s.fbBuilder, serial.ItemTypeTupleFormatAlpha)
+	serial.ProllyTreeNodeAddTreeLevel(s.fbBuilder, uint8(level))
 
-	return serial.FinishMessage(b, serial.ProllyTreeNodeEnd(b), prollyMapFileID)
+	return serial.FinishMessage(s.fbBuilder, serial.ProllyTreeNodeEnd(s.fbBuilder), prollyMapFileID)
 }
 
 func getProllyMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, level, count uint16, err error) {

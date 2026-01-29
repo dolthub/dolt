@@ -52,7 +52,7 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 	)
 
 	keySz, addrSz, totalSz := estimateAddressMapSize(keys, addrs, subtrees)
-	b := getFlatbufferBuilder(s.pool, totalSz)
+	b := getFlatbufferBuilder(totalSz)
 
 	// keys
 	keyArr = writeItemBytes(b, keys, keySz)

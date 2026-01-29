@@ -126,15 +126,15 @@ func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]*Nod
 	}
 
 	var nerr error
-	mu := new(sync.Mutex)
+	//mu := new(sync.Mutex)
 	err := ns.store.GetMany(ctx, gets, func(ctx context.Context, chunk *chunks.Chunk) {
 		n, _, err := NodeFromBytes(chunk.Data())
 		if err != nil {
 			nerr = err
 		}
-		mu.Lock()
+		//mu.Lock()
 		found[chunk.Hash()] = n
-		mu.Unlock()
+		//mu.Unlock()
 	})
 	if err == nil {
 		err = nerr

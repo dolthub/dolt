@@ -21,7 +21,6 @@ import (
 	fb "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -35,9 +34,9 @@ var fbBuilderPool = sync.Pool{
 	},
 }
 
-func getFlatbufferBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
+func getFlatbufferBuilder(sz int) (b *fb.Builder) {
 	b = fbBuilderPool.Get().(*fb.Builder)
-	b.Bytes = pool.Get(uint64(sz))
+	b.Bytes = make([]byte, sz)
 	b.Reset()
 	return
 }
