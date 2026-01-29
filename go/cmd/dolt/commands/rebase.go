@@ -181,7 +181,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	rows, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, "CALL DOLT_REBASE('--continue');")
 	if err != nil {
-		if isRebasePauseError(err) {
+		if isRebaseConflictError(err) {
 			if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
 			}
@@ -212,9 +212,9 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	message = rows[0][1].(string)
 
-	// Check if this is an edit pause (successful status but halted for editing)
-	if strings.Contains(message, "edit action paused at commit") {
-		// Sync CLI branch to SQL session branch for edit pauses (like we do for data conflicts)
+	// Check if this is an edit pause. Such messages have a status value of 0, so all we have to go on is the message.
+	if strings.Contains(message, dprocedures.EditPausePrefix) {
+		// Make sure the CLI is on the same branch so the user can make their edits.
 		if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
 		}
@@ -377,9 +377,8 @@ func insertRebasePlanIntoDoltRebaseTable(plan *rebase.RebasePlan, sqlCtx *sql.Co
 }
 
 // syncCliBranchToSqlSessionBranch sets the current branch for the CLI (in repo_state.json) to the active branch
-// for the current session. This is needed during rebasing, since any conflicts need to be resolved while the
-// session is on the rebase working branch (e.g. dolt_rebase_t1) and after the rebase finishes, the session needs
-// to be back on the branch being rebased (e.g. t1).
+// for the current session. This is needed during rebasing, as the user may need to stop in the middle of the
+// process to handle a conflict or an edit operation.
 func syncCliBranchToSqlSessionBranch(ctx *sql.Context, dEnv *env.DoltEnv) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	currentBranch, err := doltSession.GetBranch(ctx)
@@ -390,10 +389,9 @@ func syncCliBranchToSqlSessionBranch(ctx *sql.Context, dEnv *env.DoltEnv) error 
 	return saveHeadBranch(dEnv.FS, currentBranch)
 }
 
-// isRebasePauseError checks if the given error represents a rebase pause condition
+// isRebaseConflictError checks if the given error represents a rebase pause condition
 // (data conflicts) that should not abort the rebase but instead allow the user to resolve/continue.
-// Note: Edit action pauses are now returned as success status rather than errors.
-func isRebasePauseError(err error) bool {
+func isRebaseConflictError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -405,5 +403,5 @@ func isRebasePauseError(err error) bool {
 
 	// For over-the-wire errors that lose their type, match against error message patterns
 	errMsg := err.Error()
-	return strings.Contains(errMsg, dprocedures.RebaseDataConflictPrefix)
+	return strings.HasPrefix(errMsg, dprocedures.RebaseDataConflictPrefix)
 }
