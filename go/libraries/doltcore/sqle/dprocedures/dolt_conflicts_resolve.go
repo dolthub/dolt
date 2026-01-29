@@ -23,16 +23,13 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -206,118 +203,6 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName doltdb.
 	return newTbl, nil
 }
 
-func resolvePkConflicts(ctx *sql.Context, opts editor.Options, tbl *doltdb.Table, tblName string, sch schema.Schema, conflicts types.Map) (*doltdb.Table, error) {
-	// Create table editor
-	tblEditor, err := editor.NewTableEditor(ctx, tbl, sch, tblName, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	err = conflicts.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
-		k := key.(types.Tuple)
-		cnf, err := conflict.ConflictFromTuple(val.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-
-		// row was removed
-		if types.IsNull(cnf.MergeValue) {
-			baseRow, err := row.FromNoms(sch, k, cnf.Base.(types.Tuple))
-			if err != nil {
-				return true, err
-			}
-			err = tblEditor.DeleteRow(ctx, baseRow)
-			if err != nil {
-				return true, err
-			}
-			return false, nil
-		}
-
-		newRow, err := row.FromNoms(sch, k, cnf.MergeValue.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-
-		if isValid, err := row.IsValid(newRow, sch); err != nil {
-			return true, err
-		} else if !isValid {
-			return true, table.NewBadRow(newRow, "error resolving conflicts", fmt.Sprintf("row with primary key %v in table %s does not match constraints or types of the table's schema.", key, tblName))
-		}
-
-		// row was added
-		if types.IsNull(cnf.Value) {
-			err = tblEditor.InsertRow(ctx, newRow, nil)
-			if err != nil {
-				return true, err
-			}
-			return false, nil
-		}
-
-		// row was modified
-		oldRow, err := row.FromNoms(sch, k, cnf.Value.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		err = tblEditor.UpdateRow(ctx, oldRow, newRow, nil)
-		if err != nil {
-			return true, err
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return tblEditor.Table(ctx)
-}
-
-func resolveKeylessConflicts(ctx *sql.Context, tbl *doltdb.Table, conflicts types.Map) (*doltdb.Table, error) {
-	rowData, err := tbl.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	mapEditor := rowData.Edit()
-	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		cnf, err := conflict.ConflictFromTuple(value.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-
-		if types.IsNull(cnf.MergeValue) {
-			mapEditor.Remove(key)
-		} else {
-			mapEditor.Set(key, cnf.MergeValue)
-		}
-
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	rowData, err = mapEditor.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return tbl.UpdateNomsRows(ctx, rowData)
-}
-
-func resolveNomsConflicts(ctx *sql.Context, opts editor.Options, tbl *doltdb.Table, tblName string, sch schema.Schema) (*doltdb.Table, error) {
-	// Get conflicts
-	_, confIdx, err := tbl.GetConflicts(ctx)
-	if err != nil {
-		return nil, err
-	}
-	conflicts := durable.NomsMapFromConflictIndex(confIdx)
-
-	if schema.IsKeyless(sch) {
-		return resolveKeylessConflicts(ctx, tbl, conflicts)
-	}
-
-	return resolvePkConflicts(ctx, opts, tbl, tblName, sch, conflicts)
-}
-
 func validateConstraintViolations(ctx *sql.Context, before, after doltdb.RootValue, table doltdb.TableName) error {
 	tables, err := after.GetTableNames(ctx, table.Schema, true)
 	if err != nil {
@@ -447,11 +332,7 @@ func ResolveDataConflictsForTable(ctx *sql.Context, root doltdb.RootValue, tblNa
 		if tbl.Format() == types.Format_DOLT {
 			tbl, err = resolveProllyConflicts(ctx, tbl, tblName, ourSch, sch)
 		} else {
-			opts, err := getEditorOpts()
-			if err != nil {
-				return nil, false, err
-			}
-			tbl, err = resolveNomsConflicts(ctx, opts, tbl, tblName.Name, sch)
+			panic("only __DOLT__ format is supported")
 		}
 		if err != nil {
 			return nil, false, err

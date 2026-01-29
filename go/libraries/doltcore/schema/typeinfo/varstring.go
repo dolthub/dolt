@@ -194,30 +194,6 @@ func (ti *varStringType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *varStringType) GetTypeIdentifier() Identifier {
-	return VarStringTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *varStringType) GetTypeParams() map[string]string {
-	typeParams := map[string]string{
-		varStringTypeParam_Collate: ti.sqlStringType.Collation().String(),
-		varStringTypeParam_Length:  strconv.FormatInt(ti.sqlStringType.MaxCharacterLength(), 10),
-	}
-	switch ti.sqlStringType.Type() {
-	case sqltypes.Char:
-		typeParams[varStringTypeParam_SQL] = varStringTypeParam_SQL_Char
-	case sqltypes.VarChar:
-		typeParams[varStringTypeParam_SQL] = varStringTypeParam_SQL_VarChar
-	case sqltypes.Text:
-		typeParams[varStringTypeParam_SQL] = varStringTypeParam_SQL_Text
-	default:
-		panic(fmt.Errorf(`unknown varstring type info sql type "%v"`, ti.sqlStringType.Type().String()))
-	}
-	return typeParams
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *varStringType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter or delete typeinfo package

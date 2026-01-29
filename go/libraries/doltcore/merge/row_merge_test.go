@@ -15,7 +15,6 @@
 package merge
 
 import (
-	"context"
 	"strconv"
 	"testing"
 
@@ -175,7 +174,7 @@ var testCases = []testCase{
 		false,
 	},
 	// TODO (dhruv): need to fix this test case for new storage format
-	//{
+	// {
 	//	"add rows but one holds a new column",
 	//	build(1, 1),
 	//	build(1, 1, 1),
@@ -184,7 +183,7 @@ var testCases = []testCase{
 	//	build(1, 1, 1),
 	//	true,
 	//	false,
-	//},
+	// },
 	{
 		"Delete a row in one, set all null in the other",
 		build(0, 0, 0), // build translates zeros into NULL values
@@ -218,30 +217,6 @@ func TestRowMerge(t *testing.T) {
 			assert.Equal(t, test.expectConflict, !ok)
 			vD := test.mergedSch.GetValueDescriptor(v.ns)
 			assert.Equal(t, vD.Format(ctx, test.expectedResult), vD.Format(ctx, merged))
-		})
-	}
-}
-
-func TestNomsRowMerge(t *testing.T) {
-	if types.Format_Default == types.Format_DOLT {
-		t.Skip()
-	}
-
-	testCases := append(testCases, convergentEditCases...)
-	tests := make([]nomsRowMergeTest, len(testCases))
-	for i, t := range testCases {
-		tests[i] = createNomsRowMergeStruct(t)
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			rowMergeResult, err := nomsPkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
-			assert.NoError(t, err)
-			assert.Equal(t, test.expectedResult, rowMergeResult.mergedRow,
-				"expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+
-					"got "+mustString(types.EncodedValue(context.Background(), rowMergeResult.mergedRow)))
-			assert.Equal(t, test.expectCellMerge, rowMergeResult.didCellMerge)
-			assert.Equal(t, test.expectConflict, rowMergeResult.isConflict)
 		})
 	}
 }
