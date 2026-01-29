@@ -36,7 +36,9 @@ var fbBuilderPool = sync.Pool{
 
 func getFlatbufferBuilder(sz int) (b *fb.Builder) {
 	b = fbBuilderPool.Get().(*fb.Builder)
-	b.Bytes = make([]byte, sz)
+	if cap(b.Bytes) < sz {
+		b.Bytes = make([]byte, sz)
+	}
 	b.Reset()
 	return
 }
