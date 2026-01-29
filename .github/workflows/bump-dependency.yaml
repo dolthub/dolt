@@ -180,16 +180,21 @@ jobs:
               });
 
               if (checkSuiteRes.data) {
+                const okConclusions = new Set(["success", "neutral", "skipped"]);
                 for (const suite of checkSuiteRes.data.check_suites) {
                   console.log("suite id:", suite.id);
                   console.log("suite app slug:", suite.app.slug);
                   console.log("suite status:", suite.status);
                   console.log("suite conclusion:", suite.conclusion);
                   if (suite.app.slug === "github-actions") {
-                     if (suite.status !== "completed" || suite.conclusion !== "success") {
-                       console.log(`Leaving pr open due to status:${suite.status} conclusion${suite.conclusion}`);
-                       process.exit(0);
-                     }
+                    if (suite.status !== "completed") {
+                      console.log(`Leaving pr open due to status:${suite.status} conclusion:${suite.conclusion}`);
+                      process.exit(0);
+                    }
+                    if (!suite.conclusion || !okConclusions.has(suite.conclusion)) {
+                      console.log(`Leaving pr open due to status:${suite.status} conclusion:${suite.conclusion}`);
+                      process.exit(0);
+                    }
                   }
                 }
               }
