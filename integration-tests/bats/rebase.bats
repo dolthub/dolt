@@ -656,11 +656,6 @@ message"
 
     # Continue rebase - should proceed to commit 3 then pause at commit 4 edit
     run dolt rebase --continue
-
-    echo "------------------------"
-    echo "$output"
-    echo "------------------------"
-
     [ "$status" -eq 0 ]
     [[ "$output" =~ "edit action paused at commit" ]] || false
     [[ "$output" =~ "b1 commit 4 - edit at end" ]] || false
