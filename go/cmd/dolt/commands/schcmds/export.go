@@ -138,7 +138,11 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root dol
 		if err != nil {
 			return errhand.BuildDError("error: ").AddCause(err).Build()
 		}
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+		deaf, err := dEnv.DbEaFactory(ctx)
+		if err != nil {
+			return errhand.BuildDError("error: ").AddCause(err).Build()
+		}
+		opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
 		verr := exportTblSchema(ctx, tn, root, wr, opts)
 		if verr != nil {
 			return verr

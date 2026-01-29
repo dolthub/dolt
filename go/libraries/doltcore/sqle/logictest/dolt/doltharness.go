@@ -305,7 +305,11 @@ func sqlNewEngine(ctx context.Context, dEnv *env.DoltEnv) (*sqle.Engine, dsess.D
 	if err != nil {
 		return nil, nil, err
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	deaf, err := dEnv.DbEaFactory(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
 	db, err := dsql.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	if err != nil {
 		return nil, nil, err

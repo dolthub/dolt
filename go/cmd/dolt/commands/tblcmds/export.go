@@ -258,7 +258,11 @@ func getTableWriter(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEn
 		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
 	}
 
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, rdSchema, editor.Options{Deaf: dEnv.DbEaFactory(ctx)}, writer)
+	deaf, err := dEnv.DbEaFactory(ctx)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
+	}
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, rdSchema, editor.Options{Deaf: deaf}, writer)
 	if err != nil {
 		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
 	}
