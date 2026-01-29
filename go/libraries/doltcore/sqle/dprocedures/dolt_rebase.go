@@ -144,9 +144,11 @@ var ErrRebaseDataConflict = goerrors.NewKind(RebaseDataConflictPrefix + " %s (%s
 	"Resolve the conflicts and remove them from the dolt_conflicts_<table> tables, " +
 	"then continue the rebase by calling dolt_rebase('--continue')")
 
+var EditPausePrefix = "edit action paused at commit"
+
 // createEditPauseMessage creates a pause message for edit actions
 func createEditPauseMessage(commitHash, commitMsg string) string {
-	return fmt.Sprintf("edit action paused at commit %s (%s). \n\n"+
+	return fmt.Sprintf(EditPausePrefix+" %s (%s). \n\n"+
 		"You can now modify the working directory and stage changes. "+
 		"When ready, continue the rebase by calling dolt_rebase('--continue')", commitHash, commitMsg)
 }

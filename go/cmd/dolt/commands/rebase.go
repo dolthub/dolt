@@ -122,6 +122,11 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
 	}
 
+	if status != 0 {
+		cli.Println(fmt.Sprintf("runtime error: unexpected non-zero, non-one status from DOLT_REBASE: %d", status))
+		return 1
+	}
+
 	// If the rebase was successful, or if it was aborted, print out the message and
 	// ensure the branch being rebased is checked out in the CLI
 	message := rows[0][1].(string)
@@ -134,6 +139,14 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 0
 	}
 
+	if strings.HasPrefix(message, dprocedures.EditPausePrefix) {
+		// We need to pause to edit a commit. This is similar to date conflicts, but that makes it's way to us as an error
+		// This is not an error scenario, Just print the message, and return 0.
+		cli.Println(message)
+		return 0
+	}
+
+	// At this point, we know the rebase has just been initiated, and we are in interactive mode.
 	rebasePlan, err := getRebasePlan(cliCtx, queryist.Context, queryist.Queryist, apr.Arg(0), branchName)
 	if err != nil {
 		// attempt to abort the rebase
