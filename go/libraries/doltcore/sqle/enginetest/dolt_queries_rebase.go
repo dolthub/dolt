@@ -1946,9 +1946,8 @@ commit
 			},
 			{
 				// Continue from first edit - should hit conflict on step 2
-				Query:            "call dolt_rebase('--continue');",
-				SkipResultsCheck: true,
-				ExpectedErr:      dprocedures.ErrRebaseDataConflict,
+				Query:       "call dolt_rebase('--continue');",
+				ExpectedErr: dprocedures.ErrRebaseDataConflict,
 				// The error message returned is long, and contains a commit id. We need a better regex
 				// match in the testing harness to validate this error.
 				// ExpectedErrStr: "data conflict detected while rebasing commit sn5pdhug6aaccvoue7ejp759aafbb1jn.....",
@@ -1976,7 +1975,7 @@ commit
 				SkipResultsCheck: true,
 			},
 			{
-				// Continue at this stage will finish the commit.
+				// Continue at this stage will finish the commit, there is another edit after this.
 				Query:    "call dolt_rebase('--continue');",
 				Expected: []sql.Row{{0, editPauseMessage}},
 			},
