@@ -1051,6 +1051,68 @@ var BranchControlTests = []BranchControlTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/10352
+		Name: "Rebase respects existing branch control privileges",
+		SetUpScript: []string{
+			"create table tbl (i int);",
+			"insert into tbl values (42);",
+			"call dolt_commit('-A','-m', 'initial data');",
+			"call dolt_branch('branch1');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%','%','root','%', 'admin');",
+			"INSERT INTO dolt_branch_control VALUES ('%','branch1','testuser','%', 'write');",
+			"call dolt_commit('--allow-empty', '-m', 'empty');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_branch_control WHERE user = 'testuser' and branch = 'branch1';",
+				Expected: []sql.Row{{"%", "branch1", "testuser", "%", "write"}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "call dolt_checkout('branch1');",
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "insert into tbl values (23);",
+				Expected: []sql.Row{{types.OkResult{Info: nil, RowsAffected: 0x1, InsertID: 0x0}}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "call dolt_commit('-a', '-m', 'user1 change');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				User:  "testuser",
+				Host:  "localhost",
+				Query: "call dolt_rebase('--interactive', 'main');",
+				Expected: []sql.Row{
+					{0, "interactive rebase started on branch dolt_rebase_branch1; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"},
+				},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/branch1"}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_branch_control WHERE user = 'testuser' and branch = 'branch1';",
+				Expected: []sql.Row{{"%", "branch1", "testuser", "%", "write"}},
+			},
+		},
+	},
+	{
 		Name: "Creating branch creates new entry",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
