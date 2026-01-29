@@ -611,7 +611,10 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		return nil, err
 	}
 
-	deaf := dEnv.DbEaFactory(ctx)
+	deaf, err := dEnv.DbEaFactory(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {

@@ -47,7 +47,9 @@ func TestNeedsToReloadEvents(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	deaf, err := dEnv.DbEaFactory(ctx)
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
 
 	timestamp := time.Now().Truncate(time.Minute).UTC()
 

@@ -1332,20 +1332,38 @@ func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	return absPath, nil
 }
 
-func (dEnv *DoltEnv) DbEaFactory(ctx context.Context) editor.DbEaFactory {
+func (dEnv *DoltEnv) DbEaFactory(ctx context.Context) (editor.DbEaFactory, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return editor.NewDbEaFactory(tmpDir, dEnv.DoltDB(ctx).ValueReadWriter())
+
+	db := dEnv.DoltDB(ctx)
+	if db == nil {
+		if dEnv.DBLoadError != nil {
+			return nil, dEnv.DBLoadError
+		}
+		return nil, errors.New("DoltDB failed to initialize but no error was recorded")
+	}
+
+	return editor.NewDbEaFactory(tmpDir, db.ValueReadWriter()), nil
 }
 
-func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) editor.DbEaFactory {
+func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) (editor.DbEaFactory, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return editor.NewBulkImportTEAFactory(dEnv.DoltDB(ctx).ValueReadWriter(), tmpDir)
+
+	db := dEnv.DoltDB(ctx)
+	if db == nil {
+		if dEnv.DBLoadError != nil {
+			return nil, dEnv.DBLoadError
+		}
+		return nil, errors.New("DoltDB failed to initialize but no error was recorded")
+	}
+
+	return editor.NewBulkImportTEAFactory(db.ValueReadWriter(), tmpDir), nil
 }
 
 func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) (bool, error) {
