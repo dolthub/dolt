@@ -62,8 +62,11 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		refArr, cardArr  fb.UOffsetT
 	)
 
+	// TODO: it appears we do this to avoid flatbufferBuilder.growByteSlice(), but if we reuse builder correctly...
 	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
-	s.fbBuilder.Bytes = make([]byte, bufSz)
+	if bufSz > cap(s.fbBuilder.Bytes) {
+		s.fbBuilder.Bytes = make([]byte, bufSz)
+	}
 	s.fbBuilder.Reset()
 
 	// serialize keys and offStart
