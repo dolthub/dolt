@@ -38,6 +38,12 @@ setupCustomEditorScript() {
     export DOLT_TEST_FORCE_OPEN_EDITOR="1"
 }
 
+getHeadHash() {
+  run dolt sql -r csv -q "select commit_hash from dolt_log limit 1 offset 0;"
+  [ "$status" -eq 0 ] || return 1
+  echo "${lines[1]}"
+}
+
 @test "rebase: no rebase in progress errors" {
     run dolt rebase --abort
     [ "$status" -eq 1 ]
@@ -116,9 +122,7 @@ setupCustomEditorScript() {
     setupCustomEditorScript "rebasePlan.txt"
 
     dolt checkout b1
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT1=${lines[0]:12:32}
+    COMMIT1="$(getHeadHash)"
 
     touch rebasePlan.txt
     echo "pick $COMMIT1 b1 commit 1" >> rebasePlan.txt
@@ -238,45 +242,31 @@ message"
     setupCustomEditorScript "multiStepPlan.txt"
 
     dolt checkout b1
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT1=${lines[0]:12:32}
+    COMMIT1="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (1);"
     dolt commit -am "b1 commit 2"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT2=${lines[0]:12:32}
+    COMMIT2="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (2);"
     dolt commit -am "b1 commit 3"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT3=${lines[0]:12:32}
+    COMMIT3="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (3);"
     dolt commit -am "b1 commit 4"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT4=${lines[0]:12:32}
+    COMMIT4="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (4);"
     dolt commit -am "b1 commit 5"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT5=${lines[0]:12:32}
+    COMMIT5="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (5);"
     dolt commit -am "b1 commit 6"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT6=${lines[0]:12:32}
+    COMMIT6="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (6);"
     dolt commit -am "b1 commit 7"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT7=${lines[0]:12:32}
+    COMMIT7="$(getHeadHash)"
 
     touch multiStepPlan.txt
     echo "pick $COMMIT1 b1 commit 1" >> multiStepPlan.txt
@@ -317,9 +307,7 @@ message"
     dolt sql -q "CREATE table t3 (pk int primary key);"
     dolt add t3
     dolt commit -m "b2 commit 1"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT1=${lines[0]:12:32}
+    COMMIT1="$(getHeadHash)"
 
     dolt sql -q "insert into t3 values (1);"
     dolt commit -am "b2 commit 2"
@@ -327,9 +315,7 @@ message"
     dolt commit -am "b2 commit 3"
 
     dolt checkout b1
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT2=${lines[0]:12:32}
+    COMMIT2="$(getHeadHash)"
 
     touch nonStandardPlan.txt
     echo "pick $COMMIT1 b2 commit 1" >> nonStandardPlan.txt
@@ -545,9 +531,7 @@ message"
 @test "rebase: edit action basic functionality" {
     # Get the commit hash for b1 commit 1 using the established pattern
     dolt checkout b1
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT1=${lines[0]:12:32}
+    COMMIT1="$(getHeadHash)"
     
     # Create a rebase plan file with an edit action
     touch rebase_plan.txt
@@ -589,30 +573,22 @@ message"
     # Commit 1: Will be edited (no conflict with main)
     dolt sql -q "INSERT INTO t1 VALUES (5, 50);"
     dolt commit -am "b1 commit 1 - to edit"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT1=${lines[0]:12:32}
+    COMMIT1="$(getHeadHash)"
 
     # Commit 2: Will conflict with main
     dolt sql -q "INSERT INTO t1 VALUES (10, 200);"  # Conflicts with main's (10, 100)
     dolt commit -am "b1 commit 2 - will conflict"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT2=${lines[0]:12:32}
+    COMMIT2="$(getHeadHash)"
 
     # Commit 3: Clean apply after conflict
     dolt sql -q "INSERT INTO t1 VALUES (20, 300);"
     dolt commit -am "b1 commit 3 - clean apply"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT3=${lines[0]:12:32}
+    COMMIT3="$(getHeadHash)"
 
     # Commit 4: Will be edited at the end
     dolt sql -q "INSERT INTO t1 VALUES (30, 400);"
     dolt commit -am "b1 commit 4 - edit at end"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT4=${lines[0]:12:32}
+    COMMIT4="$(getHeadHash)"
 
     # Create rebase plan: edit, pick (conflict), pick, edit
     setupCustomEditorScript "complex_rebase_plan.txt"
