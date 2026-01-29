@@ -16,6 +16,7 @@ package message
 
 import (
 	"math"
+	"sync"
 
 	fb "github.com/dolthub/flatbuffers/v23/go"
 
@@ -28,8 +29,14 @@ const (
 	MaxVectorOffset = uint64(math.MaxUint16)
 )
 
+var fbBuilderPool = sync.Pool{
+	New: func() interface{} {
+		return fb.NewBuilder(0) // TODO: pick good initial size
+	},
+}
+
 func getFlatbufferBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
-	b = fb.NewBuilder(0)
+	b = fbBuilderPool.Get().(*fb.Builder)
 	b.Bytes = pool.Get(uint64(sz))
 	b.Reset()
 	return
