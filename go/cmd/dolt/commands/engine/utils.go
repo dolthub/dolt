@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -51,13 +52,27 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 }
 
 func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEditor bool) (sqle.Database, error) {
-	deaf := dEnv.DbEaFactory(ctx)
-	if useBulkEditor {
-		deaf = dEnv.BulkDbEaFactory(ctx)
+	// Force DB load before constructing editor factories. When load fails (e.g. filesystem lock contention),
+	// DoltEnv records the error and returns a nil DoltDB. Callers must propagate that error instead of
+	// dereferencing through DoltDB.
+	ddb := dEnv.DoltDB(ctx)
+	if ddb == nil {
+		if dEnv.DBLoadError != nil {
+			return sqle.Database{}, dEnv.DBLoadError
+		}
+		return sqle.Database{}, errors.New("failed to load doltdb but no error was recorded")
 	}
+
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return sqle.Database{}, err
+	}
+
+	var deaf editor.DbEaFactory
+	if useBulkEditor {
+		deaf = editor.NewBulkImportTEAFactory(ddb.ValueReadWriter(), tmpDir)
+	} else {
+		deaf = editor.NewDbEaFactory(tmpDir, ddb.ValueReadWriter())
 	}
 	opts := editor.Options{
 		Deaf:    deaf,
