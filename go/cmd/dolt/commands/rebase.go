@@ -122,6 +122,11 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
 	}
 
+	if status != 0 {
+		cli.Println(fmt.Sprintf("runtime error: unexpected non-zero, non-one status from DOLT_REBASE: %d", status))
+		return 1
+	}
+
 	// If the rebase was successful, or if it was aborted, print out the message and
 	// ensure the branch being rebased is checked out in the CLI
 	message := rows[0][1].(string)
@@ -134,6 +139,14 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 0
 	}
 
+	if strings.HasPrefix(message, dprocedures.EditPausePrefix) {
+		// We need to pause to edit a commit. This is similar to date conflicts, but that makes it's way to us as an error
+		// This is not an error scenario, Just print the message, and return 0.
+		cli.Println(message)
+		return 0
+	}
+
+	// At this point, we know the rebase has just been initiated, and we are in interactive mode.
 	rebasePlan, err := getRebasePlan(cliCtx, queryist.Context, queryist.Queryist, apr.Arg(0), branchName)
 	if err != nil {
 		// attempt to abort the rebase
@@ -168,8 +181,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	rows, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, "CALL DOLT_REBASE('--continue');")
 	if err != nil {
-		// If the error is a data conflict, don't abort the rebase, but let the caller resolve the conflicts
-		if dprocedures.ErrRebaseDataConflict.Is(err) || strings.Contains(err.Error(), dprocedures.ErrRebaseDataConflict.Message[:40]) {
+		if isRebasePauseError(err) {
 			if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
 			}
@@ -198,7 +210,17 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
 	}
 
-	cli.Println(rows[0][1].(string))
+	message = rows[0][1].(string)
+
+	// Check if this is an edit pause (successful status but halted for editing)
+	if strings.Contains(message, "edit action paused at commit") {
+		// Sync CLI branch to SQL session branch for edit pauses (like we do for data conflicts)
+		if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
+		}
+	}
+
+	cli.Println(message)
 	return 0
 }
 
@@ -289,6 +311,7 @@ func buildInitialRebaseMsg(sqlCtx *sql.Context, queryist cli.Queryist, rebaseBra
 	buffer.WriteString("# Commands:\n")
 	buffer.WriteString("# p, pick <commit> = use commit\n")
 	buffer.WriteString("# d, drop <commit> = remove commit\n")
+	buffer.WriteString("# e, edit <commit> = use commit, but stop for amending\n")
 	buffer.WriteString("# r, reword <commit> = use commit, but edit the commit message\n")
 	buffer.WriteString("# s, squash <commit> = use commit, but meld into previous commit\n")
 	buffer.WriteString("# f, fixup <commit> = like \"squash\", but discard this commit's message\n")
@@ -365,4 +388,22 @@ func syncCliBranchToSqlSessionBranch(ctx *sql.Context, dEnv *env.DoltEnv) error 
 	}
 
 	return saveHeadBranch(dEnv.FS, currentBranch)
+}
+
+// isRebasePauseError checks if the given error represents a rebase pause condition
+// (data conflicts) that should not abort the rebase but instead allow the user to resolve/continue.
+// Note: Edit action pauses are now returned as success status rather than errors.
+func isRebasePauseError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check typed errors first (for local execution)
+	if dprocedures.ErrRebaseDataConflict.Is(err) {
+		return true
+	}
+
+	// For over-the-wire errors that lose their type, match against error message patterns
+	errMsg := err.Error()
+	return strings.Contains(errMsg, dprocedures.RebaseDataConflictPrefix)
 }
