@@ -337,6 +337,31 @@ func getRebaseAction(col interface{}) (string, bool) {
 	}
 }
 
+// rebaseActionMap maps short action forms to their full names
+var rebaseActionMap = map[string]string{
+	"p": rebase.RebaseActionPick,
+	"r": rebase.RebaseActionReword,
+	"e": rebase.RebaseActionEdit,
+	"s": rebase.RebaseActionSquash,
+	"f": rebase.RebaseActionFixup,
+	"d": rebase.RebaseActionDrop,
+	// Also accept full names
+	rebase.RebaseActionPick:   rebase.RebaseActionPick,
+	rebase.RebaseActionReword: rebase.RebaseActionReword,
+	rebase.RebaseActionEdit:   rebase.RebaseActionEdit,
+	rebase.RebaseActionSquash: rebase.RebaseActionSquash,
+	rebase.RebaseActionFixup:  rebase.RebaseActionFixup,
+	rebase.RebaseActionDrop:   rebase.RebaseActionDrop,
+}
+
+func expandRebaseAction(action string) (string, error) {
+	if fullAction, ok := rebaseActionMap[action]; ok {
+		return fullAction, nil
+	}
+
+	return "", fmt.Errorf("unknown action in rebase plan: %s", action)
+}
+
 // parseRebaseMessage parses the rebase message from the editor and adds all uncommented out lines as steps in the rebase plan.
 func parseRebaseMessage(rebaseMsg string) (*rebase.RebasePlan, error) {
 	plan := &rebase.RebasePlan{}
@@ -347,8 +372,14 @@ func parseRebaseMessage(rebaseMsg string) (*rebase.RebasePlan, error) {
 			if len(rebaseStepParts) != 3 {
 				return nil, fmt.Errorf("invalid line %d: %s", i, line)
 			}
+			
+			expandedAction, err := expandRebaseAction(rebaseStepParts[0])
+			if err != nil {
+				return nil, fmt.Errorf("line %d: %s", i+1, err.Error())
+			}
+			
 			plan.Steps = append(plan.Steps, rebase.RebasePlanStep{
-				Action:     rebaseStepParts[0],
+				Action:     expandedAction,
 				CommitHash: rebaseStepParts[1],
 				CommitMsg:  rebaseStepParts[2],
 			})

@@ -674,3 +674,45 @@ message"
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "rebase in progress" ]] || false
 }
+
+@test "rebase: short action forms should be recognized" {
+    setupCustomEditorScript "shortActionsPlan.txt"
+
+    dolt checkout b1
+    COMMIT1="$(getHeadHash)"
+
+    dolt sql -q "insert into t2 values (1);"
+    dolt commit -am "b1 commit 2"
+    COMMIT2="$(getHeadHash)"
+
+    dolt sql -q "insert into t2 values (2);"
+    dolt commit -am "b1 commit 3"
+    COMMIT3="$(getHeadHash)"
+
+    touch shortActionsPlan.txt
+    echo "p $COMMIT1 b1 commit 1" >> shortActionsPlan.txt
+    echo "r $COMMIT2 reworded commit" >> shortActionsPlan.txt
+    echo "f $COMMIT3 b1 commit 3" >> shortActionsPlan.txt
+
+    run dolt rebase -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "reworded commit" ]] || false
+}
+
+@test "rebase: invalid action forms should be rejected with clear error" {
+    setupCustomEditorScript "invalidActionsPlan.txt"
+
+    dolt checkout b1
+    COMMIT1="$(getHeadHash)"
+
+    touch invalidActionsPlan.txt
+    echo "invalid $COMMIT1 b1 commit 1" >> invalidActionsPlan.txt
+
+    run dolt rebase -i main
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "unknown action in rebase plan: invalid" ]] || false
+}
