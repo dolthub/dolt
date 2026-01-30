@@ -88,7 +88,7 @@ sleep 1
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
-  --time=10 \
+  --time=120 \
   --report_interval=1 \
   --threads=2 \
   --tables=1 \
@@ -117,17 +117,21 @@ echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
-  --time=10 \
+  --time=120 \
   --report_interval=1 \
   --threads=2 \
   --tables=1 \
   --scale=1 \
   --trx_level="RR" run
 
-echo "benchmark TPC-C complete at $WORKING_DIR"
-echo "DOLT_DEFAULT_BIN_FORMAT='$DOLT_DEFAULT_BIN_FORMAT'"
-echo ""
-
 unset DOLT_DEFAULT_BIN_FORMAT
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
+
+
+echo "benchmark $SYSBENCH_TEST complete at $WORKING_DIR"
+if [ "$PPROF" -eq 1 ]; then
+  # parse run.log to output the profile location
+  head -n1 "$WORKING_DIR/run.log" | cut -d ":" -f 4
+fi
+echo ""
