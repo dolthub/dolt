@@ -372,12 +372,12 @@ func parseRebaseMessage(rebaseMsg string) (*rebase.RebasePlan, error) {
 			if len(rebaseStepParts) != 3 {
 				return nil, fmt.Errorf("invalid line %d: %s", i, line)
 			}
-			
+
 			expandedAction, err := expandRebaseAction(rebaseStepParts[0])
 			if err != nil {
 				return nil, fmt.Errorf("line %d: %s", i+1, err.Error())
 			}
-			
+
 			plan.Steps = append(plan.Steps, rebase.RebasePlanStep{
 				Action:     expandedAction,
 				CommitHash: rebaseStepParts[1],
