@@ -128,7 +128,6 @@ unset DOLT_DEFAULT_BIN_FORMAT
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
 
-
 echo "benchmark $SYSBENCH_TEST complete at $WORKING_DIR"
 if [ "$PPROF" -eq 1 ]; then
   # parse run.log to output the profile location
