@@ -243,15 +243,17 @@ const (
 // treated as a uniform random number between [0,1),
 // is less than this percentage.
 func weibullCheck(size, thisSize, hash uint32) bool {
-	startx := float64(size - thisSize)
-	sl := startx / L
-	start := -math.Expm1(-sl * sl * sl * sl)
 	//start := -math.Expm1(-math.Pow(startx/L, K))
+	startx := float64(size - thisSize)
+	tmp := startx / L
+	pow := tmp * tmp * tmp * tmp
+	start := -math.Expm1(-pow)
 
-	endx := float64(size)
-	el := endx / L
-	end := -math.Expm1(-el * el * el * el)
 	//end := -math.Expm1(-math.Pow(endx/L, K))
+	endx := float64(size)
+	tmp = endx / L
+	pow = tmp * tmp * tmp * tmp
+	end := -math.Expm1(-pow)
 
 	p := float64(hash) / maxUint32
 	d := 1 - start
