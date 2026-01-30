@@ -375,11 +375,15 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, tryTruncate boo
 		}
 
 		if buf, err = rdr.Peek(int(l)); err != nil {
-			if warningsCb != nil {
-				// We probably wend off the end of the file. Report error and recover.
-				jErr := fmt.Errorf("failed to read full journal record of length %d at offset %d: %w", l, off, err)
-				warningsCb(jErr)
-			}
+			// Not being able to read a full record here is considered OK. Given our write protocol,
+			// it is expected for only a prefix of the journal to make it to storage.
+			//
+			// We still set recovered because there's a potential failure mode involving corruption
+			// which we would like to detect. That comes about when the length tag itself gets
+			// corrupted to be larger than expected, but still not larger than |journalWriterbuffSize|,
+			// and that length ends up taking us to EOF. But running recovery we can detect cases where
+			// there are valid sync'd records after this corruption and we can still detect some cases
+			// where we have knowable corruption.
 			recovered = true
 			break
 		}
