@@ -243,6 +243,7 @@ const (
 // treated as a uniform random number between [0,1),
 // is less than this percentage.
 func weibullCheck(size, thisSize, hash uint32) bool {
+	// Instead of using constant K = 4, we just manually multiply to avoid math.Pow call
 	pow := float64(size-thisSize) / L
 	start := -math.Expm1(-(pow * pow * pow * pow))
 
