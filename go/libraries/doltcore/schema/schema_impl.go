@@ -476,9 +476,9 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressC
 		var handler val.TupleTypeHandler
 
 		_, contentHashedField := contentHashedFields[tag]
-		extendedType, isExtendedType := sqlType.(sql.ExtendedType)
+		typeHandler, hasTypeHandler := sqlType.(val.TupleTypeHandler)
 
-		if isExtendedType {
+		if hasTypeHandler {
 			encoding := EncodingFromSqlType(sqlType)
 			t = val.Type{
 				Enc:      val.Encoding(encoding),
@@ -486,12 +486,12 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressC
 			}
 			switch encoding {
 			case serial.EncodingExtendedAddr:
-				handler = val.NewExtendedAddressTypeHandler(vs, extendedType)
+				handler = val.NewExtendedAddressTypeHandler(vs, typeHandler)
 			case serial.EncodingExtendedAdaptive:
-				handler = val.NewAdaptiveTypeHandler(vs, extendedType)
+				handler = val.NewAdaptiveTypeHandler(vs, typeHandler)
 			default:
 				// encoding == serial.EncodingExtended
-				handler = extendedType
+				handler = typeHandler
 			}
 		} else {
 			if convertAddressColumns && !contentHashedField && queryType == query.Type_BLOB {
@@ -573,15 +573,15 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 			collations = append(collations, sql.Collation_Unspecified)
 		}
 
-		if extendedType, ok := sqlType.(sql.ExtendedType); ok {
+		if typeHandler, ok := sqlType.(val.TupleTypeHandler); ok {
 			switch encoding {
 			case serial.EncodingExtendedAddr:
-				handlers = append(handlers, val.NewExtendedAddressTypeHandler(vs, extendedType))
+				handlers = append(handlers, val.NewExtendedAddressTypeHandler(vs, typeHandler))
 			case serial.EncodingExtendedAdaptive:
-				handlers = append(handlers, val.NewAdaptiveTypeHandler(vs, extendedType))
+				handlers = append(handlers, val.NewAdaptiveTypeHandler(vs, typeHandler))
 			default:
 				// encoding == serial.EncodingExtended
-				handlers = append(handlers, extendedType)
+				handlers = append(handlers, typeHandler)
 			}
 		} else {
 			handlers = append(handlers, nil)

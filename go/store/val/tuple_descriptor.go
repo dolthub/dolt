@@ -759,6 +759,17 @@ type AddressTypeHandler struct {
 	childHandler TupleTypeHandler
 }
 
+func (handler AddressTypeHandler) SerializationCompatible(other TupleTypeHandler) bool {
+	_, ok := other.(AddressTypeHandler)
+	return ok
+}
+
+func (handler AddressTypeHandler) ConvertSerialized(ctx context.Context, other TupleTypeHandler, val []byte) ([]byte, error) {
+	panic("implement me")
+}
+
+var _ TupleTypeHandler = AddressTypeHandler{}
+
 func NewExtendedAddressTypeHandler(vs ValueStore, childHandler TupleTypeHandler) AddressTypeHandler {
 	return AddressTypeHandler{
 		vs:           vs,

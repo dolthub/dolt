@@ -206,6 +206,17 @@ type AdaptiveEncodingTypeHandler struct {
 	childHandler TupleTypeHandler
 }
 
+func (handler AdaptiveEncodingTypeHandler) SerializationCompatible(other TupleTypeHandler) bool {
+	_, ok := other.(AdaptiveEncodingTypeHandler)
+	return ok
+}
+
+func (handler AdaptiveEncodingTypeHandler) ConvertSerialized(ctx context.Context, other TupleTypeHandler, val []byte) ([]byte, error) {
+	return handler.childHandler.ConvertSerialized(ctx, other, val)
+}
+
+var _ TupleTypeHandler = AdaptiveEncodingTypeHandler{}
+
 func NewAdaptiveTypeHandler(vs ValueStore, childHandler TupleTypeHandler) AdaptiveEncodingTypeHandler {
 	return AdaptiveEncodingTypeHandler{
 		vs:           vs,
@@ -317,7 +328,7 @@ func (e ExtendedValueWrapper) MaxByteLength() int64 {
 }
 
 func (e ExtendedValueWrapper) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 

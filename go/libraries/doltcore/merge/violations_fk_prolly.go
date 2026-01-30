@@ -263,12 +263,13 @@ func prollyChildSecDiffFkConstraintViolations(
 	parentIdxPrefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	childPriKD, _ := postChildRowData.Descriptors()
 	childIdxDesc, _ := postChildSecIdx.Descriptors()
+	childIdxPrefixDesc := childIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	childPriKB := val.NewTupleBuilder(childPriKD, preChildSecIdx.NodeStore())
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
 	compatibleTypes := true
-	for i, handler := range childIdxDesc.Handlers {
+	for i, handler := range childIdxPrefixDesc.Handlers {
 		if !handler.SerializationCompatible(parentIdxPrefixDesc.Handlers[i]) {
 			compatibleTypes = false
 			break
@@ -290,8 +291,8 @@ func prollyChildSecDiffFkConstraintViolations(
 
 			if !compatibleTypes {
 				tb := val.NewTupleBuilder(parentIdxPrefixDesc, postChildSecIdx.NodeStore())
-				for i, handler := range childIdxDesc.Handlers {
-					serialized, err := handler.ConvertSerialized(ctx, parentIdxPrefixDesc.Handlers[i], k.GetField(i))
+				for i, handler := range childIdxPrefixDesc.Handlers {
+					serialized, err := parentIdxPrefixDesc.Handlers[i].ConvertSerialized(ctx, handler, k.GetField(i))
 					if err != nil {
 						return err
 					}
