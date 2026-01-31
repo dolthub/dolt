@@ -276,6 +276,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			return nil, err
 		}
 		e.Analyzer.ExecBuilder = rowexec.NewBuilder(kvexec.Builder{}, e.Analyzer.Overrides)
+		e.Analyzer.ExecBuilder.Runner = e.Analyzer.Runner
 		d.engine = e
 
 		sqlCtx := enginetest.NewContext(d)
