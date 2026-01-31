@@ -206,13 +206,24 @@ type AdaptiveEncodingTypeHandler struct {
 	childHandler TupleTypeHandler
 }
 
+func (handler AdaptiveEncodingTypeHandler) ChildHandler() TupleTypeHandler {
+	return handler.childHandler
+}
+
 func (handler AdaptiveEncodingTypeHandler) SerializationCompatible(other TupleTypeHandler) bool {
 	_, ok := other.(AdaptiveEncodingTypeHandler)
 	return ok
 }
 
 func (handler AdaptiveEncodingTypeHandler) ConvertSerialized(ctx context.Context, other TupleTypeHandler, val []byte) ([]byte, error) {
-	return handler.childHandler.ConvertSerialized(ctx, other, val)
+	otherAdaptiveVal := AdaptiveValue(val)
+	// TODO: we don't know if this value is inlined or out-of-band. We need to check both.
+	outOfBand, err := otherAdaptiveVal.convertToOutOfBand(ctx, handler.vs, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return handler.childHandler.ConvertSerialized(ctx, other, outOfBand[:])
 }
 
 var _ TupleTypeHandler = AdaptiveEncodingTypeHandler{}
@@ -222,6 +233,10 @@ func NewAdaptiveTypeHandler(vs ValueStore, childHandler TupleTypeHandler) Adapti
 		vs:           vs,
 		childHandler: childHandler,
 	}
+}
+
+func (handler AdaptiveEncodingTypeHandler) ConvertToInline(ctx context.Context, val AdaptiveValue) ([]byte, error) {
+	return val.convertToInline(ctx, handler.vs, nil)
 }
 
 func (handler AdaptiveEncodingTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {

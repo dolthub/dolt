@@ -291,12 +291,22 @@ func prollyChildSecDiffFkConstraintViolations(
 
 			if !compatibleTypes {
 				tb := val.NewTupleBuilder(parentIdxPrefixDesc, postChildSecIdx.NodeStore())
-				for i, handler := range childIdxPrefixDesc.Handlers {
-					serialized, err := parentIdxPrefixDesc.Handlers[i].ConvertSerialized(ctx, handler, k.GetField(i))
+				for i, childHandler := range childIdxPrefixDesc.Handlers {
+					parentHandler := parentIdxPrefixDesc.Handlers[i]
+					serialized, err := convertSerialized(ctx, parentHandler, childHandler, k.GetField(i))
 					if err != nil {
 						return err
 					}
-					tb.PutRaw(i, serialized)
+
+					switch parentHandler.(type) {
+					case val.AdaptiveEncodingTypeHandler:
+						err := tb.PutAdaptiveBytesFromInline(ctx, i, serialized)
+						if err != nil {
+							return err
+						}
+					default:
+						tb.PutRaw(i, serialized)
+					}
 				}
 
 				k, err = tb.Build(parentSecIdx.Pool())
@@ -332,6 +342,51 @@ func prollyChildSecDiffFkConstraintViolations(
 		return err
 	}
 	return nil
+}
+
+func convertSerialized(ctx context.Context, parentHandler val.TupleTypeHandler, childHandler val.TupleTypeHandler, field []byte) ([]byte, error) {
+	convertingHandler := parentHandler
+	convertedHandler := childHandler
+
+	switch h := parentHandler.(type) {
+	case val.AdaptiveEncodingTypeHandler:
+		convertingHandler = h.ChildHandler()
+	case val.AddressTypeHandler:
+		convertingHandler = h.ChildHandler()
+	}
+
+	switch h := childHandler.(type) {
+	case val.AdaptiveEncodingTypeHandler:
+		convertedHandler = h.ChildHandler()
+		adaptiveVal := val.AdaptiveValue(field)
+		if adaptiveVal.IsOutOfBand() {
+			var err error
+			field, err = h.ConvertToInline(ctx, adaptiveVal)
+			if err != nil {
+				return nil, err
+			}
+		}
+		field = field[1:]
+	case val.AddressTypeHandler:
+		convertedHandler = h.ChildHandler()
+		unhashed, err := h.DeserializeValue(ctx, field)
+		if err != nil {
+			return nil, err
+		}
+
+		serialized, err := h.ChildHandler().SerializeValue(ctx, unhashed)
+		if err != nil {
+			return nil, err
+		}
+
+		field = serialized
+	}
+
+	serialized, err := convertingHandler.ConvertSerialized(ctx, convertedHandler, field)
+	if err != nil {
+		return nil, err
+	}
+	return serialized, nil
 }
 
 func createCVIfNoPartialKeyMatchesPri(

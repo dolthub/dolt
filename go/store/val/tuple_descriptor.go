@@ -830,3 +830,7 @@ func (handler AddressTypeHandler) DeserializeValue(ctx context.Context, val []by
 func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
 	return handler.childHandler.FormatValue(val)
 }
+
+func (handler AddressTypeHandler) ChildHandler() TupleTypeHandler {
+	return handler.childHandler
+}
