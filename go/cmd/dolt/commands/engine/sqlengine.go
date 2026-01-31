@@ -281,6 +281,7 @@ func NewSqlEngine(
 	branchActivityTracker := doltdb.NewBranchActivityTracker(ctx, config.BranchActivityTracking)
 
 	engine.Analyzer.ExecBuilder = rowexec.NewBuilder(kvexec.Builder{}, engine.Analyzer.Overrides)
+	engine.Analyzer.ExecBuilder.Runner = engine.Analyzer.Runner
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit, branchActivityTracker)
 	sqlEngine.provider = pro
 	sqlEngine.dsessFactory = sessFactory
