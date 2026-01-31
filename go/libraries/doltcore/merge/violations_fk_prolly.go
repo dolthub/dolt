@@ -300,9 +300,19 @@ func prollyChildSecDiffFkConstraintViolations(
 
 					switch parentHandler.(type) {
 					case val.AdaptiveEncodingTypeHandler:
-						err := tb.PutAdaptiveBytesFromInline(ctx, i, serialized)
-						if err != nil {
-							return err
+						switch parentIdxPrefixDesc.Types[i].Enc {
+						case val.ExtendedAdaptiveEnc:
+							err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
+							if err != nil {
+								return err
+							}
+						case val.BytesAdaptiveEnc:
+							err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
+							if err != nil {
+								return err
+							}
+						default:
+							panic(fmt.Sprintf("unexpected encoding for adaptive type: %d", parentIdxPrefixDesc.Types[i].Enc))
 						}
 					default:
 						tb.PutRaw(i, serialized)
