@@ -198,6 +198,7 @@ func (ks *keySplitter) Append(key, value Item) error {
 		return nil
 	}
 
+	// TODO: is there a way to reduce weibullChecks?
 	h := xxHash32(key, ks.salt)
 	ks.crossedBoundary = weibullCheck(ks.size, thisSize, h)
 	return nil
@@ -242,11 +243,12 @@ const (
 // treated as a uniform random number between [0,1),
 // is less than this percentage.
 func weibullCheck(size, thisSize, hash uint32) bool {
-	startx := float64(size - thisSize)
-	start := -math.Expm1(-math.Pow(startx/L, K))
+	// Instead of using constant K = 4, we just manually multiply to avoid math.Pow call
+	pow := float64(size-thisSize) / L
+	start := -math.Expm1(-(pow * pow * pow * pow))
 
-	endx := float64(size)
-	end := -math.Expm1(-math.Pow(endx/L, K))
+	pow = float64(size) / L
+	end := -math.Expm1(-(pow * pow * pow * pow))
 
 	p := float64(hash) / maxUint32
 	d := 1 - start
