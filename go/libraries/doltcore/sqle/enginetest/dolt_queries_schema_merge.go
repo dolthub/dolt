@@ -1504,17 +1504,66 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "TEXT index without schema change",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE TABLE t (pk INT NOT NULL PRIMARY KEY, col1 VARCHAR(255) NOT NULL, col2 text);",
+			"CREATE INDEX idx ON t (col2(255));",
+			"INSERT INTO t VALUES (1, 'aa01010aa', 'aa01010aa');",
+			"INSERT INTO t VALUES (2, 'bb01010bb', 'bb01010bb');",
+		},
+		RightSetUpScript: []string{
+			"INSERT INTO t VALUES (3, 'cc01010cc', 'cc01010cc');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (4, 'dd01010dd', 'dd01010dd');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "SELECT * FROM t WHERE (col2 LIKE '%01010%') ORDER BY col2;",
+				Expected: []sql.Row{
+					{1, "aa01010aa", "aa01010aa"},
+					{2, "bb01010bb", "bb01010bb"},
+					{3, "cc01010cc", "cc01010cc"},
+					{4, "dd01010dd", "dd01010dd"},
+				},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "aa01010aa", "aa01010aa"},
+					{2, "bb01010bb", "bb01010bb"},
+					{3, "cc01010cc", "cc01010cc"},
+					{4, "dd01010dd", "dd01010dd"},
+				},
+			},
+			{
+				Query: "select col1 from t order by col1;",
+				Expected: []sql.Row{
+					{"aa01010aa"},
+					{"bb01010bb"},
+					{"cc01010cc"},
+					{"dd01010dd"},
+				},
+			},
+		},
+	},
+	{
 		Name: "VARCHAR to TEXT widening with right side modification",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 varchar(10), col2 int);",
-			"INSERT into t values (1, '123', 10);",
+			"INSERT into t values (1, '54321', 10);",
 			"alter table t add index idx1 (col1(10));",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify column col1 TEXT;",
 			"UPDATE t SET col2 = 40 WHERE col2 = 10",
-			"INSERT into t values (2, '12345678901234567890', 20);",
+			"INSERT into t values (2, '43210000000', 20);",
 		},
 		LeftSetUpScript: []string{
 			"INSERT into t values (3, '321', 30);",
@@ -1527,9 +1576,17 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			{
 				Query: "select * from t order by pk;",
 				Expected: []sql.Row{
-					{1, "123", 40},
-					{2, "12345678901234567890", 20},
+					{1, "54321", 40},
+					{2, "43210000000", 20},
 					{3, "321", 30},
+				},
+			},
+			{
+				Query: "select col1 from t order by col1;",
+				Expected: []sql.Row{
+					{"321"},
+					{"43210000000"},
+					{"54321"},
 				},
 			},
 		},
@@ -1539,12 +1596,12 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 varchar(10));",
-			"INSERT into t values (1, '123');",
+			"INSERT into t values (1, '54321');",
 			"alter table t add index idx1 (col1(10));",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify column col1 TEXT;",
-			"INSERT into t values (2, '12345678901234567890');",
+			"INSERT into t values (2, '43210000000');",
 		},
 		LeftSetUpScript: []string{
 			"INSERT into t values (3, '321');",
@@ -1561,9 +1618,95 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			{
 				Query: "select * from t order by pk;",
 				Expected: []sql.Row{
-					{1, "123"},
-					{2, "12345678901234567890"},
+					{1, "54321"},
+					{2, "43210000000"},
 					{3, "321"},
+				},
+			},
+			{
+				Query: "select col1 from t order by col1;",
+				Expected: []sql.Row{
+					{"321"},
+					{"43210000000"},
+					{"54321"},
+				},
+			},
+		},
+	},
+	{
+		Name: "VARCHAR index with prefix narrowing",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, '987654321');",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"DROP INDEX idx1 ON t;",
+			"alter table t add index idx1 (col1(5));",
+			"INSERT into t values (2, '87654321');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '7654321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "987654321"},
+					{2, "87654321"},
+					{3, "7654321"},
+				},
+			},
+			{
+				Query: "select col1 from t order by col1;",
+				Expected: []sql.Row{
+					{"7654321"},
+					{"87654321"},
+					{"987654321"},
+				},
+			},
+		},
+	},
+	{
+		Name: "TEXT index with prefix narrowing",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 text);",
+			"INSERT into t values (1, '987654321');",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"DROP INDEX idx1 ON t;",
+			"alter table t add index idx1 (col1(5));",
+			"INSERT into t values (2, '87654321');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '7654321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "987654321"},
+					{2, "87654321"},
+					{3, "7654321"},
+				},
+			},
+			{
+				Query: "select col1 from t order by col1;",
+				Expected: []sql.Row{
+					{"7654321"},
+					{"87654321"},
+					{"987654321"},
 				},
 			},
 		},
