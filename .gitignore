@@ -1,5 +1,6 @@
 **/.idea/
 **/.dolt/
+.beads
 .vscode
 .run
 venv
