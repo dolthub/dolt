@@ -17,10 +17,11 @@ package dbfactory
 import (
 	"context"
 	"net/url"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -32,8 +33,10 @@ func createTestBareRepo(t *testing.T) string {
 	dir := t.TempDir()
 	bareDir := filepath.Join(dir, "bare.git")
 
-	_, err := git.PlainInit(bareDir, true)
-	require.NoError(t, err)
+	cmd := exec.Command("git", "init", "--bare", bareDir)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "git init --bare failed: %s", string(out))
 
 	return bareDir
 }

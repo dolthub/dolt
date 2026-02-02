@@ -50,12 +50,6 @@ func (fact GitFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	repoURL := gitURLFromURLObj(urlObj)
 	ref := gitRefFromParams(params)
 
-	// Detect authentication
-	auth, err := gitremote.DetectAuth(repoURL)
-	if err != nil {
-		return fmt.Errorf("failed to detect git auth: %w", err)
-	}
-
 	// Create a temporary directory for git operations
 	localPath, err := os.MkdirTemp("", "dolt-git-prepare-*")
 	if err != nil {
@@ -67,7 +61,6 @@ func (fact GitFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	repo, err := gitremote.Open(ctx, gitremote.OpenOptions{
 		URL:       repoURL,
 		Ref:       ref,
-		Auth:      auth,
 		LocalPath: localPath,
 	})
 	if err != nil {

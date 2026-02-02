@@ -56,17 +56,10 @@ func NewGitBlobstore(ctx context.Context, repoURL, ref, localPath string) (*GitB
 		ref = gitremote.DefaultRef
 	}
 
-	// Detect authentication
-	auth, err := gitremote.DetectAuth(repoURL)
-	if err != nil {
-		return nil, err
-	}
-
 	// Open or clone the repository
 	repo, err := gitremote.Open(ctx, gitremote.OpenOptions{
 		URL:       repoURL,
 		Ref:       ref,
-		Auth:      auth,
 		LocalPath: localPath,
 	})
 	if err != nil {

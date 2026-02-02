@@ -18,17 +18,9 @@
 //
 // # Authentication
 //
-// The package automatically detects git credentials from multiple sources:
-//
-// For SSH URLs (git@host:path or ssh://):
-//   - SSH agent (if running)
-//   - SSH key files (~/.ssh/id_ed25519, id_rsa, etc.)
-//   - GIT_SSH_KEY environment variable
-//
-// For HTTPS URLs:
-//   - Git credential helper (git credential fill)
-//   - DOLT_REMOTE_PASSWORD environment variable
-//   - ~/.netrc file
+// Dolt shells out to your installed `git` binary for transport. Authentication and
+// credential discovery are therefore handled by Git itself (ssh-agent, ~/.ssh/config,
+// git credential helper / OS keychain, ~/.netrc, etc.).
 //
 // # URL Schemes
 //

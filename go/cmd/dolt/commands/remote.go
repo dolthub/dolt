@@ -54,10 +54,8 @@ You can use any git repository as a dolt remote by using the git:// scheme or an
     dolt remote add origin https://github.com/user/repo.git
 
 Git credentials are automatically detected from:
-  - SSH agent (if running)
-  - SSH key files (~/.ssh/id_ed25519, id_rsa, etc.)
-  - Git credential helper (git credential fill)
-  - Environment variables (DOLT_REMOTE_PASSWORD)
+  - ssh-agent and ~/.ssh configuration
+  - Git credential helper / OS keychain
   - ~/.netrc file
 
 Before using a git remote, initialize it with {{.EmphasisLeft}}dolt remote init{{.EmphasisRight}}.
@@ -392,16 +390,6 @@ func initGitRemote(ctx context.Context, apr *argparser.ArgParseResults) errhand.
 
 	cli.Printf("Initializing git remote at %s on ref %s...\n", gitURL, ref)
 
-	// Detect authentication
-	auth, err := gitremote.DetectAuth(gitURL)
-	if err != nil {
-		return errhand.BuildDError("error: failed to detect git credentials").AddCause(err).Build()
-	}
-
-	if auth != nil {
-		cli.Printf("Using authentication: %s\n", gitremote.AuthMethodName(auth))
-	}
-
 	// Create a temporary directory for git operations
 	localPath, err := os.MkdirTemp("", "dolt-remote-init-*")
 	if err != nil {
@@ -413,7 +401,6 @@ func initGitRemote(ctx context.Context, apr *argparser.ArgParseResults) errhand.
 	repo, err := gitremote.Open(ctx, gitremote.OpenOptions{
 		URL:       gitURL,
 		Ref:       ref,
-		Auth:      auth,
 		LocalPath: localPath,
 	})
 	if err != nil {

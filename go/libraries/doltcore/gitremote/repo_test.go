@@ -16,72 +16,36 @@ package gitremote
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
-	"time"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	fullArgs := args
+	if dir != "" {
+		fullArgs = append([]string{"-C", dir}, args...)
+	}
+	cmd := exec.Command("git", fullArgs...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "git %s failed: %s", strings.Join(args, " "), string(out))
+	return string(out)
+}
 
 // createBareRepo creates a bare git repository for testing.
 func createBareRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	bareDir := filepath.Join(dir, "bare.git")
-
-	_, err := git.PlainInit(bareDir, true)
-	require.NoError(t, err)
-
-	return bareDir
-}
-
-// createRepoWithCommit creates a bare repo with an initial commit on the default branch.
-func createRepoWithCommit(t *testing.T) string {
-	t.Helper()
-	bareDir := createBareRepo(t)
-
-	// Init a work directory and add the bare repo as remote
-	workDir := filepath.Join(t.TempDir(), "work")
-	repo, err := git.PlainInit(workDir, false)
-	require.NoError(t, err)
-
-	// Add remote
-	_, err = repo.CreateRemote(&config.RemoteConfig{
-		Name: "origin",
-		URLs: []string{bareDir},
-	})
-	require.NoError(t, err)
-
-	// Create a file
-	testFile := filepath.Join(workDir, "test.txt")
-	err = os.WriteFile(testFile, []byte("test content"), 0644)
-	require.NoError(t, err)
-
-	// Add and commit
-	wt, err := repo.Worktree()
-	require.NoError(t, err)
-
-	_, err = wt.Add("test.txt")
-	require.NoError(t, err)
-
-	_, err = wt.Commit("Initial commit", &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "Test User",
-			Email: "test@example.com",
-			When:  time.Now(),
-		},
-	})
-	require.NoError(t, err)
-
-	// Push
-	err = repo.Push(&git.PushOptions{})
-	require.NoError(t, err)
+	runGit(t, "", "init", "--bare", bareDir)
 
 	return bareDir
 }
@@ -93,7 +57,6 @@ func TestOpenOptions_Defaults(t *testing.T) {
 
 	assert.Equal(t, "file:///test/repo", opts.URL)
 	assert.Empty(t, opts.Ref)
-	assert.Nil(t, opts.Auth)
 	assert.Empty(t, opts.LocalPath)
 }
 
@@ -234,7 +197,7 @@ func TestGitRepo_CommitAndPush(t *testing.T) {
 	// Commit
 	hash, err := gr.Commit(ctx, "Add data file")
 	require.NoError(t, err)
-	assert.NotEqual(t, plumbing.ZeroHash, hash)
+	assert.NotEmpty(t, hash)
 
 	// Push
 	err = gr.Push(ctx)
@@ -334,17 +297,13 @@ func TestGitRepo_CustomRef(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the ref exists in the bare repo
-	bareRepo, err := git.PlainOpen(bareDir)
-	require.NoError(t, err)
-
-	ref, err := bareRepo.Reference(plumbing.ReferenceName(customRef), true)
-	require.NoError(t, err)
-	assert.NotNil(t, ref)
+	// git --git-dir <bare> show-ref --verify refs/dolt/custom
+	out := runGit(t, "", fmt.Sprintf("--git-dir=%s", bareDir), "show-ref", "--verify", customRef)
+	assert.NotEmpty(t, out)
 }
 
 func TestGitRepo_FetchUpdates(t *testing.T) {
-	// Use a repo with an initial commit so clone works
-	bareDir := createRepoWithCommit(t)
+	bareDir := createBareRepo(t)
 	ctx := context.Background()
 
 	// First client writes and pushes to custom ref
@@ -401,13 +360,18 @@ func TestIsRefNotFoundError(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "reference not found",
-			err:  plumbing.ErrReferenceNotFound,
+			name: "reference not found message",
+			err:  fmt.Errorf("reference not found"),
 			want: true,
 		},
 		{
 			name: "couldn't find remote ref message",
-			err:  assert.AnError, // generic error
+			err:  fmt.Errorf("couldn't find remote ref refs/dolt/data"),
+			want: true,
+		},
+		{
+			name: "other error",
+			err:  assert.AnError,
 			want: false,
 		},
 	}
@@ -415,10 +379,7 @@ func TestIsRefNotFoundError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := isRefNotFoundError(tt.err)
-			// For the plumbing.ErrReferenceNotFound case
-			if tt.err == plumbing.ErrReferenceNotFound {
-				assert.True(t, got)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

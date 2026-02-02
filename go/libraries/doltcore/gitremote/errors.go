@@ -95,7 +95,7 @@ func (e *GitRemoteError) Hint() string {
 		return "The remote has changes you don't have locally. Pull changes first or use --force."
 	}
 	if errors.Is(e.Err, ErrAuthFailed) {
-		return "Check your git credentials. For SSH, ensure your key is added to ssh-agent. For HTTPS, check your credential helper or set DOLT_REMOTE_PASSWORD."
+		return "Check your git credentials. For SSH, ensure your key is available (ssh-agent / ~/.ssh config). For HTTPS, ensure your git credential helper / keychain / ~/.netrc is configured."
 	}
 	if errors.Is(e.Err, ErrRepoNotFound) {
 		return "Verify the git repository URL is correct and the repository exists."

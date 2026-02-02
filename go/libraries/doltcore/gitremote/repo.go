@@ -18,21 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
-
-	"github.com/go-git/go-billy/v5"
-	"github.com/go-git/go-billy/v5/memfs"
-	"github.com/go-git/go-billy/v5/osfs"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/plumbing/transport"
-	"github.com/go-git/go-git/v5/storage/memory"
 )
 
 const (
@@ -52,16 +43,13 @@ const (
 // Note: Error types are defined in errors.go
 
 // GitRepo provides a high-level interface for git operations on a dolt remote.
-// It wraps go-git and handles custom ref operations for storing dolt data.
+// It shells out to the system `git` CLI and handles custom ref operations for storing dolt data.
 type GitRepo struct {
-	url       string
-	ref       plumbing.ReferenceName
-	auth      transport.AuthMethod
-	repo      *git.Repository
-	worktree  *git.Worktree
-	fs        billy.Filesystem
-	localPath string // empty if using in-memory storage
-	mu        sync.RWMutex
+	url         string
+	ref         string
+	localPath   string
+	ownsWorkdir bool
+	mu          sync.RWMutex
 }
 
 // OpenOptions configures how a GitRepo is opened or cloned.
@@ -72,11 +60,8 @@ type OpenOptions struct {
 	// Ref is the git reference to use (default: refs/dolt/data)
 	Ref string
 
-	// Auth is the authentication method (nil for anonymous)
-	Auth transport.AuthMethod
-
 	// LocalPath is an optional local directory for the working copy.
-	// If empty, an in-memory filesystem is used.
+	// If empty, a temporary directory is created.
 	LocalPath string
 }
 
@@ -92,23 +77,29 @@ func Open(ctx context.Context, opts OpenOptions) (*GitRepo, error) {
 	if ref == "" {
 		ref = DefaultRef
 	}
-	refName := plumbing.ReferenceName(ref)
+
+	localPath := opts.LocalPath
+	owns := false
+	if localPath == "" {
+		var err error
+		localPath, err = os.MkdirTemp("", "dolt-git-repo-*")
+		if err != nil {
+			return nil, err
+		}
+		owns = true
+	}
 
 	gr := &GitRepo{
-		url:       opts.URL,
-		ref:       refName,
-		auth:      opts.Auth,
-		localPath: opts.LocalPath,
+		url:         opts.URL,
+		ref:         ref,
+		localPath:   localPath,
+		ownsWorkdir: owns,
 	}
 
 	var err error
-	if opts.LocalPath != "" {
-		err = gr.openOrCloneToPath(ctx, opts.LocalPath)
-	} else {
-		err = gr.openOrCloneInMemory(ctx)
-	}
-
+	err = gr.openOrCloneToPath(ctx, localPath)
 	if err != nil {
+		_ = gr.Close()
 		return nil, err
 	}
 
@@ -117,151 +108,40 @@ func Open(ctx context.Context, opts OpenOptions) (*GitRepo, error) {
 
 // openOrCloneToPath opens an existing repo or clones to a local path.
 func (gr *GitRepo) openOrCloneToPath(ctx context.Context, path string) error {
-	// Try to open existing repository
-	repo, err := git.PlainOpen(path)
-	if err == nil {
-		gr.repo = repo
-		gr.fs = osfs.New(path)
-		wt, err := repo.Worktree()
-		if err != nil {
-			return fmt.Errorf("failed to get worktree: %w", err)
-		}
-		gr.worktree = wt
+	// If this is already a git repo, just fetch the ref.
+	if isGitRepo(path) {
 		return gr.fetchRef(ctx)
 	}
 
-	// Need to clone or init
-	if !errors.Is(err, git.ErrRepositoryNotExists) {
-		return fmt.Errorf("failed to open repository: %w", err)
-	}
-
-	// Create directory if needed
+	// Ensure parent dir exists
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Try to clone the repository
-	repo, err = git.PlainCloneContext(ctx, path, false, &git.CloneOptions{
-		URL:  gr.url,
-		Auth: gr.auth,
-		// Don't check out any branch - we'll work with our custom ref
-		NoCheckout: true,
-	})
-
-	// Handle empty remote repository - init locally and add remote
-	if err != nil && isEmptyRepoError(err) {
-		repo, err = gr.initWithRemote(path)
-		if err != nil {
-			return fmt.Errorf("failed to init repository: %w", err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("failed to clone repository: %w", err)
+	// Clone without checkout. This works for empty remotes as well.
+	if _, err := gr.runGit(ctx, "", "clone", "--no-checkout", gr.url, path); err != nil {
+		return NewCloneError(gr.url, err)
 	}
-
-	gr.repo = repo
-	gr.fs = osfs.New(path)
-	wt, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
-	}
-	gr.worktree = wt
-
-	return gr.fetchRef(ctx)
-}
-
-// initWithRemote initializes a new repository and adds the remote.
-func (gr *GitRepo) initWithRemote(path string) (*git.Repository, error) {
-	repo, err := git.PlainInit(path, false)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = repo.CreateRemote(&config.RemoteConfig{
-		Name: DefaultRemoteName,
-		URLs: []string{gr.url},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return repo, nil
-}
-
-// isEmptyRepoError checks if the error indicates an empty remote repository.
-func isEmptyRepoError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	return errors.Is(err, transport.ErrEmptyRemoteRepository) ||
-		contains(errStr, "remote repository is empty") ||
-		// Local bare repos with no commits return "reference not found"
-		contains(errStr, "reference not found")
-}
-
-// openOrCloneInMemory opens or clones to an in-memory filesystem.
-func (gr *GitRepo) openOrCloneInMemory(ctx context.Context) error {
-	storer := memory.NewStorage()
-	fs := memfs.New()
-
-	repo, err := git.CloneContext(ctx, storer, fs, &git.CloneOptions{
-		URL:        gr.url,
-		Auth:       gr.auth,
-		NoCheckout: true,
-	})
-
-	// Handle empty remote repository - init in memory and add remote
-	if err != nil && isEmptyRepoError(err) {
-		storer = memory.NewStorage()
-		fs = memfs.New()
-		repo, err = git.Init(storer, fs)
-		if err != nil {
-			return fmt.Errorf("failed to init repository: %w", err)
-		}
-
-		_, err = repo.CreateRemote(&config.RemoteConfig{
-			Name: DefaultRemoteName,
-			URLs: []string{gr.url},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create remote: %w", err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("failed to clone repository: %w", err)
-	}
-
-	gr.repo = repo
-	gr.fs = fs
-	wt, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
-	}
-	gr.worktree = wt
 
 	return gr.fetchRef(ctx)
 }
 
 // fetchRef fetches the custom ref from the remote.
 func (gr *GitRepo) fetchRef(ctx context.Context) error {
-	refSpec := config.RefSpec(fmt.Sprintf("+%s:%s", gr.ref, gr.ref))
-
-	err := gr.repo.FetchContext(ctx, &git.FetchOptions{
-		RemoteName: DefaultRemoteName,
-		RefSpecs:   []config.RefSpec{refSpec},
-		Auth:       gr.auth,
-		Force:      true,
-	})
-
-	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && !errors.Is(err, transport.ErrEmptyRemoteRepository) {
-		// Check if the ref doesn't exist yet (new remote)
-		if isRefNotFoundError(err) {
-			// This is OK - the ref will be created on first push
-			return nil
-		}
-		return fmt.Errorf("failed to fetch ref %s: %w", gr.ref, err)
+	refSpec := fmt.Sprintf("+%s:%s", gr.ref, gr.ref)
+	_, err := gr.runGit(ctx, gr.localPath, "fetch", DefaultRemoteName, refSpec)
+	if err == nil {
+		return nil
 	}
-
-	return nil
+	// Missing ref is OK (new remote)
+	if isRefNotFoundError(err) {
+		return nil
+	}
+	// "already up to date" isn't an error for git CLI fetch, but keep just in case.
+	if strings.Contains(strings.ToLower(err.Error()), "already up to date") {
+		return nil
+	}
+	return NewFetchError(gr.url, gr.ref, err)
 }
 
 // isRefNotFoundError checks if an error indicates the ref doesn't exist.
@@ -269,24 +149,9 @@ func isRefNotFoundError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := err.Error()
-	return errors.Is(err, plumbing.ErrReferenceNotFound) ||
-		// go-git returns various error messages for missing refs
-		contains(errStr, "couldn't find remote ref") ||
-		contains(errStr, "reference not found")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr, 0))
-}
-
-func containsAt(s, substr string, start int) bool {
-	for i := start; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "couldn't find remote ref") ||
+		strings.Contains(errStr, "reference not found")
 }
 
 // CheckoutRef checks out the custom ref to the worktree.
@@ -294,24 +159,19 @@ func (gr *GitRepo) CheckoutRef(ctx context.Context) error {
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
-	// Try to resolve the ref
-	ref, err := gr.repo.Reference(gr.ref, true)
-	if err != nil {
-		if errors.Is(err, plumbing.ErrReferenceNotFound) {
-			// Ref doesn't exist yet - create empty worktree
-			return nil
-		}
-		return fmt.Errorf("failed to resolve ref: %w", err)
+	// If the ref doesn't exist locally, that's OK (new remote).
+	if !gr.hasRef(ctx, gr.ref) {
+		return nil
 	}
 
-	err = gr.worktree.Checkout(&git.CheckoutOptions{
-		Hash:  ref.Hash(),
-		Force: true,
-	})
+	hash, err := gr.revParse(ctx, gr.ref)
+	if err != nil {
+		return fmt.Errorf("failed to resolve ref: %w", err)
+	}
+	_, err = gr.runGit(ctx, gr.localPath, "checkout", "--detach", "--force", hash)
 	if err != nil {
 		return fmt.Errorf("failed to checkout: %w", err)
 	}
-
 	return nil
 }
 
@@ -320,13 +180,7 @@ func (gr *GitRepo) ReadFile(path string) ([]byte, error) {
 	gr.mu.RLock()
 	defer gr.mu.RUnlock()
 
-	f, err := gr.fs.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	return io.ReadAll(f)
+	return os.ReadFile(filepath.Join(gr.localPath, filepath.FromSlash(path)))
 }
 
 // WriteFile writes a file to the worktree.
@@ -335,24 +189,16 @@ func (gr *GitRepo) WriteFile(path string, data []byte) error {
 	defer gr.mu.Unlock()
 
 	// Ensure parent directory exists
-	dir := filepath.Dir(path)
+	abs := filepath.Join(gr.localPath, filepath.FromSlash(path))
+	dir := filepath.Dir(abs)
 	if dir != "." && dir != "/" {
-		if err := gr.fs.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
-
-	f, err := gr.fs.Create(path)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", path, err)
-	}
-	defer f.Close()
-
-	_, err = f.Write(data)
-	if err != nil {
+	if err := os.WriteFile(abs, data, 0644); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", path, err)
 	}
-
 	return nil
 }
 
@@ -361,7 +207,7 @@ func (gr *GitRepo) DeleteFile(path string) error {
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
-	return gr.fs.Remove(path)
+	return os.Remove(filepath.Join(gr.localPath, filepath.FromSlash(path)))
 }
 
 // FileExists checks if a file exists in the worktree.
@@ -369,14 +215,14 @@ func (gr *GitRepo) FileExists(path string) (bool, error) {
 	gr.mu.RLock()
 	defer gr.mu.RUnlock()
 
-	_, err := gr.fs.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
+	_, err := os.Stat(filepath.Join(gr.localPath, filepath.FromSlash(path)))
+	if err == nil {
+		return true, nil
 	}
-	return true, nil
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
 
 // ListFiles lists files in a directory.
@@ -384,7 +230,7 @@ func (gr *GitRepo) ListFiles(dir string) ([]string, error) {
 	gr.mu.RLock()
 	defer gr.mu.RUnlock()
 
-	entries, err := gr.fs.ReadDir(dir)
+	entries, err := os.ReadDir(filepath.Join(gr.localPath, filepath.FromSlash(dir)))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -401,42 +247,69 @@ func (gr *GitRepo) ListFiles(dir string) ([]string, error) {
 
 // Commit creates a new commit with all staged changes.
 // Returns the commit hash.
-func (gr *GitRepo) Commit(ctx context.Context, message string) (plumbing.Hash, error) {
+func (gr *GitRepo) Commit(ctx context.Context, message string) (string, error) {
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
+	// Ensure HEAD/worktree is positioned correctly.
+	// If the custom ref exists, base on it. Otherwise, start a new orphan branch.
+	if gr.hasRef(ctx, gr.ref) {
+		hash, err := gr.revParse(ctx, gr.ref)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve ref: %w", err)
+		}
+		if _, err := gr.runGit(ctx, gr.localPath, "checkout", "--detach", "--force", hash); err != nil {
+			return "", fmt.Errorf("failed to checkout ref: %w", err)
+		}
+	} else {
+		// Create an orphan branch for the first commit on this custom ref.
+		// We never want to base Dolt remote data on the user's normal branches.
+		if _, err := gr.runGit(ctx, gr.localPath, "checkout", "--orphan", "dolt-temp"); err != nil {
+			return "", fmt.Errorf("failed to create orphan branch: %w", err)
+		}
+	}
+
 	// Stage all changes
-	if err := gr.worktree.AddGlob("."); err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("failed to stage changes: %w", err)
+	if _, err := gr.runGit(ctx, gr.localPath, "add", "-A"); err != nil {
+		return "", fmt.Errorf("failed to stage changes: %w", err)
 	}
 
 	// Check if there are changes to commit
-	status, err := gr.worktree.Status()
+	porcelain, err := gr.runGit(ctx, gr.localPath, "status", "--porcelain")
 	if err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("failed to get status: %w", err)
+		return "", fmt.Errorf("failed to get status: %w", err)
 	}
-
-	if status.IsClean() {
-		return plumbing.ZeroHash, ErrNothingToCommit
+	if strings.TrimSpace(porcelain) == "" {
+		return "", ErrNothingToCommit
 	}
 
 	// Create commit
-	hash, err := gr.worktree.Commit(message, &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "Dolt",
-			Email: "dolt@dolthub.com",
-			When:  time.Now(),
-		},
-	})
+	commitArgs := []string{
+		"-c", "user.name=Dolt",
+		"-c", "user.email=dolt@dolthub.com",
+		"-c", "commit.gpgsign=false",
+		"commit",
+		"-m", message,
+		"--no-gpg-sign",
+		"--date", time.Now().Format(time.RFC3339),
+	}
+	if _, err := gr.runGit(ctx, gr.localPath, commitArgs...); err != nil {
+		return "", fmt.Errorf("failed to commit: %w", err)
+	}
+
+	hash, err := gr.revParse(ctx, "HEAD")
 	if err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("failed to commit: %w", err)
+		return "", fmt.Errorf("failed to resolve HEAD: %w", err)
 	}
 
 	// Update the custom ref to point to the new commit
-	ref := plumbing.NewHashReference(gr.ref, hash)
-	if err := gr.repo.Storer.SetReference(ref); err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("failed to update ref: %w", err)
+	if _, err := gr.runGit(ctx, gr.localPath, "update-ref", gr.ref, "HEAD"); err != nil {
+		return "", fmt.Errorf("failed to update ref: %w", err)
 	}
+
+	// If we created the orphan branch, detach and delete it (the commit is reachable via the custom ref).
+	_, _ = gr.runGit(ctx, gr.localPath, "checkout", "--detach", "--force", "HEAD")
+	_, _ = gr.runGit(ctx, gr.localPath, "branch", "-D", "dolt-temp")
 
 	return hash, nil
 }
@@ -446,38 +319,24 @@ func (gr *GitRepo) Push(ctx context.Context) error {
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
-	refSpec := config.RefSpec(fmt.Sprintf("%s:%s", gr.ref, gr.ref))
-
-	err := gr.repo.PushContext(ctx, &git.PushOptions{
-		RemoteName: DefaultRemoteName,
-		RefSpecs:   []config.RefSpec{refSpec},
-		Auth:       gr.auth,
-	})
-
+	refSpec := fmt.Sprintf("%s:%s", gr.ref, gr.ref)
+	_, err := gr.runGit(ctx, gr.localPath, "push", DefaultRemoteName, refSpec)
 	if err != nil {
-		if errors.Is(err, git.NoErrAlreadyUpToDate) {
-			return nil
-		}
-		return fmt.Errorf("failed to push: %w", err)
+		return NewPushError(gr.url, gr.ref, err)
 	}
-
 	return nil
 }
 
 // CurrentCommit returns the hash of the current commit on the custom ref.
-func (gr *GitRepo) CurrentCommit() (plumbing.Hash, error) {
+func (gr *GitRepo) CurrentCommit() (string, error) {
 	gr.mu.RLock()
 	defer gr.mu.RUnlock()
 
-	ref, err := gr.repo.Reference(gr.ref, true)
-	if err != nil {
-		if errors.Is(err, plumbing.ErrReferenceNotFound) {
-			return plumbing.ZeroHash, nil
-		}
-		return plumbing.ZeroHash, err
+	ctx := context.Background()
+	if !gr.hasRef(ctx, gr.ref) {
+		return "", nil
 	}
-
-	return ref.Hash(), nil
+	return gr.revParse(ctx, gr.ref)
 }
 
 // Fetch fetches the latest changes from the remote.
@@ -495,7 +354,7 @@ func (gr *GitRepo) URL() string {
 
 // Ref returns the git reference being used.
 func (gr *GitRepo) Ref() string {
-	return string(gr.ref)
+	return gr.ref
 }
 
 // Close cleans up resources. For in-memory repos, this is a no-op.
@@ -504,11 +363,10 @@ func (gr *GitRepo) Close() error {
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
-	// go-git doesn't have explicit close, but we clear references
-	gr.repo = nil
-	gr.worktree = nil
-	gr.fs = nil
-
+	if gr.ownsWorkdir && gr.localPath != "" {
+		_ = os.RemoveAll(gr.localPath)
+	}
+	gr.localPath = ""
 	return nil
 }
 
@@ -566,3 +424,44 @@ that is not part of the normal branch structure.
 
 For more information, visit: https://docs.dolthub.com/
 `
+
+func isGitRepo(path string) bool {
+	gitDir := filepath.Join(path, ".git")
+	if st, err := os.Stat(gitDir); err == nil && st.IsDir() {
+		return true
+	}
+	// For worktrees / alternative gitdir, rely on git itself.
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	return cmd.Run() == nil
+}
+
+func (gr *GitRepo) runGit(ctx context.Context, dir string, args ...string) (string, error) {
+	// Allow callers to pass dir="" for commands that don't support -C.
+	fullArgs := args
+	if dir != "" {
+		fullArgs = append([]string{"-C", dir}, args...)
+	}
+	cmd := exec.CommandContext(ctx, "git", fullArgs...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		// Include output in error for easier classification/debugging.
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
+func (gr *GitRepo) hasRef(ctx context.Context, ref string) bool {
+	// show-ref --verify exits non-zero if missing
+	_, err := gr.runGit(ctx, gr.localPath, "show-ref", "--verify", "--quiet", ref)
+	return err == nil
+}
+
+func (gr *GitRepo) revParse(ctx context.Context, rev string) (string, error) {
+	out, err := gr.runGit(ctx, gr.localPath, "rev-parse", rev)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
