@@ -34,11 +34,11 @@ import (
 )
 
 func prollyParentSecDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preParentSecIdx prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preParentSecIdx prolly.Map,
+		receiver FKViolationReceiver) error {
 	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
 	if err != nil {
 		return err
@@ -52,22 +52,43 @@ func prollyParentSecDiffFkConstraintViolations(
 		return err
 	}
 
-	parentSecKD, _ := postParentSecIdx.Descriptors()
-	parentPrefixKD := parentSecKD.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(parentPrefixKD, postParentRowData.NodeStore())
+	parentSecIdxDesc, _ := postParentSecIdx.Descriptors()
+	parentIdxPrefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
+	parentIdxKb := val.NewTupleBuilder(parentIdxPrefixDesc, postParentRowData.NodeStore())
 
 	childPriIdx, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
 		return err
 	}
-	childPriKD, _ := childPriIdx.Descriptors()
+
+	childPriIdxDesc, _ := childPriIdx.Descriptors()
+	childSecIdxDesc, _ := childSecIdx.Descriptors()
+
+	childPrimary := &indexAndKeyDescriptor{
+		index:   childPriIdx,
+		keyDesc: childPriIdxDesc,
+	}
+	childSecondary := &indexAndKeyDescriptor{
+		index:   childSecIdx,
+		keyDesc: childSecIdxDesc,
+	}
+
+	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
+	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
+	compatibleTypes := true
+	for i, handler := range parentIdxPrefixDesc.Handlers {
+		if !handler.SerializationCompatible(parentIdxPrefixDesc.Handlers[i]) {
+			compatibleTypes = false
+			break
+		}
+	}
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
 	err = prolly.DiffMaps(ctx, preParentSecIdx, postParentSecIdx, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
-			toSecKey, hadNulls, err := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.IndexSchema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentSecIdx.Pool())
+			k, hadNulls, err := makePartialKey(parentIdxKb, foreignKey.ReferencedTableColumns, postParent.Index, postParent.IndexSchema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentSecIdx.Pool())
 			if err != nil {
 				return err
 			}
@@ -76,7 +97,7 @@ func prollyParentSecDiffFkConstraintViolations(
 				return nil
 			}
 
-			ok, err := postParentSecIdx.HasPrefix(ctx, toSecKey, parentPrefixKD)
+			ok, err := postParentSecIdx.HasPrefix(ctx, k, parentIdxPrefixDesc)
 			if err != nil {
 				return err
 			}
@@ -86,7 +107,16 @@ func prollyParentSecDiffFkConstraintViolations(
 
 			// All equivalent parents were deleted, let's check for dangling children.
 			// We search for matching keys in the child's secondary index
-			err = createCVsForPartialKeyMatches(ctx, toSecKey, parentPrefixKD, childPriKD, childPriIdx, childSecIdx, postParentRowData.Pool(), receiver)
+			err = createCVsForDanglingChildRows(
+				ctx,
+				k,
+				parentIdxPrefixDesc,
+				childPrimary,
+				childSecondary,
+				postParentRowData.Pool(),
+				receiver,
+				compatibleTypes,
+			)
 			if err != nil {
 				return err
 			}
@@ -104,11 +134,11 @@ func prollyParentSecDiffFkConstraintViolations(
 }
 
 func prollyParentPriDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preParentRowData prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preParentRowData prolly.Map,
+		receiver FKViolationReceiver) error {
 	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
 	if err != nil {
 		return err
@@ -130,7 +160,18 @@ func prollyParentPriDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	primaryKD, _ := childPriIdx.Descriptors()
+
+	childPriIdxDesc, _ := childPriIdx.Descriptors()
+	childSecIdxDesc, _ := childScndryIdx.Descriptors()
+
+	childPrimary := &indexAndKeyDescriptor{
+		index:   childPriIdx,
+		keyDesc: childPriIdxDesc,
+	}
+	childSecondary := &indexAndKeyDescriptor{
+		index:   childScndryIdx,
+		keyDesc: childSecIdxDesc,
+	}
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -163,7 +204,17 @@ func prollyParentPriDiffFkConstraintViolations(
 
 			// All equivalent parents were deleted, let's check for dangling children.
 			// We search for matching keys in the child's secondary index
-			err = createCVsForPartialKeyMatches(ctx, partialKey, partialDesc, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), receiver)
+			// TODO: type conversions
+			err = createCVsForDanglingChildRows(
+				ctx,
+				partialKey,
+				partialDesc,
+				childPrimary,
+				childSecondary,
+				childPriIdx.Pool(),
+				receiver,
+				false,
+			)
 			if err != nil {
 				return err
 			}
@@ -183,11 +234,11 @@ func prollyParentPriDiffFkConstraintViolations(
 }
 
 func prollyChildPriDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preChildRowData prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preChildRowData prolly.Map,
+		receiver FKViolationReceiver) error {
 	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
 		return err
@@ -240,11 +291,11 @@ func prollyChildPriDiffFkConstraintViolations(
 }
 
 func prollyChildSecDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preChildSecIdx prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preChildSecIdx prolly.Map,
+		receiver FKViolationReceiver) error {
 
 	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
@@ -270,7 +321,7 @@ func prollyChildSecDiffFkConstraintViolations(
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
 	compatibleTypes := true
 	for i, handler := range childIdxPrefixDesc.Handlers {
-		if !handler.SerializationCompatible(parentIdxPrefixDesc.Handlers[i]) {
+		if handler != nil && !handler.SerializationCompatible(parentIdxPrefixDesc.Handlers[i]) {
 			compatibleTypes = false
 			break
 		}
@@ -293,7 +344,7 @@ func prollyChildSecDiffFkConstraintViolations(
 				tb := val.NewTupleBuilder(parentIdxPrefixDesc, postChildSecIdx.NodeStore())
 				for i, childHandler := range childIdxPrefixDesc.Handlers {
 					parentHandler := parentIdxPrefixDesc.Handlers[i]
-					serialized, err := convertSerialized(ctx, parentHandler, childHandler, k.GetField(i))
+					serialized, err := convertSerializedFkField(ctx, parentHandler, childHandler, k.GetField(i))
 					if err != nil {
 						return err
 					}
@@ -354,18 +405,23 @@ func prollyChildSecDiffFkConstraintViolations(
 	return nil
 }
 
-func convertSerialized(ctx context.Context, parentHandler val.TupleTypeHandler, childHandler val.TupleTypeHandler, field []byte) ([]byte, error) {
-	convertingHandler := parentHandler
-	convertedHandler := childHandler
+// convertSerializedFkField converts a serialized foreign key value from one type handler to another.
+func convertSerializedFkField(
+		ctx context.Context,
+		toHandler, fromHandler val.TupleTypeHandler,
+		field []byte,
+) ([]byte, error) {
+	convertingHandler := toHandler
+	convertedHandler := fromHandler
 
-	switch h := parentHandler.(type) {
+	switch h := toHandler.(type) {
 	case val.AdaptiveEncodingTypeHandler:
 		convertingHandler = h.ChildHandler()
 	case val.AddressTypeHandler:
 		convertingHandler = h.ChildHandler()
 	}
 
-	switch h := childHandler.(type) {
+	switch h := fromHandler.(type) {
 	case val.AdaptiveEncodingTypeHandler:
 		convertedHandler = h.ChildHandler()
 		adaptiveVal := val.AdaptiveValue(field)
@@ -400,11 +456,11 @@ func convertSerialized(ctx context.Context, parentHandler val.TupleTypeHandler, 
 }
 
 func createCVIfNoPartialKeyMatchesPri(
-	ctx context.Context,
-	k, v, partialKey val.Tuple,
-	partialKeyDesc *val.TupleDesc,
-	idx prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		k, v, partialKey val.Tuple,
+		partialKeyDesc *val.TupleDesc,
+		idx prolly.Map,
+		receiver FKViolationReceiver) error {
 	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
 	if err != nil {
 		return err
@@ -421,13 +477,13 @@ func createCVIfNoPartialKeyMatchesPri(
 }
 
 func createCVForSecIdx(
-	ctx context.Context,
-	k val.Tuple,
-	primaryKD *val.TupleDesc,
-	primaryKb *val.TupleBuilder,
-	pri prolly.Map,
-	pool pool.BuffPool,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		k val.Tuple,
+		primaryKD *val.TupleDesc,
+		primaryKb *val.TupleBuilder,
+		pri prolly.Map,
+		pool pool.BuffPool,
+		receiver FKViolationReceiver) error {
 
 	// convert secondary idx entry to primary row key
 	// the pks of the table are the last keys of the index
@@ -456,23 +512,69 @@ func createCVForSecIdx(
 	return receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
 }
 
-func createCVsForPartialKeyMatches(
-	ctx context.Context,
-	partialKey val.Tuple,
-	partialKeyDesc *val.TupleDesc,
-	primaryKD *val.TupleDesc,
-	primaryIdx prolly.Map,
-	secondaryIdx prolly.Map,
-	pool pool.BuffPool,
-	receiver FKViolationReceiver,
+type indexAndKeyDescriptor struct {
+	index   prolly.Map
+	keyDesc *val.TupleDesc
+}
+
+// createCVsForDanglingChildRows finds all rows in the childIdx that match the given parent key and creates constraint
+// violations for each of them using the provided receiver.
+func createCVsForDanglingChildRows(
+		ctx context.Context,
+		partialKey val.Tuple,
+		partialKeyDesc *val.TupleDesc,
+		childPrimaryIdx *indexAndKeyDescriptor,
+		childSecIdx *indexAndKeyDescriptor,
+		pool pool.BuffPool,
+		receiver FKViolationReceiver,
+		compatibleTypes bool,
 ) error {
 
-	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, secondaryIdx)
+	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
+	// in some contexts. If this lookup is one of those, we need to convert the parent key to the child key format.
+	if !compatibleTypes {
+		tb := val.NewTupleBuilder(childSecIdx.keyDesc, childSecIdx.index.NodeStore())
+		for i, parentHandler := range partialKeyDesc.Handlers {
+			childHandler := childSecIdx.keyDesc.Handlers[i]
+			serialized, err := convertSerializedFkField(ctx, childHandler, parentHandler, partialKey.GetField(i))
+			if err != nil {
+				return err
+			}
+
+			switch childHandler.(type) {
+			case val.AdaptiveEncodingTypeHandler:
+				switch partialKeyDesc.Types[i].Enc {
+				case val.ExtendedAdaptiveEnc:
+					err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
+					if err != nil {
+						return err
+					}
+				case val.BytesAdaptiveEnc:
+					err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
+					if err != nil {
+						return err
+					}
+				default:
+					panic(fmt.Sprintf("unexpected encoding for adaptive type: %d", partialKeyDesc.Types[i].Enc))
+				}
+			default:
+				tb.PutRaw(i, serialized)
+			}
+		}
+
+		var err error
+		partialKey, err = tb.Build(pool)
+		if err != nil {
+			return err
+		}
+	}
+
+	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, childSecIdx.index)
 	if err != nil {
 		return err
 	}
 
-	kb := val.NewTupleBuilder(primaryKD, primaryIdx.NodeStore())
+	kb := val.NewTupleBuilder(childPrimaryIdx.keyDesc, childPrimaryIdx.index.NodeStore())
 
 	for k, _, err := itr.Next(ctx); err != io.EOF; k, _, err = itr.Next(ctx) {
 		if err != nil {
@@ -481,8 +583,8 @@ func createCVsForPartialKeyMatches(
 
 		// convert secondary idx entry to primary row key
 		// the pks of the table are the last keys of the index
-		o := k.Count() - primaryKD.Count()
-		for i := 0; i < primaryKD.Count(); i++ {
+		o := k.Count() - childPrimaryIdx.keyDesc.Count()
+		for i := 0; i < childPrimaryIdx.keyDesc.Count(); i++ {
 			j := o + i
 			kb.PutRaw(i, k.GetField(j))
 		}
@@ -492,7 +594,7 @@ func createCVsForPartialKeyMatches(
 		}
 
 		var value val.Tuple
-		err = primaryIdx.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
+		err = childPrimaryIdx.index.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
 			value = v
 			return nil
 		})
@@ -587,15 +689,15 @@ func (m FkCVMeta) ToInterface(context.Context) (interface{}, error) {
 // output which includes additional whitespace between keys, values, and array elements.
 func (m FkCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
-		`"Index": "%s", `+
-		`"Table": "%s", `+
-		`"Columns": ["%s"], `+
-		`"OnDelete": "%s", `+
-		`"OnUpdate": "%s", `+
-		`"ForeignKey": "%s", `+
-		`"ReferencedIndex": "%s", `+
-		`"ReferencedTable": "%s", `+
-		`"ReferencedColumns": ["%s"]}`,
+			`"Index": "%s", `+
+			`"Table": "%s", `+
+			`"Columns": ["%s"], `+
+			`"OnDelete": "%s", `+
+			`"OnUpdate": "%s", `+
+			`"ForeignKey": "%s", `+
+			`"ReferencedIndex": "%s", `+
+			`"ReferencedTable": "%s", `+
+			`"ReferencedColumns": ["%s"]}`,
 		m.Index,
 		m.Table,
 		strings.Join(m.Columns, `', '`),

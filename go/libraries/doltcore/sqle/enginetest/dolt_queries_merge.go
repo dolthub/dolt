@@ -3075,6 +3075,36 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "foreign key violation, parent row deleted",
+		SetUpScript: []string{
+			"create table parent (pk int primary key);",
+			"create table child (fk int, foreign key (fk) references parent(pk));",
+			"insert into parent values (1), (2);",
+			"insert into child values (1), (2);",
+			"call dolt_commit('-Am', 'setup');",
+			"call dolt_branch('other');",
+			"delete from child where fk = 1;",
+			"delete from parent where pk = 1;",
+			"call dolt_commit('-am', 'delete parent and child rows');",
+			"call dolt_checkout('other');",
+			"insert into child values (1);",
+			"call dolt_commit('-am', 'insert child row');",
+			"set dolt_force_transaction_commit = on;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_merge('main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select violation_type, fk from dolt_constraint_violations_child",
+				Expected: []sql.Row{
+					{"foreign key", 1},
+				},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -3243,7 +3273,7 @@ var DoltConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT base_pk, base_col1, our_pk, our_col1, our_diff_type, their_pk, their_col1, their_diff_type" +
-					" from dolt_conflicts_t ORDER BY COALESCE(base_pk, our_pk, their_pk) ASC;",
+						" from dolt_conflicts_t ORDER BY COALESCE(base_pk, our_pk, their_pk) ASC;",
 				Expected: []sql.Row{
 					{1, 1, 1, 2, "modified", 1, 3, "modified"},
 					{2, 2, nil, nil, "removed", 2, 0, "modified"},
@@ -4781,10 +4811,10 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				Query: "show create table t",
 				Expected: []sql.Row{{"t",
 					"CREATE TABLE `t` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `col1` int,\n" +
-						"  PRIMARY KEY (`pk`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+							"  `pk` int NOT NULL,\n" +
+							"  `col1` int,\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},

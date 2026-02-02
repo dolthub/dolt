@@ -113,53 +113,35 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Database syntax properly handles inter-CALL communication",
+			Name: "foreign key violation, parent row deleted",
 			SetUpScript: []string{
-				`CREATE PROCEDURE p1()
-BEGIN
-	DECLARE str VARCHAR(20);
-   CALL p2(str);
-	SET str = CONCAT('a', str);
-   SELECT str;
-END`,
-				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
-BEGIN
-	SET param = 'b';
-END`,
-				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'First procedures');",
-				"CALL DOLT_BRANCH('p12');",
-				"DROP PROCEDURE p1;",
-				"DROP PROCEDURE p2;",
-				`CREATE PROCEDURE p1()
-BEGIN
-	DECLARE str VARCHAR(20);
-    CALL p2(str);
-	SET str = CONCAT('c', str);
-   SELECT str;
-END`,
-				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
-BEGIN
-	SET param = 'd';
-END`,
-				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'Second procedures');",
+				"create table parent (pk int primary key);",
+				"create table child (fk int, foreign key (fk) references parent(pk));",
+				"insert into parent values (1), (2);",
+				"insert into child values (1), (2);",
+				"call dolt_commit('-Am', 'setup');",
+				"call dolt_branch('other');",
+				"delete from child where fk = 1;",
+				"delete from parent where pk = 1;",
+				"call dolt_commit('-am', 'delete parent and child rows');",
+				"call dolt_checkout('other');",
+				"insert into child values (1);",
+				"call dolt_commit('-am', 'insert child row');",
+				"set dolt_force_transaction_commit = on;",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL p1();",
-					Expected: []sql.Row{{"cd"}},
+					Query:            "call dolt_merge('main')",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "CALL `mydb/main`.p1();",
-					Expected: []sql.Row{{"cd"}},
-				},
-				{
-					Query:    "CALL `mydb/p12`.p1();",
-					Expected: []sql.Row{{"ab"}},
+					Query: "select violation_type, fk from dolt_constraint_violations_child",
+					Expected: []sql.Row{
+						{"foreign key", 1},
+					},
 				},
 			},
 		},
