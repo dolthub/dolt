@@ -38,6 +38,12 @@ setupCustomEditorScript() {
     export DOLT_TEST_FORCE_OPEN_EDITOR="1"
 }
 
+getHeadHash() {
+  run dolt sql -r csv -q "select commit_hash from dolt_log limit 1 offset 0;"
+  [ "$status" -eq 0 ] || return 1
+  echo "${lines[1]}"
+}
+
 @test "rebase: no rebase in progress errors" {
     run dolt rebase --abort
     [ "$status" -eq 1 ]
@@ -116,9 +122,7 @@ setupCustomEditorScript() {
     setupCustomEditorScript "rebasePlan.txt"
 
     dolt checkout b1
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT1=${lines[0]:12:32}
+    COMMIT1="$(getHeadHash)"
 
     touch rebasePlan.txt
     echo "pick $COMMIT1 b1 commit 1" >> rebasePlan.txt
@@ -238,45 +242,31 @@ message"
     setupCustomEditorScript "multiStepPlan.txt"
 
     dolt checkout b1
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT1=${lines[0]:12:32}
+    COMMIT1="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (1);"
     dolt commit -am "b1 commit 2"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT2=${lines[0]:12:32}
+    COMMIT2="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (2);"
     dolt commit -am "b1 commit 3"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT3=${lines[0]:12:32}
+    COMMIT3="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (3);"
     dolt commit -am "b1 commit 4"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT4=${lines[0]:12:32}
+    COMMIT4="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (4);"
     dolt commit -am "b1 commit 5"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT5=${lines[0]:12:32}
+    COMMIT5="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (5);"
     dolt commit -am "b1 commit 6"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT6=${lines[0]:12:32}
+    COMMIT6="$(getHeadHash)"
 
     dolt sql -q "insert into t2 values (6);"
     dolt commit -am "b1 commit 7"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT7=${lines[0]:12:32}
+    COMMIT7="$(getHeadHash)"
 
     touch multiStepPlan.txt
     echo "pick $COMMIT1 b1 commit 1" >> multiStepPlan.txt
@@ -317,9 +307,7 @@ message"
     dolt sql -q "CREATE table t3 (pk int primary key);"
     dolt add t3
     dolt commit -m "b2 commit 1"
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT1=${lines[0]:12:32}
+    COMMIT1="$(getHeadHash)"
 
     dolt sql -q "insert into t3 values (1);"
     dolt commit -am "b2 commit 2"
@@ -327,9 +315,7 @@ message"
     dolt commit -am "b2 commit 3"
 
     dolt checkout b1
-    run dolt show head
-    [ "$status" -eq 0 ]
-    COMMIT2=${lines[0]:12:32}
+    COMMIT2="$(getHeadHash)"
 
     touch nonStandardPlan.txt
     echo "pick $COMMIT1 b2 commit 1" >> nonStandardPlan.txt
@@ -389,6 +375,7 @@ message"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
     [[ "$output" =~ "b1 commit 2" ]] || false
+
 
     # Assert that we are on the rebase working branch (not the branch being rebased)
     run dolt sql -q "select active_branch();"
@@ -539,4 +526,193 @@ message"
     # Make sure the commit that became empty appears in the commit log
     run dolt log
     [[ $output =~ "repeating change from main on b1" ]] || false
+}
+
+@test "rebase: edit action basic functionality" {
+    # Get the commit hash for b1 commit 1 using the established pattern
+    dolt checkout b1
+    COMMIT1="$(getHeadHash)"
+    
+    # Create a rebase plan file with an edit action
+    touch rebase_plan.txt
+    echo "edit $COMMIT1 b1 commit 1" >> rebase_plan.txt
+
+    setupCustomEditorScript rebase_plan.txt
+
+    # Start interactive rebase with edit action - should pause for editing
+    run dolt rebase -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "edit action paused at commit" ]] || false
+    [[ "$output" =~ "You can now modify the working directory" ]] || false
+
+    # Assert that we are on the rebase working branch (not the branch being rebased)
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+    # Continue the rebase after the edit pause
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    # Assert that we are on the original working branch
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b1" ]] || false
+    ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
+}
+
+@test "rebase: complex edit and conflict scenario" {
+    # Setup: Create conflicting data on main (for commit 2)
+    dolt sql -q "INSERT INTO t1 VALUES (10, 100);"
+    dolt commit -am "main conflicting data"
+
+    # Setup: Create 4 commits on b1 to rebase
+    dolt checkout b1
+
+    # Commit 1: Will be edited (no conflict with main)
+    dolt sql -q "INSERT INTO t1 VALUES (5, 50);"
+    dolt commit -am "b1 commit 1 - to edit"
+    COMMIT1="$(getHeadHash)"
+
+    # Commit 2: Will conflict with main
+    dolt sql -q "INSERT INTO t1 VALUES (10, 200);"  # Conflicts with main's (10, 100)
+    dolt commit -am "b1 commit 2 - will conflict"
+    COMMIT2="$(getHeadHash)"
+
+    # Commit 3: Clean apply after conflict
+    dolt sql -q "INSERT INTO t1 VALUES (20, 300);"
+    dolt commit -am "b1 commit 3 - clean apply"
+    COMMIT3="$(getHeadHash)"
+
+    # Commit 4: Will be edited at the end
+    dolt sql -q "INSERT INTO t1 VALUES (30, 400);"
+    dolt commit -am "b1 commit 4 - edit at end"
+    COMMIT4="$(getHeadHash)"
+
+    # Create rebase plan: edit, pick (conflict), pick, edit
+    setupCustomEditorScript "complex_rebase_plan.txt"
+    touch complex_rebase_plan.txt
+    echo "edit $COMMIT1 b1 commit 1 - to edit" >> complex_rebase_plan.txt
+    echo "pick $COMMIT2 b1 commit 2 - will conflict" >> complex_rebase_plan.txt
+    echo "pick $COMMIT3 b1 commit 3 - clean apply" >> complex_rebase_plan.txt
+    echo "edit $COMMIT4 b1 commit 4 - edit at end" >> complex_rebase_plan.txt
+
+    # Start the rebase - should pause at first edit
+    run dolt rebase -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "edit action paused at commit" ]] || false
+
+    # Assert we're on the rebase working branch
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+    # Make changes during edit pause and add another commit
+    dolt sql -q "UPDATE t1 SET c = 55 WHERE pk = 5;"
+    dolt commit -a --amend -m "edit modification to commit 1"
+
+    dolt sql -q "INSERT INTO t1 VALUES (15, 150);"
+    dolt add t1
+    dolt commit -m "edit modification to commit 1"
+    
+    # Continue rebase - should hit conflict on commit 2
+    run dolt rebase --continue
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+    [[ "$output" =~ "b1 commit 2 - will conflict" ]] || false
+
+    # Resolve the conflict
+    run dolt conflicts cat .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | ours   | 10 | 100 | NULL | NULL | NULL | NULL |" ]] || false
+    [[ "$output" =~ "+  | theirs | 10 | 200 | NULL | NULL | NULL | NULL |" ]] || false
+    dolt conflicts resolve --theirs t1
+    dolt add t1
+
+    # Continue rebase - should proceed to commit 3 then pause at commit 4 edit
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "edit action paused at commit" ]] || false
+    [[ "$output" =~ "b1 commit 4 - edit at end" ]] || false
+
+    # We're still on the rebase working branch
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+    # Continue from edit pause - should complete successfully
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    # Verify we're back on the original branch
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b1" ]] || false
+    ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
+
+    # Count commits between main and HEAD - should be 5
+    # (original 4 commits + 1 edit modification commit)
+    run dolt log --oneline main..HEAD
+    [ "$status" -eq 0 ]
+    # Count the lines (each commit is one line)
+    commit_count=$(echo "$output" | wc -l)
+    [ "$commit_count" -eq 5 ]
+
+    # Verify the data is correct after all operations
+    run dolt sql -q "SELECT * FROM t1 ORDER BY pk;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 1  | 1   |" ]] || false  # Original main data
+    [[ "$output" =~ "| 5  | 55  |" ]] || false  # Modified during edit
+    [[ "$output" =~ "| 10 | 200 |" ]] || false  # Conflict resolved to theirs
+    [[ "$output" =~ "| 20 | 300 |" ]] || false  # From commit 3
+    [[ "$output" =~ "| 30 | 400 |" ]] || false  # From commit 4
+
+    # Verify no rebase state remains
+    run dolt status
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "rebase in progress" ]] || false
+}
+
+@test "rebase: short action forms should be recognized" {
+    setupCustomEditorScript "shortActionsPlan.txt"
+
+    dolt checkout b1
+    COMMIT1="$(getHeadHash)"
+
+    dolt sql -q "insert into t2 values (1);"
+    dolt commit -am "b1 commit 2"
+    COMMIT2="$(getHeadHash)"
+
+    dolt sql -q "insert into t2 values (2);"
+    dolt commit -am "b1 commit 3"
+    COMMIT3="$(getHeadHash)"
+
+    touch shortActionsPlan.txt
+    echo "p $COMMIT1 b1 commit 1" >> shortActionsPlan.txt
+    echo "r $COMMIT2 reworded commit" >> shortActionsPlan.txt
+    echo "f $COMMIT3 b1 commit 3" >> shortActionsPlan.txt
+
+    run dolt rebase -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "reworded commit" ]] || false
+}
+
+@test "rebase: invalid action forms should be rejected with clear error" {
+    setupCustomEditorScript "invalidActionsPlan.txt"
+
+    dolt checkout b1
+    COMMIT1="$(getHeadHash)"
+
+    touch invalidActionsPlan.txt
+    echo "invalid $COMMIT1 b1 commit 1" >> invalidActionsPlan.txt
+
+    run dolt rebase -i main
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "unknown action in rebase plan: invalid" ]] || false
 }
