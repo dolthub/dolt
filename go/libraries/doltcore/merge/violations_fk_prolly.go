@@ -75,13 +75,7 @@ func prollyParentSecDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := true
-	for i, handler := range parentIdxPrefixDesc.Handlers {
-		if !handler.SerializationCompatible(parentIdxPrefixDesc.Handlers[i]) {
-			compatibleTypes = false
-			break
-		}
-	}
+	compatibleTypes := foreignKeySerializationCompatible(parentIdxPrefixDesc, childSecIdxDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -113,7 +107,6 @@ func prollyParentSecDiffFkConstraintViolations(
 				parentIdxPrefixDesc,
 				childPrimary,
 				childSecondary,
-				postParentRowData.Pool(),
 				receiver,
 				compatibleTypes,
 			)
@@ -131,6 +124,19 @@ func prollyParentSecDiffFkConstraintViolations(
 	}
 
 	return nil
+}
+
+// foreignKeySerializationCompatible returns whether the serializations for two tuple descriptors are
+// binary compatible, which is requirement when using them as values in during foreign key lookups.
+func foreignKeySerializationCompatible(descA, descB *val.TupleDesc) bool {
+	compatibleTypes := true
+	for i, handler := range descA.Handlers {
+		if handler != nil && !handler.SerializationCompatible(descB.Handlers[i]) {
+			compatibleTypes = false
+			break
+		}
+	}
+	return compatibleTypes
 }
 
 func prollyParentPriDiffFkConstraintViolations(
@@ -173,6 +179,10 @@ func prollyParentPriDiffFkConstraintViolations(
 		keyDesc: childSecIdxDesc,
 	}
 
+	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
+	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
+	compatibleTypes := foreignKeySerializationCompatible(partialDesc, childSecIdxDesc)
+
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
 	err = prolly.DiffMaps(ctx, preParentRowData, postParentRowData, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
@@ -204,16 +214,14 @@ func prollyParentPriDiffFkConstraintViolations(
 
 			// All equivalent parents were deleted, let's check for dangling children.
 			// We search for matching keys in the child's secondary index
-			// TODO: type conversions
 			err = createCVsForDanglingChildRows(
 				ctx,
 				partialKey,
 				partialDesc,
 				childPrimary,
 				childSecondary,
-				childPriIdx.Pool(),
 				receiver,
-				false,
+				compatibleTypes,
 			)
 			if err != nil {
 				return err
@@ -525,7 +533,6 @@ func createCVsForDanglingChildRows(
 		partialKeyDesc *val.TupleDesc,
 		childPrimaryIdx *indexAndKeyDescriptor,
 		childSecIdx *indexAndKeyDescriptor,
-		pool pool.BuffPool,
 		receiver FKViolationReceiver,
 		compatibleTypes bool,
 ) error {
@@ -563,7 +570,7 @@ func createCVsForDanglingChildRows(
 		}
 
 		var err error
-		partialKey, err = tb.Build(pool)
+		partialKey, err = tb.Build(childPrimaryIdx.index.Pool())
 		if err != nil {
 			return err
 		}
@@ -588,7 +595,7 @@ func createCVsForDanglingChildRows(
 			j := o + i
 			kb.PutRaw(i, k.GetField(j))
 		}
-		primaryIdxKey, err := kb.Build(pool)
+		primaryIdxKey, err := kb.Build(childPrimaryIdx.index.Pool())
 		if err != nil {
 			return err
 		}
