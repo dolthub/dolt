@@ -396,6 +396,23 @@ tests:
     queries:
     - exec: "INSERT INTO t1 VALUES (1, 1),(2, 2)"
       error_match: "table not found"
+- name: create a collated database connected to a non-dolt database
+  # Creating a collated database currently creates a new Dolt commit
+  # on the `main` branch of the created database. In the past there
+  # was a bug which used ctx.GetCurrentDatabase() in some code paths
+  # to attempt to create this database, which made things fail if
+  # the current database was a non-Dolt database (like mysql).
+  repos:
+  - name: repo1
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
+  connections:
+  - on: repo1
+    queries:
+    - exec: "USE mysql"
+    - exec: "CREATE DATABASE testdb COLLATE utf8mb4_unicode_ci"
+    - exec: "USE testdb"
 - name: dolt_gc succeeds as first write on existing database without a journal after chunk journal is enabled
   multi_repos:
   - name: server1

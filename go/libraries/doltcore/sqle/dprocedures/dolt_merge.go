@@ -329,7 +329,7 @@ func executeMerge(
 	opts editor.Options,
 	workingDiffs map[doltdb.TableName]hash.Hash,
 ) (*doltdb.WorkingSet, error) {
-	sqlDB, err := dsess.GetTableResolver(ctx)
+	sqlDB, err := dsess.GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
