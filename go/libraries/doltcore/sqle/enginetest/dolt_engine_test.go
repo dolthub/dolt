@@ -113,53 +113,255 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Database syntax properly handles inter-CALL communication",
+			Name: "pg_catalog test",
 			SetUpScript: []string{
-				`CREATE PROCEDURE p1()
-BEGIN
-	DECLARE str VARCHAR(20);
-   CALL p2(str);
-	SET str = CONCAT('a', str);
-   SELECT str;
-END`,
-				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
-BEGIN
-	SET param = 'b';
-END`,
-				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'First procedures');",
-				"CALL DOLT_BRANCH('p12');",
-				"DROP PROCEDURE p1;",
-				"DROP PROCEDURE p2;",
-				`CREATE PROCEDURE p1()
-BEGIN
-	DECLARE str VARCHAR(20);
-    CALL p2(str);
-	SET str = CONCAT('c', str);
-   SELECT str;
-END`,
-				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
-BEGIN
-	SET param = 'd';
-END`,
-				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'Second procedures');",
+				`CREATE TABLE pg_namespace (
+  oid           INT UNSIGNED NOT NULL,         -- maps PostgreSQL oid (uint32)  
+  nspname       VARCHAR(254) NOT NULL,         -- PostgreSQL name type (max len ~63); use 254 to be safe  
+  nspowner      INT UNSIGNED NOT NULL,         -- owner OID (references pg_authid in PG)  
+  nspacl        TEXT,                          -- access control list (could be stored as text)  
+  PRIMARY KEY (oid),
+  UNIQUE KEY u_nspname (nspname)
+) ENGINE = InnoDB;`,
+				`CREATE TABLE pg_class (
+  oid            INT UNSIGNED NOT NULL,        -- OID of the relation  
+  relname        VARCHAR(254) NOT NULL,        -- name of relation  
+  relnamespace   INT UNSIGNED NOT NULL,        -- namespace OID (references pg_namespace.oid)  
+  reltype        INT UNSIGNED NOT NULL,        -- OID of row-type if any  
+  reloftype      INT UNSIGNED NOT NULL,        -- OID of underlying composite type  
+  relowner       INT UNSIGNED NOT NULL,        -- owner OID  
+  relam           INT UNSIGNED NOT NULL,       -- access method OID (for indexes)  
+  relfilenode    INT UNSIGNED NOT NULL,        -- file node number  
+  reltablespace  INT UNSIGNED NOT NULL,        -- tablespace OID  
+  relpages       INT UNSIGNED NOT NULL,        -- number of pages (estimate)  
+  reltuples      FLOAT NOT NULL,               -- number of tuples (estimate)  
+  relkind        CHAR(1) NOT NULL,             -- type: 'r', 'i', 'S', etc.  
+  relhasindex    BOOLEAN NOT NULL DEFAULT FALSE,
+  relisshared    BOOLEAN NOT NULL DEFAULT FALSE,
+  relpersistence CHAR(1) NOT NULL DEFAULT 'p',
+  relchecks      INT UNSIGNED NOT NULL DEFAULT 0,
+  relhasoids     BOOLEAN NOT NULL DEFAULT FALSE,
+  relhaspkey     BOOLEAN NOT NULL DEFAULT FALSE,
+  relhasrules    BOOLEAN NOT NULL DEFAULT FALSE,
+  relhastriggers BOOLEAN NOT NULL DEFAULT FALSE,
+  relispartition boolean not null default false,
+  -- many additional internal columns omitted for brevity  
+  PRIMARY KEY (oid),
+  INDEX idx_relname (relname),
+  INDEX idx_relnamespace (relnamespace)
+) ENGINE = InnoDB;`,
+				`CREATE TABLE pg_attribute (
+  attrelid       INT UNSIGNED NOT NULL,        -- relation OID (references pg_class.oid)  
+  attname        VARCHAR(254) NOT NULL,        -- attribute name  
+  atttypid        INT UNSIGNED NOT NULL,        -- data type OID  
+  attlen          SMALLINT NOT NULL,           -- type length (in bytes)  
+  attnum          SMALLINT NOT NULL,           -- attribute number (1,2,… or negative for system columns)  
+  atttypmod       INT NOT NULL,                -- type-specific modifier (e.g. varchar length)  
+  attndims        SMALLINT NOT NULL DEFAULT 0, -- number of array dimensions  
+  attnotnull      BOOLEAN NOT NULL DEFAULT FALSE,
+  atthasdef       BOOLEAN NOT NULL DEFAULT FALSE,
+  attidentity     CHAR(1) NOT NULL DEFAULT '',  
+  attisdropped    BOOLEAN NOT NULL DEFAULT FALSE,
+  attstorage      CHAR(1) NOT NULL DEFAULT 'm',
+  attalign        CHAR(1) NOT NULL DEFAULT 'i',
+  attoptions      TEXT,                        -- storage options (text form)  
+  PRIMARY KEY (attrelid, attnum),
+  INDEX idx_attrelid (attrelid),
+  INDEX idx_attname (attname)
+) ENGINE = InnoDB;`,
+				`CREATE TABLE pg_constraint (
+  oid            INT UNSIGNED NOT NULL,         -- OID of the constraint  
+  conname        VARCHAR(254) NOT NULL,         -- name of constraint  
+  connamespace   INT UNSIGNED NOT NULL,         -- namespace OID  
+  contype        CHAR(1) NOT NULL,              -- constraint type: p, f, c, u, t, x, etc.  
+  condeferrable  BOOLEAN NOT NULL DEFAULT FALSE,
+  condeferred    BOOLEAN NOT NULL DEFAULT FALSE,
+  convalidated   BOOLEAN NOT NULL DEFAULT FALSE,
+  conrelid        INT UNSIGNED NOT NULL,        -- OID of the constrained relation  
+  contypid        INT UNSIGNED NOT NULL,        -- for domain constraints  
+  conindid        INT UNSIGNED NOT NULL,        -- index OID (for pkey, unique)  
+  confrelid      INT UNSIGNED NOT NULL,         -- referenced relation (for foreign key)  
+  confupdtype    CHAR(1) NOT NULL,              -- behavior on update  
+  confdeltype    CHAR(1) NOT NULL,              -- behavior on delete  
+  confmatchtype  CHAR(1) NOT NULL,              -- match type  
+  conislocal     BOOLEAN NOT NULL DEFAULT TRUE,
+  coninhcount    INT UNSIGNED NOT NULL DEFAULT 0,
+  connoinherit   BOOLEAN NOT NULL DEFAULT FALSE,
+  conkey         TEXT,                          -- array of attnums; store as comma-separated list  
+  confkey        TEXT,                          -- array of attnums in referenced table  
+  confpfeqop     TEXT,                          -- array of operator OIDs  
+  confppeqop     TEXT,
+  conbin          TEXT,                         -- the constraint expression (if check)  
+  PRIMARY KEY (oid),
+  INDEX idx_conname (conname),
+  INDEX idx_conrelid (conrelid),
+  INDEX idx_connamespace (connamespace)
+) ENGINE = InnoDB;`,
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL p1();",
-					Expected: []sql.Row{{"cd"}},
+					Query: `explain format=tree SELECT con.*, 
+       cl.relname AS referenced_table_name, 
+       att.attname AS referenced_column_name 
+FROM
+    pg_constraint con
+    INNER JOIN pg_attribute att ON att.attrelid = con.confrelid AND att.attnum = con.confrelid
+    INNER JOIN pg_class cl ON cl.oid = con.confrelid  AND cl.relispartition = 'f'
+    INNER JOIN pg_namespace ns ON cl.relnamespace = ns.oid 
+    INNER JOIN pg_attribute att2 ON att2.attrelid = con.confrelid AND att2.attnum = con.confrelid order by 1`,
+					Expected: []sql.Row{
+						{"Project"},
+						{" ├─ columns: [con.oid, con.conname, con.connamespace, con.contype, con.condeferrable, con.condeferred, con.convalidated, con.conrelid, con.contypid, con.conindid, con.confrelid, con.confupdtype, con.confdeltype, con.confmatchtype, con.conislocal, con.coninhcount, con.connoinherit, con.conkey, con.confkey, con.confpfeqop, con.confppeqop, con.conbin, cl.relname as referenced_table_name, att.attname as referenced_column_name]"},
+						{" └─ InnerJoin"},
+						{"     ├─ ((((((((att2.attrelid = con.confrelid) AND (att2.attnum = con.confrelid)) AND (att.attrelid = att2.attrelid)) AND (att.attrelid = att2.attnum)) AND (att.attnum = att2.attrelid)) AND (att.attnum = att2.attnum)) AND (cl.oid = att2.attrelid)) AND (cl.oid = att2.attnum))"},
+						{"     ├─ InnerJoin"},
+						{"     │   ├─ (cl.relnamespace = ns.oid)"},
+						{"     │   ├─ TableAlias(ns)"},
+						{"     │   │   └─ Table"},
+						{"     │   │       ├─ name: pg_namespace"},
+						{"     │   │       └─ columns: [oid]"},
+						{"     │   └─ InnerJoin"},
+						{"     │       ├─ (((cl.oid = con.confrelid) AND (att.attrelid = cl.oid)) AND (att.attnum = cl.oid))"},
+						{"     │       ├─ InnerJoin"},
+						{"     │       │   ├─ ((att.attrelid = con.confrelid) AND (att.attnum = con.confrelid))"},
+						{"     │       │   ├─ TableAlias(att)"},
+						{"     │       │   │   └─ Table"},
+						{"     │       │   │       ├─ name: pg_attribute"},
+						{"     │       │   │       └─ columns: [attrelid attname attnum]"},
+						{"     │       │   └─ TableAlias(con)"},
+						{"     │       │       └─ IndexedTableAccess(pg_constraint)"},
+						{"     │       │           ├─ index: [pg_constraint.oid]"},
+						{"     │       │           ├─ filters: [{[NULL, ∞)}]"},
+						{"     │       │           └─ columns: [oid conname connamespace contype condeferrable condeferred convalidated conrelid contypid conindid confrelid confupdtype confdeltype confmatchtype conislocal coninhcount connoinherit conkey confkey confpfeqop confppeqop conbin]"},
+						{"     │       └─ Filter"},
+						{"     │           ├─ (cl.relispartition = 'f')"},
+						{"     │           └─ TableAlias(cl)"},
+						{"     │               └─ Table"},
+						{"     │                   ├─ name: pg_class"},
+						{"     │                   └─ columns: [oid relname relnamespace relispartition]"},
+						{"     └─ TableAlias(att2)"},
+						{"         └─ Table"},
+						{"             ├─ name: pg_attribute"},
+						{"             └─ columns: [attrelid attnum]"},
+					},
 				},
 				{
-					Query:    "CALL `mydb/main`.p1();",
-					Expected: []sql.Row{{"cd"}},
-				},
-				{
-					Query:    "CALL `mydb/p12`.p1();",
-					Expected: []sql.Row{{"ab"}},
+					Query: `explain format=tree SELECT con.conname AS constraint_name, 
+       con.nspname AS table_schema, 
+       con.relname AS table_name, 
+       att2.attname AS column_name, 
+       ns.nspname AS referenced_table_schema, 
+       cl.relname AS referenced_table_name, 
+       att.attname AS referenced_column_name, 
+       con.confdeltype AS on_delete, 
+       con.confupdtype AS on_update, 
+       con.condeferrable AS deferrable, 
+       con.condeferred AS deferred
+FROM 
+    ( SELECT confrelid AS parent, 
+              conrelid AS child, 
+              con1.confrelid, 
+              con1.conrelid, 
+              con1.conname, 
+              con1.contype, 
+              ns.nspname, 
+              cl.relname, 
+              con1.condeferrable, 
+              CASE 
+                  WHEN con1.condeferred THEN 'INITIALLY DEFERRED' 
+                  ELSE 'INITIALLY IMMEDIATE' 
+                  END as condeferred, 
+           CASE con1.confdeltype 
+               WHEN 'a' THEN 'NO ACTION' 
+               WHEN 'r' THEN 'RESTRICT' 
+               WHEN 'c' THEN 'CASCADE' 
+               WHEN 'n' THEN 'SET NULL' 
+               WHEN 'd' THEN 'SET DEFAULT' 
+               END as confdeltype, 
+           CASE con1.confupdtype 
+               WHEN 'a' THEN 'NO ACTION' 
+               WHEN 'r' THEN 'RESTRICT' 
+               WHEN 'c' THEN 'CASCADE' 
+               WHEN 'n' THEN 'SET NULL' 
+               WHEN 'd' THEN 'SET DEFAULT' 
+               END as confupdtype 
+       FROM pg_class cl 
+           INNER JOIN pg_namespace ns ON cl.relnamespace = ns.oid 
+           INNER JOIN pg_constraint con1 ON con1.conrelid = cl.oid 
+       WHERE con1.contype = 'f' 
+         AND ((ns.nspname = 'testschema' AND cl.relname = 'test2')) ) con 
+    INNER JOIN pg_attribute att ON att.attrelid = con.confrelid AND att.attnum = con.child
+    INNER JOIN pg_class cl ON cl.oid = con.confrelid  AND cl.relispartition = 'f'
+    INNER JOIN pg_namespace ns ON cl.relnamespace = ns.oid 
+    INNER JOIN pg_attribute att2 ON att2.attrelid = con.conrelid AND att2.attnum = con.parent order by 1`,
+					Expected: []sql.Row{
+						{"Project"},
+						{" ├─ columns: [con.conname as constraint_name, con.nspname as table_schema, con.relname as table_name, att2.attname as column_name, ns.nspname as referenced_table_schema, cl.relname as referenced_table_name, att.attname as referenced_column_name, con.confdeltype as on_delete, con.confupdtype as on_update, con.condeferrable as deferrable, con.condeferred as deferred]"},
+						{" └─ Sort(con.conname as constraint_name ASC)"},
+						{"     └─ Project"},
+						{"         ├─ columns: [con.parent, con.child, con.confrelid, con.conrelid, con.conname, con.contype, con.nspname, con.relname, con.condeferrable, con.condeferred, con.confdeltype, con.confupdtype, att.attrelid, att.attname, att.atttypid, att.attlen, att.attnum, att.atttypmod, att.attndims, att.attnotnull, att.atthasdef, att.attidentity, att.attisdropped, att.attstorage, att.attalign, att.attoptions, cl.oid, cl.relname, cl.relnamespace, cl.reltype, cl.reloftype, cl.relowner, cl.relam, cl.relfilenode, cl.reltablespace, cl.relpages, cl.reltuples, cl.relkind, cl.relhasindex, cl.relisshared, cl.relpersistence, cl.relchecks, cl.relhasoids, cl.relhaspkey, cl.relhasrules, cl.relhastriggers, cl.relispartition, ns.oid, ns.nspname, ns.nspowner, ns.nspacl, att2.attrelid, att2.attname, att2.atttypid, att2.attlen, att2.attnum, att2.atttypmod, att2.attndims, att2.attnotnull, att2.atthasdef, att2.attidentity, att2.attisdropped, att2.attstorage, att2.attalign, att2.attoptions, con.conname as constraint_name, con.nspname as table_schema, con.relname as table_name, att2.attname as column_name, ns.nspname as referenced_table_schema, cl.relname as referenced_table_name, att.attname as referenced_column_name, con.confdeltype as on_delete, con.confupdtype as on_update, con.condeferrable as deferrable, con.condeferred as deferred]"},
+						{"         └─ InnerJoin"},
+						{"             ├─ ((att2.attrelid = con.conrelid) AND (att2.attnum = con.parent))"},
+						{"             ├─ TableAlias(att2)"},
+						{"             │   └─ Table"},
+						{"             │       ├─ name: pg_attribute"},
+						{"             │       └─ columns: [attrelid attname atttypid attlen attnum atttypmod attndims attnotnull atthasdef attidentity attisdropped attstorage attalign attoptions]"},
+						{"             └─ InnerJoin"},
+						{"                 ├─ (((att.attrelid = con.confrelid) AND (att.attnum = con.child)) AND (cl.oid = con.confrelid))"},
+						{"                 ├─ InnerJoin"},
+						{"                 │   ├─ (cl.relnamespace = ns.oid)"},
+						{"                 │   ├─ TableAlias(ns)"},
+						{"                 │   │   └─ Table"},
+						{"                 │   │       ├─ name: pg_namespace"},
+						{"                 │   │       └─ columns: [oid nspname nspowner nspacl]"},
+						{"                 │   └─ InnerJoin"},
+						{"                 │       ├─ (att.attrelid = cl.oid)"},
+						{"                 │       ├─ Filter"},
+						{"                 │       │   ├─ (cl.relispartition = 'f')"},
+						{"                 │       │   └─ TableAlias(cl)"},
+						{"                 │       │       └─ Table"},
+						{"                 │       │           ├─ name: pg_class"},
+						{"                 │       │           └─ columns: [oid relname relnamespace reltype reloftype relowner relam relfilenode reltablespace relpages reltuples relkind relhasindex relisshared relpersistence relchecks relhasoids relhaspkey relhasrules relhastriggers relispartition]"},
+						{"                 │       └─ TableAlias(att)"},
+						{"                 │           └─ Table"},
+						{"                 │               ├─ name: pg_attribute"},
+						{"                 │               └─ columns: [attrelid attname atttypid attlen attnum atttypmod attndims attnotnull atthasdef attidentity attisdropped attstorage attalign attoptions]"},
+						{"                 └─ CachedResults"},
+						{"                     └─ SubqueryAlias"},
+						{"                         ├─ name: con"},
+						{"                         ├─ outerVisibility: false"},
+						{"                         ├─ isLateral: false"},
+						{"                         ├─ cacheable: true"},
+						{"                         └─ Project"},
+						{"                             ├─ columns: [con1.confrelid as parent, con1.conrelid as child, con1.confrelid, con1.conrelid, con1.conname, con1.contype, ns.nspname, cl.relname, con1.condeferrable, CASE  WHEN con1.condeferred THEN 'INITIALLY DEFERRED' ELSE 'INITIALLY IMMEDIATE' END as condeferred, CASE con1.confdeltype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END as confdeltype, CASE con1.confupdtype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END as confupdtype]"},
+						{"                             └─ InnerJoin"},
+						{"                                 ├─ (con1.conrelid = cl.oid)"},
+						{"                                 ├─ Filter"},
+						{"                                 │   ├─ (con1.contype = 'f')"},
+						{"                                 │   └─ TableAlias(con1)"},
+						{"                                 │       └─ Table"},
+						{"                                 │           ├─ name: pg_constraint"},
+						{"                                 │           └─ columns: [conname contype condeferrable condeferred conrelid confrelid confupdtype confdeltype]"},
+						{"                                 └─ MergeJoin"},
+						{"                                     ├─ cmp: (cl.relnamespace = ns.oid)"},
+						{"                                     ├─ Filter"},
+						{"                                     │   ├─ (cl.relname = 'test2')"},
+						{"                                     │   └─ TableAlias(cl)"},
+						{"                                     │       └─ IndexedTableAccess(pg_class)"},
+						{"                                     │           ├─ index: [pg_class.relnamespace]"},
+						{"                                     │           ├─ filters: [{[NULL, ∞)}]"},
+						{"                                     │           └─ columns: [oid relname relnamespace]"},
+						{"                                     └─ Filter"},
+						{"                                         ├─ (ns.nspname = 'testschema')"},
+						{"                                         └─ TableAlias(ns)"},
+						{"                                             └─ IndexedTableAccess(pg_namespace)"},
+						{"                                                 ├─ index: [pg_namespace.oid]"},
+						{"                                                 ├─ filters: [{[NULL, ∞)}]"},
+						{"                                                 └─ columns: [oid nspname]"},
+					},
 				},
 			},
 		},
