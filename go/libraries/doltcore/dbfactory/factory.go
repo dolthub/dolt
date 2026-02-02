@@ -83,6 +83,7 @@ var DBFactories = map[string]DBFactory{
 
 // CreateDB creates a database based on the supplied urlStr, and creation params.  The DBFactory used for creation is
 // determined by the scheme of the url.  Naked urls will use https by default.
+// URLs ending in .git are routed to the GitFactory regardless of scheme.
 func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	urlObj, err := earl.Parse(urlStr)
 
@@ -95,6 +96,11 @@ func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, para
 		scheme = defaultScheme
 	}
 
+	// Check if this is a git remote URL (ends in .git or uses git:// scheme)
+	if IsGitURL(urlStr) {
+		scheme = GitScheme
+	}
+
 	if fact, ok := DBFactories[strings.ToLower(scheme)]; ok {
 		return fact.CreateDB(ctx, nbf, urlObj, params)
 	}
@@ -105,6 +111,7 @@ func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, para
 // PrepareDB does the necessary work to create a database at the URL given, e.g. to ready a new remote for pushing. Not
 // all URL schemes can support this operation. The DBFactory used for preparing the DB is determined by the scheme of
 // the url. Naked urls will use https by default.
+// URLs ending in .git are routed to the GitFactory regardless of scheme.
 func PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) error {
 	url, err := earl.Parse(urlStr)
 	if err != nil {
@@ -114,6 +121,11 @@ func PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, par
 	scheme := url.Scheme
 	if len(scheme) == 0 {
 		scheme = defaultScheme
+	}
+
+	// Check if this is a git remote URL (ends in .git or uses git:// scheme)
+	if IsGitURL(urlStr) {
+		scheme = GitScheme
 	}
 
 	if fact, ok := DBFactories[strings.ToLower(scheme)]; ok {

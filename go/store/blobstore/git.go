@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/gitremote"
 )
@@ -116,10 +117,47 @@ func (bs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 
 // Put stores a blob with the given key in the local worktree.
 // This does NOT commit or push - call Sync() to persist changes to the remote.
+// Note: We implement Put directly instead of delegating to LocalBlobstore to avoid
+// cross-device rename issues when the temp directory is on a different filesystem.
 func (bs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
-	return bs.local.Put(ctx, key, totalSize, reader)
+
+	path := filepath.Join(bs.local.RootDir, key) + bsExt
+
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return "", err
+	}
+
+	// Write to a temp file in the same directory, then rename (atomic on same filesystem)
+	tempPath := path + ".tmp"
+	f, err := os.Create(tempPath)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = io.Copy(f, reader)
+	if closeErr := f.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		os.Remove(tempPath)
+		return "", err
+	}
+
+	// Rename is atomic on the same filesystem
+	if err := os.Rename(tempPath, path); err != nil {
+		os.Remove(tempPath)
+		return "", err
+	}
+
+	time.Sleep(time.Millisecond * 10) // mtime resolution
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	return info.ModTime().String(), nil
 }
 
 // CheckAndPut stores a blob only if the current version matches expectedVersion.
@@ -129,11 +167,53 @@ func (bs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	// First, do the local CheckAndPut
-	ver, err := bs.local.CheckAndPut(ctx, expectedVersion, key, totalSize, reader)
+	path := filepath.Join(bs.local.RootDir, key) + bsExt
+
+	// Check current version
+	info, err := os.Stat(path)
+	currentVersion := ""
+	if err == nil {
+		currentVersion = info.ModTime().String()
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+
+	if expectedVersion != currentVersion {
+		return "", CheckAndPutError{key, expectedVersion, currentVersion}
+	}
+
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return "", err
+	}
+
+	// Write to a temp file in the same directory, then rename
+	tempPath := path + ".tmp"
+	f, err := os.Create(tempPath)
 	if err != nil {
 		return "", err
 	}
+
+	_, err = io.Copy(f, reader)
+	if closeErr := f.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		os.Remove(tempPath)
+		return "", err
+	}
+
+	if err := os.Rename(tempPath, path); err != nil {
+		os.Remove(tempPath)
+		return "", err
+	}
+
+	time.Sleep(time.Millisecond * 10) // mtime resolution
+	info, err = os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	ver := info.ModTime().String()
 
 	// Now commit and push all pending changes (including this one)
 	_, commitErr := bs.repo.Commit(ctx, "Update "+key)
@@ -154,7 +234,58 @@ func (bs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 func (bs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
-	return bs.local.Concatenate(ctx, key, sources)
+
+	path := filepath.Join(bs.local.RootDir, key) + bsExt
+
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return "", err
+	}
+
+	// Write to a temp file in the same directory
+	tempPath := path + ".tmp"
+	f, err := os.Create(tempPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Concatenate all source files
+	for _, src := range sources {
+		srcPath := filepath.Join(bs.local.RootDir, src) + bsExt
+		srcFile, err := os.Open(srcPath)
+		if err != nil {
+			f.Close()
+			os.Remove(tempPath)
+			if os.IsNotExist(err) {
+				return "", NotFound{src}
+			}
+			return "", err
+		}
+		_, err = io.Copy(f, srcFile)
+		srcFile.Close()
+		if err != nil {
+			f.Close()
+			os.Remove(tempPath)
+			return "", err
+		}
+	}
+
+	if err := f.Close(); err != nil {
+		os.Remove(tempPath)
+		return "", err
+	}
+
+	if err := os.Rename(tempPath, path); err != nil {
+		os.Remove(tempPath)
+		return "", err
+	}
+
+	time.Sleep(time.Millisecond * 10) // mtime resolution
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	return info.ModTime().String(), nil
 }
 
 // Sync commits all pending changes and pushes to the remote.
