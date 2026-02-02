@@ -19,10 +19,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,7 +70,13 @@ func createRepoWithCommit(t *testing.T) string {
 	_, err = wt.Add("test.txt")
 	require.NoError(t, err)
 
-	_, err = wt.Commit("Initial commit", &git.CommitOptions{})
+	_, err = wt.Commit("Initial commit", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test User",
+			Email: "test@example.com",
+			When:  time.Now(),
+		},
+	})
 	require.NoError(t, err)
 
 	// Push
