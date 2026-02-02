@@ -25,7 +25,24 @@ teardown() {
 # Helper function to create a bare git repository
 create_bare_git_repo() {
     local name=$1
-    git init --bare "git-remotes/${name}.git" > /dev/null 2>&1
+    local repo_path="git-remotes/${name}.git"
+    
+    # Debug output
+    echo "DEBUG: Creating bare git repo: ${repo_path}"
+    echo "DEBUG: Current directory: $(pwd)"
+    echo "DEBUG: PATH=${PATH}"
+    echo "DEBUG: which git: $(which git 2>&1)"
+    echo "DEBUG: git --version: $(git --version 2>&1)"
+    echo "DEBUG: /usr/bin/git exists: $(test -x /usr/bin/git && echo 'yes' || echo 'no')"
+    
+    # Try to create the repo
+    if ! git init --bare "${repo_path}"; then
+        echo "DEBUG: git init failed with exit code $?"
+        return 1
+    fi
+    
+    echo "DEBUG: Successfully created ${repo_path}"
+    ls -la "${repo_path}"
 }
 
 @test "remotes-git: remote init creates dolt structure" {

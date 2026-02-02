@@ -149,6 +149,12 @@ jobs:
         run: |
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
+      - name: Setup Git Config
+        run: |
+          git --version
+          git config --global user.name 'Dolthub Actions'
+          git config --global user.email 'actions@dolthub.com'
+          git config --global init.defaultBranch main
       - name: Test file
         run: bats --tap ${{ matrix.file }}
         working-directory: ./integration-tests/bats
