@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -30,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/gitremote"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
@@ -43,7 +45,22 @@ var remoteDocs = cli.CommandDocumentationContent{
 {{.EmphasisLeft}}add{{.EmphasisRight}}
 Adds a remote named {{.LessThan}}name{{.GreaterThan}} for the repository at {{.LessThan}}url{{.GreaterThan}}. The command dolt fetch {{.LessThan}}name{{.GreaterThan}} can then be used to create and update remote-tracking branches {{.EmphasisLeft}}<name>/<branch>{{.EmphasisRight}}.
 
-The {{.LessThan}}url{{.GreaterThan}} parameter supports url schemes of http, https, aws, gs, and file. The url prefix defaults to https. If the {{.LessThan}}url{{.GreaterThan}} parameter is in the format {{.EmphasisLeft}}<organization>/<repository>{{.EmphasisRight}} then dolt will use the {{.EmphasisLeft}}remotes.default_host{{.EmphasisRight}} from your configuration file (Which will be dolthub.com unless changed).
+The {{.LessThan}}url{{.GreaterThan}} parameter supports url schemes of http, https, aws, gs, git, and file. The url prefix defaults to https. If the {{.LessThan}}url{{.GreaterThan}} parameter is in the format {{.EmphasisLeft}}<organization>/<repository>{{.EmphasisRight}} then dolt will use the {{.EmphasisLeft}}remotes.default_host{{.EmphasisRight}} from your configuration file (Which will be dolthub.com unless changed).
+
+{{.EmphasisLeft}}Git Remotes{{.EmphasisRight}}
+You can use any git repository as a dolt remote by using the git:// scheme or an HTTP(S) URL ending in .git:
+
+    dolt remote add origin git://github.com/user/repo.git
+    dolt remote add origin https://github.com/user/repo.git
+
+Git credentials are automatically detected from:
+  - SSH agent (if running)
+  - SSH key files (~/.ssh/id_ed25519, id_rsa, etc.)
+  - Git credential helper (git credential fill)
+  - Environment variables (DOLT_REMOTE_PASSWORD)
+  - ~/.netrc file
+
+Before using a git remote, initialize it with {{.EmphasisLeft}}dolt remote init{{.EmphasisRight}}.
 
 AWS cloud remote urls should be of the form {{.EmphasisLeft}}aws://[dynamo-table:s3-bucket]/database{{.EmphasisRight}}.  You may configure your aws cloud remote using the optional parameters {{.EmphasisLeft}}aws-region{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-type{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-file{{.EmphasisRight}}.
 
@@ -58,12 +75,22 @@ GCP remote urls should be of the form gs://gcs-bucket/database and will use the 
 The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_scheme
 
 {{.EmphasisLeft}}remove{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}
-Remove the remote named {{.LessThan}}name{{.GreaterThan}}. All remote-tracking branches and configuration settings for the remote are removed.`,
+Remove the remote named {{.LessThan}}name{{.GreaterThan}}. All remote-tracking branches and configuration settings for the remote are removed.
+
+{{.EmphasisLeft}}init{{.EmphasisRight}}
+Initialize a git repository as a dolt remote. This creates the necessary directory structure on a custom git ref (default: refs/dolt/data) to store dolt data. The git repository URL must end with .git or use the git:// scheme.
+
+This command is idempotent - it's safe to run multiple times on the same repository. Dolt data is stored on a custom ref that doesn't interfere with normal git branches.
+
+Example:
+    dolt remote init https://github.com/user/repo.git
+    dolt remote init --ref refs/dolt/custom https://github.com/user/repo.git`,
 
 	Synopsis: []string{
 		"[-v | --verbose]",
 		"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
 		"remove {{.LessThan}}name{{.GreaterThan}}",
+		"init [--ref {{.LessThan}}ref-name{{.GreaterThan}}] {{.LessThan}}git-url{{.GreaterThan}}",
 	},
 }
 
@@ -71,6 +98,10 @@ const (
 	addRemoteId         = "add"
 	removeRemoteId      = "remove"
 	removeRemoteShortId = "rm"
+	initRemoteId        = "init"
+
+	// gitRefFlag is the flag for specifying a custom git ref
+	gitRefFlag = "ref"
 )
 
 type RemoteCmd struct{}
@@ -101,6 +132,9 @@ func (cmd RemoteCmd) ArgParser() *argparser.ArgParser {
 
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use")
+
+	// Git remote init flags
+	ap.SupportsString(gitRefFlag, "", "ref-name", "Custom git ref for dolt data (default: refs/dolt/data)")
 	return ap
 }
 
@@ -109,12 +143,25 @@ func (cmd RemoteCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_REMOTE
 }
 
+// RequiresRepo returns false because `dolt remote init` can be run without a dolt repository.
+// Other subcommands still require a repository context.
+func (cmd RemoteCmd) RequiresRepo() bool {
+	return false
+}
+
 // Exec executes the command
 func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, remoteDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	// Handle `dolt remote init` separately since it doesn't require a dolt repository
+	if apr.NArg() > 0 && apr.Arg(0) == initRemoteId {
+		verr := initGitRemote(ctx, apr)
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	// All other subcommands require a dolt repository
 	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -167,7 +214,7 @@ func addRemote(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, ap
 	}
 
 	if len(params) == 0 {
-		err := callSQLRemoteAdd(sqlCtx, queryist, remoteName, remoteUrl)
+		err := callSQLRemoteAdd(sqlCtx, queryist, remoteName, absRemoteUrl)
 		if err != nil {
 			return errhand.BuildDError("error: Unable to add remote.").AddCause(err).Build()
 		}
@@ -318,6 +365,85 @@ func printRemotes(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.Arg
 			cli.Println(r.Name)
 		}
 	}
+
+	return nil
+}
+
+// initGitRemote initializes a git repository as a dolt remote by creating the
+// .dolt_remote/ directory structure on a custom git ref.
+func initGitRemote(ctx context.Context, apr *argparser.ArgParseResults) errhand.VerboseError {
+	if apr.NArg() != 2 {
+		return errhand.BuildDError("usage: dolt remote init <git-url>").SetPrintUsage().Build()
+	}
+
+	gitURL := strings.TrimSpace(apr.Arg(1))
+
+	// Validate that this is a git URL
+	if !dbfactory.IsGitURL(gitURL) {
+		return errhand.BuildDError("error: '%s' is not a valid git remote URL", gitURL).
+			AddDetails("Git remote URLs must use the git:// scheme or end with .git").Build()
+	}
+
+	// Get custom ref if specified
+	ref := gitremote.DefaultRef
+	if refVal, ok := apr.GetValue(gitRefFlag); ok {
+		ref = refVal
+	}
+
+	cli.Printf("Initializing git remote at %s on ref %s...\n", gitURL, ref)
+
+	// Detect authentication
+	auth, err := gitremote.DetectAuth(gitURL)
+	if err != nil {
+		return errhand.BuildDError("error: failed to detect git credentials").AddCause(err).Build()
+	}
+
+	if auth != nil {
+		cli.Printf("Using authentication: %s\n", gitremote.AuthMethodName(auth))
+	}
+
+	// Create a temporary directory for git operations
+	localPath, err := os.MkdirTemp("", "dolt-remote-init-*")
+	if err != nil {
+		return errhand.BuildDError("error: failed to create temp directory").AddCause(err).Build()
+	}
+	defer os.RemoveAll(localPath)
+
+	// Open the repository
+	repo, err := gitremote.Open(ctx, gitremote.OpenOptions{
+		URL:       gitURL,
+		Ref:       ref,
+		Auth:      auth,
+		LocalPath: localPath,
+	})
+	if err != nil {
+		return errhand.BuildDError("error: failed to open git repository").AddCause(err).Build()
+	}
+	defer repo.Close()
+
+	// Checkout the ref to populate the worktree (if it exists)
+	if err := repo.CheckoutRef(ctx); err != nil {
+		return errhand.BuildDError("error: failed to checkout ref").AddCause(err).Build()
+	}
+
+	// Check if already initialized
+	initialized, err := repo.IsInitialized()
+	if err != nil {
+		return errhand.BuildDError("error: failed to check if remote is initialized").AddCause(err).Build()
+	}
+
+	if initialized {
+		cli.Println("Remote is already initialized for dolt.")
+		return nil
+	}
+
+	// Initialize the remote structure
+	if err := repo.InitRemote(ctx); err != nil {
+		return errhand.BuildDError("error: failed to initialize git remote").AddCause(err).Build()
+	}
+
+	cli.Println("Successfully initialized git repository as dolt remote.")
+	cli.Printf("You can now add this remote with: dolt remote add <name> %s\n", gitURL)
 
 	return nil
 }

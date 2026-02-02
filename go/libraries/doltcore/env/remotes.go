@@ -648,8 +648,22 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 		return "", "", err
 	}
 
-	if u.Scheme != "" && fs != nil {
+	// Check for explicit git:// scheme
+	if u.Scheme == dbfactory.GitScheme {
+		return dbfactory.GitScheme, urlArg, nil
+	}
+
+	// Check for .git suffix on HTTP(S) URLs - these are git remotes
+	if (u.Scheme == dbfactory.HTTPScheme || u.Scheme == dbfactory.HTTPSScheme) &&
+		strings.HasSuffix(strings.ToLower(u.Path), ".git") {
+		return dbfactory.GitScheme, urlArg, nil
+	}
+
+	if u.Scheme != "" {
 		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
+			if fs == nil {
+				return u.Scheme, urlArg, nil
+			}
 			absUrl, err := getAbsFileRemoteUrl(u, fs)
 
 			if err != nil {
@@ -661,7 +675,42 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 
 		return u.Scheme, urlArg, nil
 	} else if u.Host != "" {
+		// Check for .git suffix on naked URLs (no scheme)
+		// But first, check if this might be a local path that exists
+		if strings.HasSuffix(strings.ToLower(u.Host), ".git") {
+			// This could be a local path like "remote.git" or a remote like "github.com/user/repo.git"
+			// Check if it exists locally first
+			if fs != nil {
+				exists, _ := fs.Exists(urlArg)
+				if exists {
+					// It's a local git repository path - use git:///path format
+					absPath, err := fs.Abs(urlArg)
+					if err != nil {
+						return "", "", err
+					}
+					return dbfactory.GitScheme, dbfactory.GitScheme + "://" + absPath, nil
+				}
+			}
+			// Not a local path, treat as remote URL
+			return dbfactory.GitScheme, "https://" + urlArg, nil
+		}
+		if strings.HasSuffix(strings.ToLower(u.Path), ".git") {
+			return dbfactory.GitScheme, "https://" + urlArg, nil
+		}
 		return dbfactory.HTTPSScheme, "https://" + urlArg, nil
+	}
+
+	// Check for .git suffix on paths (local git repositories)
+	if strings.HasSuffix(strings.ToLower(u.Path), ".git") {
+		// This is a local git repository path - use git:///path format
+		if fs != nil {
+			absPath, err := fs.Abs(urlArg)
+			if err != nil {
+				return "", "", err
+			}
+			return dbfactory.GitScheme, dbfactory.GitScheme + "://" + absPath, nil
+		}
+		return dbfactory.GitScheme, dbfactory.GitScheme + "://" + urlArg, nil
 	}
 
 	hostName, err := cfg.GetString(config.RemotesApiHostKey)

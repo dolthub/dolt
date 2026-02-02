@@ -76,6 +76,7 @@ var DBFactories = map[string]DBFactory{
 	FileScheme:    FileFactory{},
 	MemScheme:     MemFactory{},
 	LocalBSScheme: LocalBSFactory{},
+	GitScheme:     GitFactory{},
 	HTTPScheme:    NewDoltRemoteFactory(true),
 	HTTPSScheme:   NewDoltRemoteFactory(false),
 }
