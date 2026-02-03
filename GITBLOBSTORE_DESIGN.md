@@ -296,6 +296,124 @@ This design is compatible with multiple backends:
 
 Given the current module does not include a Go git implementation dependency, the initial implementation can reasonably use **git plumbing commands** while still meeting the “no checkout” requirement.
 
+## Git internals and plumbing commands (implementation preview)
+
+This section previews the **git internals** and a concrete set of **plumbing commands** we expect `GitBlobstore` to use. The approach explicitly avoids a working tree checkout.
+
+### Git internals we rely on
+
+- **Objects** live in the object database (ODB) as either:
+  - **loose** objects under `.git/objects/aa/bb…`, or
+  - **packed** objects under `.git/objects/pack/*.pack`
+  `GitBlobstore` must be agnostic to storage format; it should interact through git’s plumbing which abstracts over loose/packed storage.
+- **Object types**:
+  - **blob**: raw file contents (this is the value for a blobstore key)
+  - **tree**: directory mapping `name -> (mode, type, oid)` (this is the blobstore keyspace index)
+  - **commit**: points to a root tree + parent(s) + metadata (this is the snapshot “version”)
+- **Ref**:
+  - `refs/dolt/data` points at the current commit snapshot
+  - updating this ref publishes a new blobstore state
+
+### Minimal plumbing command set
+
+Below are the commands we expect to use (exact invocation may vary).
+
+#### Resolve ref / versions
+
+- Check ref existence:
+  - `git --git-dir <gitDir> show-ref --verify --quiet refs/dolt/data`
+- Resolve current commit (version):
+  - `git --git-dir <gitDir> rev-parse --verify refs/dolt/data`
+
+#### Key existence and path lookup
+
+- Check if a path exists in a commit tree:
+  - `git --git-dir <gitDir> cat-file -e <commit>:<path>`
+- Resolve the blob oid for a path:
+  - `git --git-dir <gitDir> rev-parse <commit>:<path>`
+
+#### Blob size and blob content streaming
+
+- Object size (needed so `Get()` can return total blob size even for range requests):
+  - `git --git-dir <gitDir> cat-file -s <blobOid>`
+- Stream blob contents:
+  - `git --git-dir <gitDir> cat-file blob <blobOid>`
+
+Note: git does not have a native “range read” for blobs; for `BlobRange` we will stream and slice/limit in Go. Tail-range reads (`offset < 0`) can be optimized later with a ring buffer.
+
+#### Write a blob object
+
+- Write blob from stdin and get its oid:
+  - `git --git-dir <gitDir> hash-object -w --stdin`
+
+This is used by `Put`, `CheckAndPut`, and `Concatenate` (after concatenating sources).
+
+### Tree updates without a checkout (Approach A: temporary index)
+
+We prefer **Approach A**: use a *temporary git index file* to stage a tree update without a working directory.
+
+Core idea:
+
+- set `GIT_DIR=<gitDir>`
+- set `GIT_INDEX_FILE=<tempIndexPath>`
+- use `read-tree` + `update-index --cacheinfo` + `write-tree`
+
+Commands:
+
+- Initialize the temporary index from the current tree:
+  - if `refs/dolt/data` exists:
+    - `git read-tree <commit>^{tree}`
+  - if the ref is missing (bootstrap):
+    - `git read-tree --empty`
+- Add or replace a path with a specific blob oid:
+  - `git update-index --add --cacheinfo 100644 <blobOid> <path>`
+  - (mode may be `100644` for regular file; no executable bits)
+- Write the resulting tree:
+  - `git write-tree` → outputs `<treeOid>`
+
+Advantages:
+
+- avoids manual tree reconstruction for nested paths
+- avoids checkout / working tree entirely
+- supports deep key paths naturally
+
+### Commit creation and atomic ref update (CAS)
+
+- Create a commit object from the new tree:
+  - `git commit-tree <treeOid> -p <parentCommitOid> -m <message>`
+  - (author/committer identity can be supplied via env; we can use a fixed identity initially)
+- Atomic compare-and-swap ref update:
+  - `git update-ref -m "<msg>" refs/dolt/data <newCommitOid> <oldCommitOid>`
+
+This `update-ref` form is the primary CAS primitive; it will fail if the ref no longer points to `<oldCommitOid>`.
+
+Bootstrap note:
+
+- for “create ref only if absent”, git accepts an “old” value of all-zeros (`000…000`) which enforces that the ref does not exist.
+
+### Command-to-method mapping (quick reference)
+
+- `Exists(key)`:
+  - `rev-parse refs/dolt/data` (if missing → false)
+  - `cat-file -e <commit>:<key>`
+- `Get(key, br)`:
+  - `rev-parse refs/dolt/data` → version
+  - `rev-parse <commit>:<key>` → blob oid
+  - `cat-file -s <blobOid>` → total size
+  - `cat-file blob <blobOid>` → stream; slice/limit in Go per `BlobRange`
+- `Put(key, reader)`:
+  - `hash-object -w --stdin` → blob oid
+  - temp index: `read-tree` → `update-index --cacheinfo` → `write-tree` → tree oid
+  - `commit-tree` → new commit oid
+  - `update-ref refs/dolt/data <new>` (non-CAS)
+- `CheckAndPut(expectedVersion, key, reader)`:
+  - same as `Put`, but final step is:
+  - `update-ref refs/dolt/data <new> <expectedVersion>` (CAS)
+- `Concatenate(key, sources)`:
+  - for each source: resolve blob oid and stream `cat-file blob`
+  - pipe concatenation into `hash-object -w --stdin`
+  - then same tree/commit/ref update flow as `Put` (CAS preferred)
+
 ## Testing plan (expected to pass existing suite)
 
 `GitBlobstore` should be able to join the existing blobstore tests in `go/store/blobstore/blobstore_test.go`:
