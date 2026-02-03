@@ -220,6 +220,55 @@ func TestGitRepo_CommitAndPush(t *testing.T) {
 	assert.Equal(t, hash, currentHash)
 }
 
+func TestGitRepo_CommitUsesConfiguredIdentity(t *testing.T) {
+	bareDir := createBareRepo(t)
+	ctx := context.Background()
+
+	workDir := filepath.Join(t.TempDir(), "work")
+	gr, err := Open(ctx, OpenOptions{
+		URL:       bareDir,
+		LocalPath: workDir,
+	})
+	require.NoError(t, err)
+	defer gr.Close()
+
+	// Configure identity in this repo
+	runGit(t, workDir, "config", "user.name", "Test User")
+	runGit(t, workDir, "config", "user.email", "test@example.com")
+
+	require.NoError(t, gr.WriteFile("data.txt", []byte("some data")))
+	hash, err := gr.Commit(ctx, "Add data file")
+	require.NoError(t, err)
+
+	ident := strings.TrimSpace(runGit(t, workDir, "show", "-s", "--format=%an <%ae>", hash))
+	assert.Equal(t, "Test User <test@example.com>", ident)
+}
+
+func TestGitRepo_CommitFallsBackToDefaultIdentityWhenUnset(t *testing.T) {
+	// Ensure we don't accidentally read user/global config from the test environment.
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+	bareDir := createBareRepo(t)
+	ctx := context.Background()
+
+	workDir := filepath.Join(t.TempDir(), "work")
+	gr, err := Open(ctx, OpenOptions{
+		URL:       bareDir,
+		LocalPath: workDir,
+	})
+	require.NoError(t, err)
+	defer gr.Close()
+
+	// Do not set user.name / user.email
+	require.NoError(t, gr.WriteFile("data.txt", []byte("some data")))
+	hash, err := gr.Commit(ctx, "Add data file")
+	require.NoError(t, err)
+
+	ident := strings.TrimSpace(runGit(t, workDir, "show", "-s", "--format=%an <%ae>", hash))
+	assert.Equal(t, "Dolt <dolt@dolthub.com>", ident)
+}
+
 func TestGitRepo_CommitNoChanges(t *testing.T) {
 	bareDir := createBareRepo(t)
 	ctx := context.Background()

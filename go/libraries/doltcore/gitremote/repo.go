@@ -353,6 +353,42 @@ func (gr *GitRepo) ListFiles(dir string) ([]string, error) {
 	return files, nil
 }
 
+// gitConfigGet returns the effective git config value for the given key.
+// It consults local, global, and system config (per git's precedence rules).
+//
+// If the key is unset, it returns ok=false with a nil error.
+func (gr *GitRepo) gitConfigGet(ctx context.Context, key string) (val string, ok bool, err error) {
+	if err := validateNoCtl("git config key", key); err != nil {
+		return "", false, err
+	}
+
+	// Use a direct exec here so we can interpret git's exit status for "unset" cleanly.
+	args := []string{"config", "--get", key}
+	if gr.localPath != "" {
+		args = append([]string{"-C", gr.localPath}, args...)
+	}
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, cmdErr := cmd.CombinedOutput()
+	outStr := strings.TrimSpace(string(out))
+	if cmdErr != nil {
+		var exitErr *exec.ExitError
+		// `git config --get` exits 1 when the key is missing.
+		if errors.As(cmdErr, &exitErr) && exitErr.ExitCode() == 1 && outStr == "" {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to read git config %q: %w: %s", key, cmdErr, outStr)
+	}
+	if outStr == "" {
+		return "", false, nil
+	}
+	// Guard against control characters in values we might pass back to git via `-c key=value`.
+	if err := validateNoCtl("git config value", outStr); err != nil {
+		return "", false, nil
+	}
+	return outStr, true, nil
+}
+
 // Commit creates a new commit with all staged changes.
 // Returns the commit hash.
 func (gr *GitRepo) Commit(ctx context.Context, message string) (string, error) {
@@ -414,15 +450,29 @@ func (gr *GitRepo) Commit(ctx context.Context, message string) (string, error) {
 	}
 
 	// Create commit
-	commitArgs := []string{
-		"-c", "user.name=Dolt",
-		"-c", "user.email=dolt@dolthub.com",
-		"-c", "commit.gpgsign=false",
+	// Prefer the user's configured git identity, but fall back to stable defaults.
+	_, hasName, err := gr.gitConfigGet(ctx, "user.name")
+	if err != nil {
+		return "", err
+	}
+	_, hasEmail, err := gr.gitConfigGet(ctx, "user.email")
+	if err != nil {
+		return "", err
+	}
+
+	commitArgs := []string{"-c", "commit.gpgsign=false"}
+	if !hasName {
+		commitArgs = append(commitArgs, "-c", "user.name=Dolt")
+	}
+	if !hasEmail {
+		commitArgs = append(commitArgs, "-c", "user.email=dolt@dolthub.com")
+	}
+	commitArgs = append(commitArgs,
 		"commit",
 		"-m", message,
 		"--no-gpg-sign",
 		"--date", time.Now().Format(time.RFC3339),
-	}
+	)
 	if _, err := gr.runGit(ctx, gr.localPath, commitArgs...); err != nil {
 		return "", fmt.Errorf("failed to commit: %w", err)
 	}
