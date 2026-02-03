@@ -3136,6 +3136,48 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Merge foreign keys, 2 column key, dangling child violation",
+		SetUpScript: []string{
+			`CREATE TABLE parent (
+            a VARCHAR(256),
+            b varchar(256),
+            c VARCHAR(256),
+            PRIMARY KEY (b, a)
+        );`,
+			`CREATE INDEX idx_parent_on_a_b ON parent (a, b);`,
+			`CREATE TABLE child (
+            d VARCHAR(256),
+            e VARCHAR(256),
+            f varchar(256),
+            PRIMARY KEY (e, d),
+            CONSTRAINT child_fk FOREIGN KEY (d, f) REFERENCES parent (a, b)
+        );`,
+			`INSERT INTO parent VALUES ('abc','def', 'xyz');`,
+			`INSERT INTO child VALUES ('abc','123','def');`,
+			`CALL DOLT_COMMIT('-Am', '1');`,
+			`CALL DOLT_BRANCH('other_branch');`,
+			`INSERT INTO child VALUES ('abc','www','def');`,
+			`CALL DOLT_COMMIT('-Am', '2');`,
+			`CREATE TABLE table3 (table3_col1 VARCHAR(256));`,
+			`CALL DOLT_COMMIT('-Am', '3');`,
+			`CALL DOLT_CHECKOUT('other_branch');`,
+			`delete from child where e='123';`,
+			`delete from parent where a='abc';`,
+			`CALL DOLT_COMMIT('-Am', '4');`,
+			`set dolt_force_transaction_commit=1;`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('main')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select violation_type, d, e, f from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", "abc", "www", "def"}},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -3304,7 +3346,7 @@ var DoltConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT base_pk, base_col1, our_pk, our_col1, our_diff_type, their_pk, their_col1, their_diff_type" +
-					" from dolt_conflicts_t ORDER BY COALESCE(base_pk, our_pk, their_pk) ASC;",
+						" from dolt_conflicts_t ORDER BY COALESCE(base_pk, our_pk, their_pk) ASC;",
 				Expected: []sql.Row{
 					{1, 1, 1, 2, "modified", 1, 3, "modified"},
 					{2, 2, nil, nil, "removed", 2, 0, "modified"},
@@ -4842,10 +4884,10 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				Query: "show create table t",
 				Expected: []sql.Row{{"t",
 					"CREATE TABLE `t` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `col1` int,\n" +
-						"  PRIMARY KEY (`pk`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+							"  `pk` int NOT NULL,\n" +
+							"  `col1` int,\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},

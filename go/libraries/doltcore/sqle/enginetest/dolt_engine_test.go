@@ -84,13 +84,13 @@ func TestSingleQuery(t *testing.T) {
 		Expected: []sql.Row{
 			{"mytable",
 				"CREATE TABLE `mytable` (\n" +
-					"  `i` bigint NOT NULL,\n" +
-					"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
-					"  PRIMARY KEY (`i`),\n" +
-					"  KEY `idx_si` (`s`,`i`),\n" +
-					"  KEY `mytable_i_s` (`i`,`s`),\n" +
-					"  UNIQUE KEY `mytable_s` (`s`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+						"  `i` bigint NOT NULL,\n" +
+						"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
+						"  PRIMARY KEY (`i`),\n" +
+						"  KEY `idx_si` (`s`,`i`),\n" +
+						"  KEY `mytable_i_s` (`i`,`s`),\n" +
+						"  UNIQUE KEY `mytable_s` (`s`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 		},
 	}
 
@@ -113,35 +113,47 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "foreign key violation, parent row deleted",
+			Name: "Merge foreign keys, 2 column key, dangling child violation",
 			SetUpScript: []string{
-				"create table parent (pk int primary key);",
-				"create table child (fk int, foreign key (fk) references parent(pk));",
-				"insert into parent values (1), (2);",
-				"insert into child values (1), (2);",
-				"call dolt_commit('-Am', 'setup');",
-				"call dolt_branch('other');",
-				"delete from child where fk = 1;",
-				"delete from parent where pk = 1;",
-				"call dolt_commit('-am', 'delete parent and child rows');",
-				"call dolt_checkout('other');",
-				"insert into child values (1);",
-				"call dolt_commit('-am', 'insert child row');",
-				"set dolt_force_transaction_commit = on;",
+				`CREATE TABLE parent (
+            a VARCHAR(256),
+            b varchar(256),
+            c VARCHAR(256),
+            PRIMARY KEY (b, a)
+        );`,
+				`CREATE INDEX idx_parent_on_a_b ON parent (a, b);`,
+				`CREATE TABLE child (
+            d VARCHAR(256),
+            e VARCHAR(256),
+            f varchar(256),
+            PRIMARY KEY (e, d),
+            CONSTRAINT child_fk FOREIGN KEY (d, f) REFERENCES parent (a, b)
+        );`,
+				`INSERT INTO parent VALUES ('abc','def', 'xyz');`,
+				`INSERT INTO child VALUES ('abc','123','def');`,
+				`CALL DOLT_COMMIT('-Am', '1');`,
+				`CALL DOLT_BRANCH('other_branch');`,
+				`INSERT INTO child VALUES ('abc','www','def');`,
+				`CALL DOLT_COMMIT('-Am', '2');`,
+				`CREATE TABLE table3 (table3_col1 VARCHAR(256));`,
+				`CALL DOLT_COMMIT('-Am', '3');`,
+				`CALL DOLT_CHECKOUT('other_branch');`,
+				`delete from child where e='123';`,
+				`delete from parent where a='abc';`,
+				`CALL DOLT_COMMIT('-Am', '4');`,
+				`set dolt_force_transaction_commit=1;`,
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:            "call dolt_merge('main')",
-					SkipResultsCheck: true,
+					Query:    "CALL dolt_merge('main')",
+					Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 				},
 				{
-					Query: "select violation_type, fk from dolt_constraint_violations_child",
-					Expected: []sql.Row{
-						{"foreign key", 1},
-					},
+					Query:    "select violation_type, d, e, f from dolt_constraint_violations_child;",
+					Expected: []sql.Row{{"foreign key", "abc", "www", "def"}},
 				},
 			},
 		},
