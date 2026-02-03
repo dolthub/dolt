@@ -22,3 +22,6 @@ CLAUDE.md
 
 *~
 .dir-locals.el
+
+# bd (beads) local issue DB / artifacts
+.beads/
