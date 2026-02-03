@@ -102,4 +102,3 @@ func (UnimplementedWriteAPI) UpdateRefCAS(ctx context.Context, ref string, newOI
 func (UnimplementedWriteAPI) UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error {
 	return fmt.Errorf("%w: UpdateRef", ErrUnimplemented)
 }
-

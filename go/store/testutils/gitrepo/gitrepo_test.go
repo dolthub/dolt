@@ -41,4 +41,3 @@ func TestInitBareAndSetRefToTree(t *testing.T) {
 		t.Fatalf("cat-file -e failed: %v\n%s", err, string(out))
 	}
 }
-

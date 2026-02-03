@@ -65,4 +65,3 @@ func IsPathNotFound(err error) bool {
 	_, ok := err.(PathNotFoundError)
 	return ok
 }
-

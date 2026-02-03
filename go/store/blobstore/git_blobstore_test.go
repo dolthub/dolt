@@ -185,4 +185,3 @@ func TestGitBlobstore_InvalidKeysError(t *testing.T) {
 		require.Error(t, err, "expected error for key %q", k)
 	}
 }
-

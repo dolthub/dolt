@@ -94,4 +94,3 @@ func TestGitBlobstoreReadSmoke_ManifestAndTableAccessPatterns(t *testing.T) {
 	require.Equal(t, 100, n)
 	require.Equal(t, table[start:], out2[:n])
 }
-

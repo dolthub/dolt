@@ -252,4 +252,3 @@ func formatOutput(out []byte) string {
 	trimmed := out[len(out)-maxCapturedOutputBytes:]
 	return fmt.Sprintf("... (truncated; showing last %d bytes)\n%s", maxCapturedOutputBytes, strings.TrimRight(string(trimmed), "\n"))
 }
-

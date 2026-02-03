@@ -207,4 +207,3 @@ func normalizeGitTreePath(key string) (string, error) {
 	}
 	return key, nil
 }
-

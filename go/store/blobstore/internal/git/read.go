@@ -173,4 +173,3 @@ func NormalizeGitPlumbingError(err error) error {
 	}
 	return err
 }
-
