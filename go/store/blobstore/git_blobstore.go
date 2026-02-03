@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
 )
@@ -52,6 +53,10 @@ func (gbs *GitBlobstore) Path() string {
 }
 
 func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
+	key, err := normalizeGitTreePath(key)
+	if err != nil {
+		return false, err
+	}
 	commit, ok, err := git.TryResolveRefCommit(ctx, gbs.runner, gbs.ref)
 	if err != nil {
 		return false, err
@@ -70,6 +75,10 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
+	key, err := normalizeGitTreePath(key)
+	if err != nil {
+		return nil, 0, "", err
+	}
 	commit, ok, err := git.TryResolveRefCommit(ctx, gbs.runner, gbs.ref)
 	if err != nil {
 		return nil, 0, "", err
@@ -139,14 +148,63 @@ func (l *limitReadCloser) Read(p []byte) (int, error) { return l.r.Read(p) }
 func (l *limitReadCloser) Close() error               { return l.c.Close() }
 
 func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
+	if _, err := normalizeGitTreePath(key); err != nil {
+		return "", err
+	}
 	return "", fmt.Errorf("%w: GitBlobstore.Put", git.ErrUnimplemented)
 }
 
 func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+	if _, err := normalizeGitTreePath(key); err != nil {
+		return "", err
+	}
 	return "", fmt.Errorf("%w: GitBlobstore.CheckAndPut", git.ErrUnimplemented)
 }
 
 func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
+	if _, err := normalizeGitTreePath(key); err != nil {
+		return "", err
+	}
+	for _, src := range sources {
+		if _, err := normalizeGitTreePath(src); err != nil {
+			return "", err
+		}
+	}
 	return "", fmt.Errorf("%w: GitBlobstore.Concatenate", git.ErrUnimplemented)
+}
+
+// normalizeGitTreePath normalizes and validates a blobstore key for use as a git tree path.
+//
+// Rules:
+// - convert Windows-style separators: "\" -> "/"
+// - disallow absolute paths (leading "/")
+// - disallow empty segments and trailing "/"
+// - disallow "." and ".." segments
+// - disallow NUL bytes
+func normalizeGitTreePath(key string) (string, error) {
+	if strings.ContainsRune(key, '\x00') {
+		return "", fmt.Errorf("invalid git blobstore key (NUL byte): %q", key)
+	}
+	key = strings.ReplaceAll(key, "\\", "/")
+	if key == "" {
+		return "", fmt.Errorf("invalid git blobstore key (empty)")
+	}
+	if strings.HasPrefix(key, "/") {
+		return "", fmt.Errorf("invalid git blobstore key (absolute path): %q", key)
+	}
+
+	parts := strings.Split(key, "/")
+	for _, p := range parts {
+		if p == "" {
+			return "", fmt.Errorf("invalid git blobstore key (empty path segment): %q", key)
+		}
+		if p == "." || p == ".." {
+			return "", fmt.Errorf("invalid git blobstore key (path traversal): %q", key)
+		}
+		if strings.ContainsRune(p, '\x00') {
+			return "", fmt.Errorf("invalid git blobstore key (NUL byte): %q", key)
+		}
+	}
+	return key, nil
 }
 
