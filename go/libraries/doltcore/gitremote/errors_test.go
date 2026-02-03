@@ -141,14 +141,24 @@ func TestClassifyError(t *testing.T) {
 			expectedError: ErrAuthFailed,
 		},
 		{
-			name:          "permission denied",
+			name:          "permission denied (publickey)",
 			inputErr:      errors.New("Permission denied (publickey)"),
 			expectedError: ErrAuthFailed,
+		},
+		{
+			name:          "access denied",
+			inputErr:      errors.New("access denied"),
+			expectedError: ErrPermissionDenied,
 		},
 		{
 			name:          "401 error",
 			inputErr:      errors.New("server returned 401"),
 			expectedError: ErrAuthFailed,
+		},
+		{
+			name:          "403 error",
+			inputErr:      errors.New("server returned 403"),
+			expectedError: ErrPermissionDenied,
 		},
 		{
 			name:          "repository not found",
@@ -217,6 +227,7 @@ func TestErrorHelpers(t *testing.T) {
 	t.Run("IsAuthError", func(t *testing.T) {
 		assert.True(t, IsAuthError(ErrAuthFailed))
 		assert.True(t, IsAuthError(classifyError(errors.New("authentication required"))))
+		assert.True(t, IsAuthError(classifyError(errors.New("access denied"))))
 		assert.False(t, IsAuthError(ErrPushRejected))
 	})
 

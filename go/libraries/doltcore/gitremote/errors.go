@@ -160,12 +160,12 @@ func classifyError(err error) error {
 	errStr := strings.ToLower(err.Error())
 
 	// Authentication errors
+	// Note: "permission denied" can be auth (e.g. SSH publickey) or authz (repo access).
+	// We treat explicit SSH failures as auth, and everything else as permission denied below.
 	if strings.Contains(errStr, "authentication") ||
-		strings.Contains(errStr, "permission denied") ||
 		strings.Contains(errStr, "publickey") ||
 		strings.Contains(errStr, "invalid credentials") ||
-		strings.Contains(errStr, "401") ||
-		strings.Contains(errStr, "403") {
+		strings.Contains(errStr, "401") {
 		return fmt.Errorf("%w: %v", ErrAuthFailed, err)
 	}
 
@@ -199,7 +199,9 @@ func classifyError(err error) error {
 	}
 
 	// Permission denied
-	if strings.Contains(errStr, "access denied") {
+	if strings.Contains(errStr, "permission denied") ||
+		strings.Contains(errStr, "access denied") ||
+		strings.Contains(errStr, "403") {
 		return fmt.Errorf("%w: %v", ErrPermissionDenied, err)
 	}
 
@@ -208,7 +210,8 @@ func classifyError(err error) error {
 
 // IsAuthError returns true if the error is an authentication error.
 func IsAuthError(err error) bool {
-	return errors.Is(err, ErrAuthFailed)
+	// Treat both authentication failures and permission failures as "auth-ish" errors for callers.
+	return errors.Is(err, ErrAuthFailed) || errors.Is(err, ErrPermissionDenied)
 }
 
 // IsPushRejectedError returns true if the error is a push rejection.
