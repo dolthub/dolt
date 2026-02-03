@@ -60,7 +60,8 @@ func ResolveRefCommit(ctx context.Context, r *Runner, ref string) (OID, error) {
 }
 
 // ResolvePathBlob resolves |path| within |commit| to a blob OID.
-// It returns PathNotFoundError if the path does not exist.
+// It returns PathNotFoundError if the path does not exist, and NotBlobError if the
+// path resolves to a non-blob object (e.g. a tree).
 func ResolvePathBlob(ctx context.Context, r *Runner, commit OID, path string) (OID, error) {
 	spec := commit.String() + ":" + path
 	out, err := r.Run(ctx, RunOptions{}, "rev-parse", "--verify", spec)

@@ -37,7 +37,9 @@ type Repo struct {
 	GitDir string
 }
 
-// InitBare initializes a new bare git repository at |dir| (which should not exist yet).
+// InitBare initializes a new bare git repository at |dir|.
+// For portability across git versions, callers should generally pass a path that
+// does not exist yet.
 func InitBare(ctx context.Context, dir string) (*Repo, error) {
 	if err := runGit(ctx, "", "", "", "init", "--bare", dir); err != nil {
 		return nil, err
