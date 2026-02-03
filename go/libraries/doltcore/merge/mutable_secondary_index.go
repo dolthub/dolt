@@ -85,7 +85,7 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ns tree.NodeStore, our
 			idxKeyDesc = idxKeyDesc.PrefixDesc(idxKeyDesc.Count() - 1)
 		}
 
-		if !idxKeyDesc.Equals(index.Schema().GetKeyDescriptor()) {
+		if !idxKeyDesc.Equals(index.Schema().GetKeyDescriptor(ns)) {
 			continue
 		}
 
