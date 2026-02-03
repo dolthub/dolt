@@ -14,7 +14,14 @@
 
 package git
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrUnimplemented is returned by stubbed write-path APIs. It is intentionally
+// exported so higher layers (e.g. GitBlobstore) can wrap or match it.
+var ErrUnimplemented = errors.New("unimplemented")
 
 // RefNotFoundError indicates that a ref (e.g. refs/dolt/data) could not be resolved.
 type RefNotFoundError struct {
