@@ -23,6 +23,8 @@ package tree
 
 import (
 	"context"
+	"golang.org/x/sync/errgroup"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/hash"
 
@@ -347,12 +349,24 @@ func (tc *chunker[S]) append(ctx context.Context, key, value Item, subtree uint6
 		}
 	}
 
-	tc.builder.addItems(key, value, subtree)
-
-	err := tc.splitter.Append(key, value)
+	eg := errgroup.Group{}
+	eg.Go(func() error {
+		tc.builder.addItems(key, value, subtree)
+		return nil
+	})
+	eg.Go(func() error {
+		return tc.splitter.Append(key, value)
+	})
+	err := eg.Wait()
 	if err != nil {
 		return false, err
 	}
+
+	//tc.builder.addItems(key, value, subtree)
+	//err := tc.splitter.Append(key, value)
+	//if err != nil {
+	//	return false, err
+	//}
 
 	// recompute with updated |tc.keys|
 	degenerate = !tc.isLeaf() && tc.builder.count() == 1
