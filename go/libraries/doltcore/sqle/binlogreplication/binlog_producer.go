@@ -549,7 +549,11 @@ func (b *binlogProducer) newXIDEvent() mysql.BinlogEvent {
 // newTableMapEvent returns a new TableMap BinlogEvent for the specified |tableId| and |tableMap|, and updates the
 // stream's log position.
 func (b *binlogProducer) newTableMapEvent(tableId uint64, tableMap *mysql.TableMap) mysql.BinlogEvent {
-	return mysql.NewTableMapEvent(*b.binlogFormat, b.binlogEventMeta, tableId, tableMap)
+	// TODO: The new error introduced in this function signature is only used when optional table metadata
+	//       is specified (e.g. column names). Dolt doesn't support populating this yet, so there's no
+	//       need to look at the return error yet. That will be added in an upcoming PR.
+	event, _ := mysql.NewTableMapEvent(*b.binlogFormat, b.binlogEventMeta, tableId, tableMap)
+	return event
 }
 
 // newWriteRowsEvent returns a new WriteRows BinlogEvent for the specified |tableId| and |rows|, and updates the
