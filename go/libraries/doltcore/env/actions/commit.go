@@ -101,9 +101,16 @@ func GetCommitStaged(
 			}
 		}
 
-		roots.Staged, err = doltdb.ValidateForeignKeysOnSchemas(ctx, tableResolver, roots.Staged)
+		fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 		if err != nil {
 			return nil, err
+		}
+
+		if fkChecks.(int8) == 1 {
+			roots.Staged, err = doltdb.ValidateForeignKeysOnSchemas(ctx, tableResolver, roots.Staged)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
