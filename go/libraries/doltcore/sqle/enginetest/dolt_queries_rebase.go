@@ -454,6 +454,31 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "serial cherry pick with uniqueness constraint",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY,val INT UNIQUE );",
+			"CALL dolt_commit('-Am', 'creating table t');",
+			"insert into t values (1,1),(2,2);",
+			"CALL dolt_commit('-am', 'inserting rows 1 and 2');",
+			// Update both values independently to avoid uniqueness constraint.
+			"update t set val = 3 where val = 2;",
+			"update t set val = 2 where val = 1;",
+			"CALL dolt_commit('-am', 'bumping val1');",
+			"CALL dolt_checkout('-b', 'branch1', 'HEAD~2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_cherry_pick('main~1');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "CALL dolt_cherry_pick('main');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+		},
+	},
+
+	{
 		Name: "dolt_rebase errors: unresolved conflicts",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(100));",
