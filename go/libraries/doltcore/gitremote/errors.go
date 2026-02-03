@@ -171,7 +171,7 @@ func classifyError(err error) error {
 
 	// Repository not found
 	if strings.Contains(errStr, "repository not found") ||
-		strings.Contains(errStr, "not found") && strings.Contains(errStr, "repo") ||
+		strings.Contains(errStr, "repo not found") ||
 		strings.Contains(errStr, "404") {
 		return fmt.Errorf("%w: %v", ErrRepoNotFound, err)
 	}
@@ -199,8 +199,7 @@ func classifyError(err error) error {
 	}
 
 	// Permission denied
-	if strings.Contains(errStr, "permission denied") ||
-		strings.Contains(errStr, "access denied") {
+	if strings.Contains(errStr, "access denied") {
 		return fmt.Errorf("%w: %v", ErrPermissionDenied, err)
 	}
 

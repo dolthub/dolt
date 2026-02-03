@@ -52,6 +52,58 @@ type GitRepo struct {
 	mu          sync.RWMutex
 }
 
+var (
+	// ErrDirtyWorktree is returned when an operation would need to clobber existing
+	// uncommitted changes in the underlying git worktree in order to proceed.
+	ErrDirtyWorktree = errors.New("git worktree has uncommitted changes; refusing forced checkout")
+
+	// ErrInvalidPath is returned when a requested file path escapes the repo root.
+	ErrInvalidPath = errors.New("invalid path")
+)
+
+func validateNoCtl(name, s string) error {
+	if strings.ContainsAny(s, "\x00\r\n") {
+		return fmt.Errorf("%s contains invalid control characters", name)
+	}
+	return nil
+}
+
+func validateRefName(ctx context.Context, ref string) error {
+	if err := validateNoCtl("ref", ref); err != nil {
+		return err
+	}
+	// `git check-ref-format` is the authoritative validator.
+	cmd := exec.CommandContext(ctx, "git", "check-ref-format", ref)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("invalid ref %q: %s", ref, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func safeRepoPath(root, p string) (string, error) {
+	if err := validateNoCtl("path", p); err != nil {
+		return "", err
+	}
+	clean := filepath.Clean(filepath.FromSlash(p))
+	if clean == "." {
+		return "", fmt.Errorf("%w: empty path", ErrInvalidPath)
+	}
+	if filepath.IsAbs(clean) {
+		return "", fmt.Errorf("%w: absolute path %q", ErrInvalidPath, p)
+	}
+	abs := filepath.Join(root, clean)
+	rel, err := filepath.Rel(root, abs)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%w: path traversal %q", ErrInvalidPath, p)
+	}
+	return abs, nil
+}
+
 // PushOptions controls how GitRepo updates the remote ref.
 type PushOptions struct {
 	// ForceWithLease performs a compare-and-swap update of the remote ref. If the remote ref has moved since
@@ -87,6 +139,12 @@ func Open(ctx context.Context, opts OpenOptions) (*GitRepo, error) {
 	ref := opts.Ref
 	if ref == "" {
 		ref = DefaultRef
+	}
+	if err := validateRefName(ctx, ref); err != nil {
+		return nil, err
+	}
+	if err := validateNoCtl("url", opts.URL); err != nil {
+		return nil, err
 	}
 
 	localPath := opts.LocalPath
@@ -191,7 +249,11 @@ func (gr *GitRepo) ReadFile(path string) ([]byte, error) {
 	gr.mu.RLock()
 	defer gr.mu.RUnlock()
 
-	return os.ReadFile(filepath.Join(gr.localPath, filepath.FromSlash(path)))
+	abs, err := safeRepoPath(gr.localPath, path)
+	if err != nil {
+		return nil, err
+	}
+	return os.ReadFile(abs)
 }
 
 // WriteFile writes a file to the worktree.
@@ -200,12 +262,13 @@ func (gr *GitRepo) WriteFile(path string, data []byte) error {
 	defer gr.mu.Unlock()
 
 	// Ensure parent directory exists
-	abs := filepath.Join(gr.localPath, filepath.FromSlash(path))
+	abs, err := safeRepoPath(gr.localPath, path)
+	if err != nil {
+		return err
+	}
 	dir := filepath.Dir(abs)
-	if dir != "." && dir != "/" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
-		}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 	if err := os.WriteFile(abs, data, 0644); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", path, err)
@@ -218,7 +281,11 @@ func (gr *GitRepo) DeleteFile(path string) error {
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
-	return os.Remove(filepath.Join(gr.localPath, filepath.FromSlash(path)))
+	abs, err := safeRepoPath(gr.localPath, path)
+	if err != nil {
+		return err
+	}
+	return os.Remove(abs)
 }
 
 // FileExists checks if a file exists in the worktree.
@@ -226,7 +293,12 @@ func (gr *GitRepo) FileExists(path string) (bool, error) {
 	gr.mu.RLock()
 	defer gr.mu.RUnlock()
 
-	_, err := os.Stat(filepath.Join(gr.localPath, filepath.FromSlash(path)))
+	abs, err := safeRepoPath(gr.localPath, path)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = os.Stat(abs)
 	if err == nil {
 		return true, nil
 	}
@@ -241,7 +313,11 @@ func (gr *GitRepo) ListFiles(dir string) ([]string, error) {
 	gr.mu.RLock()
 	defer gr.mu.RUnlock()
 
-	entries, err := os.ReadDir(filepath.Join(gr.localPath, filepath.FromSlash(dir)))
+	abs, err := safeRepoPath(gr.localPath, dir)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(abs)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -262,22 +338,44 @@ func (gr *GitRepo) Commit(ctx context.Context, message string) (string, error) {
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
+	if err := validateNoCtl("commit message", message); err != nil {
+		return "", err
+	}
+
 	// Ensure HEAD/worktree is positioned correctly.
-	// If the custom ref exists, base on it. Otherwise, start a new orphan branch.
+	//
+	// IMPORTANT: never discard user modifications. We only perform a forced checkout
+	// if the worktree is clean AND HEAD is not already at the ref tip.
 	if gr.hasRef(ctx, gr.ref) {
-		hash, err := gr.revParse(ctx, gr.ref)
+		refHash, err := gr.revParse(ctx, gr.ref)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve ref: %w", err)
 		}
-		if _, err := gr.runGit(ctx, gr.localPath, "checkout", "--detach", "--force", hash); err != nil {
-			return "", fmt.Errorf("failed to checkout ref: %w", err)
+
+		headHash, err := gr.revParse(ctx, "HEAD")
+		if err == nil && headHash != "" && headHash != refHash {
+			statusOut, stErr := gr.runGit(ctx, gr.localPath, "status", "--porcelain")
+			if stErr != nil {
+				return "", fmt.Errorf("failed to get status before checkout: %w", stErr)
+			}
+			if strings.TrimSpace(statusOut) != "" {
+				return "", ErrDirtyWorktree
+			}
+			if _, err := gr.runGit(ctx, gr.localPath, "checkout", "--detach", "--force", refHash); err != nil {
+				return "", fmt.Errorf("failed to checkout ref: %w", err)
+			}
 		}
 	} else {
 		// Create an orphan branch for the first commit on this custom ref.
 		// We never want to base Dolt remote data on the user's normal branches.
-		if _, err := gr.runGit(ctx, gr.localPath, "checkout", "--orphan", "dolt-temp"); err != nil {
+		tmpBranch := fmt.Sprintf("dolt-temp-%d-%d", os.Getpid(), time.Now().UnixNano())
+		if _, err := gr.runGit(ctx, gr.localPath, "checkout", "--orphan", tmpBranch); err != nil {
 			return "", fmt.Errorf("failed to create orphan branch: %w", err)
 		}
+		defer func() {
+			_, _ = gr.runGit(ctx, gr.localPath, "checkout", "--detach", "--force", "HEAD")
+			_, _ = gr.runGit(ctx, gr.localPath, "branch", "-D", tmpBranch)
+		}()
 	}
 
 	// Stage all changes
@@ -318,10 +416,6 @@ func (gr *GitRepo) Commit(ctx context.Context, message string) (string, error) {
 		return "", fmt.Errorf("failed to update ref: %w", err)
 	}
 
-	// If we created the orphan branch, detach and delete it (the commit is reachable via the custom ref).
-	_, _ = gr.runGit(ctx, gr.localPath, "checkout", "--detach", "--force", "HEAD")
-	_, _ = gr.runGit(ctx, gr.localPath, "branch", "-D", "dolt-temp")
-
 	return hash, nil
 }
 
@@ -344,6 +438,13 @@ func (gr *GitRepo) PushWithOptions(ctx context.Context, opts PushOptions) error 
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
+	if err := validateRefName(ctx, gr.ref); err != nil {
+		return err
+	}
+	if err := validateNoCtl("expected remote hash", opts.ExpectedRemoteHash); err != nil {
+		return err
+	}
+
 	refSpec := fmt.Sprintf("%s:%s", gr.ref, gr.ref)
 
 	args := []string{"push"}
@@ -364,11 +465,10 @@ func (gr *GitRepo) PushWithOptions(ctx context.Context, opts PushOptions) error 
 }
 
 // CurrentCommit returns the hash of the current commit on the custom ref.
-func (gr *GitRepo) CurrentCommit() (string, error) {
+func (gr *GitRepo) CurrentCommit(ctx context.Context) (string, error) {
 	gr.mu.RLock()
 	defer gr.mu.RUnlock()
 
-	ctx := context.Background()
 	if !gr.hasRef(ctx, gr.ref) {
 		return "", nil
 	}
@@ -399,10 +499,14 @@ func (gr *GitRepo) Close() error {
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
+	if gr.localPath == "" {
+		return nil
+	}
 	if gr.ownsWorkdir && gr.localPath != "" {
 		_ = os.RemoveAll(gr.localPath)
 	}
 	gr.localPath = ""
+	gr.ownsWorkdir = false
 	return nil
 }
 

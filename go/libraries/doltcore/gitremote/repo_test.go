@@ -47,7 +47,7 @@ func runGit(t *testing.T, dir string, args ...string) string {
 	cmd := exec.Command(gitPath, fullArgs...)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "git %s failed: %s", strings.Join(args, " "), string(out))
+	require.NoError(t, err, "git %s failed (dir=%q, PATH=%q): %s", strings.Join(args, " "), dir, os.Getenv("PATH"), string(out))
 	return string(out)
 }
 
@@ -215,7 +215,7 @@ func TestGitRepo_CommitAndPush(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the commit is on the custom ref
-	currentHash, err := gr.CurrentCommit()
+	currentHash, err := gr.CurrentCommit(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, hash, currentHash)
 }
@@ -354,7 +354,7 @@ func TestGitRepo_FetchUpdates(t *testing.T) {
 	assert.Equal(t, []byte("from client 1"), content)
 
 	// Current commit should match
-	hash2, err := gr2.CurrentCommit()
+	hash2, err := gr2.CurrentCommit(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, hash1, hash2)
 }
@@ -387,7 +387,7 @@ func TestGitRepo_PushWithLeaseRejectsStaleWriter(t *testing.T) {
 	defer gr2.Close()
 
 	require.NoError(t, gr2.CheckoutRef(ctx))
-	gotBase, err := gr2.CurrentCommit()
+	gotBase, err := gr2.CurrentCommit(ctx)
 	require.NoError(t, err)
 	require.Equal(t, baseHash, gotBase)
 
