@@ -177,6 +177,11 @@ func Open(ctx context.Context, opts OpenOptions) (*GitRepo, error) {
 
 // openOrCloneToPath opens an existing repo or clones to a local path.
 func (gr *GitRepo) openOrCloneToPath(ctx context.Context, path string) error {
+	// Read config under lock for consistency with other methods.
+	gr.mu.RLock()
+	url := gr.url
+	gr.mu.RUnlock()
+
 	// If this is already a git repo, just fetch the ref.
 	if isGitRepo(path) {
 		return gr.fetchRef(ctx)
@@ -188,8 +193,8 @@ func (gr *GitRepo) openOrCloneToPath(ctx context.Context, path string) error {
 	}
 
 	// Clone without checkout. This works for empty remotes as well.
-	if _, err := gr.runGit(ctx, "", "clone", "--no-checkout", gr.url, path); err != nil {
-		return NewCloneError(gr.url, err)
+	if _, err := gr.runGit(ctx, "", "clone", "--no-checkout", url, path); err != nil {
+		return NewCloneError(url, err)
 	}
 
 	return gr.fetchRef(ctx)
@@ -197,8 +202,15 @@ func (gr *GitRepo) openOrCloneToPath(ctx context.Context, path string) error {
 
 // fetchRef fetches the custom ref from the remote.
 func (gr *GitRepo) fetchRef(ctx context.Context) error {
-	refSpec := fmt.Sprintf("+%s:%s", gr.ref, gr.ref)
-	_, err := gr.runGit(ctx, gr.localPath, "fetch", DefaultRemoteName, refSpec)
+	// Read config under lock for consistency with other methods.
+	gr.mu.RLock()
+	localPath := gr.localPath
+	url := gr.url
+	ref := gr.ref
+	gr.mu.RUnlock()
+
+	refSpec := fmt.Sprintf("+%s:%s", ref, ref)
+	_, err := gr.runGit(ctx, localPath, "fetch", DefaultRemoteName, refSpec)
 	if err == nil {
 		return nil
 	}
@@ -210,7 +222,7 @@ func (gr *GitRepo) fetchRef(ctx context.Context) error {
 	if strings.Contains(strings.ToLower(err.Error()), "already up to date") {
 		return nil
 	}
-	return NewFetchError(gr.url, gr.ref, err)
+	return NewFetchError(url, ref, err)
 }
 
 // isRefNotFoundError checks if an error indicates the ref doesn't exist.
@@ -231,6 +243,15 @@ func (gr *GitRepo) CheckoutRef(ctx context.Context) error {
 	// If the ref doesn't exist locally, that's OK (new remote).
 	if !gr.hasRef(ctx, gr.ref) {
 		return nil
+	}
+
+	// Avoid clobbering local changes with a forced checkout.
+	statusOut, stErr := gr.runGit(ctx, gr.localPath, "status", "--porcelain")
+	if stErr != nil {
+		return fmt.Errorf("failed to get status before checkout: %w", stErr)
+	}
+	if strings.TrimSpace(statusOut) != "" {
+		return ErrDirtyWorktree
 	}
 
 	hash, err := gr.revParse(ctx, gr.ref)
