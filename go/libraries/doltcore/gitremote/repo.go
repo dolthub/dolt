@@ -52,6 +52,17 @@ type GitRepo struct {
 	mu          sync.RWMutex
 }
 
+// PushOptions controls how GitRepo updates the remote ref.
+type PushOptions struct {
+	// ForceWithLease performs a compare-and-swap update of the remote ref. If the remote ref has moved since
+	// ExpectedRemoteHash was observed, the push fails.
+	ForceWithLease bool
+
+	// ExpectedRemoteHash is the expected current value of the remote ref (40-hex SHA1 or any rev Git accepts).
+	// If empty, Git will use its last known value for the ref (less strict).
+	ExpectedRemoteHash string
+}
+
 // OpenOptions configures how a GitRepo is opened or cloned.
 type OpenOptions struct {
 	// URL is the git repository URL
@@ -316,11 +327,36 @@ func (gr *GitRepo) Commit(ctx context.Context, message string) (string, error) {
 
 // Push pushes the custom ref to the remote.
 func (gr *GitRepo) Push(ctx context.Context) error {
+	return gr.PushWithOptions(ctx, PushOptions{})
+}
+
+// PushWithLease pushes the custom ref using `--force-with-lease`. If expectedRemoteHash is non-empty, it is
+// used as the expected current value of the remote ref (stronger CAS semantics).
+func (gr *GitRepo) PushWithLease(ctx context.Context, expectedRemoteHash string) error {
+	return gr.PushWithOptions(ctx, PushOptions{
+		ForceWithLease:     true,
+		ExpectedRemoteHash: expectedRemoteHash,
+	})
+}
+
+// PushWithOptions pushes the custom ref to the remote.
+func (gr *GitRepo) PushWithOptions(ctx context.Context, opts PushOptions) error {
 	gr.mu.Lock()
 	defer gr.mu.Unlock()
 
 	refSpec := fmt.Sprintf("%s:%s", gr.ref, gr.ref)
-	_, err := gr.runGit(ctx, gr.localPath, "push", DefaultRemoteName, refSpec)
+
+	args := []string{"push"}
+	if opts.ForceWithLease {
+		if opts.ExpectedRemoteHash != "" {
+			args = append(args, fmt.Sprintf("--force-with-lease=%s:%s", gr.ref, opts.ExpectedRemoteHash))
+		} else {
+			args = append(args, fmt.Sprintf("--force-with-lease=%s", gr.ref))
+		}
+	}
+	args = append(args, DefaultRemoteName, refSpec)
+
+	_, err := gr.runGit(ctx, gr.localPath, args...)
 	if err != nil {
 		return NewPushError(gr.url, gr.ref, err)
 	}

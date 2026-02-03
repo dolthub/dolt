@@ -16,6 +16,7 @@ package gitremote
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -356,6 +357,54 @@ func TestGitRepo_FetchUpdates(t *testing.T) {
 	hash2, err := gr2.CurrentCommit()
 	require.NoError(t, err)
 	assert.Equal(t, hash1, hash2)
+}
+
+func TestGitRepo_PushWithLeaseRejectsStaleWriter(t *testing.T) {
+	bareDir := createBareRepo(t)
+	ctx := context.Background()
+
+	// Client 1 initializes remote ref with an initial commit
+	workDir1 := filepath.Join(t.TempDir(), "work1")
+	gr1, err := Open(ctx, OpenOptions{
+		URL:       bareDir,
+		LocalPath: workDir1,
+	})
+	require.NoError(t, err)
+	defer gr1.Close()
+
+	require.NoError(t, gr1.WriteFile("base.txt", []byte("base")))
+	baseHash, err := gr1.Commit(ctx, "base")
+	require.NoError(t, err)
+	require.NoError(t, gr1.Push(ctx))
+
+	// Client 2 fetches baseHash
+	workDir2 := filepath.Join(t.TempDir(), "work2")
+	gr2, err := Open(ctx, OpenOptions{
+		URL:       bareDir,
+		LocalPath: workDir2,
+	})
+	require.NoError(t, err)
+	defer gr2.Close()
+
+	require.NoError(t, gr2.CheckoutRef(ctx))
+	gotBase, err := gr2.CurrentCommit()
+	require.NoError(t, err)
+	require.Equal(t, baseHash, gotBase)
+
+	// Client 1 advances the remote ref
+	require.NoError(t, gr1.WriteFile("advance.txt", []byte("advance")))
+	_, err = gr1.Commit(ctx, "advance")
+	require.NoError(t, err)
+	require.NoError(t, gr1.Push(ctx))
+
+	// Client 2 attempts a stale push using force-with-lease expecting baseHash -> should fail
+	require.NoError(t, gr2.WriteFile("stale.txt", []byte("stale")))
+	_, err = gr2.Commit(ctx, "stale")
+	require.NoError(t, err)
+
+	err = gr2.PushWithLease(ctx, baseHash)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrPushRejected), "expected push rejection, got: %v", err)
 }
 
 func TestIsRefNotFoundError(t *testing.T) {
