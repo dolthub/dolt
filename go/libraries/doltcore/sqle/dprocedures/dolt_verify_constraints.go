@@ -82,7 +82,7 @@ func doDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	// Check for all non-FK constraint violations
-	newRoot, tablesWithViolations, err := calculateViolations(ctx, workingRoot, comparingRoot, tableSet)
+	newRoot, tablesWithViolations, err := calculateViolations(ctx, dbName, workingRoot, comparingRoot, tableSet)
 	if err != nil {
 		return 1, err
 	}
@@ -110,7 +110,7 @@ func doDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 // tables in |tableSet|. Returns the new root with the violations, and a set of table names that have violations.
 // Note that constraint violations detected for ALL existing tables will be stored in the dolt_constraint_violations
 // tables, but the returned set of table names will be a subset of |tableSet|.
-func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot doltdb.RootValue, tableSet *doltdb.TableNameSet) (doltdb.RootValue, *doltdb.TableNameSet, error) {
+func calculateViolations(ctx *sql.Context, dbName string, workingRoot, comparingRoot doltdb.RootValue, tableSet *doltdb.TableNameSet) (doltdb.RootValue, *doltdb.TableNameSet, error) {
 	var recordViolationsForTables map[doltdb.TableName]struct{} = nil
 	if tableSet.Size() > 0 {
 		recordViolationsForTables = make(map[doltdb.TableName]struct{})
@@ -119,7 +119,7 @@ func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot doltdb.Roo
 		}
 	}
 
-	tableResolver, err := dsess.GetTableResolver(ctx)
+	tableResolver, err := dsess.GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, nil, err
 	}

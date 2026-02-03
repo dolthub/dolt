@@ -318,13 +318,13 @@ func resolveNomsConflicts(ctx *sql.Context, opts editor.Options, tbl *doltdb.Tab
 	return resolvePkConflicts(ctx, opts, tbl, tblName, sch, conflicts)
 }
 
-func validateConstraintViolations(ctx *sql.Context, before, after doltdb.RootValue, table doltdb.TableName) error {
+func validateConstraintViolations(ctx *sql.Context, dbName string, before, after doltdb.RootValue, table doltdb.TableName) error {
 	tables, err := after.GetTableNames(ctx, table.Schema, true)
 	if err != nil {
 		return err
 	}
 
-	tableResolver, err := dsess.GetTableResolver(ctx)
+	tableResolver, err := dsess.GetTableResolver(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -413,7 +413,7 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 	return ws.WithWorkingRoot(root).WithUnmergableTables(unmerged).WithMergedTables(merged), nil
 }
 
-func ResolveDataConflictsForTable(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName, ours bool, getEditorOpts func() (editor.Options, error)) (doltdb.RootValue, bool, error) {
+func ResolveDataConflictsForTable(ctx *sql.Context, dbName string, root doltdb.RootValue, tblName doltdb.TableName, ours bool, getEditorOpts func() (editor.Options, error)) (doltdb.RootValue, bool, error) {
 	tbl, ok, err := root.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, false, err
@@ -463,7 +463,7 @@ func ResolveDataConflictsForTable(ctx *sql.Context, root doltdb.RootValue, tblNa
 		return nil, false, err
 	}
 
-	err = validateConstraintViolations(ctx, root, newRoot, tblName)
+	err = validateConstraintViolations(ctx, dbName, root, newRoot, tblName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -485,7 +485,7 @@ func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltd
 	}
 
 	for _, tblName := range tblNames {
-		newRoot, hasConflicts, err := ResolveDataConflictsForTable(ctx, root, tblName, ours, getEditorOpts)
+		newRoot, hasConflicts, err := ResolveDataConflictsForTable(ctx, dbName, root, tblName, ours, getEditorOpts)
 		if err != nil {
 			return err
 		}

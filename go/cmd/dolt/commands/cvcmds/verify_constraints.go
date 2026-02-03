@@ -125,7 +125,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sqlCtx.SetCurrentDatabase(dbName)
 
-	tableResolver, err := dsess.GetTableResolver(sqlCtx)
+	tableResolver, err := dsess.GetTableResolver(sqlCtx, dbName)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
