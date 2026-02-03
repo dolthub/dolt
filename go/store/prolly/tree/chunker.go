@@ -24,7 +24,6 @@ package tree
 import (
 	"context"
 	"golang.org/x/sync/errgroup"
-	"sync"
 
 	"github.com/dolthub/dolt/go/store/hash"
 
