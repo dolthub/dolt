@@ -91,17 +91,52 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		return nil, 0, commit.String(), err
 	}
 
-	// Range support is implemented in a follow-up task. For now, only AllRange.
-	if !br.isAllRange() {
-		return nil, uint64(sz), commit.String(), fmt.Errorf("%w: GitBlobstore.Get supports only AllRange (for now)", git.ErrUnimplemented)
-	}
-
 	rc, err := git.BlobReader(ctx, gbs.runner, blobOID)
 	if err != nil {
 		return nil, 0, commit.String(), err
 	}
-	return rc, uint64(sz), commit.String(), nil
+
+	// Implement BlobRange by slicing the streamed blob contents.
+	if br.isAllRange() {
+		return rc, uint64(sz), commit.String(), nil
+	}
+
+	pos := br.positiveRange(sz)
+	if pos.offset < 0 || pos.offset > sz {
+		_ = rc.Close()
+		return nil, uint64(sz), commit.String(), fmt.Errorf("invalid BlobRange offset %d for blob of size %d", pos.offset, sz)
+	}
+	if pos.length < 0 {
+		_ = rc.Close()
+		return nil, uint64(sz), commit.String(), fmt.Errorf("invalid BlobRange length %d", pos.length)
+	}
+	if pos.length == 0 {
+		// Read from offset to end.
+		pos.length = sz - pos.offset
+	}
+	// Clamp to end (defensive; positiveRange should already do this).
+	if pos.offset+pos.length > sz {
+		pos.length = sz - pos.offset
+	}
+
+	// Skip to offset.
+	if pos.offset > 0 {
+		if _, err := io.CopyN(io.Discard, rc, pos.offset); err != nil {
+			_ = rc.Close()
+			return nil, uint64(sz), commit.String(), err
+		}
+	}
+
+	return &limitReadCloser{r: io.LimitReader(rc, pos.length), c: rc}, uint64(sz), commit.String(), nil
 }
+
+type limitReadCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (l *limitReadCloser) Read(p []byte) (int, error) { return l.r.Read(p) }
+func (l *limitReadCloser) Close() error               { return l.c.Close() }
 
 func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	return "", fmt.Errorf("%w: GitBlobstore.Put", git.ErrUnimplemented)
