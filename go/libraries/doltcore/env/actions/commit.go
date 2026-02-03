@@ -106,7 +106,7 @@ func GetCommitStaged(
 			return nil, err
 		}
 
-		if fkChecks.(int8) == 1 {
+		if intValue, ok := fkChecks.(int8); ok && intValue == 1 {
 			roots.Staged, err = doltdb.ValidateForeignKeysOnSchemas(ctx, tableResolver, roots.Staged)
 			if err != nil {
 				return nil, err
