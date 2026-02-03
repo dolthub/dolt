@@ -1521,7 +1521,7 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query: "SELECT * FROM t WHERE (col2 LIKE '%01010%') ORDER BY col2;",
@@ -1652,7 +1652,7 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t order by pk;",
@@ -1691,7 +1691,7 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t order by pk;",
