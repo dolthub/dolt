@@ -141,9 +141,11 @@ func isPathNotFoundErr(err error) bool {
 		// Common patterns:
 		// - "fatal: Path 'x' does not exist in 'HEAD'"
 		// - "fatal: invalid object name 'HEAD:x'"
+		// - "fatal: Needed a single revision"
 		// - "fatal: ambiguous argument '...': unknown revision or path not in the working tree."
 		if strings.Contains(msg, "does not exist in") ||
 			strings.Contains(msg, "invalid object name") ||
+			strings.Contains(msg, "needed a single revision") ||
 			strings.Contains(msg, "unknown revision or path not in the working tree") {
 			return true
 		}
