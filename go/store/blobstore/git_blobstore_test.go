@@ -212,6 +212,9 @@ func TestGitBlobstore_InvalidKeysError(t *testing.T) {
 
 		_, _, _, err = bs.Get(ctx, k, AllRange)
 		require.Error(t, err, "expected error for key %q", k)
+
+		_, err = bs.Put(ctx, k, 1, bytes.NewReader([]byte("x")))
+		require.Error(t, err, "expected error for key %q", k)
 	}
 }
 
