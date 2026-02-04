@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -74,7 +75,7 @@ func (bsm blobstoreManifest) ParseIfExists(ctx context.Context, stats *Stats, re
 }
 
 // Update updates the contents of the manifest in the blobstore
-func (bsm blobstoreManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (bsm blobstoreManifest) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	checker := func(upstream, contents manifestContents) error {
 		if contents.gcGen != upstream.gcGen {
 			return chunks.ErrGCGenerationExpired
@@ -82,14 +83,14 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock hash.Hash, new
 		return nil
 	}
 
-	return updateBSWithChecker(ctx, bsm.bs, checker, lastLock, newContents, writeHook)
+	return updateBSWithChecker(ctx, behavior, bsm.bs, checker, lastLock, newContents, writeHook)
 }
 
-func (bsm blobstoreManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
-	return updateBSWithChecker(ctx, bsm.bs, updateGCGenManifestCheck, lastLock, newContents, writeHook)
+func (bsm blobstoreManifest) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	return updateBSWithChecker(ctx, behavior, bsm.bs, updateGCGenManifestCheck, lastLock, newContents, writeHook)
 }
 
-func updateBSWithChecker(ctx context.Context, bs blobstore.Blobstore, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+func updateBSWithChecker(ctx context.Context, behavior dherrors.FatalBehavior, bs blobstore.Blobstore, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	if writeHook != nil {
 		panic("Write hooks not supported")
 	}

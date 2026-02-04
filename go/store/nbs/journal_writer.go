@@ -29,6 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -379,10 +380,10 @@ func (wr *journalWriter) getCompressedChunkAtRange(r Range, h hash.Hash) (Compre
 }
 
 // getRange returns a Range for the chunk with addr |h|.
-func (wr *journalWriter) getRange(ctx context.Context, h hash.Hash) (rng Range, ok bool, err error) {
+func (wr *journalWriter) getRange(ctx context.Context, behavior dherrors.FatalBehavior, h hash.Hash) (rng Range, ok bool, err error) {
 	// callers will use |rng| to read directly from the
 	// journal file, so we must flush here
-	if err = wr.maybeFlush(ctx); err != nil {
+	if err = wr.maybeFlush(ctx, behavior); err != nil {
 		return
 	}
 	wr.lock.RLock()
@@ -392,7 +393,7 @@ func (wr *journalWriter) getRange(ctx context.Context, h hash.Hash) (rng Range, 
 }
 
 // writeCompressedChunk writes |cc| to the journal.
-func (wr *journalWriter) writeCompressedChunk(ctx context.Context, cc CompressedChunk) error {
+func (wr *journalWriter) writeCompressedChunk(ctx context.Context, behavior dherrors.FatalBehavior, cc CompressedChunk) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 	recordLen, payloadOff := chunkRecordSize(cc)
@@ -400,7 +401,7 @@ func (wr *journalWriter) writeCompressedChunk(ctx context.Context, cc Compressed
 		Offset: uint64(wr.offset()) + uint64(payloadOff),
 		Length: uint32(len(cc.FullCompressedChunk)),
 	}
-	buf, err := wr.getBytes(ctx, int(recordLen))
+	buf, err := wr.getBytes(ctx, behavior, int(recordLen))
 	if err != nil {
 		return err
 	}
@@ -430,17 +431,17 @@ func (wr *journalWriter) writeCompressedChunk(ctx context.Context, cc Compressed
 	// write index records out. It's perfectly fine to reuse the current
 	// root hash, and this will also take care of the |Sync|.
 	if wr.unsyncd > journalMaybeSyncThreshold && !wr.currentRoot.IsEmpty() {
-		return wr.commitRootHashUnlocked(ctx, wr.currentRoot)
+		return wr.commitRootHashUnlocked(ctx, behavior, wr.currentRoot)
 	}
 
 	return nil
 }
 
 // commitRootHash commits |root| to the journal and syncs the file to disk.
-func (wr *journalWriter) commitRootHash(ctx context.Context, root hash.Hash) error {
+func (wr *journalWriter) commitRootHash(ctx context.Context, behavior dherrors.FatalBehavior, root hash.Hash) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	return wr.commitRootHashUnlocked(ctx, root)
+	return wr.commitRootHashUnlocked(ctx, behavior, root)
 }
 
 func (wr *journalWriter) size() int64 {
@@ -449,16 +450,16 @@ func (wr *journalWriter) size() int64 {
 	return wr.off
 }
 
-func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, root hash.Hash) error {
+func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, behavior dherrors.FatalBehavior, root hash.Hash) error {
 	defer trace.StartRegion(ctx, "commit-root").End()
 
-	buf, err := wr.getBytes(ctx, rootHashRecordSize())
+	buf, err := wr.getBytes(ctx, behavior, rootHashRecordSize())
 	if err != nil {
 		return err
 	}
 	wr.currentRoot = root
 	n := writeRootHashRecord(buf, root)
-	if err = wr.flush(ctx); err != nil {
+	if err = wr.flush(ctx, behavior); err != nil {
 		return err
 	}
 	func() {
@@ -467,7 +468,7 @@ func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, root hash.H
 		err = wr.journal.Sync()
 	}()
 	if err != nil {
-		return err
+		return dherrors.Fatalf(behavior, "%w: error syncing journal", err)
 	}
 
 	wr.unsyncd = 0
@@ -520,13 +521,13 @@ func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
 }
 
 // getBytes returns a buffer for writers to copy data into.
-func (wr *journalWriter) getBytes(ctx context.Context, n int) (buf []byte, err error) {
+func (wr *journalWriter) getBytes(ctx context.Context, behavior dherrors.FatalBehavior, n int) (buf []byte, err error) {
 	c, l := cap(wr.buf), len(wr.buf)
 	if n > c {
 		err = fmt.Errorf("requested bytes (%d) exceeds capacity (%d)", n, c)
 		return
 	} else if n > c-l {
-		if err = wr.flush(ctx); err != nil {
+		if err = wr.flush(ctx, behavior); err != nil {
 			return
 		}
 	}
@@ -537,10 +538,10 @@ func (wr *journalWriter) getBytes(ctx context.Context, n int) (buf []byte, err e
 }
 
 // flush writes buffered data into the journal file.
-func (wr *journalWriter) flush(ctx context.Context) (err error) {
+func (wr *journalWriter) flush(ctx context.Context, behavior dherrors.FatalBehavior) (err error) {
 	defer trace.StartRegion(ctx, "flush journal").End()
 	if _, err = wr.journal.WriteAt(wr.buf, wr.off); err != nil {
-		return err
+		return dherrors.Fatalf(behavior, "%w: error writing to database journal file", err)
 	}
 	wr.off += int64(len(wr.buf))
 	wr.buf = wr.buf[:0]
@@ -548,7 +549,7 @@ func (wr *journalWriter) flush(ctx context.Context) (err error) {
 }
 
 // maybeFlush flushes buffered data, if any exists.
-func (wr *journalWriter) maybeFlush(ctx context.Context) (err error) {
+func (wr *journalWriter) maybeFlush(ctx context.Context, behavior dherrors.FatalBehavior) (err error) {
 	wr.lock.RLock()
 	empty := len(wr.buf) == 0
 	wr.lock.RUnlock()
@@ -557,7 +558,7 @@ func (wr *journalWriter) maybeFlush(ctx context.Context) (err error) {
 	}
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	return wr.flush(ctx)
+	return wr.flush(ctx, behavior)
 }
 
 type journalWriterSnapshot struct {
@@ -571,10 +572,10 @@ func (s journalWriterSnapshot) Close() error {
 
 // snapshot returns an io.Reader with a consistent view of
 // the current state of the journal file.
-func (wr *journalWriter) snapshot(ctx context.Context) (io.ReadCloser, int64, error) {
+func (wr *journalWriter) snapshot(ctx context.Context, behavior dherrors.FatalBehavior) (io.ReadCloser, int64, error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	if err := wr.flush(ctx); err != nil {
+	if err := wr.flush(ctx, behavior); err != nil {
 		return nil, 0, err
 	}
 	// open a new file descriptor with an
@@ -622,7 +623,8 @@ func (wr *journalWriter) Close() (err error) {
 		return nil
 	}
 
-	if err = wr.flush(context.Background()); err != nil {
+	// Let caller fatal on Close.
+	if err = wr.flush(context.Background(), dherrors.FatalBehaviorError); err != nil {
 		return err
 	}
 	if wr.index != nil {

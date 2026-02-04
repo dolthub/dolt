@@ -49,6 +49,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/valctx"
 )
@@ -94,6 +95,8 @@ type SqlEngineConfig struct {
 	//
 	// Intended for embedded-driver use-cases that need to influence dbfactory / storage open behavior.
 	DBLoadParams map[string]interface{}
+
+	FatalBehavior dherrors.FatalBehavior
 }
 
 type SqlEngineConfigOption func(*SqlEngineConfig)

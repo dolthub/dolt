@@ -23,6 +23,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -44,7 +45,7 @@ var _ tableFilePersister = &blobstorePersister{}
 
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
-func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
+func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	address, data, splitOffset, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
@@ -90,7 +91,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 }
 
 // ConjoinAll implements tablePersister.
-func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
+func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
 	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, stats)
 	if err != nil {
 		return nil, nil, err

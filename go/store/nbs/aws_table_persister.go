@@ -37,6 +37,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -135,7 +136,7 @@ func (s3p awsTablePersister) key(k string) string {
 	return k
 }
 
-func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
+func (s3p awsTablePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	name, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
@@ -230,7 +231,7 @@ func (s partsByPartNum) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
+func (s3p awsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
 	plan, err := planRangeCopyConjoin(ctx, sources, s3p.q, stats)
 	if err != nil {
 		return nil, nil, err
@@ -242,7 +243,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	}
 
 	t1 := time.Now()
-	err = s3p.executeCompactionPlan(ctx, plan, plan.name.String()+plan.suffix)
+	err = s3p.executeCompactionPlan(ctx, behavior, plan, plan.name.String()+plan.suffix)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -260,13 +261,13 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	}
 }
 
-func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, plan compactionPlan, key string) error {
+func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, behavior dherrors.FatalBehavior, plan compactionPlan, key string) error {
 	uploadID, err := s3p.startMultipartUpload(ctx, key)
 	if err != nil {
 		return err
 	}
 
-	multipartUpload, err := s3p.assembleTable(ctx, plan, key, uploadID)
+	multipartUpload, err := s3p.assembleTable(ctx, behavior, plan, key, uploadID)
 	if err != nil {
 		_ = s3p.abortMultipartUpload(ctx, key, uploadID)
 		return err
@@ -275,7 +276,7 @@ func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, plan com
 	return s3p.completeMultipartUpload(ctx, key, uploadID, multipartUpload)
 }
 
-func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionPlan, key, uploadID string) (*s3types.CompletedMultipartUpload, error) {
+func (s3p awsTablePersister) assembleTable(ctx context.Context, behavior dherrors.FatalBehavior, plan compactionPlan, key, uploadID string) (*s3types.CompletedMultipartUpload, error) {
 	if len(plan.sources.sws) > maxS3Parts {
 		return nil, errors.New("exceeded maximum parts")
 	}
@@ -301,7 +302,7 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 		readWg.Add(1)
 		go func(m manualPart) {
 			defer readWg.Done()
-			err := m.readFull(ctx, buff)
+			err := m.readFull(ctx, behavior, buff)
 			if err != nil {
 				ae.SetIfError(fmt.Errorf("failed to read conjoin table data: %w", err))
 			}
@@ -438,8 +439,8 @@ type manualPart struct {
 	start, end int64
 }
 
-func (mp manualPart) readFull(ctx context.Context, buff []byte) error {
-	reader, _, err := mp.src.reader(ctx)
+func (mp manualPart) readFull(ctx context.Context, behavior dherrors.FatalBehavior, buff []byte) error {
+	reader, _, err := mp.src.reader(ctx, behavior)
 	if err != nil {
 		return err
 	}

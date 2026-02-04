@@ -47,6 +47,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/valctx"
 	"github.com/dolthub/dolt/go/store/blobstore"
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -133,6 +134,8 @@ type NomsBlockStore struct {
 
 	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
 	gcInProgress bool
+
+	fatalBehavior dherrors.FatalBehavior
 }
 
 func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
@@ -200,9 +203,9 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashe
 }
 
 func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.HashSet) (map[*chunkSource]map[hash.Hash]Range, error) {
-	fn := func(css chunkSourceSet, gr []getRecord, ranges map[*chunkSource]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
+	fn := func(behavior dherrors.FatalBehavior, css chunkSourceSet, gr []getRecord, ranges map[*chunkSource]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
 		for _, cs := range css {
-			rng, gcb, err := cs.getRecordRanges(ctx, gr, keeper)
+			rng, gcb, err := cs.getRecordRanges(ctx, behavior, gr, keeper)
 			if err != nil {
 				return gcBehavior_Continue, err
 			}
@@ -226,20 +229,20 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 
 	for {
 		nbs.mu.Lock()
-		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		tables, keeper, endRead, behavior := nbs.tables, nbs.keeperFunc, nbs.beginRead(), nbs.fatalBehavior
 		nbs.mu.Unlock()
 
 		gr := toGetRecords(hashes)
 		ranges := make(map[*chunkSource]map[hash.Hash]Range)
 
-		gcb, err := fn(tables.upstream, gr, ranges, keeper)
+		gcb, err := fn(behavior, tables.upstream, gr, ranges, keeper)
 		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, false, endRead, err); err != nil {
 			return nil, err
 		} else if needsContinue {
 			continue
 		}
 
-		gcb, err = fn(tables.novel, gr, ranges, keeper)
+		gcb, err = fn(behavior, tables.novel, gr, ranges, keeper)
 		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err); err != nil {
 			return nil, err
 		} else if needsContinue {
@@ -307,11 +310,12 @@ func (nbs *NomsBlockStore) startConjoinIfRequired(ctx context.Context) error {
 			return err
 		}
 		nbs.conjoinOp = op
+		fatalBehavior := nbs.fatalBehavior
 		go func(ctx context.Context) {
 			// We use context.Background(), since this context will outlive the caller
 			// and it does not access NomsBlockStore storage directly, instead operating
 			// only on tablePersister and manifestUpdater.
-			err := op.conjoin(ctx, nbs.persister, nbs.stats)
+			err := op.conjoin(ctx, fatalBehavior, nbs.persister, nbs.stats)
 			nbs.finalizeConjoin(ctx, err)
 		}(context.Background())
 	}
@@ -343,7 +347,7 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 		}
 	}()
 
-	newUpstream, cleanup, err := nbs.conjoinOp.updateManifest(ctx, nbs.upstream, nbs.manifestMgr, nbs.stats)
+	newUpstream, cleanup, err := nbs.conjoinOp.updateManifest(ctx, nbs.fatalBehavior, nbs.upstream, nbs.manifestMgr, nbs.stats)
 	if err != nil {
 		nbs.logger.WithError(err).Warn("during conjoin, updating database manifest with new table files failed")
 	}
@@ -459,7 +463,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 
 		contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix, nil)
 
-		updatedContents, err = nbs.manifestMgr.Update(ctx, originalLock, contents, nbs.stats, nil)
+		updatedContents, err = nbs.manifestMgr.Update(ctx, nbs.fatalBehavior, originalLock, contents, nbs.stats, nil)
 		if err != nil {
 			return manifestContents{}, false, err
 		}
@@ -574,7 +578,7 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 			err = unlockErr
 		}
 	}()
-	updatedContents, err := store.manifestMgr.Update(ctx, store.upstream.lock, contents, store.stats, nil)
+	updatedContents, err := store.manifestMgr.Update(ctx, store.fatalBehavior, store.upstream.lock, contents, store.stats, nil)
 	if err != nil {
 		return err
 	}
@@ -769,6 +773,12 @@ func (nbs *NomsBlockStore) AppendLoggerFields(fields logrus.Fields) {
 	nbs.logger = nbs.logger.WithFields(fields)
 }
 
+func (nbs *NomsBlockStore) SetFatalBehavior(behavior dherrors.FatalBehavior) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+	nbs.fatalBehavior = behavior
+}
+
 // Wait for GC to complete to continue with ongoing operations.
 // Called with nbs.mu held. When this function returns with a nil
 // error, gcInProgress will be false.
@@ -856,7 +866,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAdd
 
 		addChunkRes = nbs.memtable.addChunk(ch.Hash(), ch.Data())
 		if addChunkRes == chunkNotAdded {
-			ts, gcb, err := nbs.tables.append(ctx, nbs.memtable, checker, nbs.keeperFunc, nbs.hasCache, nbs.stats)
+			ts, gcb, err := nbs.tables.append(ctx, nbs.fatalBehavior, nbs.memtable, checker, nbs.keeperFunc, nbs.hasCache, nbs.stats)
 			if err != nil {
 				nbs.handlePossibleDanglingRefError(err)
 				return false, err
@@ -1435,7 +1445,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 				return err
 			}
 			if cnt > 0 {
-				ts, gcb, err := nbs.tables.append(ctx, nbs.memtable, checker, nbs.keeperFunc, nbs.hasCache, nbs.stats)
+				ts, gcb, err := nbs.tables.append(ctx, nbs.fatalBehavior, nbs.memtable, checker, nbs.keeperFunc, nbs.hasCache, nbs.stats)
 				if err != nil {
 					nbs.handlePossibleDanglingRefError(err)
 					return err
@@ -1496,7 +1506,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		appendix: appendixSpecs,
 	}
 
-	upstream, err := nbs.manifestMgr.Update(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
+	upstream, err := nbs.manifestMgr.Update(ctx, nbs.fatalBehavior, nbs.upstream.lock, newContents, nbs.stats, nil)
 	if err != nil {
 		return err
 	}
@@ -1535,6 +1545,9 @@ func (nbs *NomsBlockStore) Close() error {
 		nbs.conjoinOpCond.Wait()
 	}
 	err := nbs.persister.Close()
+	if err != nil {
+		err = dherrors.Fatalf(nbs.fatalBehavior, "%w: fatal error closing table persister", err)
+	}
 	err = errors.Join(err, nbs.tables.close())
 	err = errors.Join(err, nbs.manifestMgr.Close())
 	return err
@@ -1608,14 +1621,14 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.Tab
 		return hash.Hash{}, nil, nil, err
 	}
 
-	appendixTableFiles, err := getTableFiles(css, contents, contents.NumAppendixSpecs(), func(mc manifestContents, idx int) tableSpec {
+	appendixTableFiles, err := getTableFiles(css, nbs.fatalBehavior, contents, contents.NumAppendixSpecs(), func(mc manifestContents, idx int) tableSpec {
 		return mc.getAppendixSpec(idx)
 	})
 	if err != nil {
 		return hash.Hash{}, nil, nil, err
 	}
 
-	allTableFiles, err := getTableFiles(css, contents, contents.NumTableSpecs(), func(mc manifestContents, idx int) tableSpec {
+	allTableFiles, err := getTableFiles(css, nbs.fatalBehavior, contents, contents.NumTableSpecs(), func(mc manifestContents, idx int) tableSpec {
 		return mc.getSpec(idx)
 	})
 	if err != nil {
@@ -1625,7 +1638,7 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.Tab
 	return contents.GetRoot(), allTableFiles, appendixTableFiles, nil
 }
 
-func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]chunks.TableFile, error) {
+func getTableFiles(css map[hash.Hash]chunkSource, behavior dherrors.FatalBehavior, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]chunks.TableFile, error) {
 	tableFiles := make([]chunks.TableFile, 0)
 	if numSpecs == 0 {
 		return tableFiles, nil
@@ -1637,12 +1650,12 @@ func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, num
 			return nil, ErrSpecWithoutChunkSource
 		}
 
-		tableFiles = append(tableFiles, newTableFile(cs, info))
+		tableFiles = append(tableFiles, newTableFile(cs, info, behavior))
 	}
 	return tableFiles, nil
 }
 
-func newTableFile(cs chunkSource, info tableSpec) tableFile {
+func newTableFile(cs chunkSource, info tableSpec, behavior dherrors.FatalBehavior) tableFile {
 	sfx := ""
 	dataOffset := uint64(0)
 	if a, ok := cs.(archiveChunkSource); ok {
@@ -1654,7 +1667,7 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 	return tableFile{
 		info: info,
 		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
-			r, s, err := cs.reader(ctx)
+			r, s, err := cs.reader(ctx, behavior)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -2282,7 +2295,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 		specs:   specs,
 	}
 
-	upstream, err := nbs.manifestMgr.UpdateGCGen(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
+	upstream, err := nbs.manifestMgr.UpdateGCGen(ctx, nbs.fatalBehavior, nbs.upstream.lock, newContents, nbs.stats, nil)
 	if err != nil {
 		return err
 	}
@@ -2381,7 +2394,7 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 	originalUpstream := nbs.upstream
 
 	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
-	newUpstream, finalCleanup, err := conjoin(ctx, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
+	newUpstream, finalCleanup, err := conjoin(ctx, nbs.fatalBehavior, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
 	if err != nil {
 		return hash.Hash{}, err
 	}

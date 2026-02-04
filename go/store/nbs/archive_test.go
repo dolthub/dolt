@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -948,11 +949,11 @@ func TestArchiveGetRecordRanges(t *testing.T) {
 	records = append(records, getRecord{a: &h2[0], prefix: h2[0].Prefix(), found: false})
 	records = append(records, getRecord{a: &sharedHash, prefix: sharedHash.Prefix(), found: false})
 
-	rang1, _, err := src1.getRecordRanges(context.Background(), records, nil)
+	rang1, _, err := src1.getRecordRanges(context.Background(), dherrors.FatalBehaviorError, records, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(rang1))
 
-	rang2, _, err := src2.getRecordRanges(context.Background(), records, nil)
+	rang2, _, err := src2.getRecordRanges(context.Background(), dherrors.FatalBehaviorError, records, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(rang2))
 	_, ok := rang2[sharedHash]
@@ -962,11 +963,11 @@ func TestArchiveGetRecordRanges(t *testing.T) {
 	for i := range records {
 		records[i].found = false
 	}
-	rang1, _, err = src2.getRecordRanges(context.Background(), records, nil)
+	rang1, _, err = src2.getRecordRanges(context.Background(), dherrors.FatalBehaviorError, records, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(rang1))
 
-	rang2, _, err = src1.getRecordRanges(context.Background(), records, nil)
+	rang2, _, err = src1.getRecordRanges(context.Background(), dherrors.FatalBehaviorError, records, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(rang2))
 	_, ok = rang2[sharedHash]
@@ -1299,11 +1300,11 @@ func (tcs *testChunkSource) suffix() string {
 	panic("never used")
 }
 
-func (tcs *testChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
+func (tcs *testChunkSource) reader(ctx context.Context, _ dherrors.FatalBehavior) (io.ReadCloser, uint64, error) {
 	panic("never used")
 }
 
-func (tcs *testChunkSource) getRecordRanges(ctx context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+func (tcs *testChunkSource) getRecordRanges(ctx context.Context, _ dherrors.FatalBehavior, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	panic("never used")
 }
 
