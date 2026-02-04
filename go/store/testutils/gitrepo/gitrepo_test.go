@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dolthub/dolt/go/store/blobstore"
 )
 
 func TestInitBareAndSetRefToTree(t *testing.T) {
@@ -36,7 +38,7 @@ func TestInitBareAndSetRefToTree(t *testing.T) {
 		t.Fatalf("InitBare failed: %v", err)
 	}
 
-	commit, err := repo.SetRefToTree(ctx, "refs/dolt/data", map[string][]byte{
+	commit, err := repo.SetRefToTree(ctx, blobstore.DoltDataRef, map[string][]byte{
 		"manifest":   []byte("hello\n"),
 		"dir/file":   []byte("abc"),
 		"dir/file2":  []byte("def"),
