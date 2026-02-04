@@ -216,6 +216,8 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		} else if apr.NArg() > 1 {
 			return 1, "", fmt.Errorf("too many args")
 		}
+
+
 		err = startRebase(ctx, apr.Arg(0), commitBecomesEmptyHandling, emptyCommitHandling)
 		if err != nil {
 			return 1, "", err

@@ -33,6 +33,7 @@ type CommitStagedProps struct {
 	Force      bool
 	Name       string
 	Email      string
+	SkipTests  bool
 }
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.

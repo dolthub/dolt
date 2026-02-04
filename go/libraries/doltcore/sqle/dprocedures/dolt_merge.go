@@ -444,11 +444,12 @@ func executeNoFFMerge(
 	}
 
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message: msg,
-		Date:    spec.Date,
-		Force:   spec.Force,
-		Name:    spec.Name,
-		Email:   spec.Email,
+		Message:   msg,
+		Date:      spec.Date,
+		Force:     spec.Force,
+		Name:      spec.Name,
+		Email:     spec.Email,
+		SkipTests: false, // TODO: Add support for --skip-tests in merge operations
 	})
 	if err != nil {
 		return nil, nil, err

@@ -1256,6 +1256,11 @@ func TestDoltDdlScripts(t *testing.T) {
 	RunDoltDdlScripts(t, harness)
 }
 
+func TestDoltTestValidationScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltTestValidationScriptsTest(t, harness)
+}
+
 func TestBrokenDdlScripts(t *testing.T) {
 	for _, script := range BrokenDDLScripts {
 		t.Skip(script.Name)
