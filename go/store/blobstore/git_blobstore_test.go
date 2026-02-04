@@ -385,3 +385,120 @@ func TestGitBlobstore_Put_ContentionRetryPreservesOtherKey(t *testing.T) {
 	_, _ = io.ReadAll(rc)
 	_ = rc.Close()
 }
+
+type failReader struct {
+	called atomic.Bool
+}
+
+func (r *failReader) Read(_ []byte) (int, error) {
+	r.called.Store(true)
+	return 0, io.EOF
+}
+
+func TestGitBlobstore_CheckAndPut_CreateOnly(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	want := []byte("created\n")
+	ver, err := bs.CheckAndPut(ctx, "", "k", int64(len(want)), bytes.NewReader(want))
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	got, ver2, err := GetBytes(ctx, bs, "k", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver, ver2)
+	require.Equal(t, want, got)
+}
+
+func TestGitBlobstore_CheckAndPut_MismatchDoesNotRead(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"k": []byte("base\n"),
+	}, "seed")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	r := &failReader{}
+	_, err = bs.CheckAndPut(ctx, commit+"-wrong", "k", 1, r)
+	require.Error(t, err)
+	require.True(t, IsCheckAndPutError(err))
+	require.False(t, r.called.Load(), "expected reader not to be consumed on version mismatch")
+}
+
+func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"k":    []byte("base\n"),
+		"keep": []byte("keep\n"),
+	}, "seed")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	want := []byte("updated\n")
+	ver2, err := bs.CheckAndPut(ctx, commit, "k", int64(len(want)), bytes.NewReader(want))
+	require.NoError(t, err)
+	require.NotEmpty(t, ver2)
+	require.NotEqual(t, commit, ver2)
+
+	got, ver3, err := GetBytes(ctx, bs, "k", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver2, ver3)
+	require.Equal(t, want, got)
+
+	got, _, err = GetBytes(ctx, bs, "keep", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("keep\n"), got)
+}
+
+func TestGitBlobstore_CheckAndPut_ConcurrentUpdateReturnsMismatch(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"k": []byte("base\n"),
+	}, "seed")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	origAPI := bs.api
+	h := &hookGitAPI{GitAPI: origAPI, ref: DoltDataRef}
+	h.onFirstCAS = func(ctx context.Context, old git.OID) {
+		// Advance the ref (without touching "k") to make UpdateRefCAS fail.
+		_, _ = writeKeyToRef(ctx, origAPI, DoltDataRef, "external", []byte("external\n"), testIdentity())
+	}
+	bs.api = h
+
+	_, err = bs.CheckAndPut(ctx, commit, "k", 0, bytes.NewReader([]byte("mine\n")))
+	require.Error(t, err)
+	require.True(t, IsCheckAndPutError(err))
+
+	// Verify key did not change, since our CAS should have failed.
+	got, _, err := GetBytes(ctx, bs, "k", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("base\n"), got)
+}

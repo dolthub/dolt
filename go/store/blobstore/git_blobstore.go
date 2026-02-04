@@ -247,19 +247,28 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 }
 
 func (gbs *GitBlobstore) buildPutCommit(ctx context.Context, parent git.OID, hasParent bool, key string, blobOID git.OID) (git.OID, string, error) {
-	_, indexFile, cleanup, err := newTempIndex()
+	msg := fmt.Sprintf("gitblobstore: put %s", key)
+	commitOID, err := gbs.buildCommitWithMessage(ctx, parent, hasParent, key, blobOID, msg)
 	if err != nil {
 		return "", "", err
+	}
+	return commitOID, msg, nil
+}
+
+func (gbs *GitBlobstore) buildCommitWithMessage(ctx context.Context, parent git.OID, hasParent bool, key string, blobOID git.OID, msg string) (git.OID, error) {
+	_, indexFile, cleanup, err := newTempIndex()
+	if err != nil {
+		return "", err
 	}
 	defer cleanup()
 
 	if hasParent {
 		if err := gbs.api.ReadTree(ctx, parent, indexFile); err != nil {
-			return "", "", err
+			return "", err
 		}
 	} else {
 		if err := gbs.api.ReadTreeEmpty(ctx, indexFile); err != nil {
-			return "", "", err
+			return "", err
 		}
 	}
 
@@ -270,12 +279,12 @@ func (gbs *GitBlobstore) buildPutCommit(ctx context.Context, parent git.OID, has
 	// namespace keys into directories, consider proactively removing conflicting paths from the index
 	// before UpdateIndexCacheInfo so Put/CheckAndPut remain robust.
 	if err := gbs.api.UpdateIndexCacheInfo(ctx, indexFile, "100644", blobOID, key); err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	treeOID, err := gbs.api.WriteTree(ctx, indexFile)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	var parentPtr *git.OID
@@ -283,7 +292,6 @@ func (gbs *GitBlobstore) buildPutCommit(ctx context.Context, parent git.OID, has
 		p := parent
 		parentPtr = &p
 	}
-	msg := fmt.Sprintf("gitblobstore: put %s", key)
 
 	// Prefer git's default identity from env/config when not explicitly configured.
 	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
@@ -291,10 +299,10 @@ func (gbs *GitBlobstore) buildPutCommit(ctx context.Context, parent git.OID, has
 		commitOID, err = gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, defaultGitBlobstoreIdentity())
 	}
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	return commitOID, msg, nil
+	return commitOID, nil
 }
 
 func defaultGitBlobstoreIdentity() *git.Identity {
@@ -346,10 +354,57 @@ func (gbs *GitBlobstore) refAdvanced(ctx context.Context, old git.OID) bool {
 }
 
 func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
-	if _, err := normalizeGitTreePath(key); err != nil {
+	key, err := normalizeGitTreePath(key)
+	if err != nil {
 		return "", err
 	}
-	return "", fmt.Errorf("%w: GitBlobstore.CheckAndPut", git.ErrUnimplemented)
+
+	// Resolve current head and validate expectedVersion before consuming |reader|.
+	parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	if err != nil {
+		return "", err
+	}
+	actualVersion := ""
+	if ok {
+		actualVersion = parent.String()
+	}
+	if expectedVersion != actualVersion {
+		return "", CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: actualVersion}
+	}
+
+	blobOID, err := gbs.api.HashObject(ctx, reader)
+	if err != nil {
+		return "", err
+	}
+
+	msg := fmt.Sprintf("gitblobstore: checkandput %s", key)
+	newCommit, err := gbs.buildCommitWithMessage(ctx, parent, ok, key, blobOID, msg)
+	if err != nil {
+		return "", err
+	}
+
+	if ok {
+		if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, parent, msg); err != nil {
+			// If the ref changed, surface as a standard mismatch error.
+			cur, ok2, err2 := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+			if err2 == nil && ok2 && cur != parent {
+				return "", CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: cur.String()}
+			}
+			return "", err
+		}
+		return newCommit.String(), nil
+	}
+
+	// Create-only CAS: oldOID=all-zero requires the ref to not exist.
+	const zeroOID = git.OID("0000000000000000000000000000000000000000")
+	if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, zeroOID, msg); err != nil {
+		cur, ok2, err2 := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+		if err2 == nil && ok2 {
+			return "", CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: cur.String()}
+		}
+		return "", err
+	}
+	return newCommit.String(), nil
 }
 
 func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
