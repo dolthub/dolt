@@ -153,10 +153,10 @@ func newDoltHarnessForLocalFilesystem(t *testing.T) *DoltHarness {
 }
 
 var defaultSkippedQueries = []string{
-	"show variables",             // we set extra variables
-	"show create table fk_tbl",   // we create an extra key for the FK that vanilla gms does not
-	"show indexes from",          // we create / expose extra indexes (for foreign keys)
-	"show global variables like", // we set extra variables
+	"show variables",           // we set extra variables
+	"show create table fk_tbl", // we create an extra key for the FK that vanilla gms does not
+	"show indexes from",        // we create / expose extra indexes (for foreign keys)
+	// NM4 - why? "show global variables like", // we set extra variables
 }
 
 // Setup sets the setup scripts for this DoltHarness's engine

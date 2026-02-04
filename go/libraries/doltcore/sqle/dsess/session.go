@@ -45,6 +45,7 @@ import (
 
 var ErrSessionNotPersistable = errors.New("session is not persistable")
 
+
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	provider DoltDatabaseProvider
