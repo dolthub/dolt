@@ -168,10 +168,10 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 // Start starts "git <args...>" and returns a ReadCloser for stdout.
 //
 // Resource management:
-// - Call Close() on the returned ReadCloser to ensure the underlying git process
-//   is waited (cmd.Wait()) and resources are released.
-// - The returned *exec.Cmd is provided for advanced uses (e.g. signals), but most
-//   callers should not call Wait() directly.
+//   - Call Close() on the returned ReadCloser to ensure the underlying git process
+//     is waited (cmd.Wait()) and resources are released.
+//   - The returned *exec.Cmd is provided for advanced uses (e.g. signals), but most
+//     callers should not call Wait() directly.
 func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io.ReadCloser, *exec.Cmd, error) {
 	cmd := exec.CommandContext(ctx, r.gitPath, args...) //nolint:gosec // args are controlled by caller; used for internal plumbing.
 	if opts.Dir != "" {
