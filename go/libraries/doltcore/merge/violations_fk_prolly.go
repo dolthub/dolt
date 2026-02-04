@@ -276,36 +276,7 @@ func prollyChildPriDiffFkConstraintViolations(
 			}
 
 			if !compatibleTypes {
-				tb := val.NewTupleBuilder(parentIdxPrefixDesc, parentSecondaryIdx.NodeStore())
-				for i, childHandler := range childPriIdxDesc.Handlers {
-					parentHandler := parentIdxPrefixDesc.Handlers[i]
-					serialized, err := convertSerializedFkField(ctx, parentHandler, childHandler, parentLookupKey.GetField(i))
-					if err != nil {
-						return err
-					}
-
-					switch parentHandler.(type) {
-					case val.AdaptiveEncodingTypeHandler:
-						switch parentIdxPrefixDesc.Types[i].Enc {
-						case val.ExtendedAdaptiveEnc:
-							err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
-							if err != nil {
-								return err
-							}
-						case val.BytesAdaptiveEnc:
-							err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
-							if err != nil {
-								return err
-							}
-						default:
-							panic(fmt.Sprintf("unexpected encoding for adaptive type: %d", parentIdxPrefixDesc.Types[i].Enc))
-						}
-					default:
-						tb.PutRaw(i, serialized)
-					}
-				}
-
-				parentLookupKey, err = tb.Build(parentSecondaryIdx.Pool())
+				parentLookupKey, err = convertKeyBetweenTypes(ctx, parentLookupKey, childPriIdxDesc, parentIdxPrefixDesc, parentSecondaryIdx.NodeStore(), parentSecondaryIdx.Pool())
 				if err != nil {
 					return err
 				}
@@ -374,36 +345,7 @@ func prollyChildSecDiffFkConstraintViolations(
 			}
 
 			if !compatibleTypes {
-				tb := val.NewTupleBuilder(parentIdxPrefixDesc, postChildSecIdx.NodeStore())
-				for i, childHandler := range childIdxPrefixDesc.Handlers {
-					parentHandler := parentIdxPrefixDesc.Handlers[i]
-					serialized, err := convertSerializedFkField(ctx, parentHandler, childHandler, parentLookupKey.GetField(i))
-					if err != nil {
-						return err
-					}
-
-					switch parentHandler.(type) {
-					case val.AdaptiveEncodingTypeHandler:
-						switch parentIdxPrefixDesc.Types[i].Enc {
-						case val.ExtendedAdaptiveEnc:
-							err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
-							if err != nil {
-								return err
-							}
-						case val.BytesAdaptiveEnc:
-							err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
-							if err != nil {
-								return err
-							}
-						default:
-							panic(fmt.Sprintf("unexpected encoding for adaptive type: %d", parentIdxPrefixDesc.Types[i].Enc))
-						}
-					default:
-						tb.PutRaw(i, serialized)
-					}
-				}
-
-				parentLookupKey, err = tb.Build(parentSecIdx.Pool())
+				parentLookupKey, err = convertKeyBetweenTypes(ctx, key, childIdxPrefixDesc, parentIdxPrefixDesc, postChildSecIdx.NodeStore(), postChildSecIdx.Pool())
 				if err != nil {
 					return err
 				}
@@ -672,7 +614,7 @@ func convertKeyBetweenTypes(
 
 		switch toHandler.(type) {
 		case val.AdaptiveEncodingTypeHandler:
-			switch fromKeyDesc.Types[i].Enc {
+			switch toKeyDesc.Types[i].Enc {
 			case val.ExtendedAdaptiveEnc:
 				err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
 				if err != nil {
