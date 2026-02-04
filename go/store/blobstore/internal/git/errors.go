@@ -28,7 +28,7 @@ type RefNotFoundError struct {
 	Ref string
 }
 
-func (e RefNotFoundError) Error() string {
+func (e *RefNotFoundError) Error() string {
 	return fmt.Sprintf("git ref not found: %s", e.Ref)
 }
 
@@ -38,7 +38,7 @@ type PathNotFoundError struct {
 	Path   string
 }
 
-func (e PathNotFoundError) Error() string {
+func (e *PathNotFoundError) Error() string {
 	return fmt.Sprintf("git path not found: %s:%s", e.Commit, e.Path)
 }
 
@@ -49,7 +49,7 @@ type NotBlobError struct {
 	Type   string
 }
 
-func (e NotBlobError) Error() string {
+func (e *NotBlobError) Error() string {
 	if e.Type == "" {
 		return fmt.Sprintf("git path is not a blob: %s:%s", e.Commit, e.Path)
 	}
@@ -57,11 +57,11 @@ func (e NotBlobError) Error() string {
 }
 
 func IsRefNotFound(err error) bool {
-	_, ok := err.(RefNotFoundError)
-	return ok
+	var e *RefNotFoundError
+	return errors.As(err, &e)
 }
 
 func IsPathNotFound(err error) bool {
-	_, ok := err.(PathNotFoundError)
-	return ok
+	var e *PathNotFoundError
+	return errors.As(err, &e)
 }

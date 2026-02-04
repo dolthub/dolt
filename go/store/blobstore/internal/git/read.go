@@ -54,7 +54,7 @@ func ResolveRefCommit(ctx context.Context, r *Runner, ref string) (OID, error) {
 		return "", err
 	}
 	if !ok {
-		return "", RefNotFoundError{Ref: ref}
+		return "", &RefNotFoundError{Ref: ref}
 	}
 	return oid, nil
 }
@@ -67,7 +67,7 @@ func ResolvePathBlob(ctx context.Context, r *Runner, commit OID, path string) (O
 	out, err := r.Run(ctx, RunOptions{}, "rev-parse", "--verify", spec)
 	if err != nil {
 		if isPathNotFoundErr(err) {
-			return "", PathNotFoundError{Commit: commit.String(), Path: path}
+			return "", &PathNotFoundError{Commit: commit.String(), Path: path}
 		}
 		return "", err
 	}
@@ -81,7 +81,7 @@ func ResolvePathBlob(ctx context.Context, r *Runner, commit OID, path string) (O
 		return "", err
 	}
 	if typ != "blob" {
-		return "", NotBlobError{Commit: commit.String(), Path: path, Type: typ}
+		return "", &NotBlobError{Commit: commit.String(), Path: path, Type: typ}
 	}
 	return OID(oid), nil
 }
