@@ -32,11 +32,11 @@ import (
 )
 
 func prollyParentSecDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preParentSecIdx prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preParentSecIdx prolly.Map,
+		receiver FKViolationReceiver) error {
 	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
 	if err != nil {
 		return err
@@ -75,7 +75,7 @@ func prollyParentSecDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeySerializationCompatible(parentIdxPrefixDesc, childSecIdxDesc)
+	compatibleTypes := foreignKeysAreCompatibleTypes(parentIdxPrefixDesc, childSecIdxDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -126,25 +126,12 @@ func prollyParentSecDiffFkConstraintViolations(
 	return nil
 }
 
-// foreignKeySerializationCompatible returns whether the serializations for two tuple descriptors are
-// binary compatible, which is requirement when using them as values in during foreign key lookups.
-func foreignKeySerializationCompatible(descA, descB *val.TupleDesc) bool {
-	compatibleTypes := true
-	for i, handler := range descA.Handlers {
-		if handler != nil && !handler.SerializationCompatible(descB.Handlers[i]) {
-			compatibleTypes = false
-			break
-		}
-	}
-	return compatibleTypes
-}
-
 func prollyParentPriDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preParentRowData prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preParentRowData prolly.Map,
+		receiver FKViolationReceiver) error {
 	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
 	if err != nil {
 		return err
@@ -183,7 +170,7 @@ func prollyParentPriDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeySerializationCompatible(partialDesc, childSecIdxDesc)
+	compatibleTypes := foreignKeysAreCompatibleTypes(partialDesc, childSecIdxDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -244,11 +231,11 @@ func prollyParentPriDiffFkConstraintViolations(
 }
 
 func prollyChildPriDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preChildRowData prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preChildRowData prolly.Map,
+		receiver FKViolationReceiver) error {
 	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
 		return err
@@ -265,13 +252,7 @@ func prollyChildPriDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := true
-	for i, handler := range childPriIdxDesc.Handlers {
-		if handler != nil && !handler.SerializationCompatible(parentIdxPrefixDesc.Handlers[i]) {
-			compatibleTypes = false
-			break
-		}
-	}
+	compatibleTypes := foreignKeysAreCompatibleTypes(childPriIdxDesc, parentIdxPrefixDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -348,11 +329,11 @@ func prollyChildPriDiffFkConstraintViolations(
 }
 
 func prollyChildSecDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preChildSecIdx prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preChildSecIdx prolly.Map,
+		receiver FKViolationReceiver) error {
 
 	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
@@ -375,13 +356,7 @@ func prollyChildSecDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := true
-	for i, handler := range childIdxPrefixDesc.Handlers {
-		if handler != nil && !handler.SerializationCompatible(parentIdxPrefixDesc.Handlers[i]) {
-			compatibleTypes = false
-			break
-		}
-	}
+	compatibleTypes := foreignKeysAreCompatibleTypes(childIdxPrefixDesc, parentIdxPrefixDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -454,11 +429,24 @@ func prollyChildSecDiffFkConstraintViolations(
 	return nil
 }
 
+// foreignKeysAreCompatibleTypes returns whether the serializations for two tuple descriptors are binary compatible
+func foreignKeysAreCompatibleTypes(keyDescA, keyDescB *val.TupleDesc) bool {
+	compatibleTypes := true
+	for i, handlerA := range keyDescA.Handlers {
+		handlerB := keyDescB.Handlers[i]
+		if handlerA != nil && handlerB != nil && !handlerA.SerializationCompatible(handlerB) {
+			compatibleTypes = false
+			break
+		}
+	}
+	return compatibleTypes
+}
+
 // convertSerializedFkField converts a serialized foreign key value from one type handler to another.
 func convertSerializedFkField(
-	ctx context.Context,
-	toHandler, fromHandler val.TupleTypeHandler,
-	field []byte,
+		ctx context.Context,
+		toHandler, fromHandler val.TupleTypeHandler,
+		field []byte,
 ) ([]byte, error) {
 	convertingHandler := toHandler
 	convertedHandler := fromHandler
@@ -505,11 +493,11 @@ func convertSerializedFkField(
 }
 
 func createCVIfNoPartialKeyMatchesPri(
-	ctx context.Context,
-	k, v, partialKey val.Tuple,
-	partialKeyDesc *val.TupleDesc,
-	idx prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		k, v, partialKey val.Tuple,
+		partialKeyDesc *val.TupleDesc,
+		idx prolly.Map,
+		receiver FKViolationReceiver) error {
 	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
 	if err != nil {
 		return err
@@ -526,12 +514,12 @@ func createCVIfNoPartialKeyMatchesPri(
 }
 
 func createCVForSecIdx(
-	ctx context.Context,
-	k val.Tuple,
-	primaryKD *val.TupleDesc,
-	pri prolly.Map,
-	tableSchema, indexSchema schema.Schema,
-	receiver FKViolationReceiver,
+		ctx context.Context,
+		k val.Tuple,
+		primaryKD *val.TupleDesc,
+		pri prolly.Map,
+		tableSchema, indexSchema schema.Schema,
+		receiver FKViolationReceiver,
 ) error {
 
 	// convert secondary idx entry to primary row key
@@ -601,50 +589,21 @@ type indexAndKeyDescriptor struct {
 // createCVsForDanglingChildRows finds all rows in the childIdx that match the given parent key and creates constraint
 // violations for each of them using the provided receiver.
 func createCVsForDanglingChildRows(
-	ctx context.Context,
-	partialKey val.Tuple,
-	partialKeyDesc *val.TupleDesc,
-	childPrimaryIdx *indexAndKeyDescriptor,
-	childSecIdx *indexAndKeyDescriptor,
-	receiver FKViolationReceiver,
-	compatibleTypes bool,
+		ctx context.Context,
+		partialKey val.Tuple,
+		partialKeyDesc *val.TupleDesc,
+		childPrimaryIdx *indexAndKeyDescriptor,
+		childSecIdx *indexAndKeyDescriptor,
+		receiver FKViolationReceiver,
+		compatibleTypes bool,
 ) error {
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the parent key to the child key format.
 	secondaryIndexKeyDesc := childSecIdx.keyDesc.PrefixDesc(partialKeyDesc.Count())
 	if !compatibleTypes {
-		tb := val.NewTupleBuilder(secondaryIndexKeyDesc, childSecIdx.index.NodeStore())
-		for i, parentHandler := range partialKeyDesc.Handlers {
-			childHandler := secondaryIndexKeyDesc.Handlers[i]
-			serialized, err := convertSerializedFkField(ctx, childHandler, parentHandler, partialKey.GetField(i))
-			if err != nil {
-				return err
-			}
-
-			switch childHandler.(type) {
-			case val.AdaptiveEncodingTypeHandler:
-				switch partialKeyDesc.Types[i].Enc {
-				case val.ExtendedAdaptiveEnc:
-					err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
-					if err != nil {
-						return err
-					}
-				case val.BytesAdaptiveEnc:
-					err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
-					if err != nil {
-						return err
-					}
-				default:
-					panic(fmt.Sprintf("unexpected encoding for adaptive type: %d", partialKeyDesc.Types[i].Enc))
-				}
-			default:
-				tb.PutRaw(i, serialized)
-			}
-		}
-
 		var err error
-		partialKey, err = tb.Build(childPrimaryIdx.index.Pool())
+		partialKey, err = convertKeyBetweenTypes(ctx, partialKey, partialKeyDesc, secondaryIndexKeyDesc, childSecIdx.index.NodeStore(), childPrimaryIdx.index.Pool())
 		if err != nil {
 			return err
 		}
@@ -691,6 +650,53 @@ func createCVsForDanglingChildRows(
 	}
 
 	return nil
+}
+
+// convertKeyBetweenTypes converts a partial key from one tuple descriptor's types to another. This is only necessary
+// when the keys are of different types that are not serialization identical.
+func convertKeyBetweenTypes(
+		ctx context.Context,
+		key val.Tuple,
+		fromKeyDesc *val.TupleDesc,
+		toKeyDesc *val.TupleDesc,
+		ns tree.NodeStore,
+		pool pool.BuffPool,
+) (val.Tuple, error) {
+	tb := val.NewTupleBuilder(toKeyDesc, ns)
+	for i, fromHandler := range fromKeyDesc.Handlers {
+		toHandler := toKeyDesc.Handlers[i]
+		serialized, err := convertSerializedFkField(ctx, toHandler, fromHandler, key.GetField(i))
+		if err != nil {
+			return nil, err
+		}
+
+		switch toHandler.(type) {
+		case val.AdaptiveEncodingTypeHandler:
+			switch fromKeyDesc.Types[i].Enc {
+			case val.ExtendedAdaptiveEnc:
+				err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
+				if err != nil {
+					return nil, err
+				}
+			case val.BytesAdaptiveEnc:
+				err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
+				if err != nil {
+					return nil, err
+				}
+			default:
+				panic(fmt.Sprintf("unexpected encoding for adaptive type: %d", fromKeyDesc.Types[i].Enc))
+			}
+		default:
+			tb.PutRaw(i, serialized)
+		}
+	}
+
+	var err error
+	key, err = tb.Build(pool)
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool, error) {
@@ -762,15 +768,15 @@ func (m FkCVMeta) ToInterface(context.Context) (interface{}, error) {
 // output which includes additional whitespace between keys, values, and array elements.
 func (m FkCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
-		`"Index": "%s", `+
-		`"Table": "%s", `+
-		`"Columns": ["%s"], `+
-		`"OnDelete": "%s", `+
-		`"OnUpdate": "%s", `+
-		`"ForeignKey": "%s", `+
-		`"ReferencedIndex": "%s", `+
-		`"ReferencedTable": "%s", `+
-		`"ReferencedColumns": ["%s"]}`,
+			`"Index": "%s", `+
+			`"Table": "%s", `+
+			`"Columns": ["%s"], `+
+			`"OnDelete": "%s", `+
+			`"OnUpdate": "%s", `+
+			`"ForeignKey": "%s", `+
+			`"ReferencedIndex": "%s", `+
+			`"ReferencedTable": "%s", `+
+			`"ReferencedColumns": ["%s"]}`,
 		m.Index,
 		m.Table,
 		strings.Join(m.Columns, `', '`),
