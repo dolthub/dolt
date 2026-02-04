@@ -21,6 +21,9 @@ import (
 	"io"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -34,8 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 // constraintViolationsLoadedTable is a collection of items needed to process constraint violations for a single table.
@@ -69,11 +70,11 @@ type FKViolationReceiver interface {
 // RegisterForeignKeyViolations emits constraint violations that have been created as a
 // result of the diff between |baseRoot| and |newRoot|. It sends violations to |receiver|.
 func RegisterForeignKeyViolations(
-		ctx *sql.Context,
-		tableResolver doltdb.TableResolver,
-		newRoot, baseRoot doltdb.RootValue,
-		tables *doltdb.TableNameSet,
-		receiver FKViolationReceiver,
+	ctx *sql.Context,
+	tableResolver doltdb.TableResolver,
+	newRoot, baseRoot doltdb.RootValue,
+	tables *doltdb.TableNameSet,
+	receiver FKViolationReceiver,
 ) error {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -355,12 +356,12 @@ var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
 
 // parentFkConstraintViolations processes foreign key constraint violations for the parent in a foreign key.
 func parentFkConstraintViolations(
-		ctx context.Context,
-		vr types.ValueReader,
-		foreignKey doltdb.ForeignKey,
-		preParent, postParent, postChild *constraintViolationsLoadedTable,
-		preParentRowData durable.Index,
-		receiver FKViolationReceiver,
+	ctx context.Context,
+	vr types.ValueReader,
+	foreignKey doltdb.ForeignKey,
+	preParent, postParent, postChild *constraintViolationsLoadedTable,
+	preParentRowData durable.Index,
+	receiver FKViolationReceiver,
 ) error {
 	if preParentRowData.Format() != types.Format_DOLT {
 		m := durable.NomsMapFromIndex(preParentRowData)
@@ -396,12 +397,12 @@ func parentFkConstraintViolations(
 // childFkConstraintViolations handles processing the reference options on a child, or creating a violation if
 // necessary.
 func childFkConstraintViolations(
-		ctx context.Context,
-		vr types.ValueReader,
-		foreignKey doltdb.ForeignKey,
-		postParent, postChild, preChild *constraintViolationsLoadedTable,
-		preChildRowData durable.Index,
-		receiver FKViolationReceiver,
+	ctx context.Context,
+	vr types.ValueReader,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild, preChild *constraintViolationsLoadedTable,
+	preChildRowData durable.Index,
+	receiver FKViolationReceiver,
 ) error {
 	if preChildRowData.Format() != types.Format_DOLT {
 		m := durable.NomsMapFromIndex(preChildRowData)
@@ -436,13 +437,13 @@ func childFkConstraintViolations(
 }
 
 func nomsParentFkConstraintViolations(
-		ctx context.Context,
-		vr types.ValueReader,
-		foreignKey doltdb.ForeignKey,
-		postParent, postChild *constraintViolationsLoadedTable,
-		preParentSch schema.Schema,
-		preParentRowData types.Map,
-		receiver FKViolationReceiver) error {
+	ctx context.Context,
+	vr types.ValueReader,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preParentSch schema.Schema,
+	preParentRowData types.Map,
+	receiver FKViolationReceiver) error {
 
 	postParentIndexTags := postParent.Index.IndexedColumnTags()
 	postChildIndexTags := postChild.Index.IndexedColumnTags()
@@ -535,12 +536,12 @@ func nomsParentFkConstraintViolations(
 }
 
 func nomsParentFkConstraintViolationsProcess(
-		ctx context.Context,
-		vr types.ValueReader,
-		foreignKey doltdb.ForeignKey,
-		postChild *constraintViolationsLoadedTable,
-		postChildIndexPartialKey types.Tuple,
-		receiver FKViolationReceiver,
+	ctx context.Context,
+	vr types.ValueReader,
+	foreignKey doltdb.ForeignKey,
+	postChild *constraintViolationsLoadedTable,
+	postChildIndexPartialKey types.Tuple,
+	receiver FKViolationReceiver,
 ) error {
 	indexData := durable.NomsMapFromIndex(postChild.IndexData)
 	rowData := durable.NomsMapFromIndex(postChild.RowData)
@@ -583,13 +584,13 @@ func nomsParentFkConstraintViolationsProcess(
 
 // nomsChildFkConstraintViolations processes foreign key constraint violations for the child in a foreign key.
 func nomsChildFkConstraintViolations(
-		ctx context.Context,
-		vr types.ValueReader,
-		foreignKey doltdb.ForeignKey,
-		postParent, postChild *constraintViolationsLoadedTable,
-		preChildSch schema.Schema,
-		preChildRowData types.Map,
-		receiver FKViolationReceiver,
+	ctx context.Context,
+	vr types.ValueReader,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preChildSch schema.Schema,
+	preChildRowData types.Map,
+	receiver FKViolationReceiver,
 ) error {
 	var postParentIndexTags, postChildIndexTags []uint64
 	if postParent.Index.Name() == "" {
@@ -666,12 +667,12 @@ func nomsChildFkConstraintViolations(
 
 // childFkConstraintViolationsProcess handles processing the constraint violations for the child of a foreign key.
 func childFkConstraintViolationsProcess(
-		ctx context.Context,
-		vr types.ValueReader,
-		postParent *constraintViolationsLoadedTable,
-		rowDiff *diff2.Difference,
-		parentPartialKey types.Tuple,
-		receiver FKViolationReceiver,
+	ctx context.Context,
+	vr types.ValueReader,
+	postParent *constraintViolationsLoadedTable,
+	rowDiff *diff2.Difference,
+	parentPartialKey types.Tuple,
+	receiver FKViolationReceiver,
 ) error {
 	var mapIter table.ReadCloser = noms.NewNomsRangeReader(
 		vr,
@@ -696,11 +697,11 @@ func childFkConstraintViolationsProcess(
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
 func newConstraintViolationsLoadedTable(
-		ctx *sql.Context,
-		tableResolver doltdb.TableResolver,
-		tblName doltdb.TableName,
-		idxName string,
-		root doltdb.RootValue,
+	ctx *sql.Context,
+	tableResolver doltdb.TableResolver,
+	tblName doltdb.TableName,
+	idxName string,
+	root doltdb.RootValue,
 ) (*constraintViolationsLoadedTable, bool, error) {
 	trueTblName, tbl, ok, err := tableResolver.ResolveTableInsensitive(ctx, root, tblName)
 	if err != nil {

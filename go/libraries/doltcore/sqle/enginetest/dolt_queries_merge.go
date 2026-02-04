@@ -3377,7 +3377,7 @@ var DoltConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT base_pk, base_col1, our_pk, our_col1, our_diff_type, their_pk, their_col1, their_diff_type" +
-						" from dolt_conflicts_t ORDER BY COALESCE(base_pk, our_pk, their_pk) ASC;",
+					" from dolt_conflicts_t ORDER BY COALESCE(base_pk, our_pk, their_pk) ASC;",
 				Expected: []sql.Row{
 					{1, 1, 1, 2, "modified", 1, 3, "modified"},
 					{2, 2, nil, nil, "removed", 2, 0, "modified"},
@@ -4915,10 +4915,10 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				Query: "show create table t",
 				Expected: []sql.Row{{"t",
 					"CREATE TABLE `t` (\n" +
-							"  `pk` int NOT NULL,\n" +
-							"  `col1` int,\n" +
-							"  PRIMARY KEY (`pk`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+						"  `pk` int NOT NULL,\n" +
+						"  `col1` int,\n" +
+						"  PRIMARY KEY (`pk`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
