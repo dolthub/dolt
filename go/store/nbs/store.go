@@ -667,12 +667,23 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 }
 
 func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error)) (*NomsBlockStore, error) {
+	return NewLocalJournalingStoreWithOptions(ctx, nbfVers, dir, q, mmapArchiveIndexes, warningsCb, JournalingStoreOptions{})
+}
+
+// JournalingStoreOptions controls behavior of local journaling store creation.
+type JournalingStoreOptions struct {
+	// FailOnLockTimeout returns an error if the exclusive journal manifest lock cannot be acquired
+	// within Dolt's internal lock timeout, instead of falling back to opening in read-only mode.
+	FailOnLockTimeout bool
+}
+
+func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), opts JournalingStoreOptions) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
 
-	m, err := newJournalManifest(ctx, dir)
+	m, err := newJournalManifest(ctx, dir, opts.FailOnLockTimeout)
 	if err != nil {
 		return nil, err
 	}

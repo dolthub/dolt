@@ -245,6 +245,50 @@ func TestJournalForDataLoss(t *testing.T) {
 	}
 }
 
+func TestJournalTruncated(t *testing.T) {
+	// We should be able to process a truncated journal without any errors.
+	origTimestampGenerator := journalRecordTimestampGenerator
+	t.Cleanup(func() {
+		journalRecordTimestampGenerator = origTimestampGenerator
+	})
+	journalRecordTimestampGenerator = testTimestampGenerator
+
+	journal := make([]byte, 1<<20) // 1 MB should be plenty for these tests.
+
+	var off uint32
+	for range 8 {
+		r, _ := makeRootHashRecord()
+		off += writeRootHashRecord(journal[off:], r.address)
+		for range 32 {
+			r, _ = makeChunkRecord()
+			off += writeChunkRecord(journal[off:], mustCompressedChunk(r))
+		}
+	}
+	r, _ := makeRootHashRecord()
+	rootstart := off
+	off += writeRootHashRecord(journal[off:], r.address)
+	for i := range 16 {
+		var recoverErr error
+		_, err := processJournalRecords(t.Context(), bytes.NewReader(journal[:int(off)-i]), true, 0, func(int64, journalRec) error { return nil }, func(e error) { recoverErr = e })
+		require.NoError(t, err, "err should be nil, iteration %d", i)
+		require.NoError(t, recoverErr, "recoverErr should be nil, iteration %d", i)
+	}
+
+	// Test writing a large incorrect offset for that root record and then some more records after it. We should see
+	// errors in that case.
+	writeUint32(journal[rootstart:], uint32(1<<20))
+	for range 8 {
+		r, _ := makeRootHashRecord()
+		off += writeRootHashRecord(journal[off:], r.address)
+		for range 32 {
+			r, _ = makeChunkRecord()
+			off += writeChunkRecord(journal[off:], mustCompressedChunk(r))
+		}
+	}
+	_, err := processJournalRecords(t.Context(), bytes.NewReader(journal[:off]), true, 0, func(int64, journalRec) error { return nil }, nil)
+	require.Error(t, err)
+}
+
 func TestJournalForDataLossOnBoundary(t *testing.T) {
 	r := rand.New(rand.NewSource(987654321))
 	// The data loss detection logic has some special cases around buffer boundaries to avoid reading all data into

@@ -8253,6 +8253,19 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "DOLT_COMMIT respects foreign_key_checks=0",
+		SetUpScript: []string{
+			"SET @@foreign_key_checks=0;",
+			"CREATE TABLE invalidFK (id int primary key, constraint fk foreign key (id) references invalidTable(id))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_COMMIT('-A', '-m', 'Table with foreign key violation');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+		},
+	},
 }
 
 var DoltIndexPrefixScripts = []queries.ScriptTest{

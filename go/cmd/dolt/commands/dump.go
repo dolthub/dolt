@@ -627,7 +627,11 @@ func getTableWriter(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOption
 	if err != nil {
 		return nil, errhand.BuildDError("error: ").AddCause(err).Build()
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	deaf, err := dEnv.DbEaFactory(ctx)
+	if err != nil {
+		return nil, errhand.BuildDError("error: ").AddCause(err).Build()
+	}
+	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
 
 	writer, err := dEnv.FS.OpenForWriteAppend(filePath, os.ModePerm)
 	if err != nil {

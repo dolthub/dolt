@@ -6,7 +6,7 @@ set -o pipefail
 script_dir=$(dirname "$0")
 cd $script_dir/../..
 
-GO_BUILD_VERSION=1.25.3
+GO_BUILD_VERSION=1.25.6
 
 if (( $# != 1 )); then
   echo "usage: build.sh linux-arm64|linux-amd64|darwin-arm64|darwin-amd64|windows-amd64"

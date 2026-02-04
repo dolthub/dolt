@@ -56,7 +56,10 @@ type DoltHarness struct {
 func (h *DoltHarness) Close() {
 	dbs := h.sess.Provider().AllDatabases(sql.NewEmptyContext())
 	for _, db := range dbs {
-		db.(dsess.SqlDatabase).DbData().Ddb.Close()
+		// Close the sql-layer database resources (global state, background threads, etc).
+		// Do NOT close the underlying DoltDB here; this harness reuses a shared *env.DoltEnv
+		// across multiple init/teardown cycles (see doltharness_test.go).
+		db.(dsess.SqlDatabase).Close()
 	}
 }
 
@@ -302,7 +305,11 @@ func sqlNewEngine(ctx context.Context, dEnv *env.DoltEnv) (*sqle.Engine, dsess.D
 	if err != nil {
 		return nil, nil, err
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	deaf, err := dEnv.DbEaFactory(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
 	db, err := dsql.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	if err != nil {
 		return nil, nil, err

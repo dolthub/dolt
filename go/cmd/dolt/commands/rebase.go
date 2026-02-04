@@ -122,6 +122,11 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
 	}
 
+	if status != 0 {
+		cli.Println(fmt.Sprintf("runtime error: unexpected non-zero, non-one status from DOLT_REBASE: %d", status))
+		return 1
+	}
+
 	// If the rebase was successful, or if it was aborted, print out the message and
 	// ensure the branch being rebased is checked out in the CLI
 	message := rows[0][1].(string)
@@ -134,6 +139,14 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 0
 	}
 
+	if strings.HasPrefix(message, dprocedures.EditPausePrefix) {
+		// We need to pause to edit a commit. This is similar to date conflicts, but that makes it's way to us as an error
+		// This is not an error scenario, Just print the message, and return 0.
+		cli.Println(message)
+		return 0
+	}
+
+	// At this point, we know the rebase has just been initiated, and we are in interactive mode.
 	rebasePlan, err := getRebasePlan(cliCtx, queryist.Context, queryist.Queryist, apr.Arg(0), branchName)
 	if err != nil {
 		// attempt to abort the rebase
@@ -168,8 +181,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	rows, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, "CALL DOLT_REBASE('--continue');")
 	if err != nil {
-		// If the error is a data conflict, don't abort the rebase, but let the caller resolve the conflicts
-		if dprocedures.ErrRebaseDataConflict.Is(err) || strings.Contains(err.Error(), dprocedures.ErrRebaseDataConflict.Message[:40]) {
+		if isRebaseConflictError(err) {
 			if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
 			}
@@ -198,7 +210,17 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
 	}
 
-	cli.Println(rows[0][1].(string))
+	message = rows[0][1].(string)
+
+	// Check if this is an edit pause. Such messages have a status value of 0, so all we have to go on is the message.
+	if strings.Contains(message, dprocedures.EditPausePrefix) {
+		// Make sure the CLI is on the same branch so the user can make their edits.
+		if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
+		}
+	}
+
+	cli.Println(message)
 	return 0
 }
 
@@ -289,6 +311,7 @@ func buildInitialRebaseMsg(sqlCtx *sql.Context, queryist cli.Queryist, rebaseBra
 	buffer.WriteString("# Commands:\n")
 	buffer.WriteString("# p, pick <commit> = use commit\n")
 	buffer.WriteString("# d, drop <commit> = remove commit\n")
+	buffer.WriteString("# e, edit <commit> = use commit, but stop for amending\n")
 	buffer.WriteString("# r, reword <commit> = use commit, but edit the commit message\n")
 	buffer.WriteString("# s, squash <commit> = use commit, but meld into previous commit\n")
 	buffer.WriteString("# f, fixup <commit> = like \"squash\", but discard this commit's message\n")
@@ -314,6 +337,31 @@ func getRebaseAction(col interface{}) (string, bool) {
 	}
 }
 
+// rebaseActionMap maps short action forms to their full names
+var rebaseActionMap = map[string]string{
+	"p": rebase.RebaseActionPick,
+	"r": rebase.RebaseActionReword,
+	"e": rebase.RebaseActionEdit,
+	"s": rebase.RebaseActionSquash,
+	"f": rebase.RebaseActionFixup,
+	"d": rebase.RebaseActionDrop,
+	// Also accept full names
+	rebase.RebaseActionPick:   rebase.RebaseActionPick,
+	rebase.RebaseActionReword: rebase.RebaseActionReword,
+	rebase.RebaseActionEdit:   rebase.RebaseActionEdit,
+	rebase.RebaseActionSquash: rebase.RebaseActionSquash,
+	rebase.RebaseActionFixup:  rebase.RebaseActionFixup,
+	rebase.RebaseActionDrop:   rebase.RebaseActionDrop,
+}
+
+func expandRebaseAction(action string) (string, error) {
+	if fullAction, ok := rebaseActionMap[action]; ok {
+		return fullAction, nil
+	}
+
+	return "", fmt.Errorf("unknown action in rebase plan: %s", action)
+}
+
 // parseRebaseMessage parses the rebase message from the editor and adds all uncommented out lines as steps in the rebase plan.
 func parseRebaseMessage(rebaseMsg string) (*rebase.RebasePlan, error) {
 	plan := &rebase.RebasePlan{}
@@ -324,8 +372,14 @@ func parseRebaseMessage(rebaseMsg string) (*rebase.RebasePlan, error) {
 			if len(rebaseStepParts) != 3 {
 				return nil, fmt.Errorf("invalid line %d: %s", i, line)
 			}
+
+			expandedAction, err := expandRebaseAction(rebaseStepParts[0])
+			if err != nil {
+				return nil, fmt.Errorf("line %d: %s", i+1, err.Error())
+			}
+
 			plan.Steps = append(plan.Steps, rebase.RebasePlanStep{
-				Action:     rebaseStepParts[0],
+				Action:     expandedAction,
 				CommitHash: rebaseStepParts[1],
 				CommitMsg:  rebaseStepParts[2],
 			})
@@ -354,9 +408,8 @@ func insertRebasePlanIntoDoltRebaseTable(plan *rebase.RebasePlan, sqlCtx *sql.Co
 }
 
 // syncCliBranchToSqlSessionBranch sets the current branch for the CLI (in repo_state.json) to the active branch
-// for the current session. This is needed during rebasing, since any conflicts need to be resolved while the
-// session is on the rebase working branch (e.g. dolt_rebase_t1) and after the rebase finishes, the session needs
-// to be back on the branch being rebased (e.g. t1).
+// for the current session. This is needed during rebasing, as the user may need to stop in the middle of the
+// process to handle a conflict or an edit operation.
 func syncCliBranchToSqlSessionBranch(ctx *sql.Context, dEnv *env.DoltEnv) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	currentBranch, err := doltSession.GetBranch(ctx)
@@ -365,4 +418,21 @@ func syncCliBranchToSqlSessionBranch(ctx *sql.Context, dEnv *env.DoltEnv) error 
 	}
 
 	return saveHeadBranch(dEnv.FS, currentBranch)
+}
+
+// isRebaseConflictError checks if the given error represents a rebase pause condition
+// (data conflicts) that should not abort the rebase but instead allow the user to resolve/continue.
+func isRebaseConflictError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check typed errors first (for local execution)
+	if dprocedures.ErrRebaseDataConflict.Is(err) {
+		return true
+	}
+
+	// For over-the-wire errors that lose their type, match against error message patterns
+	errMsg := err.Error()
+	return strings.HasPrefix(errMsg, dprocedures.RebaseDataConflictPrefix)
 }

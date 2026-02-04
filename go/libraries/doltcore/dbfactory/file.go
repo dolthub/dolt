@@ -57,6 +57,19 @@ const (
 	DatabaseNameParam = "database_name"
 
 	MMapArchiveIndexesParam = "mmap_archive_indexes"
+
+	// DisableSingletonCacheParam disables the in-process singleton database cache for local file-backed databases.
+	// When set, each open will construct a fresh underlying store instead of reusing a cached instance.
+	//
+	// Intended for embedded-driver usage where callers want deterministic reopen semantics.
+	DisableSingletonCacheParam = "disable_singleton_cache"
+
+	// FailOnJournalLockTimeoutParam changes the journaling store open behavior to fail fast when the exclusive
+	// journal manifest lock cannot be acquired within Dolt's internal lock timeout, instead of falling back
+	// to opening the database in read-only mode.
+	//
+	// Intended for embedded-driver usage so higher layers can implement their own retry/backoff policy.
+	FailOnJournalLockTimeoutParam = "fail_on_journal_lock_timeout"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -128,6 +141,14 @@ func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 
 // CreateDB creates a local filesys backed database
 func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+	// Some embedded-driver use-cases require deterministic reopen semantics. When this flag is set,
+	// bypass the in-process singleton cache and always create a new underlying store.
+	if params != nil {
+		if _, ok := params[DisableSingletonCacheParam]; ok {
+			return fact.CreateDbNoCache(ctx, nbf, urlObj, params, nbs.JournalParserLoggingWarningsCb)
+		}
+	}
+
 	singletonLock.Lock()
 	defer singletonLock.Unlock()
 
@@ -179,7 +200,15 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	if useJournal && chunkJournalFeatureFlag {
-		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb)
+		// Allow higher layers (e.g. embedded driver) to opt into fail-fast lock behavior instead of
+		// falling back to read-only mode on lock timeout.
+		opts := nbs.JournalingStoreOptions{}
+		if params != nil {
+			if _, ok := params[FailOnJournalLockTimeoutParam]; ok {
+				opts.FailOnLockTimeout = true
+			}
+		}
+		newGenSt, err = nbs.NewLocalJournalingStoreWithOptions(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb, opts)
 	} else {
 		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q, mmapArchiveIndexes)
 	}

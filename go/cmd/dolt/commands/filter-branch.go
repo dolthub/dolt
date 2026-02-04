@@ -339,7 +339,11 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 	if err != nil {
 		return nil, nil, err
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	deaf, err := dEnv.DbEaFactory(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
 	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(ctx), opts)
 	if err != nil {
 		return nil, nil, err

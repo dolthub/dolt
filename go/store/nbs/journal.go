@@ -36,6 +36,10 @@ const (
 	chunkJournalName = chunkJournalAddr // todo
 )
 
+// ErrDatabaseLocked indicates the database is currently locked by another Dolt process.
+// This is returned when callers opt into fail-fast lock behavior for embedded usage.
+var ErrDatabaseLocked = errors.New("the database is locked by another dolt process")
+
 // reflogDisabled indicates whether access to the reflog has been disabled and if so, no chunk journal root references
 // should be kept in memory. This is controlled by the DOLT_DISABLE_REFLOG env var and this var is ONLY written to
 // during initialization. All access after initialization is read-only, so no additional locking is needed.
@@ -544,12 +548,17 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 }
 
 // newJournalManifest makes a new file manifest.
-func newJournalManifest(ctx context.Context, dir string) (m *journalManifest, err error) {
+// When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
+// (The behavior change is implemented separately; this is the plumbing flag.)
+func newJournalManifest(ctx context.Context, dir string, failOnTimeout bool) (m *journalManifest, err error) {
 	lock := fslock.New(filepath.Join(dir, lockFileName))
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
 	err = lock.LockWithTimeout(lockFileTimeout)
 	if errors.Is(err, fslock.ErrTimeout) {
+		if failOnTimeout {
+			return nil, ErrDatabaseLocked
+		}
 		lock, err = nil, nil // read only
 	} else if err != nil {
 		return nil, err

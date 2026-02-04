@@ -32,6 +32,7 @@ const (
 	RebaseActionSquash = "squash"
 	RebaseActionFixup  = "fixup"
 	RebaseActionDrop   = "drop"
+	RebaseActionEdit   = "edit"
 	RebaseActionReword = "reword"
 )
 
