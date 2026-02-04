@@ -526,7 +526,7 @@ func createCVForSecIdx(
 }
 
 func primaryKeyFromSecondaryIndexRow(secIndexRow val.Tuple, primaryKD *val.TupleDesc, pri prolly.Map, tableSchema schema.Schema, indexSchema schema.Schema) (val.Tuple, error) {
-	keyMap := makeOrdinalMappingForSchemas(indexSchema.GetPKCols(), tableSchema.GetPKCols())
+	keyMap := makeOrdinalMappingForSchemas(indexSchema, tableSchema)
 
 	kb := val.NewTupleBuilder(primaryKD, pri.NodeStore())
 	for to := range keyMap {
@@ -538,13 +538,26 @@ func primaryKeyFromSecondaryIndexRow(secIndexRow val.Tuple, primaryKD *val.Tuple
 }
 
 // makeOrdinalMappingForSchemas creates an ordinal mapping from one schema to another based on column names.
-func makeOrdinalMappingForSchemas(from, to *schema.ColCollection) (m val.OrdinalMapping) {
+func makeOrdinalMappingForSchemas(fromSch, toSch schema.Schema) (m val.OrdinalMapping) {
+	from := fromSch.GetPKCols()
+	to := toSch.GetPKCols()
+
+	// offset accounts for a keyless to schema, where the pseudo key column is the final one
+	offset := 0
+	if from.Size() == 0 {
+		from = fromSch.GetNonPKCols()
+	}
+	if to.Size() == 0 {
+		to = toSch.GetNonPKCols()
+		offset = to.Size()
+	}
+
 	m = make(val.OrdinalMapping, to.StoredSize())
 	for i := range m {
 		col := to.GetByStoredIndex(i)
 		name := col.Name
 		colIdx := from.IndexOf(name)
-		m[i] = colIdx
+		m[i] = colIdx + offset
 	}
 	return
 }
