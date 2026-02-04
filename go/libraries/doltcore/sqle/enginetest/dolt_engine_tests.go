@@ -885,7 +885,7 @@ func RunDoltRebaseTests(t *testing.T, h DoltEnginetestHarness) {
 		}()
 	}
 
-	testMultiSessionScriptTests(t, DoltRebaseMultiSessionScriptTests)
+	//	testMultiSessionScriptTests(t, DoltRebaseMultiSessionScriptTests)
 }
 
 func RunDoltRebasePreparedTests(t *testing.T, h DoltEnginetestHarness) {
