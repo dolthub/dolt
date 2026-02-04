@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@actions/core": "^1.9.1",
-    "@aws-sdk/client-ses": "^3.621.0"
+    "@aws-sdk/client-ses": "^3.982.0"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.4"
   }
 }
