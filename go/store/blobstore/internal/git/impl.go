@@ -120,7 +120,7 @@ func (a *GitAPIImpl) HashObject(ctx context.Context, contents io.Reader) (OID, e
 		return "", err
 	}
 	fields := strings.Fields(string(out))
-	if len(fields) != 1 || fields[0] == "" {
+	if len(fields) != 1 {
 		return "", fmt.Errorf("git hash-object returned unexpected output: %q", strings.TrimSpace(string(out)))
 	}
 	return OID(fields[0]), nil
