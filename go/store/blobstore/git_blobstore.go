@@ -34,7 +34,7 @@ type GitBlobstore struct {
 	gitDir string
 	ref    string
 	runner *git.Runner
-	read   git.ReadAPI
+	api    git.GitAPI
 }
 
 var _ Blobstore = (*GitBlobstore)(nil)
@@ -46,7 +46,7 @@ func NewGitBlobstore(gitDir, ref string) (*GitBlobstore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &GitBlobstore{gitDir: gitDir, ref: ref, runner: r, read: git.NewReadAPIImpl(r)}, nil
+	return &GitBlobstore{gitDir: gitDir, ref: ref, runner: r, api: git.NewAPIImpl(r)}, nil
 }
 
 func (gbs *GitBlobstore) Path() string {
@@ -58,14 +58,14 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	commit, ok, err := gbs.read.TryResolveRefCommit(ctx, gbs.ref)
+	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
 	if err != nil {
 		return false, err
 	}
 	if !ok {
 		return false, nil
 	}
-	_, err = gbs.read.ResolvePathBlob(ctx, commit, key)
+	_, err = gbs.api.ResolvePathBlob(ctx, commit, key)
 	if err != nil {
 		if git.IsPathNotFound(err) {
 			return false, nil
@@ -80,7 +80,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 	if err != nil {
 		return nil, 0, "", err
 	}
-	commit, ok, err := gbs.read.TryResolveRefCommit(ctx, gbs.ref)
+	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
 	if err != nil {
 		return nil, 0, "", err
 	}
@@ -93,7 +93,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		return nil, 0, "", &git.RefNotFoundError{Ref: gbs.ref}
 	}
 
-	blobOID, err := gbs.read.ResolvePathBlob(ctx, commit, key)
+	blobOID, err := gbs.api.ResolvePathBlob(ctx, commit, key)
 	if err != nil {
 		if git.IsPathNotFound(err) {
 			return nil, 0, commit.String(), NotFound{Key: key}
@@ -101,7 +101,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		return nil, 0, commit.String(), err
 	}
 
-	sz, err := gbs.read.BlobSize(ctx, blobOID)
+	sz, err := gbs.api.BlobSize(ctx, blobOID)
 	if err != nil {
 		return nil, 0, commit.String(), err
 	}
@@ -109,7 +109,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 	// TODO(gitblobstore): This streaming implementation is correct but may be slow for workloads
 	// that do many small ranged reads (e.g. table index/footer reads). Consider caching/materializing
 	// blobs to a local file (or using a batched git cat-file mode) to serve ranges efficiently.
-	rc, err := gbs.read.BlobReader(ctx, blobOID)
+	rc, err := gbs.api.BlobReader(ctx, blobOID)
 	if err != nil {
 		return nil, 0, commit.String(), err
 	}

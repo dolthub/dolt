@@ -23,18 +23,20 @@ import (
 	"strings"
 )
 
-// ReadAPIImpl implements ReadAPI using the git CLI plumbing commands, via Runner.
-type ReadAPIImpl struct {
+// APIImpl implements GitAPI using the git CLI plumbing commands, via Runner.
+// It supports reads and Approach A writes (temporary index via GIT_INDEX_FILE)
+// without requiring a working tree checkout.
+type APIImpl struct {
 	r *Runner
 }
 
-var _ ReadAPI = (*ReadAPIImpl)(nil)
+var _ GitAPI = (*APIImpl)(nil)
 
-func NewReadAPIImpl(r *Runner) *ReadAPIImpl {
-	return &ReadAPIImpl{r: r}
+func NewAPIImpl(r *Runner) *APIImpl {
+	return &APIImpl{r: r}
 }
 
-func (a *ReadAPIImpl) TryResolveRefCommit(ctx context.Context, ref string) (oid OID, ok bool, err error) {
+func (a *APIImpl) TryResolveRefCommit(ctx context.Context, ref string) (oid OID, ok bool, err error) {
 	out, err := a.r.Run(ctx, RunOptions{}, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	if err == nil {
 		s := strings.TrimSpace(string(out))
@@ -51,7 +53,7 @@ func (a *ReadAPIImpl) TryResolveRefCommit(ctx context.Context, ref string) (oid 
 	return "", false, err
 }
 
-func (a *ReadAPIImpl) ResolveRefCommit(ctx context.Context, ref string) (OID, error) {
+func (a *APIImpl) ResolveRefCommit(ctx context.Context, ref string) (OID, error) {
 	oid, ok, err := a.TryResolveRefCommit(ctx, ref)
 	if err != nil {
 		return "", err
@@ -62,7 +64,7 @@ func (a *ReadAPIImpl) ResolveRefCommit(ctx context.Context, ref string) (OID, er
 	return oid, nil
 }
 
-func (a *ReadAPIImpl) ResolvePathBlob(ctx context.Context, commit OID, path string) (OID, error) {
+func (a *APIImpl) ResolvePathBlob(ctx context.Context, commit OID, path string) (OID, error) {
 	spec := commit.String() + ":" + path
 	out, err := a.r.Run(ctx, RunOptions{}, "rev-parse", "--verify", spec)
 	if err != nil {
@@ -86,7 +88,7 @@ func (a *ReadAPIImpl) ResolvePathBlob(ctx context.Context, commit OID, path stri
 	return OID(oid), nil
 }
 
-func (a *ReadAPIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
+func (a *APIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
 	out, err := a.r.Run(ctx, RunOptions{}, "cat-file", "-t", oid.String())
 	if err != nil {
 		return "", err
@@ -94,7 +96,7 @@ func (a *ReadAPIImpl) CatFileType(ctx context.Context, oid OID) (string, error) 
 	return strings.TrimSpace(string(out)), nil
 }
 
-func (a *ReadAPIImpl) BlobSize(ctx context.Context, oid OID) (int64, error) {
+func (a *APIImpl) BlobSize(ctx context.Context, oid OID) (int64, error) {
 	out, err := a.r.Run(ctx, RunOptions{}, "cat-file", "-s", oid.String())
 	if err != nil {
 		return 0, err
@@ -107,9 +109,89 @@ func (a *ReadAPIImpl) BlobSize(ctx context.Context, oid OID) (int64, error) {
 	return n, nil
 }
 
-func (a *ReadAPIImpl) BlobReader(ctx context.Context, oid OID) (io.ReadCloser, error) {
+func (a *APIImpl) BlobReader(ctx context.Context, oid OID) (io.ReadCloser, error) {
 	rc, _, err := a.r.Start(ctx, RunOptions{}, "cat-file", "blob", oid.String())
 	return rc, err
+}
+
+func (a *APIImpl) ReadTree(ctx context.Context, commit OID, indexFile string) error {
+	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "read-tree", commit.String()+"^{tree}")
+	return err
+}
+
+func (a *APIImpl) ReadTreeEmpty(ctx context.Context, indexFile string) error {
+	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "read-tree", "--empty")
+	return err
+}
+
+func (a *APIImpl) UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid OID, path string) error {
+	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "update-index", "--add", "--cacheinfo", mode, oid.String(), path)
+	return err
+}
+
+func (a *APIImpl) WriteTree(ctx context.Context, indexFile string) (OID, error) {
+	out, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "write-tree")
+	if err != nil {
+		return "", err
+	}
+	oid := strings.TrimSpace(string(out))
+	if oid == "" {
+		return "", fmt.Errorf("git write-tree returned empty oid")
+	}
+	return OID(oid), nil
+}
+
+func (a *APIImpl) CommitTree(ctx context.Context, tree OID, parent *OID, message string, author *Identity) (OID, error) {
+	args := []string{"commit-tree", tree.String(), "-m", message}
+	if parent != nil && parent.String() != "" {
+		args = append(args, "-p", parent.String())
+	}
+
+	var env []string
+	if author != nil {
+		if author.Name != "" {
+			env = append(env,
+				"GIT_AUTHOR_NAME="+author.Name,
+				"GIT_COMMITTER_NAME="+author.Name,
+			)
+		}
+		if author.Email != "" {
+			env = append(env,
+				"GIT_AUTHOR_EMAIL="+author.Email,
+				"GIT_COMMITTER_EMAIL="+author.Email,
+			)
+		}
+	}
+
+	out, err := a.r.Run(ctx, RunOptions{Env: env}, args...)
+	if err != nil {
+		return "", err
+	}
+	oid := strings.TrimSpace(string(out))
+	if oid == "" {
+		return "", fmt.Errorf("git commit-tree returned empty oid")
+	}
+	return OID(oid), nil
+}
+
+func (a *APIImpl) UpdateRefCAS(ctx context.Context, ref string, newOID OID, oldOID OID, msg string) error {
+	args := []string{"update-ref"}
+	if msg != "" {
+		args = append(args, "-m", msg)
+	}
+	args = append(args, ref, newOID.String(), oldOID.String())
+	_, err := a.r.Run(ctx, RunOptions{}, args...)
+	return err
+}
+
+func (a *APIImpl) UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error {
+	args := []string{"update-ref"}
+	if msg != "" {
+		args = append(args, "-m", msg)
+	}
+	args = append(args, ref, newOID.String())
+	_, err := a.r.Run(ctx, RunOptions{}, args...)
+	return err
 }
 
 func isRefNotFoundErr(err error) bool {

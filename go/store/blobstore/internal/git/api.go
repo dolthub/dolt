@@ -16,16 +16,33 @@ package git
 
 import (
 	"context"
-	"fmt"
+	"io"
 )
 
-// WriteAPI defines the git plumbing operations needed for Approach A (temporary index
-// via GIT_INDEX_FILE) to perform updates without a working tree checkout.
-//
-// This file intentionally does not implement these operations yet; the current
-// GitBlobstore milestone is read-only. All methods on the default implementation
-// return ErrUnimplemented.
-type WriteAPI interface {
+// GitAPI defines the git plumbing operations needed by GitBlobstore. It includes both
+// read and write operations to allow swapping implementations (e.g. git CLI vs a Go git
+// library) while keeping callers stable.
+type GitAPI interface {
+	// TryResolveRefCommit resolves |ref| to a commit OID. Returns ok=false if the ref does not exist.
+	TryResolveRefCommit(ctx context.Context, ref string) (oid OID, ok bool, err error)
+
+	// ResolveRefCommit resolves |ref| to a commit OID, returning RefNotFoundError if missing.
+	ResolveRefCommit(ctx context.Context, ref string) (OID, error)
+
+	// ResolvePathBlob resolves |path| within |commit| to a blob OID.
+	// It returns PathNotFoundError if the path does not exist, and NotBlobError if it
+	// resolves to a non-blob object.
+	ResolvePathBlob(ctx context.Context, commit OID, path string) (OID, error)
+
+	// CatFileType returns the git object type for |oid| (e.g. "blob", "tree", "commit").
+	CatFileType(ctx context.Context, oid OID) (string, error)
+
+	// BlobSize returns the size in bytes of the blob object |oid|.
+	BlobSize(ctx context.Context, oid OID) (int64, error)
+
+	// BlobReader returns a reader for blob contents.
+	BlobReader(ctx context.Context, oid OID) (io.ReadCloser, error)
+
 	// ReadTree populates |indexFile| with the entries from |commit|'s root tree.
 	// Equivalent plumbing:
 	//   GIT_DIR=... GIT_INDEX_FILE=<indexFile> git read-tree <commit>^{tree}
@@ -62,43 +79,9 @@ type WriteAPI interface {
 	UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error
 }
 
-// Identity represents git author/committer metadata. A future implementation
-// may set this via environment variables (GIT_AUTHOR_NAME, etc.).
+// Identity represents git author/committer metadata. A future implementation may set
+// this via environment variables (GIT_AUTHOR_NAME, etc.).
 type Identity struct {
 	Name  string
 	Email string
-}
-
-// UnimplementedWriteAPI is the default write API for the read-only milestone.
-// It can be embedded or returned by constructors to make write paths fail fast.
-type UnimplementedWriteAPI struct{}
-
-var _ WriteAPI = UnimplementedWriteAPI{}
-
-func (UnimplementedWriteAPI) ReadTree(ctx context.Context, commit OID, indexFile string) error {
-	return fmt.Errorf("%w: ReadTree", ErrUnimplemented)
-}
-
-func (UnimplementedWriteAPI) ReadTreeEmpty(ctx context.Context, indexFile string) error {
-	return fmt.Errorf("%w: ReadTreeEmpty", ErrUnimplemented)
-}
-
-func (UnimplementedWriteAPI) UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid OID, path string) error {
-	return fmt.Errorf("%w: UpdateIndexCacheInfo", ErrUnimplemented)
-}
-
-func (UnimplementedWriteAPI) WriteTree(ctx context.Context, indexFile string) (OID, error) {
-	return "", fmt.Errorf("%w: WriteTree", ErrUnimplemented)
-}
-
-func (UnimplementedWriteAPI) CommitTree(ctx context.Context, tree OID, parent *OID, message string, author *Identity) (OID, error) {
-	return "", fmt.Errorf("%w: CommitTree", ErrUnimplemented)
-}
-
-func (UnimplementedWriteAPI) UpdateRefCAS(ctx context.Context, ref string, newOID OID, oldOID OID, msg string) error {
-	return fmt.Errorf("%w: UpdateRefCAS", ErrUnimplemented)
-}
-
-func (UnimplementedWriteAPI) UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error {
-	return fmt.Errorf("%w: UpdateRef", ErrUnimplemented)
 }
