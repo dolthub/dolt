@@ -49,6 +49,26 @@ teardown() {
     /build/bin/python/sqlalchemy-test $USER $PORT $REPO_NAME
 }
 
+@test "python replication client" {
+    # Stop the server that setup launched
+    kill $SERVER_PID
+
+    # Configure binlog replication settings
+    dolt sql -q "SET @@PERSIST.log_bin=1;"
+    dolt sql -q "SET @@PERSIST.gtid_mode=ON;"
+    dolt sql -q "SET @@PERSIST.enforce_gtid_consistency=ON;"
+    dolt sql -q "SET @@PERSIST.binlog_format='ROW';"
+    dolt sql -q "SET @@PERSIST.binlog_row_image='FULL';"
+    dolt sql -q "SET @@PERSIST.binlog_row_metadata='FULL';"
+
+    # Restart the SQL server
+    dolt sql-server --host 0.0.0.0 --port=$PORT --loglevel=trace &
+    SERVER_PID=$!
+    sleep 1 # Give the server a chance to start
+
+    /build/bin/python/python-replication-test $USER $PORT $REPO_NAME
+}
+
 @test "java mysql-connector-j" {
     java -jar /build/bin/java/mysql-connector-test.jar $USER $PORT $REPO_NAME
 }

@@ -72,13 +72,14 @@ RUN make
 
 FROM python:3.14-slim-bookworm AS python_clients_build
 RUN apt-get update && apt-get install -y binutils libmariadb-dev gcc && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir mysql-connector-python==8.0.33 PyMySQL==1.0.2 sqlalchemy==1.4.46 mariadb pyinstaller
+RUN pip install --no-cache-dir mysql-connector-python==8.0.33 PyMySQL==1.0.2 sqlalchemy==1.4.46 mariadb pyinstaller mysql-replication
 COPY dolt/integration-tests/mysql-client-tests/python/ /build/python/
 WORKDIR /build/python/
 RUN pyinstaller --onefile pymysql-test.py
 RUN pyinstaller --onefile --collect-all mysql.connector sqlalchemy-test.py
 RUN pyinstaller --onefile --collect-all mysql.connector mysql-connector-test.py
 RUN pyinstaller --onefile mariadb-connector-test.py
+RUN pyinstaller --onefile python-replication-test.py
 
 FROM elixir:1.18.3-slim AS elixir_clients_build
 RUN apt-get update && apt-get install -y ca-certificates xz-utils curl && rm -rf /var/lib/apt/lists/*
