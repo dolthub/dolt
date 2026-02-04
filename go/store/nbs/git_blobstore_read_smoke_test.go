@@ -58,14 +58,14 @@ func TestGitBlobstoreReadSmoke_ManifestAndTableAccessPatterns(t *testing.T) {
 		table[i] = byte(i % 251)
 	}
 
-	commit, err := repo.SetRefToTree(ctx, "refs/dolt/data", map[string][]byte{
+	commit, err := repo.SetRefToTree(ctx, blobstore.DoltDataRef, map[string][]byte{
 		"manifest": buf.Bytes(),
 		"table":    table,
 	}, "seed refs/dolt/data for smoke test")
 	require.NoError(t, err)
 	require.NotEmpty(t, commit)
 
-	bs, err := blobstore.NewGitBlobstore(repo.GitDir, "refs/dolt/data")
+	bs, err := blobstore.NewGitBlobstore(repo.GitDir, blobstore.DoltDataRef)
 	require.NoError(t, err)
 
 	// 1) Manifest read path via blobstoreManifest.ParseIfExists.

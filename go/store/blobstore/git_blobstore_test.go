@@ -35,7 +35,7 @@ func TestGitBlobstore_RefMissingIsNotFound(t *testing.T) {
 	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, "refs/dolt/data")
+	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	ok, err := bs.Exists(ctx, "manifest")
@@ -64,13 +64,13 @@ func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {
 	require.NoError(t, err)
 
 	want := []byte("hello manifest\n")
-	commit, err := repo.SetRefToTree(ctx, "refs/dolt/data", map[string][]byte{
+	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"manifest": want,
 		"dir/file": []byte("abc"),
 	}, "seed")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, "refs/dolt/data")
+	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	ok, err := bs.Exists(ctx, "manifest")
@@ -108,12 +108,12 @@ func TestGitBlobstore_Get_NotFoundMissingKey(t *testing.T) {
 	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
 	require.NoError(t, err)
 
-	_, err = repo.SetRefToTree(ctx, "refs/dolt/data", map[string][]byte{
+	_, err = repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"present": []byte("x"),
 	}, "seed")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, "refs/dolt/data")
+	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	_, _, err = GetBytes(ctx, bs, "missing", AllRange)
@@ -133,12 +133,12 @@ func TestGitBlobstore_BlobRangeSemantics(t *testing.T) {
 	maxValue := int64(16 * 1024)
 	testData := rangeData(0, maxValue)
 
-	commit, err := repo.SetRefToTree(ctx, "refs/dolt/data", map[string][]byte{
+	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"range": testData,
 	}, "range fixture")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, "refs/dolt/data")
+	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	// full range
@@ -181,10 +181,10 @@ func TestGitBlobstore_InvalidKeysError(t *testing.T) {
 	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
 	require.NoError(t, err)
 
-	_, err = repo.SetRefToTree(ctx, "refs/dolt/data", map[string][]byte{"ok": []byte("x")}, "seed")
+	_, err = repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{"ok": []byte("x")}, "seed")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, "refs/dolt/data")
+	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	invalid := []string{
