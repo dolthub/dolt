@@ -56,11 +56,6 @@ func (e *NotBlobError) Error() string {
 	return fmt.Sprintf("git path is not a blob (%s): %s:%s", e.Type, e.Commit, e.Path)
 }
 
-func IsRefNotFound(err error) bool {
-	var e *RefNotFoundError
-	return errors.As(err, &e)
-}
-
 func IsPathNotFound(err error) bool {
 	var e *PathNotFoundError
 	return errors.As(err, &e)
