@@ -9,7 +9,7 @@ exports.modules = {
 var __webpack_unused_export__;
 
 
-var propertyProvider = __webpack_require__(1238);
+var propertyProvider = __webpack_require__(8857);
 var url = __webpack_require__(7016);
 var buffer = __webpack_require__(181);
 var http = __webpack_require__(8611);

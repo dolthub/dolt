@@ -10,7 +10,7 @@
     "build": "ncc build index.js"
   },
   "dependencies": {
-    "@actions/core": "^1.9.1",
+    "@actions/core": "^2.0.3",
     "@aws-sdk/client-ses": "^3.982.0"
   },
   "devDependencies": {

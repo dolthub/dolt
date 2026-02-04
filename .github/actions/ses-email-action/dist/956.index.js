@@ -10,7 +10,7 @@ exports.modules = {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.fromTokenFile = void 0;
 const client_1 = __webpack_require__(5152);
-const property_provider_1 = __webpack_require__(1238);
+const property_provider_1 = __webpack_require__(8857);
 const shared_ini_file_loader_1 = __webpack_require__(4964);
 const fs_1 = __webpack_require__(9896);
 const fromWebToken_1 = __webpack_require__(4453);
@@ -886,7 +886,7 @@ const core_1 = __webpack_require__(8704);
 const util_user_agent_node_1 = __webpack_require__(1656);
 const config_resolver_1 = __webpack_require__(9316);
 const core_2 = __webpack_require__(402);
-const hash_node_1 = __webpack_require__(5092);
+const hash_node_1 = __webpack_require__(2711);
 const middleware_retry_1 = __webpack_require__(9618);
 const node_config_provider_1 = __webpack_require__(5704);
 const node_http_handler_1 = __webpack_require__(1279);
