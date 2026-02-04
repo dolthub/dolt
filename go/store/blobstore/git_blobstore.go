@@ -49,8 +49,9 @@ type GitBlobstore struct {
 
 var _ Blobstore = (*GitBlobstore)(nil)
 
-// NewGitBlobstore creates a new read-only GitBlobstore rooted at |gitDir| and |ref|.
-// |gitDir| should point at a bare repo directory or a .git directory.
+// NewGitBlobstore creates a new GitBlobstore rooted at |gitDir| and |ref|.
+// |gitDir| should point at a bare repo directory or a .git directory. Put is implemented,
+// while CheckAndPut and Concatenate are still unimplemented (see type-level docs).
 func NewGitBlobstore(gitDir, ref string) (*GitBlobstore, error) {
 	return NewGitBlobstoreWithIdentity(gitDir, ref, nil)
 }
