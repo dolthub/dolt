@@ -43,6 +43,11 @@ type GitAPI interface {
 	// BlobReader returns a reader for blob contents.
 	BlobReader(ctx context.Context, oid OID) (io.ReadCloser, error)
 
+	// HashObject writes a new blob object for the provided contents and returns its OID.
+	// Equivalent plumbing:
+	//   GIT_DIR=... git hash-object -w --stdin
+	HashObject(ctx context.Context, contents io.Reader) (OID, error)
+
 	// ReadTree populates |indexFile| with the entries from |commit|'s root tree.
 	// Equivalent plumbing:
 	//   GIT_DIR=... GIT_INDEX_FILE=<indexFile> git read-tree <commit>^{tree}

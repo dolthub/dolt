@@ -114,6 +114,18 @@ func (a *GitAPIImpl) BlobReader(ctx context.Context, oid OID) (io.ReadCloser, er
 	return rc, err
 }
 
+func (a *GitAPIImpl) HashObject(ctx context.Context, contents io.Reader) (OID, error) {
+	out, err := a.r.Run(ctx, RunOptions{Stdin: contents}, "hash-object", "-w", "--stdin")
+	if err != nil {
+		return "", err
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) != 1 || fields[0] == "" {
+		return "", fmt.Errorf("git hash-object returned unexpected output: %q", strings.TrimSpace(string(out)))
+	}
+	return OID(fields[0]), nil
+}
+
 func (a *GitAPIImpl) ReadTree(ctx context.Context, commit OID, indexFile string) error {
 	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "read-tree", commit.String()+"^{tree}")
 	return err
