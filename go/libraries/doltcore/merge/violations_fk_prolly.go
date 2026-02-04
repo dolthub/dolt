@@ -564,10 +564,11 @@ func createCVsForDanglingChildRows(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the parent key to the child key format.
+	secondaryIndexKeyDesc := childSecIdx.keyDesc.PrefixDesc(partialKeyDesc.Count())
 	if !compatibleTypes {
-		tb := val.NewTupleBuilder(childSecIdx.keyDesc, childSecIdx.index.NodeStore())
+		tb := val.NewTupleBuilder(secondaryIndexKeyDesc, childSecIdx.index.NodeStore())
 		for i, parentHandler := range partialKeyDesc.Handlers {
-			childHandler := childSecIdx.keyDesc.Handlers[i]
+			childHandler := secondaryIndexKeyDesc.Handlers[i]
 			serialized, err := convertSerializedFkField(ctx, childHandler, parentHandler, partialKey.GetField(i))
 			if err != nil {
 				return err
@@ -601,7 +602,11 @@ func createCVsForDanglingChildRows(
 		}
 	}
 
-	itr, err := creation.NewPrefixItr(ctx, partialKey, childSecIdx.keyDesc, childSecIdx.index)
+	logrus.Warnf("createCVsForDanglingChildRows: looking for child sec idx key: %s\n", secondaryIndexKeyDesc.Format(ctx, partialKey))
+	format, _ := prolly.DebugFormat(ctx, childSecIdx.index)
+	logrus.Warnf("createCVsForDanglingChildRows: secondary index contents: %s", format)
+
+	itr, err := creation.NewPrefixItr(ctx, partialKey, secondaryIndexKeyDesc, childSecIdx.index)
 	if err != nil {
 		return err
 	}
