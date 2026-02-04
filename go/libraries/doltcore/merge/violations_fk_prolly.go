@@ -20,9 +20,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -31,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func prollyParentSecDiffFkConstraintViolations(
@@ -389,15 +387,6 @@ func prollyChildSecDiffFkConstraintViolations(
 				}
 			}
 
-			logrus.Warnf("looking for parent sec idx key: %s\n", parentSecIdxDesc.Format(ctx, parentLookupKey))
-			logrus.Warnf("prefix key: %s\n", parentIdxPrefixDesc.Format(ctx, parentLookupKey))
-			fullIdx, err := prolly.DebugFormat(ctx, parentSecIdx)
-			if err != nil {
-				return err
-			}
-
-			logrus.Warnf("sec idx: %s\n", fullIdx)
-
 			ok, err := parentSecIdx.HasPrefix(ctx, parentLookupKey, parentIdxPrefixDesc)
 			if err != nil {
 				return err
@@ -498,17 +487,11 @@ func createCVForSecIdx(
 	receiver FKViolationReceiver,
 ) error {
 
-	logrus.Warnf("sec index key: %s\n", primaryKD.Format(ctx, k))
-
 	// convert secondary idx entry to primary row key
 	primaryKey, err := primaryKeyFromSecondaryIndexRow(k, primaryKD, pri, tableSchema, indexSchema)
 	if err != nil {
 		return err
 	}
-
-	logrus.Warnf("primary index key: %s\n", primaryKD.Format(ctx, primaryKey))
-	format, _ := prolly.DebugFormat(ctx, pri)
-	logrus.Warnf("primary index: %s\n", format)
 
 	var value val.Tuple
 	err = pri.Get(ctx, primaryKey, func(k, v val.Tuple) error {
@@ -619,10 +602,6 @@ func createCVsForDanglingChildRows(
 			return err
 		}
 	}
-
-	logrus.Warnf("createCVsForDanglingChildRows: looking for child sec idx key: %s\n", secondaryIndexKeyDesc.Format(ctx, partialKey))
-	format, _ := prolly.DebugFormat(ctx, childSecIdx.index)
-	logrus.Warnf("createCVsForDanglingChildRows: secondary index contents: %s", format)
 
 	itr, err := creation.NewPrefixItr(ctx, partialKey, secondaryIndexKeyDesc, childSecIdx.index)
 	if err != nil {
