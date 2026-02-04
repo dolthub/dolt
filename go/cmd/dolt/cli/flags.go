@@ -78,6 +78,7 @@ const (
 	SilentFlag           = "silent"
 	SingleBranchFlag     = "single-branch"
 	SkipEmptyFlag        = "skip-empty"
+	SkipTestsFlag        = "skip-tests"
 	SoftResetParam       = "soft"
 	SquashParam          = "squash"
 	StagedFlag           = "staged"

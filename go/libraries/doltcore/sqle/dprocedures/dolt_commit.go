@@ -171,6 +171,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
+		SkipTests:  apr.Contains(cli.SkipTestsFlag),
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
@@ -214,6 +215,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 
 		pendingCommit.CommitOptions.Meta.Signature = string(signature)
 	}
+
 
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
 	if err != nil {
@@ -272,3 +274,4 @@ func commitSignatureStr(ctx *sql.Context, dbName string, roots doltdb.Roots, csp
 
 	return strings.Join(lines, "\n"), nil
 }
+

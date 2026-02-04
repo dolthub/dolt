@@ -61,6 +61,7 @@ func CreateCommitArgParser(supportsBranchFlag bool) *argparser.ArgParser {
 	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables and databases (including new tables) in the working set to the staged set.")
 	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")
 	ap.SupportsOptionalString(SignFlag, "S", "key-id", "Sign the commit using GPG. If no key-id is provided the key-id is taken from 'user.signingkey' the in the configuration")
+	ap.SupportsFlag(SkipTestsFlag, "", "Skip test validation before commit")
 	if supportsBranchFlag {
 		ap.SupportsString(BranchParam, "", "branch", "Commit to the specified branch instead of the current branch.")
 	}
@@ -116,6 +117,7 @@ func CreateRebaseArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AbortParam, "", "Abort an interactive rebase and return the working set to the pre-rebase state")
 	ap.SupportsFlag(ContinueFlag, "", "Continue an interactive rebase after adjusting the rebase plan")
 	ap.SupportsFlag(InteractiveFlag, "i", "Start an interactive rebase")
+	ap.SupportsFlag(SkipTestsFlag, "", "Skip test validation before rebase")
 	return ap
 }
 
@@ -190,6 +192,7 @@ func CreateCherryPickArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AllowEmptyFlag, "", "Allow empty commits to be cherry-picked. "+
 		"Note that use of this option only keeps commits that were initially empty. "+
 		"Commits which become empty, due to a previous commit, will cause cherry-pick to fail.")
+	ap.SupportsFlag(SkipTestsFlag, "", "Skip test validation before cherry-pick")
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
 		return errors.New("cherry-picking multiple commits is not supported yet.")
 	}

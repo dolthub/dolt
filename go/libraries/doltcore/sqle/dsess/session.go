@@ -45,6 +45,18 @@ import (
 
 var ErrSessionNotPersistable = errors.New("session is not persistable")
 
+// runTestValidation runs the test validation for the specified operation and test groups.
+// This is a placeholder implementation that can be enhanced to actually execute dolt_test_run() queries.
+func runTestValidation(ctx *sql.Context, testGroups []string, operationType string) error {
+	// If no test groups specified, skip validation
+	if len(testGroups) == 0 {
+		return nil
+	}
+	// TODO: Implement proper test execution once we have access to the SQL engine context
+	// For now, just return nil to allow commits to proceed
+	return nil
+}
+
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	provider DoltDatabaseProvider
@@ -794,6 +806,17 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 				return nil, err
 			}
 			props.Message = meta.Description
+		}
+	}
+
+	// Run test validation before creating commit if enabled and not skipped
+	if !props.SkipTests {
+		testGroups := GetCommitRunTestGroups()
+		if len(testGroups) > 0 {
+			err := runTestValidation(ctx, testGroups, "commit")
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
