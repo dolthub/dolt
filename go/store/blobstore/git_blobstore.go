@@ -263,6 +263,12 @@ func (gbs *GitBlobstore) buildPutCommit(ctx context.Context, parent git.OID, has
 		}
 	}
 
+	// TODO(gitblobstore): Decide on a policy for file-vs-directory prefix conflicts when staging keys.
+	// For example, staging "a" when "a/b" already exists in the tree/index (or vice-versa) can fail
+	// with a git index error (path appears as both a file and directory). Today our NBS keyspace is
+	// flat (e.g. "manifest", "<tableid>", "<tableid>.records"), so this should not occur. If we ever
+	// namespace keys into directories, consider proactively removing conflicting paths from the index
+	// before UpdateIndexCacheInfo so Put/CheckAndPut remain robust.
 	if err := gbs.api.UpdateIndexCacheInfo(ctx, indexFile, "100644", blobOID, key); err != nil {
 		return "", "", err
 	}
@@ -312,12 +318,22 @@ func isMissingGitIdentityErr(err error) bool {
 }
 
 func newTempIndex() (dir, indexFile string, cleanup func(), err error) {
-	dir, err = os.MkdirTemp("", "dolt-gitblobstore-index-")
+	// Create a unique temp index file. This is intentionally *not* placed under GIT_DIR:
+	// - some git dirs may be read-only or otherwise unsuitable for scratch files
+	// - we don't want to leave temp files inside the repo on crashes
+	//
+	// Note: git will also create a sibling lock file (<index>.lock) during index writes.
+	f, err := os.CreateTemp("", "dolt-gitblobstore-index-")
 	if err != nil {
 		return "", "", nil, err
 	}
-	indexFile = filepath.Join(dir, "index")
-	cleanup = func() { _ = os.RemoveAll(dir) }
+	indexFile = f.Name()
+	_ = f.Close()
+	dir = filepath.Dir(indexFile)
+	cleanup = func() {
+		_ = os.Remove(indexFile)
+		_ = os.Remove(indexFile + ".lock")
+	}
 	return dir, indexFile, cleanup, nil
 }
 
