@@ -100,12 +100,8 @@ func (e *CmdError) Error() string {
 		b.WriteString("\ndir: ")
 		b.WriteString(e.Dir)
 	}
-	if len(e.Output) > 0 {
-		b.WriteString("\noutput:\n")
-		b.WriteString(formatOutput(e.Output))
-	} else {
-		b.WriteString("\noutput:\n(no output)")
-	}
+	b.WriteString("\noutput:\n")
+	b.WriteString(formatOutput(e.Output))
 	if e.Cause != nil {
 		b.WriteString("\nerror: ")
 		b.WriteString(e.Cause.Error())
@@ -160,7 +156,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		Args:     append([]string(nil), args...),
 		Dir:      cmd.Dir,
 		ExitCode: exitCode,
-		Output:   append([]byte(nil), out...),
+		Output:   out,
 		Cause:    err,
 	}
 }
@@ -231,7 +227,7 @@ func (c *cmdReadCloser) Close() error {
 		Args:     c.args,
 		Dir:      c.dir,
 		ExitCode: exitCode,
-		Output:   append([]byte(nil), c.stderr.Bytes()...),
+		Output:   c.stderr.Bytes(),
 		Cause:    err,
 	}
 }
