@@ -23,7 +23,7 @@ import (
 // ReadAllBytes is a small helper for read-path callers that want a whole object.
 // This is not used by GitBlobstore.Get (which must support BlobRange), but it is useful in tests.
 func ReadAllBytes(ctx context.Context, r *Runner, oid OID) ([]byte, error) {
-	rc, err := NewAPIImpl(r).BlobReader(ctx, oid)
+	rc, err := NewGitAPIImpl(r).BlobReader(ctx, oid)
 	if err != nil {
 		return nil, err
 	}

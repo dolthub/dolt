@@ -23,20 +23,20 @@ import (
 	"strings"
 )
 
-// APIImpl implements GitAPI using the git CLI plumbing commands, via Runner.
-// It supports reads and Approach A writes (temporary index via GIT_INDEX_FILE)
+// GitAPIImpl implements GitAPI using the git CLI plumbing commands, via Runner.
+// It supports reads and writes (temporary index via GIT_INDEX_FILE)
 // without requiring a working tree checkout.
-type APIImpl struct {
+type GitAPIImpl struct {
 	r *Runner
 }
 
-var _ GitAPI = (*APIImpl)(nil)
+var _ GitAPI = (*GitAPIImpl)(nil)
 
-func NewAPIImpl(r *Runner) *APIImpl {
-	return &APIImpl{r: r}
+func NewGitAPIImpl(r *Runner) *GitAPIImpl {
+	return &GitAPIImpl{r: r}
 }
 
-func (a *APIImpl) TryResolveRefCommit(ctx context.Context, ref string) (oid OID, ok bool, err error) {
+func (a *GitAPIImpl) TryResolveRefCommit(ctx context.Context, ref string) (oid OID, ok bool, err error) {
 	out, err := a.r.Run(ctx, RunOptions{}, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	if err == nil {
 		s := strings.TrimSpace(string(out))
@@ -53,7 +53,7 @@ func (a *APIImpl) TryResolveRefCommit(ctx context.Context, ref string) (oid OID,
 	return "", false, err
 }
 
-func (a *APIImpl) ResolveRefCommit(ctx context.Context, ref string) (OID, error) {
+func (a *GitAPIImpl) ResolveRefCommit(ctx context.Context, ref string) (OID, error) {
 	oid, ok, err := a.TryResolveRefCommit(ctx, ref)
 	if err != nil {
 		return "", err
@@ -64,7 +64,7 @@ func (a *APIImpl) ResolveRefCommit(ctx context.Context, ref string) (OID, error)
 	return oid, nil
 }
 
-func (a *APIImpl) ResolvePathBlob(ctx context.Context, commit OID, path string) (OID, error) {
+func (a *GitAPIImpl) ResolvePathBlob(ctx context.Context, commit OID, path string) (OID, error) {
 	spec := commit.String() + ":" + path
 	out, err := a.r.Run(ctx, RunOptions{}, "rev-parse", "--verify", spec)
 	if err != nil {
@@ -88,7 +88,7 @@ func (a *APIImpl) ResolvePathBlob(ctx context.Context, commit OID, path string) 
 	return OID(oid), nil
 }
 
-func (a *APIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
+func (a *GitAPIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
 	out, err := a.r.Run(ctx, RunOptions{}, "cat-file", "-t", oid.String())
 	if err != nil {
 		return "", err
@@ -96,7 +96,7 @@ func (a *APIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func (a *APIImpl) BlobSize(ctx context.Context, oid OID) (int64, error) {
+func (a *GitAPIImpl) BlobSize(ctx context.Context, oid OID) (int64, error) {
 	out, err := a.r.Run(ctx, RunOptions{}, "cat-file", "-s", oid.String())
 	if err != nil {
 		return 0, err
@@ -109,27 +109,27 @@ func (a *APIImpl) BlobSize(ctx context.Context, oid OID) (int64, error) {
 	return n, nil
 }
 
-func (a *APIImpl) BlobReader(ctx context.Context, oid OID) (io.ReadCloser, error) {
+func (a *GitAPIImpl) BlobReader(ctx context.Context, oid OID) (io.ReadCloser, error) {
 	rc, _, err := a.r.Start(ctx, RunOptions{}, "cat-file", "blob", oid.String())
 	return rc, err
 }
 
-func (a *APIImpl) ReadTree(ctx context.Context, commit OID, indexFile string) error {
+func (a *GitAPIImpl) ReadTree(ctx context.Context, commit OID, indexFile string) error {
 	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "read-tree", commit.String()+"^{tree}")
 	return err
 }
 
-func (a *APIImpl) ReadTreeEmpty(ctx context.Context, indexFile string) error {
+func (a *GitAPIImpl) ReadTreeEmpty(ctx context.Context, indexFile string) error {
 	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "read-tree", "--empty")
 	return err
 }
 
-func (a *APIImpl) UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid OID, path string) error {
+func (a *GitAPIImpl) UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid OID, path string) error {
 	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "update-index", "--add", "--cacheinfo", mode, oid.String(), path)
 	return err
 }
 
-func (a *APIImpl) WriteTree(ctx context.Context, indexFile string) (OID, error) {
+func (a *GitAPIImpl) WriteTree(ctx context.Context, indexFile string) (OID, error) {
 	out, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "write-tree")
 	if err != nil {
 		return "", err
@@ -141,7 +141,7 @@ func (a *APIImpl) WriteTree(ctx context.Context, indexFile string) (OID, error) 
 	return OID(oid), nil
 }
 
-func (a *APIImpl) CommitTree(ctx context.Context, tree OID, parent *OID, message string, author *Identity) (OID, error) {
+func (a *GitAPIImpl) CommitTree(ctx context.Context, tree OID, parent *OID, message string, author *Identity) (OID, error) {
 	args := []string{"commit-tree", tree.String(), "-m", message}
 	if parent != nil && parent.String() != "" {
 		args = append(args, "-p", parent.String())
@@ -174,7 +174,7 @@ func (a *APIImpl) CommitTree(ctx context.Context, tree OID, parent *OID, message
 	return OID(oid), nil
 }
 
-func (a *APIImpl) UpdateRefCAS(ctx context.Context, ref string, newOID OID, oldOID OID, msg string) error {
+func (a *GitAPIImpl) UpdateRefCAS(ctx context.Context, ref string, newOID OID, oldOID OID, msg string) error {
 	args := []string{"update-ref"}
 	if msg != "" {
 		args = append(args, "-m", msg)
@@ -184,7 +184,7 @@ func (a *APIImpl) UpdateRefCAS(ctx context.Context, ref string, newOID OID, oldO
 	return err
 }
 
-func (a *APIImpl) UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error {
+func (a *GitAPIImpl) UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error {
 	args := []string{"update-ref"}
 	if msg != "" {
 		args = append(args, "-m", msg)

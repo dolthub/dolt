@@ -46,7 +46,7 @@ func NewGitBlobstore(gitDir, ref string) (*GitBlobstore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &GitBlobstore{gitDir: gitDir, ref: ref, runner: r, api: git.NewAPIImpl(r)}, nil
+	return &GitBlobstore{gitDir: gitDir, ref: ref, runner: r, api: git.NewGitAPIImpl(r)}, nil
 }
 
 func (gbs *GitBlobstore) Path() string {
