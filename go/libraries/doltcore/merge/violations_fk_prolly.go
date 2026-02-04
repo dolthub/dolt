@@ -67,10 +67,12 @@ func prollyParentSecDiffFkConstraintViolations(
 	childPrimary := &indexAndKeyDescriptor{
 		index:   childPriIdx,
 		keyDesc: childPriIdxDesc,
+		schema:  postChild.Schema,
 	}
 	childSecondary := &indexAndKeyDescriptor{
 		index:   childSecIdx,
 		keyDesc: childSecIdxDesc,
+		schema:  postChild.IndexSchema,
 	}
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
@@ -173,10 +175,12 @@ func prollyParentPriDiffFkConstraintViolations(
 	childPrimary := &indexAndKeyDescriptor{
 		index:   childPriIdx,
 		keyDesc: childPriIdxDesc,
+		schema:  postChild.Schema,
 	}
 	childSecondary := &indexAndKeyDescriptor{
 		index:   childScndryIdx,
 		keyDesc: childSecIdxDesc,
+		schema:  postChild.IndexSchema,
 	}
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
@@ -548,6 +552,7 @@ func makeOrdinalMappingForSchemas(from, to *schema.ColCollection) (m val.Ordinal
 type indexAndKeyDescriptor struct {
 	index   prolly.Map
 	keyDesc *val.TupleDesc
+	schema  schema.Schema
 }
 
 // createCVsForDanglingChildRows finds all rows in the childIdx that match the given parent key and creates constraint
@@ -611,21 +616,13 @@ func createCVsForDanglingChildRows(
 		return err
 	}
 
-	kb := val.NewTupleBuilder(childPrimaryIdx.keyDesc, childPrimaryIdx.index.NodeStore())
-
 	for k, _, err := itr.Next(ctx); err != io.EOF; k, _, err = itr.Next(ctx) {
 		if err != nil {
 			return err
 		}
 
 		// convert secondary idx entry to primary row key
-		// the pks of the table are the last keys of the index
-		o := k.Count() - childPrimaryIdx.keyDesc.Count()
-		for i := 0; i < childPrimaryIdx.keyDesc.Count(); i++ {
-			j := o + i
-			kb.PutRaw(i, k.GetField(j))
-		}
-		primaryIdxKey, err := kb.Build(childPrimaryIdx.index.Pool())
+		primaryIdxKey, err := primaryKeyFromSecondaryIndexRow(k, childPrimaryIdx.keyDesc, childPrimaryIdx.index, childPrimaryIdx.schema, childSecIdx.schema)
 		if err != nil {
 			return err
 		}
