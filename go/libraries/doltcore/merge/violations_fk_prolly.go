@@ -253,14 +253,25 @@ func prollyChildPriDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	parentScndryIdx, err := durable.ProllyMapFromIndex(postParent.IndexData)
+	parentSecondaryIdx, err := durable.ProllyMapFromIndex(postParent.IndexData)
 	if err != nil {
 		return err
 	}
 
-	idxDesc, _ := parentScndryIdx.Descriptors()
-	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(partialDesc, postChildRowData.NodeStore())
+	childPriIdxDesc, _ := postChildRowData.Descriptors()
+	parentIdxDesc, _ := parentSecondaryIdx.Descriptors()
+	parentIdxPrefixDesc := parentIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
+	partialKB := val.NewTupleBuilder(parentIdxPrefixDesc, postChildRowData.NodeStore())
+
+	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
+	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
+	compatibleTypes := true
+	for i, handler := range childPriIdxDesc.Handlers {
+		if handler != nil && !handler.SerializationCompatible(parentIdxPrefixDesc.Handlers[i]) {
+			compatibleTypes = false
+			break
+		}
+	}
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -268,7 +279,7 @@ func prollyChildPriDiffFkConstraintViolations(
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
-			partialKey, hasNulls, err := makePartialKey(
+			parentLookupKey, hasNulls, err := makePartialKey(
 				partialKB,
 				foreignKey.TableColumns,
 				postChild.Index,
@@ -283,7 +294,43 @@ func prollyChildPriDiffFkConstraintViolations(
 				return nil
 			}
 
-			err = createCVIfNoPartialKeyMatchesPri(ctx, k, v, partialKey, partialDesc, parentScndryIdx, receiver)
+			if !compatibleTypes {
+				tb := val.NewTupleBuilder(parentIdxPrefixDesc, parentSecondaryIdx.NodeStore())
+				for i, childHandler := range childPriIdxDesc.Handlers {
+					parentHandler := parentIdxPrefixDesc.Handlers[i]
+					serialized, err := convertSerializedFkField(ctx, parentHandler, childHandler, parentLookupKey.GetField(i))
+					if err != nil {
+						return err
+					}
+
+					switch parentHandler.(type) {
+					case val.AdaptiveEncodingTypeHandler:
+						switch parentIdxPrefixDesc.Types[i].Enc {
+						case val.ExtendedAdaptiveEnc:
+							err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
+							if err != nil {
+								return err
+							}
+						case val.BytesAdaptiveEnc:
+							err := tb.PutAdaptiveExtendedFromInline(ctx, i, serialized)
+							if err != nil {
+								return err
+							}
+						default:
+							panic(fmt.Sprintf("unexpected encoding for adaptive type: %d", parentIdxPrefixDesc.Types[i].Enc))
+						}
+					default:
+						tb.PutRaw(i, serialized)
+					}
+				}
+
+				parentLookupKey, err = tb.Build(parentSecondaryIdx.Pool())
+				if err != nil {
+					return err
+				}
+			}
+
+			err = createCVIfNoPartialKeyMatchesPri(ctx, k, v, parentLookupKey, parentIdxPrefixDesc, parentSecondaryIdx, receiver)
 			if err != nil {
 				return err
 			}
