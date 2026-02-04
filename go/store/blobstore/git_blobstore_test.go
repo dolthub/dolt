@@ -16,11 +16,13 @@ package blobstore
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 )
 
@@ -43,6 +45,13 @@ func TestGitBlobstore_RefMissingIsNotFound(t *testing.T) {
 	_, _, err = GetBytes(ctx, bs, "manifest", AllRange)
 	require.Error(t, err)
 	require.True(t, IsNotFoundError(err))
+
+	// For non-manifest keys, missing the ref is a hard error.
+	_, _, _, err = bs.Get(ctx, "table", AllRange)
+	require.Error(t, err)
+	require.False(t, IsNotFoundError(err))
+	var rnf *git.RefNotFoundError
+	require.True(t, errors.As(err, &rnf))
 }
 
 func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {

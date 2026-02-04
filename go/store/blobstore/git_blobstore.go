@@ -84,7 +84,12 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		return nil, 0, "", err
 	}
 	if !ok {
-		return nil, 0, "", NotFound{Key: key}
+		// If the ref doesn't exist, treat the manifest as missing (empty store),
+		// but surface a hard error for other keys: the store itself is missing.
+		if key == "manifest" {
+			return nil, 0, "", NotFound{Key: key}
+		}
+		return nil, 0, "", &git.RefNotFoundError{Ref: gbs.ref}
 	}
 
 	blobOID, err := git.ResolvePathBlob(ctx, gbs.runner, commit, key)
@@ -100,6 +105,9 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		return nil, 0, commit.String(), err
 	}
 
+	// TODO(gitblobstore): This streaming implementation is correct but may be slow for workloads
+	// that do many small ranged reads (e.g. table index/footer reads). Consider caching/materializing
+	// blobs to a local file (or using a batched git cat-file mode) to serve ranges efficiently.
 	rc, err := git.BlobReader(ctx, gbs.runner, blobOID)
 	if err != nil {
 		return nil, 0, commit.String(), err
