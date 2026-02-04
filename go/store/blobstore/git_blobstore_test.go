@@ -15,9 +15,14 @@
 package blobstore
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,10 +31,19 @@ import (
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 )
 
-func TestGitBlobstore_RefMissingIsNotFound(t *testing.T) {
+func requireGitOnPath(t *testing.T) {
+	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found on PATH")
 	}
+}
+
+func testIdentity() *git.Identity {
+	return &git.Identity{Name: "gitblobstore test", Email: "gitblobstore@test.invalid"}
+}
+
+func TestGitBlobstore_RefMissingIsNotFound(t *testing.T) {
+	requireGitOnPath(t)
 
 	ctx := context.Background()
 	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
@@ -55,9 +69,7 @@ func TestGitBlobstore_RefMissingIsNotFound(t *testing.T) {
 }
 
 func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found on PATH")
-	}
+	requireGitOnPath(t)
 
 	ctx := context.Background()
 	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
@@ -100,9 +112,7 @@ func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {
 }
 
 func TestGitBlobstore_Get_NotFoundMissingKey(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found on PATH")
-	}
+	requireGitOnPath(t)
 
 	ctx := context.Background()
 	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
@@ -122,9 +132,7 @@ func TestGitBlobstore_Get_NotFoundMissingKey(t *testing.T) {
 }
 
 func TestGitBlobstore_BlobRangeSemantics(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found on PATH")
-	}
+	requireGitOnPath(t)
 
 	ctx := context.Background()
 	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
@@ -173,9 +181,7 @@ func TestGitBlobstore_BlobRangeSemantics(t *testing.T) {
 }
 
 func TestGitBlobstore_InvalidKeysError(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found on PATH")
-	}
+	requireGitOnPath(t)
 
 	ctx := context.Background()
 	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
@@ -207,4 +213,172 @@ func TestGitBlobstore_InvalidKeysError(t *testing.T) {
 		_, _, _, err = bs.Get(ctx, k, AllRange)
 		require.Error(t, err, "expected error for key %q", k)
 	}
+}
+
+func TestGitBlobstore_Put_RoundTripAndVersion(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	want := []byte("hello put\n")
+	ver, err := PutBytes(ctx, bs, "k", want)
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	ok, err := bs.Exists(ctx, "k")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	got, ver2, err := GetBytes(ctx, bs, "k", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver, ver2)
+	require.Equal(t, want, got)
+}
+
+func TestGitBlobstore_Put_Overwrite(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	ver1, err := PutBytes(ctx, bs, "k", []byte("v1\n"))
+	require.NoError(t, err)
+	require.NotEmpty(t, ver1)
+
+	ver2, err := PutBytes(ctx, bs, "k", []byte("v2\n"))
+	require.NoError(t, err)
+	require.NotEmpty(t, ver2)
+	require.NotEqual(t, ver1, ver2)
+
+	got, ver3, err := GetBytes(ctx, bs, "k", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver2, ver3)
+	require.Equal(t, []byte("v2\n"), got)
+}
+
+type hookGitAPI struct {
+	git.GitAPI
+
+	ref string
+	// if set, called once before the first UpdateRefCAS executes.
+	onFirstCAS func(ctx context.Context, old git.OID)
+	did        atomic.Bool
+}
+
+func (h *hookGitAPI) UpdateRefCAS(ctx context.Context, ref string, newOID git.OID, oldOID git.OID, msg string) error {
+	if h.onFirstCAS != nil && !h.did.Swap(true) && ref == h.ref {
+		h.onFirstCAS(ctx, oldOID)
+	}
+	return h.GitAPI.UpdateRefCAS(ctx, ref, newOID, oldOID, msg)
+}
+
+func writeKeyToRef(ctx context.Context, api git.GitAPI, ref string, key string, data []byte, author *git.Identity) (git.OID, error) {
+	parent, ok, err := api.TryResolveRefCommit(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+
+	indexDir, err := os.MkdirTemp("", "gitblobstore-test-index-")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.RemoveAll(indexDir) }()
+	indexFile := filepath.Join(indexDir, "index")
+
+	if ok {
+		if err := api.ReadTree(ctx, parent, indexFile); err != nil {
+			return "", err
+		}
+	} else {
+		if err := api.ReadTreeEmpty(ctx, indexFile); err != nil {
+			return "", err
+		}
+	}
+
+	blobOID, err := api.HashObject(ctx, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", blobOID, key); err != nil {
+		return "", err
+	}
+
+	treeOID, err := api.WriteTree(ctx, indexFile)
+	if err != nil {
+		return "", err
+	}
+
+	var parentPtr *git.OID
+	if ok && parent != "" {
+		p := parent
+		parentPtr = &p
+	}
+
+	msg := "test external writer"
+	commitOID, err := api.CommitTree(ctx, treeOID, parentPtr, msg, author)
+	if err != nil {
+		return "", err
+	}
+
+	if err := api.UpdateRef(ctx, ref, commitOID, msg); err != nil {
+		return "", err
+	}
+	return commitOID, nil
+}
+
+func TestGitBlobstore_Put_ContentionRetryPreservesOtherKey(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	// Seed the ref so Put takes the CAS path.
+	_, err = repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"base": []byte("base\n"),
+	}, "seed")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	origAPI := bs.api
+	h := &hookGitAPI{GitAPI: origAPI, ref: DoltDataRef}
+	h.onFirstCAS = func(ctx context.Context, old git.OID) {
+		// Advance the ref to simulate another writer committing concurrently.
+		_, _ = writeKeyToRef(ctx, origAPI, DoltDataRef, "external", []byte("external\n"), testIdentity())
+	}
+	bs.api = h
+
+	ver, err := PutBytes(ctx, bs, "k", []byte("mine\n"))
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	got, ver2, err := GetBytes(ctx, bs, "k", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver, ver2)
+	require.Equal(t, []byte("mine\n"), got)
+
+	got, _, err = GetBytes(ctx, bs, "external", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("external\n"), got)
+
+	got, _, err = GetBytes(ctx, bs, "base", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("base\n"), got)
+
+	// Sanity: BlobReader path still works for the new commit.
+	rc, _, _, err := bs.Get(ctx, "k", AllRange)
+	require.NoError(t, err)
+	_, _ = io.ReadAll(rc)
+	_ = rc.Close()
 }
