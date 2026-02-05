@@ -33,29 +33,16 @@ type PartSlice struct {
 // - length == 0 means "to end"
 // - length < 0 is invalid
 func NormalizeRange(total int64, offset int64, length int64) (start, end int64, err error) {
-	if total < 0 {
-		return 0, 0, fmt.Errorf("invalid total size %d", total)
+	if err := validateNormalizeRangeInputs(total, length); err != nil {
+		return 0, 0, err
 	}
-	if length < 0 {
-		return 0, 0, fmt.Errorf("invalid length %d", length)
+	start, err = normalizeStart(total, offset)
+	if err != nil {
+		return 0, 0, err
 	}
-	start = offset
-	if start < 0 {
-		start = total + start
-	}
-	if start < 0 || start > total {
-		return 0, 0, fmt.Errorf("invalid offset %d for total size %d", offset, total)
-	}
-	if length == 0 {
-		end = total
-	} else {
-		end = start + length
-		if end < start {
-			return 0, 0, fmt.Errorf("range overflow")
-		}
-		if end > total {
-			end = total
-		}
+	end, err = normalizeEnd(total, start, length)
+	if err != nil {
+		return 0, 0, err
 	}
 	return start, end, nil
 }
@@ -66,10 +53,10 @@ func NormalizeRange(total int64, offset int64, length int64) (start, end int64, 
 // - start/end are byte offsets in the logical object (0 <= start <= end <= total)
 // - parts must have Size > 0
 func SliceParts(parts []PartRef, start, end int64) ([]PartSlice, error) {
-	if start < 0 || end < 0 || end < start {
-		return nil, fmt.Errorf("invalid start/end: %d/%d", start, end)
+	if err := validateStartEnd(start, end); err != nil {
+		return nil, err
 	}
-	if start == end {
+	if isEmptyRange(start, end) {
 		return nil, nil
 	}
 
@@ -79,13 +66,9 @@ func SliceParts(parts []PartRef, start, end int64) ([]PartSlice, error) {
 	)
 
 	for _, p := range parts {
-		if p.Size == 0 {
-			return nil, fmt.Errorf("invalid part size 0")
-		}
-		partStart := pos
-		partEnd := pos + int64(p.Size)
-		if partEnd < partStart {
-			return nil, fmt.Errorf("part size overflow")
+		partStart, partEnd, err := partBounds(pos, p.Size)
+		if err != nil {
+			return nil, err
 		}
 
 		// Does this part overlap [start,end)?
@@ -97,35 +80,111 @@ func SliceParts(parts []PartRef, start, end int64) ([]PartSlice, error) {
 			continue
 		}
 
-		// Compute overlap.
-		s := start
-		if s < partStart {
-			s = partStart
-		}
-		e := end
-		if e > partEnd {
-			e = partEnd
-		}
-		if e > s {
-			out = append(out, PartSlice{
-				OIDHex: p.OIDHex,
-				Offset: s - partStart,
-				Length: e - s,
-			})
+		if s, e, ok := overlap(partStart, partEnd, start, end); ok {
+			out = append(out, newPartSlice(p.OIDHex, partStart, s, e))
 		}
 		pos = partEnd
 	}
 
+	return validateCoverage(out, start, end)
+}
+
+func validateNormalizeRangeInputs(total int64, length int64) error {
+	if total < 0 {
+		return fmt.Errorf("invalid total size %d", total)
+	}
+	if length < 0 {
+		return fmt.Errorf("invalid length %d", length)
+	}
+	return nil
+}
+
+func normalizeStart(total int64, offset int64) (int64, error) {
+	start := offset
+	if start < 0 {
+		start = total + start
+	}
+	if start < 0 || start > total {
+		return 0, fmt.Errorf("invalid offset %d for total size %d", offset, total)
+	}
+	return start, nil
+}
+
+func normalizeEnd(total int64, start int64, length int64) (int64, error) {
+	if length == 0 {
+		return total, nil
+	}
+	end := start + length
+	if end < start {
+		return 0, fmt.Errorf("range overflow")
+	}
+	if end > total {
+		end = total
+	}
+	return end, nil
+}
+
+func validateStartEnd(start, end int64) error {
+	if start < 0 || end < 0 || end < start {
+		return fmt.Errorf("invalid start/end: %d/%d", start, end)
+	}
+	return nil
+}
+
+func isEmptyRange(start, end int64) bool {
+	return start == end
+}
+
+func partBounds(pos int64, size uint64) (start, end int64, err error) {
+	if size == 0 {
+		return 0, 0, fmt.Errorf("invalid part size 0")
+	}
+	start = pos
+	end = pos + int64(size)
+	if end < start {
+		return 0, 0, fmt.Errorf("part size overflow")
+	}
+	return start, end, nil
+}
+
+func overlap(partStart, partEnd, start, end int64) (s, e int64, ok bool) {
+	s = start
+	if s < partStart {
+		s = partStart
+	}
+	e = end
+	if e > partEnd {
+		e = partEnd
+	}
+	if e <= s {
+		return 0, 0, false
+	}
+	return s, e, true
+}
+
+func newPartSlice(oidHex string, partStart, s, e int64) PartSlice {
+	return PartSlice{
+		OIDHex: oidHex,
+		Offset: s - partStart,
+		Length: e - s,
+	}
+}
+
+func validateCoverage(out []PartSlice, start, end int64) ([]PartSlice, error) {
 	// Validate that the requested interval was fully covered by parts.
 	if len(out) == 0 {
 		return nil, fmt.Errorf("range [%d,%d) not covered by parts", start, end)
 	}
-	var covered int64
-	for _, s := range out {
-		covered += s.Length
-	}
+	covered := coveredLength(out)
 	if covered != (end - start) {
 		return nil, fmt.Errorf("range [%d,%d) not fully covered by parts", start, end)
 	}
 	return out, nil
+}
+
+func coveredLength(slices []PartSlice) (covered int64) {
+	for _, s := range slices {
+		covered += s.Length
+	}
+	return covered
 }
