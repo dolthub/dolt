@@ -365,56 +365,97 @@ type multiPartReadCloser struct {
 
 func (m *multiPartReadCloser) Read(p []byte) (int, error) {
 	for {
+		if err := m.ensureCurrent(); err != nil {
+			return 0, err
+		}
 		if m.curRC == nil {
-			if m.curIdx >= len(m.slices) {
-				return 0, io.EOF
-			}
-			s := m.slices[m.curIdx]
-			rc, err := m.api.BlobReader(m.ctx, git.OID(s.OIDHex))
-			if err != nil {
-				return 0, err
-			}
-			// Skip within part.
-			if s.Offset > 0 {
-				if _, err := io.CopyN(io.Discard, rc, s.Offset); err != nil {
-					_ = rc.Close()
-					return 0, err
-				}
-			}
-			m.curRC = rc
-			m.rem = s.Length
+			return 0, io.EOF
 		}
 
 		if m.rem == 0 {
-			_ = m.curRC.Close()
-			m.curRC = nil
-			m.curIdx++
+			_ = m.closeCurrentAndAdvance()
 			continue
 		}
 
-		toRead := len(p)
-		if int64(toRead) > m.rem {
-			toRead = int(m.rem)
-		}
-		n, err := m.curRC.Read(p[:toRead])
-		if n > 0 {
-			m.rem -= int64(n)
-			return n, nil
-		}
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				// End of underlying part blob; if we still expected bytes, that's corruption.
-				if m.rem > 0 {
-					return 0, io.ErrUnexpectedEOF
-				}
-				_ = m.curRC.Close()
-				m.curRC = nil
-				m.curIdx++
-				continue
-			}
-			return 0, err
+		n, err := m.readCurrent(p)
+		if n > 0 || err != nil {
+			return n, err
 		}
 	}
+}
+
+func (m *multiPartReadCloser) ensureCurrent() error {
+	if m.curRC != nil {
+		return nil
+	}
+	if m.curIdx >= len(m.slices) {
+		return nil
+	}
+	s := m.slices[m.curIdx]
+	rc, err := m.openSliceReader(s)
+	if err != nil {
+		return err
+	}
+	m.curRC = rc
+	m.rem = s.Length
+	return nil
+}
+
+func (m *multiPartReadCloser) openSliceReader(s gitbs.PartSlice) (io.ReadCloser, error) {
+	rc, err := m.api.BlobReader(m.ctx, git.OID(s.OIDHex))
+	if err != nil {
+		return nil, err
+	}
+	if err := skipN(rc, s.Offset); err != nil {
+		_ = rc.Close()
+		return nil, err
+	}
+	return rc, nil
+}
+
+func (m *multiPartReadCloser) closeCurrentAndAdvance() error {
+	if m.curRC != nil {
+		err := m.curRC.Close()
+		m.curRC = nil
+		m.rem = 0
+		m.curIdx++
+		return err
+	}
+	m.curIdx++
+	return nil
+}
+
+func (m *multiPartReadCloser) readCurrent(p []byte) (int, error) {
+	toRead := len(p)
+	if int64(toRead) > m.rem {
+		toRead = int(m.rem)
+	}
+
+	n, err := m.curRC.Read(p[:toRead])
+	if n > 0 {
+		m.rem -= int64(n)
+		return n, nil
+	}
+	if err == nil {
+		return 0, nil
+	}
+	if errors.Is(err, io.EOF) {
+		// End of underlying part blob; if we still expected bytes, that's corruption.
+		if m.rem > 0 {
+			return 0, io.ErrUnexpectedEOF
+		}
+		_ = m.closeCurrentAndAdvance()
+		return 0, nil
+	}
+	return 0, err
+}
+
+func skipN(r io.Reader, n int64) error {
+	if n <= 0 {
+		return nil
+	}
+	_, err := io.CopyN(io.Discard, r, n)
+	return err
 }
 
 func (m *multiPartReadCloser) Close() error {
