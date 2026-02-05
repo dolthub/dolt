@@ -67,4 +67,3 @@ func TestDescriptorHelpers_writePartLine(t *testing.T) {
 	writePartLine(&b, PartRef{OIDHex: "0123456789abcdef0123456789abcdef01234567", Size: 9})
 	require.Equal(t, "part 0123456789abcdef0123456789abcdef01234567 9\n", b.String())
 }
-

@@ -37,4 +37,3 @@ func validateOIDHex(oid string) error {
 	}
 	return nil
 }
-

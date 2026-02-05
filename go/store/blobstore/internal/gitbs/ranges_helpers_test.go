@@ -66,4 +66,3 @@ func TestRangesHelpers_validateCoverage(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 }
-
