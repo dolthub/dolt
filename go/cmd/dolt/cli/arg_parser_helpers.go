@@ -97,6 +97,7 @@ func CreateMergeArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
 	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
+	ap.SupportsFlag(SkipTestsFlag, "", "Skip test validation before merge")
 
 	return ap
 }
@@ -230,6 +231,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.SupportsString(UserFlag, "", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	ap.SupportsFlag(PruneFlag, "p", "After fetching, remove any remote-tracking references that don't exist on the remote.")
 	ap.SupportsFlag(SilentFlag, "", "Suppress progress information.")
+	ap.SupportsFlag(SkipTestsFlag, "", "Skip test validation before merge")
 	return ap
 }
 
