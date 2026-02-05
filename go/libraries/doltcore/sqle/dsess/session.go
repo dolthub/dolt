@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/testvalidation"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -45,15 +46,6 @@ import (
 
 var ErrSessionNotPersistable = errors.New("session is not persistable")
 
-// NM4 - this is crap. Put this anywhere else.
-func runTestValidation(ctx *sql.Context, testGroups []string, operationType string) error {
-	// If no test groups specified, skip validation
-	if len(testGroups) == 0 {
-		return nil
-	}
-
-	return nil // Always pass for demonstration
-}
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
@@ -811,7 +803,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 	if !props.SkipTests {
 		testGroups := GetCommitRunTestGroups()
 		if len(testGroups) > 0 {
-			err := runTestValidation(ctx, testGroups, "commit")
+			err := testvalidation.RunTestValidation(ctx, testGroups, "commit")
 			if err != nil {
 				return nil, err
 			}
