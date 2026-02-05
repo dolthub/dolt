@@ -35,7 +35,7 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	t.Cleanup(func() { file.RemoveAll(dir) })
-	m, err := newJournalManifest(ctx, dir, false)
+	m, err := newJournalManifest(ctx, dir, false, false)
 	require.NoError(t, err)
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFSTablePersister(dir, q, false)
@@ -47,7 +47,7 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 }
 
 func openTestChunkJournal(t *testing.T, dir string) *ChunkJournal {
-	m, err := newJournalManifest(t.Context(), dir, false)
+	m, err := newJournalManifest(t.Context(), dir, false, false)
 	require.NoError(t, err)
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFSTablePersister(dir, q, false)
@@ -103,9 +103,20 @@ func TestChunkJournalReadOnly(t *testing.T) {
 		rw := makeTestChunkJournal(t)
 		assert.Equal(t, chunks.ExclusiveAccessMode(chunks.ExclusiveAccessMode_Exclusive), rw.AccessMode())
 
-		_, err := newJournalManifest(t.Context(), rw.backing.dir, true)
+		_, err := newJournalManifest(t.Context(), rw.backing.dir, true, false)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrDatabaseLocked)
+	})
+
+	t.Run("ExplicitReadOnlySkipsExclusiveLock", func(t *testing.T) {
+		// A rw journal holds the journalManifest lock. An explicit read-only open should not block
+		// and should succeed by skipping the lock entirely.
+		rw := makeTestChunkJournal(t)
+		assert.Equal(t, chunks.ExclusiveAccessMode(chunks.ExclusiveAccessMode_Exclusive), rw.AccessMode())
+
+		m, err := newJournalManifest(t.Context(), rw.backing.dir, true /* failOnTimeout */, true /* readOnly */)
+		require.NoError(t, err)
+		require.True(t, m.readOnly())
 	})
 }
 

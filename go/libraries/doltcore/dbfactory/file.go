@@ -70,6 +70,13 @@ const (
 	//
 	// Intended for embedded-driver usage so higher layers can implement their own retry/backoff policy.
 	FailOnJournalLockTimeoutParam = "fail_on_journal_lock_timeout"
+
+	// OpenReadOnlyParam opens the journaling store in read-only mode without attempting to acquire (or hold)
+	// the exclusive journal manifest lock. This allows a read-only open to proceed concurrently with another
+	// process holding the lock, and ensures the read-only open does not block a subsequent writer.
+	//
+	// This parameter is only applicable when using the chunk journal (ChunkJournalParam).
+	OpenReadOnlyParam = "open_read_only"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -206,6 +213,9 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 		if params != nil {
 			if _, ok := params[FailOnJournalLockTimeoutParam]; ok {
 				opts.FailOnLockTimeout = true
+			}
+			if _, ok := params[OpenReadOnlyParam]; ok {
+				opts.ReadOnly = true
 			}
 		}
 		newGenSt, err = nbs.NewLocalJournalingStoreWithOptions(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb, opts)
