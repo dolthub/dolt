@@ -705,6 +705,209 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/10382
+	{
+		Name: "database revision specs: prisma detects existing _prisma_migrations on branch",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'init');",
+			"call dolt_branch('newbranch');",
+			"use `mydb@newbranch`;",
+			"SET @schema = database();",
+			"PREPARE stmt_list_base_tables FROM 'SELECT DISTINCT table_info.table_name AS table_name FROM information_schema.tables AS table_info JOIN information_schema.columns AS column_info ON column_info.table_name = table_info.table_name WHERE table_info.table_schema = ? AND column_info.table_schema = ? AND table_info.table_type = ''BASE TABLE'' ORDER BY table_info.table_name';",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CREATE TABLE _prisma_migrations (id VARCHAR(36) PRIMARY KEY NOT NULL, checksum VARCHAR(64) NOT NULL, finished_at DATETIME(3), migration_name VARCHAR(255) NOT NULL, logs TEXT, rolled_back_at DATETIME(3), started_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), applied_steps_count INTEGER UNSIGNED NOT NULL DEFAULT 0);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "SELECT id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count FROM _prisma_migrations ORDER BY started_at ASC;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema;",
+				Expected: []sql.Row{{"_prisma_migrations"}, {"t01"}},
+			},
+		},
+	},
+	{
+		Name: "database revision specs: ResolveRevisionDelimiter alias '@' when dolt_enable_revision_delimiter_alias is ON",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'creating table t01 on main');",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
+			"call dolt_tag('tag1');",
+			"call dolt_branch('branch1');",
+			"insert into t01 values (3, 3);",
+			"call dolt_commit('-am', 'adding another row to table t01 on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "use `mydb@branch1`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb@branch1"}, {"mysql"}},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb@branch1"}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				Query:    "select * from t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = database() and table_name = 't01' order by ordinal_position;",
+				Expected: []sql.Row{{"pk"}, {"c1"}},
+			},
+			{
+				Query:    "select table_name from information_schema.tables where table_schema = database() and table_name = 't01';",
+				Expected: []sql.Row{{"t01"}},
+			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from `mydb@branch1`.t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "select * from `mydb@tag1`.t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:          "drop database `mydb@branch1`;",
+				ExpectedErrStr: "unable to drop revision database: mydb/branch1",
+			},
+			{
+				Query:    "use `mydb@branch1`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "create table parent(id int primary key);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "create table child(id int primary key, pid int, foreign key (pid) references `mydb@branch1`.parent(id));",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "insert into parent values (1);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "insert into child values (1, 1);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			// Switch to using forward slash to ensure the above is not a different branch entirely.
+			{
+				Query:    "use `mydb/branch1`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/branch1"}},
+			},
+			{
+				Query:    "select * from t01;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = database() and table_name = 't01' order by ordinal_position;",
+				Expected: []sql.Row{{"pk"}, {"c1"}},
+			},
+			{
+				Query:    "select table_name from information_schema.tables where table_schema = database() and table_name = 't01';",
+				Expected: []sql.Row{{"t01"}},
+			},
+			{
+				Query:    "select * from parent;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select * from child;",
+				Expected: []sql.Row{{1, 1}},
+			},
+		},
+	},
+	{
+		Name: "database revision specs: ResolveRevisionDelimiter alias '@' when dolt_enable_revision_delimiter_alias is OFF",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'creating table t01 on main');",
+			"call dolt_branch('branch1');",
+			"set dolt_enable_revision_delimiter_alias = 0;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "use `mydb@branch1`;",
+				ExpectedErr: sql.ErrDatabaseNotFound,
+			},
+			{
+				Query:       "select * from `mydb@branch1`.t01;",
+				ExpectedErr: sql.ErrDatabaseNotFound,
+			},
+			{
+				Query:    "use `mydb/branch1`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:       "use `mydb@branch1`;",
+				ExpectedErr: sql.ErrDatabaseNotFound,
+			},
+			{
+				Query:    "create table t02(pk int primary key);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "select * from t02;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "call dolt_commit('-Am', 'add t2 table to branch');",
+			},
+			{
+				Query:    "use `mydb/main`",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "create schema `mydb@branch1`",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "use `mydb@branch1`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:       "select * from t02;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:    "set dolt_enable_revision_delimiter_alias = 1;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "use `mydb@branch1`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t02;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }
 
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
