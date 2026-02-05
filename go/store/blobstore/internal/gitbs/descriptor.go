@@ -41,6 +41,12 @@ type PartRef struct {
 	Size   uint64
 }
 
+type descriptorParseState struct {
+	d       Descriptor
+	haveSz  bool
+	sumPart uint64
+}
+
 // IsDescriptorPrefix returns true if |b| looks like the beginning of a descriptor.
 // Callers can use this on a small prefix before deciding whether to read and parse
 // the full blob.
@@ -73,74 +79,16 @@ func ParseDescriptor(b []byte) (Descriptor, error) {
 		return Descriptor{}, fmt.Errorf("descriptor: invalid magic %q", lines[0])
 	}
 
-	var (
-		d       Descriptor
-		haveSz  bool
-		sumPart uint64
-	)
-
+	var st descriptorParseState
 	for _, line := range lines[1:] {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		fields := strings.Fields(line)
-		switch {
-		case len(fields) >= 1 && fields[0] == "size":
-			if haveSz {
-				return Descriptor{}, fmt.Errorf("descriptor: multiple size lines")
-			}
-			if len(fields) != 2 {
-				return Descriptor{}, fmt.Errorf("descriptor: malformed size line %q", line)
-			}
-			n, err := parseUint(fields[1])
-			if err != nil {
-				return Descriptor{}, fmt.Errorf("descriptor: invalid size %q: %w", fields[1], err)
-			}
-			d.TotalSize = n
-			haveSz = true
-
-		case len(fields) >= 1 && fields[0] == "part":
-			if len(fields) != 3 {
-				return Descriptor{}, fmt.Errorf("descriptor: malformed part line %q", line)
-			}
-			oid := fields[1]
-			if err := validateOIDHex(oid); err != nil {
-				return Descriptor{}, fmt.Errorf("descriptor: invalid part oid %q: %w", oid, err)
-			}
-			sz, err := parseUint(fields[2])
-			if err != nil {
-				return Descriptor{}, fmt.Errorf("descriptor: invalid part size %q: %w", fields[2], err)
-			}
-			if sz == 0 {
-				return Descriptor{}, fmt.Errorf("descriptor: part size must be > 0")
-			}
-			if sumPart > ^uint64(0)-sz {
-				return Descriptor{}, fmt.Errorf("descriptor: part sizes overflow uint64")
-			}
-			sumPart += sz
-			d.Parts = append(d.Parts, PartRef{OIDHex: oid, Size: sz})
-
-		default:
-			return Descriptor{}, fmt.Errorf("descriptor: unknown line %q", line)
+		if err := parseDescriptorLine(&st, line); err != nil {
+			return Descriptor{}, err
 		}
 	}
-
-	if !haveSz {
-		return Descriptor{}, fmt.Errorf("descriptor: missing size line")
-	}
-	if d.TotalSize == 0 {
-		if len(d.Parts) != 0 {
-			return Descriptor{}, fmt.Errorf("descriptor: total size 0 requires zero parts")
-		}
-		return d, nil
-	}
-	if len(d.Parts) == 0 {
-		return Descriptor{}, fmt.Errorf("descriptor: non-zero total size requires at least one part")
-	}
-	if sumPart != d.TotalSize {
-		return Descriptor{}, fmt.Errorf("descriptor: part sizes sum to %d, expected %d", sumPart, d.TotalSize)
-	}
-	return d, nil
+	return finalizeParsedDescriptor(st)
 }
 
 // EncodeDescriptor encodes a descriptor in the stable line-oriented format.
@@ -158,42 +106,121 @@ func EncodeDescriptor(d Descriptor) ([]byte, error) {
 	buf.WriteString(strconv.FormatUint(d.TotalSize, 10))
 	buf.WriteByte('\n')
 	for _, p := range d.Parts {
-		buf.WriteString("part ")
-		buf.WriteString(p.OIDHex)
-		buf.WriteByte(' ')
-		buf.WriteString(strconv.FormatUint(p.Size, 10))
-		buf.WriteByte('\n')
+		writePartLine(&buf, p)
 	}
 	return []byte(buf.String()), nil
 }
 
 func validateDescriptorForEncode(d Descriptor) (Descriptor, error) {
-	var sum uint64
-	if d.TotalSize == 0 {
-		if len(d.Parts) != 0 {
-			return Descriptor{}, fmt.Errorf("descriptor: total size 0 requires zero parts")
+	sum, err := validateDescriptorParts(d.Parts)
+	if err != nil {
+		return Descriptor{}, err
+	}
+	if err := validateDescriptorSizeAndParts(d.TotalSize, len(d.Parts), sum); err != nil {
+		return Descriptor{}, err
+	}
+	return d, nil
+}
+
+func parseDescriptorLine(st *descriptorParseState, line string) error {
+	fields := strings.Fields(line)
+	switch {
+	case len(fields) >= 1 && fields[0] == "size":
+		return parseSizeLine(st, line, fields)
+	case len(fields) >= 1 && fields[0] == "part":
+		return parsePartLine(st, line, fields)
+	default:
+		return fmt.Errorf("descriptor: unknown line %q", line)
+	}
+}
+
+func parseSizeLine(st *descriptorParseState, line string, fields []string) error {
+	if st.haveSz {
+		return fmt.Errorf("descriptor: multiple size lines")
+	}
+	if len(fields) != 2 {
+		return fmt.Errorf("descriptor: malformed size line %q", line)
+	}
+	n, err := parseUint(fields[1])
+	if err != nil {
+		return fmt.Errorf("descriptor: invalid size %q: %w", fields[1], err)
+	}
+	st.d.TotalSize = n
+	st.haveSz = true
+	return nil
+}
+
+func parsePartLine(st *descriptorParseState, line string, fields []string) error {
+	if len(fields) != 3 {
+		return fmt.Errorf("descriptor: malformed part line %q", line)
+	}
+	oid := fields[1]
+	if err := validateOIDHex(oid); err != nil {
+		return fmt.Errorf("descriptor: invalid part oid %q: %w", oid, err)
+	}
+	sz, err := parseUint(fields[2])
+	if err != nil {
+		return fmt.Errorf("descriptor: invalid part size %q: %w", fields[2], err)
+	}
+	if sz == 0 {
+		return fmt.Errorf("descriptor: part size must be > 0")
+	}
+	if st.sumPart > ^uint64(0)-sz {
+		return fmt.Errorf("descriptor: part sizes overflow uint64")
+	}
+	st.sumPart += sz
+	st.d.Parts = append(st.d.Parts, PartRef{OIDHex: oid, Size: sz})
+	return nil
+}
+
+func finalizeParsedDescriptor(st descriptorParseState) (Descriptor, error) {
+	if !st.haveSz {
+		return Descriptor{}, fmt.Errorf("descriptor: missing size line")
+	}
+	if err := validateDescriptorSizeAndParts(st.d.TotalSize, len(st.d.Parts), st.sumPart); err != nil {
+		return Descriptor{}, err
+	}
+	return st.d, nil
+}
+
+func validateDescriptorSizeAndParts(totalSize uint64, partCount int, sumParts uint64) error {
+	if totalSize == 0 {
+		if partCount != 0 {
+			return fmt.Errorf("descriptor: total size 0 requires zero parts")
 		}
-		return d, nil
+		return nil
 	}
-	if len(d.Parts) == 0 {
-		return Descriptor{}, fmt.Errorf("descriptor: non-zero total size requires at least one part")
+	if partCount == 0 {
+		return fmt.Errorf("descriptor: non-zero total size requires at least one part")
 	}
-	for _, p := range d.Parts {
+	if sumParts != totalSize {
+		return fmt.Errorf("descriptor: part sizes sum to %d, expected %d", sumParts, totalSize)
+	}
+	return nil
+}
+
+func validateDescriptorParts(parts []PartRef) (sum uint64, err error) {
+	for _, p := range parts {
 		if err := validateOIDHex(p.OIDHex); err != nil {
-			return Descriptor{}, fmt.Errorf("descriptor: invalid part oid %q: %w", p.OIDHex, err)
+			return 0, fmt.Errorf("descriptor: invalid part oid %q: %w", p.OIDHex, err)
 		}
 		if p.Size == 0 {
-			return Descriptor{}, fmt.Errorf("descriptor: part size must be > 0")
+			return 0, fmt.Errorf("descriptor: part size must be > 0")
 		}
 		if sum > ^uint64(0)-p.Size {
-			return Descriptor{}, fmt.Errorf("descriptor: part sizes overflow uint64")
+			return 0, fmt.Errorf("descriptor: part sizes overflow uint64")
 		}
 		sum += p.Size
 	}
-	if sum != d.TotalSize {
-		return Descriptor{}, fmt.Errorf("descriptor: part sizes sum to %d, expected %d", sum, d.TotalSize)
-	}
-	return d, nil
+	return sum, nil
+}
+
+func writePartLine(buf *strings.Builder, p PartRef) {
+	buf.WriteString("part ")
+	buf.WriteString(p.OIDHex)
+	buf.WriteByte(' ')
+	buf.WriteString(strconv.FormatUint(p.Size, 10))
+	buf.WriteByte('\n')
 }
 
 func splitLines(s string) []string {
