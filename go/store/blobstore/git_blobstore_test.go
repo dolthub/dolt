@@ -543,6 +543,42 @@ func TestGitBlobstore_Put_ContentionRetryPreservesOtherKey(t *testing.T) {
 	_ = rc.Close()
 }
 
+func TestGitBlobstore_Put_ConcurrentCreateRefPreservesBothKeys(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	start := make(chan struct{})
+	errCh := make(chan error, 2)
+	go func() {
+		<-start
+		_, err := PutBytes(ctx, bs, "a", []byte("A\n"))
+		errCh <- err
+	}()
+	go func() {
+		<-start
+		_, err := PutBytes(ctx, bs, "b", []byte("B\n"))
+		errCh <- err
+	}()
+	close(start)
+
+	require.NoError(t, <-errCh)
+	require.NoError(t, <-errCh)
+
+	got, _, err := GetBytes(ctx, bs, "a", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("A\n"), got)
+
+	got, _, err = GetBytes(ctx, bs, "b", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("B\n"), got)
+}
+
 type failReader struct {
 	called atomic.Bool
 }

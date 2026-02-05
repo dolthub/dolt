@@ -39,7 +39,10 @@ func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (st
 	reader, _, ver, err := bs.Get(ctx, manifestFile, blobstore.AllRange)
 
 	if err != nil {
-		return "", manifestContents{}, err
+		// Some blobstore implementations (notably GitBlobstore) can still return a meaningful
+		// store version even when the key is missing. Preserve |ver| so callers (Update) can
+		// perform CAS against the current store version when creating a missing manifest.
+		return ver, manifestContents{}, err
 	}
 
 	defer reader.Close()
