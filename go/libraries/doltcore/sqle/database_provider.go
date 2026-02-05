@@ -842,11 +842,11 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
 func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
-	name, _, err := dsess.ResolveRevisionDelimiter(ctx, name)
+	revisionQualifiedName, _, err := dsess.ResolveRevisionDelimiter(ctx, name)
 	if err != nil {
 		return err
 	}
-	_, revision := doltdb.SplitRevisionDbName(name)
+	_, revision := doltdb.SplitRevisionDbName(revisionQualifiedName)
 	if revision != "" {
 		return fmt.Errorf("unable to drop revision database: %s", name)
 	}
@@ -854,15 +854,15 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// get the case-sensitive name for case-sensitive file systems
-	dbKey := formatDbMapKeyName(name)
+	// get the case-sensitive revisionQualifiedName for case-sensitive file systems
+	dbKey := formatDbMapKeyName(revisionQualifiedName)
 	db := p.databases[dbKey]
 
 	var database *doltdb.DoltDB
 	if ddb, ok := db.(Database); ok {
 		database = ddb.ddb
 	} else {
-		return fmt.Errorf("unable to drop database: %s", name)
+		return fmt.Errorf("unable to drop database: %s", revisionQualifiedName)
 	}
 
 	err = database.Close()
@@ -893,15 +893,15 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		err = nil
 	}
 
-	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
+	err = p.droppedDatabaseManager.DropDatabase(ctx, revisionQualifiedName, dropDbLoc)
 	if err != nil {
 		return err
 	}
 
 	for _, dropHook := range p.DropDatabaseHooks {
 		// For symmetry with InitDatabaseHook and the names we see in
-		// MultiEnv initialization, we use `name` here, not `dbKey`.
-		dropHook(ctx, name)
+		// MultiEnv initialization, we use `revisionQualifiedName` here, not `dbKey`.
+		dropHook(ctx, revisionQualifiedName)
 	}
 
 	// We not only have to delete tracking metadata for this database, but also for any derivative
@@ -914,7 +914,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 	delete(p.databases, dbKey)
 
-	return p.invalidateDbStateInAllSessions(ctx, name)
+	return p.invalidateDbStateInAllSessions(ctx, revisionQualifiedName)
 }
 
 func (p *DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {

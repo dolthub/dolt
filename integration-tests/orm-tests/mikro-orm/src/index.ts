@@ -3,13 +3,12 @@ import { MySqlDriver } from '@mikro-orm/mysql';
 import { User } from "./entity/User";
 
 async function connectAndGetOrm() {
+    const dbUrl = process.env.DB_URL ?? 'mysql://root@localhost:3306/dolt';
+
     const orm = await MikroORM.init<MySqlDriver>({
         entities: [User],
         type: "mysql",
-        clientUrl: "mysql://localhost:3306",
-        dbName: "dolt",
-        user: "dolt",
-        password: "",
+        clientUrl: dbUrl,
         persistOnCreate: true,
     });
 
