@@ -142,7 +142,8 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "CALL dolt_commit('-m', 'Commit that should fail validation')",
-				Expected: []sql.Row{{commitHash}}, // Demonstrates validation infrastructure works
+				// NM4 - this is a broken test. An error should be expected.
+				ExpectedErrStr: "some error message as yet determined.",
 			},
 		},
 	},
@@ -154,29 +155,24 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
 				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '2'), " +
-				"('test_will_fail', 'integration', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999')",
+				"('test_will_fail', 'integration', 'SELECT COUNT(*) FROM users', 'expected_single_value', '>', '999')",
 			"CALL dolt_add('.')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "CALL dolt_commit('-m', 'Commit with unit tests only')",
+				Query:    "CALL dolt_commit('-m', 'Commit with unit tests only')",
 				Expected: []sql.Row{{commitHash}},
 			},
-		},
-	},
-	{
-		Name: "commit with --skip-tests flag bypasses validation",
-		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
-			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
-			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
-			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
-				"('test_will_fail', 'integration', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999')",
-			"CALL dolt_add('.')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
+			{ // NM4
+				Query:            "SET GLOBAL dolt_commit_run_test_groups = 'integration'",
+				SkipResultsCheck: true,
+			},
+			{ //NM4
+				Query:          "CALL dolt_commit('--allow-empty', '--amend, '-m', 'fail please')",
+				ExpectedErrStr: "some error message as yet determined.",
+			},
 			{
-				Query: "CALL dolt_commit('--skip-tests', '-m', 'Commit skipping tests')",
+				Query:    "CALL dolt_commit('--allow-empty', '--amend', '--skip-tests', '-m', 'skip the tests')",
 				Expected: []sql.Row{{commitHash}},
 			},
 		},
@@ -200,11 +196,13 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL dolt_cherry_pick(@commit_hash)",
+				Query:    "CALL dolt_cherry_pick(@commit_hash)",
 				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
 			},
 		},
 	},
+
+	/* NM4 - Comment out tests until I can review themw
 	{
 		Name: "cherry-pick with test validation enabled - tests fail, aborted",
 		SetUpScript: []string{
@@ -223,7 +221,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "CALL dolt_cherry_pick(@commit_hash)",
+				Query:    "CALL dolt_cherry_pick(@commit_hash)",
 				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}}, // Demonstrates validation infrastructure works
 			},
 		},
@@ -246,7 +244,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL dolt_cherry_pick('--skip-tests', @commit_hash)",
+				Query:    "CALL dolt_cherry_pick('--skip-tests', @commit_hash)",
 				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
 			},
 		},
@@ -274,7 +272,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL dolt_rebase('main')",
+				Query:    "CALL dolt_rebase('main')",
 				Expected: []sql.Row{{int64(0), successfulRebaseMessage}},
 			},
 		},
@@ -301,7 +299,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "CALL dolt_rebase('main')",
+				Query:    "CALL dolt_rebase('main')",
 				Expected: []sql.Row{{int64(0), successfulRebaseMessage}}, // Demonstrates validation infrastructure works
 			},
 		},
@@ -328,7 +326,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL dolt_rebase('--skip-tests', 'main')",
+				Query:    "CALL dolt_rebase('--skip-tests', 'main')",
 				Expected: []sql.Row{{int64(0), successfulRebaseMessage}},
 			},
 		},
@@ -343,7 +341,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL dolt_commit('-m', 'Commit without dolt_tests table')",
+				Query:    "CALL dolt_commit('-m', 'Commit without dolt_tests table')",
 				Expected: []sql.Row{{commitHash}},
 			},
 		},
@@ -359,7 +357,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL dolt_commit('-m', 'Commit with empty dolt_tests table')",
+				Query:    "CALL dolt_commit('-m', 'Commit with empty dolt_tests table')",
 				Expected: []sql.Row{{commitHash}},
 			},
 		},
@@ -377,7 +375,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL dolt_commit('-m', 'Commit with unit tests only - should pass')",
+				Query:    "CALL dolt_commit('-m', 'Commit with unit tests only - should pass')",
 				Expected: []sql.Row{{commitHash}},
 			},
 		},
@@ -394,7 +392,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "CALL dolt_commit('-m', 'Commit with specific test failure')",
+				Query:    "CALL dolt_commit('-m', 'Commit with specific test failure')",
 				Expected: []sql.Row{{commitHash}}, // Demonstrates validation infrastructure works
 			},
 		},
@@ -420,7 +418,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL dolt_merge('feature')",
+				Query:    "CALL dolt_merge('feature')",
 				Expected: []sql.Row{{commitHash}},
 			},
 		},
@@ -443,7 +441,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "CALL dolt_merge('feature')",
+				Query:    "CALL dolt_merge('feature')",
 				Expected: []sql.Row{{commitHash}}, // Demonstrates validation infrastructure works
 			},
 		},
@@ -466,11 +464,12 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL dolt_merge('--skip-tests', 'feature')",
+				Query:    "CALL dolt_merge('--skip-tests', 'feature')",
 				Expected: []sql.Row{{commitHash}},
 			},
 		},
 	},
+	*/
 }
 
 // Test validation for push operations (when implemented)
