@@ -42,7 +42,9 @@ func (f fakeGitAPI) ResolveRefCommit(ctx context.Context, ref string) (git.OID, 
 func (f fakeGitAPI) ResolvePathBlob(ctx context.Context, commit git.OID, path string) (git.OID, error) {
 	return f.resolvePathBlob(ctx, commit, path)
 }
-func (f fakeGitAPI) CatFileType(ctx context.Context, oid git.OID) (string, error) { panic("unexpected call") }
+func (f fakeGitAPI) CatFileType(ctx context.Context, oid git.OID) (string, error) {
+	panic("unexpected call")
+}
 func (f fakeGitAPI) BlobSize(ctx context.Context, oid git.OID) (int64, error) {
 	return f.blobSize(ctx, oid)
 }
@@ -55,7 +57,9 @@ func (f fakeGitAPI) HashObject(ctx context.Context, contents io.Reader) (git.OID
 func (f fakeGitAPI) ReadTree(ctx context.Context, commit git.OID, indexFile string) error {
 	panic("unexpected call")
 }
-func (f fakeGitAPI) ReadTreeEmpty(ctx context.Context, indexFile string) error { panic("unexpected call") }
+func (f fakeGitAPI) ReadTreeEmpty(ctx context.Context, indexFile string) error {
+	panic("unexpected call")
+}
 func (f fakeGitAPI) UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid git.OID, path string) error {
 	panic("unexpected call")
 }
@@ -244,4 +248,3 @@ func TestReadFullBlobBounded(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "descriptor too large")
 }
-

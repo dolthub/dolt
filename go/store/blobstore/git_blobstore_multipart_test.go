@@ -113,4 +113,3 @@ func TestMultiPartReadCloser_CloseClosesUnderlyingPartReader(t *testing.T) {
 	require.NoError(t, rc.Close())
 	require.True(t, underlying.closed)
 }
-
