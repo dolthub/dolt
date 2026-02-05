@@ -349,7 +349,7 @@ func TestJournalIndexBootstrap(t *testing.T) {
 						assert.NoError(t, j.commitRootHash(context.Background(), dherrors.FatalBehaviorError, cc.H))
 					}
 				}
-				o := j.offset()                                                   // precommit offset
+				o := j.offset()                                                                                // precommit offset
 				assert.NoError(t, j.commitRootHash(context.Background(), dherrors.FatalBehaviorError, e.last)) // commit |e.last|
 				if i == len(epochs) {
 					break // don't index |test.novel|

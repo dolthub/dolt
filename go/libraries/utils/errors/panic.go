@@ -35,10 +35,11 @@ const (
 func Fatalf(behavior FatalBehavior, msg string, args ...any) error {
 	if behavior == FatalBehaviorCrash {
 		go func() {
-			panic(fmt.Sprintf("fatal error: " + msg, args...))
+			panic(fmt.Sprintf("fatal error: "+msg, args...))
 		}()
-		for {}
+		for {
+		}
 	} else {
-		return fmt.Errorf("fatal error: " + msg, args...)
+		return fmt.Errorf("fatal error: "+msg, args...)
 	}
 }
