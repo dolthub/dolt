@@ -1,0 +1,49 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+datasource db {
+  provider = "mysql"
+  url      = env("DB_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Employee {
+  emp_no      Int      @id
+  birth_date  DateTime
+  first_name  String   @db.VarChar(14)
+  last_name   String   @db.VarChar(16)
+  hire_date   DateTime
+  dept_emps   DeptEmp[]
+  department  Department[]
+  col_to_drop String
+
+  @@map("employees")
+}
+
+model Department {
+  dept_no    String   @id @db.Char(4)
+  dept_name  String   @unique @db.VarChar(40)
+  manager_id Int?     // Optional field to store manager's employee number
+  manager    Employee? @relation(fields: [manager_id], references: [emp_no])
+  dept_emps  DeptEmp[]
+
+  @@map("departments")
+}
+
+model DeptEmp {
+  emp_no     Int
+  dept_no    String   @db.Char(4)
+  from_date  DateTime
+  to_date    DateTime
+  employee   Employee @relation(fields: [emp_no], references: [emp_no], onDelete: Cascade)
+  department Department @relation(fields: [dept_no], references: [dept_no], onDelete: Cascade)
+
+  @@id([emp_no, dept_no])
+  @@map("dept_emp")
+}

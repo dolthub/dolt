@@ -7,4 +7,4 @@ dolt config --global --add user.name orm-test-runner
 dolt config --global --add user.email orm-test-runner@liquidata.co
 
 echo "Running orm-tests:"
-bats /orm-tests/orm-tests.bats
+bats /orm-tests/orm-tests.bats --show-output-of-passing-tests
