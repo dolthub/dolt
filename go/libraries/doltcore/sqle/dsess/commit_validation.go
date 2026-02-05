@@ -12,39 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package testvalidation
+package dsess
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// RunTestValidation executes test validation using the dolt_test_run() table function.
+// runTestValidation executes test validation using the dolt_test_run() table function.
 // It runs tests for the specified test groups during the given operation type.
-// 
-// Note: This function has architectural limitations and will be replaced by the 
-// integrated session-based approach. It currently only works for SQL-based operations
-// due to session interface constraints.
-func RunTestValidation(ctx *sql.Context, testGroups []string, operationType string) error {
+func runTestValidation(ctx *sql.Context, testGroups []string, operationType string) error {
 	// If no test groups specified, skip validation
 	if len(testGroups) == 0 {
 		return nil
 	}
 
-	// Try to create a queryist from the session to use existing CLI infrastructure
-	queryist, ok := ctx.Session.(cli.Queryist)
-	if !ok {
-		// Session doesn't support queries, skip validation silently
-		// This is expected for CLI operations due to session interface differences
-		return nil
-	}
+	// Get the DoltSession and provider directly (no reflection needed!)
+	doltSession := ctx.Session.(*DoltSession)
+	provider := doltSession.Provider()
+
+	// Create an engine to execute queries
+	engine := gms.NewDefault(provider)
 
 	// Run tests for each group and collect failures
 	var allFailures []string
@@ -63,10 +59,24 @@ func RunTestValidation(ctx *sql.Context, testGroups []string, operationType stri
 			}
 		}
 
-		rows, err := cli.GetRowsForSql(queryist, ctx, query)
+		// Execute the query using the engine
+		_, iter, _, err := engine.Query(ctx, query)
 		if err != nil {
 			// If there are no dolt_tests to run for the specified group, that's an error
 			return fmt.Errorf("failed to run tests for group %s: %w", group, err)
+		}
+
+		// Collect all rows from the iterator
+		var rows []sql.Row
+		for {
+			row, err := iter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("error reading test results for group %s: %w", group, err)
+			}
+			rows = append(rows, row)
 		}
 
 		// If no rows returned, the group was not found

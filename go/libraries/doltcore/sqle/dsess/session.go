@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/testvalidation"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -803,7 +802,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 	if !props.SkipTests {
 		testGroups := GetCommitRunTestGroups()
 		if len(testGroups) > 0 {
-			err := testvalidation.RunTestValidation(ctx, testGroups, "commit")
+			err := runTestValidation(ctx, testGroups, "commit")
 			if err != nil {
 				return nil, err
 			}
