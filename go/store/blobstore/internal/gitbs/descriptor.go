@@ -236,20 +236,3 @@ func splitLines(s string) []string {
 func parseUint(s string) (uint64, error) {
 	return strconv.ParseUint(s, 10, 64)
 }
-
-func validateOIDHex(oid string) error {
-	if len(oid) != 40 {
-		return fmt.Errorf("expected 40 hex chars, got %d", len(oid))
-	}
-	for i := 0; i < len(oid); i++ {
-		c := oid[i]
-		switch {
-		case c >= '0' && c <= '9':
-		case c >= 'a' && c <= 'f':
-		case c >= 'A' && c <= 'F':
-		default:
-			return fmt.Errorf("non-hex character %q", c)
-		}
-	}
-	return nil
-}
