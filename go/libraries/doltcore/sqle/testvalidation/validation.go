@@ -19,49 +19,67 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // RunTestValidation executes test validation using the dolt_test_run() table function.
 // It runs tests for the specified test groups during the given operation type.
+// 
+// Note: This function has architectural limitations and will be replaced by the 
+// integrated session-based approach. It currently only works for SQL-based operations
+// due to session interface constraints.
 func RunTestValidation(ctx *sql.Context, testGroups []string, operationType string) error {
 	// If no test groups specified, skip validation
 	if len(testGroups) == 0 {
 		return nil
 	}
 
-	// Create a queryist from the session to use existing CLI infrastructure
+	// Try to create a queryist from the session to use existing CLI infrastructure
 	queryist, ok := ctx.Session.(cli.Queryist)
 	if !ok {
-		return nil // Session doesn't support queries, skip validation
+		// Session doesn't support queries, skip validation silently
+		// This is expected for CLI operations due to session interface differences
+		return nil
 	}
 
 	// Run tests for each group and collect failures
 	var allFailures []string
-	
+
 	for _, group := range testGroups {
 		var query string
 		if group == "*" {
 			// Run all tests
 			query = "SELECT * FROM dolt_test_run()"
 		} else {
-			// Run tests for specific group
-			query = fmt.Sprintf("SELECT * FROM dolt_test_run('%s')", strings.ReplaceAll(group, "'", "''"))
+			// Use proper MySQL parameter interpolation to prevent SQL injection
+			var err error
+			query, err = dbr.InterpolateForDialect("SELECT * FROM dolt_test_run(?)", []interface{}{group}, dialect.MySQL)
+			if err != nil {
+				return fmt.Errorf("failed to interpolate query for group %s: %w", group, err)
+			}
 		}
-		
+
 		rows, err := cli.GetRowsForSql(queryist, ctx, query)
 		if err != nil {
-			// If dolt_test_run doesn't exist or table doesn't exist, skip validation
-			return nil
+			// If there are no dolt_tests to run for the specified group, that's an error
+			return fmt.Errorf("failed to run tests for group %s: %w", group, err)
 		}
-		
+
+		// If no rows returned, the group was not found
+		if len(rows) == 0 {
+			return fmt.Errorf("no tests found for group %s", group)
+		}
+
 		// Process results - any rows indicate test results (both pass and fail)
-		failures, err := processTestResults(ctx, rows, group)
+		failures, err := processTestResults(ctx, rows)
 		if err != nil {
 			return fmt.Errorf("error processing test results for group %s: %w", group, err)
 		}
-		
+
 		allFailures = append(allFailures, failures...)
 	}
 
@@ -75,44 +93,44 @@ func RunTestValidation(ctx *sql.Context, testGroups []string, operationType stri
 
 // processTestResults processes rows from dolt_test_run() and returns failure messages.
 // The dolt_test_run() table function returns: test_name, test_group_name, query, status, message
-func processTestResults(ctx *sql.Context, rows []sql.Row, group string) ([]string, error) {
+func processTestResults(ctx *sql.Context, rows []sql.Row) ([]string, error) {
 	var failures []string
-	
+
 	for _, row := range rows {
 		if len(row) < 5 {
 			return nil, fmt.Errorf("unexpected row format from dolt_test_run()")
 		}
-		
-		testName, err := getStringValue(row[0])
+
+		testName, err := getStringValue(ctx, row[0])
 		if err != nil {
 			return nil, fmt.Errorf("failed to read test_name: %w", err)
 		}
-		
-		status, err := getStringValue(row[3])
+
+		status, err := getStringValue(ctx, row[3])
 		if err != nil {
 			return nil, fmt.Errorf("failed to read status for test %s: %w", testName, err)
 		}
-		
-		// If status is not "PASS", it's a failure
+
+		// If status is not "PASS", it's a failure (matches dolt_test_run.go:247)
 		if status != "PASS" {
-			message, err := getStringValue(row[4])
+			message, err := getStringValue(ctx, row[4])
 			if err != nil {
 				message = "unknown error"
 			}
 			failures = append(failures, fmt.Sprintf("%s (%s)", testName, message))
 		}
 	}
-	
+
 	return failures, nil
 }
 
-// getStringValue safely converts a sql.Row value to string
-func getStringValue(val interface{}) (string, error) {
-	if val == nil {
-		return "", nil
-	}
-	if str, ok := val.(string); ok {
+// getStringValue safely converts a sql.Row value to string using the same pattern as CI code
+func getStringValue(sqlCtx *sql.Context, tableValue interface{}) (string, error) {
+	if ts, ok := tableValue.(*val.TextStorage); ok {
+		return ts.Unwrap(sqlCtx)
+	} else if str, ok := tableValue.(string); ok {
 		return str, nil
+	} else {
+		return "", fmt.Errorf("unexpected type %T, was expecting string", tableValue)
 	}
-	return fmt.Sprintf("%v", val), nil
 }
