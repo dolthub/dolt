@@ -1,0 +1,64 @@
+name: Mini Benchmark Pull Requests
+
+on:
+  pull_request:
+    types: [ opened ]
+  issue_comment:
+    types: [ created ]
+
+jobs:
+  validate-commentor:
+    runs-on: ubuntu-22.04
+    outputs:
+      valid: ${{ steps.set_valid.outputs.valid }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Commentor
+        id: set_valid
+        run: ./.github/scripts/performance-benchmarking/validate-commentor.sh "$ACTOR"
+        env:
+          ACTOR: ${{ github.actor }}
+
+  check-comments:
+    runs-on: ubuntu-22.04
+    needs: validate-commentor
+    if: ${{ needs.validate-commentor.outputs.valid == 'true' }}
+    outputs:
+      benchmark: ${{ steps.set_benchmark.outputs.benchmark }}
+      comment-body: ${{ steps.set_body.outputs.body }}
+    steps:
+      - name: Check for Deploy Trigger
+        uses: dolthub/pull-request-comment-trigger@v2
+        id: check
+        with:
+          trigger: '#benchmark-mini'
+          reaction: rocket
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set Benchmark
+        if: ${{ steps.check.outputs.triggered == 'true' }}
+        id: set_benchmark
+        run: |
+          echo "benchmark=true" >> $GITHUB_OUTPUT
+
+  performance:
+    runs-on: ubuntu-22.04
+    needs: [validate-commentor, check-comments]
+    if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
+    name: Trigger Mini Benchmark Latency K8s Workflow
+    steps:
+      - uses: dolthub/pull-request-comment-branch@v3
+        id: comment-branch
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get pull number
+        uses: actions/github-script@v7
+        id: get_pull_number
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: benchmark-latency
+          client-payload: '{"from_server": "dolt", "from_version": "${{ github.sha }}", "to_server": "dolt", "to_version": "${{ steps.comment-branch.outputs.head_sha }}", "mode": "pullRequest", "issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "init_big_repo": "true", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-dolt-mini-job-json.sh"}'
