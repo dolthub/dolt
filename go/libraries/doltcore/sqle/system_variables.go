@@ -170,6 +170,14 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Default:           int8(0),
 	},
 	&sql.MysqlSystemVariable{
+		Name:              dsess.DoltEnableRevisionDelimiterAlias,
+		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+		Dynamic:           true,
+		SetVarHintApplies: false,
+		Type:              types.NewSystemBoolType(dsess.DoltEnableRevisionDelimiterAlias),
+		Default:           int8(1),
+	},
+	&sql.MysqlSystemVariable{
 		Name:              dsess.AwsCredsFile,
 		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
 		Dynamic:           false,

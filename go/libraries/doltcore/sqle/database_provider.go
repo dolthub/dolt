@@ -418,11 +418,14 @@ func (p *DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 }
 
 func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
-	currentDb := ctx.GetCurrentDatabase()
-	_, currRev := doltdb.SplitRevisionDbName(currentDb)
-
 	p.mu.RLock()
 	showBranches, _ := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabases)
+	currentDBName, _, err := dsess.ResolveRevisionDelimiter(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		ctx.GetLogger().Warn(err)
+	}
+
+	_, currentRevision := doltdb.SplitRevisionDbName(currentDBName)
 
 	all = make([]sql.Database, 0, len(p.databases))
 	for _, db := range p.databases {
@@ -441,8 +444,8 @@ func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Databas
 	p.mu.RUnlock()
 
 	// If there's a revision database in use, include it in the list (but don't double-count)
-	if currRev != "" && !showBranches {
-		rdb, ok, err := p.databaseForRevision(ctx, currentDb, currentDb)
+	if currentRevision != "" && !showBranches {
+		rdb, ok, err := p.databaseForRevision(ctx, currentDBName, ctx.GetCurrentDatabase())
 		if err != nil || !ok {
 			// TODO: this interface is wrong, needs to return errors
 			ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
@@ -488,7 +491,7 @@ func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlData
 	revDbs := make([]sql.Database, len(branches))
 	for i, branch := range branches {
 		revisionQualifiedName := fmt.Sprintf("%s/%s", db.Name(), branch.GetPath())
-		revDb, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, revisionQualifiedName)
+		revDb, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, db.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -839,6 +842,10 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
 func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
+	name, _, err := dsess.ResolveRevisionDelimiter(ctx, name)
+	if err != nil {
+		return err
+	}
 	_, revision := doltdb.SplitRevisionDbName(name)
 	if revision != "" {
 		return fmt.Errorf("unable to drop revision database: %s", name)
@@ -858,7 +865,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		return fmt.Errorf("unable to drop database: %s", name)
 	}
 
-	err := database.Close()
+	err = database.Close()
 	if err != nil {
 		return err
 	}
@@ -1038,8 +1045,9 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 }
 
 func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQualifiedName string, requestedName string) (dsess.SqlDatabase, bool, error) {
-	if !strings.Contains(revisionQualifiedName, doltdb.DbRevisionDelimiter) {
-		return nil, false, nil
+	revisionQualifiedName, _, err := dsess.ResolveRevisionDelimiter(ctx, revisionQualifiedName)
+	if err != nil {
+		return nil, false, err
 	}
 
 	parts := strings.SplitN(revisionQualifiedName, doltdb.DbRevisionDelimiter, 2)
@@ -1411,6 +1419,7 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 // BaseDatabase returns the base database for the specified database name. Meant for informational purposes when
 // managing the session initialization only. Use SessionDatabase for normal database retrieval.
 func (p *DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool) {
+	name, _, _ = dsess.ResolveRevisionDelimiter(ctx, name)
 	baseName := name
 	isRevisionDbName := strings.Contains(name, doltdb.DbRevisionDelimiter)
 
@@ -1429,13 +1438,16 @@ func (p *DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dses
 
 // SessionDatabase implements dsess.SessionDatabaseProvider
 func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
-	baseName := name
-	isRevisionDbName := strings.Contains(name, doltdb.DbRevisionDelimiter)
-
+	revisionQualifiedName, _, err := dsess.ResolveRevisionDelimiter(ctx, name)
+	if err != nil {
+		return nil, false, err
+	}
+	isRevisionDbName := strings.Contains(revisionQualifiedName, doltdb.DbRevisionDelimiter)
+	baseName := revisionQualifiedName
 	if isRevisionDbName {
 		// TODO: formalize and enforce this rule (can't allow DBs with / in the name)
 		// TODO: some connectors will take issue with the /, we need other mechanisms to support them
-		parts := strings.SplitN(name, doltdb.DbRevisionDelimiter, 2)
+		parts := strings.SplitN(revisionQualifiedName, doltdb.DbRevisionDelimiter, 2)
 		baseName = parts[0]
 	}
 
@@ -1466,7 +1478,6 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 
 	// Convert to a revision database before returning. If we got a non-qualified name, convert it to a qualified name
 	// using the session's current head
-	revisionQualifiedName := name
 	usingDefaultBranch := false
 	head := ""
 	sess := dsess.DSessFromSess(ctx.Session)
@@ -1491,7 +1502,7 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 		revisionQualifiedName = baseName + doltdb.DbRevisionDelimiter + head
 	}
 
-	db, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, name)
+	db, ok, err = p.databaseForRevision(ctx, revisionQualifiedName, name)
 	if err != nil {
 		if sql.ErrDatabaseNotFound.Is(err) && usingDefaultBranch {
 			// We can return a better error message here in some cases
