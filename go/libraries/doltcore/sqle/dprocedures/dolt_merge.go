@@ -180,7 +180,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 		msg = userMsg
 	}
 
-	ws, commit, conflicts, fastForward, message, err := performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+	ws, commit, conflicts, fastForward, message, err := performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg, apr.Contains(cli.SkipTestsFlag))
 	if err != nil {
 		return commit, conflicts, fastForward, "", err
 	}
@@ -205,6 +205,7 @@ func performMerge(
 	spec *merge.MergeSpec,
 	noCommit bool,
 	msg string,
+	skipTests bool,
 ) (*doltdb.WorkingSet, string, int, int, string, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
@@ -306,7 +307,10 @@ func performMerge(
 		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
 		args := []string{"-m", msg, "--author", author}
 		if spec.Force {
-			args = append(args, "--force")
+			args = append(args, "--"+cli.ForceFlag)
+		}
+		if skipTests {
+			args = append(args, "--"+cli.SkipTestsFlag)
 		}
 		commit, _, err = doDoltCommit(ctx, args)
 		if err != nil {
