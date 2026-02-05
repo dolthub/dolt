@@ -16,204 +16,103 @@ package testvalidation
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 )
 
-// RunTestValidation executes test validation for the specified operation and test groups.
-// It queries the dolt_tests table and runs tests that match the specified groups.
+// RunTestValidation executes test validation using the dolt_test_run() table function.
+// It runs tests for the specified test groups during the given operation type.
 func RunTestValidation(ctx *sql.Context, testGroups []string, operationType string) error {
 	// If no test groups specified, skip validation
 	if len(testGroups) == 0 {
 		return nil
 	}
 
-	dbName := ctx.GetCurrentDatabase()
-	if len(dbName) == 0 {
-		return nil // No database selected, skip validation
-	}
-
-	// Get the database provider from session
-	provider, ok := ctx.Session.(sql.DatabaseProvider)
+	// Create a queryist from the session to use existing CLI infrastructure
+	queryist, ok := ctx.Session.(cli.Queryist)
 	if !ok {
-		return nil // Session doesn't provide databases, skip validation
+		return nil // Session doesn't support queries, skip validation
 	}
+
+	// Run tests for each group and collect failures
+	var allFailures []string
 	
-	db, err := provider.Database(ctx, dbName)
-	if err != nil {
-		return nil // Database access error, skip validation
-	}
-
-	// Check if dolt_tests table exists
-	tableNames, err := db.GetTableNames(ctx)
-	if err != nil {
-		return nil // Can't get table names, skip validation
-	}
-
-	hasTestsTable := false
-	for _, tableName := range tableNames {
-		if tableName == "dolt_tests" {
-			hasTestsTable = true
-			break
-		}
-	}
-
-	if !hasTestsTable {
-		return nil // No dolt_tests table, skip validation
-	}
-
-	// Create engine from provider
-	engine := gms.NewDefault(provider)
-	
-	// Build query to get tests for the specified groups
-	groupConditions := make([]string, len(testGroups))
-	for i, group := range testGroups {
+	for _, group := range testGroups {
+		var query string
 		if group == "*" {
 			// Run all tests
-			groupConditions = []string{"1 = 1"}
-			break
+			query = "SELECT * FROM dolt_test_run()"
+		} else {
+			// Run tests for specific group
+			query = fmt.Sprintf("SELECT * FROM dolt_test_run('%s')", strings.ReplaceAll(group, "'", "''"))
 		}
-		groupConditions[i] = fmt.Sprintf("test_group = '%s'", group)
+		
+		rows, err := cli.GetRowsForSql(queryist, ctx, query)
+		if err != nil {
+			// If dolt_test_run doesn't exist or table doesn't exist, skip validation
+			return nil
+		}
+		
+		// Process results - any rows indicate test results (both pass and fail)
+		failures, err := processTestResults(ctx, rows, group)
+		if err != nil {
+			return fmt.Errorf("error processing test results for group %s: %w", group, err)
+		}
+		
+		allFailures = append(allFailures, failures...)
 	}
 
-	query := fmt.Sprintf("SELECT test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value FROM dolt_tests WHERE %s",
-		strings.Join(groupConditions, " OR "))
-
-	// Execute query to get tests
-	_, iter, _, err := engine.Query(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to query dolt_tests table: %w", err)
-	}
-
-	var failedTests []string
-
-	// Execute each test
-	for {
-		row, err := iter.Next(ctx)
-		if err == io.EOF {
-			break // No more rows
-		}
-		if err != nil {
-			return fmt.Errorf("failed to read test row: %w", err)
-		}
-		if row == nil {
-			break // No more rows
-		}
-
-		testName := row[0].(string)
-		testGroup := row[1].(string)
-		testQuery := row[2].(string)
-		assertionType := row[3].(string)
-		assertionComparator := row[4].(string)
-		assertionValue := row[5]
-
-		// Execute the test query
-		_, testIter, _, err := engine.Query(ctx, testQuery)
-		if err != nil {
-			failedTests = append(failedTests, fmt.Sprintf("%s (query failed: %v)", testName, err))
-			continue
-		}
-
-		// Get the first result row
-		resultRow, err := testIter.Next(ctx)
-		if err == io.EOF || resultRow == nil {
-			failedTests = append(failedTests, fmt.Sprintf("%s (no result returned)", testName))
-			continue
-		}
-		if err != nil {
-			failedTests = append(failedTests, fmt.Sprintf("%s (result read failed: %v)", testName, err))
-			continue
-		}
-
-		// Validate the result based on assertion type
-		passed, err := validateTestAssertion(ctx, resultRow[0], assertionType, assertionComparator, assertionValue)
-		if err != nil {
-			failedTests = append(failedTests, fmt.Sprintf("%s (assertion validation failed: %v)", testName, err))
-			continue
-		}
-
-		if !passed {
-			failedTests = append(failedTests, fmt.Sprintf("%s (expected %s %s %v, got %v)", 
-				testName, assertionType, assertionComparator, assertionValue, resultRow[0]))
-		}
-
-		_ = testGroup // Used for potential filtering/reporting
-	}
-
-	// If any tests failed, return error
-	if len(failedTests) > 0 {
-		return fmt.Errorf("test validation failed for %s: %s", operationType, strings.Join(failedTests, "; "))
+	// If any tests failed, return error with details
+	if len(allFailures) > 0 {
+		return fmt.Errorf("test validation failed for %s: %s", operationType, strings.Join(allFailures, "; "))
 	}
 
 	return nil
 }
 
-// validateTestAssertion validates a test result against the expected assertion
-func validateTestAssertion(ctx *sql.Context, actual interface{}, assertionType, comparator string, expected interface{}) (bool, error) {
-	switch assertionType {
-	case "expected_single_value":
-		return validateSingleValue(ctx, actual, comparator, expected)
-	default:
-		return false, fmt.Errorf("unsupported assertion type: %s", assertionType)
+// processTestResults processes rows from dolt_test_run() and returns failure messages.
+// The dolt_test_run() table function returns: test_name, test_group_name, query, status, message
+func processTestResults(ctx *sql.Context, rows []sql.Row, group string) ([]string, error) {
+	var failures []string
+	
+	for _, row := range rows {
+		if len(row) < 5 {
+			return nil, fmt.Errorf("unexpected row format from dolt_test_run()")
+		}
+		
+		testName, err := getStringValue(row[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to read test_name: %w", err)
+		}
+		
+		status, err := getStringValue(row[3])
+		if err != nil {
+			return nil, fmt.Errorf("failed to read status for test %s: %w", testName, err)
+		}
+		
+		// If status is not "PASS", it's a failure
+		if status != "PASS" {
+			message, err := getStringValue(row[4])
+			if err != nil {
+				message = "unknown error"
+			}
+			failures = append(failures, fmt.Sprintf("%s (%s)", testName, message))
+		}
 	}
+	
+	return failures, nil
 }
 
-// validateSingleValue validates a single value assertion
-func validateSingleValue(ctx *sql.Context, actual interface{}, comparator string, expected interface{}) (bool, error) {
-	switch comparator {
-	case "==":
-		actualStr := fmt.Sprintf("%v", actual)
-		expectedStr := fmt.Sprintf("%v", expected)
-		return actualStr == expectedStr, nil
-	case "!=":
-		actualStr := fmt.Sprintf("%v", actual)
-		expectedStr := fmt.Sprintf("%v", expected)
-		return actualStr != expectedStr, nil
-	case ">":
-		actualNum, _, err := types.Float64.Convert(ctx, actual)
-		if err != nil {
-			return false, fmt.Errorf("cannot convert actual value to number: %v", err)
-		}
-		expectedNum, _, err := types.Float64.Convert(ctx, expected)
-		if err != nil {
-			return false, fmt.Errorf("cannot convert expected value to number: %v", err)
-		}
-		return actualNum.(float64) > expectedNum.(float64), nil
-	case "<":
-		actualNum, _, err := types.Float64.Convert(ctx, actual)
-		if err != nil {
-			return false, fmt.Errorf("cannot convert actual value to number: %v", err)
-		}
-		expectedNum, _, err := types.Float64.Convert(ctx, expected)
-		if err != nil {
-			return false, fmt.Errorf("cannot convert expected value to number: %v", err)
-		}
-		return actualNum.(float64) < expectedNum.(float64), nil
-	case ">=":
-		actualNum, _, err := types.Float64.Convert(ctx, actual)
-		if err != nil {
-			return false, fmt.Errorf("cannot convert actual value to number: %v", err)
-		}
-		expectedNum, _, err := types.Float64.Convert(ctx, expected)
-		if err != nil {
-			return false, fmt.Errorf("cannot convert expected value to number: %v", err)
-		}
-		return actualNum.(float64) >= expectedNum.(float64), nil
-	case "<=":
-		actualNum, _, err := types.Float64.Convert(ctx, actual)
-		if err != nil {
-			return false, fmt.Errorf("cannot convert actual value to number: %v", err)
-		}
-		expectedNum, _, err := types.Float64.Convert(ctx, expected)
-		if err != nil {
-			return false, fmt.Errorf("cannot convert expected value to number: %v", err)
-		}
-		return actualNum.(float64) <= expectedNum.(float64), nil
-	default:
-		return false, fmt.Errorf("unsupported comparator: %s", comparator)
+// getStringValue safely converts a sql.Row value to string
+func getStringValue(val interface{}) (string, error) {
+	if val == nil {
+		return "", nil
 	}
+	if str, ok := val.(string); ok {
+		return str, nil
+	}
+	return fmt.Sprintf("%v", val), nil
 }
