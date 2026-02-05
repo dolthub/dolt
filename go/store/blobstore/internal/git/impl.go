@@ -186,6 +186,41 @@ func (a *GitAPIImpl) CommitTree(ctx context.Context, tree OID, parent *OID, mess
 	return OID(oid), nil
 }
 
+func (a *GitAPIImpl) CommitTreeWithParents(ctx context.Context, tree OID, parents []OID, message string, author *Identity) (OID, error) {
+	args := []string{"commit-tree", tree.String(), "-m", message}
+	for _, p := range parents {
+		if p != "" {
+			args = append(args, "-p", p.String())
+		}
+	}
+
+	var env []string
+	if author != nil {
+		if author.Name != "" {
+			env = append(env,
+				"GIT_AUTHOR_NAME="+author.Name,
+				"GIT_COMMITTER_NAME="+author.Name,
+			)
+		}
+		if author.Email != "" {
+			env = append(env,
+				"GIT_AUTHOR_EMAIL="+author.Email,
+				"GIT_COMMITTER_EMAIL="+author.Email,
+			)
+		}
+	}
+
+	out, err := a.r.Run(ctx, RunOptions{Env: env}, args...)
+	if err != nil {
+		return "", err
+	}
+	oid := strings.TrimSpace(string(out))
+	if oid == "" {
+		return "", fmt.Errorf("git commit-tree returned empty oid")
+	}
+	return OID(oid), nil
+}
+
 func (a *GitAPIImpl) UpdateRefCAS(ctx context.Context, ref string, newOID OID, oldOID OID, msg string) error {
 	args := []string{"update-ref"}
 	if msg != "" {
@@ -206,6 +241,46 @@ func (a *GitAPIImpl) UpdateRef(ctx context.Context, ref string, newOID OID, msg 
 	return err
 }
 
+func (a *GitAPIImpl) FetchRef(ctx context.Context, remote, remoteRef, localRef string) error {
+	// Use a force-updating refspec ("+...") so the remote-tracking ref always reflects the
+	// remote state, even if the remote rewrites history.
+	refspec := "+" + remoteRef + ":" + localRef
+	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", remote, refspec)
+	if err == nil {
+		return nil
+	}
+	if isRemoteRefNotFoundErr(err) {
+		// Best-effort: delete local tracking ref to represent "remote has no data".
+		// Ignore errors (e.g. if it didn't exist).
+		_, _ = a.r.Run(ctx, RunOptions{}, "update-ref", "-d", localRef)
+		return nil
+	}
+	return err
+}
+
+func (a *GitAPIImpl) MergeBase(ctx context.Context, aCommit, bCommit OID) (base OID, ok bool, err error) {
+	out, err := a.r.Run(ctx, RunOptions{}, "merge-base", aCommit.String(), bCommit.String())
+	if err == nil {
+		s := strings.TrimSpace(string(out))
+		if s == "" {
+			return "", false, nil
+		}
+		return OID(s), true, nil
+	}
+	if isMergeBaseNotFoundErr(err) {
+		return "", false, nil
+	}
+	return "", false, err
+}
+
+func (a *GitAPIImpl) ListTreeRecursive(ctx context.Context, commit OID) ([]TreeEntry, error) {
+	out, err := a.r.Run(ctx, RunOptions{}, "ls-tree", "-r", "-z", "--full-tree", commit.String()+"^{tree}")
+	if err != nil {
+		return nil, err
+	}
+	return parseLsTreeZ(out)
+}
+
 func isRefNotFoundErr(err error) bool {
 	ce, ok := err.(*CmdError)
 	if !ok {
@@ -220,6 +295,26 @@ func isRefNotFoundErr(err error) bool {
 	return strings.Contains(msg, "needed a single revision") ||
 		strings.Contains(msg, "unknown revision") ||
 		strings.Contains(msg, "not a valid object name")
+}
+
+func isRemoteRefNotFoundErr(err error) bool {
+	ce, ok := err.(*CmdError)
+	if !ok {
+		return false
+	}
+	msg := strings.ToLower(string(ce.Output))
+	return strings.Contains(msg, "couldn't find remote ref") ||
+		strings.Contains(msg, "could not find remote ref") ||
+		strings.Contains(msg, "remote ref does not exist")
+}
+
+func isMergeBaseNotFoundErr(err error) bool {
+	ce, ok := err.(*CmdError)
+	if !ok {
+		return false
+	}
+	// `git merge-base <a> <b>` returns exit 1 and no output when there is no merge base.
+	return ce.ExitCode == 1 && len(bytes.TrimSpace(ce.Output)) == 0
 }
 
 func isPathNotFoundErr(err error) bool {
@@ -242,4 +337,31 @@ func isPathNotFoundErr(err error) bool {
 		}
 	}
 	return false
+}
+
+func parseLsTreeZ(out []byte) ([]TreeEntry, error) {
+	records := bytes.Split(out, []byte{0})
+	entries := make([]TreeEntry, 0, len(records))
+	for _, rec := range records {
+		if len(rec) == 0 {
+			continue
+		}
+		parts := bytes.SplitN(rec, []byte{'\t'}, 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("git ls-tree: missing tab separator in record %q", string(rec))
+		}
+		hdr := string(parts[0])
+		path := string(parts[1])
+		fields := strings.Fields(hdr)
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("git ls-tree: unexpected header %q", hdr)
+		}
+		entries = append(entries, TreeEntry{
+			Mode: fields[0],
+			Type: fields[1],
+			OID:  OID(fields[2]),
+			Path: path,
+		})
+	}
+	return entries, nil
 }
