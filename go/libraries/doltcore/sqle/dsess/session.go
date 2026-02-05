@@ -176,6 +176,10 @@ func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, er
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
 	dbName = strings.ToLower(dbName)
+	dbName, _, err := ResolveRevisionDelimiter(ctx, dbName)
+	if err != nil {
+		return nil, false, err
+	}
 
 	var baseName, rev string
 	baseName, rev = doltdb.SplitRevisionDbName(dbName)
@@ -230,6 +234,28 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	}
 
 	return dbState.heads[strings.ToLower(database.Revision())], true, nil
+}
+
+func ResolveRevisionDelimiter(ctx *sql.Context, dbName string) (resolved string, isDelimiterAlias bool, err error) {
+	if !strings.Contains(dbName, doltdb.DbRevisionDelimiterAlias) {
+		return dbName, false, nil
+	}
+
+	enabled, err := GetBooleanSystemVar(ctx, DoltEnableRevisionDelimiterAlias)
+	if err != nil {
+		return dbName, false, err
+	}
+	if !enabled {
+		return dbName, false, nil
+	}
+
+	base, revision, found := strings.Cut(dbName, doltdb.DbRevisionDelimiterAlias)
+	if !found {
+		errRevisionDelimAliasUnresolved := fmt.Errorf("could not resolve revision delimiter '%s' in %s", doltdb.DbRevisionDelimiterAlias, dbName)
+		return dbName, false, errRevisionDelimAliasUnresolved
+	}
+
+	return doltdb.RevisionDbName(base, revision), true, nil
 }
 
 // LookupDbState returns the session state for the database named. Unqualified database names, e.g. `mydb` get resolved
