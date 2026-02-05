@@ -765,9 +765,9 @@ func (handler AddressTypeHandler) SerializationCompatible(other TupleTypeHandler
 }
 
 func (handler AddressTypeHandler) ConvertSerialized(ctx context.Context, other TupleTypeHandler, val []byte) ([]byte, error) {
-	panic("unexpected call to ConvertSerialized on AddressTypeHandler; this should never be necessary because" +
-			" AddressTypeHandler should only be used in contexts where the child handler's serialized form is never " +
-			"directly compared or converted")
+	panic("unexpected call to ConvertSerialized on AddressTypeHandler; this should never be necessary because " +
+		"AddressTypeHandler should only be used in contexts where the child handler's serialized form is never " +
+		"directly compared or converted")
 }
 
 var _ TupleTypeHandler = AddressTypeHandler{}
