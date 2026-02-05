@@ -116,7 +116,7 @@ func computeProllyTreePatches(
 	mergeInfo MergeInfo,
 	diffInfo tree.ThreeWayDiffInfo,
 	patchBuffer tree.PatchBuffer,
-	s *MergeStats) (*secondaryMerger, *conflictMerger, error) {
+	mStats *MergeStats) (*secondaryMerger, *conflictMerger, error) {
 	ns := tm.ns
 
 	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo)
@@ -213,6 +213,7 @@ func computeProllyTreePatches(
 	for _, col := range finalSch.GetNonPKCols().GetColumns() {
 		if !col.IsNullable() {
 			needsNullValidation = true
+			break
 		}
 	}
 	needsSecondaryIndexMerge := len(sec.leftIdxes) > 0 && !mergeInfo.InvalidateSecondaryIndexes
@@ -243,7 +244,7 @@ func computeProllyTreePatches(
 				return tree.Diff{}, false
 			}
 			if !b {
-				s.DataConflicts++
+				mStats.DataConflicts++
 				conflictDiff := tree.ThreeWayDiff{
 					Op:    tree.DiffOpDivergentModifyConflict,
 					Key:   val.Tuple(left.Key),
@@ -304,13 +305,13 @@ func computeProllyTreePatches(
 			if err != nil {
 				return nil, nil, err
 			}
-			s.ConstraintViolations += cnt
+			mStats.ConstraintViolations += cnt
 
 			cnt, err = nullChk.validateDiff(ctx, diff)
 			if err != nil {
 				return nil, nil, err
 			}
-			s.ConstraintViolations += cnt
+			mStats.ConstraintViolations += cnt
 			if cnt > 0 {
 				continue
 			}
@@ -319,7 +320,7 @@ func computeProllyTreePatches(
 			if err != nil {
 				return nil, nil, err
 			}
-			s.ConstraintViolations += cnt
+			mStats.ConstraintViolations += cnt
 
 			switch diff.Op {
 			case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
@@ -334,7 +335,7 @@ func computeProllyTreePatches(
 			case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
 				// In this case, a modification or delete was made to one side, and a conflicting delete or modification
 				// was made to the other side, so these cannot be automatically resolved.
-				s.DataConflicts++
+				mStats.DataConflicts++
 				err = conflicts.merge(ctx, diff, nil)
 				if err != nil {
 					return nil, nil, err
@@ -344,7 +345,7 @@ func computeProllyTreePatches(
 					return nil, nil, err
 				}
 			case tree.DiffOpRightAdd:
-				s.Adds++
+				mStats.Adds++
 				err = pri.merge(ctx, diff, tm.rightSch)
 				if err != nil {
 					return nil, nil, err
@@ -354,7 +355,7 @@ func computeProllyTreePatches(
 					return nil, nil, err
 				}
 			case tree.DiffOpRightModify:
-				s.Modifications++
+				mStats.Modifications++
 				err = pri.merge(ctx, diff, tm.rightSch)
 				if err != nil {
 					return nil, nil, err
@@ -364,7 +365,7 @@ func computeProllyTreePatches(
 					return nil, nil, err
 				}
 			case tree.DiffOpRightDelete, tree.DiffOpDivergentDeleteResolved:
-				s.Deletes++
+				mStats.Deletes++
 				err = pri.merge(ctx, diff, tm.rightSch)
 				if err != nil {
 					return nil, nil, err
@@ -376,7 +377,7 @@ func computeProllyTreePatches(
 			case tree.DiffOpDivergentModifyResolved:
 				// In this case, both sides of the merge have made different changes to a row, but we were able to
 				// resolve them automatically.
-				s.Modifications++
+				mStats.Modifications++
 				err = pri.merge(ctx, diff, nil)
 				if err != nil {
 					return nil, nil, err
@@ -388,7 +389,7 @@ func computeProllyTreePatches(
 			case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
 				// In this case, both sides of the merge have made the same change, so no additional changes are needed.
 				if keyless {
-					s.DataConflicts++
+					mStats.DataConflicts++
 					err = conflicts.merge(ctx, diff, nil)
 					if err != nil {
 						return nil, nil, err
