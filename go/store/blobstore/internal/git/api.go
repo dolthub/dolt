@@ -73,6 +73,11 @@ type GitAPI interface {
 	//   GIT_DIR=... git commit-tree <tree> [-p <parent>] -m <message>
 	CommitTree(ctx context.Context, tree OID, parent *OID, message string, author *Identity) (OID, error)
 
+	// CommitTreeWithParents creates a commit object from |tree| with zero or more parents.
+	// Equivalent plumbing:
+	//   GIT_DIR=... git commit-tree <tree> [-p <p1> -p <p2> ...] -m <message>
+	CommitTreeWithParents(ctx context.Context, tree OID, parents []OID, message string, author *Identity) (OID, error)
+
 	// UpdateRefCAS atomically updates |ref| from |old| to |new|.
 	// Equivalent plumbing:
 	//   GIT_DIR=... git update-ref -m <msg> <ref> <new> <old>
@@ -92,6 +97,27 @@ type GitAPI interface {
 	// If |remoteRef| does not exist on the remote, FetchRef deletes |localRef| (best-effort)
 	// to represent an "empty remote" state and returns nil.
 	FetchRef(ctx context.Context, remote, remoteRef, localRef string) error
+
+	// MergeBase returns the merge base OID for two commits.
+	//
+	// Equivalent plumbing:
+	//   GIT_DIR=... git merge-base <a> <b>
+	//
+	// Returns ok=false if the commits have no merge base.
+	MergeBase(ctx context.Context, a, b OID) (base OID, ok bool, err error)
+
+	// ListTreeRecursive returns the recursive set of tree entries for |commit|.
+	// Equivalent plumbing:
+	//   GIT_DIR=... git ls-tree -r -z --full-tree <commit>^{tree}
+	ListTreeRecursive(ctx context.Context, commit OID) ([]TreeEntry, error)
+}
+
+// TreeEntry is a single file entry in a git tree.
+type TreeEntry struct {
+	Path string
+	Mode string
+	Type string
+	OID  OID
 }
 
 // Identity represents git author/committer metadata. A future implementation may set

@@ -56,6 +56,28 @@ func (e *NotBlobError) Error() string {
 	return fmt.Sprintf("git path is not a blob (%s): %s:%s", e.Type, e.Commit, e.Path)
 }
 
+// MergeConflictError indicates that a merge could not be completed without resolving conflicts.
+// For GitBlobstore usage, this typically means the same blobstore key was changed differently
+// on both sides.
+type MergeConflictError struct {
+	Paths []string
+}
+
+func (e *MergeConflictError) Error() string {
+	if len(e.Paths) == 0 {
+		return "git merge conflict"
+	}
+	// Avoid overly large errors; callers can log more details if needed.
+	const max = 10
+	paths := e.Paths
+	more := ""
+	if len(paths) > max {
+		paths = paths[:max]
+		more = fmt.Sprintf(" (and %d more)", len(e.Paths)-max)
+	}
+	return fmt.Sprintf("git merge conflict on %d paths%s: %v", len(e.Paths), more, paths)
+}
+
 func IsPathNotFound(err error) bool {
 	var e *PathNotFoundError
 	return errors.As(err, &e)
