@@ -113,7 +113,6 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			"SET GLOBAL dolt_commit_run_test_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
-			"CREATE TABLE dolt_tests (test_name VARCHAR(255) NOT NULL PRIMARY KEY, test_group VARCHAR(255) NOT NULL, test_query TEXT NOT NULL, assertion_type VARCHAR(255) NOT NULL, assertion_comparator VARCHAR(255) NOT NULL, assertion_value VARCHAR(255))",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
 				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '2'), " +
 				"('test_alice_exists', 'unit', 'SELECT COUNT(*) FROM users WHERE name = \"Alice\"', 'expected_single_value', '==', '1')",
@@ -135,7 +134,6 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			"SET GLOBAL dolt_commit_run_test_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
-			"CREATE TABLE dolt_tests (test_name VARCHAR(255) NOT NULL PRIMARY KEY, test_group VARCHAR(255) NOT NULL, test_query TEXT NOT NULL, assertion_type VARCHAR(255) NOT NULL, assertion_comparator VARCHAR(255) NOT NULL, assertion_value VARCHAR(255))",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
 				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '2'), " +
 				"('test_will_fail', 'integration', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999')",
@@ -154,7 +152,6 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			"SET GLOBAL dolt_commit_run_test_groups = 'unit'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
-			"CREATE TABLE dolt_tests (test_name VARCHAR(255) NOT NULL PRIMARY KEY, test_group VARCHAR(255) NOT NULL, test_query TEXT NOT NULL, assertion_type VARCHAR(255) NOT NULL, assertion_comparator VARCHAR(255) NOT NULL, assertion_value VARCHAR(255))",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
 				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '2'), " +
 				"('test_will_fail', 'integration', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999')",

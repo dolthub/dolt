@@ -453,7 +453,7 @@ func executeNoFFMerge(
 		Force:     spec.Force,
 		Name:      spec.Name,
 		Email:     spec.Email,
-		SkipTests: false, // TODO: Add support for --skip-tests in merge operations
+		SkipTests: false, // NM4: Add support for --skip-tests in merge operations
 	})
 	if err != nil {
 		return nil, nil, err
