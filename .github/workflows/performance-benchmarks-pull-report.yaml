@@ -35,11 +35,20 @@ jobs:
           reaction: rocket
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set Benchmark
+      - name: Check for Deploy Mini Trigger
+        uses: dolthub/pull-request-comment-trigger@v2
+        id: check
+        with:
+          trigger: '#benchmark-mini'
+          reaction: rocket
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set Benchmark Mini
         if: ${{ steps.check.outputs.triggered == 'true' }}
         id: set_benchmark
         run: |
           echo "benchmark=true" >> $GITHUB_OUTPUT
+          echo "sysbench-test-time=10" >> $GITHUB_OUTPUT
 
   performance:
     runs-on: ubuntu-22.04
