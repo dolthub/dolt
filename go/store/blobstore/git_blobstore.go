@@ -212,9 +212,10 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 		}
 
 		if !ok {
-			// Best-effort ref creation. If a concurrent writer created the ref first, retry
-			// and take the normal CAS path on the new head.
-			if err := gbs.api.UpdateRef(ctx, gbs.ref, newCommit, msg); err != nil {
+			// Create-only CAS: oldOID=all-zero requires the ref to not exist. This avoids
+			// losing concurrent writes when multiple goroutines create the ref at once.
+			const zeroOID = git.OID("0000000000000000000000000000000000000000")
+			if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, zeroOID, msg); err != nil {
 				if gbs.refAdvanced(ctx, parent) {
 					return err
 				}
@@ -462,8 +463,10 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 		}
 
 		if !hasParent {
-			// Best-effort ref creation. If a concurrent writer created the ref first, retry.
-			if err := gbs.api.UpdateRef(ctx, gbs.ref, newCommit, msg); err != nil {
+			// Create-only CAS: oldOID=all-zero requires the ref to not exist. This avoids
+			// losing concurrent writes when multiple goroutines create the ref at once.
+			const zeroOID = git.OID("0000000000000000000000000000000000000000")
+			if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, zeroOID, msg); err != nil {
 				if gbs.refAdvanced(ctx, parent) {
 					return err
 				}
