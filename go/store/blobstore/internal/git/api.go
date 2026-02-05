@@ -82,6 +82,16 @@ type GitAPI interface {
 	// Equivalent plumbing:
 	//   GIT_DIR=... git update-ref -m <msg> <ref> <new>
 	UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error
+
+	// FetchRef updates |localRef| to match |remoteRef| from |remote|, storing the fetched
+	// state under a remote-tracking ref (e.g. refs/dolt/remotes/origin/data).
+	//
+	// Equivalent plumbing:
+	//   GIT_DIR=... git fetch --no-tags <remote> +<remoteRef>:<localRef>
+	//
+	// If |remoteRef| does not exist on the remote, FetchRef deletes |localRef| (best-effort)
+	// to represent an "empty remote" state and returns nil.
+	FetchRef(ctx context.Context, remote, remoteRef, localRef string) error
 }
 
 // Identity represents git author/committer metadata. A future implementation may set

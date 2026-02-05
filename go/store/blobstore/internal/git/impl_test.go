@@ -478,6 +478,125 @@ func TestGitAPIImpl_ReadTree_PreservesExistingPaths(t *testing.T) {
 	}
 }
 
+func TestGitAPIImpl_FetchRef_UpdatesRemoteTrackingRef(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	origin, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteCommit, err := origin.SetRefToTree(ctx, "refs/dolt/data", map[string][]byte{
+		"manifest": []byte("m1\n"),
+	}, "seed")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	local, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := NewRunner(local.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewGitAPIImpl(r)
+
+	// Configure a remote pointing at the origin bare repo.
+	if _, err := r.Run(ctx, RunOptions{}, "remote", "add", "origin", origin.GitDir); err != nil {
+		t.Fatal(err)
+	}
+
+	localRef := "refs/dolt/remotes/origin/data"
+	if err := api.FetchRef(ctx, "origin", "refs/dolt/data", localRef); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := api.ResolveRefCommit(ctx, localRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.String() != remoteCommit {
+		t.Fatalf("remote-tracking ref mismatch: got %q, want %q", got.String(), remoteCommit)
+	}
+
+	// Advance origin and fetch again.
+	remoteCommit2, err := origin.SetRefToTree(ctx, "refs/dolt/data", map[string][]byte{
+		"manifest": []byte("m2\n"),
+	}, "advance")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := api.FetchRef(ctx, "origin", "refs/dolt/data", localRef); err != nil {
+		t.Fatal(err)
+	}
+	got2, err := api.ResolveRefCommit(ctx, localRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got2.String() != remoteCommit2 {
+		t.Fatalf("remote-tracking ref mismatch after advance: got %q, want %q", got2.String(), remoteCommit2)
+	}
+}
+
+func TestGitAPIImpl_FetchRef_MissingRemoteRefDeletesLocalRef(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	origin, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Intentionally do not create refs/dolt/data in origin.
+
+	local, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := NewRunner(local.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewGitAPIImpl(r)
+
+	// Create the local tracking ref so we can verify it is deleted.
+	indexFile := tempIndexFile(t)
+	if err := api.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+	treeOID, err := api.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitOID, err := api.CommitTree(ctx, treeOID, nil, "local seed", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	localRef := "refs/dolt/remotes/origin/data"
+	if err := api.UpdateRef(ctx, localRef, commitOID, "seed"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := r.Run(ctx, RunOptions{}, "remote", "add", "origin", origin.GitDir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Fetch should treat missing remote ref as "remote empty" and delete localRef.
+	if err := api.FetchRef(ctx, "origin", "refs/dolt/data", localRef); err != nil {
+		t.Fatal(err)
+	}
+	_, ok, err := api.TryResolveRefCommit(ctx, localRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatalf("expected %q to be deleted after fetching missing remote ref", localRef)
+	}
+}
+
 func TestGitAPIImpl_UpdateRef_And_CAS(t *testing.T) {
 	t.Parallel()
 

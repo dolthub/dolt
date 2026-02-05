@@ -206,6 +206,23 @@ func (a *GitAPIImpl) UpdateRef(ctx context.Context, ref string, newOID OID, msg 
 	return err
 }
 
+func (a *GitAPIImpl) FetchRef(ctx context.Context, remote, remoteRef, localRef string) error {
+	// Use a force-updating refspec ("+...") so the remote-tracking ref always reflects the
+	// remote state, even if the remote rewrites history.
+	refspec := "+" + remoteRef + ":" + localRef
+	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", remote, refspec)
+	if err == nil {
+		return nil
+	}
+	if isRemoteRefNotFoundErr(err) {
+		// Best-effort: delete local tracking ref to represent "remote has no data".
+		// Ignore errors (e.g. if it didn't exist).
+		_, _ = a.r.Run(ctx, RunOptions{}, "update-ref", "-d", localRef)
+		return nil
+	}
+	return err
+}
+
 func isRefNotFoundErr(err error) bool {
 	ce, ok := err.(*CmdError)
 	if !ok {
@@ -220,6 +237,17 @@ func isRefNotFoundErr(err error) bool {
 	return strings.Contains(msg, "needed a single revision") ||
 		strings.Contains(msg, "unknown revision") ||
 		strings.Contains(msg, "not a valid object name")
+}
+
+func isRemoteRefNotFoundErr(err error) bool {
+	ce, ok := err.(*CmdError)
+	if !ok {
+		return false
+	}
+	msg := strings.ToLower(string(ce.Output))
+	return strings.Contains(msg, "couldn't find remote ref") ||
+		strings.Contains(msg, "could not find remote ref") ||
+		strings.Contains(msg, "remote ref does not exist")
 }
 
 func isPathNotFoundErr(err error) bool {
