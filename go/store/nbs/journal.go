@@ -556,6 +556,8 @@ func newJournalManifest(ctx context.Context, dir string, opts JournalingStoreOpt
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
 	if opts.BlockOnLock {
+		ticker := time.NewTicker(lockRetryInterval)
+		defer ticker.Stop()
 		for {
 			err = lock.TryLock()
 			if err == nil {
@@ -567,7 +569,7 @@ func newJournalManifest(ctx context.Context, dir string, opts JournalingStoreOpt
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-time.After(10 * time.Millisecond):
+			case <-ticker.C:
 			}
 		}
 	} else {

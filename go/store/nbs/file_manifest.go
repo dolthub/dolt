@@ -40,9 +40,10 @@ import (
 )
 
 const (
-	manifestFileName = "manifest"
-	lockFileName     = "LOCK"
-	lockFileTimeout  = time.Millisecond * 100
+	manifestFileName    = "manifest"
+	lockFileName        = "LOCK"
+	lockFileTimeout     = time.Millisecond * 100
+	lockRetryInterval   = time.Millisecond * 10
 
 	storageVersion4 = "4"
 
