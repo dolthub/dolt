@@ -102,7 +102,7 @@ echo '
               "--issue-number='$issueNumber'",
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
-              "--sysbench-test-time='$sysbenchTestTime'",
+              '"$sysbenchTestTime"'
               '"$withTpcc"'
               '"$initBigRepo"'
               '"$nomsBinFormat"'
