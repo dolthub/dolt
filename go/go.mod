@@ -72,6 +72,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
+	github.com/klauspost/compress v1.18.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lib/pq v1.10.0
 	github.com/mohae/uvarint v0.0.0-20160208145430-c3f9e62bf2b0
@@ -156,7 +157,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.14.2 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
