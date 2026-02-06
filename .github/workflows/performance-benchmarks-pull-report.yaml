@@ -25,7 +25,7 @@ jobs:
     if: ${{ needs.validate-commentor.outputs.valid == 'true' }}
     outputs:
       benchmark: ${{ steps.set_benchmark.outputs.benchmark }}
-      sysbench-test-time: ${{ steps.set_benchmark.outputs.sysbench-test-time }}
+      sysbench-test-time: ${{ steps.set_benchmark_mini.outputs.sysbench-test-time }}
       comment-body: ${{ steps.set_body.outputs.body }}
     steps:
       - name: Check for Deploy Trigger
