@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
-	gitbs "github.com/dolthub/dolt/go/store/blobstore/internal/gitbs"
 )
 
 type trackingReadCloser struct {
@@ -59,9 +58,9 @@ func TestMultiPartReadCloser_ReadConcatenatesAcrossPartsWithOffsets(t *testing.T
 	rc := &multiPartReadCloser{
 		ctx: ctx,
 		api: api,
-		slices: []gitbs.PartSlice{
-			{OIDHex: oid1, Offset: 1, Length: 3}, // "ell"
-			{OIDHex: oid2, Offset: 2, Length: 3}, // "rld"
+		slices: []chunkPartSlice{
+			{oidHex: oid1, offset: 1, length: 3}, // "ell"
+			{oidHex: oid2, offset: 2, length: 3}, // "rld"
 		},
 	}
 	defer func() { _ = rc.Close() }()
@@ -84,8 +83,8 @@ func TestMultiPartReadCloser_ReadUnexpectedEOFWhenPartShorterThanDeclared(t *tes
 	rc := &multiPartReadCloser{
 		ctx: ctx,
 		api: api,
-		slices: []gitbs.PartSlice{
-			{OIDHex: oid, Offset: 0, Length: 3}, // expect 3 bytes, only 2 available
+		slices: []chunkPartSlice{
+			{oidHex: oid, offset: 0, length: 3}, // expect 3 bytes, only 2 available
 		},
 	}
 	defer func() { _ = rc.Close() }()
@@ -110,8 +109,8 @@ func TestMultiPartReadCloser_CloseClosesUnderlyingPartReader(t *testing.T) {
 	rc := &multiPartReadCloser{
 		ctx: ctx,
 		api: api,
-		slices: []gitbs.PartSlice{
-			{OIDHex: oid, Offset: 0, Length: 1},
+		slices: []chunkPartSlice{
+			{oidHex: oid, offset: 0, length: 1},
 		},
 	}
 

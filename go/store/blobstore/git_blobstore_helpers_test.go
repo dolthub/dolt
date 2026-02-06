@@ -218,15 +218,15 @@ func TestGitBlobstoreHelpers_validateAndSizeChunkedParts(t *testing.T) {
 	gbs := &GitBlobstore{api: api}
 
 	parts, total, err := gbs.validateAndSizeChunkedParts(ctx, []git.TreeEntry{
-		{Name: "0001", Type: "blob", OID: "0123456789abcdef0123456789abcdef01234567"},
-		{Name: "0002", Type: "blob", OID: "89abcdef0123456789abcdef0123456789abcdef"},
+		{Name: "0001", Type: git.ObjectTypeBlob, OID: "0123456789abcdef0123456789abcdef01234567"},
+		{Name: "0002", Type: git.ObjectTypeBlob, OID: "89abcdef0123456789abcdef0123456789abcdef"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, uint64(8), total)
 	require.Len(t, parts, 2)
-	require.Equal(t, "0123456789abcdef0123456789abcdef01234567", parts[0].OIDHex)
-	require.Equal(t, uint64(3), parts[0].Size)
+	require.Equal(t, "0123456789abcdef0123456789abcdef01234567", parts[0].oidHex)
+	require.Equal(t, uint64(3), parts[0].size)
 
-	_, _, err = gbs.validateAndSizeChunkedParts(ctx, []git.TreeEntry{{Name: "1", Type: "blob", OID: "0123456789abcdef0123456789abcdef01234567"}})
+	_, _, err = gbs.validateAndSizeChunkedParts(ctx, []git.TreeEntry{{Name: "1", Type: git.ObjectTypeBlob, OID: "0123456789abcdef0123456789abcdef01234567"}})
 	require.Error(t, err)
 }

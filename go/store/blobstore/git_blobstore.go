@@ -31,10 +31,20 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
-	gitbs "github.com/dolthub/dolt/go/store/blobstore/internal/gitbs"
 )
 
 const gitblobstorePartNameWidth = 8 // "00000001"
+
+type chunkPartRef struct {
+	oidHex string
+	size   uint64
+}
+
+type chunkPartSlice struct {
+	oidHex string
+	offset int64
+	length int64
+}
 
 // GitBlobstore is a Blobstore implementation backed by a git repository's object
 // database (bare repo or .git directory). It stores keys as paths within the tree
@@ -221,11 +231,11 @@ func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OI
 	}
 
 	total := int64(totalSize)
-	start, end, err := gitbs.NormalizeRange(total, br.offset, br.length)
+	start, end, err := normalizeRange(total, br.offset, br.length)
 	if err != nil {
 		return nil, totalSize, ver, err
 	}
-	slices, err := gitbs.SliceParts(parts, start, end)
+	slices, err := sliceChunkParts(parts, start, end)
 	if err != nil {
 		return nil, totalSize, ver, err
 	}
@@ -239,7 +249,7 @@ func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OI
 	return streamRC, totalSize, ver, nil
 }
 
-func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entries []git.TreeEntry) ([]gitbs.PartRef, uint64, error) {
+func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entries []git.TreeEntry) ([]chunkPartRef, uint64, error) {
 	if len(entries) == 0 {
 		return nil, 0, fmt.Errorf("gitblobstore: chunked tree has no parts")
 	}
@@ -250,7 +260,7 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 		return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected at least 4 digits)", entries[0].Name)
 	}
 
-	parts := make([]gitbs.PartRef, 0, len(entries))
+	parts := make([]chunkPartRef, 0, len(entries))
 	var total uint64
 	for i, e := range entries {
 		if e.Type != git.ObjectTypeBlob {
@@ -282,7 +292,7 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 			return nil, 0, fmt.Errorf("gitblobstore: total size overflow")
 		}
 		total += uint64(sz)
-		parts = append(parts, gitbs.PartRef{OIDHex: e.OID.String(), Size: uint64(sz)})
+		parts = append(parts, chunkPartRef{oidHex: e.OID.String(), size: uint64(sz)})
 	}
 	return parts, total, nil
 }
@@ -329,7 +339,7 @@ type multiPartReadCloser struct {
 	ctx context.Context
 	api git.GitAPI
 
-	slices []gitbs.PartSlice
+	slices []chunkPartSlice
 	curIdx int
 
 	curRC io.ReadCloser
@@ -370,16 +380,16 @@ func (m *multiPartReadCloser) ensureCurrent() error {
 		return err
 	}
 	m.curRC = rc
-	m.rem = s.Length
+	m.rem = s.length
 	return nil
 }
 
-func (m *multiPartReadCloser) openSliceReader(s gitbs.PartSlice) (io.ReadCloser, error) {
-	rc, err := m.api.BlobReader(m.ctx, git.OID(s.OIDHex))
+func (m *multiPartReadCloser) openSliceReader(s chunkPartSlice) (io.ReadCloser, error) {
+	rc, err := m.api.BlobReader(m.ctx, git.OID(s.oidHex))
 	if err != nil {
 		return nil, err
 	}
-	if err := skipN(rc, s.Offset); err != nil {
+	if err := skipN(rc, s.offset); err != nil {
 		_ = rc.Close()
 		return nil, err
 	}
@@ -429,6 +439,96 @@ func skipN(r io.Reader, n int64) error {
 	}
 	_, err := io.CopyN(io.Discard, r, n)
 	return err
+}
+
+func normalizeRange(total int64, offset int64, length int64) (start, end int64, err error) {
+	if total < 0 {
+		return 0, 0, fmt.Errorf("invalid total size %d", total)
+	}
+	if length < 0 {
+		return 0, 0, fmt.Errorf("invalid length %d", length)
+	}
+	start = offset
+	if start < 0 {
+		start = total + start
+	}
+	if start < 0 || start > total {
+		return 0, 0, fmt.Errorf("invalid offset %d for total size %d", offset, total)
+	}
+	if length == 0 {
+		end = total
+	} else {
+		end = start + length
+		if end < start {
+			return 0, 0, fmt.Errorf("range overflow")
+		}
+		if end > total {
+			end = total
+		}
+	}
+	return start, end, nil
+}
+
+func sliceChunkParts(parts []chunkPartRef, start, end int64) ([]chunkPartSlice, error) {
+	if start < 0 || end < 0 || end < start {
+		return nil, fmt.Errorf("invalid start/end: %d/%d", start, end)
+	}
+	if start == end {
+		return nil, nil
+	}
+
+	var (
+		out []chunkPartSlice
+		pos int64
+	)
+
+	for _, p := range parts {
+		if p.size == 0 {
+			return nil, fmt.Errorf("invalid part size 0")
+		}
+		partStart := pos
+		partEnd := pos + int64(p.size)
+		if partEnd < partStart {
+			return nil, fmt.Errorf("part size overflow")
+		}
+
+		if end <= partStart {
+			break
+		}
+		if start >= partEnd {
+			pos = partEnd
+			continue
+		}
+
+		s := start
+		if s < partStart {
+			s = partStart
+		}
+		e := end
+		if e > partEnd {
+			e = partEnd
+		}
+		if e > s {
+			out = append(out, chunkPartSlice{
+				oidHex: p.oidHex,
+				offset: s - partStart,
+				length: e - s,
+			})
+		}
+		pos = partEnd
+	}
+
+	if len(out) == 0 {
+		return nil, fmt.Errorf("range [%d,%d) not covered by parts", start, end)
+	}
+	var covered int64
+	for _, s := range out {
+		covered += s.length
+	}
+	if covered != (end - start) {
+		return nil, fmt.Errorf("range [%d,%d) not fully covered by parts", start, end)
+	}
+	return out, nil
 }
 
 func (m *multiPartReadCloser) Close() error {
@@ -746,7 +846,7 @@ func (gbs *GitBlobstore) hashChunkedParts(ctx context.Context, reader io.Reader)
 	return partOIDs, nil
 }
 
-func (gbs *GitBlobstore) hashParts(ctx context.Context, reader io.Reader) (parts []gitbs.PartRef, partOIDs []git.OID, total uint64, err error) {
+func (gbs *GitBlobstore) hashParts(ctx context.Context, reader io.Reader) (parts []chunkPartRef, partOIDs []git.OID, total uint64, err error) {
 	max := int64(gbs.maxPartSize)
 	if max <= 0 {
 		return nil, nil, 0, fmt.Errorf("gitblobstore: invalid maxPartSize %d", gbs.maxPartSize)
@@ -773,7 +873,7 @@ func (gbs *GitBlobstore) hashParts(ctx context.Context, reader io.Reader) (parts
 			return nil, nil, 0, err
 		}
 		partOIDs = append(partOIDs, oid)
-		parts = append(parts, gitbs.PartRef{OIDHex: oid.String(), Size: uint64(n)})
+		parts = append(parts, chunkPartRef{oidHex: oid.String(), size: uint64(n)})
 		total += uint64(n)
 		if errors.Is(rerr, io.ErrUnexpectedEOF) {
 			break
