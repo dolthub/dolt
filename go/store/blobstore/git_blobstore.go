@@ -425,8 +425,11 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 	// Many NBS/table-file writes are content-addressed: if the key already exists, callers
 	// assume it refers to the same bytes and treat the operation as idempotent.
 	//
-	// The manifest is the main exception (it is mutable and updated via CheckAndPut), so
-	// we only apply this fast-path for non-manifest keys.
+	// GitBlobstore enforces that assumption by fast-succeeding when a non-manifest key
+	// already exists: it returns the existing per-key version and does not overwrite the
+	// key (and does not consume |reader|).
+	//
+	// The manifest is the main exception (it is mutable and updated via CheckAndPut).
 	if ver, ok, err := gbs.tryFastSucceedPutIfKeyExists(ctx, key); err != nil {
 		return "", err
 	} else if ok {

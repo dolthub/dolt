@@ -33,7 +33,12 @@ type Blobstore interface {
 	// Get returns a byte range of from the blob keyed by |key|, and the latest store version.
 	Get(ctx context.Context, key string, br BlobRange) (rc io.ReadCloser, size uint64, version string, err error)
 
-	// Put creates a new blob from |reader| keyed by |key|, it returns the latest store version.
+	// Put stores a blob from |reader| keyed by |key|, returning the latest store version.
+	//
+	// If |key| already exists, behavior is implementation-defined: some Blobstore
+	// implementations overwrite, while others may treat Put as idempotent and fast-succeed
+	// without consuming |reader|. Callers that require an explicit check-and-set should use
+	// CheckAndPut.
 	Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (version string, err error)
 
 	// CheckAndPut updates the blob keyed by |key| using a check-and-set on |expectedVersion|.
