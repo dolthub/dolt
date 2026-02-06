@@ -730,6 +730,22 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema;",
 				Expected: []sql.Row{{"_prisma_migrations"}, {"t01"}},
 			},
+			{
+				Query:    "use `mydb/newbranch`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb/newbranch"}},
+			},
+			{
+				Query:    "set @schema = database();",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema",
+				Expected: []sql.Row{{"_prisma_migrations"}, {"t01"}},
+			},
 		},
 	},
 	{
@@ -788,7 +804,11 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "drop database `mydb@branch1`;",
-				ExpectedErrStr: "unable to drop revision database: mydb/branch1",
+				ExpectedErrStr: "unable to drop revision database: mydb@branch1",
+			},
+			{
+				Query:          "create database `mydb@branch1`;",
+				ExpectedErrStr: "can't create database mydb@branch1; database exists",
 			},
 			{
 				Query:    "use `mydb@branch1`;",
