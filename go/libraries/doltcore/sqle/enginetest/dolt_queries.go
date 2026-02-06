@@ -714,7 +714,8 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			"call dolt_commit('-am', 'init');",
 			"call dolt_branch('newbranch');",
 			"use `mydb@newbranch`;",
-			"SET @schema = database();",
+			"set @schema2 = 'mydb/newbranch';",
+			"set @schema = database();",
 			"PREPARE stmt_list_base_tables FROM 'SELECT DISTINCT table_info.table_name AS table_name FROM information_schema.tables AS table_info JOIN information_schema.columns AS column_info ON column_info.table_name = table_info.table_name WHERE table_info.table_schema = ? AND column_info.table_schema = ? AND table_info.table_type = ''BASE TABLE'' ORDER BY table_info.table_name';",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -725,6 +726,14 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count FROM _prisma_migrations ORDER BY started_at ASC;",
 				Expected: []sql.Row{},
+			},
+			{
+				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema;",
+				Expected: []sql.Row{{"_prisma_migrations"}, {"t01"}},
+			},
+			{
+				Query:    "set dolt_show_branch_databases = on;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema;",
@@ -859,13 +868,21 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Query:    "select * from child;",
 				Expected: []sql.Row{{1, 1}},
 			},
+			{
+				Query:    "use mydb;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:       "create schema `mydb@branch1`;",
+				ExpectedErr: sql.ErrDatabaseExists,
+			},
 		},
 	},
 	{
 		Name: "database revision specs: ResolveRevisionDelimiter alias '@' when dolt_enable_revision_delimiter_alias is OFF",
 		SetUpScript: []string{
-			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_add('.')",
+			"create table t01 (pk int primary key, c1 int);",
+			"call dolt_add('.');",
 			"call dolt_commit('-am', 'creating table t01 on main');",
 			"call dolt_branch('branch1');",
 			"set dolt_enable_revision_delimiter_alias = 0;",
@@ -915,16 +932,36 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb@branch1"}, {"mysql"}},
+			},
+			{
+				Query:    "set dolt_show_branch_databases = on;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb/branch1"}, {"mydb/main"}, {"mydb@branch1"}, {"mydb@branch1/main"}, {"mysql"}},
+			},
+			{
 				Query:    "set dolt_enable_revision_delimiter_alias = 1;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				Query:    "use `mydb@branch1`;",
+				Query:    "select * from t02;",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select * from t02;",
-				Expected: []sql.Row{},
+				Query:    "show databases;",
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb/main"}, {"mydb@branch1"}, {"mysql"}},
+			},
+			{
+				Query:    "set dolt_enable_revision_delimiter_alias = 0;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb/branch1"}, {"mydb/main"}, {"mydb@branch1"}, {"mydb@branch1/main"}, {"mysql"}},
 			},
 		},
 	},
