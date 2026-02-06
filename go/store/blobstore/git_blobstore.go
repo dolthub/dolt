@@ -46,6 +46,132 @@ type chunkPartSlice struct {
 	length int64
 }
 
+type treeWrite struct {
+	path string
+	oid  git.OID
+}
+
+type putPlan struct {
+	writes []treeWrite
+	// If true, the key should be represented as a tree (chunked parts under key/NNNNNNNN).
+	chunked bool
+}
+
+type limitReadCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (l *limitReadCloser) Read(p []byte) (int, error) { return l.r.Read(p) }
+func (l *limitReadCloser) Close() error               { return l.c.Close() }
+
+type multiPartReadCloser struct {
+	ctx context.Context
+	api git.GitAPI
+
+	slices []chunkPartSlice
+	curIdx int
+
+	curRC io.ReadCloser
+	rem   int64
+}
+
+func (m *multiPartReadCloser) Read(p []byte) (int, error) {
+	for {
+		if err := m.ensureCurrent(); err != nil {
+			return 0, err
+		}
+		if m.curRC == nil {
+			return 0, io.EOF
+		}
+
+		if m.rem == 0 {
+			_ = m.closeCurrentAndAdvance()
+			continue
+		}
+
+		n, err := m.readCurrent(p)
+		if n > 0 || err != nil {
+			return n, err
+		}
+	}
+}
+
+func (m *multiPartReadCloser) ensureCurrent() error {
+	if m.curRC != nil {
+		return nil
+	}
+	if m.curIdx >= len(m.slices) {
+		return nil
+	}
+	s := m.slices[m.curIdx]
+	rc, err := m.openSliceReader(s)
+	if err != nil {
+		return err
+	}
+	m.curRC = rc
+	m.rem = s.length
+	return nil
+}
+
+func (m *multiPartReadCloser) openSliceReader(s chunkPartSlice) (io.ReadCloser, error) {
+	rc, err := m.api.BlobReader(m.ctx, git.OID(s.oidHex))
+	if err != nil {
+		return nil, err
+	}
+	if err := skipN(rc, s.offset); err != nil {
+		_ = rc.Close()
+		return nil, err
+	}
+	return rc, nil
+}
+
+func (m *multiPartReadCloser) closeCurrentAndAdvance() error {
+	if m.curRC != nil {
+		err := m.curRC.Close()
+		m.curRC = nil
+		m.rem = 0
+		m.curIdx++
+		return err
+	}
+	m.curIdx++
+	return nil
+}
+
+func (m *multiPartReadCloser) readCurrent(p []byte) (int, error) {
+	toRead := len(p)
+	if int64(toRead) > m.rem {
+		toRead = int(m.rem)
+	}
+
+	n, err := m.curRC.Read(p[:toRead])
+	if n > 0 {
+		m.rem -= int64(n)
+		return n, nil
+	}
+	if err == nil {
+		return 0, nil
+	}
+	if errors.Is(err, io.EOF) {
+		// End of underlying part blob; if we still expected bytes, that's corruption.
+		if m.rem > 0 {
+			return 0, io.ErrUnexpectedEOF
+		}
+		_ = m.closeCurrentAndAdvance()
+		return 0, nil
+	}
+	return 0, err
+}
+
+func (m *multiPartReadCloser) Close() error {
+	if m.curRC != nil {
+		err := m.curRC.Close()
+		m.curRC = nil
+		return err
+	}
+	return nil
+}
+
 // GitBlobstore is a Blobstore implementation backed by a git repository's object
 // database (bare repo or .git directory). It stores keys as paths within the tree
 // of the commit referenced by a git ref (e.g. refs/dolt/data).
@@ -686,25 +812,6 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 	return "", git.ErrUnimplemented
 }
 
-type treeWrite struct {
-	path string
-	oid  git.OID
-}
-
-type putPlan struct {
-	writes []treeWrite
-	// If true, the key should be represented as a tree (chunked parts under key/NNNNNNNN).
-	chunked bool
-}
-
-type limitReadCloser struct {
-	r io.Reader
-	c io.Closer
-}
-
-func (l *limitReadCloser) Read(p []byte) (int, error) { return l.r.Read(p) }
-func (l *limitReadCloser) Close() error               { return l.c.Close() }
-
 func sliceInlineBlob(rc io.ReadCloser, sz int64, br BlobRange, ver string) (io.ReadCloser, uint64, string, error) {
 	// Implement BlobRange by slicing the streamed blob contents.
 	// TODO(gitblobstore): This streaming implementation is correct but may be slow for workloads
@@ -741,113 +848,6 @@ func sliceInlineBlob(rc io.ReadCloser, sz int64, br BlobRange, ver string) (io.R
 	}
 
 	return &limitReadCloser{r: io.LimitReader(rc, pos.length), c: rc}, uint64(sz), ver, nil
-}
-
-type multiPartReadCloser struct {
-	ctx context.Context
-	api git.GitAPI
-
-	slices []chunkPartSlice
-	curIdx int
-
-	curRC io.ReadCloser
-	rem   int64
-}
-
-func (m *multiPartReadCloser) Read(p []byte) (int, error) {
-	for {
-		if err := m.ensureCurrent(); err != nil {
-			return 0, err
-		}
-		if m.curRC == nil {
-			return 0, io.EOF
-		}
-
-		if m.rem == 0 {
-			_ = m.closeCurrentAndAdvance()
-			continue
-		}
-
-		n, err := m.readCurrent(p)
-		if n > 0 || err != nil {
-			return n, err
-		}
-	}
-}
-
-func (m *multiPartReadCloser) ensureCurrent() error {
-	if m.curRC != nil {
-		return nil
-	}
-	if m.curIdx >= len(m.slices) {
-		return nil
-	}
-	s := m.slices[m.curIdx]
-	rc, err := m.openSliceReader(s)
-	if err != nil {
-		return err
-	}
-	m.curRC = rc
-	m.rem = s.length
-	return nil
-}
-
-func (m *multiPartReadCloser) openSliceReader(s chunkPartSlice) (io.ReadCloser, error) {
-	rc, err := m.api.BlobReader(m.ctx, git.OID(s.oidHex))
-	if err != nil {
-		return nil, err
-	}
-	if err := skipN(rc, s.offset); err != nil {
-		_ = rc.Close()
-		return nil, err
-	}
-	return rc, nil
-}
-
-func (m *multiPartReadCloser) closeCurrentAndAdvance() error {
-	if m.curRC != nil {
-		err := m.curRC.Close()
-		m.curRC = nil
-		m.rem = 0
-		m.curIdx++
-		return err
-	}
-	m.curIdx++
-	return nil
-}
-
-func (m *multiPartReadCloser) readCurrent(p []byte) (int, error) {
-	toRead := len(p)
-	if int64(toRead) > m.rem {
-		toRead = int(m.rem)
-	}
-
-	n, err := m.curRC.Read(p[:toRead])
-	if n > 0 {
-		m.rem -= int64(n)
-		return n, nil
-	}
-	if err == nil {
-		return 0, nil
-	}
-	if errors.Is(err, io.EOF) {
-		// End of underlying part blob; if we still expected bytes, that's corruption.
-		if m.rem > 0 {
-			return 0, io.ErrUnexpectedEOF
-		}
-		_ = m.closeCurrentAndAdvance()
-		return 0, nil
-	}
-	return 0, err
-}
-
-func (m *multiPartReadCloser) Close() error {
-	if m.curRC != nil {
-		err := m.curRC.Close()
-		m.curRC = nil
-		return err
-	}
-	return nil
 }
 
 func skipN(r io.Reader, n int64) error {
