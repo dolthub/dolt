@@ -16,6 +16,12 @@ package gitbs
 
 import "fmt"
 
+// PartRef describes one part of a logically concatenated object.
+type PartRef struct {
+	OIDHex string
+	Size   uint64
+}
+
 // PartSlice describes a contiguous slice to read from a particular part.
 type PartSlice struct {
 	OIDHex string
