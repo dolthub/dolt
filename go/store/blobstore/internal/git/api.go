@@ -85,8 +85,8 @@ type GitAPI interface {
 	UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid OID, path string) error
 
 	// RemoveIndexPaths removes |paths| from |indexFile| if present.
-	// Equivalent plumbing:
-	//   GIT_DIR=... GIT_INDEX_FILE=<indexFile> git update-index --remove -z --stdin
+	// Equivalent plumbing (using --index-info with mode 0 entries):
+	//   GIT_DIR=... GIT_INDEX_FILE=<indexFile> git update-index --index-info
 	RemoveIndexPaths(ctx context.Context, indexFile string, paths []string) error
 
 	// WriteTree writes a tree object from the contents of |indexFile| and returns its oid.
