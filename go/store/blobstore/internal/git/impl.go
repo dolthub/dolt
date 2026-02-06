@@ -211,6 +211,11 @@ func (a *GitAPIImpl) RemoveIndexPaths(ctx context.Context, indexFile string, pat
 	//   0 0000000000000000000000000000000000000000 0\t<path>\n
 	const zeroOID = "0000000000000000000000000000000000000000"
 	for _, p := range paths {
+		// Paths containing tab or newline would break the `--index-info` text format and could
+		// cause the wrong entries to be removed. Reject such paths explicitly.
+		if strings.ContainsAny(p, "\n\t") {
+			return fmt.Errorf("cannot remove index path with tab or newline characters: %q", p)
+		}
 		fmt.Fprintf(&buf, "0 %s 0\t%s\n", zeroOID, p)
 	}
 	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile, Stdin: &buf}, "update-index", "--index-info")
