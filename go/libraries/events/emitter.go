@@ -115,13 +115,31 @@ func (we WriterEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.Log
 
 // GrpcEmitter sends events to a GRPC service implementing the eventsapi
 type GrpcEmitter struct {
-	client eventsapi.ClientEventsServiceClient
+	client      eventsapi.ClientEventsServiceClient
+	application eventsapi.AppID
+}
+
+type GrpcEmitterOption func(*GrpcEmitter)
+
+// WithApplication is an option func to set the application ID for a GrpcEmitter.
+// If not set, the application ID will default to the value of the Application variable in this package.
+func WithApplication(appID eventsapi.AppID) GrpcEmitterOption {
+	return func(em *GrpcEmitter) {
+		em.application = appID
+	}
 }
 
 // NewGrpcEmitter creates a new GrpcEmitter
-func NewGrpcEmitter(conn *grpc.ClientConn) *GrpcEmitter {
+func NewGrpcEmitter(conn *grpc.ClientConn, opts ...GrpcEmitterOption) *GrpcEmitter {
 	client := eventsapi.NewClientEventsServiceClient(conn)
-	return &GrpcEmitter{client}
+	g := &GrpcEmitter{
+		client:      client,
+		application: Application,
+	}
+	for _, opt := range opts {
+		opt(g)
+	}
+	return g
 }
 
 func (em *GrpcEmitter) LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error {
@@ -143,7 +161,7 @@ func (em *GrpcEmitter) LogEvents(ctx context.Context, version string, evts []*ev
 		Version:   version,
 		Platform:  plat,
 		Events:    evts,
-		App:       Application,
+		App:       em.application,
 	}
 
 	return em.sendLogEventsRequest(ctx, req)
