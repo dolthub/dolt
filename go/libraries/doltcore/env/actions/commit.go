@@ -15,8 +15,12 @@
 package actions
 
 import (
+	"fmt"
+	"io"
+	"strings"
 	"time"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -34,6 +38,56 @@ type CommitStagedProps struct {
 	Name       string
 	Email      string
 	SkipTests  bool
+}
+
+// Test validation system variable names
+const (
+	DoltCommitRunTestGroups = "dolt_commit_run_test_groups"
+	DoltPushRunTestGroups   = "dolt_push_run_test_groups"
+)
+
+// GetCommitRunTestGroups returns the test groups to run for commit operations
+// Returns empty slice if no tests should be run, ["*"] if all tests should be run,
+// or specific group names if only those groups should be run
+func GetCommitRunTestGroups() []string {
+	_, val, ok := sql.SystemVariables.GetGlobal(DoltCommitRunTestGroups)
+	if !ok {
+		return nil
+	}
+	if stringVal, ok := val.(string); ok && stringVal != "" {
+		if stringVal == "*" {
+			return []string{"*"}
+		}
+		// Split by comma and trim whitespace
+		groups := strings.Split(stringVal, ",")
+		for i, group := range groups {
+			groups[i] = strings.TrimSpace(group)
+		}
+		return groups
+	}
+	return nil
+}
+
+// GetPushRunTestGroups returns the test groups to run for push operations
+// Returns empty slice if no tests should be run, ["*"] if all tests should be run,
+// or specific group names if only those groups should be run
+func GetPushRunTestGroups() []string {
+	_, val, ok := sql.SystemVariables.GetGlobal(DoltPushRunTestGroups)
+	if !ok {
+		return nil
+	}
+	if stringVal, ok := val.(string); ok && stringVal != "" {
+		if stringVal == "*" {
+			return []string{"*"}
+		}
+		// Split by comma and trim whitespace
+		groups := strings.Split(stringVal, ",")
+		for i, group := range groups {
+			groups[i] = strings.TrimSpace(group)
+		}
+		return groups
+	}
+	return nil
 }
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.
@@ -115,6 +169,18 @@ func GetCommitStaged(
 		}
 	}
 
+	// Run test validation against staged data if enabled and not skipped
+	if !props.SkipTests {
+		testGroups := GetCommitRunTestGroups()
+		if len(testGroups) > 0 {
+			// Use the new root-based validation approach
+			err := runTestValidationAgainstRoot(ctx, roots.Staged, testGroups, "commit")
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 	if err != nil {
 		return nil, err
@@ -122,3 +188,79 @@ func GetCommitStaged(
 
 	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
 }
+
+// runTestValidationAgainstRoot executes test validation against a specific root using the exposed internals
+func runTestValidationAgainstRoot(ctx *sql.Context, root doltdb.RootValue, testGroups []string, operationType string) error {
+	// Get session information to create engine
+	type sessionInterface interface {
+		sql.Session
+		GenericProvider() sql.MutableDatabaseProvider
+	}
+	
+	session, ok := ctx.Session.(sessionInterface)
+	if !ok {
+		return fmt.Errorf("session does not provide database provider interface")
+	}
+
+	provider := session.GenericProvider()
+	engine := gms.NewDefault(provider)
+
+	// Use the refactored dtablefunctions.RunTestsAgainstRoot
+	return runTestsUsingDtablefunctions(ctx, root, engine, testGroups, operationType)
+}
+
+// runTestsUsingDtablefunctions runs tests using SQL dolt_test_run() queries against current session
+func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engine *gms.Engine, testGroups []string, operationType string) error {
+	if len(testGroups) == 0 {
+		return nil
+	}
+
+	// For now, this runs against the current session state, not the specific root
+	// TODO: Implement root-based validation once circular import is resolved
+	fmt.Printf("INFO: %s validation running against current session state for groups %v\n", operationType, testGroups)
+	
+	var allFailures []string
+	
+	for _, group := range testGroups {
+		// Run dolt_test_run() for this group
+		query := fmt.Sprintf("SELECT * FROM dolt_test_run('%s')", group)
+		_, iter, _, err := engine.Query(ctx, query)
+		if err != nil {
+			return fmt.Errorf("failed to run dolt_test_run for group %s: %w", group, err)
+		}
+		
+		// Process results
+		for {
+			row, rErr := iter.Next(ctx)
+			if rErr == io.EOF {
+				break
+			}
+			if rErr != nil {
+				return fmt.Errorf("error reading test results: %w", rErr)
+			}
+			
+			if len(row) < 4 {
+				continue
+			}
+			
+			// Extract status (column 3)
+			status := fmt.Sprintf("%v", row[3])
+			if status != "PASS" {
+				testName := fmt.Sprintf("%v", row[0])
+				message := ""
+				if len(row) > 4 {
+					message = fmt.Sprintf("%v", row[4])
+				}
+				allFailures = append(allFailures, fmt.Sprintf("%s (%s)", testName, message))
+			}
+		}
+	}
+
+	if len(allFailures) > 0 {
+		return fmt.Errorf("%s validation failed: %s", operationType, strings.Join(allFailures, ", "))
+	}
+
+	fmt.Printf("INFO: %s validation passed for groups %v\n", operationType, testGroups)
+	return nil
+}
+

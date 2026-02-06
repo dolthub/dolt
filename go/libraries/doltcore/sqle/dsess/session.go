@@ -798,17 +798,6 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 		}
 	}
 
-	// Run test validation before creating commit if enabled and not skipped
-	if !props.SkipTests {
-		testGroups := GetCommitRunTestGroups()
-		if len(testGroups) > 0 {
-			err := runTestValidation(ctx, testGroups, "commit")
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	tableResolver, err := GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, err
