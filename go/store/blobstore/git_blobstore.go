@@ -173,268 +173,6 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 	}
 }
 
-func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
-	key, err := normalizeGitTreePath(key)
-	if err != nil {
-		return "", err
-	}
-
-	// Many NBS/table-file writes are content-addressed: if the key already exists, callers
-	// assume it refers to the same bytes and treat the operation as idempotent.
-	//
-	// The manifest is the main exception (it is mutable and updated via CheckAndPut), so
-	// we only apply this fast-path for non-manifest keys.
-	if key != "manifest" {
-		commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return "", err
-		}
-		if ok {
-			oid, _, err := gbs.api.ResolvePathObject(ctx, commit, key)
-			if err == nil {
-				// Per-key version: existing object id.
-				return oid.String(), nil
-			}
-			if !git.IsPathNotFound(err) {
-				return "", err
-			}
-		}
-	}
-
-	msg := fmt.Sprintf("gitblobstore: put %s", key)
-
-	// Hash the contents once. If we need to retry due to concurrent updates to |gbs.ref|,
-	// we can reuse the resulting object OIDs without re-reading |reader|.
-	plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
-	if err != nil {
-		return "", err
-	}
-
-	// Make Put resilient to concurrent writers updating unrelated keys by using a CAS loop
-	// under the hood. This matches typical object-store semantics more closely than an
-	// unconditional ref update (which could clobber other keys).
-	const maxRetries = 31 // 32 total attempts (initial + retries)
-	bo := backoff.NewExponentialBackOff()
-	bo.InitialInterval = 5 * time.Millisecond
-	bo.Multiplier = 2
-	bo.MaxInterval = 320 * time.Millisecond
-	bo.RandomizationFactor = 0 // deterministic; can add jitter later if needed
-	bo.Reset()
-	policy := backoff.WithContext(backoff.WithMaxRetries(bo, maxRetries), ctx)
-
-	var ver string
-	op := func() error {
-		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, plan, msg)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		if !ok {
-			// Create-only CAS: oldOID=all-zero requires the ref to not exist. This avoids
-			// losing concurrent writes when multiple goroutines create the ref at once.
-			const zeroOID = git.OID("0000000000000000000000000000000000000000")
-			if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, zeroOID, msg); err != nil {
-				if gbs.refAdvanced(ctx, parent) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
-			oid, _, err := gbs.api.ResolvePathObject(ctx, newCommit, key)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			ver = oid.String()
-			return nil
-		}
-
-		err = gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, parent, msg)
-		if err == nil {
-			oid, _, err := gbs.api.ResolvePathObject(ctx, newCommit, key)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			ver = oid.String()
-			return nil
-		}
-
-		// If the ref changed since we read |parent|, retry on the new head. Otherwise
-		// surface the error (e.g. permissions, corruption).
-		if gbs.refAdvanced(ctx, parent) {
-			return err
-		}
-		return backoff.Permanent(err)
-	}
-
-	if err := backoff.Retry(op, policy); err != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
-		return "", err
-	}
-	return ver, nil
-}
-
-func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
-	key, err := normalizeGitTreePath(key)
-	if err != nil {
-		return "", err
-	}
-
-	msg := fmt.Sprintf("gitblobstore: checkandput %s", key)
-
-	// Implement per-key CAS by validating |expectedVersion| against the current key version
-	// at HEAD, then committing on that HEAD and CAS-updating the ref. If the ref advances,
-	// retry by re-checking the key version.
-	const maxRetries = 31 // 32 total attempts (initial + retries)
-	bo := backoff.NewExponentialBackOff()
-	bo.InitialInterval = 5 * time.Millisecond
-	bo.Multiplier = 2
-	bo.MaxInterval = 320 * time.Millisecond
-	bo.RandomizationFactor = 0 // deterministic; can add jitter later if needed
-	bo.Reset()
-	policy := backoff.WithContext(backoff.WithMaxRetries(bo, maxRetries), ctx)
-
-	var newKeyVersion string
-	var cachedPlan *putPlan
-	op := func() error {
-		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		actualKeyVersion, err := gbs.currentKeyVersion(ctx, parent, ok, key)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		if expectedVersion != actualKeyVersion {
-			return backoff.Permanent(CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: actualKeyVersion})
-		}
-
-		// Only hash/consume the reader once we know the expectedVersion matches.
-		// If we need to retry due to unrelated ref advances, reuse the cached plan so we
-		// don't re-read |reader| (which may not be rewindable).
-		if cachedPlan == nil {
-			plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			cachedPlan = &plan
-		}
-
-		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, *cachedPlan, msg)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		if !ok {
-			// Create-only CAS: oldOID=all-zero requires the ref to not exist.
-			const zeroOID = git.OID("0000000000000000000000000000000000000000")
-			if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, zeroOID, msg); err != nil {
-				// If the ref now exists, retry; otherwise surface the error.
-				if gbs.refAdvanced(ctx, parent) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
-		} else {
-			if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, parent, msg); err != nil {
-				if gbs.refAdvanced(ctx, parent) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
-		}
-
-		oid, _, err := gbs.api.ResolvePathObject(ctx, newCommit, key)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		newKeyVersion = oid.String()
-		return nil
-	}
-
-	if err := backoff.Retry(op, policy); err != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
-		return "", err
-	}
-	return newKeyVersion, nil
-}
-
-func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
-	// Chunked-object support is landing in phases. Concatenate is the final piece
-	// needed for NBS conjoin and is intentionally left unimplemented on this branch.
-	//
-	// Keep key validation for consistent error behavior.
-	_, err := normalizeGitTreePath(key)
-	if err != nil {
-		return "", err
-	}
-	for _, src := range sources {
-		if _, err := normalizeGitTreePath(src); err != nil {
-			return "", err
-		}
-	}
-	return "", git.ErrUnimplemented
-}
-
-func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, haveCommit bool, key string) (string, error) {
-	if !haveCommit {
-		// Ref missing => empty store => key missing.
-		return "", nil
-	}
-	oid, _, err := gbs.api.ResolvePathObject(ctx, commit, key)
-	if err != nil {
-		if git.IsPathNotFound(err) {
-			return "", nil
-		}
-		return "", err
-	}
-	return oid.String(), nil
-}
-
-func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (commit git.OID, err error) {
-	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-	if err != nil {
-		return git.OID(""), err
-	}
-	if ok {
-		return commit, nil
-	}
-
-	// If the ref doesn't exist, treat the manifest as missing (empty store),
-	// but surface a hard error for other keys: the store itself is missing.
-	if key == "manifest" {
-		return git.OID(""), NotFound{Key: key}
-	}
-	return git.OID(""), &git.RefNotFoundError{Ref: gbs.ref}
-}
-
-func (gbs *GitBlobstore) resolveObjectForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, typ git.ObjectType, err error) {
-	oid, typ, err = gbs.api.ResolvePathObject(ctx, commit, key)
-	if err != nil {
-		if git.IsPathNotFound(err) {
-			return git.OID(""), git.ObjectTypeUnknown, NotFound{Key: key}
-		}
-		return git.OID(""), git.ObjectTypeUnknown, err
-	}
-	return oid, typ, nil
-}
-
-func (gbs *GitBlobstore) resolveBlobSizeForGet(ctx context.Context, commit git.OID, oid git.OID) (sz int64, ver string, err error) {
-	sz, err = gbs.api.BlobSize(ctx, oid)
-	if err != nil {
-		return 0, commit.String(), err
-	}
-	return sz, commit.String(), nil
-}
-
 func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OID, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	ver := commit.String()
 
@@ -514,150 +252,68 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 	return parts, total, nil
 }
 
-func (gbs *GitBlobstore) buildCommitWithMessage(ctx context.Context, parent git.OID, hasParent bool, key string, blobOID git.OID, msg string) (git.OID, error) {
-	return gbs.buildCommitWithWrites(ctx, parent, hasParent, []treeWrite{{path: key, oid: blobOID}}, msg)
+func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (commit git.OID, err error) {
+	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	if err != nil {
+		return git.OID(""), err
+	}
+	if ok {
+		return commit, nil
+	}
+
+	// If the ref doesn't exist, treat the manifest as missing (empty store),
+	// but surface a hard error for other keys: the store itself is missing.
+	if key == "manifest" {
+		return git.OID(""), NotFound{Key: key}
+	}
+	return git.OID(""), &git.RefNotFoundError{Ref: gbs.ref}
 }
 
-func (gbs *GitBlobstore) buildCommitWithWrites(ctx context.Context, parent git.OID, hasParent bool, writes []treeWrite, msg string) (git.OID, error) {
-	_, indexFile, cleanup, err := newTempIndex()
-	if err != nil {
-		return "", err
-	}
-	defer cleanup()
-
-	if hasParent {
-		if err := gbs.api.ReadTree(ctx, parent, indexFile); err != nil {
-			return "", err
-		}
-	} else {
-		if err := gbs.api.ReadTreeEmpty(ctx, indexFile); err != nil {
-			return "", err
-		}
-	}
-
-	// TODO(gitblobstore): Decide on a policy for file-vs-directory prefix conflicts when staging keys.
-	// For example, staging "a" when "a/b" already exists in the tree/index (or vice-versa) can fail
-	// with a git index error (path appears as both a file and directory). Today our NBS keyspace is
-	// flat (e.g. "manifest", "<tableid>", "<tableid>.records"), so this should not occur. If we ever
-	// namespace keys into directories, consider proactively removing conflicting paths from the index
-	// before UpdateIndexCacheInfo so Put/CheckAndPut remain robust.
-	sort.Slice(writes, func(i, j int) bool { return writes[i].path < writes[j].path })
-	for _, w := range writes {
-		if err := gbs.api.UpdateIndexCacheInfo(ctx, indexFile, "100644", w.oid, w.path); err != nil {
-			return "", err
-		}
-	}
-
-	treeOID, err := gbs.api.WriteTree(ctx, indexFile)
-	if err != nil {
-		return "", err
-	}
-
-	var parentPtr *git.OID
-	if hasParent && parent != "" {
-		p := parent
-		parentPtr = &p
-	}
-
-	// Prefer git's default identity from env/config when not explicitly configured.
-	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
-	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
-		commitOID, err = gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, defaultGitBlobstoreIdentity())
-	}
-	if err != nil {
-		return "", err
-	}
-
-	return commitOID, nil
-}
-
-func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.OID, hasParent bool, key string, plan putPlan, msg string) (git.OID, error) {
-	_, indexFile, cleanup, err := newTempIndex()
-	if err != nil {
-		return "", err
-	}
-	defer cleanup()
-
-	if hasParent {
-		if err := gbs.api.ReadTree(ctx, parent, indexFile); err != nil {
-			return "", err
-		}
-	} else {
-		if err := gbs.api.ReadTreeEmpty(ctx, indexFile); err != nil {
-			return "", err
-		}
-	}
-
-	if hasParent {
-		if err := gbs.removeKeyConflictsFromIndex(ctx, parent, indexFile, key, plan.chunked); err != nil {
-			return "", err
-		}
-	}
-
-	sort.Slice(plan.writes, func(i, j int) bool { return plan.writes[i].path < plan.writes[j].path })
-	for _, w := range plan.writes {
-		if err := gbs.api.UpdateIndexCacheInfo(ctx, indexFile, "100644", w.oid, w.path); err != nil {
-			return "", err
-		}
-	}
-
-	treeOID, err := gbs.api.WriteTree(ctx, indexFile)
-	if err != nil {
-		return "", err
-	}
-
-	var parentPtr *git.OID
-	if hasParent && parent != "" {
-		p := parent
-		parentPtr = &p
-	}
-
-	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
-	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
-		commitOID, err = gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, defaultGitBlobstoreIdentity())
-	}
-	if err != nil {
-		return "", err
-	}
-	return commitOID, nil
-}
-
-func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent git.OID, indexFile string, key string, newIsChunked bool) error {
-	oid, typ, err := gbs.api.ResolvePathObject(ctx, parent, key)
+func (gbs *GitBlobstore) resolveObjectForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, typ git.ObjectType, err error) {
+	oid, typ, err = gbs.api.ResolvePathObject(ctx, commit, key)
 	if err != nil {
 		if git.IsPathNotFound(err) {
-			return nil
+			return git.OID(""), git.ObjectTypeUnknown, NotFound{Key: key}
 		}
-		return err
+		return git.OID(""), git.ObjectTypeUnknown, err
 	}
-	_ = oid
+	return oid, typ, nil
+}
 
-	switch typ {
-	case git.ObjectTypeBlob:
-		if newIsChunked {
-			// blob -> tree: must remove the file entry at <key>
-			return gbs.api.RemoveIndexPaths(ctx, indexFile, []string{key})
-		}
-		return nil
-
-	case git.ObjectTypeTree:
-		// tree -> blob OR tree overwrite: remove old child entries under <key>/...
-		entries, err := gbs.api.ListTree(ctx, parent, key)
-		if err != nil {
-			return err
-		}
-		if len(entries) == 0 {
-			return nil
-		}
-		paths := make([]string, 0, len(entries))
-		for _, e := range entries {
-			paths = append(paths, key+"/"+e.Name)
-		}
-		return gbs.api.RemoveIndexPaths(ctx, indexFile, paths)
-
-	default:
-		return fmt.Errorf("gitblobstore: unsupported existing object type %q at key %q", typ, key)
+func (gbs *GitBlobstore) resolveBlobSizeForGet(ctx context.Context, commit git.OID, oid git.OID) (sz int64, ver string, err error) {
+	sz, err = gbs.api.BlobSize(ctx, oid)
+	if err != nil {
+		return 0, commit.String(), err
 	}
+	return sz, commit.String(), nil
+}
+
+func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
+	key, err := normalizeGitTreePath(key)
+	if err != nil {
+		return "", err
+	}
+
+	// Many NBS/table-file writes are content-addressed: if the key already exists, callers
+	// assume it refers to the same bytes and treat the operation as idempotent.
+	//
+	// The manifest is the main exception (it is mutable and updated via CheckAndPut), so
+	// we only apply this fast-path for non-manifest keys.
+	if ver, ok, err := gbs.tryFastSucceedPutIfKeyExists(ctx, key); err != nil {
+		return "", err
+	} else if ok {
+		return ver, nil
+	}
+
+	msg := fmt.Sprintf("gitblobstore: put %s", key)
+
+	// Hash the contents once. If we need to retry due to concurrent updates to |gbs.ref|,
+	// we can reuse the resulting object OIDs without re-reading |reader|.
+	plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
+	if err != nil {
+		return "", err
+	}
+	return gbs.putWithCASRetries(ctx, key, plan, msg)
 }
 
 func (gbs *GitBlobstore) planPutWrites(ctx context.Context, key string, totalSize int64, reader io.Reader) (putPlan, error) {
@@ -732,12 +388,302 @@ func (gbs *GitBlobstore) hashParts(ctx context.Context, reader io.Reader) (parts
 	return parts, partOIDs, total, nil
 }
 
+func (gbs *GitBlobstore) putWithCASRetries(ctx context.Context, key string, plan putPlan, msg string) (string, error) {
+	// Make Put resilient to concurrent writers updating unrelated keys by using a CAS loop
+	// under the hood. This matches typical object-store semantics more closely than an
+	// unconditional ref update (which could clobber other keys).
+	policy := gbs.casRetryPolicy(ctx)
+
+	var ver string
+	op := func() error {
+		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+
+		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, plan, msg)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+
+		if err := gbs.updateRefCASForWrite(ctx, parent, ok, newCommit, msg); err != nil {
+			return err
+		}
+
+		ver, err = gbs.resolveKeyVersionAtCommit(ctx, newCommit, key)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+		return nil
+	}
+
+	if err := backoff.Retry(op, policy); err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", err
+	}
+	return ver, nil
+}
+
+func (gbs *GitBlobstore) casRetryPolicy(ctx context.Context) backoff.BackOff {
+	const maxRetries = 31 // 32 total attempts (initial + retries)
+	bo := backoff.NewExponentialBackOff()
+	bo.InitialInterval = 5 * time.Millisecond
+	bo.Multiplier = 2
+	bo.MaxInterval = 320 * time.Millisecond
+	bo.RandomizationFactor = 0 // deterministic; can add jitter later if needed
+	bo.Reset()
+	return backoff.WithContext(backoff.WithMaxRetries(bo, maxRetries), ctx)
+}
+
+func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.OID, hasParent bool, key string, plan putPlan, msg string) (git.OID, error) {
+	_, indexFile, cleanup, err := newTempIndex()
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
+
+	if hasParent {
+		if err := gbs.api.ReadTree(ctx, parent, indexFile); err != nil {
+			return "", err
+		}
+	} else {
+		if err := gbs.api.ReadTreeEmpty(ctx, indexFile); err != nil {
+			return "", err
+		}
+	}
+
+	if hasParent {
+		if err := gbs.removeKeyConflictsFromIndex(ctx, parent, indexFile, key, plan.chunked); err != nil {
+			return "", err
+		}
+	}
+
+	sort.Slice(plan.writes, func(i, j int) bool { return plan.writes[i].path < plan.writes[j].path })
+	for _, w := range plan.writes {
+		if err := gbs.api.UpdateIndexCacheInfo(ctx, indexFile, "100644", w.oid, w.path); err != nil {
+			return "", err
+		}
+	}
+
+	treeOID, err := gbs.api.WriteTree(ctx, indexFile)
+	if err != nil {
+		return "", err
+	}
+
+	var parentPtr *git.OID
+	if hasParent && parent != "" {
+		p := parent
+		parentPtr = &p
+	}
+
+	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
+	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
+		commitOID, err = gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, defaultGitBlobstoreIdentity())
+	}
+	if err != nil {
+		return "", err
+	}
+	return commitOID, nil
+}
+
+func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent git.OID, indexFile string, key string, newIsChunked bool) error {
+	_, typ, err := gbs.api.ResolvePathObject(ctx, parent, key)
+	if err != nil {
+		if git.IsPathNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	switch typ {
+	case git.ObjectTypeBlob:
+		if newIsChunked {
+			// blob -> tree: must remove the file entry at <key>
+			return gbs.api.RemoveIndexPaths(ctx, indexFile, []string{key})
+		}
+		return nil
+
+	case git.ObjectTypeTree:
+		// tree -> blob OR tree overwrite: remove old child entries under <key>/...
+		entries, err := gbs.api.ListTree(ctx, parent, key)
+		if err != nil {
+			return err
+		}
+		if len(entries) == 0 {
+			return nil
+		}
+		paths := make([]string, 0, len(entries))
+		for _, e := range entries {
+			paths = append(paths, key+"/"+e.Name)
+		}
+		return gbs.api.RemoveIndexPaths(ctx, indexFile, paths)
+
+	default:
+		return fmt.Errorf("gitblobstore: unsupported existing object type %q at key %q", typ, key)
+	}
+}
+
+func (gbs *GitBlobstore) updateRefCASForWrite(ctx context.Context, parent git.OID, haveParent bool, newCommit git.OID, msg string) error {
+	if !haveParent {
+		// Create-only CAS: oldOID=all-zero requires the ref to not exist. This avoids
+		// losing concurrent writes when multiple goroutines create the ref at once.
+		const zeroOID = git.OID("0000000000000000000000000000000000000000")
+		if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, zeroOID, msg); err != nil {
+			if gbs.refAdvanced(ctx, parent) {
+				return err
+			}
+			return backoff.Permanent(err)
+		}
+		return nil
+	}
+
+	if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, parent, msg); err != nil {
+		// If the ref changed since we read |parent|, retry on the new head. Otherwise
+		// surface the error (e.g. permissions, corruption).
+		if gbs.refAdvanced(ctx, parent) {
+			return err
+		}
+		return backoff.Permanent(err)
+	}
+	return nil
+}
+
 func (gbs *GitBlobstore) refAdvanced(ctx context.Context, old git.OID) bool {
 	if ctx.Err() != nil {
 		return false
 	}
 	cur, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
 	return err == nil && ok && cur != old
+}
+
+func (gbs *GitBlobstore) resolveKeyVersionAtCommit(ctx context.Context, commit git.OID, key string) (string, error) {
+	oid, _, err := gbs.api.ResolvePathObject(ctx, commit, key)
+	if err != nil {
+		return "", err
+	}
+	return oid.String(), nil
+}
+
+func (gbs *GitBlobstore) tryFastSucceedPutIfKeyExists(ctx context.Context, key string) (ver string, ok bool, err error) {
+	if key == "manifest" {
+		return "", false, nil
+	}
+
+	commit, haveCommit, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	if err != nil {
+		return "", false, err
+	}
+	if !haveCommit {
+		return "", false, nil
+	}
+
+	oid, _, err := gbs.api.ResolvePathObject(ctx, commit, key)
+	if err == nil {
+		// Per-key version: existing object id.
+		return oid.String(), true, nil
+	}
+	if git.IsPathNotFound(err) {
+		return "", false, nil
+	}
+	return "", false, err
+}
+
+func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+	key, err := normalizeGitTreePath(key)
+	if err != nil {
+		return "", err
+	}
+
+	msg := fmt.Sprintf("gitblobstore: checkandput %s", key)
+
+	policy := gbs.casRetryPolicy(ctx)
+
+	var newKeyVersion string
+	var cachedPlan *putPlan
+	op := func() error {
+		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+
+		actualKeyVersion, err := gbs.currentKeyVersion(ctx, parent, ok, key)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+		if expectedVersion != actualKeyVersion {
+			return backoff.Permanent(CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: actualKeyVersion})
+		}
+
+		// Only hash/consume the reader once we know the expectedVersion matches.
+		// If we need to retry due to unrelated ref advances, reuse the cached plan so we
+		// don't re-read |reader| (which may not be rewindable).
+		if cachedPlan == nil {
+			plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
+			if err != nil {
+				return backoff.Permanent(err)
+			}
+			cachedPlan = &plan
+		}
+
+		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, *cachedPlan, msg)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+
+		if err := gbs.updateRefCASForWrite(ctx, parent, ok, newCommit, msg); err != nil {
+			return err
+		}
+
+		ver, err := gbs.resolveKeyVersionAtCommit(ctx, newCommit, key)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+		newKeyVersion = ver
+		return nil
+	}
+
+	if err := backoff.Retry(op, policy); err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", err
+	}
+
+	return newKeyVersion, nil
+}
+
+func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, haveCommit bool, key string) (string, error) {
+	if !haveCommit {
+		// Ref missing => empty store => key missing.
+		return "", nil
+	}
+	oid, _, err := gbs.api.ResolvePathObject(ctx, commit, key)
+	if err != nil {
+		if git.IsPathNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return oid.String(), nil
+}
+
+func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
+	// Chunked-object support is landing in phases. Concatenate is the final piece
+	// needed for NBS conjoin and is intentionally left unimplemented on this branch.
+	//
+	// Keep key validation for consistent error behavior.
+	_, err := normalizeGitTreePath(key)
+	if err != nil {
+		return "", err
+	}
+	for _, src := range sources {
+		if _, err := normalizeGitTreePath(src); err != nil {
+			return "", err
+		}
+	}
+	return "", git.ErrUnimplemented
 }
 
 type treeWrite struct {
