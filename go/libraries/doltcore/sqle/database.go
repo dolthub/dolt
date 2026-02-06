@@ -2565,7 +2565,7 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
 func (db Database) CreateView(ctx *sql.Context, name string, selectStatement, createViewStmt string) error {
-	err := sql.ErrExistingView.New(db.Name(), name)
+	err := sql.ErrExistingView.New(name)
 	return db.addFragToSchemasTable(ctx, "view", name, createViewStmt, time.Unix(0, 0).UTC(), err)
 }
 
