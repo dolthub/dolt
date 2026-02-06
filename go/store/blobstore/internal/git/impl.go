@@ -88,6 +88,62 @@ func (a *GitAPIImpl) ResolvePathBlob(ctx context.Context, commit OID, path strin
 	return OID(oid), nil
 }
 
+func (a *GitAPIImpl) ResolvePathObject(ctx context.Context, commit OID, path string) (oid OID, typ string, err error) {
+	spec := commit.String() + ":" + path
+	out, err := a.r.Run(ctx, RunOptions{}, "rev-parse", "--verify", spec)
+	if err != nil {
+		if isPathNotFoundErr(err) {
+			return "", "", &PathNotFoundError{Commit: commit.String(), Path: path}
+		}
+		return "", "", err
+	}
+	oidStr := strings.TrimSpace(string(out))
+	if oidStr == "" {
+		return "", "", fmt.Errorf("git rev-parse returned empty oid for %q", spec)
+	}
+
+	typ, err = a.CatFileType(ctx, OID(oidStr))
+	if err != nil {
+		return "", "", err
+	}
+	return OID(oidStr), typ, nil
+}
+
+func (a *GitAPIImpl) ListTree(ctx context.Context, commit OID, treePath string) ([]TreeEntry, error) {
+	// Note: `git ls-tree <tree-ish>` accepts a tree-ish of the form "<commit>:<path>".
+	// Use that to list children of a tree path without needing to pre-resolve the tree OID.
+	spec := commit.String()
+	if treePath != "" {
+		spec = spec + ":" + treePath
+	} else {
+		spec = spec + "^{tree}"
+	}
+
+	out, err := a.r.Run(ctx, RunOptions{}, "ls-tree", spec)
+	if err != nil {
+		if isPathNotFoundErr(err) && treePath != "" {
+			return nil, &PathNotFoundError{Commit: commit.String(), Path: treePath}
+		}
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) == 1 && strings.TrimSpace(lines[0]) == "" {
+		return nil, nil
+	}
+	entries := make([]TreeEntry, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		e, err := parseLsTreeLine(line)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
 func (a *GitAPIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
 	out, err := a.r.Run(ctx, RunOptions{}, "cat-file", "-t", oid.String())
 	if err != nil {
@@ -138,6 +194,26 @@ func (a *GitAPIImpl) ReadTreeEmpty(ctx context.Context, indexFile string) error 
 
 func (a *GitAPIImpl) UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid OID, path string) error {
 	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "update-index", "--add", "--cacheinfo", mode, oid.String(), path)
+	return err
+}
+
+func (a *GitAPIImpl) RemoveIndexPaths(ctx context.Context, indexFile string, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	var buf bytes.Buffer
+	// `git update-index --remove` is about removing *missing worktree files*, and requires a worktree.
+	// For bare repos / index-only workflows, use `--index-info` to remove paths by writing mode "0".
+	//
+	// Format:
+	//   <mode> <object> <stage>\t<path>\n
+	// To remove:
+	//   0 0000000000000000000000000000000000000000 0\t<path>\n
+	const zeroOID = "0000000000000000000000000000000000000000"
+	for _, p := range paths {
+		fmt.Fprintf(&buf, "0 %s 0\t%s\n", zeroOID, p)
+	}
+	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile, Stdin: &buf}, "update-index", "--index-info")
 	return err
 }
 
@@ -242,4 +318,25 @@ func isPathNotFoundErr(err error) bool {
 		}
 	}
 	return false
+}
+
+func parseLsTreeLine(line string) (TreeEntry, error) {
+	// Format (one entry):
+	//   <mode> SP <type> SP <oid>\t<name>
+	// Example:
+	//   100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\tfile.txt
+	parts := strings.SplitN(line, "\t", 2)
+	if len(parts) != 2 {
+		return TreeEntry{}, fmt.Errorf("git ls-tree: malformed line %q", line)
+	}
+	left := strings.Fields(parts[0])
+	if len(left) != 3 {
+		return TreeEntry{}, fmt.Errorf("git ls-tree: malformed line %q", line)
+	}
+	return TreeEntry{
+		Mode: left[0],
+		Type: left[1],
+		OID:  OID(left[2]),
+		Name: parts[1],
+	}, nil
 }

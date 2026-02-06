@@ -27,6 +27,16 @@ import (
 	gitbs "github.com/dolthub/dolt/go/store/blobstore/internal/gitbs"
 )
 
+type trackingReadCloser struct {
+	io.Reader
+	closed bool
+}
+
+func (t *trackingReadCloser) Close() error {
+	t.closed = true
+	return nil
+}
+
 func TestMultiPartReadCloser_ReadConcatenatesAcrossPartsWithOffsets(t *testing.T) {
 	ctx := context.Background()
 
