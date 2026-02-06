@@ -30,7 +30,7 @@ if [ -n "$nomsBinFormat" ]; then
   nomsBinFormat="\"--noms-bin-format=$nomsBinFormat\","
 fi
 
-if [ -n "sysbenchTestTime" ]; then
+if [ -n "$sysbenchTestTime" ]; then
   sysbenchTestTime="\"--sysbenchTestTime=$sysbenchTestTime\","
 fi
 
