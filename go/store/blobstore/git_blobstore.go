@@ -165,7 +165,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 
 	case git.ObjectTypeTree:
 		// Per-key version: tree object id at this key.
-		rc, sz, _, err := gbs.openChunkedTreeRange(ctx, commit, key, oid, br)
+		rc, sz, _, err := gbs.openChunkedTreeRange(ctx, commit, key, br)
 		return rc, sz, oid.String(), err
 
 	default:
@@ -217,10 +217,9 @@ type limitReadCloser struct {
 func (l *limitReadCloser) Read(p []byte) (int, error) { return l.r.Read(p) }
 func (l *limitReadCloser) Close() error               { return l.c.Close() }
 
-func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OID, key string, treeOID git.OID, br BlobRange) (io.ReadCloser, uint64, string, error) {
+func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OID, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	ver := commit.String()
 
-	_ = treeOID // treeOID is informational; ListTree resolves by path.
 	entries, err := gbs.api.ListTree(ctx, commit, key)
 	if err != nil {
 		return nil, 0, ver, err
@@ -433,6 +432,15 @@ func (m *multiPartReadCloser) readCurrent(p []byte) (int, error) {
 	return 0, err
 }
 
+func (m *multiPartReadCloser) Close() error {
+	if m.curRC != nil {
+		err := m.curRC.Close()
+		m.curRC = nil
+		return err
+	}
+	return nil
+}
+
 func skipN(r io.Reader, n int64) error {
 	if n <= 0 {
 		return nil
@@ -529,15 +537,6 @@ func sliceChunkParts(parts []chunkPartRef, start, end int64) ([]chunkPartSlice, 
 		return nil, fmt.Errorf("range [%d,%d) not fully covered by parts", start, end)
 	}
 	return out, nil
-}
-
-func (m *multiPartReadCloser) Close() error {
-	if m.curRC != nil {
-		err := m.curRC.Close()
-		m.curRC = nil
-		return err
-	}
-	return nil
 }
 
 func min(a, b int) int {
