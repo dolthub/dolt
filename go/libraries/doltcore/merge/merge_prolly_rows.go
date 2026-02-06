@@ -422,15 +422,25 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	s := &MergeStats{
 		Operation: TableModified,
 	}
-	var sec *secondaryMerger
+
 	var conflicts *conflictMerger
+	var leftIdxs, rightIdxs durable.IndexSet
 	eg.Go(func() error {
+		var sec *secondaryMerger
 		var err error
 		sec, conflicts, err = computeProllyTreePatches(errCtx, tm, finalSch, mergeTbl, valueMerger, mergeInfo, diffInfo, patchBuffer, s)
+		if err != nil {
+			return err
+		}
+		leftIdxs, rightIdxs, err = sec.finalize(ctx)
+		if err != nil {
+			return err
+		}
 		return err
 	})
 
 	var mergedRoot *tree.Node
+	var finalRows durable.Index
 	// consume |patches| and apply them to |left|
 	eg.Go(func() error {
 		leftRowData, err := tm.leftTbl.GetRowData(errCtx)
@@ -445,7 +455,13 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 
 		serializer := message.NewProllyMapSerializer(mergedValDesc, ns.Pool())
 		mergedRoot, err = tree.ApplyPatches(errCtx, ns, lIdx.Node(), mergedKeyDesc, serializer, patchBuffer)
-		return err
+		if err != nil {
+			return err
+		}
+
+		finalMap := prolly.NewMap(mergedRoot, ns, mergedKeyDesc, mergedValDesc)
+		finalRows = durable.IndexFromProllyMap(finalMap)
+		return nil
 	})
 
 	err := eg.Wait()
@@ -453,16 +469,8 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	finalMap := prolly.NewMap(mergedRoot, ns, mergedKeyDesc, mergedValDesc)
-	finalRows := durable.IndexFromProllyMap(finalMap)
-
 	// After we've resolved all the diffs, it's safe for us to update the schema on the table
 	mergeTbl, err = tm.leftTbl.UpdateSchema(ctx, finalSch)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	leftIdxs, rightIdxs, err := sec.finalize(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
