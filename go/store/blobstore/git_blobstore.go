@@ -86,7 +86,9 @@ func (m *multiPartReadCloser) Read(p []byte) (int, error) {
 		}
 
 		if m.rem == 0 {
-			_ = m.closeCurrentAndAdvance()
+			if err := m.closeCurrentAndAdvance(); err != nil {
+				return 0, err
+			}
 			continue
 		}
 
