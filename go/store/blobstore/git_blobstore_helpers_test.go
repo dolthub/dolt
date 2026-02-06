@@ -15,7 +15,6 @@
 package blobstore
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -29,6 +28,7 @@ import (
 type fakeGitAPI struct {
 	tryResolveRefCommit func(ctx context.Context, ref string) (git.OID, bool, error)
 	resolvePathBlob     func(ctx context.Context, commit git.OID, path string) (git.OID, error)
+	resolvePathObject   func(ctx context.Context, commit git.OID, path string) (git.OID, string, error)
 	blobSize            func(ctx context.Context, oid git.OID) (int64, error)
 	blobReader          func(ctx context.Context, oid git.OID) (io.ReadCloser, error)
 }
@@ -41,6 +41,12 @@ func (f fakeGitAPI) ResolveRefCommit(ctx context.Context, ref string) (git.OID, 
 }
 func (f fakeGitAPI) ResolvePathBlob(ctx context.Context, commit git.OID, path string) (git.OID, error) {
 	return f.resolvePathBlob(ctx, commit, path)
+}
+func (f fakeGitAPI) ResolvePathObject(ctx context.Context, commit git.OID, path string) (git.OID, string, error) {
+	return f.resolvePathObject(ctx, commit, path)
+}
+func (f fakeGitAPI) ListTree(ctx context.Context, commit git.OID, treePath string) ([]git.TreeEntry, error) {
+	panic("unexpected call")
 }
 func (f fakeGitAPI) CatFileType(ctx context.Context, oid git.OID) (string, error) {
 	panic("unexpected call")
@@ -63,6 +69,9 @@ func (f fakeGitAPI) ReadTreeEmpty(ctx context.Context, indexFile string) error {
 func (f fakeGitAPI) UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid git.OID, path string) error {
 	panic("unexpected call")
 }
+func (f fakeGitAPI) RemoveIndexPaths(ctx context.Context, indexFile string, paths []string) error {
+	panic("unexpected call")
+}
 func (f fakeGitAPI) WriteTree(ctx context.Context, indexFile string) (git.OID, error) {
 	panic("unexpected call")
 }
@@ -74,16 +83,6 @@ func (f fakeGitAPI) UpdateRefCAS(ctx context.Context, ref string, newOID git.OID
 }
 func (f fakeGitAPI) UpdateRef(ctx context.Context, ref string, newOID git.OID, msg string) error {
 	panic("unexpected call")
-}
-
-type trackingReadCloser struct {
-	io.Reader
-	closed bool
-}
-
-func (t *trackingReadCloser) Close() error {
-	t.closed = true
-	return nil
 }
 
 func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
@@ -146,35 +145,36 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 	})
 }
 
-func TestGitBlobstoreHelpers_resolveBlobForGet(t *testing.T) {
+func TestGitBlobstoreHelpers_resolveObjectForGet(t *testing.T) {
 	ctx := context.Background()
 	commit := git.OID("0123456789abcdef0123456789abcdef01234567")
 
 	t.Run("ok", func(t *testing.T) {
 		api := fakeGitAPI{
-			resolvePathBlob: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, error) {
+			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, string, error) {
 				require.Equal(t, commit, gotCommit)
 				require.Equal(t, "k", path)
-				return git.OID("89abcdef0123456789abcdef0123456789abcdef"), nil
+				return git.OID("89abcdef0123456789abcdef0123456789abcdef"), "blob", nil
 			},
 		}
 		gbs := &GitBlobstore{api: api}
 
-		oid, ver, err := gbs.resolveBlobForGet(ctx, commit, "k")
+		oid, typ, ver, err := gbs.resolveObjectForGet(ctx, commit, "k")
 		require.NoError(t, err)
 		require.Equal(t, "0123456789abcdef0123456789abcdef01234567", ver)
+		require.Equal(t, "blob", typ)
 		require.Equal(t, git.OID("89abcdef0123456789abcdef0123456789abcdef"), oid)
 	})
 
 	t.Run("pathNotFoundMapsToNotFound", func(t *testing.T) {
 		api := fakeGitAPI{
-			resolvePathBlob: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, error) {
-				return git.OID(""), &git.PathNotFoundError{Commit: gotCommit.String(), Path: path}
+			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, string, error) {
+				return git.OID(""), "", &git.PathNotFoundError{Commit: gotCommit.String(), Path: path}
 			},
 		}
 		gbs := &GitBlobstore{api: api}
 
-		_, ver, err := gbs.resolveBlobForGet(ctx, commit, "k")
+		_, _, ver, err := gbs.resolveObjectForGet(ctx, commit, "k")
 		require.Equal(t, commit.String(), ver)
 		var nf NotFound
 		require.ErrorAs(t, err, &nf)
@@ -203,48 +203,33 @@ func TestGitBlobstoreHelpers_resolveBlobSizeForGet(t *testing.T) {
 	})
 }
 
-func TestGitBlobstoreHelpers_reopenInlineBlobReaderClosesOriginal(t *testing.T) {
+func TestGitBlobstoreHelpers_validateAndSizeChunkedParts(t *testing.T) {
 	ctx := context.Background()
-	blobOID := git.OID("0123456789abcdef0123456789abcdef01234567")
 
-	orig := &trackingReadCloser{Reader: bytes.NewReader([]byte("x"))}
 	api := fakeGitAPI{
-		blobReader: func(ctx context.Context, gotOID git.OID) (io.ReadCloser, error) {
-			require.Equal(t, blobOID, gotOID)
-			return io.NopCloser(bytes.NewReader([]byte("y"))), nil
+		blobSize: func(ctx context.Context, oid git.OID) (int64, error) {
+			switch oid {
+			case "0123456789abcdef0123456789abcdef01234567":
+				return 3, nil
+			case "89abcdef0123456789abcdef0123456789abcdef":
+				return 5, nil
+			default:
+				return 0, errors.New("unexpected oid")
+			}
 		},
 	}
 	gbs := &GitBlobstore{api: api}
 
-	rc, err := gbs.reopenInlineBlobReader(ctx, orig, blobOID)
+	parts, total, err := gbs.validateAndSizeChunkedParts(ctx, []git.TreeEntry{
+		{Name: "0001", Type: "blob", OID: "0123456789abcdef0123456789abcdef01234567"},
+		{Name: "0002", Type: "blob", OID: "89abcdef0123456789abcdef0123456789abcdef"},
+	})
 	require.NoError(t, err)
-	require.True(t, orig.closed)
-	require.NotNil(t, rc)
-	_ = rc.Close()
-}
+	require.Equal(t, uint64(8), total)
+	require.Len(t, parts, 2)
+	require.Equal(t, "0123456789abcdef0123456789abcdef01234567", parts[0].OIDHex)
+	require.Equal(t, uint64(3), parts[0].Size)
 
-func TestReadAtMost(t *testing.T) {
-	out, err := readAtMost(bytes.NewReader([]byte("hello")), 3)
-	require.NoError(t, err)
-	require.Equal(t, []byte("hel"), out)
-
-	out, err = readAtMost(bytes.NewReader([]byte("hi")), 3)
-	require.NoError(t, err)
-	require.Equal(t, []byte("hi"), out)
-}
-
-func TestReadFullBlobBounded(t *testing.T) {
-	// Reads through to blobSize when within max.
-	// Note: |already| is expected to be a prefix read from |r|, so |r| must represent the
-	// remaining stream after the prefix has been consumed.
-	r := bytes.NewReader([]byte("cdef"))
-	got, err := readFullBlobBounded(r, []byte("ab"), 6, 64)
-	require.NoError(t, err)
-	require.Equal(t, []byte("abcdef"), got)
-
-	// Errors if blobSize exceeds max and we hit the cap.
-	r = bytes.NewReader(bytes.Repeat([]byte("x"), 100))
-	_, err = readFullBlobBounded(r, bytes.Repeat([]byte("x"), 10), 100000, 10)
+	_, _, err = gbs.validateAndSizeChunkedParts(ctx, []git.TreeEntry{{Name: "1", Type: "blob", OID: "0123456789abcdef0123456789abcdef01234567"}})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "descriptor too large")
 }

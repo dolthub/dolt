@@ -20,9 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -111,7 +113,7 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	_, err = gbs.api.ResolvePathBlob(ctx, commit, key)
+	_, _, err = gbs.api.ResolvePathObject(ctx, commit, key)
 	if err != nil {
 		if git.IsPathNotFound(err) {
 			return false, nil
@@ -131,17 +133,29 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		return nil, 0, ver, err
 	}
 
-	blobOID, ver, err := gbs.resolveBlobForGet(ctx, commit, key)
+	oid, typ, ver, err := gbs.resolveObjectForGet(ctx, commit, key)
 	if err != nil {
 		return nil, 0, ver, err
 	}
 
-	sz, ver, err := gbs.resolveBlobSizeForGet(ctx, commit, blobOID)
-	if err != nil {
-		return nil, 0, ver, err
-	}
+	switch typ {
+	case "blob":
+		sz, ver, err := gbs.resolveBlobSizeForGet(ctx, commit, oid)
+		if err != nil {
+			return nil, 0, ver, err
+		}
+		rc, err := gbs.api.BlobReader(ctx, oid)
+		if err != nil {
+			return nil, 0, ver, err
+		}
+		return sliceInlineBlob(rc, sz, br, ver)
 
-	return gbs.openBlobOrDescriptorRange(ctx, commit, blobOID, sz, br)
+	case "tree":
+		return gbs.openChunkedTreeRange(ctx, commit, key, oid, br)
+
+	default:
+		return nil, 0, ver, fmt.Errorf("gitblobstore: unsupported object type %q for key %q", typ, key)
+	}
 }
 
 func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (commit git.OID, ver string, err error) {
@@ -161,15 +175,15 @@ func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (c
 	return git.OID(""), "", &git.RefNotFoundError{Ref: gbs.ref}
 }
 
-func (gbs *GitBlobstore) resolveBlobForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, ver string, err error) {
-	oid, err = gbs.api.ResolvePathBlob(ctx, commit, key)
+func (gbs *GitBlobstore) resolveObjectForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, typ string, ver string, err error) {
+	oid, typ, err = gbs.api.ResolvePathObject(ctx, commit, key)
 	if err != nil {
 		if git.IsPathNotFound(err) {
-			return git.OID(""), commit.String(), NotFound{Key: key}
+			return git.OID(""), "", commit.String(), NotFound{Key: key}
 		}
-		return git.OID(""), commit.String(), err
+		return git.OID(""), "", commit.String(), err
 	}
-	return oid, commit.String(), nil
+	return oid, typ, commit.String(), nil
 }
 
 func (gbs *GitBlobstore) resolveBlobSizeForGet(ctx context.Context, commit git.OID, oid git.OID) (sz int64, ver string, err error) {
@@ -188,56 +202,27 @@ type limitReadCloser struct {
 func (l *limitReadCloser) Read(p []byte) (int, error) { return l.r.Read(p) }
 func (l *limitReadCloser) Close() error               { return l.c.Close() }
 
-func (gbs *GitBlobstore) openBlobOrDescriptorRange(ctx context.Context, commit git.OID, blobOID git.OID, blobSize int64, br BlobRange) (io.ReadCloser, uint64, string, error) {
+func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OID, key string, treeOID git.OID, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	ver := commit.String()
 
-	rc, err := gbs.api.BlobReader(ctx, blobOID)
+	_ = treeOID // treeOID is informational; ListTree resolves by path.
+	entries, err := gbs.api.ListTree(ctx, commit, key)
 	if err != nil {
 		return nil, 0, ver, err
 	}
-	defer func() {
-		if rc != nil {
-			_ = rc.Close()
-		}
-	}()
-
-	const peekN = 64 * 1024
-	peek, err := readAtMost(rc, 256)
+	parts, totalSize, err := gbs.validateAndSizeChunkedParts(ctx, entries)
 	if err != nil {
 		return nil, 0, ver, err
 	}
 
-	// Not a descriptor: stream inline blob with BlobRange slicing.
-	if !gitbs.IsDescriptorPrefix(peek) {
-		inlineRC, err := gbs.reopenInlineBlobReader(ctx, rc, blobOID)
-		if err != nil {
-			return nil, 0, ver, err
-		}
-		rc = nil // ownership transferred / already closed
-		return sliceInlineBlob(inlineRC, blobSize, br, ver)
-	}
-
-	// It's probably a descriptor. Read the full contents (bounded defensively).
-	// TODO(gitblobstore): add a MaxDescriptorSize config; for now cap at 64KiB.
-	descBytes, err := readFullBlobBounded(rc, peek, blobSize, peekN)
-	if err != nil {
-		return nil, 0, ver, err
-	}
-
-	desc, err := gitbs.ParseDescriptor(descBytes)
-	if err != nil {
-		// Treat malformed descriptors as corruption (hard error).
-		return nil, 0, ver, err
-	}
-
-	total := int64(desc.TotalSize)
+	total := int64(totalSize)
 	start, end, err := gitbs.NormalizeRange(total, br.offset, br.length)
 	if err != nil {
-		return nil, uint64(desc.TotalSize), ver, err
+		return nil, totalSize, ver, err
 	}
-	slices, err := gitbs.SliceParts(desc.Parts, start, end)
+	slices, err := gitbs.SliceParts(parts, start, end)
 	if err != nil {
-		return nil, uint64(desc.TotalSize), ver, err
+		return nil, totalSize, ver, err
 	}
 
 	// Stream across part blobs.
@@ -246,72 +231,55 @@ func (gbs *GitBlobstore) openBlobOrDescriptorRange(ctx context.Context, commit g
 		api:    gbs.api,
 		slices: slices,
 	}
-	// Close descriptor blob reader (not used past this point).
-	_ = rc.Close()
-	rc = nil
-	return streamRC, uint64(desc.TotalSize), ver, nil
+	return streamRC, totalSize, ver, nil
 }
 
-func (gbs *GitBlobstore) reopenInlineBlobReader(ctx context.Context, rc io.ReadCloser, blobOID git.OID) (io.ReadCloser, error) {
-	// Re-open for streaming the full inline blob. (Simpler than splicing peek+rest.)
-	if rc != nil {
-		_ = rc.Close()
+func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entries []git.TreeEntry) ([]gitbs.PartRef, uint64, error) {
+	if len(entries) == 0 {
+		return nil, 0, fmt.Errorf("gitblobstore: chunked tree has no parts")
 	}
-	return gbs.api.BlobReader(ctx, blobOID)
-}
 
-func readAtMost(r io.Reader, n int) ([]byte, error) {
-	if n <= 0 {
-		return nil, nil
+	width := len(entries[0].Name)
+	// First pass: validate names + types, and determine width.
+	if width < 4 {
+		return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected at least 4 digits)", entries[0].Name)
 	}
-	out := make([]byte, 0, n)
-	buf := make([]byte, min(256, n))
-	for len(out) < n {
-		toRead := min(n-len(out), len(buf))
-		rd, err := r.Read(buf[:toRead])
-		if rd > 0 {
-			out = append(out, buf[:rd]...)
+
+	parts := make([]gitbs.PartRef, 0, len(entries))
+	var total uint64
+	for i, e := range entries {
+		if e.Type != "blob" {
+			return nil, 0, fmt.Errorf("gitblobstore: invalid part %q: expected blob, got %q", e.Name, e.Type)
 		}
+		if len(e.Name) != width {
+			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected width %d)", e.Name, width)
+		}
+		n, err := strconv.Atoi(e.Name)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, err
+			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected digits): %w", e.Name, err)
 		}
-	}
-	return out, nil
-}
-
-func readFullBlobBounded(r io.Reader, already []byte, blobSize int64, max int) ([]byte, error) {
-	if blobSize < 0 {
-		return nil, fmt.Errorf("gitblobstore: invalid blob size %d", blobSize)
-	}
-	if int64(len(already)) > blobSize {
-		// Defensive: callers should pass a prefix read from this same blob reader.
-		return nil, io.ErrUnexpectedEOF
-	}
-
-	descBytes := append([]byte(nil), already...)
-	buf := make([]byte, 256)
-	for int64(len(descBytes)) < blobSize && len(descBytes) < max {
-		n, err := r.Read(buf)
-		if n > 0 {
-			descBytes = append(descBytes, buf[:n]...)
+		if n != i+1 {
+			want := fmt.Sprintf("%0*d", width, i+1)
+			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected %q)", e.Name, want)
 		}
+		if want := fmt.Sprintf("%0*d", width, n); want != e.Name {
+			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected %q)", e.Name, want)
+		}
+
+		sz, err := gbs.api.BlobSize(ctx, e.OID)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, err
+			return nil, 0, err
 		}
-	}
-	if int64(len(descBytes)) < blobSize {
-		if blobSize > int64(max) {
-			return nil, fmt.Errorf("gitblobstore: descriptor too large (%d bytes, cap %d)", blobSize, max)
+		if sz < 0 {
+			return nil, 0, fmt.Errorf("gitblobstore: invalid part size %d for %q", sz, e.Name)
 		}
-		return nil, io.ErrUnexpectedEOF
+		if uint64(sz) > math.MaxUint64-total {
+			return nil, 0, fmt.Errorf("gitblobstore: total size overflow")
+		}
+		total += uint64(sz)
+		parts = append(parts, gitbs.PartRef{OIDHex: e.OID.String(), Size: uint64(sz)})
 	}
-	return descBytes, nil
+	return parts, total, nil
 }
 
 func sliceInlineBlob(rc io.ReadCloser, sz int64, br BlobRange, ver string) (io.ReadCloser, uint64, string, error) {
