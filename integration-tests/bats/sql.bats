@@ -1506,6 +1506,12 @@ SQL
     run dolt sql -r csv -q 'use `db1/main`; show databases'
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
+    [[ "$output" =~ "db1/main" ]] || false
+
+    run dolt sql -r csv -q 'use `db1@main`; show databases'
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 11 ]
+    [[ "$output" =~ "db1@main" ]] || false
 }
 
 @test "sql: run outside a dolt directory" {

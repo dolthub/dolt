@@ -236,23 +236,23 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	return dbState.heads[strings.ToLower(database.Revision())], true, nil
 }
 
-func ResolveRevisionDelimiter(ctx *sql.Context, dbName string) (resolved string, isDelimiterAlias bool, err error) {
+func ResolveRevisionDelimiter(ctx *sql.Context, dbName string) (resolved string, usesDelimiterAlias bool, err error) {
 	if !strings.Contains(dbName, doltdb.DbRevisionDelimiterAlias) {
 		return dbName, false, nil
 	}
 
 	enabled, err := GetBooleanSystemVar(ctx, DoltEnableRevisionDelimiterAlias)
 	if err != nil {
-		return dbName, false, err
+		return dbName, true, err
 	}
 	if !enabled {
-		return dbName, false, nil
+		return dbName, true, nil
 	}
 
 	base, revision, found := strings.Cut(dbName, doltdb.DbRevisionDelimiterAlias)
 	if !found {
 		errRevisionDelimAliasUnresolved := fmt.Errorf("could not resolve revision delimiter '%s' in %s", doltdb.DbRevisionDelimiterAlias, dbName)
-		return dbName, false, errRevisionDelimAliasUnresolved
+		return dbName, true, errRevisionDelimAliasUnresolved
 	}
 
 	return doltdb.RevisionDbName(base, revision), true, nil
