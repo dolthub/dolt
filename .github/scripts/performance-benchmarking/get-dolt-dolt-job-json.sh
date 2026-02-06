@@ -31,7 +31,7 @@ if [ -n "$nomsBinFormat" ]; then
 fi
 
 if [ -n "$sysbenchTestTime" ]; then
-  sysbenchTestTime="\"--sysbenchTestTime=$sysbenchTestTime\","
+  sysbenchTestTime="\"--sysbench-test-time=$sysbenchTestTime\","
 fi
 
 if [ -n "$withTpcc" ]; then
