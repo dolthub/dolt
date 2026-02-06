@@ -53,14 +53,14 @@ func TestCreateDatabase_ReleasesLockOnEngineClose(t *testing.T) {
 	})
 
 	dbLoadParams := map[string]interface{}{
-		dbfactory.DisableSingletonCacheParam:    struct{}{},
-		dbfactory.FailOnJournalLockTimeoutParam: struct{}{},
+		dbfactory.DisableSingletonCacheParam: struct{}{},
+		dbfactory.BlockOnJournalLockParam:    struct{}{},
 	}
 
 	rootEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "test")
 	rootEnv.DBLoadParams = map[string]interface{}{
-		dbfactory.DisableSingletonCacheParam:    struct{}{},
-		dbfactory.FailOnJournalLockTimeoutParam: struct{}{},
+		dbfactory.DisableSingletonCacheParam: struct{}{},
+		dbfactory.BlockOnJournalLockParam:    struct{}{},
 	}
 	mrEnv, err := env.MultiEnvForDirectory(ctx, cfg, fs, "test", rootEnv)
 	require.NoError(t, err)

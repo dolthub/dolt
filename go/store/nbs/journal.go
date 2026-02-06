@@ -547,21 +547,36 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	return
 }
 
-// newJournalManifest makes a new file manifest.
-// When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
-// (The behavior change is implemented separately; this is the plumbing flag.)
-func newJournalManifest(ctx context.Context, dir string, failOnTimeout bool) (m *journalManifest, err error) {
+// newJournalManifest makes a new journal manifest.
+// By default it attempts to take the journal manifest lock with Dolt's internal lock timeout and
+// falls back to a read-only manifest if it cannot acquire the lock. When |opts.BlockOnLock| is set,
+// it will block until it acquires the lock or |ctx| is canceled.
+func newJournalManifest(ctx context.Context, dir string, opts JournalingStoreOptions) (m *journalManifest, err error) {
 	lock := fslock.New(filepath.Join(dir, lockFileName))
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
-	err = lock.LockWithTimeout(lockFileTimeout)
-	if errors.Is(err, fslock.ErrTimeout) {
-		if failOnTimeout {
-			return nil, ErrDatabaseLocked
+	if opts.BlockOnLock {
+		for {
+			err = lock.TryLock()
+			if err == nil {
+				break
+			}
+			if !errors.Is(err, fslock.ErrLocked) {
+				return nil, err
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(10 * time.Millisecond):
+			}
 		}
-		lock, err = nil, nil // read only
-	} else if err != nil {
-		return nil, err
+	} else {
+		err = lock.LockWithTimeout(lockFileTimeout)
+		if errors.Is(err, fslock.ErrTimeout) {
+			lock, err = nil, nil // read only
+		} else if err != nil {
+			return nil, err
+		}
 	}
 	m = &journalManifest{dir: dir, lock: lock}
 

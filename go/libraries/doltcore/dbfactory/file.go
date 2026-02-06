@@ -64,12 +64,12 @@ const (
 	// Intended for embedded-driver usage where callers want deterministic reopen semantics.
 	DisableSingletonCacheParam = "disable_singleton_cache"
 
-	// FailOnJournalLockTimeoutParam changes the journaling store open behavior to fail fast when the exclusive
-	// journal manifest lock cannot be acquired within Dolt's internal lock timeout, instead of falling back
-	// to opening the database in read-only mode.
+	// BlockOnJournalLockParam changes the journaling store open behavior to block until it acquires the
+	// exclusive journal manifest lock (or the context is canceled), instead of falling back to opening
+	// the database in read-only mode on lock timeout.
 	//
 	// Intended for embedded-driver usage so higher layers can implement their own retry/backoff policy.
-	FailOnJournalLockTimeoutParam = "fail_on_journal_lock_timeout"
+	BlockOnJournalLockParam = "block_on_journal_lock"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -200,12 +200,12 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	if useJournal && chunkJournalFeatureFlag {
-		// Allow higher layers (e.g. embedded driver) to opt into fail-fast lock behavior instead of
+		// Allow higher layers (e.g. embedded driver) to opt into blocking lock behavior instead of
 		// falling back to read-only mode on lock timeout.
 		opts := nbs.JournalingStoreOptions{}
 		if params != nil {
-			if _, ok := params[FailOnJournalLockTimeoutParam]; ok {
-				opts.FailOnLockTimeout = true
+			if _, ok := params[BlockOnJournalLockParam]; ok {
+				opts.BlockOnLock = true
 			}
 		}
 		newGenSt, err = nbs.NewLocalJournalingStoreWithOptions(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb, opts)
