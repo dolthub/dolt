@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 )
 
@@ -41,6 +42,12 @@ func TestGitBlobstore_Get_ChunkedTree_AllAndRanges(t *testing.T) {
 	}, "seed chunked tree")
 	require.NoError(t, err)
 
+	runner, err := git.NewRunner(repo.GitDir)
+	require.NoError(t, err)
+	api := git.NewGitAPIImpl(runner)
+	treeOID, _, err := api.ResolvePathObject(ctx, git.OID(commitOID), "chunked")
+	require.NoError(t, err)
+
 	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
@@ -48,26 +55,26 @@ func TestGitBlobstore_Get_ChunkedTree_AllAndRanges(t *testing.T) {
 
 	got, ver, err := GetBytes(ctx, bs, "chunked", AllRange)
 	require.NoError(t, err)
-	require.Equal(t, commitOID, ver)
+	require.Equal(t, treeOID.String(), ver)
 	require.Equal(t, wantAll, got)
 
 	// Range spanning boundary: offset 2 length 4 => "cdef"
 	got, ver, err = GetBytes(ctx, bs, "chunked", NewBlobRange(2, 4))
 	require.NoError(t, err)
-	require.Equal(t, commitOID, ver)
+	require.Equal(t, treeOID.String(), ver)
 	require.Equal(t, []byte("cdef"), got)
 
 	// Tail read last 3 bytes => "fgh"
 	got, ver, err = GetBytes(ctx, bs, "chunked", NewBlobRange(-3, 0))
 	require.NoError(t, err)
-	require.Equal(t, commitOID, ver)
+	require.Equal(t, treeOID.String(), ver)
 	require.Equal(t, []byte("fgh"), got)
 
 	// Validate size returned is logical size.
 	rc, sz, ver2, err := bs.Get(ctx, "chunked", NewBlobRange(0, 1))
 	require.NoError(t, err)
 	require.Equal(t, uint64(len(wantAll)), sz)
-	require.Equal(t, commitOID, ver2)
+	require.Equal(t, treeOID.String(), ver2)
 	_ = rc.Close()
 }
 
