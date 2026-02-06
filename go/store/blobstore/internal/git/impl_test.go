@@ -406,7 +406,7 @@ func TestGitAPIImpl_ResolvePathObject_BlobAndTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gotTyp != "blob" {
+	if gotTyp != ObjectTypeBlob {
 		t.Fatalf("expected type blob, got %q", gotTyp)
 	}
 	if gotOID != blobOID {
@@ -417,7 +417,7 @@ func TestGitAPIImpl_ResolvePathObject_BlobAndTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gotTyp != "tree" {
+	if gotTyp != ObjectTypeTree {
 		t.Fatalf("expected type tree, got %q", gotTyp)
 	}
 }
@@ -487,17 +487,17 @@ func TestGitAPIImpl_ListTree_NonRecursive(t *testing.T) {
 		switch e.Name {
 		case "a.txt":
 			gotA = true
-			if e.Type != "blob" || e.OID != oidA {
+			if e.Type != ObjectTypeBlob || e.OID != oidA {
 				t.Fatalf("unexpected a.txt entry: %+v", e)
 			}
 		case "b.txt":
 			gotB = true
-			if e.Type != "blob" || e.OID != oidB {
+			if e.Type != ObjectTypeBlob || e.OID != oidB {
 				t.Fatalf("unexpected b.txt entry: %+v", e)
 			}
 		case "sub":
 			gotSub = true
-			if e.Type != "tree" || e.OID == "" {
+			if e.Type != ObjectTypeTree || e.OID == "" {
 				t.Fatalf("unexpected sub entry: %+v", e)
 			}
 		default:

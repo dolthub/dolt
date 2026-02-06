@@ -141,7 +141,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 	}
 
 	switch typ {
-	case "blob":
+	case git.ObjectTypeBlob:
 		sz, ver, err := gbs.resolveBlobSizeForGet(ctx, commit, oid)
 		if err != nil {
 			return nil, 0, ver, err
@@ -153,7 +153,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		// Per-key version: blob object id.
 		return sliceInlineBlob(rc, sz, br, oid.String())
 
-	case "tree":
+	case git.ObjectTypeTree:
 		// Per-key version: tree object id at this key.
 		rc, sz, _, err := gbs.openChunkedTreeRange(ctx, commit, key, oid, br)
 		return rc, sz, oid.String(), err
@@ -180,13 +180,13 @@ func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (c
 	return git.OID(""), &git.RefNotFoundError{Ref: gbs.ref}
 }
 
-func (gbs *GitBlobstore) resolveObjectForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, typ string, err error) {
+func (gbs *GitBlobstore) resolveObjectForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, typ git.ObjectType, err error) {
 	oid, typ, err = gbs.api.ResolvePathObject(ctx, commit, key)
 	if err != nil {
 		if git.IsPathNotFound(err) {
-			return git.OID(""), "", NotFound{Key: key}
+			return git.OID(""), git.ObjectTypeUnknown, NotFound{Key: key}
 		}
-		return git.OID(""), "", err
+		return git.OID(""), git.ObjectTypeUnknown, err
 	}
 	return oid, typ, nil
 }
@@ -253,7 +253,7 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 	parts := make([]gitbs.PartRef, 0, len(entries))
 	var total uint64
 	for i, e := range entries {
-		if e.Type != "blob" {
+		if e.Type != git.ObjectTypeBlob {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part %q: expected blob, got %q", e.Name, e.Type)
 		}
 		if len(e.Name) != width {
@@ -677,14 +677,14 @@ func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent
 	_ = oid
 
 	switch typ {
-	case "blob":
+	case git.ObjectTypeBlob:
 		if newIsChunked {
 			// blob -> tree: must remove the file entry at <key>
 			return gbs.api.RemoveIndexPaths(ctx, indexFile, []string{key})
 		}
 		return nil
 
-	case "tree":
+	case git.ObjectTypeTree:
 		// tree -> blob OR tree overwrite: remove old child entries under <key>/...
 		entries, err := gbs.api.ListTree(ctx, parent, key)
 		if err != nil {

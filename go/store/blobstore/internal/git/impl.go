@@ -88,25 +88,25 @@ func (a *GitAPIImpl) ResolvePathBlob(ctx context.Context, commit OID, path strin
 	return OID(oid), nil
 }
 
-func (a *GitAPIImpl) ResolvePathObject(ctx context.Context, commit OID, path string) (oid OID, typ string, err error) {
+func (a *GitAPIImpl) ResolvePathObject(ctx context.Context, commit OID, path string) (oid OID, typ ObjectType, err error) {
 	spec := commit.String() + ":" + path
 	out, err := a.r.Run(ctx, RunOptions{}, "rev-parse", "--verify", spec)
 	if err != nil {
 		if isPathNotFoundErr(err) {
-			return "", "", &PathNotFoundError{Commit: commit.String(), Path: path}
+			return "", ObjectTypeUnknown, &PathNotFoundError{Commit: commit.String(), Path: path}
 		}
-		return "", "", err
+		return "", ObjectTypeUnknown, err
 	}
 	oidStr := strings.TrimSpace(string(out))
 	if oidStr == "" {
-		return "", "", fmt.Errorf("git rev-parse returned empty oid for %q", spec)
+		return "", ObjectTypeUnknown, fmt.Errorf("git rev-parse returned empty oid for %q", spec)
 	}
 
-	typ, err = a.CatFileType(ctx, OID(oidStr))
+	typStr, err := a.CatFileType(ctx, OID(oidStr))
 	if err != nil {
-		return "", "", err
+		return "", ObjectTypeUnknown, err
 	}
-	return OID(oidStr), typ, nil
+	return OID(oidStr), ObjectType(typStr), nil
 }
 
 func (a *GitAPIImpl) ListTree(ctx context.Context, commit OID, treePath string) ([]TreeEntry, error) {
@@ -335,7 +335,7 @@ func parseLsTreeLine(line string) (TreeEntry, error) {
 	}
 	return TreeEntry{
 		Mode: left[0],
-		Type: left[1],
+		Type: ObjectType(left[1]),
 		OID:  OID(left[2]),
 		Name: parts[1],
 	}, nil
