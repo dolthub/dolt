@@ -366,6 +366,216 @@ func TestGitAPIImpl_UpdateIndexCacheInfo_FileDirectoryConflictErrors(t *testing.
 	}
 }
 
+func TestGitAPIImpl_ResolvePathObject_BlobAndTree(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := NewRunner(repo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewGitAPIImpl(r)
+
+	indexFile := tempIndexFile(t)
+	if err := api.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+
+	blobOID, err := api.HashObject(ctx, bytes.NewReader([]byte("hi\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", blobOID, "dir/file.txt"); err != nil {
+		t.Fatal(err)
+	}
+	treeOID, err := api.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitOID, err := api.CommitTree(ctx, treeOID, nil, "seed", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotOID, gotTyp, err := api.ResolvePathObject(ctx, commitOID, "dir/file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTyp != ObjectTypeBlob {
+		t.Fatalf("expected type blob, got %q", gotTyp)
+	}
+	if gotOID != blobOID {
+		t.Fatalf("expected oid %q, got %q", blobOID, gotOID)
+	}
+
+	_, gotTyp, err = api.ResolvePathObject(ctx, commitOID, "dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTyp != ObjectTypeTree {
+		t.Fatalf("expected type tree, got %q", gotTyp)
+	}
+}
+
+func TestGitAPIImpl_ListTree_NonRecursive(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := NewRunner(repo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewGitAPIImpl(r)
+
+	indexFile := tempIndexFile(t)
+	if err := api.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+
+	oidA, err := api.HashObject(ctx, bytes.NewReader([]byte("a\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oidB, err := api.HashObject(ctx, bytes.NewReader([]byte("b\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oidX, err := api.HashObject(ctx, bytes.NewReader([]byte("x\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", oidA, "dir/a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", oidB, "dir/b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", oidX, "dir/sub/x.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	treeOID, err := api.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitOID, err := api.CommitTree(ctx, treeOID, nil, "seed", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := api.ListTree(ctx, commitOID, "dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Expect: a.txt (blob), b.txt (blob), sub (tree)
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d: %+v", len(entries), entries)
+	}
+
+	var gotA, gotB, gotSub bool
+	for _, e := range entries {
+		switch e.Name {
+		case "a.txt":
+			gotA = true
+			if e.Type != ObjectTypeBlob || e.OID != oidA {
+				t.Fatalf("unexpected a.txt entry: %+v", e)
+			}
+		case "b.txt":
+			gotB = true
+			if e.Type != ObjectTypeBlob || e.OID != oidB {
+				t.Fatalf("unexpected b.txt entry: %+v", e)
+			}
+		case "sub":
+			gotSub = true
+			if e.Type != ObjectTypeTree || e.OID == "" {
+				t.Fatalf("unexpected sub entry: %+v", e)
+			}
+		default:
+			t.Fatalf("unexpected entry: %+v", e)
+		}
+	}
+	if !gotA || !gotB || !gotSub {
+		t.Fatalf("missing expected entries: gotA=%v gotB=%v gotSub=%v", gotA, gotB, gotSub)
+	}
+}
+
+func TestGitAPIImpl_RemoveIndexPaths_RemovesFromIndex(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := NewRunner(repo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewGitAPIImpl(r)
+
+	indexFile := tempIndexFile(t)
+	if err := api.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+
+	oidA, err := api.HashObject(ctx, bytes.NewReader([]byte("a\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oidB, err := api.HashObject(ctx, bytes.NewReader([]byte("b\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", oidA, "a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", oidB, "b.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := api.RemoveIndexPaths(ctx, indexFile, []string{"a.txt"}); err != nil {
+		t.Fatal(err)
+	}
+
+	treeOID, err := api.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitOID, err := api.CommitTree(ctx, treeOID, nil, "seed", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// a.txt removed, b.txt still present
+	_, err = api.ResolvePathBlob(ctx, commitOID, "a.txt")
+	if err == nil {
+		t.Fatalf("expected a.txt missing")
+	}
+	var pnf *PathNotFoundError
+	if !errors.As(err, &pnf) {
+		t.Fatalf("expected PathNotFoundError, got %T: %v", err, err)
+	}
+
+	gotB, err := api.ResolvePathBlob(ctx, commitOID, "b.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotB != oidB {
+		t.Fatalf("expected b.txt oid %q, got %q", oidB, gotB)
+	}
+}
+
 func TestGitAPIImpl_ReadTree_PreservesExistingPaths(t *testing.T) {
 	t.Parallel()
 
