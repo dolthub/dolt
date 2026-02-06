@@ -97,10 +97,9 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 		}
 		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
 
-		commit, ver, err := gbs.resolveCommitForGet(ctx, "k")
+		commit, err := gbs.resolveCommitForGet(ctx, "k")
 		require.NoError(t, err)
 		require.Equal(t, git.OID("0123456789abcdef0123456789abcdef01234567"), commit)
-		require.Equal(t, "0123456789abcdef0123456789abcdef01234567", ver)
 	})
 
 	t.Run("missingRef_manifestIsNotFound", func(t *testing.T) {
@@ -111,7 +110,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 		}
 		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
 
-		_, _, err := gbs.resolveCommitForGet(ctx, "manifest")
+		_, err := gbs.resolveCommitForGet(ctx, "manifest")
 		var nf NotFound
 		require.ErrorAs(t, err, &nf)
 		require.Equal(t, "manifest", nf.Key)
@@ -125,7 +124,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 		}
 		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
 
-		_, _, err := gbs.resolveCommitForGet(ctx, "somekey")
+		_, err := gbs.resolveCommitForGet(ctx, "somekey")
 		var rnf *git.RefNotFoundError
 		require.ErrorAs(t, err, &rnf)
 		require.Equal(t, DoltDataRef, rnf.Ref)
@@ -140,7 +139,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 		}
 		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
 
-		_, _, err := gbs.resolveCommitForGet(ctx, "k")
+		_, err := gbs.resolveCommitForGet(ctx, "k")
 		require.ErrorIs(t, err, sentinel)
 	})
 }
@@ -159,9 +158,8 @@ func TestGitBlobstoreHelpers_resolveObjectForGet(t *testing.T) {
 		}
 		gbs := &GitBlobstore{api: api}
 
-		oid, typ, ver, err := gbs.resolveObjectForGet(ctx, commit, "k")
+		oid, typ, err := gbs.resolveObjectForGet(ctx, commit, "k")
 		require.NoError(t, err)
-		require.Equal(t, "0123456789abcdef0123456789abcdef01234567", ver)
 		require.Equal(t, "blob", typ)
 		require.Equal(t, git.OID("89abcdef0123456789abcdef0123456789abcdef"), oid)
 	})
@@ -174,8 +172,7 @@ func TestGitBlobstoreHelpers_resolveObjectForGet(t *testing.T) {
 		}
 		gbs := &GitBlobstore{api: api}
 
-		_, _, ver, err := gbs.resolveObjectForGet(ctx, commit, "k")
-		require.Equal(t, commit.String(), ver)
+		_, _, err := gbs.resolveObjectForGet(ctx, commit, "k")
 		var nf NotFound
 		require.ErrorAs(t, err, &nf)
 		require.Equal(t, "k", nf.Key)

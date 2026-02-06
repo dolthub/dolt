@@ -51,19 +51,22 @@ func TestGitBlobstore_Put_ChunkedWritesTreeParts(t *testing.T) {
 	require.NoError(t, err)
 	api := git.NewGitAPIImpl(runner)
 
-	commit := git.OID(ver)
-	_, typ, err := api.ResolvePathObject(ctx, commit, "big")
+	head, ok, err := api.TryResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	_, typ, err := api.ResolvePathObject(ctx, head, "big")
 	require.NoError(t, err)
 	require.Equal(t, "tree", typ)
 
-	entries, err := api.ListTree(ctx, commit, "big")
+	entries, err := api.ListTree(ctx, head, "big")
 	require.NoError(t, err)
 	require.Len(t, entries, 4)
 	require.Equal(t, "00000001", entries[0].Name)
 	require.Equal(t, "00000004", entries[3].Name)
 }
 
-func TestGitBlobstore_Put_TreeToBlobAndBlobToTreeTransitions(t *testing.T) {
+func TestGitBlobstore_Put_IdempotentDoesNotChangeExistingRepresentation(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
@@ -80,23 +83,39 @@ func TestGitBlobstore_Put_TreeToBlobAndBlobToTreeTransitions(t *testing.T) {
 	require.NoError(t, err)
 	api := git.NewGitAPIImpl(runner)
 
-	// blob -> tree
-	_, err = bs.Put(ctx, "k", 2, bytes.NewReader([]byte("hi")))
+	// blob stays blob (even if the caller would have triggered chunked mode)
+	verBlob, err := bs.Put(ctx, "k", 2, bytes.NewReader([]byte("hi")))
 	require.NoError(t, err)
-	verTree, err := bs.Put(ctx, "k", 10, bytes.NewReader([]byte("abcdefghij")))
+	verNoop, err := bs.Put(ctx, "k", 10, putShouldNotRead{})
 	require.NoError(t, err)
-	_, typ, err := api.ResolvePathObject(ctx, git.OID(verTree), "k")
-	require.NoError(t, err)
-	require.Equal(t, "tree", typ)
+	require.Equal(t, verBlob, verNoop)
 
-	// tree -> blob
-	verBlob, err := bs.Put(ctx, "k", 2, bytes.NewReader([]byte("ok")))
+	head1, ok, err := api.TryResolveRefCommit(ctx, DoltDataRef)
 	require.NoError(t, err)
-	_, typ, err = api.ResolvePathObject(ctx, git.OID(verBlob), "k")
+	require.True(t, ok)
+	_, typ, err := api.ResolvePathObject(ctx, head1, "k")
 	require.NoError(t, err)
 	require.Equal(t, "blob", typ)
 
 	got, _, err := GetBytes(ctx, bs, "k", AllRange)
 	require.NoError(t, err)
-	require.Equal(t, []byte("ok"), got)
+	require.Equal(t, []byte("hi"), got)
+
+	// tree stays tree
+	verTree, err := bs.Put(ctx, "ktree", 10, bytes.NewReader([]byte("abcdefghij")))
+	require.NoError(t, err)
+	head2, ok, err := api.TryResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	require.True(t, ok)
+	_, typ, err = api.ResolvePathObject(ctx, head2, "ktree")
+	require.NoError(t, err)
+	require.Equal(t, "tree", typ)
+
+	verTreeNoop, err := bs.Put(ctx, "ktree", 2, putShouldNotRead{})
+	require.NoError(t, err)
+	require.Equal(t, verTree, verTreeNoop)
+
+	got, _, err = GetBytes(ctx, bs, "ktree", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("abcdefghij"), got)
 }
