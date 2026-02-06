@@ -709,8 +709,8 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 	{
 		Name: "database revision specs: prisma detects existing _prisma_migrations on branch",
 		SetUpScript: []string{
-			"create table t01 (pk int primary key)",
-			"call dolt_add('.')",
+			"create table t01 (pk int primary key);",
+			"call dolt_add('.');",
 			"call dolt_commit('-am', 'init');",
 			"call dolt_branch('newbranch');",
 			"use `mydb@newbranch`;",
@@ -743,7 +743,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema",
+				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema;",
 				Expected: []sql.Row{{"_prisma_migrations"}, {"t01"}},
 			},
 		},
@@ -751,8 +751,8 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 	{
 		Name: "database revision specs: ResolveRevisionDelimiter alias '@' when dolt_enable_revision_delimiter_alias is ON",
 		SetUpScript: []string{
-			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_add('.')",
+			"create table t01 (pk int primary key, c1 int);",
+			"call dolt_add('.');",
 			"call dolt_commit('-am', 'creating table t01 on main');",
 			"insert into t01 values (1, 1), (2, 2);",
 			"call dolt_commit('-am', 'adding rows to table t01 on main');",
@@ -899,11 +899,11 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Query: "call dolt_commit('-Am', 'add t2 table to branch');",
 			},
 			{
-				Query:    "use `mydb/main`",
+				Query:    "use `mydb/main`;",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "create schema `mydb@branch1`",
+				Query:    "create schema `mydb@branch1`;",
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
