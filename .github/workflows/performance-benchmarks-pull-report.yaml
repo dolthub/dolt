@@ -25,6 +25,7 @@ jobs:
     if: ${{ needs.validate-commentor.outputs.valid == 'true' }}
     outputs:
       benchmark: ${{ steps.set_benchmark.outputs.benchmark }}
+      sysbench-test-time: ${{ steps.set_benchmark_mini.outputs.sysbench-test-time }}
       comment-body: ${{ steps.set_body.outputs.body }}
     steps:
       - name: Check for Deploy Trigger
@@ -40,6 +41,20 @@ jobs:
         id: set_benchmark
         run: |
           echo "benchmark=true" >> $GITHUB_OUTPUT
+      - name: Check for Deploy Mini Trigger
+        uses: dolthub/pull-request-comment-trigger@v2
+        id: check_mini
+        with:
+          trigger: '#benchmark-mini'
+          reaction: rocket
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set Benchmark Mini
+        if: ${{ steps.check_mini.outputs.triggered == 'true' }}
+        id: set_benchmark_mini
+        run: |
+          echo "benchmark=true" >> $GITHUB_OUTPUT
+          echo "sysbench-test-time=10" >> $GITHUB_OUTPUT
 
   performance:
     runs-on: ubuntu-22.04
@@ -61,4 +76,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency
-          client-payload: '{"from_server": "dolt", "from_version": "${{ github.sha }}", "to_server": "dolt", "to_version": "${{ steps.comment-branch.outputs.head_sha }}", "mode": "pullRequest", "issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "init_big_repo": "true", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"}'
+          client-payload: '{"from_server": "dolt", "from_version": "${{ github.sha }}", "to_server": "dolt", "to_version": "${{ steps.comment-branch.outputs.head_sha }}", "mode": "pullRequest", "issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "init_big_repo": "true", "actor": "${{ github.actor }}", "sysbench_test_time": "${{ needs.check-comments.outputs.sysbench-test-time }}", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"}'

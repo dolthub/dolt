@@ -104,19 +104,20 @@ source \
     "$NOMS_BIN_FORMAT" > job.json
 else
   source \
-    "$TEMPLATE_SCRIPT" \
-    "$jobname"         \
-    "$FROM_SERVER"     \
-    "$FROM_VERSION"    \
-    "$TO_SERVER"       \
-    "$TO_VERSION"      \
-    "$timeprefix"      \
-    "$actorprefix"     \
-    "$format"          \
-    "$issuenumber"     \
-    "$INIT_BIG_REPO"   \
-    "$NOMS_BIN_FORMAT" \
-    "$WITH_TPCC" > job.json
+    "$TEMPLATE_SCRIPT"    \
+    "$jobname"            \
+    "$FROM_SERVER"        \
+    "$FROM_VERSION"       \
+    "$TO_SERVER"          \
+    "$TO_VERSION"         \
+    "$timeprefix"         \
+    "$actorprefix"        \
+    "$format"             \
+    "$issuenumber"        \
+    "$INIT_BIG_REPO"      \
+    "$NOMS_BIN_FORMAT"    \
+    "$SYSBENCH_TEST_TIME" \
+    "$WITH_TPCC"          > job.json
 fi
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
