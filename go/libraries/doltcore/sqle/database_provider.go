@@ -588,6 +588,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	if err != nil {
 		return err
 	}
+	newEnv.DoltDB(ctx).SetCrashOnFatalError()
 
 	updatedCollation, updatedSchemas := false, false
 

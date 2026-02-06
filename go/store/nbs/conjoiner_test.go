@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
@@ -90,7 +91,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tableFilePersister, mode 
 				c := nextChunk()
 				mt.addChunk(computeAddr(c), c)
 			}
-			cs, _, err := p.Persist(t.Context(), mt, nil, nil, &Stats{})
+			cs, _, err := p.Persist(t.Context(), dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
 			require.NoError(t, err)
 			c, err := cs.clone()
 			require.NoError(t, err)
@@ -237,7 +238,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 		mt := newMemTable(testMemTableSize)
 		data := []byte{0xde, 0xad}
 		mt.addChunk(computeAddr(data), data)
-		src, _, err := p.Persist(context.Background(), mt, nil, nil, &Stats{})
+		src, _, err := p.Persist(context.Background(), dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		defer src.close()
 		return tableSpec{src.hash(), mustUint32(src.count())}
@@ -264,7 +265,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
+				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -285,7 +286,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
 				}}
-				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -305,7 +306,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
 				}}
-				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -348,7 +349,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
+				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -372,7 +373,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
 				}}
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -397,7 +398,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
 				}}
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -421,7 +422,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
 				}}
-				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -445,7 +446,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
 				}}
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -462,9 +463,9 @@ type updatePreemptManifest struct {
 	preUpdate func()
 }
 
-func (u updatePreemptManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (u updatePreemptManifest) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if u.preUpdate != nil {
 		u.preUpdate()
 	}
-	return u.manifest.Update(ctx, lastLock, newContents, stats, writeHook)
+	return u.manifest.Update(ctx, behavior, lastLock, newContents, stats, writeHook)
 }

@@ -29,6 +29,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -247,10 +248,10 @@ type chunkSource interface {
 	suffix() string
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
-	reader(context.Context) (io.ReadCloser, uint64, error)
+	reader(context.Context, dherrors.FatalBehavior) (io.ReadCloser, uint64, error)
 
 	// getRecordRanges sets getRecord.found to true, and returns a Range for each present getRecord query.
-	getRecordRanges(ctx context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error)
+	getRecordRanges(ctx context.Context, _ dherrors.FatalBehavior, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error)
 
 	// index returns the tableIndex of this chunkSource.
 	index() (tableIndex, error)

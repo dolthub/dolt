@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -75,7 +76,7 @@ type manifestUpdater interface {
 	// If writeHook is non-nil, it will be invoked while the implementation is
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
-	Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
+	Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
 type manifestGCGenUpdater interface {
@@ -88,7 +89,7 @@ type manifestGCGenUpdater interface {
 	// If writeHook is non-nil, it will be invoked while the implementation is
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
-	UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
+	UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
 // ManifestInfo is an interface for retrieving data from a manifest outside of this package
@@ -346,7 +347,7 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
 // Update does not call Lock/UnlockForUpdate() on its own because it is
 // intended to be used in a larger critical section along with updateWillFail.
-func (mm manifestManager) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
+func (mm manifestManager) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
 	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
 		if lastLock != upstream.lock {
 			return upstream, nil
@@ -364,7 +365,7 @@ func (mm manifestManager) Update(ctx context.Context, lastLock hash.Hash, newCon
 	}()
 
 	f := func() (manifestContents, error) {
-		contents, err := mm.m.Update(ctx, lastLock, newContents, stats, writeHook)
+		contents, err := mm.m.Update(ctx, behavior, lastLock, newContents, stats, writeHook)
 
 		if err != nil {
 			return contents, err
@@ -385,7 +386,7 @@ func (mm manifestManager) Update(ctx context.Context, lastLock hash.Hash, newCon
 
 // UpdateGCGen will update the manifest with a new garbage collection generation.
 // Callers MUST protect uses of UpdateGCGen with Lock/UnlockForUpdate.
-func (mm manifestManager) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
+func (mm manifestManager) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
 	updater, ok := mm.m.(manifestGCGenUpdater)
 	if !ok {
 		return manifestContents{}, errors.New("manifest does not support updating gc gen")
@@ -408,7 +409,7 @@ func (mm manifestManager) UpdateGCGen(ctx context.Context, lastLock hash.Hash, n
 	}()
 
 	f := func() (manifestContents, error) {
-		contents, err := updater.UpdateGCGen(ctx, lastLock, newContents, stats, writeHook)
+		contents, err := updater.UpdateGCGen(ctx, behavior, lastLock, newContents, stats, writeHook)
 
 		if err != nil {
 			return contents, err

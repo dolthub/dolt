@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -400,7 +401,7 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 	persisted = append(chunks, rootChunk)
 
 	var src chunkSource
-	src, _, err = p.Persist(context.Background(), createMemTable(persisted), nil, nil, &Stats{})
+	src, _, err = p.Persist(context.Background(), dherrors.FatalBehaviorError, createMemTable(persisted), nil, nil, &Stats{})
 	if err != nil {
 		return hash.Hash{}, nil, err
 	}
@@ -455,7 +456,7 @@ func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHoo
 // to |newLock|, |fm.root| is set to |newRoot|, and the contents of |specs|
 // replace |fm.tableSpecs|. If |lastLock| != |fm.lock|, then the update
 // fails. Regardless of success or failure, the current state is returned.
-func (fm *fakeManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (fm *fakeManifest) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.contents.lock == lastLock {
@@ -506,7 +507,7 @@ type fakeTablePersister struct {
 
 var _ tablePersister = fakeTablePersister{}
 
-func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
+func (ftp fakeTablePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	if mustUint32(mt.count()) == 0 {
 		return emptyChunkSource{}, gcBehavior_Continue, nil
 	}
@@ -544,7 +545,7 @@ func (ftp fakeTablePersister) Path() string {
 	return "//fakeTablePersister/"
 }
 
-func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
+func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, _ dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
 	name, data, chunkCount, err := compactSourcesToBuffer(sources)
 	if err != nil {
 		return nil, nil, err

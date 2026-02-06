@@ -69,5 +69,17 @@ func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEdi
 		Deaf:    deaf,
 		Tempdir: tmpDir,
 	}
-	return sqle.NewDatabase(ctx, name, dEnv.DbData(ctx), opts)
+	dbdata := dEnv.DbData(ctx)
+	// Databases registered with the SQL engine are always
+	// configured for FatalBehaviorCrash. These are local
+	// databases and it isn't necessarily safe to continue
+	// operating after an I/O on the write path. This is in
+	// contrast to something like a remote in the context of a
+	// backup, replication or a push, where an I/O error is just
+	// an error to perform the requested operation.
+	//
+	// See also sqle/database_provider.go, where we do this when
+	// creating new databases as well.
+	dbdata.Ddb.SetCrashOnFatalError()
+	return sqle.NewDatabase(ctx, name, dbdata, opts)
 }

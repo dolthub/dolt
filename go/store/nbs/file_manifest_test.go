@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -89,7 +90,7 @@ func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	err := clobberManifest(fm.dir, m)
 	require.NoError(t, err)
 
-	_, err = fm.Update(context.Background(), hash.Hash{}, manifestContents{}, stats, nil)
+	_, err = fm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, manifestContents{}, stats, nil)
 	assert.Error(err)
 }
 
@@ -100,7 +101,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	stats := &Stats{}
 
 	l := computeAddr([]byte{0x01})
-	upstream, err := fm.Update(context.Background(), hash.Hash{}, manifestContents{nbfVers: constants.FormatLD1String, lock: l}, stats, nil)
+	upstream, err := fm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, manifestContents{nbfVers: constants.FormatLD1String, lock: l}, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(l, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
@@ -116,7 +117,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.Empty(upstream.specs)
 
 	l2 := computeAddr([]byte{0x02})
-	upstream, err = fm2.Update(context.Background(), l, manifestContents{nbfVers: constants.FormatLD1String, lock: l2}, stats, nil)
+	upstream, err = fm2.Update(context.Background(), dherrors.FatalBehaviorError, l, manifestContents{nbfVers: constants.FormatLD1String, lock: l2}, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(l2, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
@@ -136,7 +137,7 @@ func TestFileManifestUpdate(t *testing.T) {
 		root:    hash.Of([]byte("new root")),
 		specs:   []tableSpec{{computeAddr([]byte("a")), 3}},
 	}
-	upstream, err := fm.Update(context.Background(), hash.Hash{}, contents, stats, func() error {
+	upstream, err := fm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
@@ -153,12 +154,12 @@ func TestFileManifestUpdate(t *testing.T) {
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
 	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2")), nbfVers: constants.FormatLD1String}
-	upstream, err = fm.Update(context.Background(), hash.Hash{}, contents2, stats, nil)
+	upstream, err = fm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, contents2, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
-	upstream, err = fm.Update(context.Background(), upstream.lock, contents2, stats, nil)
+	upstream, err = fm.Update(context.Background(), dherrors.FatalBehaviorError, upstream.lock, contents2, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(contents2.lock, upstream.lock)
 	assert.Equal(contents2.root, upstream.root)
@@ -173,7 +174,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3")), nbfVers: constants.FormatLD1String}
-	upstream, err = fm.Update(context.Background(), upstream.lock, contents3, stats, nil)
+	upstream, err = fm.Update(context.Background(), dherrors.FatalBehaviorError, upstream.lock, contents3, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(contents2.root, upstream.root)

@@ -28,6 +28,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -74,11 +75,11 @@ func (ecs emptyChunkSource) index() (tableIndex, error) {
 	return onHeapTableIndex{}, nil
 }
 
-func (ecs emptyChunkSource) reader(context.Context) (io.ReadCloser, uint64, error) {
+func (ecs emptyChunkSource) reader(context.Context, dherrors.FatalBehavior) (io.ReadCloser, uint64, error) {
 	return io.NopCloser(&bytes.Buffer{}), 0, nil
 }
 
-func (ecs emptyChunkSource) getRecordRanges(ctx context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+func (ecs emptyChunkSource) getRecordRanges(ctx context.Context, _ dherrors.FatalBehavior, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	return map[hash.Hash]Range{}, gcBehavior_Continue, nil
 }
 

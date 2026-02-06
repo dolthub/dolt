@@ -25,6 +25,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -281,6 +282,11 @@ func (gcs *GenerationalNBS) AccessMode() chunks.ExclusiveAccessMode {
 	newGenMode := gcs.newGen.AccessMode()
 	oldGenMode := gcs.oldGen.AccessMode()
 	return max(oldGenMode, newGenMode)
+}
+
+func (gcs *GenerationalNBS) SetFatalBehavior(behavior dherrors.FatalBehavior) {
+	gcs.newGen.SetFatalBehavior(behavior)
+	gcs.oldGen.SetFatalBehavior(behavior)
 }
 
 // Rebase brings this ChunkStore into sync with the persistent storage's

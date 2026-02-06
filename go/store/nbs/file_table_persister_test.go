@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/hash"
 
@@ -96,7 +97,7 @@ func persistTableData(p tablePersister, chunx ...[]byte) (src chunkSource, err e
 			return nil, fmt.Errorf("memTable too full to add %s", computeAddr(c))
 		}
 	}
-	src, _, err = p.Persist(context.Background(), mt, nil, nil, &Stats{})
+	src, _, err = p.Persist(context.Background(), dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
 	return src, err
 }
 
@@ -114,7 +115,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	defer file.RemoveAll(dir)
 	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{}, false)
 
-	src, _, err := fts.Persist(context.Background(), mt, existingTable, nil, &Stats{})
+	src, _, err := fts.Persist(context.Background(), dherrors.FatalBehaviorError, mt, existingTable, nil, &Stats{})
 	require.NoError(t, err)
 	assert.True(mustUint32(src.count()) == 0)
 
@@ -147,7 +148,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		}
 	}()
 
-	src, _, err := fts.ConjoinAll(ctx, sources, &Stats{})
+	src, _, err := fts.ConjoinAll(ctx, dherrors.FatalBehaviorError, sources, &Stats{})
 	require.NoError(t, err)
 	defer src.close()
 
@@ -178,14 +179,14 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	}
 
 	var err error
-	sources[0], _, err = fts.Persist(ctx, mt, nil, nil, &Stats{})
+	sources[0], _, err = fts.Persist(ctx, dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
 	require.NoError(t, err)
 	sources[1], err = sources[0].clone()
 	require.NoError(t, err)
 	sources[2], err = sources[0].clone()
 	require.NoError(t, err)
 
-	src, cleanup, err := fts.ConjoinAll(ctx, sources, &Stats{})
+	src, cleanup, err := fts.ConjoinAll(ctx, dherrors.FatalBehaviorError, sources, &Stats{})
 	require.NoError(t, err)
 	defer src.close()
 

@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -2027,6 +2028,21 @@ func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error
 		return nbsStore.IterateRoots(cb)
 	} else {
 		return nil
+	}
+}
+
+// SetCrashOnFatalError puts the store into a mode where it will
+// crash the running process is there is a fatal I/O error which
+// prevents Dolt from being able to continue safely while
+// continuing to accept writes to this database. This is typically
+// the correct behavior for a long-lived process working with a
+// local, non-read-only database.
+func (ddb *DoltDB) SetCrashOnFatalError() {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+	if nbs, ok := cs.(interface {
+		SetFatalBehavior(dherrors.FatalBehavior)
+	}); ok {
+		nbs.SetFatalBehavior(dherrors.FatalBehaviorCrash)
 	}
 }
 

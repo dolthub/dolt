@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -41,7 +42,7 @@ var hasManyHasAll = func([]hasRecord) (hash.HashSet, error) {
 func TestTableSetPrependEmpty(t *testing.T) {
 	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
-	ts, _, err := newFakeTableSet(&UnlimitedQuotaProvider{}).append(context.Background(), newMemTable(testMemTableSize), hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err := newFakeTableSet(&UnlimitedQuotaProvider{}).append(context.Background(), dherrors.FatalBehaviorError, newMemTable(testMemTableSize), hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 	specs, err := ts.toSpecs()
 	require.NoError(t, err)
@@ -61,7 +62,7 @@ func TestTableSetPrepend(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
 	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	firstSpecs, err := ts.toSpecs()
@@ -71,7 +72,7 @@ func TestTableSetPrepend(t *testing.T) {
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	secondSpecs, err := ts.toSpecs()
@@ -93,17 +94,17 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
 	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	specs, err = ts.toSpecs()
@@ -124,17 +125,17 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
 	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	ts, err = ts.flatten(context.Background())
@@ -146,7 +147,7 @@ func persist(t *testing.T, p tablePersister, chunks ...[]byte) {
 	for _, c := range chunks {
 		mt := newMemTable(testMemTableSize)
 		mt.addChunk(computeAddr(c), c)
-		cs, _, err := p.Persist(context.Background(), mt, nil, nil, &Stats{})
+		cs, _, err := p.Persist(context.Background(), dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		require.NoError(t, cs.close())
 	}
@@ -164,7 +165,7 @@ func TestTableSetRebase(t *testing.T) {
 		for _, c := range chunks {
 			mt := newMemTable(testMemTableSize)
 			mt.addChunk(computeAddr(c), c)
-			ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+			ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 			require.NoError(t, err)
 		}
 		return ts
@@ -213,13 +214,13 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
 	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts, _, err = ts.append(context.Background(), mt, hasManyHasAll, nil, hasCache, &Stats{})
+	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
 	assert.True(mustUint64(ts.physicalLen()) > indexSize(mustUint32(ts.count())))

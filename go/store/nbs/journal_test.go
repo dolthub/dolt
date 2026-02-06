@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/types"
@@ -117,7 +118,7 @@ func TestChunkJournalPersist(t *testing.T) {
 	haver := emptyChunkSource{}
 	for i := 0; i < iters; i++ {
 		memTbl, chunkMap := randomMemTable(16)
-		source, _, err := j.Persist(ctx, memTbl, haver, nil, stats)
+		source, _, err := j.Persist(ctx, dherrors.FatalBehaviorError, memTbl, haver, nil, stats)
 		assert.NoError(t, err)
 
 		for h, ch := range chunkMap {
@@ -146,10 +147,10 @@ func TestReadRecordRanges(t *testing.T) {
 		gets = append(gets, getRecord{a: &h, prefix: h.Prefix()})
 	}
 
-	jcs, _, err := j.Persist(ctx, mt, emptyChunkSource{}, nil, &Stats{})
+	jcs, _, err := j.Persist(ctx, dherrors.FatalBehaviorError, mt, emptyChunkSource{}, nil, &Stats{})
 	require.NoError(t, err)
 
-	rdr, sz, err := jcs.(journalChunkSource).journal.snapshot(context.Background())
+	rdr, sz, err := jcs.(journalChunkSource).journal.snapshot(context.Background(), dherrors.FatalBehaviorError)
 	require.NoError(t, err)
 	defer rdr.Close()
 
@@ -158,7 +159,7 @@ func TestReadRecordRanges(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int(sz), n)
 
-	ranges, _, err := jcs.getRecordRanges(ctx, gets, nil)
+	ranges, _, err := jcs.getRecordRanges(ctx, dherrors.FatalBehaviorError, gets, nil)
 	require.NoError(t, err)
 
 	for h, rng := range ranges {

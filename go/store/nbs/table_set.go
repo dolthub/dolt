@@ -32,6 +32,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -355,7 +356,7 @@ func (ts tableSet) Size() int {
 
 // append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, keeper keeperF, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (tableSet, gcBehavior, error) {
+func (ts tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBehavior, mt *memTable, checker refCheck, keeper keeperF, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (tableSet, gcBehavior, error) {
 	addrs := hash.NewHashSet()
 	for _, getAddrs := range mt.getChildAddrs {
 		getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Contains(h) })
@@ -376,7 +377,7 @@ func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, k
 		return tableSet{}, gcBehavior_Continue, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
 	}
 
-	cs, gcb, err := ts.p.Persist(ctx, mt, ts, keeper, stats)
+	cs, gcb, err := ts.p.Persist(ctx, fatalBehavior, mt, ts, keeper, stats)
 	if err != nil {
 		return tableSet{}, gcBehavior_Continue, err
 	}

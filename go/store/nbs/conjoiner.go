@@ -30,6 +30,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -174,9 +175,9 @@ func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStr
 // Actually runs persister.ConjoinAll, after conjoinees are chosen by
 // |prepareConjoin|.  This should be done asynchronously by
 // NomsBlockStore.
-func (op *conjoinOperation) conjoin(ctx context.Context, persister tablePersister, stats *Stats) error {
+func (op *conjoinOperation) conjoin(ctx context.Context, behavior dherrors.FatalBehavior, persister tablePersister, stats *Stats) error {
 	var err error
-	op.conjoined, op.cleanup, err = conjoinTables(ctx, op.conjoinees, persister, stats)
+	op.conjoined, op.cleanup, err = conjoinTables(ctx, behavior, op.conjoinees, persister, stats)
 	if err != nil {
 		return err
 	}
@@ -191,7 +192,7 @@ func (op *conjoinOperation) conjoin(ctx context.Context, persister tablePersiste
 // Whether the conjoined file lands or not, this returns a nil error
 // if it runs to completion successfully and it returns a cleanupFunc
 // which should be run.
-func (op *conjoinOperation) updateManifest(ctx context.Context, upstream manifestContents, mm manifestUpdater, stats *Stats) (manifestContents, cleanupFunc, error) {
+func (op *conjoinOperation) updateManifest(ctx context.Context, behavior dherrors.FatalBehavior, upstream manifestContents, mm manifestUpdater, stats *Stats) (manifestContents, cleanupFunc, error) {
 	conjoineeSet := toSpecSet(op.conjoinees)
 	for {
 		upstreamSet := toSpecSet(upstream.specs)
@@ -225,7 +226,7 @@ func (op *conjoinOperation) updateManifest(ctx context.Context, upstream manifes
 				appendix: upstream.appendix,
 			}
 
-			updated, err := mm.Update(ctx, upstream.lock, newContents, stats, nil)
+			updated, err := mm.Update(ctx, behavior, upstream.lock, newContents, stats, nil)
 			if err != nil {
 				return manifestContents{}, func() {}, err
 			}
@@ -265,20 +266,20 @@ func (op *conjoinOperation) updateManifest(ctx context.Context, upstream manifes
 // process actor has already landed a conjoin of its own. Callers must
 // handle this, likely by rebasing against upstream and re-evaluating the
 // situation.
-func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, cleanupFunc, error) {
+func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, cleanupFunc, error) {
 	var op conjoinOperation
 	err := op.prepareConjoin(ctx, s, upstream)
 	if err != nil {
 		return manifestContents{}, nil, err
 	}
-	err = op.conjoin(ctx, p, stats)
+	err = op.conjoin(ctx, behavior, p, stats)
 	if err != nil {
 		return manifestContents{}, nil, err
 	}
-	return op.updateManifest(ctx, upstream, mm, stats)
+	return op.updateManifest(ctx, behavior, upstream, mm, stats)
 }
 
-func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, cleanup cleanupFunc, err error) {
+func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, cleanup cleanupFunc, err error) {
 	eg, ectx := errgroup.WithContext(ctx)
 	toConjoin := make(chunkSources, len(conjoinees))
 
@@ -302,7 +303,7 @@ func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister
 
 	t1 := time.Now()
 
-	conjoinedSrc, cleanup, err := p.ConjoinAll(ctx, toConjoin, stats)
+	conjoinedSrc, cleanup, err := p.ConjoinAll(ctx, behavior, toConjoin, stats)
 	if err != nil {
 		return tableSpec{}, nil, err
 	}
