@@ -504,8 +504,7 @@ func (gbs *GitBlobstore) hashParts(ctx context.Context, reader io.Reader) (parts
 		if n == 0 {
 			break
 		}
-		partBytes := append([]byte(nil), buf[:n]...)
-		oid, err := gbs.api.HashObject(ctx, bytes.NewReader(partBytes))
+		oid, err := gbs.api.HashObject(ctx, bytes.NewReader(buf[:n]))
 		if err != nil {
 			return nil, nil, 0, err
 		}
