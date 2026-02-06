@@ -196,7 +196,7 @@ func runTestValidationAgainstRoot(ctx *sql.Context, root doltdb.RootValue, testG
 		sql.Session
 		GenericProvider() sql.MutableDatabaseProvider
 	}
-	
+
 	session, ok := ctx.Session.(sessionInterface)
 	if !ok {
 		return fmt.Errorf("session does not provide database provider interface")
@@ -216,16 +216,16 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engin
 	}
 
 	fmt.Printf("INFO: %s validation running against staged root for groups %v\n", operationType, testGroups)
-	
+
 	// Create a temporary context that uses the staged root for database operations
 	// The key insight: we need to temporarily modify the session's database state
 	tempCtx, err := createTemporaryContextWithStagedRoot(ctx, root)
 	if err != nil {
 		return fmt.Errorf("failed to create temporary context with staged root: %w", err)
 	}
-	
+
 	var allFailures []string
-	
+
 	for _, group := range testGroups {
 		// Run dolt_test_run() for this group using the temporary context
 		query := fmt.Sprintf("SELECT * FROM dolt_test_run('%s')", group)
@@ -233,7 +233,7 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engin
 		if err != nil {
 			return fmt.Errorf("failed to run dolt_test_run for group %s: %w", group, err)
 		}
-		
+
 		// Process results
 		for {
 			row, rErr := iter.Next(tempCtx)
@@ -243,11 +243,11 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engin
 			if rErr != nil {
 				return fmt.Errorf("error reading test results: %w", rErr)
 			}
-			
+
 			if len(row) < 4 {
 				continue
 			}
-			
+
 			// Extract status (column 3)
 			status := fmt.Sprintf("%v", row[3])
 			if status != "PASS" {
@@ -279,11 +279,9 @@ func createTemporaryContextWithStagedRoot(ctx *sql.Context, stagedRoot doltdb.Ro
 	// 4. Setting up the context to use this new session
 	//
 	// This is a complex operation that requires deep knowledge of dolt's session/database architecture
-	
 	// For the immediate functional need, return the original context
 	// This means validation will run against the current session state, which should still work
 	// since the staged changes are available in the session
 	fmt.Printf("DEBUG: Validation using current session context (staged root switching pending implementation)\n")
 	return ctx, nil
 }
-

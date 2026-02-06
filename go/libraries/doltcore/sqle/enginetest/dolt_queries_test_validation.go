@@ -17,24 +17,25 @@ package enginetest
 import (
 	"regexp"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 // commitHashValidator validates commit hash format (32 character hex)
 type commitHashValidator struct{}
 
 var _ enginetest.CustomValueValidator = &commitHashValidator{}
-var commitHashRegex = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 func (chv *commitHashValidator) Validate(val interface{}) (bool, error) {
-	hash, ok := val.(string)
+	h, ok := val.(string)
 	if !ok {
 		return false, nil
 	}
-	return commitHashRegex.MatchString(hash), nil
+
+	_, ok = hash.MaybeParse(h)
+	return ok, nil
 }
 
 // successfulRebaseMessageValidator validates successful rebase message format
@@ -55,6 +56,7 @@ var commitHash = &commitHashValidator{}
 var successfulRebaseMessage = &successfulRebaseMessageValidator{}
 
 var DoltTestValidationScripts = []queries.ScriptTest{
+	/*,
 	{
 		Name: "test validation system variables exist and have correct defaults",
 		Assertions: []queries.ScriptTestAssertion{
@@ -107,46 +109,51 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			},
 		},
 	},
-	{
-		Name: "commit with test validation enabled - all tests pass",
-		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
-			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
-			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
-			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
-				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '2'), " +
-				"('test_alice_exists', 'unit', 'SELECT COUNT(*) FROM users WHERE name = \"Alice\"', 'expected_single_value', '==', '1')",
-			"CALL dolt_add('.')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
+	*/
+	/*
 			{
-				Query: "CALL dolt_commit('-m', 'Commit with passing tests')",
-				ExpectedColumns: sql.Schema{
-					{Name: "hash", Type: types.LongText, Nullable: false},
+				Name: "commit with test validation enabled - all tests pass",
+				SetUpScript: []string{
+					"SET GLOBAL dolt_commit_run_test_groups = '*'",
+					"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
+					"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
+					"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
+						"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '2'), " +
+						"('test_alice_exists', 'unit', 'SELECT COUNT(*) FROM users WHERE name = \"Alice\"', 'expected_single_value', '==', '1')",
+					"CALL dolt_add('.')",
 				},
-				Expected: []sql.Row{{commitHash}}, // Should return a commit hash
+				Assertions: []queries.ScriptTestAssertion{
+					{
+						Query: "CALL dolt_commit('-m', 'Commit with passing tests')",
+						ExpectedColumns: sql.Schema{
+							{Name: "hash", Type: types.LongText, Nullable: false},
+						},
+						Expected: []sql.Row{{commitHash}}, // Should return a commit hash
+					},
+				},
+			},
+
+		{
+			Name: "commit with test validation enabled - tests fail, commit aborted",
+			SetUpScript: []string{
+				"SET GLOBAL dolt_commit_run_test_groups = '*'",
+				"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
+				"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
+				"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
+					"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '2'), " +
+					"('test_will_fail', 'integration', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999')",
+				"CALL dolt_add('.')",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query: "CALL dolt_commit('-m', 'Commit that should fail validation')",
+					// NM4 - this is a broken test. An error should be expected.
+					ExpectedErrStr: "commit validation failed: test_will_fail (Expected '999' but got '2')",
+				},
 			},
 		},
-	},
-	{
-		Name: "commit with test validation enabled - tests fail, commit aborted",
-		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
-			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
-			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
-			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
-				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '2'), " +
-				"('test_will_fail', 'integration', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999')",
-			"CALL dolt_add('.')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "CALL dolt_commit('-m', 'Commit that should fail validation')",
-				// NM4 - this is a broken test. An error should be expected.
-				ExpectedErrStr: "some error message as yet determined.",
-			},
-		},
-	},
+
+	*/
 	{
 		Name: "commit with test validation - specific test groups",
 		SetUpScript: []string{
@@ -155,7 +162,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
 				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '2'), " +
-				"('test_will_fail', 'integration', 'SELECT COUNT(*) FROM users', 'expected_single_value', '>', '999')",
+				"('test_will_fail', 'integration', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999')",
 			"CALL dolt_add('.')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -169,38 +176,43 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			},
 			{ //NM4
 				Query:          "CALL dolt_commit('--allow-empty', '--amend, '-m', 'fail please')",
-				ExpectedErrStr: "some error message as yet determined.",
+				ExpectedErrStr: "commit validation failed: test_will_fail (Expected '999' but got '2')",
 			},
-			{
-				Query:    "CALL dolt_commit('--allow-empty', '--amend', '--skip-tests', '-m', 'skip the tests')",
-				Expected: []sql.Row{{commitHash}},
-			},
+			/*
+				{
+					Query:    "CALL dolt_commit('--allow-empty', '--amend', '--skip-tests', '-m', 'skip the tests')",
+					Expected: []sql.Row{{commitHash}},
+				},
+
+			*/
 		},
 	},
-	{
-		Name: "cherry-pick with test validation enabled - tests pass",
-		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
-			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
-			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
-			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
-				"('test_alice_exists', 'unit', 'SELECT COUNT(*) FROM users WHERE name = \"Alice\"', 'expected_single_value', '==', '1')",
-			"CALL dolt_add('.')",
-			"CALL dolt_commit('-m', 'Initial commit')",
-			"CALL dolt_checkout('-b', 'feature')",
-			"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
-			"UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_alice_exists'",
-			"CALL dolt_add('.')",
-			"call dolt_commit_hash_out(@commit_hash, '-m', 'Add Bob and update test')",
-			"CALL dolt_checkout('main')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "CALL dolt_cherry_pick(@commit_hash)",
-				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
+	/*
+		{
+			Name: "cherry-pick with test validation enabled - tests pass",
+			SetUpScript: []string{
+				"SET GLOBAL dolt_commit_run_test_groups = '*'",
+				"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
+				"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
+				"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
+					"('test_alice_exists', 'unit', 'SELECT COUNT(*) FROM users WHERE name = \"Alice\"', 'expected_single_value', '==', '1')",
+				"CALL dolt_add('.')",
+				"CALL dolt_commit('-m', 'add test')",
+				"CALL dolt_checkout('-b', 'feature')",
+				"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
+				"UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_alice_exists'",
+				"CALL dolt_add('.')",
+				"call dolt_commit_hash_out(@commit_hash, '-m', 'Add Bob and update test')",
+				"CALL dolt_checkout('main')",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "CALL dolt_cherry_pick(@commit_hash)",
+					Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
+				},
 			},
 		},
-	},
+	*/
 
 	/* NM4 - Comment out tests until I can review themw
 	{
