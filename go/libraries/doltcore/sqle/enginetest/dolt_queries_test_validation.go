@@ -154,6 +154,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 
 	*/
+
 	{
 		Name: "commit with test validation - specific test groups",
 		SetUpScript: []string{
@@ -170,49 +171,44 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 				Query:    "CALL dolt_commit('-m', 'Commit with unit tests only')",
 				Expected: []sql.Row{{commitHash}},
 			},
-			{ // NM4
+			{
 				Query:            "SET GLOBAL dolt_commit_run_test_groups = 'integration'",
 				SkipResultsCheck: true,
 			},
-			{ //NM4
-				Query:          "CALL dolt_commit('--allow-empty', '--amend, '-m', 'fail please')",
+			{
+				Query:          "CALL dolt_commit('--allow-empty', '--amend', '-m', 'fail please')",
 				ExpectedErrStr: "commit validation failed: test_will_fail (Expected '999' but got '2')",
 			},
-			/*
-				{
-					Query:    "CALL dolt_commit('--allow-empty', '--amend', '--skip-tests', '-m', 'skip the tests')",
-					Expected: []sql.Row{{commitHash}},
-				},
-
-			*/
+			{
+				Query:    "CALL dolt_commit('--allow-empty', '--amend', '--skip-tests', '-m', 'skip the tests')",
+				Expected: []sql.Row{{commitHash}},
+			},
 		},
 	},
-	/*
-		{
-			Name: "cherry-pick with test validation enabled - tests pass",
-			SetUpScript: []string{
-				"SET GLOBAL dolt_commit_run_test_groups = '*'",
-				"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
-				"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
-				"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
-					"('test_alice_exists', 'unit', 'SELECT COUNT(*) FROM users WHERE name = \"Alice\"', 'expected_single_value', '==', '1')",
-				"CALL dolt_add('.')",
-				"CALL dolt_commit('-m', 'add test')",
-				"CALL dolt_checkout('-b', 'feature')",
-				"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
-				"UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_alice_exists'",
-				"CALL dolt_add('.')",
-				"call dolt_commit_hash_out(@commit_hash, '-m', 'Add Bob and update test')",
-				"CALL dolt_checkout('main')",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:    "CALL dolt_cherry_pick(@commit_hash)",
-					Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
-				},
+	{
+		Name: "cherry-pick with test validation enabled - tests pass",
+		SetUpScript: []string{
+			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
+			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
+			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
+				"('test_user_count_update', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1')",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'add test')",
+			"CALL dolt_checkout('-b', 'feature')",
+			"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
+			"UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_user_count_update'",
+			"CALL dolt_add('.')",
+			"call dolt_commit_hash_out(@commit_hash, '-m', 'Add Bob and update test')",
+			"CALL dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_cherry_pick(@commit_hash)",
+				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
 			},
 		},
-	*/
+	},
 
 	/* NM4 - Comment out tests until I can review themw
 	{
