@@ -17,13 +17,14 @@ package sqlserver
 import (
 	"context"
 	"crypto/tls"
-	sql2 "database/sql"
+	connsql "database/sql"
 	"fmt"
 	"io"
 	"regexp"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -32,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -93,7 +93,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 		return nil, err
 	}
 
-	conn := &dbr.Connection{DB: sql2.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
+	conn := &dbr.Connection{DB: connsql.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
 
 	gatherWarnings := false
 	queryist := ConnectionQueryist{connection: conn, gatherWarnings: &gatherWarnings}
@@ -131,12 +131,12 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 		return nil, nil, nil, err
 	}
 
-	rowIter, err := NewMysqlRowWrapper(rows)
+	rowIter, err := NewConnectionQueryResult(rows)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	if c.gatherWarnings != nil && *c.gatherWarnings == true {
+	if c.gatherWarnings != nil && *c.gatherWarnings {
 		ctx.ClearWarnings()
 
 		re := regexp.MustCompile(`\s+`)
@@ -171,35 +171,47 @@ func (c ConnectionQueryist) QueryWithBindings(ctx *sql.Context, query string, _ 
 	return c.Query(ctx, query)
 }
 
-type MysqlRowWrapper struct {
+type ConnectionQueryResult struct {
 	rows    []sql.Row
 	schema  sql.Schema
 	numRows int
 	curRow  int
 }
 
-var _ sql.RowIter = (*MysqlRowWrapper)(nil)
+var _ sql.RowIter = (*ConnectionQueryResult)(nil)
 
-func NewMysqlRowWrapper(sqlRows *sql2.Rows) (*MysqlRowWrapper, error) {
-	colTypes, err := sqlRows.ColumnTypes()
+func NewConnectionQueryResult(driverResult *connsql.Rows) (*ConnectionQueryResult, error) {
+	driverColumns, err := driverResult.ColumnTypes()
 	if err != nil {
 		return nil, err
 	}
-	schema := make(sql.Schema, len(colTypes))
-	vRow := make([]*string, len(colTypes))
-	iRow := make([]interface{}, len(colTypes))
+
+	schema := make(sql.Schema, len(driverColumns))
+	vRow := make([]*string, len(driverColumns))
+	iRow := make([]interface{}, len(driverColumns))
 	rows := make([]sql.Row, 0)
-	for i, colType := range colTypes {
-		schema[i] = &sql.Column{
-			Name:     colType.Name(),
-			Type:     sqlutil.DatabaseTypeNameToSqlType(colType.DatabaseTypeName()),
-			Nullable: true,
+	for i, driverColumn := range driverColumns {
+		driverNullable, ok := driverColumn.Nullable()
+		if !ok {
+			return nil, fmt.Errorf("driver column '%s' of type '%s' nullable is nil", driverColumn.Name(), driverColumn.Name())
 		}
+
+		sqlType, err := newSqlTypeFromDriverColumn(driverColumn)
+		if err != nil {
+			return nil, err
+		}
+
+		schema[i] = &sql.Column{
+			Name:     driverColumn.Name(),
+			Type:     sqlType,
+			Nullable: driverNullable,
+		}
+
 		iRow[i] = &vRow[i]
 	}
 
-	for sqlRows.Next() {
-		err := sqlRows.Scan(iRow...)
+	for driverResult.Next() {
+		err := driverResult.Scan(iRow...)
 		if err != nil {
 			return nil, err
 		}
@@ -213,12 +225,12 @@ func NewMysqlRowWrapper(sqlRows *sql2.Rows) (*MysqlRowWrapper, error) {
 		rows = append(rows, sqlRow)
 	}
 
-	closeErr := sqlRows.Close()
+	closeErr := driverResult.Close()
 	if closeErr != nil {
 		return nil, err
 	}
 
-	return &MysqlRowWrapper{
+	return &ConnectionQueryResult{
 		rows:    rows,
 		schema:  schema,
 		numRows: len(rows),
@@ -226,11 +238,37 @@ func NewMysqlRowWrapper(sqlRows *sql2.Rows) (*MysqlRowWrapper, error) {
 	}, nil
 }
 
-func (s *MysqlRowWrapper) Schema() sql.Schema {
+// newSqlTypeFromDriverColumn converts a [connsql.ColumnType] into [sql.Type]. The [connsql.ColumnType] only
+// reveals the name of a type as a string. We reconstruct [sql.Type] from the [connsql.ColumnType] member functions,
+// which provide additional metadata.
+func newSqlTypeFromDriverColumn(columnType *connsql.ColumnType) (sql.Type, error) {
+	typeName := columnType.DatabaseTypeName()
+	//typeLength, ok := columnType.Length()
+	switch typeName {
+	case "binary":
+		return gmstypes.LongText, nil
+	case "varbinary":
+		return gmstypes.LongText, nil
+	case "bit":
+		return gmstypes.LongText, nil
+	case "tinyblob":
+		return gmstypes.TinyBlob, nil
+	case "blob":
+		return gmstypes.Blob, nil
+	case "mediumblob":
+		return gmstypes.MediumBlob, nil
+	case "longblob":
+		return gmstypes.LongBlob, nil
+	default:
+		return gmstypes.LongText, nil
+	}
+}
+
+func (s *ConnectionQueryResult) Schema() sql.Schema {
 	return s.schema
 }
 
-func (s *MysqlRowWrapper) Next(*sql.Context) (sql.Row, error) {
+func (s *ConnectionQueryResult) Next(*sql.Context) (sql.Row, error) {
 	if s.NoMoreRows() {
 		return nil, io.EOF
 	}
@@ -239,11 +277,11 @@ func (s *MysqlRowWrapper) Next(*sql.Context) (sql.Row, error) {
 	return s.rows[s.curRow-1], nil
 }
 
-func (s *MysqlRowWrapper) NoMoreRows() bool {
+func (s *ConnectionQueryResult) NoMoreRows() bool {
 	return s.curRow >= s.numRows
 }
 
-func (s *MysqlRowWrapper) Close(*sql.Context) error {
+func (s *ConnectionQueryResult) Close(*sql.Context) error {
 	s.curRow = s.numRows
 	return nil
 }

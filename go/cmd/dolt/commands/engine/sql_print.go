@@ -23,7 +23,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -127,9 +126,8 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 			}
 		}
 
-		// Wrap iterator with binary-to-hex transformation if needed
 		if binaryAsHex {
-			rowIter = newBinaryHexIterator(rowIter, sqlSch)
+			rowIter = sqlutil.NewBinaryHexIterator(rowIter, sqlSch)
 		}
 
 		numRows, err = writeResultSet(ctx, rowIter, wr)
@@ -201,54 +199,6 @@ func printResultSetSummary(numRows int, numWarnings uint16, warningsList string,
 	}
 
 	return nil
-}
-
-// binaryHexIterator wraps a row iterator and transforms binary data to hex format
-type binaryHexIterator struct {
-	inner  sql.RowIter
-	schema sql.Schema
-}
-
-var _ sql.RowIter = (*binaryHexIterator)(nil)
-
-// newBinaryHexIterator creates a new iterator that transforms binary data to hex format
-func newBinaryHexIterator(inner sql.RowIter, schema sql.Schema) sql.RowIter {
-	return &binaryHexIterator{
-		inner:  inner,
-		schema: schema,
-	}
-}
-
-// Next returns the next row with binary data transformed to hex format
-func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
-	rowData, err := iter.inner.Next(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB) and BIT type
-	for i, val := range rowData {
-		if val != nil && i < len(iter.schema) {
-			switch iter.schema[i].Type.Type() {
-			case sqltypes.Binary, sqltypes.VarBinary:
-				switch v := val.(type) {
-				case []byte: // hex fmt is explicitly upper case
-					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", v))
-				case string: // handles results from sql-server; MySQL wire protocol returns strings
-					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(v)))
-				default:
-					return nil, fmt.Errorf("unexpected type %T for binary column %s", val, iter.schema[i].Name)
-				}
-			}
-		}
-	}
-
-	return rowData, nil
-}
-
-// Close closes the wrapped iterator and releases any resources.
-func (iter *binaryHexIterator) Close(ctx *sql.Context) error {
-	return iter.inner.Close(ctx)
 }
 
 // writeResultSet drains the iterator given, printing rows from it to the writer given. Returns the number of rows.

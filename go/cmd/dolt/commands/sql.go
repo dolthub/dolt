@@ -223,9 +223,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	// Determine binary-as-hex behavior from flags (default false for non-interactive modes)
-	binaryAsHex := apr.Contains(binaryAsHexFlag)
-	if binaryAsHex && apr.Contains(skipBinaryAsHexFlag) { // We stray from MYSQL here to make usage clear for users
+	hasSkipBinaryAsHex := apr.Contains(skipBinaryAsHexFlag)
+	if apr.Contains(binaryAsHexFlag) && hasSkipBinaryAsHex {
 		return HandleVErrAndExitCode(errhand.BuildDError("cannot use both --%s and --%s", binaryAsHexFlag, skipBinaryAsHexFlag).Build(), usage)
 	}
 
@@ -240,13 +239,14 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	binaryAsHexMode := !hasSkipBinaryAsHex
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		if apr.Contains(saveFlag) {
-			return SaveQuery(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHex)
+			return SaveQuery(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHexMode)
 		}
-		return queryMode(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHex)
+		return queryMode(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHexMode)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return executeSavedQuery(queryist.Context, queryist.Queryist, savedQueryName, format, usage, binaryAsHex)
+		return executeSavedQuery(queryist.Context, queryist.Queryist, savedQueryName, format, usage, binaryAsHexMode)
 	} else if apr.Contains(listSavedFlag) {
 		return listSavedQueries(queryist.Context, queryist.Queryist, format, usage)
 	} else {
@@ -283,15 +283,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			// In shell mode, default to hex format unless explicitly disabled
-			shellBinaryAsHex := !apr.Contains(skipBinaryAsHexFlag)
-			err := execShell(queryist.Context, queryist.Queryist, format, cliCtx, shellBinaryAsHex)
+			err := execShell(queryist.Context, queryist.Queryist, format, cliCtx, binaryAsHexMode)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
 		} else {
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
-			err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex)
+			err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHexMode)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
