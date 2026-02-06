@@ -28,7 +28,7 @@ import (
 type fakeGitAPI struct {
 	tryResolveRefCommit func(ctx context.Context, ref string) (git.OID, bool, error)
 	resolvePathBlob     func(ctx context.Context, commit git.OID, path string) (git.OID, error)
-	resolvePathObject   func(ctx context.Context, commit git.OID, path string) (git.OID, string, error)
+	resolvePathObject   func(ctx context.Context, commit git.OID, path string) (git.OID, git.ObjectType, error)
 	blobSize            func(ctx context.Context, oid git.OID) (int64, error)
 	blobReader          func(ctx context.Context, oid git.OID) (io.ReadCloser, error)
 }
@@ -42,7 +42,7 @@ func (f fakeGitAPI) ResolveRefCommit(ctx context.Context, ref string) (git.OID, 
 func (f fakeGitAPI) ResolvePathBlob(ctx context.Context, commit git.OID, path string) (git.OID, error) {
 	return f.resolvePathBlob(ctx, commit, path)
 }
-func (f fakeGitAPI) ResolvePathObject(ctx context.Context, commit git.OID, path string) (git.OID, string, error) {
+func (f fakeGitAPI) ResolvePathObject(ctx context.Context, commit git.OID, path string) (git.OID, git.ObjectType, error) {
 	return f.resolvePathObject(ctx, commit, path)
 }
 func (f fakeGitAPI) ListTree(ctx context.Context, commit git.OID, treePath string) ([]git.TreeEntry, error) {
@@ -150,24 +150,24 @@ func TestGitBlobstoreHelpers_resolveObjectForGet(t *testing.T) {
 
 	t.Run("ok", func(t *testing.T) {
 		api := fakeGitAPI{
-			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, string, error) {
+			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, git.ObjectType, error) {
 				require.Equal(t, commit, gotCommit)
 				require.Equal(t, "k", path)
-				return git.OID("89abcdef0123456789abcdef0123456789abcdef"), "blob", nil
+				return git.OID("89abcdef0123456789abcdef0123456789abcdef"), git.ObjectTypeBlob, nil
 			},
 		}
 		gbs := &GitBlobstore{api: api}
 
 		oid, typ, err := gbs.resolveObjectForGet(ctx, commit, "k")
 		require.NoError(t, err)
-		require.Equal(t, "blob", typ)
+		require.Equal(t, git.ObjectTypeBlob, typ)
 		require.Equal(t, git.OID("89abcdef0123456789abcdef0123456789abcdef"), oid)
 	})
 
 	t.Run("pathNotFoundMapsToNotFound", func(t *testing.T) {
 		api := fakeGitAPI{
-			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, string, error) {
-				return git.OID(""), "", &git.PathNotFoundError{Commit: gotCommit.String(), Path: path}
+			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, git.ObjectType, error) {
+				return git.OID(""), git.ObjectTypeUnknown, &git.PathNotFoundError{Commit: gotCommit.String(), Path: path}
 			},
 		}
 		gbs := &GitBlobstore{api: api}

@@ -57,7 +57,7 @@ func TestGitBlobstore_Put_ChunkedWritesTreeParts(t *testing.T) {
 
 	_, typ, err := api.ResolvePathObject(ctx, head, "big")
 	require.NoError(t, err)
-	require.Equal(t, "tree", typ)
+	require.Equal(t, git.ObjectTypeTree, typ)
 
 	entries, err := api.ListTree(ctx, head, "big")
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestGitBlobstore_Put_IdempotentDoesNotChangeExistingRepresentation(t *testi
 	require.True(t, ok)
 	_, typ, err := api.ResolvePathObject(ctx, head1, "k")
 	require.NoError(t, err)
-	require.Equal(t, "blob", typ)
+	require.Equal(t, git.ObjectTypeBlob, typ)
 
 	got, _, err := GetBytes(ctx, bs, "k", AllRange)
 	require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestGitBlobstore_Put_IdempotentDoesNotChangeExistingRepresentation(t *testi
 	require.True(t, ok)
 	_, typ, err = api.ResolvePathObject(ctx, head2, "ktree")
 	require.NoError(t, err)
-	require.Equal(t, "tree", typ)
+	require.Equal(t, git.ObjectTypeTree, typ)
 
 	verTreeNoop, err := bs.Put(ctx, "ktree", 2, putShouldNotRead{})
 	require.NoError(t, err)

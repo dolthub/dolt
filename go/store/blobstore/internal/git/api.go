@@ -19,6 +19,17 @@ import (
 	"io"
 )
 
+// ObjectType is a git object type returned by plumbing (e.g. "blob", "tree").
+type ObjectType string
+
+const (
+	ObjectTypeUnknown ObjectType = ""
+	ObjectTypeBlob    ObjectType = "blob"
+	ObjectTypeTree    ObjectType = "tree"
+	ObjectTypeCommit  ObjectType = "commit"
+	ObjectTypeTag     ObjectType = "tag"
+)
+
 // GitAPI defines the git plumbing operations needed by GitBlobstore. It includes both
 // read and write operations to allow swapping implementations (e.g. git CLI vs a Go git
 // library) while keeping callers stable.
@@ -36,9 +47,7 @@ type GitAPI interface {
 
 	// ResolvePathObject resolves |path| within |commit| to an object OID and type.
 	// It returns PathNotFoundError if the path does not exist.
-	//
-	// Typical types are "blob" and "tree".
-	ResolvePathObject(ctx context.Context, commit OID, path string) (oid OID, typ string, err error)
+	ResolvePathObject(ctx context.Context, commit OID, path string) (oid OID, typ ObjectType, err error)
 
 	// ListTree lists the entries of the tree at |treePath| within |commit|.
 	// The listing is non-recursive: it returns only immediate children.
@@ -104,7 +113,7 @@ type GitAPI interface {
 // TreeEntry describes one entry in a git tree listing.
 type TreeEntry struct {
 	Mode string
-	Type string
+	Type ObjectType
 	OID  OID
 	Name string
 }
