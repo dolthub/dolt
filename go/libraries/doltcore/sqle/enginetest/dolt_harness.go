@@ -153,10 +153,9 @@ func newDoltHarnessForLocalFilesystem(t *testing.T) *DoltHarness {
 }
 
 var defaultSkippedQueries = []string{
-	"show variables",             // we set extra variables
-	"show create table fk_tbl",   // we create an extra key for the FK that vanilla gms does not
-	"show indexes from",          // we create / expose extra indexes (for foreign keys)
-	"show global variables like", // we set extra variables
+	"show variables",           // we set extra variables
+	"show create table fk_tbl", // we create an extra key for the FK that vanilla gms does not
+	"show indexes from",        // we create / expose extra indexes (for foreign keys)
 }
 
 // Setup sets the setup scripts for this DoltHarness's engine
@@ -218,8 +217,36 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 			resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("drop database if exists %s", db)})
 		}
 	}
+
+	resetCmds = append(resetCmds, resetGlobalSystemVariables()...)
+
 	resetCmds = append(resetCmds, setup.SetupScript{"use mydb"})
 	return resetCmds
+}
+
+// resetGlobalSystemVariables returns setup scripts to reset global system variables to their default values
+func resetGlobalSystemVariables() []setup.SetupScript {
+	return []setup.SetupScript{
+		// Replication system variables
+		{"SET GLOBAL dolt_replicate_to_remote = ''"},
+		{"SET GLOBAL dolt_replication_remote_url_template = ''"},
+		{"SET GLOBAL dolt_read_replica_remote = ''"},
+		{"SET GLOBAL dolt_read_replica_force_pull = 1"},
+		{"SET GLOBAL dolt_skip_replication_errors = 0"},
+		{"SET GLOBAL dolt_replicate_heads = ''"},
+		{"SET GLOBAL dolt_replicate_all_heads = 0"},
+		{"SET GLOBAL dolt_async_replication = 0"},
+		// Stats system variables
+		{"SET GLOBAL dolt_stats_enabled = 1"},
+		{"SET GLOBAL dolt_stats_paused = 1"},
+		{"SET GLOBAL dolt_stats_memory_only = 0"},
+		{"SET GLOBAL dolt_stats_job_interval = 30"},
+		{"SET GLOBAL dolt_stats_gc_interval = 3600000"},
+		{"SET GLOBAL dolt_stats_gc_enabled = 1"},
+		{"SET GLOBAL dolt_stats_branches = ''"},
+		// Auto GC system variables
+		{"SET GLOBAL dolt_auto_gc_enabled = 1"},
+	}
 }
 
 // commitScripts returns a set of queries that will commit the working sets of the given database names
