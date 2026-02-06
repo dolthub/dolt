@@ -64,7 +64,7 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 	)
 
 	keySz, valSz, bufSz := estimateMergeArtifactSize(keys, values, subtrees, s.keyDesc.AddressFieldCount())
-	b := getFlatbufferBuilder(s.pool, bufSz)
+	b := getFlatbufferBuilder(bufSz)
 
 	// serialize keys and offStart
 	keyTups = writeItemBytes(b, keys, keySz)
