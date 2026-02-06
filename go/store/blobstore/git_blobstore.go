@@ -34,6 +34,8 @@ import (
 	gitbs "github.com/dolthub/dolt/go/store/blobstore/internal/gitbs"
 )
 
+const gitblobstorePartNameWidth = 8 // "00000001"
+
 // GitBlobstore is a Blobstore implementation backed by a git repository's object
 // database (bare repo or .git directory). It stores keys as paths within the tree
 // of the commit referenced by a git ref (e.g. refs/dolt/data).
@@ -452,7 +454,7 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 
 	// Hash the contents once. If we need to retry due to concurrent updates to |gbs.ref|,
 	// we can reuse the resulting object OIDs without re-reading |reader|.
-	writes, err := gbs.planPutWrites(ctx, key, totalSize, reader)
+	plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
 	if err != nil {
 		return "", err
 	}
@@ -476,7 +478,7 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 			return backoff.Permanent(err)
 		}
 
-		newCommit, err := gbs.buildCommitWithWrites(ctx, parent, ok, writes, msg)
+		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, plan, msg)
 		if err != nil {
 			return backoff.Permanent(err)
 		}
@@ -580,53 +582,135 @@ func (gbs *GitBlobstore) buildCommitWithWrites(ctx context.Context, parent git.O
 	return commitOID, nil
 }
 
-func (gbs *GitBlobstore) planPutWrites(ctx context.Context, key string, totalSize int64, reader io.Reader) ([]treeWrite, error) {
+func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.OID, hasParent bool, key string, plan putPlan, msg string) (git.OID, error) {
+	_, indexFile, cleanup, err := newTempIndex()
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
+
+	if hasParent {
+		if err := gbs.api.ReadTree(ctx, parent, indexFile); err != nil {
+			return "", err
+		}
+	} else {
+		if err := gbs.api.ReadTreeEmpty(ctx, indexFile); err != nil {
+			return "", err
+		}
+	}
+
+	if hasParent {
+		if err := gbs.removeKeyConflictsFromIndex(ctx, parent, indexFile, key, plan.chunked); err != nil {
+			return "", err
+		}
+	}
+
+	sort.Slice(plan.writes, func(i, j int) bool { return plan.writes[i].path < plan.writes[j].path })
+	for _, w := range plan.writes {
+		if err := gbs.api.UpdateIndexCacheInfo(ctx, indexFile, "100644", w.oid, w.path); err != nil {
+			return "", err
+		}
+	}
+
+	treeOID, err := gbs.api.WriteTree(ctx, indexFile)
+	if err != nil {
+		return "", err
+	}
+
+	var parentPtr *git.OID
+	if hasParent && parent != "" {
+		p := parent
+		parentPtr = &p
+	}
+
+	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
+	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
+		commitOID, err = gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, defaultGitBlobstoreIdentity())
+	}
+	if err != nil {
+		return "", err
+	}
+	return commitOID, nil
+}
+
+func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent git.OID, indexFile string, key string, newIsChunked bool) error {
+	oid, typ, err := gbs.api.ResolvePathObject(ctx, parent, key)
+	if err != nil {
+		if git.IsPathNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	_ = oid
+
+	switch typ {
+	case "blob":
+		if newIsChunked {
+			// blob -> tree: must remove the file entry at <key>
+			return gbs.api.RemoveIndexPaths(ctx, indexFile, []string{key})
+		}
+		return nil
+
+	case "tree":
+		// tree -> blob OR tree overwrite: remove old child entries under <key>/...
+		entries, err := gbs.api.ListTree(ctx, parent, key)
+		if err != nil {
+			return err
+		}
+		if len(entries) == 0 {
+			return nil
+		}
+		paths := make([]string, 0, len(entries))
+		for _, e := range entries {
+			paths = append(paths, key+"/"+e.Name)
+		}
+		return gbs.api.RemoveIndexPaths(ctx, indexFile, paths)
+
+	default:
+		return fmt.Errorf("gitblobstore: unsupported existing object type %q at key %q", typ, key)
+	}
+}
+
+type putPlan struct {
+	writes []treeWrite
+	// If true, the key should be represented as a tree (chunked parts under key/NNNNNNNN).
+	chunked bool
+}
+
+func (gbs *GitBlobstore) planPutWrites(ctx context.Context, key string, totalSize int64, reader io.Reader) (putPlan, error) {
 	// Minimal policy: chunk only when explicitly enabled and |totalSize| exceeds MaxPartSize.
 	if gbs.maxPartSize == 0 || totalSize <= 0 || uint64(totalSize) <= gbs.maxPartSize {
 		blobOID, err := gbs.api.HashObject(ctx, reader)
 		if err != nil {
-			return nil, err
+			return putPlan{}, err
 		}
-		return []treeWrite{{path: key, oid: blobOID}}, nil
+		return putPlan{writes: []treeWrite{{path: key, oid: blobOID}}}, nil
 	}
 
-	descOID, partOIDs, err := gbs.hashChunkedObject(ctx, reader)
+	partOIDs, err := gbs.hashChunkedParts(ctx, reader)
+	if err != nil {
+		return putPlan{}, err
+	}
+
+	writes := make([]treeWrite, 0, len(partOIDs))
+	for i, p := range partOIDs {
+		partName := fmt.Sprintf("%0*d", gitblobstorePartNameWidth, i+1)
+		writes = append(writes, treeWrite{path: key + "/" + partName, oid: p})
+	}
+	return putPlan{writes: writes, chunked: true}, nil
+}
+
+func (gbs *GitBlobstore) hashChunkedParts(ctx context.Context, reader io.Reader) (partOIDs []git.OID, err error) {
+	max := int64(gbs.maxPartSize)
+	if max <= 0 {
+		return nil, fmt.Errorf("gitblobstore: invalid maxPartSize %d", gbs.maxPartSize)
+	}
+
+	_, partOIDs, _, err = gbs.hashParts(ctx, reader)
 	if err != nil {
 		return nil, err
 	}
-
-	writes := make([]treeWrite, 0, 1+len(partOIDs))
-	writes = append(writes, treeWrite{path: key, oid: descOID})
-	for _, p := range partOIDs {
-		ppath, err := gitbs.PartPath(p.String())
-		if err != nil {
-			return nil, err
-		}
-		writes = append(writes, treeWrite{path: ppath, oid: p})
-	}
-	return writes, nil
-}
-
-func (gbs *GitBlobstore) hashChunkedObject(ctx context.Context, reader io.Reader) (descOID git.OID, partOIDs []git.OID, err error) {
-	max := int64(gbs.maxPartSize)
-	if max <= 0 {
-		return "", nil, fmt.Errorf("gitblobstore: invalid maxPartSize %d", gbs.maxPartSize)
-	}
-
-	parts, partOIDs, total, err := gbs.hashParts(ctx, reader)
-	if err != nil {
-		return "", nil, err
-	}
-
-	descBytes, err := gitbs.EncodeDescriptor(gitbs.Descriptor{TotalSize: total, Parts: parts})
-	if err != nil {
-		return "", nil, err
-	}
-	descOID, err = gbs.api.HashObject(ctx, bytes.NewReader(descBytes))
-	if err != nil {
-		return "", nil, err
-	}
-	return descOID, partOIDs, nil
+	return partOIDs, nil
 }
 
 func (gbs *GitBlobstore) hashParts(ctx context.Context, reader io.Reader) (parts []gitbs.PartRef, partOIDs []git.OID, total uint64, err error) {
@@ -733,12 +817,12 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 	}
 
 	msg := fmt.Sprintf("gitblobstore: checkandput %s", key)
-	writes, err := gbs.planPutWrites(ctx, key, totalSize, reader)
+	plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
 	if err != nil {
 		return "", err
 	}
 
-	newCommit, err := gbs.buildCommitWithWrites(ctx, parent, ok, writes, msg)
+	newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, plan, msg)
 	if err != nil {
 		return "", err
 	}
