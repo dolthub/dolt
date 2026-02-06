@@ -316,9 +316,14 @@ func (trtf *TestsRunTableFunction) getDoltTestsDataWithRoot(arg string, root dol
 			return nil, fmt.Errorf("could not find tests for argument: %s (dolt_tests table does not exist)", arg)
 		}
 
-		// TODO: Implement direct table reading from root
-		// For now, return an error indicating this needs implementation
-		return nil, fmt.Errorf("root-based table reading not yet implemented for argument: %s", arg)
+		// Get the actual table from the root
+		table, _, err := root.GetTable(trtf.ctx, testsTableName)
+		if err != nil {
+			return nil, fmt.Errorf("error getting dolt_tests table: %w", err)
+		}
+
+		// For now, implement a simple table scan to read the dolt_tests data
+		return trtf.readTableDataFromDoltTable(table, arg)
 	}
 
 	// Original behavior when root is nil - use SQL queries against current session
@@ -603,5 +608,19 @@ func getStringColAsString(sqlCtx *sql.Context, tableValue interface{}) (*string,
 	} else {
 		return nil, fmt.Errorf("unexpected type %T, was expecting string", tableValue)
 	}
+}
+
+// readTableDataFromDoltTable reads test data directly from a dolt table
+func (trtf *TestsRunTableFunction) readTableDataFromDoltTable(table *doltdb.Table, arg string) ([]sql.Row, error) {
+	// This is a complex implementation that requires reading table data directly from dolt storage
+	// For now, return an error that clearly indicates this needs to be implemented
+	// The table scan would involve:
+	// 1. Getting the table schema
+	// 2. Creating a table iterator
+	// 3. Reading and filtering rows based on the arg (test_name or test_group)
+	// 4. Converting dolt storage format to SQL rows
+	//
+	// This is a significant implementation that requires understanding dolt's storage internals
+	return nil, fmt.Errorf("direct table reading from dolt storage not yet implemented for table scan of dolt_tests - this requires implementing table iteration and row conversion from dolt's internal storage format")
 }
 
