@@ -19,11 +19,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -71,7 +71,7 @@ func TestFileFactory_CreateDB_SingletonCacheAndBypass(t *testing.T) {
 	})
 }
 
-func TestFileFactory_CreateDB_FailOnJournalLockTimeoutParam(t *testing.T) {
+func TestFileFactory_CreateDB_BlockOnJournalLockParam(t *testing.T) {
 	ctx := context.Background()
 	nbf := types.Format_Default
 
@@ -81,9 +81,9 @@ func TestFileFactory_CreateDB_FailOnJournalLockTimeoutParam(t *testing.T) {
 
 	urlStr := earl.FileUrlFromPath(filepath.ToSlash(nomsDir), os.PathSeparator)
 	params := map[string]interface{}{
-		ChunkJournalParam:             struct{}{},
-		DisableSingletonCacheParam:    struct{}{},
-		FailOnJournalLockTimeoutParam: struct{}{},
+		ChunkJournalParam:          struct{}{},
+		DisableSingletonCacheParam: struct{}{},
+		BlockOnJournalLockParam:    struct{}{},
 	}
 
 	// First open takes the journal manifest lock and holds it until closed.
@@ -91,8 +91,36 @@ func TestFileFactory_CreateDB_FailOnJournalLockTimeoutParam(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db1.Close() })
 
-	// Second open should fail fast when the fail-on-timeout flag is honored.
-	_, _, _, err = CreateDB(ctx, nbf, urlStr, params)
-	require.Error(t, err)
-	require.ErrorIs(t, err, nbs.ErrDatabaseLocked)
+	t.Run("blocks until context deadline exceeded", func(t *testing.T) {
+		ctx2, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+		t.Cleanup(cancel)
+
+		_, _, _, err = CreateDB(ctx2, nbf, urlStr, params)
+		require.Error(t, err)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+
+	t.Run("blocks and succeeds when lock released", func(t *testing.T) {
+		ctx2, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		t.Cleanup(cancel)
+
+		done := make(chan error, 1)
+		go func() {
+			db2, _, _, err := CreateDB(ctx2, nbf, urlStr, params)
+			if err == nil {
+				_ = db2.Close()
+			}
+			done <- err
+		}()
+
+		time.Sleep(50 * time.Millisecond)
+		require.NoError(t, db1.Close())
+
+		select {
+		case err := <-done:
+			require.NoError(t, err)
+		case <-time.After(3 * time.Second):
+			t.Fatal("timed out waiting for second open to complete")
+		}
+	})
 }

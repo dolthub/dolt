@@ -10,7 +10,7 @@ require (
 	github.com/bcicen/jstream v1.0.0
 	github.com/boltdb/bolt v1.3.1
 	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/dolthub/fslock v0.0.0-20251215194149-ef20baba2318
+	github.com/dolthub/fslock v0.0.4-0.20260206230739-ee1f58d31997
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
 	github.com/dolthub/vitess v0.0.0-20260202234501-b14ed9b1632b
