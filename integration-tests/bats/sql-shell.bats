@@ -1146,3 +1146,10 @@ expect eof
     [[ "$output" =~ "2,0x0A000000001000112233" ]] || false
     [[ "$output" =~ "3,0x00000000000000000000" ]] || false
 }
+
+# bats test_tags=no_lambda
+@test "sql-shell: sql shell respects revision database as current database" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run expect "$BATS_TEST_DIRNAME"/sql-shell-revision-db.expect
+    [ "$status" -eq 0 ]
+}
