@@ -2217,3 +2217,8 @@ func TestDriverExecution(t *testing.T) {
 	q = "call dolt_backup('remove', 'backup1');"
 	enginetest.TestQueryWithContext(t, ctx, engine, h, q, []sql.Row{{0}}, nil, nil, nil)
 }
+
+func TestDoltVectorIndexNull(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltVectorIndexNullTests(t, harness)
+}

@@ -170,6 +170,12 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 		return nil
 	}
 
+	// Vector indexes do not index NULL values, so primary and secondary row
+	// counts may legitimately differ when the indexed column is nullable.
+	if def.IsVector() {
+		return nil
+	}
+
 	// Indexes on virtual columns cannot be rebuilt via the method below
 	if isVirtualIndex(def, sch) {
 		return nil
@@ -245,6 +251,12 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.MapInterface) error {
 	// Full-Text indexes do not make use of their internal map, so we may safely skip this check
 	if def.IsFullText() {
+		return nil
+	}
+
+	// Vector indexes do not index NULL values, so primary and secondary row
+	// counts may legitimately differ when the indexed column is nullable.
+	if def.IsVector() {
 		return nil
 	}
 
