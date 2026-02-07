@@ -472,6 +472,10 @@ func encodeTableNameForSerialization(name TableName) string {
 // decodeTableNameFromSerialization decodes a table name from a serialized string. See notes on serialization in
 // |encodeTableNameForSerialization|
 func decodeTableNameFromSerialization(encodedName string) (TableName, bool) {
+	if len(encodedName) == 0 {
+		return TableName{}, false
+	}
+
 	if encodedName[0] != 0 {
 		return TableName{Name: encodedName}, true
 	} else if len(encodedName) >= 4 { // 2 null bytes plus at least one char for schema and table name
@@ -492,8 +496,8 @@ func decodeTableNameForAddressMap(encodedName, schemaName string) (string, bool)
 	if schemaName == "" && encodedName[0] != 0 {
 		return encodedName, true
 	} else if schemaName != "" && encodedName[0] == 0 &&
-		len(encodedName) > len(schemaName)+2 &&
-		encodedName[1:len(schemaName)+1] == schemaName {
+			len(encodedName) > len(schemaName)+2 &&
+			encodedName[1:len(schemaName)+1] == schemaName {
 		return encodedName[len(schemaName)+2:], true
 	}
 	return "", false
