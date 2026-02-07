@@ -174,6 +174,9 @@ func (f ProximityFlusher) visitNode(
 			if err != nil {
 				return nil, 0, err
 			}
+			if editVector == nil {
+				continue
+			}
 			level := edit.level
 			// visit each child in the node to determine which is closest
 			closestIdx := 0

@@ -157,6 +157,9 @@ func getConvertToVectorFunction(keyDesc *val.TupleDesc, ns tree.NodeStore) (tree
 			if err != nil {
 				return nil, err
 			}
+			if vec == nil {
+				return nil, nil
+			}
 			return sql.ConvertToVector(ctx, vec)
 		}, nil
 	default:
@@ -411,6 +414,16 @@ func (b *ProximityMapBuilder) makePathMaps(ctx context.Context, mutableLevelMap 
 		if err != nil {
 			return nil, err
 		}
+		if vectorToInsert == nil {
+			levelMapKey, levelMapValue, err = levelMapIter.Next(ctx)
+			if err == io.EOF {
+				return pathMaps, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
 		// Compute the path that this row will have in the vector index, starting at the root.
 		// A key-value pair at depth D will have a path D prior keys.
 		// This path is computed in steps, by performing a lookup in each of the prior pathMaps.
@@ -533,6 +546,20 @@ func (b *ProximityMapBuilder) getClosestVector(ctx context.Context, targetVector
 	if err != nil {
 		return nil, nil, err
 	}
+	for closestVector == nil {
+		enc, err, valid := nextCandidate()
+		if err != nil {
+			return nil, nil, err
+		}
+		if !valid {
+			return nil, nil, nil
+		}
+		closestVectorEncoding = enc
+		closestVector, err = b.convertFunc(ctx, closestVectorEncoding)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
 	closestDistance, err := b.distanceType.Eval(targetVector, closestVector)
 	if err != nil {
@@ -550,6 +577,9 @@ func (b *ProximityMapBuilder) getClosestVector(ctx context.Context, targetVector
 		candidateVector, err := b.convertFunc(ctx, candidateVectorEncoding)
 		if err != nil {
 			return nil, nil, err
+		}
+		if candidateVector == nil {
+			continue
 		}
 		candidateDistance, err := b.distanceType.Eval(targetVector, candidateVector)
 		if err != nil {

@@ -2185,6 +2185,14 @@ func RunScriptsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engine), scri
 	}
 }
 
+func RunDoltVectorIndexNullTests(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range DoltVectorIndexNullScripts {
+		harness := harness.NewHarness(t)
+		enginetest.TestScript(t, harness, script)
+		harness.Close()
+	}
+}
+
 func RunTransactionTestsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engine), tests []queries.TransactionTest) {
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
