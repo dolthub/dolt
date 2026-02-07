@@ -472,6 +472,10 @@ func encodeTableNameForSerialization(name TableName) string {
 // decodeTableNameFromSerialization decodes a table name from a serialized string. See notes on serialization in
 // |encodeTableNameForSerialization|
 func decodeTableNameFromSerialization(encodedName string) (TableName, bool) {
+	if len(encodedName) == 0 {
+		return TableName{}, false
+	}
+
 	if encodedName[0] != 0 {
 		return TableName{Name: encodedName}, true
 	} else if len(encodedName) >= 4 { // 2 null bytes plus at least one char for schema and table name
