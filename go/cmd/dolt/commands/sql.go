@@ -45,6 +45,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -959,7 +960,7 @@ func preprocessQuery(query, lastQuery string, cliCtx cli.CliContext) (CommandTyp
 func postCommandUpdate(sqlCtx *sql.Context, qryist cli.Queryist) (string, string) {
 	db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
 	if ok {
-		sqlCtx.SetCurrentDatabase(db)
+		sqlCtx.SetCurrentDatabase(doltdb.RevisionDbName(db, branch))
 	}
 	dirty := false
 	if branch != "" {
@@ -1032,8 +1033,11 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 	if row[0] == nil {
 		db = ""
 	} else {
-		db = row[0].(string)
-
+		revisionDelimiterAliasEnabled, err := cli.QueryBooleanSessionVariable(qryist, sqlCtx, dsess.DoltEnableRevisionDelimiterAlias)
+		if err != nil {
+			cli.Println(color.RedString("Failure in querying revision delimiter session variable for DB): " + err.Error()))
+		}
+		db, _, _ = doltdb.RewriteRevisionDelimiter(row[0].(string), revisionDelimiterAliasEnabled)
 		// It is possible to `use mydb/branch`, and as far as your session is concerned your database is mydb/branch. We
 		// allow that, but also want to show the user the branch name in the prompt. So we munge the DB in this case.
 		if strings.HasSuffix(strings.ToLower(db), strings.ToLower("/"+branch)) {

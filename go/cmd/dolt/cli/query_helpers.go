@@ -83,3 +83,29 @@ func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.
 
 	return rows, nil
 }
+
+// QuerySessionVariable returns the value of a session variable from the [Queryist].
+func QuerySessionVariable(queryist Queryist, sqlCtx *sql.Context, varName string) (interface{}, error) {
+	rows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("SELECT @@%s", varName))
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 || len(rows[0]) == 0 {
+		return nil, nil
+	}
+
+	return rows[0][0], nil
+}
+
+// QueryBooleanSessionVariable returns the value of a boolean session variable from the [Queryist].
+func QueryBooleanSessionVariable(queryist Queryist, sqlCtx *sql.Context, varName string) (bool, error) {
+	val, err := QuerySessionVariable(queryist, sqlCtx, varName)
+	if err != nil {
+		return false, err
+	}
+	if val == nil {
+		return false, nil
+	}
+
+	return GetInt8ColAsBool(val)
+}

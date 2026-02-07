@@ -758,7 +758,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "database revision specs: ResolveRevisionDelimiter alias '@' when dolt_enable_revision_delimiter_alias is ON",
+		Name: "database revision specs: db revision delimiter alias '@' when dolt_enable_revision_delimiter_alias is ON",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int);",
 			"call dolt_add('.');",
@@ -879,7 +879,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "database revision specs: ResolveRevisionDelimiter alias '@' when dolt_enable_revision_delimiter_alias is OFF",
+		Name: "database revision specs: db revision delimiter alias '@' when dolt_enable_revision_delimiter_alias is OFF",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int);",
 			"call dolt_add('.');",

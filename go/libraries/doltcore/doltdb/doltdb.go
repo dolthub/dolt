@@ -2405,3 +2405,23 @@ func SplitRevisionDbName(dbName string) (string, string) {
 	}
 	return baseName, rev
 }
+
+// RewriteRevisionDelimiter inspects the database name for a DbRevisionDelimiterAlias and if found, decides to rewrite
+// database name to contain the normal DbRevisionDelimiter (a potential revision database) when the
+// |revisionDelimiterAliasEnabled|.
+func RewriteRevisionDelimiter(dbName string, revisionDelimiterAliasEnabled bool) (resolved string, usesDelimiterAlias bool, err error) {
+	if !strings.Contains(dbName, DbRevisionDelimiterAlias) {
+		return dbName, false, nil
+	}
+
+	if !revisionDelimiterAliasEnabled {
+		return dbName, true, nil
+	}
+
+	base, revision, found := strings.Cut(dbName, DbRevisionDelimiterAlias)
+	if !found {
+		return dbName, true, fmt.Errorf("could not resolve revision delimiter '%s' in %s", DbRevisionDelimiterAlias, dbName)
+	}
+
+	return RevisionDbName(base, revision), true, nil
+}
