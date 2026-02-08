@@ -14,13 +14,16 @@ pkgs.buildGoModule {
   subPackages = [ "cmd/dolt" ];
   doCheck = false;
 
-  # Placeholder hash — the first CI run will fail and print the correct value.
-  # Replace with the "got:" hash from the nix build log.
+  # Placeholder hash — cannot be computed until nixpkgs ships a Go version
+  # that satisfies go.mod (currently requires >= 1.25.6, nixpkgs has 1.25.5).
+  # Once nixpkgs catches up, the build will fail with a hash mismatch and
+  # print the correct value in the "got:" line of the error output.
   vendorHash = pkgs.lib.fakeHash;
 
-  # nixpkgs may lag behind the Go version in go.mod.
-  # GOTOOLCHAIN=auto lets the Go toolchain download the required version.
-  env.GOTOOLCHAIN = "auto";
+  # Note: GOTOOLCHAIN=auto does NOT work inside the nix build sandbox because
+  # the sandbox has no network access, so Go cannot download a newer toolchain.
+  # When nixpkgs Go is older than what go.mod requires, the build will fail.
+  # This is intentional — it is the signal this CI job exists to surface.
 
   nativeBuildInputs = [ pkgs.git ];
 
