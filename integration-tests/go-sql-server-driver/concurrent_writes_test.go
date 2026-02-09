@@ -26,7 +26,7 @@ import (
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 )
 
-// The txLocks in 
+// TestConcurrentWrites verifies concurrent write behavior and transaction locking in the SQL server driver.
 func TestConcurrentWrites(t *testing.T) {
 	t.Parallel()
 	var ports DynamicResources
@@ -125,27 +125,11 @@ func TestConcurrentWrites(t *testing.T) {
 	defer func () {
 		require.NoError(t, conn.Close())
 	}()
-	rows, err := conn.QueryContext(ctx, "SELECT COUNT(*) FROM data")
-	if err != nil {
-		require.NoError(t, err)
-	}
 	var i int
-	for rows.Next() {
-		err = rows.Scan(&i)
-		require.NoError(t, err)
-	}
-	require.NoError(t, rows.Err())
-	require.NoError(t, rows.Close())
+	err = conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM data").Scan(&i)
+	require.NoError(t, err)
 	t.Logf("read %d", i)
-	rows, err = conn.QueryContext(ctx, "SELECT COUNT(*) FROM dolt_log")
-	if err != nil {
-		require.NoError(t, err)
-	}
-	for rows.Next() {
-		err = rows.Scan(&i)
-		require.NoError(t, err)
-	}
-	require.NoError(t, rows.Err())
-	require.NoError(t, rows.Close())
+	err = conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM dolt_log").Scan(&i)
+	require.NoError(t, err)
 	t.Logf("created %d commits", i)
 }
