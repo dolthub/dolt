@@ -342,12 +342,19 @@ func (gbs *GitBlobstore) Path() string {
 	return fmt.Sprintf("%s@%s", gbs.gitDir, gbs.ref)
 }
 
+func (gbs *GitBlobstore) validateRemoteManaged() error {
+	if gbs.remoteName == "" || gbs.remoteTrackingRef == "" {
+		return fmt.Errorf("gitblobstore: remote-managed mode misconfigured (remoteName=%q trackingRef=%q)", gbs.remoteName, gbs.remoteTrackingRef)
+	}
+	return nil
+}
+
 func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	if !gbs.remoteManaged {
 		return nil
 	}
-	if gbs.remoteName == "" || gbs.remoteTrackingRef == "" {
-		return fmt.Errorf("gitblobstore: remote-managed mode misconfigured (remoteName=%q trackingRef=%q)", gbs.remoteName, gbs.remoteTrackingRef)
+	if err := gbs.validateRemoteManaged(); err != nil {
+		return err
 	}
 
 	// 1) Fetch remote ref into our remote-tracking ref.
@@ -386,12 +393,9 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	return nil
 }
 
-func (gbs *GitBlobstore) putWithRemoteSync(ctx context.Context, key string, plan putPlan, msg string) (string, error) {
-	if !gbs.remoteManaged {
-		return gbs.putWithCASRetries(ctx, key, plan, msg)
-	}
-	if gbs.remoteName == "" || gbs.remoteTrackingRef == "" {
-		return "", fmt.Errorf("gitblobstore: remote-managed mode misconfigured (remoteName=%q trackingRef=%q)", gbs.remoteName, gbs.remoteTrackingRef)
+func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string, build func(parent git.OID, ok bool) (git.OID, error)) (string, error) {
+	if err := gbs.validateRemoteManaged(); err != nil {
+		return "", err
 	}
 
 	policy := gbs.casRetryPolicy(ctx)
@@ -415,7 +419,6 @@ func (gbs *GitBlobstore) putWithRemoteSync(ctx context.Context, key string, plan
 		if err != nil {
 			return backoff.Permanent(err)
 		}
-
 		_, _, err = gitrebase.MergeRemoteTrackingIntoLocalRefWithOptions(ctx, gbs.api, gbs.ref, gbs.remoteTrackingRef, gitrebase.MergeOptions{
 			Message:    "gitblobstore: sync write",
 			Author:     gbs.identity,
@@ -434,8 +437,7 @@ func (gbs *GitBlobstore) putWithRemoteSync(ctx context.Context, key string, plan
 		if err != nil {
 			return backoff.Permanent(err)
 		}
-
-		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, plan, msg)
+		newCommit, err := build(parent, ok)
 		if err != nil {
 			return backoff.Permanent(err)
 		}
@@ -464,96 +466,37 @@ func (gbs *GitBlobstore) putWithRemoteSync(ctx context.Context, key string, plan
 	return ver, nil
 }
 
+func (gbs *GitBlobstore) putWithRemoteSync(ctx context.Context, key string, plan putPlan, msg string) (string, error) {
+	if !gbs.remoteManaged {
+		return gbs.putWithCASRetries(ctx, key, plan, msg)
+	}
+	return gbs.remoteManagedWrite(ctx, key, msg, func(parent git.OID, ok bool) (git.OID, error) {
+		return gbs.buildCommitForKeyWrite(ctx, parent, ok, key, plan, msg)
+	})
+}
+
 func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader, msg string) (string, error) {
 	if !gbs.remoteManaged {
 		return "", fmt.Errorf("gitblobstore: internal error: checkAndPutWithRemoteSync called when remoteManaged=false")
 	}
-	if gbs.remoteName == "" || gbs.remoteTrackingRef == "" {
-		return "", fmt.Errorf("gitblobstore: remote-managed mode misconfigured (remoteName=%q trackingRef=%q)", gbs.remoteName, gbs.remoteTrackingRef)
-	}
-
-	policy := gbs.casRetryPolicy(ctx)
-
-	var newKeyVersion string
 	var cachedPlan *putPlan
-	op := func() error {
-		// 1) Fetch remote state into local tracking ref.
-		if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.ref, gbs.remoteTrackingRef); err != nil {
-			return err
-		}
-		remoteHead, okRemote, err := gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		if !okRemote {
-			return backoff.Permanent(&git.RefNotFoundError{Ref: gbs.remoteTrackingRef})
-		}
-
-		// 2) Merge remote-tracking into local ref (remote is source-of-truth on conflicts).
-		oldLocal, okLocal, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		_, _, err = gitrebase.MergeRemoteTrackingIntoLocalRefWithOptions(ctx, gbs.api, gbs.ref, gbs.remoteTrackingRef, gitrebase.MergeOptions{
-			Message:    "gitblobstore: sync write",
-			Author:     gbs.identity,
-			OnConflict: gitrebase.ConflictRemoteWins,
-		})
-		if err != nil {
-			if okLocal && gbs.refAdvanced(ctx, oldLocal) {
-				return err
-			}
-			return backoff.Permanent(err)
-		}
-
-		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
+	return gbs.remoteManagedWrite(ctx, key, msg, func(parent git.OID, ok bool) (git.OID, error) {
 		actualKeyVersion, err := gbs.currentKeyVersion(ctx, parent, ok, key)
 		if err != nil {
-			return backoff.Permanent(err)
+			return git.OID(""), err
 		}
 		if expectedVersion != actualKeyVersion {
-			return backoff.Permanent(CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: actualKeyVersion})
+			return git.OID(""), CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: actualKeyVersion}
 		}
-
 		if cachedPlan == nil {
 			plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
 			if err != nil {
-				return backoff.Permanent(err)
+				return git.OID(""), err
 			}
 			cachedPlan = &plan
 		}
-
-		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, *cachedPlan, msg)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		if err := gbs.updateRefCASForWrite(ctx, parent, ok, newCommit, msg); err != nil {
-			return err
-		}
-
-		if err := gbs.api.PushRefWithLease(ctx, gbs.remoteName, gbs.ref, gbs.ref, remoteHead); err != nil {
-			return err
-		}
-
-		ver, err := gbs.resolveKeyVersionAtCommit(ctx, newCommit, key)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		newKeyVersion = ver
-		return nil
-	}
-
-	if err := backoff.Retry(op, policy); err != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
-		return "", err
-	}
-	return newKeyVersion, nil
+		return gbs.buildCommitForKeyWrite(ctx, parent, ok, key, *cachedPlan, msg)
+	})
 }
 
 func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {

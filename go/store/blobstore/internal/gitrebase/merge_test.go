@@ -27,6 +27,20 @@ func testAuthor() *git.Identity {
 	return &git.Identity{Name: "gitrebase test", Email: "gitrebase@test.invalid"}
 }
 
+func newTestGitAPI(t *testing.T, ctx context.Context) (*git.Runner, git.GitAPI) {
+	t.Helper()
+
+	repo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := git.NewRunner(repo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r, git.NewGitAPIImpl(r)
+}
+
 func mkCommit(t *testing.T, ctx context.Context, api git.GitAPI, parent *git.OID, files map[string][]byte, msg string) git.OID {
 	t.Helper()
 
@@ -77,15 +91,7 @@ func TestMergeRemoteTrackingIntoLocalRef_FastForward(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBareTemp(ctx, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := git.NewRunner(repo.GitDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	api := git.NewGitAPIImpl(r)
+	_, api := newTestGitAPI(t, ctx)
 
 	base := mkCommit(t, ctx, api, nil, nil, "base")
 	remote := mkCommit(t, ctx, api, &base, map[string][]byte{"r.txt": []byte("remote\n")}, "remote")
@@ -122,15 +128,7 @@ func TestMergeRemoteTrackingIntoLocalRef_MergeCommit_NoConflict(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBareTemp(ctx, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := git.NewRunner(repo.GitDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	api := git.NewGitAPIImpl(r)
+	r, api := newTestGitAPI(t, ctx)
 
 	base := mkCommit(t, ctx, api, nil, nil, "base")
 	local := mkCommit(t, ctx, api, &base, map[string][]byte{"local.txt": []byte("l\n")}, "local")
@@ -185,15 +183,7 @@ func TestMergeRemoteTrackingIntoLocalRef_Conflict(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBareTemp(ctx, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := git.NewRunner(repo.GitDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	api := git.NewGitAPIImpl(r)
+	_, api := newTestGitAPI(t, ctx)
 
 	base := mkCommit(t, ctx, api, nil, map[string][]byte{"k": []byte("0\n")}, "base")
 	local := mkCommit(t, ctx, api, &base, map[string][]byte{"k": []byte("1\n")}, "local")
@@ -243,15 +233,7 @@ func TestMergeRemoteTrackingIntoLocalRef_ChunkedTreeAtomicConflict(t *testing.T)
 	t.Parallel()
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBareTemp(ctx, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := git.NewRunner(repo.GitDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	api := git.NewGitAPIImpl(r)
+	_, api := newTestGitAPI(t, ctx)
 
 	base := mkCommit(t, ctx, api, nil, map[string][]byte{
 		"big/0001": []byte("a\n"),
@@ -273,7 +255,7 @@ func TestMergeRemoteTrackingIntoLocalRef_ChunkedTreeAtomicConflict(t *testing.T)
 		t.Fatal(err)
 	}
 
-	_, _, err = MergeRemoteTrackingIntoLocalRef(ctx, api, localRef, remoteRef, "merge", testAuthor())
+	_, _, err := MergeRemoteTrackingIntoLocalRef(ctx, api, localRef, remoteRef, "merge", testAuthor())
 	if err == nil {
 		t.Fatalf("expected conflict error")
 	}
@@ -297,15 +279,7 @@ func TestMergeRemoteTrackingIntoLocalRef_ConflictHook_RemoteWins(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBareTemp(ctx, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := git.NewRunner(repo.GitDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	api := git.NewGitAPIImpl(r)
+	_, api := newTestGitAPI(t, ctx)
 
 	base := mkCommit(t, ctx, api, nil, map[string][]byte{"k": []byte("0\n")}, "base")
 	local := mkCommit(t, ctx, api, &base, map[string][]byte{"k": []byte("1\n")}, "local")
