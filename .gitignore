@@ -20,6 +20,9 @@ integration-tests/bats/batsee_results
 # ignore CLAUDE.md for now
 CLAUDE.md
 
+# nix build output symlink
+result
+
 *~
 .dir-locals.el
 .beads

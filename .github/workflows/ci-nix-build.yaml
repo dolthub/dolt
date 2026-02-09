@@ -1,0 +1,43 @@
+name: CI Nix Build
+on:
+  pull_request:
+    paths:
+      - 'go/go.mod'
+      - 'go/go.sum'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'default.nix'
+  push:
+    branches: [main]
+    paths:
+      - 'go/go.mod'
+      - 'go/go.sum'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'default.nix'
+
+concurrency:
+  group: ci-nix-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix-build:
+    name: Test Nix Flake Build
+    runs-on: ubuntu-latest
+    # Informational only — does not block PRs or merges.
+    # nixpkgs may lag behind the Go version in go.mod by several weeks.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Build Dolt via Nix
+        run: nix build .#default --print-build-logs
+
+      - name: Verify binary
+        run: ./result/bin/dolt version
