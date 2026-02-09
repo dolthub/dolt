@@ -88,7 +88,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 			}
 
 			split := len(srcTags)
-			projections := append(srcTags, dstTags...) // this isn't right -- this always assumes src rows are projected
+			projections := append(srcTags, dstTags...)
 			rowJoiner := newRowJoiner([]schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
 			return newLookupKvIter(
 				srcIter,
@@ -339,6 +339,10 @@ func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []ui
 // getSourceKv extracts prolly table and index specific structures needed
 // to implement a lookup join. We return either |srcIter| or |dstIter|
 // depending on whether |isSrc| is true.
+// TODO: This function call is very confusing because it returns so many different variables (many of which are often
+//
+//	ignored or nil). Split into two separate functions. The source and destination distinction is also not the most
+//	intuitive -- consider using primary and secondary naming conventions.
 func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.MapIter, index.SecondaryLookupIterGen, schema.Schema, []uint64, sql.Expression, error) {
 	var table *doltdb.Table
 	var tags []uint64
@@ -348,7 +352,6 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 	var dstIter index.SecondaryLookupIterGen
 	var priSch schema.Schema
 	switch n := n.(type) {
-	// TODO: what if the node is a join because we're doing a multi-table join?
 	case *plan.TableAlias:
 		return getSourceKv(ctx, n.Child, isSrc)
 	case *plan.Filter:
