@@ -340,9 +340,8 @@ func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []ui
 // to implement a lookup join. We return either |srcIter| or |dstIter|
 // depending on whether |isSrc| is true.
 // TODO: This function call is very confusing because it returns so many different variables (many of which are often
-//
-//	ignored or nil). Split into two separate functions. The source and destination distinction is also not the most
-//	intuitive -- consider using primary and secondary naming conventions.
+// ignored or nil). Split into two separate functions. The source and destination distinction is also not the most
+// intuitive -- consider using primary and secondary naming conventions.
 func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.MapIter, index.SecondaryLookupIterGen, schema.Schema, []uint64, sql.Expression, error) {
 	var table *doltdb.Table
 	var tags []uint64
