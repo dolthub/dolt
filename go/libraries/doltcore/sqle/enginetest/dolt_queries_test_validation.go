@@ -319,6 +319,40 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "interactive rebase with --skip-tests flag should persist across continue operations",
+		SetUpScript: []string{
+			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
+			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
+			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
+				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1')",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('--skip-tests', '-m', 'Initial commit')",
+			"CALL dolt_checkout('-b', 'feature')",
+			"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('--skip-tests', '-m', 'Add Bob but dont update test')", // This will cause test to fail
+			"INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com')",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('--skip-tests', '-m', 'Add Charlie')",
+			"CALL dolt_checkout('main')",
+			"INSERT INTO users VALUES (4, 'David', 'david@example.com')", // Add a commit to main to create divergence
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('--skip-tests', '-m', 'Add David on main')",
+			"CALL dolt_checkout('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_rebase('--interactive', '--skip-tests', 'main')",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_feature; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"}},
+			},
+			{
+				Query:    "CALL dolt_rebase('--continue')", // This should NOT require --skip-tests flag but should still skip tests
+				Expected: []sql.Row{{int64(0), successfulRebaseMessage}},
+			},
+		},
+	},
 	/*
 		{
 			Name: "test validation with no dolt_tests table - no validation occurs",

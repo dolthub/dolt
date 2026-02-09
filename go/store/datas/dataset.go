@@ -169,6 +169,7 @@ type RebaseState struct {
 	commitBecomesEmptyHandling uint8
 	emptyCommitHandling        uint8
 	rebasingStarted            bool
+	skipVerification           bool
 }
 
 func (rs *RebaseState) PreRebaseWorkingAddr() hash.Hash {
@@ -204,6 +205,10 @@ func (rs *RebaseState) CommitBecomesEmptyHandling(_ context.Context) uint8 {
 
 func (rs *RebaseState) EmptyCommitHandling(_ context.Context) uint8 {
 	return rs.emptyCommitHandling
+}
+
+func (rs *RebaseState) SkipVerification(_ context.Context) bool {
+	return rs.skipVerification
 }
 
 type MergeState struct {
@@ -457,6 +462,7 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 			rebaseState.EmptyCommitHandling(),
 			rebaseState.LastAttemptedStep(),
 			rebaseState.RebasingStarted(),
+			rebaseState.SkipVerification(),
 		)
 	}
 
