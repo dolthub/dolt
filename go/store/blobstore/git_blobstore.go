@@ -174,6 +174,83 @@ func (m *multiPartReadCloser) Close() error {
 	return nil
 }
 
+type concatReadCloser struct {
+	ctx   context.Context
+	keys  []string
+	open  func(ctx context.Context, key string) (io.ReadCloser, error)
+	cur   int
+	curRC io.ReadCloser
+	done  bool
+}
+
+func (c *concatReadCloser) ensureCurrent() error {
+	if c.done || c.curRC != nil {
+		return nil
+	}
+	if c.cur >= len(c.keys) {
+		c.done = true
+		return nil
+	}
+	rc, err := c.open(c.ctx, c.keys[c.cur])
+	if err != nil {
+		return err
+	}
+	c.curRC = rc
+	return nil
+}
+
+func (c *concatReadCloser) closeCurrentAndAdvance() error {
+	if c.curRC != nil {
+		err := c.curRC.Close()
+		c.curRC = nil
+		c.cur++
+		return err
+	}
+	c.cur++
+	return nil
+}
+
+func (c *concatReadCloser) Read(p []byte) (int, error) {
+	for {
+		if err := c.ensureCurrent(); err != nil {
+			return 0, err
+		}
+		if c.curRC == nil {
+			return 0, io.EOF
+		}
+
+		n, err := c.curRC.Read(p)
+		if n > 0 {
+			// Preserve data; defer advancement until next Read call.
+			if err == io.EOF {
+				_ = c.closeCurrentAndAdvance()
+				return n, nil
+			}
+			return n, err
+		}
+		if err == nil {
+			continue
+		}
+		if err == io.EOF {
+			if cerr := c.closeCurrentAndAdvance(); cerr != nil {
+				return 0, cerr
+			}
+			continue
+		}
+		return 0, err
+	}
+}
+
+func (c *concatReadCloser) Close() error {
+	c.done = true
+	if c.curRC != nil {
+		err := c.curRC.Close()
+		c.curRC = nil
+		return err
+	}
+	return nil
+}
+
 // GitBlobstore is a Blobstore implementation backed by a git repository's object
 // database (bare repo or .git directory). It stores keys as paths within the tree
 // of the commit referenced by a git ref (e.g. refs/dolt/data).
@@ -944,83 +1021,6 @@ func (gbs *GitBlobstore) totalSizeAtCommit(ctx context.Context, commit git.OID, 
 		return 0, fmt.Errorf("gitblobstore: concatenated size %d overflows int64", total)
 	}
 	return int64(total), nil
-}
-
-type concatReadCloser struct {
-	ctx   context.Context
-	keys  []string
-	open  func(ctx context.Context, key string) (io.ReadCloser, error)
-	cur   int
-	curRC io.ReadCloser
-	done  bool
-}
-
-func (c *concatReadCloser) ensureCurrent() error {
-	if c.done || c.curRC != nil {
-		return nil
-	}
-	if c.cur >= len(c.keys) {
-		c.done = true
-		return nil
-	}
-	rc, err := c.open(c.ctx, c.keys[c.cur])
-	if err != nil {
-		return err
-	}
-	c.curRC = rc
-	return nil
-}
-
-func (c *concatReadCloser) closeCurrentAndAdvance() error {
-	if c.curRC != nil {
-		err := c.curRC.Close()
-		c.curRC = nil
-		c.cur++
-		return err
-	}
-	c.cur++
-	return nil
-}
-
-func (c *concatReadCloser) Read(p []byte) (int, error) {
-	for {
-		if err := c.ensureCurrent(); err != nil {
-			return 0, err
-		}
-		if c.curRC == nil {
-			return 0, io.EOF
-		}
-
-		n, err := c.curRC.Read(p)
-		if n > 0 {
-			// Preserve data; defer advancement until next Read call.
-			if err == io.EOF {
-				_ = c.closeCurrentAndAdvance()
-				return n, nil
-			}
-			return n, err
-		}
-		if err == nil {
-			continue
-		}
-		if err == io.EOF {
-			if cerr := c.closeCurrentAndAdvance(); cerr != nil {
-				return 0, cerr
-			}
-			continue
-		}
-		return 0, err
-	}
-}
-
-func (c *concatReadCloser) Close() error {
-	c.done = true
-	if c.curRC != nil {
-		err := c.curRC.Close()
-		c.curRC = nil
-		return err
-	}
-	return nil
 }
 
 func sliceInlineBlob(rc io.ReadCloser, sz int64, br BlobRange, ver string) (io.ReadCloser, uint64, string, error) {
