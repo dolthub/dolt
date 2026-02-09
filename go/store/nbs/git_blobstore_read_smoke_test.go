@@ -93,8 +93,12 @@ func TestGitBlobstoreReadSmoke_ManifestAndTableAccessPatterns(t *testing.T) {
 	require.Equal(t, table[len(table)-tailN:], tail)
 
 	// Per-key version should be stable across reads.
-	_, _, ver2, err := bs.Get(ctx, "table", blobstore.AllRange)
+	rc2, _, ver2, err := bs.Get(ctx, "table", blobstore.AllRange)
 	require.NoError(t, err)
+	// Drain before close to avoid broken-pipe errors from killing git early.
+	_, err = io.Copy(io.Discard, rc2)
+	require.NoError(t, err)
+	require.NoError(t, rc2.Close())
 	require.Equal(t, ver, ver2)
 
 	// 3) ReadAt-style ranged reads used by table readers.
