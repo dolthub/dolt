@@ -62,8 +62,7 @@ func IsPathNotFound(err error) bool {
 	return errors.As(err, &e)
 }
 
-// MergeConflictError indicates a merge conflict at one or more key paths.
-// Conflicts are reported at the key/path granularity used by GitBlobstore.
+// MergeConflictError indicates merge conflicts at GitBlobstore key/path granularity.
 type MergeConflictError struct {
 	Conflicts []string
 }

@@ -161,17 +161,9 @@ func unitsFromSnapshot(s treeSnapshot) map[string]unit {
 	return out
 }
 
-// MergeRemoteTrackingIntoLocalRef merges |remoteTrackingRef| into |localRef| and updates |localRef| using CAS.
-//
-// Behavior:
-// - If |localRef| does not exist, it is created to point to |remoteTrackingRef| (create-only CAS).
-// - If |localRef| is an ancestor of |remoteTrackingRef|, |localRef| is fast-forwarded to |remoteTrackingRef|.
-// - If |remoteTrackingRef| is an ancestor of |localRef|, no update is performed.
-// - Otherwise, a 3-way merge is performed at the GitBlobstore key/path granularity:
-//   - blob entries merge by path
-//   - chunked trees (trees whose children are 4-digit part blobs) merge atomically as a unit
-//
-// - On conflict, returns *MergeConflictError and does not update |localRef|.
+// MergeRemoteTrackingIntoLocalRef merges |remoteTrackingRef| into |localRef| and CAS-updates |localRef|.
+// It fast-forwards when possible, no-ops if remote is behind, else 3-way merges at key/path granularity
+// (chunked trees merge atomically). On conflict it returns *git.MergeConflictError without updating |localRef|.
 func MergeRemoteTrackingIntoLocalRef(ctx context.Context, api git.GitAPI, localRef string, remoteTrackingRef string, msg string, author *git.Identity) (newHead git.OID, updated bool, err error) {
 	return MergeRemoteTrackingIntoLocalRefWithOptions(ctx, api, localRef, remoteTrackingRef, MergeOptions{
 		Message:    msg,
@@ -189,13 +181,10 @@ type MergeOptions struct {
 	OnConflict ConflictHook
 }
 
-// ConflictHook allows callers (e.g. GitBlobstore) to implement merge conflict policy.
-// This is intended for the "remote truth + replay" flow: callers can decide how to resolve conflicts and
-// update |localRef| accordingly.
+// ConflictHook allows callers (e.g. GitBlobstore) to implement conflict policy (e.g. "remote truth + replay").
 type ConflictHook func(ctx context.Context, api git.GitAPI, localRef string, remoteTrackingRef string, base git.OID, localHead git.OID, remoteHead git.OID, conflict *git.MergeConflictError, msg string, author *git.Identity) (newHead git.OID, updated bool, handled bool, err error)
 
-// ConflictRemoteWins is a simple conflict policy that treats the remote as source-of-truth by moving
-// |localRef| to |remoteHead| using CAS.
+// ConflictRemoteWins treats remote as source-of-truth by CAS-moving |localRef| to |remoteHead|.
 func ConflictRemoteWins(ctx context.Context, api git.GitAPI, localRef string, remoteTrackingRef string, base git.OID, localHead git.OID, remoteHead git.OID, conflict *git.MergeConflictError, msg string, author *git.Identity) (git.OID, bool, bool, error) {
 	if err := api.UpdateRefCAS(ctx, localRef, remoteHead, localHead, msg); err != nil {
 		return "", false, true, err

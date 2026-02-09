@@ -300,9 +300,8 @@ type GitBlobstoreOptions struct {
 	// MaxPartSize enables chunked-object writes when non-zero.
 	// Read paths always support chunked objects if encountered.
 	MaxPartSize uint64
-	// RemoteManaged enables remote-managed sync mode for this blobstore. When enabled, callers are expected
-	// to configure a git remote (by name) in the underlying git repository; subsequent work will cause
-	// Get/Put/CheckAndPut/Concatenate to fetch/merge/push automatically.
+	// RemoteManaged enables automatic fetch/merge/push against a configured git remote for
+	// Get/Put/CheckAndPut/Concatenate.
 	RemoteManaged bool
 	// RemoteName is the git remote name to use for remote-managed mode (e.g. "origin").
 	// If empty and RemoteManaged is true, it defaults to "origin".
