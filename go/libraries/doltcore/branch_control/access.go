@@ -31,6 +31,7 @@ type Permissions uint64
 const (
 	Permissions_Admin Permissions = 1 << iota // Permissions_Admin grants unrestricted control over a branch, including modification of table entries
 	Permissions_Write                         // Permissions_Write allows for all modifying operations on a branch, but does not allow modification of table entries
+	Permissions_Merge                         // Permissions_Merge allows for merging into this branch with dolt_merge, but does not allow for arbitrary writes. The caller must also have read permissions on the branch from which they are merging.
 	Permissions_Read                          // Permissions_Read allows for reading from a branch, which is equivalent to having no permissions
 
 	Permissions_None Permissions = 0 // Permissions_None represents a lack of permissions, which defaults to allowing reading
@@ -277,6 +278,8 @@ func (perm Permissions) Consolidate() Permissions {
 		return Permissions_Admin
 	} else if perm&Permissions_Write == Permissions_Write {
 		return Permissions_Write
+	} else if perm&Permissions_Merge == Permissions_Merge {
+		return Permissions_Merge
 	} else {
 		return Permissions_Read
 	}

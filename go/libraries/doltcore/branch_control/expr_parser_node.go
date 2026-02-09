@@ -550,6 +550,8 @@ func (mn *MatchNode) formatSelf(reverseSortOrders []map[int32]string) (string, [
 			perms = ", admin"
 		case Permissions_Write:
 			perms = ", write"
+		case Permissions_Merge:
+			perms = ", merge"
 		case Permissions_Read, Permissions_None:
 			perms = ", read"
 		default:

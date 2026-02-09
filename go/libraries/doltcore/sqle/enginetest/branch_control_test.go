@@ -356,17 +356,6 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{
-		Name: "DOLT_MERGE",
-		SetUpScript: []string{
-			"INSERT INTO test VALUES (2, 2);",
-			"CALL DOLT_ADD('-A');",
-			"CALL DOLT_COMMIT('-m', 'message');",
-			"CALL DOLT_CHECKOUT('other');",
-		},
-		Query:       "CALL DOLT_MERGE('main');",
-		ExpectedErr: branch_control.ErrIncorrectPermissions,
-	},
-	{
 		Name:        "DOLT_RESET",
 		Query:       "CALL DOLT_RESET();",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
@@ -1439,6 +1428,232 @@ var BranchControlTests = []BranchControlTest{
 				Expected: []sql.Row{
 					{types.NewOkResult(0)},
 				},
+			},
+		},
+	},
+	{
+		Name: "Merge permission allows merge but blocks other writes",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			// Give testuser merge permission on 'other' branch
+			"INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'merge');",
+			// Add more data on main so other can FF merge
+			"INSERT INTO test VALUES (2, 2);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'second commit on main');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			// Verify the merge permission entry is visible in the table
+			{
+				User:  "testuser",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
+				Expected: []sql.Row{
+					{"%", "other", "testuser", "localhost", "merge"},
+				},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			// Merge permission allows reading
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT * FROM test ORDER BY pk;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			// Merge permission blocks INSERT
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO test VALUES (3, 3);",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission blocks UPDATE
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "UPDATE test SET v1 = 10 WHERE pk = 1;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission blocks DELETE
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "DELETE FROM test WHERE pk = 1;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission blocks CREATE TABLE
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CREATE TABLE test2 (pk BIGINT PRIMARY KEY);",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission blocks DROP TABLE
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "DROP TABLE test;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission blocks DOLT_ADD
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_ADD('-A');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission blocks DOLT_COMMIT
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_COMMIT('--allow-empty', '-m', 'msg');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission blocks DOLT_RESET
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_RESET();",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission blocks DOLT_CLEAN
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_CLEAN();",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission blocks DOLT_REVERT
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_REVERT();",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Merge permission allows DOLT_MERGE (FF merge)
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_MERGE('main');",
+				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+			},
+			// After merge, the merged data is visible
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT * FROM test ORDER BY pk;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+		},
+	},
+	{
+		Name: "Read-only user cannot merge",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			// No merge permission given; testuser is read-only on 'other'
+			"INSERT INTO test VALUES (2, 2);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'second commit on main');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			// Can read
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT * FROM test ORDER BY pk;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			// Cannot write
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO test VALUES (3, 3);",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// Cannot merge without merge permission
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_MERGE('main');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
+	{
+		Name: "Merge permission on specific branch does not apply to other branches",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			"CALL DOLT_BRANCH('third');",
+			// Give testuser merge permission only on 'other', not on 'third'
+			"INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'merge');",
+			"INSERT INTO test VALUES (2, 2);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'second commit on main');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			// Merge works on 'other' where testuser has merge permission
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_MERGE('main');",
+				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+			},
+			// Merge fails on 'third' where testuser has no merge permission
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('third');",
+				Expected: []sql.Row{{0, "Switched to branch 'third'"}},
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_MERGE('main');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
 		},
 	},

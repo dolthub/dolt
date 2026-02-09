@@ -340,6 +340,8 @@ Node("|")
 							postfix = ", admin"
 						case Permissions_Write:
 							postfix = ", write"
+						case Permissions_Merge:
+							postfix = ", merge"
 						case Permissions_Read, Permissions_None:
 							postfix = ", read"
 						}
