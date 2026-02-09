@@ -39,6 +39,7 @@
               git
               gopls
               gotools
+              icu
             ];
 
             shellHook = ''

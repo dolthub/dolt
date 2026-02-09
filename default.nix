@@ -14,18 +14,15 @@ pkgs.buildGoModule {
   subPackages = [ "cmd/dolt" ];
   doCheck = false;
 
-  # Placeholder hash — cannot be computed until nixpkgs ships a Go version
-  # that satisfies go.mod (currently requires >= 1.25.6, nixpkgs has 1.25.5).
-  # Once nixpkgs catches up, the build will fail with a hash mismatch and
-  # print the correct value in the "got:" line of the error output.
+  # vendorHash must be updated when go.mod/go.sum change. When incorrect,
+  # `nix build` will fail and print the correct hash in the "got:" line.
+  # To compute without nix installed:
+  #   docker run --rm -v $(pwd):/workspace -w /workspace nixos/nix \
+  #     sh -c 'echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf && nix build .#default 2>&1'
   vendorHash = pkgs.lib.fakeHash;
 
-  # Note: GOTOOLCHAIN=auto does NOT work inside the nix build sandbox because
-  # the sandbox has no network access, so Go cannot download a newer toolchain.
-  # When nixpkgs Go is older than what go.mod requires, the build will fail.
-  # This is intentional — it is the signal this CI job exists to surface.
-
   nativeBuildInputs = [ pkgs.git ];
+  buildInputs = [ pkgs.icu ];
 
   meta = with pkgs.lib; {
     description = "Dolt – a SQL database you can diff, branch, and merge";
