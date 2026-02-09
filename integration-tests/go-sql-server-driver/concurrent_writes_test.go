@@ -85,6 +85,7 @@ func TestConcurrentWrites(t *testing.T) {
 			}
 			db, err := server.DB(driver.Connection{User: "root"})
 			require.NoError(t, err)
+			defer db.Close()
 			db.SetMaxOpenConns(1)
 			conn, err := db.Conn(ctx)
 			if err != nil {
@@ -119,9 +120,7 @@ func TestConcurrentWrites(t *testing.T) {
 	t.Logf("wrote %d", nextInt)
 	ctx = t.Context()
 	conn, err := db.Conn(ctx)
-	if err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, err)
 	defer func () {
 		require.NoError(t, conn.Close())
 	}()
