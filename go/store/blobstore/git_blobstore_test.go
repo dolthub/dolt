@@ -255,6 +255,141 @@ func TestGitBlobstore_Put_RoundTripAndVersion(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
+func TestGitBlobstore_Concatenate_Basic(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	_, err = PutBytes(ctx, bs, "a", []byte("hi "))
+	require.NoError(t, err)
+	_, err = PutBytes(ctx, bs, "b", []byte("there"))
+	require.NoError(t, err)
+
+	ver, err := bs.Concatenate(ctx, "c", []string{"a", "b"})
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	got, ver2, err := GetBytes(ctx, bs, "c", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver, ver2)
+	require.Equal(t, []byte("hi there"), got)
+}
+
+func TestGitBlobstore_Concatenate_ChunkedResult(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(repo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		Identity:    testIdentity(),
+		MaxPartSize: 1024,
+	})
+	require.NoError(t, err)
+
+	a := bytes.Repeat([]byte("a"), 700)
+	b := bytes.Repeat([]byte("b"), 700)
+	want := append(append([]byte(nil), a...), b...)
+
+	_, err = PutBytes(ctx, bs, "a", a)
+	require.NoError(t, err)
+	_, err = PutBytes(ctx, bs, "b", b)
+	require.NoError(t, err)
+
+	ver, err := bs.Concatenate(ctx, "c", []string{"a", "b"})
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	// Verify the resulting key is stored as a chunked tree (not a single blob).
+	head, ok, err := bs.api.TryResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	require.True(t, ok)
+	oid, typ, err := bs.api.ResolvePathObject(ctx, head, "c")
+	require.NoError(t, err)
+	require.Equal(t, git.ObjectTypeTree, typ)
+	require.Equal(t, oid.String(), ver)
+
+	parts, err := bs.api.ListTree(ctx, head, "c")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(parts), 2)
+	require.Equal(t, "00000001", parts[0].Name)
+
+	got, ver2, err := GetBytes(ctx, bs, "c", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver, ver2)
+	require.Equal(t, want, got)
+}
+
+func TestGitBlobstore_Concatenate_KeyExistsFastSucceeds(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	ver1, err := PutBytes(ctx, bs, "c", []byte("original"))
+	require.NoError(t, err)
+	require.NotEmpty(t, ver1)
+
+	_, err = PutBytes(ctx, bs, "a", []byte("new "))
+	require.NoError(t, err)
+	_, err = PutBytes(ctx, bs, "b", []byte("value"))
+	require.NoError(t, err)
+
+	ver2, err := bs.Concatenate(ctx, "c", []string{"a", "b"})
+	require.NoError(t, err)
+	require.Equal(t, ver1, ver2, "expected concatenate to fast-succeed without overwriting existing key")
+
+	got, ver3, err := GetBytes(ctx, bs, "c", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver1, ver3)
+	require.Equal(t, []byte("original"), got)
+}
+
+func TestGitBlobstore_Concatenate_MissingSourceIsNotFound(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	_, err = PutBytes(ctx, bs, "present", []byte("x"))
+	require.NoError(t, err)
+
+	_, err = bs.Concatenate(ctx, "c", []string{"present", "missing"})
+	require.Error(t, err)
+	require.True(t, IsNotFoundError(err))
+	var nf NotFound
+	require.ErrorAs(t, err, &nf)
+	require.Equal(t, "missing", nf.Key)
+}
+
+func TestGitBlobstore_Concatenate_EmptySourcesErrors(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	_, err = bs.Concatenate(ctx, "c", nil)
+	require.Error(t, err)
+}
+
 type putShouldNotRead struct{}
 
 func (putShouldNotRead) Read(_ []byte) (int, error) {
