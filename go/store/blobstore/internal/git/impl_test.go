@@ -773,3 +773,388 @@ func TestGitAPIImpl_UpdateRef_And_CAS(t *testing.T) {
 		t.Fatalf("ref changed unexpectedly: ok=%v got=%q want=%q", ok, got, c2)
 	}
 }
+
+func TestGitAPIImpl_FetchRef_ForcedUpdatesTrackingRef(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	remoteRepo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteRunner, err := NewRunner(remoteRepo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteAPI := NewGitAPIImpl(remoteRunner)
+
+	// Create two commits on the same tree in the remote.
+	indexFile := tempIndexFile(t)
+	if err := remoteAPI.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+	treeOID, err := remoteAPI.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c1, err := remoteAPI.CommitTree(ctx, treeOID, nil, "c1", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c2, err := remoteAPI.CommitTree(ctx, treeOID, nil, "c2", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c1 == c2 {
+		c2, err = remoteAPI.CommitTree(ctx, treeOID, nil, "c2b", testAuthor())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c1 == c2 {
+			t.Fatalf("expected distinct commit oids")
+		}
+	}
+
+	remoteDataRef := "refs/dolt/data"
+	if err := remoteAPI.UpdateRef(ctx, remoteDataRef, c2, "seed remote"); err != nil {
+		t.Fatal(err)
+	}
+
+	localRepo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	localRunner, err := NewRunner(localRepo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = localRunner.Run(ctx, RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localAPI := NewGitAPIImpl(localRunner)
+
+	dstRef := "refs/dolt/remotes/origin/data"
+	if err := localAPI.FetchRef(ctx, "origin", remoteDataRef, dstRef); err != nil {
+		t.Fatal(err)
+	}
+	got, err := localAPI.ResolveRefCommit(ctx, dstRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != c2 {
+		t.Fatalf("tracking ref mismatch: got %q, want %q", got, c2)
+	}
+
+	// Rewind the remote ref to c1 and ensure a subsequent fetch forces the tracking ref backwards.
+	if err := remoteAPI.UpdateRef(ctx, remoteDataRef, c1, "rewind remote"); err != nil {
+		t.Fatal(err)
+	}
+	if err := localAPI.FetchRef(ctx, "origin", remoteDataRef, dstRef); err != nil {
+		t.Fatal(err)
+	}
+	got, err = localAPI.ResolveRefCommit(ctx, dstRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != c1 {
+		t.Fatalf("tracking ref mismatch after rewind: got %q, want %q", got, c1)
+	}
+}
+
+func TestGitAPIImpl_PushRefWithLease_SucceedsThenRejectsStaleLease(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	remoteRepo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteRunner, err := NewRunner(remoteRepo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteAPI := NewGitAPIImpl(remoteRunner)
+
+	// Seed remote ref with r1, then later advance to r2.
+	indexFile := tempIndexFile(t)
+	if err := remoteAPI.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+	treeOID, err := remoteAPI.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r1, err := remoteAPI.CommitTree(ctx, treeOID, nil, "r1", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2, err := remoteAPI.CommitTree(ctx, treeOID, nil, "r2", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r1 == r2 {
+		r2, err = remoteAPI.CommitTree(ctx, treeOID, nil, "r2b", testAuthor())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r1 == r2 {
+			t.Fatalf("expected distinct commit oids")
+		}
+	}
+
+	remoteDataRef := "refs/dolt/data"
+	if err := remoteAPI.UpdateRef(ctx, remoteDataRef, r1, "seed remote"); err != nil {
+		t.Fatal(err)
+	}
+
+	localRepo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	localRunner, err := NewRunner(localRepo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = localRunner.Run(ctx, RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localAPI := NewGitAPIImpl(localRunner)
+
+	// Create a local commit l1 and set local refs/dolt/data to it (src ref for push).
+	localIndex := tempIndexFile(t)
+	if err := localAPI.ReadTreeEmpty(ctx, localIndex); err != nil {
+		t.Fatal(err)
+	}
+	localTree, err := localAPI.WriteTree(ctx, localIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l1, err := localAPI.CommitTree(ctx, localTree, nil, "l1", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := localAPI.UpdateRef(ctx, remoteDataRef, l1, "set local src"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Lease matches remote (r1) -> push should succeed and overwrite remoteDataRef to l1.
+	if err := localAPI.PushRefWithLease(ctx, "origin", remoteDataRef, remoteDataRef, r1); err != nil {
+		t.Fatal(err)
+	}
+	got, err := remoteAPI.ResolveRefCommit(ctx, remoteDataRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != l1 {
+		t.Fatalf("remote ref mismatch after push: got %q, want %q", got, l1)
+	}
+
+	// Advance remote to r2, then attempt a stale-lease push expecting r1 -> should fail and not clobber r2.
+	if err := remoteAPI.UpdateRef(ctx, remoteDataRef, r2, "advance remote"); err != nil {
+		t.Fatal(err)
+	}
+	err = localAPI.PushRefWithLease(ctx, "origin", remoteDataRef, remoteDataRef, r1)
+	if err == nil {
+		t.Fatalf("expected stale lease push to fail")
+	}
+	got, err = remoteAPI.ResolveRefCommit(ctx, remoteDataRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != r2 {
+		t.Fatalf("remote ref changed unexpectedly on stale lease: got %q, want %q", got, r2)
+	}
+}
+
+func TestGitAPIImpl_MergeBase_OkAndNoMergeBase(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRunner(repo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewGitAPIImpl(r)
+
+	// Base commit (empty tree).
+	indexFile := tempIndexFile(t)
+	if err := api.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+	treeOID, err := api.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := api.CommitTree(ctx, treeOID, nil, "base", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Two children of base.
+	p := base
+	a, err := api.CommitTree(ctx, treeOID, &p, "a", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p = base
+	b, err := api.CommitTree(ctx, treeOID, &p, "b", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mb, ok, err := api.MergeBase(ctx, a, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatalf("expected merge base")
+	}
+	if mb != base {
+		t.Fatalf("merge base mismatch: got %q, want %q", mb, base)
+	}
+
+	// No merge base: two unrelated root commits in the same repo.
+	c1, err := api.CommitTree(ctx, treeOID, nil, "root1", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c2, err := api.CommitTree(ctx, treeOID, nil, "root2", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ok, err = api.MergeBase(ctx, c1, c2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatalf("expected no merge base")
+	}
+}
+
+func TestGitAPIImpl_ListTreeRecursive(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRunner(repo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewGitAPIImpl(r)
+
+	indexFile := tempIndexFile(t)
+	if err := api.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+
+	oidA, err := api.HashObject(ctx, bytes.NewReader([]byte("a\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oidX, err := api.HashObject(ctx, bytes.NewReader([]byte("x\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", oidA, "dir/a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", oidX, "dir/sub/x.txt"); err != nil {
+		t.Fatal(err)
+	}
+	treeOID, err := api.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitOID, err := api.CommitTree(ctx, treeOID, nil, "seed", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := api.ListTreeRecursive(ctx, commitOID, "dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]TreeEntry{}
+	for _, e := range entries {
+		got[e.Name] = e
+	}
+	if e, ok := got["a.txt"]; !ok || e.Type != ObjectTypeBlob || e.OID != oidA {
+		t.Fatalf("missing or unexpected a.txt: ok=%v entry=%+v", ok, e)
+	}
+	if e, ok := got["sub"]; !ok || e.Type != ObjectTypeTree || e.OID == "" {
+		t.Fatalf("missing or unexpected sub tree: ok=%v entry=%+v", ok, e)
+	}
+	if e, ok := got["sub/x.txt"]; !ok || e.Type != ObjectTypeBlob || e.OID != oidX {
+		t.Fatalf("missing or unexpected sub/x.txt: ok=%v entry=%+v", ok, e)
+	}
+}
+
+func TestGitAPIImpl_CommitTreeWithParents(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBareTemp(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRunner(repo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewGitAPIImpl(r)
+
+	indexFile := tempIndexFile(t)
+	if err := api.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+	treeOID, err := api.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := api.CommitTree(ctx, treeOID, nil, "base", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := base
+	a, err := api.CommitTree(ctx, treeOID, &p, "a", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p = base
+	b, err := api.CommitTree(ctx, treeOID, &p, "b", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	merge, err := api.CommitTreeWithParents(ctx, treeOID, []OID{a, b}, "merge", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := r.Run(ctx, RunOptions{}, "rev-parse", merge.String()+"^1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotP1 := string(bytes.TrimSpace(out)); gotP1 != a.String() {
+		t.Fatalf("parent1 mismatch: got %q, want %q", gotP1, a.String())
+	}
+	out, err = r.Run(ctx, RunOptions{}, "rev-parse", merge.String()+"^2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotP2 := string(bytes.TrimSpace(out)); gotP2 != b.String() {
+		t.Fatalf("parent2 mismatch: got %q, want %q", gotP2, b.String())
+	}
+}

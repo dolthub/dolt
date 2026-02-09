@@ -144,6 +144,39 @@ func (a *GitAPIImpl) ListTree(ctx context.Context, commit OID, treePath string) 
 	return entries, nil
 }
 
+func (a *GitAPIImpl) ListTreeRecursive(ctx context.Context, commit OID, treePath string) ([]TreeEntry, error) {
+	spec := commit.String()
+	if treePath != "" {
+		spec = spec + ":" + treePath
+	} else {
+		spec = spec + "^{tree}"
+	}
+
+	out, err := a.r.Run(ctx, RunOptions{}, "ls-tree", "-r", "-t", spec)
+	if err != nil {
+		if isPathNotFoundErr(err) && treePath != "" {
+			return nil, &PathNotFoundError{Commit: commit.String(), Path: treePath}
+		}
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) == 1 && strings.TrimSpace(lines[0]) == "" {
+		return nil, nil
+	}
+	entries := make([]TreeEntry, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		e, err := parseLsTreeLine(line)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
 func (a *GitAPIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
 	out, err := a.r.Run(ctx, RunOptions{}, "cat-file", "-t", oid.String())
 	if err != nil {
@@ -262,6 +295,63 @@ func (a *GitAPIImpl) CommitTree(ctx context.Context, tree OID, parent *OID, mess
 	return OID(oid), nil
 }
 
+func (a *GitAPIImpl) CommitTreeWithParents(ctx context.Context, tree OID, parents []OID, message string, author *Identity) (OID, error) {
+	args := []string{"commit-tree", tree.String(), "-m", message}
+	for _, p := range parents {
+		if p == "" {
+			continue
+		}
+		args = append(args, "-p", p.String())
+	}
+
+	var env []string
+	if author != nil {
+		if author.Name != "" {
+			env = append(env,
+				"GIT_AUTHOR_NAME="+author.Name,
+				"GIT_COMMITTER_NAME="+author.Name,
+			)
+		}
+		if author.Email != "" {
+			env = append(env,
+				"GIT_AUTHOR_EMAIL="+author.Email,
+				"GIT_COMMITTER_EMAIL="+author.Email,
+			)
+		}
+	}
+
+	out, err := a.r.Run(ctx, RunOptions{Env: env}, args...)
+	if err != nil {
+		return "", err
+	}
+	oid := strings.TrimSpace(string(out))
+	if oid == "" {
+		return "", fmt.Errorf("git commit-tree returned empty oid")
+	}
+	return OID(oid), nil
+}
+
+func (a *GitAPIImpl) MergeBase(ctx context.Context, aOID OID, bOID OID) (oid OID, ok bool, err error) {
+	if aOID == "" {
+		return "", false, fmt.Errorf("git merge-base: oid a is required")
+	}
+	if bOID == "" {
+		return "", false, fmt.Errorf("git merge-base: oid b is required")
+	}
+	out, err := a.r.Run(ctx, RunOptions{}, "merge-base", aOID.String(), bOID.String())
+	if err != nil {
+		if isNoMergeBaseErr(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	s := strings.TrimSpace(string(out))
+	if s == "" {
+		return "", false, fmt.Errorf("git merge-base returned empty oid")
+	}
+	return OID(s), true, nil
+}
+
 func (a *GitAPIImpl) UpdateRefCAS(ctx context.Context, ref string, newOID OID, oldOID OID, msg string) error {
 	args := []string{"update-ref"}
 	if msg != "" {
@@ -282,6 +372,43 @@ func (a *GitAPIImpl) UpdateRef(ctx context.Context, ref string, newOID OID, msg 
 	return err
 }
 
+func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error {
+	if remote == "" {
+		return fmt.Errorf("git fetch: remote is required")
+	}
+	if srcRef == "" {
+		return fmt.Errorf("git fetch: src ref is required")
+	}
+	if dstRef == "" {
+		return fmt.Errorf("git fetch: dst ref is required")
+	}
+	// Forced refspec to keep tracking refs in sync with remote truth.
+	srcRef = strings.TrimPrefix(srcRef, "+")
+	refspec := "+" + srcRef + ":" + dstRef
+	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", remote, refspec)
+	return err
+}
+
+func (a *GitAPIImpl) PushRefWithLease(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID OID) error {
+	if remote == "" {
+		return fmt.Errorf("git push: remote is required")
+	}
+	if srcRef == "" {
+		return fmt.Errorf("git push: src ref is required")
+	}
+	if dstRef == "" {
+		return fmt.Errorf("git push: dst ref is required")
+	}
+	if expectedDstOID == "" {
+		return fmt.Errorf("git push: expected dst oid is required")
+	}
+	srcRef = strings.TrimPrefix(srcRef, "+")
+	refspec := srcRef + ":" + dstRef
+	lease := "--force-with-lease=" + dstRef + ":" + expectedDstOID.String()
+	_, err := a.r.Run(ctx, RunOptions{}, "push", "--porcelain", lease, remote, refspec)
+	return err
+}
+
 func isRefNotFoundErr(err error) bool {
 	ce, ok := err.(*CmdError)
 	if !ok {
@@ -296,6 +423,19 @@ func isRefNotFoundErr(err error) bool {
 	return strings.Contains(msg, "needed a single revision") ||
 		strings.Contains(msg, "unknown revision") ||
 		strings.Contains(msg, "not a valid object name")
+}
+
+func isNoMergeBaseErr(err error) bool {
+	ce, ok := err.(*CmdError)
+	if !ok {
+		return false
+	}
+	// `git merge-base <a> <b>` returns exit 1 when there is no merge base.
+	if ce.ExitCode == 1 {
+		msg := strings.ToLower(string(bytes.TrimSpace(ce.Output)))
+		return msg == "" || strings.Contains(msg, "no merge base")
+	}
+	return false
 }
 
 func isPathNotFoundErr(err error) bool {

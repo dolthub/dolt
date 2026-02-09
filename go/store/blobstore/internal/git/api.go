@@ -108,6 +108,34 @@ type GitAPI interface {
 	// Equivalent plumbing:
 	//   GIT_DIR=... git update-ref -m <msg> <ref> <new>
 	UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error
+
+	// FetchRef fetches |srcRef| from |remote| and updates |dstRef| in the local repo.
+	// It is expected to be a forced update to keep local tracking refs in sync with remote truth.
+	// Equivalent plumbing:
+	//   GIT_DIR=... git fetch <remote> +<srcRef>:<dstRef>
+	FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error
+
+	// PushRefWithLease pushes |srcRef| to |dstRef| on |remote|, but only if the remote's |dstRef|
+	// currently equals |expectedDstOID| (i.e. force-with-lease semantics).
+	// Equivalent plumbing:
+	//   GIT_DIR=... git push --force-with-lease=<dstRef>:<expectedDstOID> <remote> <srcRef>:<dstRef>
+	PushRefWithLease(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID OID) error
+
+	// MergeBase returns the merge-base OID for |a| and |b|, if one exists.
+	// Equivalent plumbing:
+	//   GIT_DIR=... git merge-base <a> <b>
+	MergeBase(ctx context.Context, a OID, b OID) (oid OID, ok bool, err error)
+
+	// ListTreeRecursive lists entries of the tree at |treePath| within |commit| recursively.
+	// For entries under a subdirectory, Name contains the relative path (e.g. "sub/x.txt").
+	// Equivalent plumbing:
+	//   GIT_DIR=... git ls-tree -r -t <commit>:<treePath>
+	ListTreeRecursive(ctx context.Context, commit OID, treePath string) ([]TreeEntry, error)
+
+	// CommitTreeWithParents creates a commit object from |tree| with zero or more |parents| and returns its oid.
+	// Equivalent plumbing:
+	//   GIT_DIR=... git commit-tree <tree> [-p <parent> ...] -m <message>
+	CommitTreeWithParents(ctx context.Context, tree OID, parents []OID, message string, author *Identity) (OID, error)
 }
 
 // TreeEntry describes one entry in a git tree listing.
