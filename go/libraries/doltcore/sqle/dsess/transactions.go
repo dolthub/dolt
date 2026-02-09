@@ -386,10 +386,11 @@ func (tx *DoltTransaction) doCommit(
 	if !ok {
 		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
 	}
+	normalizedDbName := strings.ToLower(branchState.dbState.dbName)
 
 	// Load the start state for this working set from the noms root at tx start
 	// Get the base DB name from the db state, not the branch state
-	startPoint, ok := tx.dbStartPoints[strings.ToLower(branchState.dbState.dbName)]
+	startPoint, ok := tx.dbStartPoints[normalizedDbName]
 	if !ok {
 		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
 	}
@@ -403,7 +404,7 @@ func (tx *DoltTransaction) doCommit(
 
 	mergeOpts := branchState.EditOpts()
 
-	lockID := dbName + "\u0000" + workingSet.Ref().String()
+	lockID := normalizedDbName + "\u0000" + workingSet.Ref().String()
 
 	for i := 0; i < maxTxCommitRetries; i++ {
 		updatedWs, newCommit, err := func() (*doltdb.WorkingSet, *doltdb.Commit, error) {
@@ -501,7 +502,6 @@ func (tx *DoltTransaction) mergeRoots(
 	workingSet *doltdb.WorkingSet,
 	mergeOpts editor.Options,
 ) (*doltdb.WorkingSet, error) {
-
 	tableResolver, err := GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, err
