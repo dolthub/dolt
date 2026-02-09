@@ -366,7 +366,7 @@ func (ht *HistoryTable) ProjectedTags() []uint64 {
 	if ht.projectedCols != nil {
 		return ht.projectedCols
 	}
-	
+
 	// Otherwise (no projection), return the tags for the underlying table with the extra meta tags appended
 	return append(ht.doltTable.ProjectedTags(), schema.HistoryCommitHashTag, schema.HistoryCommitterTag, schema.HistoryCommitDateTag)
 }
