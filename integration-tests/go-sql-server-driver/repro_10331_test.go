@@ -15,11 +15,6 @@
 package main
 
 import (
-	//	"context"
-	//	"database/sql"
-	//	sqldriver "database/sql/driver"
-	//	"fmt"
-	//	"strings"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -29,13 +24,8 @@ import (
 	"testing"
 	"time"
 
-	//	"time"
-
-	//	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
-
-	//	"golang.org/x/sync/errgroup"
 
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 )
