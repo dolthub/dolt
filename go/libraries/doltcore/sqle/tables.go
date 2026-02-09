@@ -1353,7 +1353,7 @@ func (t *DoltTable) Projections() []string {
 }
 
 func (t *DoltTable) ProjectedTags() []uint64 {
-	if len(t.projectedCols) > 0 {
+	if t.projectedCols != nil {
 		return t.projectedCols
 	}
 	return t.sch.GetAllCols().Tags
