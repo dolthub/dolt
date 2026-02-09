@@ -117,6 +117,93 @@ func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {
 	_ = rc.Close()
 }
 
+func TestGitBlobstore_RemoteManaged_ExistsFetchesAndMerges(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	remoteCommit, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"manifest": []byte("from remote\n"),
+	}, "seed remote")
+	require.NoError(t, err)
+
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		RemoteManaged: true,
+		RemoteName:    "origin",
+	})
+	require.NoError(t, err)
+
+	ok, err := bs.Exists(ctx, "manifest")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	localAPI := git.NewGitAPIImpl(localRunner)
+	gotLocal, err := localAPI.ResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	require.Equal(t, git.OID(remoteCommit), gotLocal)
+
+	gotTracking, err := localAPI.ResolveRefCommit(ctx, DoltRemoteTrackingDataRef("origin"))
+	require.NoError(t, err)
+	require.Equal(t, git.OID(remoteCommit), gotTracking)
+}
+
+func TestGitBlobstore_RemoteManaged_PutPushesToRemote(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"base": []byte("base\n"),
+	}, "seed remote")
+	require.NoError(t, err)
+
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		RemoteManaged: true,
+		RemoteName:    "origin",
+		Identity:      testIdentity(),
+	})
+	require.NoError(t, err)
+
+	ver, err := PutBytes(ctx, bs, "k", []byte("from local\n"))
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
+	require.NoError(t, err)
+	remoteAPI := git.NewGitAPIImpl(remoteRunner)
+
+	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	oid, typ, err := remoteAPI.ResolvePathObject(ctx, remoteHead, "k")
+	require.NoError(t, err)
+	require.Equal(t, git.ObjectTypeBlob, typ)
+
+	rc, err := remoteAPI.BlobReader(ctx, oid)
+	require.NoError(t, err)
+	got, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	require.NoError(t, rc.Close())
+	require.Equal(t, []byte("from local\n"), got)
+}
+
 func TestGitBlobstore_Get_NotFoundMissingKey(t *testing.T) {
 	requireGitOnPath(t)
 
