@@ -62,8 +62,8 @@ func TestGitBlobstore_Put_ChunkedWritesTreeParts(t *testing.T) {
 	entries, err := api.ListTree(ctx, head, "big")
 	require.NoError(t, err)
 	require.Len(t, entries, 4)
-	require.Equal(t, "00000001", entries[0].Name)
-	require.Equal(t, "00000004", entries[3].Name)
+	require.Equal(t, "0001", entries[0].Name)
+	require.Equal(t, "0004", entries[3].Name)
 }
 
 func TestGitBlobstore_Put_IdempotentDoesNotChangeExistingRepresentation(t *testing.T) {

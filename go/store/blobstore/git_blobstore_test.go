@@ -537,7 +537,7 @@ func TestGitBlobstore_Concatenate_ChunkedResult(t *testing.T) {
 	parts, err := bs.api.ListTree(ctx, head, "c")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(parts), 2)
-	require.Equal(t, "00000001", parts[0].Name)
+	require.Equal(t, "0001", parts[0].Name)
 
 	got, ver2, err := GetBytes(ctx, bs, "c", AllRange)
 	require.NoError(t, err)

@@ -34,7 +34,7 @@ import (
 	gitrebase "github.com/dolthub/dolt/go/store/blobstore/internal/gitrebase"
 )
 
-const gitblobstorePartNameWidth = 8 // "00000001"
+const gitblobstorePartNameWidth = 4 // "0001"
 
 type chunkPartRef struct {
 	oidHex string
@@ -54,7 +54,7 @@ type treeWrite struct {
 
 type putPlan struct {
 	writes []treeWrite
-	// If true, the key should be represented as a tree (chunked parts under key/NNNNNNNN).
+	// If true, the key should be represented as a tree (chunked parts under key/NNNN).
 	chunked bool
 }
 
@@ -600,10 +600,9 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 		return nil, 0, fmt.Errorf("gitblobstore: chunked tree has no parts")
 	}
 
-	width := len(entries[0].Name)
-	// First pass: validate names + types, and determine width.
-	if width < 4 {
-		return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected at least 4 digits)", entries[0].Name)
+	// GitBlobstore chunked trees use fixed-width 4-digit part names: 0001, 0002, ...
+	if len(entries[0].Name) != gitblobstorePartNameWidth {
+		return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected width %d)", entries[0].Name, gitblobstorePartNameWidth)
 	}
 
 	parts := make([]chunkPartRef, 0, len(entries))
@@ -612,18 +611,18 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 		if e.Type != git.ObjectTypeBlob {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part %q: expected blob, got %q", e.Name, e.Type)
 		}
-		if len(e.Name) != width {
-			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected width %d)", e.Name, width)
+		if len(e.Name) != gitblobstorePartNameWidth {
+			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected width %d)", e.Name, gitblobstorePartNameWidth)
 		}
 		n, err := strconv.Atoi(e.Name)
 		if err != nil {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected digits): %w", e.Name, err)
 		}
 		if n != i+1 {
-			want := fmt.Sprintf("%0*d", width, i+1)
+			want := fmt.Sprintf("%0*d", gitblobstorePartNameWidth, i+1)
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected %q)", e.Name, want)
 		}
-		if want := fmt.Sprintf("%0*d", width, n); want != e.Name {
+		if want := fmt.Sprintf("%0*d", gitblobstorePartNameWidth, n); want != e.Name {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected %q)", e.Name, want)
 		}
 
