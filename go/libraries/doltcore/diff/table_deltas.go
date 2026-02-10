@@ -660,13 +660,7 @@ func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, er
 
 // Format returns the format of the tables in this delta.
 func (td TableDelta) Format() *types.NomsBinFormat {
-	if td.FromRootObject != nil || td.ToRootObject != nil {
-		return types.Format_DOLT
-	}
-	if td.FromTable != nil {
-		return td.FromTable.Format()
-	}
-	return td.ToTable.Format()
+	return types.Format_DOLT
 }
 
 func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {

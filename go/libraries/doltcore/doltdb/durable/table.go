@@ -95,8 +95,6 @@ type Table interface {
 	HasConflicts(ctx context.Context) (bool, error)
 	// SetConflicts sets the merge conflicts for this table.
 	SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts ConflictIndex) (Table, error)
-	// ClearConflicts removes all merge conflicts for this table.
-	ClearConflicts(ctx context.Context) (Table, error)
 
 	// GetConstraintViolations returns the constraint violations for this table.
 	GetConstraintViolations(ctx context.Context) (types.Map, error)

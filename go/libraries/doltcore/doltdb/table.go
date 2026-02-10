@@ -222,7 +222,7 @@ func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
 		return t.clearArtifactConflicts(ctx)
 	}
 
-	return t.clearConflicts(ctx)
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 func (t *Table) clearArtifactConflicts(ctx context.Context) (*Table, error) {
@@ -235,14 +235,6 @@ func (t *Table) clearArtifactConflicts(ctx context.Context) (*Table, error) {
 		return nil, err
 	}
 	table, err := t.table.SetArtifacts(ctx, artIdx)
-	if err != nil {
-		return nil, err
-	}
-	return &Table{table: table}, nil
-}
-
-func (t *Table) clearConflicts(ctx context.Context) (*Table, error) {
-	table, err := t.table.ClearConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -456,57 +448,6 @@ func (t *Table) GetRowDataHash(ctx context.Context) (hash.Hash, error) {
 		return hash.Hash{}, err
 	}
 	return idx.HashOf()
-}
-
-// ResolveConflicts resolves conflicts for this table.
-func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
-	removed := 0
-	conflictSchema, confIdx, err := t.GetConflicts(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	if confIdx.Format() == types.Format_DOLT {
-		panic("resolve conflicts not implemented for new storage format")
-	}
-
-	confData := durable.NomsMapFromConflictIndex(confIdx)
-
-	confEdit := confData.Edit()
-	for _, pkTupleVal := range pkTuples {
-		if has, err := confData.Has(ctx, pkTupleVal); err != nil {
-			return nil, nil, nil, err
-		} else if has {
-			removed++
-			confEdit.Remove(pkTupleVal)
-		} else {
-			notFound = append(notFound, pkTupleVal)
-		}
-	}
-
-	if removed == 0 {
-		return invalid, notFound, tbl, ErrNoConflictsResolved
-	}
-
-	conflicts, err := confEdit.Map(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	if conflicts.Len() == 0 {
-		table, err := t.table.ClearConflicts(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		return invalid, notFound, &Table{table: table}, nil
-	}
-
-	table, err := t.table.SetConflicts(ctx, conflictSchema, durable.ConflictIndexFromNomsMap(conflicts, t.ValueReadWriter()))
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return invalid, notFound, &Table{table: table}, nil
 }
 
 // GetIndexSet returns the internal index map which goes from index name to a ref of the row data map.
