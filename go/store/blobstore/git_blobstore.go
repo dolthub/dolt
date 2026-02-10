@@ -413,6 +413,14 @@ func (gbs *GitBlobstore) sortCacheChildrenLocked(dirs map[string]struct{}) {
 }
 
 func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) error {
+	return gbs.mergeCacheFromHeadWithOverwrite(ctx, head, false)
+}
+
+func (gbs *GitBlobstore) mergeCacheFromHeadOverwriteAll(ctx context.Context, head git.OID) error {
+	return gbs.mergeCacheFromHeadWithOverwrite(ctx, head, true)
+}
+
+func (gbs *GitBlobstore) mergeCacheFromHeadWithOverwrite(ctx context.Context, head git.OID, overwriteAll bool) error {
 	if head == "" {
 		return fmt.Errorf("gitblobstore: cannot merge cache for empty head")
 	}
@@ -453,16 +461,17 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 		}
 
 		isManifest := e.Name == gitblobstoreManifestKey
-		gbs.mergeCacheObjectLocked(e.Name, e.OID, e.Type, isManifest)
+		overwrite := overwriteAll || isManifest
+		gbs.mergeCacheObjectLocked(e.Name, e.OID, e.Type, overwrite)
 
-		// Merge parent -> child membership (ensure presence; update only for manifest).
+		// Merge parent -> child membership (ensure presence; overwrite on demand).
 		parent, base := splitGitPathParentBase(e.Name)
 		if base == "" {
 			continue
 		}
 
 		child := git.TreeEntry{Mode: e.Mode, Type: e.Type, OID: e.OID, Name: base}
-		if gbs.mergeCacheChildLocked(parent, child, isManifest) {
+		if gbs.mergeCacheChildLocked(parent, child, overwrite) {
 			touchedDirs[parent] = struct{}{}
 		}
 	}
@@ -581,7 +590,9 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		}
 
 		// 5) Merge cache to reflect the new head after a successful push.
-		if err := gbs.mergeCacheFromHead(ctx, newCommit); err != nil {
+		// When we successfully push a new head, it is safe (and required for correctness)
+		// to overwrite cache entries to reflect the new head's tree.
+		if err := gbs.mergeCacheFromHeadOverwriteAll(ctx, newCommit); err != nil {
 			return backoff.Permanent(err)
 		}
 

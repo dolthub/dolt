@@ -620,6 +620,17 @@ func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string
 	return NewNoConjoinBSStore(ctx, nbfVerStr, bs, memTableSize, q)
 }
 
+// NewGitStore returns an nbs implementation backed by a GitBlobstore.
+func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+
+	bs, err := blobstore.NewGitBlobstoreWithOptions(gitDir, ref, opts)
+	if err != nil {
+		return nil, err
+	}
+	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+}
+
 // NewBSStore returns an nbs implementation backed by a Blobstore
 func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
