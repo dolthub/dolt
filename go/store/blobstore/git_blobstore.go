@@ -252,15 +252,11 @@ func (c *concatReadCloser) Close() error {
 // GitBlobstore is a Blobstore implementation backed by a git repository's object
 // database (bare repo or .git directory). It stores keys as paths within the tree
 // of the commit referenced by a git ref (e.g. refs/dolt/data).
-//
-// This implementation is being developed in phases. Read paths were implemented first,
-// then write paths were added incrementally.
 type GitBlobstore struct {
 	gitDir            string
 	ref               string
 	runner            *git.Runner
 	api               git.GitAPI
-	remoteManaged     bool
 	remoteName        string
 	remoteTrackingRef string
 	// identity, when non-nil, is used as the author/committer identity for new commits.
@@ -278,8 +274,7 @@ type GitBlobstore struct {
 var _ Blobstore = (*GitBlobstore)(nil)
 
 // NewGitBlobstore creates a new GitBlobstore rooted at |gitDir| and |ref|.
-// |gitDir| should point at a bare repo directory or a .git directory. Put is implemented,
-// while CheckAndPut and Concatenate are still unimplemented (see type-level docs).
+// |gitDir| should point at a bare repo directory or a .git directory.
 func NewGitBlobstore(gitDir, ref string) (*GitBlobstore, error) {
 	return NewGitBlobstoreWithOptions(gitDir, ref, GitBlobstoreOptions{})
 }
@@ -297,11 +292,8 @@ type GitBlobstoreOptions struct {
 	// MaxPartSize enables chunked-object writes when non-zero.
 	// Read paths always support chunked objects if encountered.
 	MaxPartSize uint64
-	// RemoteManaged enables automatic fetch/push sync against a configured git remote for
-	// Get/Put/CheckAndPut/Concatenate. Remote is source-of-truth; local ref is CAS-aligned to remote head.
-	RemoteManaged bool
 	// RemoteName is the git remote name to use for remote-managed mode (e.g. "origin").
-	// If empty and RemoteManaged is true, it defaults to "origin".
+	// If empty, it defaults to "origin".
 	RemoteName string
 }
 
@@ -313,20 +305,16 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 	}
 
 	remoteName := opts.RemoteName
-	if opts.RemoteManaged && remoteName == "" {
+	if remoteName == "" {
 		remoteName = "origin"
 	}
-	remoteTrackingRef := ""
-	if opts.RemoteManaged {
-		remoteTrackingRef = DoltRemoteTrackingDataRef(remoteName)
-	}
+	remoteTrackingRef := DoltRemoteTrackingDataRef(remoteName)
 
 	return &GitBlobstore{
 		gitDir:            gitDir,
 		ref:               ref,
 		runner:            r,
 		api:               git.NewGitAPIImpl(r),
-		remoteManaged:     opts.RemoteManaged,
 		remoteName:        remoteName,
 		remoteTrackingRef: remoteTrackingRef,
 		identity:          opts.Identity,
@@ -346,9 +334,6 @@ func (gbs *GitBlobstore) validateRemoteManaged() error {
 }
 
 func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
-	if !gbs.remoteManaged {
-		return nil
-	}
 	if err := gbs.validateRemoteManaged(); err != nil {
 		return err
 	}
@@ -471,18 +456,12 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 }
 
 func (gbs *GitBlobstore) putWithRemoteSync(ctx context.Context, key string, plan putPlan, msg string) (string, error) {
-	if !gbs.remoteManaged {
-		return gbs.putWithCASRetries(ctx, key, plan, msg)
-	}
 	return gbs.remoteManagedWrite(ctx, key, msg, func(remoteHead git.OID, _ bool) (git.OID, error) {
 		return gbs.buildCommitForKeyWrite(ctx, remoteHead, true, key, plan, msg)
 	})
 }
 
 func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader, msg string) (string, error) {
-	if !gbs.remoteManaged {
-		return "", fmt.Errorf("gitblobstore: internal error: checkAndPutWithRemoteSync called when remoteManaged=false")
-	}
 	var cachedPlan *putPlan
 	return gbs.remoteManagedWrite(ctx, key, msg, func(remoteHead git.OID, _ bool) (git.OID, error) {
 		actualKeyVersion, err := gbs.currentKeyVersion(ctx, remoteHead, true, key)
@@ -689,11 +668,9 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 		return "", err
 	}
 
-	if gbs.remoteManaged {
-		// Ensure the idempotent "key exists" fast-path observes remote state.
-		if err := gbs.syncForRead(ctx); err != nil {
-			return "", err
-		}
+	// Ensure the idempotent "key exists" fast-path observes remote state.
+	if err := gbs.syncForRead(ctx); err != nil {
+		return "", err
 	}
 
 	// Many NBS/table-file writes are content-addressed: if the key already exists, callers
@@ -718,10 +695,7 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 	if err != nil {
 		return "", err
 	}
-	if gbs.remoteManaged {
-		return gbs.putWithRemoteSync(ctx, key, plan, msg)
-	}
-	return gbs.putWithCASRetries(ctx, key, plan, msg)
+	return gbs.putWithRemoteSync(ctx, key, plan, msg)
 }
 
 func (gbs *GitBlobstore) planPutWrites(ctx context.Context, key string, totalSize int64, reader io.Reader) (putPlan, error) {
@@ -1005,65 +979,7 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 	}
 
 	msg := fmt.Sprintf("gitblobstore: checkandput %s", key)
-
-	if gbs.remoteManaged {
-		return gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg)
-	}
-
-	policy := gbs.casRetryPolicy(ctx)
-
-	var newKeyVersion string
-	var cachedPlan *putPlan
-	op := func() error {
-		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		actualKeyVersion, err := gbs.currentKeyVersion(ctx, parent, ok, key)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		if expectedVersion != actualKeyVersion {
-			return backoff.Permanent(CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: actualKeyVersion})
-		}
-
-		// Only hash/consume the reader once we know the expectedVersion matches.
-		// If we need to retry due to unrelated ref advances, reuse the cached plan so we
-		// don't re-read |reader| (which may not be rewindable).
-		if cachedPlan == nil {
-			plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			cachedPlan = &plan
-		}
-
-		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, *cachedPlan, msg)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		if err := gbs.updateRefCASForWrite(ctx, parent, ok, newCommit, msg); err != nil {
-			return err
-		}
-
-		ver, err := gbs.resolveKeyVersionAtCommit(ctx, newCommit, key)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		newKeyVersion = ver
-		return nil
-	}
-
-	if err := backoff.Retry(op, policy); err != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
-		return "", err
-	}
-
-	return newKeyVersion, nil
+	return gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg)
 }
 
 func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, haveCommit bool, key string) (string, error) {
@@ -1088,10 +1004,8 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 	if err != nil {
 		return "", err
 	}
-	if gbs.remoteManaged {
-		if err := gbs.syncForRead(ctx); err != nil {
-			return "", err
-		}
+	if err := gbs.syncForRead(ctx); err != nil {
+		return "", err
 	}
 	if len(sources) == 0 {
 		return "", fmt.Errorf("gitblobstore: concatenate requires at least one source")
@@ -1146,10 +1060,7 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 	}
 
 	msg := fmt.Sprintf("gitblobstore: concatenate %s", key)
-	if gbs.remoteManaged {
-		return gbs.putWithRemoteSync(ctx, key, plan, msg)
-	}
-	return gbs.putWithCASRetries(ctx, key, plan, msg)
+	return gbs.putWithRemoteSync(ctx, key, plan, msg)
 }
 
 func (gbs *GitBlobstore) openReaderAtCommit(ctx context.Context, commit git.OID, key string) (io.ReadCloser, error) {

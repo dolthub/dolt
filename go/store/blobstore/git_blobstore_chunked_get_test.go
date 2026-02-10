@@ -31,24 +31,31 @@ func TestGitBlobstore_Get_ChunkedTree_AllAndRanges(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
 	require.NoError(t, err)
 
 	part1 := []byte("abc")
 	part2 := []byte("defgh")
-	commitOID, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+	commitOID, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"chunked/0001": part1,
 		"chunked/0002": part2,
 	}, "seed chunked tree")
 	require.NoError(t, err)
 
-	runner, err := git.NewRunner(repo.GitDir)
+	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
-	api := git.NewGitAPIImpl(runner)
+	api := git.NewGitAPIImpl(remoteRunner)
 	treeOID, _, err := api.ResolvePathObject(ctx, git.OID(commitOID), "chunked")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstore(localRepo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	wantAll := append(append([]byte(nil), part1...), part2...)
@@ -82,17 +89,24 @@ func TestGitBlobstore_Get_ChunkedTree_InvalidPartsError(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
 	require.NoError(t, err)
 
 	// Gap: 0001, 0003
-	_, err = repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+	_, err = remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"chunked/0001": []byte("a"),
 		"chunked/0003": []byte("b"),
 	}, "seed invalid chunked tree")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstore(localRepo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	_, _, err = GetBytes(ctx, bs, "chunked", AllRange)

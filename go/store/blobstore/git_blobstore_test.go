@@ -42,14 +42,30 @@ func testIdentity() *git.Identity {
 	return &git.Identity{Name: "gitblobstore test", Email: "gitblobstore@test.invalid"}
 }
 
-func TestGitBlobstore_RefMissingIsNotFound(t *testing.T) {
+func newRemoteAndLocalRepos(t *testing.T, ctx context.Context) (remoteRepo *gitrepo.Repo, localRepo *gitrepo.Repo, localRunner *git.Runner) {
+	t.Helper()
+
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+
+	localRepo, err = gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err = git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+	return remoteRepo, localRepo, localRunner
+}
+
+func TestGitBlobstore_MissingKeysAreNotFound(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
+	bs, err := NewGitBlobstore(localRepo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	ok, err := bs.Exists(ctx, "manifest")
@@ -60,35 +76,31 @@ func TestGitBlobstore_RefMissingIsNotFound(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, IsNotFoundError(err))
 
-	// For non-manifest keys, missing the ref is a hard error.
 	_, _, _, err = bs.Get(ctx, "table", AllRange)
 	require.Error(t, err)
-	require.False(t, IsNotFoundError(err))
-	var rnf *git.RefNotFoundError
-	require.True(t, errors.As(err, &rnf))
+	require.True(t, IsNotFoundError(err))
 }
 
 func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
-	require.NoError(t, err)
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
 
 	want := []byte("hello manifest\n")
-	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+	commit, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"manifest": want,
 		"dir/file": []byte("abc"),
 	}, "seed")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
+	bs, err := NewGitBlobstore(localRepo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
-	runner, err := git.NewRunner(repo.GitDir)
+	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
-	api := git.NewGitAPIImpl(runner)
-	manifestOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "manifest")
+	remoteAPI := git.NewGitAPIImpl(remoteRunner)
+	manifestOID, _, err := remoteAPI.ResolvePathObject(ctx, git.OID(commit), "manifest")
 	require.NoError(t, err)
 
 	ok, err := bs.Exists(ctx, "manifest")
@@ -137,8 +149,7 @@ func TestGitBlobstore_RemoteManaged_ExistsFetchesAndAligns(t *testing.T) {
 	require.NoError(t, err)
 
 	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
-		RemoteManaged: true,
-		RemoteName:    "origin",
+		RemoteName: "origin",
 	})
 	require.NoError(t, err)
 
@@ -176,9 +187,8 @@ func TestGitBlobstore_RemoteManaged_PutPushesToRemote(t *testing.T) {
 	require.NoError(t, err)
 
 	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
-		RemoteManaged: true,
-		RemoteName:    "origin",
-		Identity:      testIdentity(),
+		RemoteName: "origin",
+		Identity:   testIdentity(),
 	})
 	require.NoError(t, err)
 
@@ -241,9 +251,8 @@ func TestGitBlobstore_RemoteManaged_PutRetriesOnLeaseFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
-		RemoteManaged: true,
-		RemoteName:    "origin",
-		Identity:      testIdentity(),
+		RemoteName: "origin",
+		Identity:   testIdentity(),
 	})
 	require.NoError(t, err)
 
@@ -328,9 +337,8 @@ func TestGitBlobstore_RemoteManaged_CheckAndPut_RemoteHeadTruth(t *testing.T) {
 	require.NoError(t, err)
 
 	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
-		RemoteManaged: true,
-		RemoteName:    "origin",
-		Identity:      testIdentity(),
+		RemoteName: "origin",
+		Identity:   testIdentity(),
 	})
 	require.NoError(t, err)
 
@@ -394,9 +402,8 @@ func TestGitBlobstore_RemoteManaged_CheckAndPut_ExpectedMatchesLocalButNotRemote
 	require.NoError(t, err)
 
 	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
-		RemoteManaged: true,
-		RemoteName:    "origin",
-		Identity:      testIdentity(),
+		RemoteName: "origin",
+		Identity:   testIdentity(),
 	})
 	require.NoError(t, err)
 
@@ -443,9 +450,8 @@ func TestGitBlobstore_RemoteManaged_PutOverwritesDivergedLocalRef_NoMergeCommit(
 	require.NoError(t, err)
 
 	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
-		RemoteManaged: true,
-		RemoteName:    "origin",
-		Identity:      testIdentity(),
+		RemoteName: "origin",
+		Identity:   testIdentity(),
 	})
 	require.NoError(t, err)
 
@@ -471,15 +477,13 @@ func TestGitBlobstore_Get_NotFoundMissingKey(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
-	require.NoError(t, err)
-
-	_, err = repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"present": []byte("x"),
 	}, "seed")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
+	bs, err := NewGitBlobstore(localRepo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	_, _, err = GetBytes(ctx, bs, "missing", AllRange)
@@ -491,21 +495,20 @@ func TestGitBlobstore_BlobRangeSemantics(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
-	require.NoError(t, err)
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
 
 	maxValue := int64(16 * 1024)
 	testData := rangeData(0, maxValue)
 
-	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+	commit, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"range": testData,
 	}, "range fixture")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
+	bs, err := NewGitBlobstore(localRepo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
-	runner, err := git.NewRunner(repo.GitDir)
+	runner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
 	api := git.NewGitAPIImpl(runner)
 	rangeOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "range")
@@ -584,10 +587,11 @@ func TestGitBlobstore_Put_RoundTripAndVersion(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
 	want := []byte("hello put\n")
@@ -609,10 +613,11 @@ func TestGitBlobstore_Concatenate_Basic(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
 	_, err = PutBytes(ctx, bs, "a", []byte("hi "))
@@ -634,10 +639,11 @@ func TestGitBlobstore_Concatenate_ChunkedResult(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(repo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		Identity:    testIdentity(),
 		MaxPartSize: 1024,
 	})
@@ -680,10 +686,11 @@ func TestGitBlobstore_Concatenate_KeyExistsFastSucceeds(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
 	ver1, err := PutBytes(ctx, bs, "c", []byte("original"))
@@ -709,10 +716,13 @@ func TestGitBlobstore_Concatenate_MissingSourceIsNotFound(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"present": []byte("x"),
+	}, "seed")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
 	_, err = PutBytes(ctx, bs, "present", []byte("x"))
@@ -730,10 +740,11 @@ func TestGitBlobstore_Concatenate_EmptySourcesErrors(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
 	_, err = bs.Concatenate(ctx, "c", nil)
@@ -750,10 +761,11 @@ func TestGitBlobstore_Put_IdempotentIfKeyExists(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
 	ver1, err := PutBytes(ctx, bs, "k", []byte("v1\n"))
@@ -768,22 +780,6 @@ func TestGitBlobstore_Put_IdempotentIfKeyExists(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ver1, ver3)
 	require.Equal(t, []byte("v1\n"), got)
-}
-
-type hookGitAPI struct {
-	git.GitAPI
-
-	ref string
-	// if set, called once before the first UpdateRefCAS executes.
-	onFirstCAS func(ctx context.Context, old git.OID)
-	did        atomic.Bool
-}
-
-func (h *hookGitAPI) UpdateRefCAS(ctx context.Context, ref string, newOID git.OID, oldOID git.OID, msg string) error {
-	if h.onFirstCAS != nil && !h.did.Swap(true) && ref == h.ref {
-		h.onFirstCAS(ctx, oldOID)
-	}
-	return h.GitAPI.UpdateRefCAS(ctx, ref, newOID, oldOID, msg)
 }
 
 func writeKeyToRef(ctx context.Context, api git.GitAPI, ref string, key string, data []byte, author *git.Identity) (git.OID, error) {
@@ -840,54 +836,6 @@ func writeKeyToRef(ctx context.Context, api git.GitAPI, ref string, key string, 
 	return commitOID, nil
 }
 
-func TestGitBlobstore_Put_ContentionRetryPreservesOtherKey(t *testing.T) {
-	requireGitOnPath(t)
-
-	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
-	require.NoError(t, err)
-
-	// Seed the ref so Put takes the CAS path.
-	_, err = repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
-		"base": []byte("base\n"),
-	}, "seed")
-	require.NoError(t, err)
-
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
-	require.NoError(t, err)
-
-	origAPI := bs.api
-	h := &hookGitAPI{GitAPI: origAPI, ref: DoltDataRef}
-	h.onFirstCAS = func(ctx context.Context, old git.OID) {
-		// Advance the ref to simulate another writer committing concurrently.
-		_, _ = writeKeyToRef(ctx, origAPI, DoltDataRef, "external", []byte("external\n"), testIdentity())
-	}
-	bs.api = h
-
-	ver, err := PutBytes(ctx, bs, "k", []byte("mine\n"))
-	require.NoError(t, err)
-	require.NotEmpty(t, ver)
-
-	got, ver2, err := GetBytes(ctx, bs, "k", AllRange)
-	require.NoError(t, err)
-	require.Equal(t, ver, ver2)
-	require.Equal(t, []byte("mine\n"), got)
-
-	got, _, err = GetBytes(ctx, bs, "external", AllRange)
-	require.NoError(t, err)
-	require.Equal(t, []byte("external\n"), got)
-
-	got, _, err = GetBytes(ctx, bs, "base", AllRange)
-	require.NoError(t, err)
-	require.Equal(t, []byte("base\n"), got)
-
-	// Sanity: BlobReader path still works for the new commit.
-	rc, _, _, err := bs.Get(ctx, "k", AllRange)
-	require.NoError(t, err)
-	_, _ = io.ReadAll(rc)
-	_ = rc.Close()
-}
-
 type failReader struct {
 	called atomic.Bool
 }
@@ -901,10 +849,11 @@ func TestGitBlobstore_CheckAndPut_CreateOnly(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
 	want := []byte("created\n")
@@ -922,18 +871,17 @@ func TestGitBlobstore_CheckAndPut_MismatchDoesNotRead(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
-	require.NoError(t, err)
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
 
-	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+	commit, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"k": []byte("base\n"),
 	}, "seed")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
-	runner, err := git.NewRunner(repo.GitDir)
+	runner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
 	api := git.NewGitAPIImpl(runner)
 	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "k")
@@ -950,19 +898,18 @@ func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
-	require.NoError(t, err)
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
 
-	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+	commit, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
 		"k":    []byte("base\n"),
 		"keep": []byte("keep\n"),
 	}, "seed")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
-	runner, err := git.NewRunner(repo.GitDir)
+	runner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
 	api := git.NewGitAPIImpl(runner)
 	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "k")
@@ -982,48 +929,4 @@ func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
 	got, _, err = GetBytes(ctx, bs, "keep", AllRange)
 	require.NoError(t, err)
 	require.Equal(t, []byte("keep\n"), got)
-}
-
-func TestGitBlobstore_CheckAndPut_ConcurrentUnrelatedUpdateStillSucceeds(t *testing.T) {
-	requireGitOnPath(t)
-
-	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
-	require.NoError(t, err)
-
-	commit, err := repo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
-		"k": []byte("base\n"),
-	}, "seed")
-	require.NoError(t, err)
-
-	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
-	require.NoError(t, err)
-
-	runner, err := git.NewRunner(repo.GitDir)
-	require.NoError(t, err)
-	api := git.NewGitAPIImpl(runner)
-	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "k")
-	require.NoError(t, err)
-
-	origAPI := bs.api
-	h := &hookGitAPI{GitAPI: origAPI, ref: DoltDataRef}
-	h.onFirstCAS = func(ctx context.Context, old git.OID) {
-		// Advance the ref (without touching "k") to make UpdateRefCAS fail.
-		_, _ = writeKeyToRef(ctx, origAPI, DoltDataRef, "external", []byte("external\n"), testIdentity())
-	}
-	bs.api = h
-
-	ver2, err := bs.CheckAndPut(ctx, keyOID.String(), "k", 0, bytes.NewReader([]byte("mine\n")))
-	require.NoError(t, err)
-	require.NotEmpty(t, ver2)
-	require.NotEqual(t, keyOID.String(), ver2)
-
-	got, ver3, err := GetBytes(ctx, bs, "k", AllRange)
-	require.NoError(t, err)
-	require.Equal(t, ver2, ver3)
-	require.Equal(t, []byte("mine\n"), got)
-
-	got, _, err = GetBytes(ctx, bs, "external", AllRange)
-	require.NoError(t, err)
-	require.Equal(t, []byte("external\n"), got)
 }

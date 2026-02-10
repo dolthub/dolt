@@ -29,10 +29,19 @@ func TestGitBlobstore_Put_ChunkedWritesTreeParts(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(repo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		Identity:    testIdentity(),
 		MaxPartSize: 3,
 	})
@@ -47,7 +56,7 @@ func TestGitBlobstore_Put_ChunkedWritesTreeParts(t *testing.T) {
 	require.Equal(t, ver, ver2)
 	require.Equal(t, want, got)
 
-	runner, err := git.NewRunner(repo.GitDir)
+	runner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
 	api := git.NewGitAPIImpl(runner)
 
@@ -70,16 +79,25 @@ func TestGitBlobstore_Put_IdempotentDoesNotChangeExistingRepresentation(t *testi
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(repo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		Identity:    testIdentity(),
 		MaxPartSize: 3,
 	})
 	require.NoError(t, err)
 
-	runner, err := git.NewRunner(repo.GitDir)
+	runner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
 	api := git.NewGitAPIImpl(runner)
 
