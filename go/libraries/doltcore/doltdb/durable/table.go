@@ -23,7 +23,6 @@ import (
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -738,61 +737,6 @@ func (t doltDevTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, 
 	return doltDevTable{t.vrw, t.ns, msg}, nil
 }
 
-func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, ConflictIndex, error) {
-	conflicts, err := t.msg.TryConflicts(nil)
-	if err != nil {
-		return conflict.ConflictSchema{}, nil, err
-	}
-
-	ouraddr := hash.New(conflicts.OurSchemaBytes())
-	theiraddr := hash.New(conflicts.TheirSchemaBytes())
-	baseaddr := hash.New(conflicts.AncestorSchemaBytes())
-
-	if ouraddr.IsEmpty() {
-		sch, err := t.GetSchema(ctx)
-		if err != nil {
-			return conflict.ConflictSchema{}, nil, err
-		}
-		empty, err := NewEmptyConflictIndex(ctx, t.vrw, t.ns, sch, sch, sch)
-		if err != nil {
-			return conflict.ConflictSchema{}, nil, err
-		}
-		return conflict.ConflictSchema{}, empty, nil
-	}
-
-	ourschema, err := getSchemaAtAddr(ctx, t.vrw, ouraddr)
-	if err != nil {
-		return conflict.ConflictSchema{}, nil, err
-	}
-	theirschema, err := getSchemaAtAddr(ctx, t.vrw, theiraddr)
-	if err != nil {
-		return conflict.ConflictSchema{}, nil, err
-	}
-	baseschema, err := getSchemaAtAddr(ctx, t.vrw, baseaddr)
-	if err != nil {
-		return conflict.ConflictSchema{}, nil, err
-	}
-
-	conflictschema := conflict.ConflictSchema{
-		Base:        baseschema,
-		Schema:      ourschema,
-		MergeSchema: theirschema,
-	}
-
-	mapaddr := hash.New(conflicts.DataBytes())
-	var conflictIdx ConflictIndex
-	if mapaddr.IsEmpty() {
-		conflictIdx, err = NewEmptyConflictIndex(ctx, t.vrw, t.ns, ourschema, theirschema, baseschema)
-		if err != nil {
-			return conflict.ConflictSchema{}, nil, err
-		}
-	} else {
-		panic("TODO: unreachable code")
-	}
-
-	return conflictschema, conflictIdx, nil
-}
-
 // GetArtifacts implements Table.
 func (t doltDevTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
 	if t.Format() != types.Format_DOLT {
@@ -834,90 +778,6 @@ func (t doltDevTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex)
 	}
 	msg := t.clone()
 	copy(msg.ArtifactsBytes(), addr[:])
-	return doltDevTable{t.vrw, t.ns, msg}, nil
-}
-
-func (t doltDevTable) HasConflicts(ctx context.Context) (bool, error) {
-
-	conflicts, err := t.msg.TryConflicts(nil)
-	if err != nil {
-		return false, err
-	}
-	addr := hash.New(conflicts.OurSchemaBytes())
-	return !addr.IsEmpty(), nil
-}
-
-func (t doltDevTable) SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts ConflictIndex) (Table, error) {
-	conflictsRef, err := RefFromConflictIndex(ctx, t.vrw, conflicts)
-	if err != nil {
-		return nil, err
-	}
-	conflictsAddr := conflictsRef.TargetHash()
-
-	baseaddr, err := getAddrForSchema(ctx, t.vrw, sch.Base)
-	if err != nil {
-		return nil, err
-	}
-	ouraddr, err := getAddrForSchema(ctx, t.vrw, sch.Schema)
-	if err != nil {
-		return nil, err
-	}
-	theiraddr, err := getAddrForSchema(ctx, t.vrw, sch.MergeSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	msg := t.clone()
-	cmsg, err := msg.TryConflicts(nil)
-	if err != nil {
-		return nil, err
-	}
-	copy(cmsg.DataBytes(), conflictsAddr[:])
-	copy(cmsg.OurSchemaBytes(), ouraddr[:])
-	copy(cmsg.TheirSchemaBytes(), theiraddr[:])
-	copy(cmsg.AncestorSchemaBytes(), baseaddr[:])
-
-	return doltDevTable{t.vrw, t.ns, msg}, nil
-}
-
-func (t doltDevTable) ClearConflicts(ctx context.Context) (Table, error) {
-	msg := t.clone()
-	conflicts, err := msg.TryConflicts(nil)
-	if err != nil {
-		return nil, err
-	}
-	var emptyhash hash.Hash
-	copy(conflicts.DataBytes(), emptyhash[:])
-	copy(conflicts.OurSchemaBytes(), emptyhash[:])
-	copy(conflicts.TheirSchemaBytes(), emptyhash[:])
-	copy(conflicts.AncestorSchemaBytes(), emptyhash[:])
-	return doltDevTable{t.vrw, t.ns, msg}, nil
-}
-
-func (t doltDevTable) GetConstraintViolations(ctx context.Context) (types.Map, error) {
-	addr := hash.New(t.msg.ViolationsBytes())
-	if addr.IsEmpty() {
-		return types.NewMap(ctx, t.vrw)
-	}
-	v, err := t.vrw.MustReadValue(ctx, addr)
-	if err != nil {
-		return types.Map{}, err
-	}
-
-	return v.(types.Map), nil
-}
-
-func (t doltDevTable) SetConstraintViolations(ctx context.Context, violations types.Map) (Table, error) {
-	var addr hash.Hash
-	if violations != types.EmptyMap && violations.Len() != 0 {
-		ref, err := refFromNomsValue(ctx, t.vrw, violations)
-		if err != nil {
-			return nil, err
-		}
-		addr = ref.TargetHash()
-	}
-	msg := t.clone()
-	copy(msg.ViolationsBytes(), addr[:])
 	return doltDevTable{t.vrw, t.ns, msg}, nil
 }
 
