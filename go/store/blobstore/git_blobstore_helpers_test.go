@@ -33,6 +33,8 @@ type fakeGitAPI struct {
 	listTree            func(ctx context.Context, commit git.OID, treePath string) ([]git.TreeEntry, error)
 	blobSize            func(ctx context.Context, oid git.OID) (int64, error)
 	blobReader          func(ctx context.Context, oid git.OID) (io.ReadCloser, error)
+	fetchRef            func(ctx context.Context, remote string, srcRef string, dstRef string) error
+	pushRefWithLease    func(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID git.OID) error
 }
 
 func (f fakeGitAPI) TryResolveRefCommit(ctx context.Context, ref string) (git.OID, bool, error) {
@@ -86,6 +88,18 @@ func (f fakeGitAPI) UpdateRefCAS(ctx context.Context, ref string, newOID git.OID
 func (f fakeGitAPI) UpdateRef(ctx context.Context, ref string, newOID git.OID, msg string) error {
 	panic("unexpected call")
 }
+func (f fakeGitAPI) FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error {
+	if f.fetchRef == nil {
+		panic("unexpected call")
+	}
+	return f.fetchRef(ctx, remote, srcRef, dstRef)
+}
+func (f fakeGitAPI) PushRefWithLease(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID git.OID) error {
+	if f.pushRefWithLease == nil {
+		panic("unexpected call")
+	}
+	return f.pushRefWithLease(ctx, remote, srcRef, dstRef, expectedDstOID)
+}
 
 func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 	ctx := context.Background()
@@ -97,7 +111,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 				return git.OID("0123456789abcdef0123456789abcdef01234567"), true, nil
 			},
 		}
-		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
+		gbs := &GitBlobstore{localRef: DoltDataRef, api: api}
 
 		commit, err := gbs.resolveCommitForGet(ctx, "k")
 		require.NoError(t, err)
@@ -110,7 +124,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 				return git.OID(""), false, nil
 			},
 		}
-		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
+		gbs := &GitBlobstore{localRef: DoltDataRef, api: api}
 
 		_, err := gbs.resolveCommitForGet(ctx, "manifest")
 		var nf NotFound
@@ -124,7 +138,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 				return git.OID(""), false, nil
 			},
 		}
-		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
+		gbs := &GitBlobstore{localRef: DoltDataRef, api: api}
 
 		_, err := gbs.resolveCommitForGet(ctx, "somekey")
 		var rnf *git.RefNotFoundError
@@ -139,7 +153,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 				return git.OID(""), false, sentinel
 			},
 		}
-		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
+		gbs := &GitBlobstore{localRef: DoltDataRef, api: api}
 
 		_, err := gbs.resolveCommitForGet(ctx, "k")
 		require.ErrorIs(t, err, sentinel)

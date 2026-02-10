@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 )
 
@@ -30,10 +31,19 @@ func TestGitBlobstore_CheckAndPut_ChunkedRoundTrip_CreateOnly(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(repo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		Identity:    testIdentity(),
 		MaxPartSize: 3,
 	})
@@ -60,16 +70,25 @@ func TestGitBlobstore_CheckAndPut_MismatchDoesNotConsumeReader_WithChunkingEnabl
 	requireGitOnPath(t)
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
+	require.NoError(t, err)
+
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
 	require.NoError(t, err)
 
 	// Seed any commit so actualVersion != "".
-	bs0, err := NewGitBlobstoreWithOptions(repo.GitDir, DoltDataRef, GitBlobstoreOptions{Identity: testIdentity()})
+	bs0, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{Identity: testIdentity()})
 	require.NoError(t, err)
 	_, err = bs0.Put(ctx, "x", 1, bytes.NewReader([]byte("x")))
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(repo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		Identity:    testIdentity(),
 		MaxPartSize: 3,
 	})

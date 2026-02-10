@@ -108,6 +108,17 @@ type GitAPI interface {
 	// Equivalent plumbing:
 	//   GIT_DIR=... git update-ref -m <msg> <ref> <new>
 	UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error
+
+	// FetchRef fetches |srcRef| from |remote| and updates |dstRef| in the local repo.
+	// It is expected to force-update (tracking refs follow remote truth).
+	// Equivalent plumbing:
+	//   GIT_DIR=... git fetch <remote> +<srcRef>:<dstRef>
+	FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error
+
+	// PushRefWithLease pushes |srcRef| to |dstRef| on |remote|, but only if the remote's |dstRef|
+	// equals |expectedDstOID| (force-with-lease).
+	// Equivalent plumbing: GIT_DIR=... git push --force-with-lease=<dstRef>:<expectedDstOID> <remote> <srcRef>:<dstRef>
+	PushRefWithLease(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID OID) error
 }
 
 // TreeEntry describes one entry in a git tree listing.

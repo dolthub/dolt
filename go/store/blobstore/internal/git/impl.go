@@ -282,6 +282,43 @@ func (a *GitAPIImpl) UpdateRef(ctx context.Context, ref string, newOID OID, msg 
 	return err
 }
 
+func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error {
+	if remote == "" {
+		return fmt.Errorf("git fetch: remote is required")
+	}
+	if srcRef == "" {
+		return fmt.Errorf("git fetch: src ref is required")
+	}
+	if dstRef == "" {
+		return fmt.Errorf("git fetch: dst ref is required")
+	}
+	// Forced refspec to keep tracking refs in sync with remote truth.
+	srcRef = strings.TrimPrefix(srcRef, "+")
+	refspec := "+" + srcRef + ":" + dstRef
+	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", remote, refspec)
+	return err
+}
+
+func (a *GitAPIImpl) PushRefWithLease(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID OID) error {
+	if remote == "" {
+		return fmt.Errorf("git push: remote is required")
+	}
+	if srcRef == "" {
+		return fmt.Errorf("git push: src ref is required")
+	}
+	if dstRef == "" {
+		return fmt.Errorf("git push: dst ref is required")
+	}
+	if expectedDstOID == "" {
+		return fmt.Errorf("git push: expected dst oid is required")
+	}
+	srcRef = strings.TrimPrefix(srcRef, "+")
+	refspec := srcRef + ":" + dstRef
+	lease := "--force-with-lease=" + dstRef + ":" + expectedDstOID.String()
+	_, err := a.r.Run(ctx, RunOptions{}, "push", "--porcelain", lease, remote, refspec)
+	return err
+}
+
 func isRefNotFoundErr(err error) bool {
 	ce, ok := err.(*CmdError)
 	if !ok {

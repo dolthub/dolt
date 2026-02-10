@@ -21,19 +21,19 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/google/uuid"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
 )
 
-const gitblobstorePartNameWidth = 8 // "00000001"
+const gitblobstorePartNameWidth = 4 // "0001"
 
 type chunkPartRef struct {
 	oidHex string
@@ -53,7 +53,7 @@ type treeWrite struct {
 
 type putPlan struct {
 	writes []treeWrite
-	// If true, the key should be represented as a tree (chunked parts under key/NNNNNNNN).
+	// If true, the key should be represented as a tree (chunked parts under key/NNNN).
 	chunked bool
 }
 
@@ -254,14 +254,15 @@ func (c *concatReadCloser) Close() error {
 // GitBlobstore is a Blobstore implementation backed by a git repository's object
 // database (bare repo or .git directory). It stores keys as paths within the tree
 // of the commit referenced by a git ref (e.g. refs/dolt/data).
-//
-// This implementation is being developed in phases. Read paths were implemented first,
-// then write paths were added incrementally.
 type GitBlobstore struct {
-	gitDir string
-	ref    string
-	runner *git.Runner
-	api    git.GitAPI
+	gitDir            string
+	remoteRef         string
+	localRef          string
+	runner            *git.Runner
+	api               git.GitAPI
+	remoteName        string
+	remoteTrackingRef string
+	mu                sync.Mutex
 	// identity, when non-nil, is used as the author/committer identity for new commits.
 	// When nil, we prefer whatever identity git derives from env/config, falling back
 	// to a deterministic default only if git reports the identity is missing.
@@ -277,8 +278,7 @@ type GitBlobstore struct {
 var _ Blobstore = (*GitBlobstore)(nil)
 
 // NewGitBlobstore creates a new GitBlobstore rooted at |gitDir| and |ref|.
-// |gitDir| should point at a bare repo directory or a .git directory. Put is implemented,
-// while CheckAndPut and Concatenate are still unimplemented (see type-level docs).
+// |gitDir| should point at a bare repo directory or a .git directory.
 func NewGitBlobstore(gitDir, ref string) (*GitBlobstore, error) {
 	return NewGitBlobstoreWithOptions(gitDir, ref, GitBlobstoreOptions{})
 }
@@ -296,6 +296,9 @@ type GitBlobstoreOptions struct {
 	// MaxPartSize enables chunked-object writes when non-zero.
 	// Read paths always support chunked objects if encountered.
 	MaxPartSize uint64
+	// RemoteName is the git remote name to use for remote-managed mode (e.g. "origin").
+	// If empty, it defaults to "origin".
+	RemoteName string
 }
 
 // NewGitBlobstoreWithOptions creates a GitBlobstore rooted at |gitDir| and |ref|.
@@ -304,18 +307,165 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 	if err != nil {
 		return nil, err
 	}
+
+	remoteName := opts.RemoteName
+	if remoteName == "" {
+		remoteName = "origin"
+	}
+	remoteRef := ref
+	remoteTrackingRef := RemoteTrackingRef(remoteName, remoteRef)
+	localRef := OwnedLocalRef(remoteName, remoteRef, uuid.NewString())
+
 	return &GitBlobstore{
-		gitDir:      gitDir,
-		ref:         ref,
-		runner:      r,
-		api:         git.NewGitAPIImpl(r),
-		identity:    opts.Identity,
-		maxPartSize: opts.MaxPartSize,
+		gitDir:            gitDir,
+		remoteRef:         remoteRef,
+		localRef:          localRef,
+		runner:            r,
+		api:               git.NewGitAPIImpl(r),
+		remoteName:        remoteName,
+		remoteTrackingRef: remoteTrackingRef,
+		identity:          opts.Identity,
+		maxPartSize:       opts.MaxPartSize,
 	}, nil
 }
 
 func (gbs *GitBlobstore) Path() string {
-	return fmt.Sprintf("%s@%s", gbs.gitDir, gbs.ref)
+	return fmt.Sprintf("%s@%s", gbs.gitDir, gbs.remoteRef)
+}
+
+func (gbs *GitBlobstore) validateRemoteManaged() error {
+	if gbs.remoteName == "" || gbs.remoteRef == "" || gbs.remoteTrackingRef == "" || gbs.localRef == "" {
+		return fmt.Errorf("gitblobstore: remote-managed mode misconfigured (remoteName=%q remoteRef=%q trackingRef=%q localRef=%q)", gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef, gbs.localRef)
+	}
+	return nil
+}
+
+// CleanupOwnedLocalRef best-effort deletes this blobstore instance's UUID-owned local ref.
+//
+// This is an optional hygiene API: by default, UUID-owned local refs may accumulate in the
+// repo over time. Callers that care about cleanup (e.g. tests) may invoke this explicitly.
+func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
+	gbs.mu.Lock()
+	defer gbs.mu.Unlock()
+
+	_, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	_, err = gbs.runner.Run(ctx, git.RunOptions{}, "update-ref", "-d", gbs.localRef)
+	return err
+}
+
+func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
+	if err := gbs.validateRemoteManaged(); err != nil {
+		return err
+	}
+	gbs.mu.Lock()
+	defer gbs.mu.Unlock()
+
+	// 1) Fetch remote ref into our remote-tracking ref.
+	if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
+		return err
+	}
+
+	remoteHead, okRemote, err := gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
+	if err != nil {
+		return err
+	}
+	if !okRemote {
+		return &git.RefNotFoundError{Ref: gbs.remoteTrackingRef}
+	}
+
+	// 2) Force-set owned local ref to remote head (no merge; remote is source-of-truth).
+	return gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync read")
+}
+
+func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string, build func(parent git.OID, ok bool) (git.OID, error)) (string, error) {
+	if err := gbs.validateRemoteManaged(); err != nil {
+		return "", err
+	}
+	gbs.mu.Lock()
+	defer gbs.mu.Unlock()
+
+	policy := gbs.casRetryPolicy(ctx)
+
+	var ver string
+	op := func() error {
+		// 1) Fetch remote state into local tracking ref.
+		if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
+			return err
+		}
+		remoteHead, okRemote, err := gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+		if !okRemote {
+			return backoff.Permanent(&git.RefNotFoundError{Ref: gbs.remoteTrackingRef})
+		}
+
+		// 2) Force-set owned local ref to remote head (remote is source-of-truth).
+		if err := gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync write"); err != nil {
+			return backoff.Permanent(err)
+		}
+
+		// 3) Apply this operation's changes on top of the remote head.
+		newCommit, err := build(remoteHead, true)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+		if err := gbs.api.UpdateRef(ctx, gbs.localRef, newCommit, msg); err != nil {
+			return backoff.Permanent(err)
+		}
+
+		// 4) Push local ref to remote with lease.
+		if err := gbs.api.PushRefWithLease(ctx, gbs.remoteName, gbs.localRef, gbs.remoteRef, remoteHead); err != nil {
+			return err
+		}
+
+		ver, err = gbs.resolveKeyVersionAtCommit(ctx, newCommit, key)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+		return nil
+	}
+
+	if err := backoff.Retry(op, policy); err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", err
+	}
+	return ver, nil
+}
+
+func (gbs *GitBlobstore) putWithRemoteSync(ctx context.Context, key string, plan putPlan, msg string) (string, error) {
+	return gbs.remoteManagedWrite(ctx, key, msg, func(remoteHead git.OID, _ bool) (git.OID, error) {
+		return gbs.buildCommitForKeyWrite(ctx, remoteHead, true, key, plan, msg)
+	})
+}
+
+func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader, msg string) (string, error) {
+	var cachedPlan *putPlan
+	return gbs.remoteManagedWrite(ctx, key, msg, func(remoteHead git.OID, _ bool) (git.OID, error) {
+		actualKeyVersion, err := gbs.currentKeyVersion(ctx, remoteHead, true, key)
+		if err != nil {
+			return git.OID(""), err
+		}
+		if expectedVersion != actualKeyVersion {
+			return git.OID(""), CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: actualKeyVersion}
+		}
+		if cachedPlan == nil {
+			plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
+			if err != nil {
+				return git.OID(""), err
+			}
+			cachedPlan = &plan
+		}
+		return gbs.buildCommitForKeyWrite(ctx, remoteHead, true, key, *cachedPlan, msg)
+	})
 }
 
 func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
@@ -323,7 +473,10 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	if err := gbs.syncForRead(ctx); err != nil {
+		return false, err
+	}
+	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
 	if err != nil {
 		return false, err
 	}
@@ -343,6 +496,9 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
+		return nil, 0, "", err
+	}
+	if err := gbs.syncForRead(ctx); err != nil {
 		return nil, 0, "", err
 	}
 	commit, err := gbs.resolveCommitForGet(ctx, key)
@@ -414,10 +570,9 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 		return nil, 0, fmt.Errorf("gitblobstore: chunked tree has no parts")
 	}
 
-	width := len(entries[0].Name)
-	// First pass: validate names + types, and determine width.
-	if width < 4 {
-		return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected at least 4 digits)", entries[0].Name)
+	// GitBlobstore chunked trees use fixed-width 4-digit part names: 0001, 0002, ...
+	if len(entries[0].Name) != gitblobstorePartNameWidth {
+		return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected width %d)", entries[0].Name, gitblobstorePartNameWidth)
 	}
 
 	parts := make([]chunkPartRef, 0, len(entries))
@@ -426,18 +581,18 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 		if e.Type != git.ObjectTypeBlob {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part %q: expected blob, got %q", e.Name, e.Type)
 		}
-		if len(e.Name) != width {
-			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected width %d)", e.Name, width)
+		if len(e.Name) != gitblobstorePartNameWidth {
+			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected width %d)", e.Name, gitblobstorePartNameWidth)
 		}
 		n, err := strconv.Atoi(e.Name)
 		if err != nil {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected digits): %w", e.Name, err)
 		}
 		if n != i+1 {
-			want := fmt.Sprintf("%0*d", width, i+1)
+			want := fmt.Sprintf("%0*d", gitblobstorePartNameWidth, i+1)
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected %q)", e.Name, want)
 		}
-		if want := fmt.Sprintf("%0*d", width, n); want != e.Name {
+		if want := fmt.Sprintf("%0*d", gitblobstorePartNameWidth, n); want != e.Name {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected %q)", e.Name, want)
 		}
 
@@ -458,7 +613,7 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 }
 
 func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (commit git.OID, err error) {
-	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
 	if err != nil {
 		return git.OID(""), err
 	}
@@ -471,7 +626,7 @@ func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (c
 	if key == "manifest" {
 		return git.OID(""), NotFound{Key: key}
 	}
-	return git.OID(""), &git.RefNotFoundError{Ref: gbs.ref}
+	return git.OID(""), &git.RefNotFoundError{Ref: gbs.localRef}
 }
 
 func (gbs *GitBlobstore) resolveObjectForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, typ git.ObjectType, err error) {
@@ -499,6 +654,11 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 		return "", err
 	}
 
+	// Ensure the idempotent "key exists" fast-path observes remote state.
+	if err := gbs.syncForRead(ctx); err != nil {
+		return "", err
+	}
+
 	// Many NBS/table-file writes are content-addressed: if the key already exists, callers
 	// assume it refers to the same bytes and treat the operation as idempotent.
 	//
@@ -515,13 +675,13 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 
 	msg := fmt.Sprintf("gitblobstore: put %s", key)
 
-	// Hash the contents once. If we need to retry due to concurrent updates to |gbs.ref|,
+	// Hash the contents once. If we need to retry due to a concurrent remote advance (lease failure),
 	// we can reuse the resulting object OIDs without re-reading |reader|.
 	plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
 	if err != nil {
 		return "", err
 	}
-	return gbs.putWithCASRetries(ctx, key, plan, msg)
+	return gbs.putWithRemoteSync(ctx, key, plan, msg)
 }
 
 func (gbs *GitBlobstore) planPutWrites(ctx context.Context, key string, totalSize int64, reader io.Reader) (putPlan, error) {
@@ -596,44 +756,6 @@ func (gbs *GitBlobstore) hashParts(ctx context.Context, reader io.Reader) (parts
 	return parts, partOIDs, total, nil
 }
 
-func (gbs *GitBlobstore) putWithCASRetries(ctx context.Context, key string, plan putPlan, msg string) (string, error) {
-	// Make Put resilient to concurrent writers updating unrelated keys by using a CAS loop
-	// under the hood. This matches typical object-store semantics more closely than an
-	// unconditional ref update (which could clobber other keys).
-	policy := gbs.casRetryPolicy(ctx)
-
-	var ver string
-	op := func() error {
-		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, plan, msg)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		if err := gbs.updateRefCASForWrite(ctx, parent, ok, newCommit, msg); err != nil {
-			return err
-		}
-
-		ver, err = gbs.resolveKeyVersionAtCommit(ctx, newCommit, key)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		return nil
-	}
-
-	if err := backoff.Retry(op, policy); err != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
-		return "", err
-	}
-	return ver, nil
-}
-
 func (gbs *GitBlobstore) casRetryPolicy(ctx context.Context) backoff.BackOff {
 	const maxRetries = 31 // 32 total attempts (initial + retries)
 	bo := backoff.NewExponentialBackOff()
@@ -646,7 +768,7 @@ func (gbs *GitBlobstore) casRetryPolicy(ctx context.Context) backoff.BackOff {
 }
 
 func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.OID, hasParent bool, key string, plan putPlan, msg string) (git.OID, error) {
-	_, indexFile, cleanup, err := newTempIndex()
+	_, indexFile, cleanup, err := git.NewTempIndex()
 	if err != nil {
 		return "", err
 	}
@@ -733,39 +855,6 @@ func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent
 	}
 }
 
-func (gbs *GitBlobstore) updateRefCASForWrite(ctx context.Context, parent git.OID, haveParent bool, newCommit git.OID, msg string) error {
-	if !haveParent {
-		// Create-only CAS: oldOID=all-zero requires the ref to not exist. This avoids
-		// losing concurrent writes when multiple goroutines create the ref at once.
-		const zeroOID = git.OID("0000000000000000000000000000000000000000")
-		if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, zeroOID, msg); err != nil {
-			if gbs.refAdvanced(ctx, parent) {
-				return err
-			}
-			return backoff.Permanent(err)
-		}
-		return nil
-	}
-
-	if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, parent, msg); err != nil {
-		// If the ref changed since we read |parent|, retry on the new head. Otherwise
-		// surface the error (e.g. permissions, corruption).
-		if gbs.refAdvanced(ctx, parent) {
-			return err
-		}
-		return backoff.Permanent(err)
-	}
-	return nil
-}
-
-func (gbs *GitBlobstore) refAdvanced(ctx context.Context, old git.OID) bool {
-	if ctx.Err() != nil {
-		return false
-	}
-	cur, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-	return err == nil && ok && cur != old
-}
-
 func (gbs *GitBlobstore) resolveKeyVersionAtCommit(ctx context.Context, commit git.OID, key string) (string, error) {
 	oid, _, err := gbs.api.ResolvePathObject(ctx, commit, key)
 	if err != nil {
@@ -779,7 +868,7 @@ func (gbs *GitBlobstore) tryFastSucceedPutIfKeyExists(ctx context.Context, key s
 		return "", false, nil
 	}
 
-	commit, haveCommit, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	commit, haveCommit, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
 	if err != nil {
 		return "", false, err
 	}
@@ -805,61 +894,7 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 	}
 
 	msg := fmt.Sprintf("gitblobstore: checkandput %s", key)
-
-	policy := gbs.casRetryPolicy(ctx)
-
-	var newKeyVersion string
-	var cachedPlan *putPlan
-	op := func() error {
-		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		actualKeyVersion, err := gbs.currentKeyVersion(ctx, parent, ok, key)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		if expectedVersion != actualKeyVersion {
-			return backoff.Permanent(CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: actualKeyVersion})
-		}
-
-		// Only hash/consume the reader once we know the expectedVersion matches.
-		// If we need to retry due to unrelated ref advances, reuse the cached plan so we
-		// don't re-read |reader| (which may not be rewindable).
-		if cachedPlan == nil {
-			plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			cachedPlan = &plan
-		}
-
-		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, *cachedPlan, msg)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		if err := gbs.updateRefCASForWrite(ctx, parent, ok, newCommit, msg); err != nil {
-			return err
-		}
-
-		ver, err := gbs.resolveKeyVersionAtCommit(ctx, newCommit, key)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		newKeyVersion = ver
-		return nil
-	}
-
-	if err := backoff.Retry(op, policy); err != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
-		return "", err
-	}
-
-	return newKeyVersion, nil
+	return gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg)
 }
 
 func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, haveCommit bool, key string) (string, error) {
@@ -884,6 +919,9 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 	if err != nil {
 		return "", err
 	}
+	if err := gbs.syncForRead(ctx); err != nil {
+		return "", err
+	}
 	if len(sources) == 0 {
 		return "", fmt.Errorf("gitblobstore: concatenate requires at least one source")
 	}
@@ -905,7 +943,7 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 	}
 
 	// Resolve a snapshot commit for the sources.
-	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
 	if err != nil {
 		return "", err
 	}
@@ -914,7 +952,7 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 		if key == "manifest" {
 			return "", NotFound{Key: key}
 		}
-		return "", &git.RefNotFoundError{Ref: gbs.ref}
+		return "", &git.RefNotFoundError{Ref: gbs.localRef}
 	}
 
 	totalSz, err := gbs.totalSizeAtCommit(ctx, commit, sources)
@@ -937,7 +975,7 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 	}
 
 	msg := fmt.Sprintf("gitblobstore: concatenate %s", key)
-	return gbs.putWithCASRetries(ctx, key, plan, msg)
+	return gbs.putWithRemoteSync(ctx, key, plan, msg)
 }
 
 func (gbs *GitBlobstore) openReaderAtCommit(ctx context.Context, commit git.OID, key string) (io.ReadCloser, error) {
@@ -1177,26 +1215,6 @@ func isMissingGitIdentityErr(err error) bool {
 	return strings.Contains(msg, "author identity unknown") ||
 		strings.Contains(msg, "unable to auto-detect email address") ||
 		strings.Contains(msg, "empty ident name")
-}
-
-func newTempIndex() (dir, indexFile string, cleanup func(), err error) {
-	// Create a unique temp index file. This is intentionally *not* placed under GIT_DIR:
-	// - some git dirs may be read-only or otherwise unsuitable for scratch files
-	// - we don't want to leave temp files inside the repo on crashes
-	//
-	// Note: git will also create a sibling lock file (<index>.lock) during index writes.
-	f, err := os.CreateTemp("", "dolt-gitblobstore-index-")
-	if err != nil {
-		return "", "", nil, err
-	}
-	indexFile = f.Name()
-	_ = f.Close()
-	dir = filepath.Dir(indexFile)
-	cleanup = func() {
-		_ = os.Remove(indexFile)
-		_ = os.Remove(indexFile + ".lock")
-	}
-	return dir, indexFile, cleanup, nil
 }
 
 // normalizeGitTreePath normalizes and validates a blobstore key for use as a git tree path.

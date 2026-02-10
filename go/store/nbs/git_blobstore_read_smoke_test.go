@@ -35,7 +35,7 @@ func TestGitBlobstoreReadSmoke_ManifestAndTableAccessPatterns(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
 	require.NoError(t, err)
 
 	// Seed a valid v5 manifest with no tables. This should allow NBS to open
@@ -58,14 +58,20 @@ func TestGitBlobstoreReadSmoke_ManifestAndTableAccessPatterns(t *testing.T) {
 		table[i] = byte(i % 251)
 	}
 
-	commit, err := repo.SetRefToTree(ctx, blobstore.DoltDataRef, map[string][]byte{
+	commit, err := remoteRepo.SetRefToTree(ctx, blobstore.DoltDataRef, map[string][]byte{
 		"manifest": buf.Bytes(),
 		"table":    table,
 	}, "seed refs/dolt/data for smoke test")
 	require.NoError(t, err)
 	require.NotEmpty(t, commit)
 
-	bs, err := blobstore.NewGitBlobstore(repo.GitDir, blobstore.DoltDataRef)
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	cmd := exec.CommandContext(ctx, "git", "--git-dir", localRepo.GitDir, "remote", "add", "origin", remoteRepo.GitDir)
+	remoteAddOut, err := cmd.CombinedOutput()
+	require.NoError(t, err, "git remote add failed: %s", string(remoteAddOut))
+
+	bs, err := blobstore.NewGitBlobstore(localRepo.GitDir, blobstore.DoltDataRef)
 	require.NoError(t, err)
 
 	// 1) Manifest read path via blobstoreManifest.ParseIfExists.
