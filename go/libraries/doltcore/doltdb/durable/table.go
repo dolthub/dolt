@@ -89,18 +89,6 @@ type Table interface {
 	// SetArtifacts sets the merge artifacts for this table.
 	SetArtifacts(ctx context.Context, artifacts ArtifactIndex) (Table, error)
 
-	// GetConflicts returns the merge conflicts for this table.
-	GetConflicts(ctx context.Context) (conflict.ConflictSchema, ConflictIndex, error)
-	// HasConflicts returns true if this table has conflicts.
-	HasConflicts(ctx context.Context) (bool, error)
-	// SetConflicts sets the merge conflicts for this table.
-	SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts ConflictIndex) (Table, error)
-
-	// GetConstraintViolations returns the constraint violations for this table.
-	GetConstraintViolations(ctx context.Context) (types.Map, error)
-	// SetConstraintViolations sets the constraint violations for this table.
-	SetConstraintViolations(ctx context.Context, violations types.Map) (Table, error)
-
 	// GetAutoIncrement returns the AUTO_INCREMENT sequence value for this table.
 	GetAutoIncrement(ctx context.Context) (uint64, error)
 	// SetAutoIncrement sets the AUTO_INCREMENT sequence value for this table.

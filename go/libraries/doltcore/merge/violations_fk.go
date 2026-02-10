@@ -276,16 +276,7 @@ func (f *foreignKeyViolationWriter) StartFK(ctx *sql.Context, fk doltdb.ForeignK
 		f.cInfoJsonData = jsonData
 		f.kd = sch.GetKeyDescriptor(tbl.NodeStore())
 	} else {
-		violMap, err := tbl.GetConstraintViolations(ctx)
-		if err != nil {
-			return err
-		}
-		f.violMapEditor = violMap.Edit()
-
-		f.nomsVInfo, err = jsonDataToNomsValue(ctx, tbl.ValueReadWriter(), jsonData)
-		if err != nil {
-			return err
-		}
+		panic("Unsupported formant: " + tbl.Format().VersionString())
 	}
 
 	return nil
@@ -309,19 +300,7 @@ func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
 		return nil
 	}
 
-	violMap, err := f.violMapEditor.Map(ctx)
-	if err != nil {
-		return err
-	}
-	tbl, err := f.currTbl.SetConstraintViolations(ctx, violMap)
-	if err != nil {
-		return err
-	}
-	f.rootValue, err = f.rootValue.PutTable(ctx, f.currFk.TableName, tbl)
-	if err != nil {
-		return err
-	}
-	return nil
+	panic("Unsupported format: " + f.currTbl.Format().VersionString())
 }
 
 func (f *foreignKeyViolationWriter) NomsFKViolationFound(ctx context.Context, rowKey, rowValue types.Tuple) error {

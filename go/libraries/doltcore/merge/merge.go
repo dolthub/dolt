@@ -175,22 +175,13 @@ func MergeRoots(
 	mergeOpts MergeOpts,
 ) (*Result, error) {
 	var (
-		conflictStash  *conflictStash
-		violationStash *violationStash
-		nbf            *types.NomsBinFormat
-		err            error
+		nbf *types.NomsBinFormat
+		err error
 	)
 
 	nbf = ourRoot.VRW().Format()
 	if !types.IsFormat_DOLT(nbf) {
-		ourRoot, conflictStash, err = stashConflicts(ctx, ourRoot)
-		if err != nil {
-			return nil, err
-		}
-		ancRoot, violationStash, err = stashViolations(ctx, ancRoot)
-		if err != nil {
-			return nil, err
-		}
+		panic("unsupported format: " + nbf.VersionString())
 	}
 
 	// merge collations
@@ -406,79 +397,7 @@ func MergeRoots(
 		}, nil
 	}
 
-	mergedRoot, err = mergeCVsWithStash(ctx, mergedRoot, violationStash)
-	if err != nil {
-		return nil, err
-	}
-
-	err = getConstraintViolationStats(ctx, mergedRoot, tblToStats)
-	if err != nil {
-		return nil, err
-	}
-
-	mergedHasTableConflicts := checkForTableConflicts(tblToStats)
-	if !conflictStash.Empty() && mergedHasTableConflicts {
-		return nil, ErrCantOverwriteConflicts
-	} else if !conflictStash.Empty() {
-		mergedRoot, err = applyConflictStash(ctx, conflictStash.Stash, mergedRoot)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &Result{
-		Root:            mergedRoot,
-		SchemaConflicts: schConflicts,
-		Stats:           tblToStats,
-	}, nil
-}
-
-// mergeCVsWithStash merges the table constraint violations in |stash| with |root|.
-// Returns an updated root with all the merged CVs.
-func mergeCVsWithStash(ctx context.Context, root doltdb.RootValue, stash *violationStash) (doltdb.RootValue, error) {
-	updatedRoot := root
-	for name, stashed := range stash.Stash {
-		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: name})
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			// the table with the CVs was deleted
-			continue
-		}
-		curr, err := tbl.GetConstraintViolations(ctx)
-		if err != nil {
-			return nil, err
-		}
-		unioned, err := types.UnionMaps(ctx, curr, stashed, func(key types.Value, currV types.Value, stashV types.Value) (types.Value, error) {
-			if !currV.Equals(stashV) {
-				panic(fmt.Sprintf("encountered conflict when merging constraint violations, conflicted key: %v\ncurrent value: %v\nstashed value: %v\n", key, currV, stashV))
-			}
-			return currV, nil
-		})
-		if err != nil {
-			return nil, err
-		}
-		tbl, err = tbl.SetConstraintViolations(ctx, unioned)
-		if err != nil {
-			return nil, err
-		}
-		updatedRoot, err = root.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return updatedRoot, nil
-}
-
-// Checks if a table conflict occurred during the merge
-func checkForTableConflicts(tblToStats map[doltdb.TableName]*MergeStats) bool {
-	for _, stat := range tblToStats {
-		if stat.HasConflicts() && !stat.HasRootObjectConflicts() {
-			return true
-		}
-	}
-	return false
+	panic("Unsupported format: " + ourRoot.VRW().Format().VersionString())
 }
 
 // populates tblToStats with violation statistics

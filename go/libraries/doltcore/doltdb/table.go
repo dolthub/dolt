@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"unicode"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -127,24 +126,6 @@ func (t *Table) GetOverriddenSchema() schema.Schema {
 	return t.overriddenSchema
 }
 
-// SetConflicts sets the merge conflicts for this table.
-func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData durable.ConflictIndex) (*Table, error) {
-	table, err := t.table.SetConflicts(ctx, schemas, conflictData)
-	if err != nil {
-		return nil, err
-	}
-	return &Table{table: table}, nil
-}
-
-// GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table.
-func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, durable.ConflictIndex, error) {
-	if t.Format() == types.Format_DOLT {
-		panic("should use artifacts")
-	}
-
-	return t.table.GetConflicts(ctx)
-}
-
 // HasConflicts returns true if this table contains merge conflicts.
 func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
 	if t.Format() == types.Format_DOLT {
@@ -155,7 +136,8 @@ func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
 
 		return art.HasConflicts(ctx)
 	}
-	return t.table.HasConflicts(ctx)
+
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 // GetArtifacts returns the merge artifacts for this table.
@@ -182,20 +164,7 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 		return artIdx.ConflictCount(ctx)
 	}
 
-	ok, err := t.table.HasConflicts(ctx)
-	if err != nil {
-		return 0, err
-	}
-	if !ok {
-		return 0, nil
-	}
-
-	_, cons, err := t.table.GetConflicts(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	return cons.Count(), nil
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 // NumConstraintViolations returns the number of constraint violations for this table.
@@ -208,12 +177,7 @@ func (t *Table) NumConstraintViolations(ctx context.Context) (uint64, error) {
 		return artIdx.ConstraintViolationCount(ctx)
 	}
 
-	cvs, err := t.table.GetConstraintViolations(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	return cvs.Len(), nil
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 // ClearConflicts deletes all merge conflicts for this table.
@@ -247,7 +211,7 @@ func (t *Table) GetConflictSchemas(ctx context.Context, tblName TableName) (base
 		return t.getProllyConflictSchemas(ctx, tblName)
 	}
 
-	return t.getNomsConflictSchemas(ctx)
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 // The conflict schema is implicitly determined based on the first conflict in the artifacts table.
@@ -327,36 +291,6 @@ func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, ns tree.No
 		return nil, false, err
 	}
 	return tbl, ok, nil
-}
-
-func (t *Table) getNomsConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
-	cs, _, err := t.table.GetConflicts(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return cs.Base, cs.Schema, cs.MergeSchema, nil
-}
-
-// GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
-// whether the table has any violations.
-func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) {
-	if t.Format() == types.Format_DOLT {
-		panic("should use artifacts")
-	}
-	return t.table.GetConstraintViolations(ctx)
-}
-
-// SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
-// violations entry on the embedded struct is removed.
-func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (*Table, error) {
-	if t.Format() == types.Format_DOLT {
-		panic("should use artifacts")
-	}
-	table, err := t.table.SetConstraintViolations(ctx, violationsMap)
-	if err != nil {
-		return nil, err
-	}
-	return &Table{table: table}, nil
 }
 
 // GetSchema returns the schema.Schema for this Table.
