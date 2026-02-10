@@ -111,7 +111,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 				return git.OID("0123456789abcdef0123456789abcdef01234567"), true, nil
 			},
 		}
-		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
+		gbs := &GitBlobstore{localRef: DoltDataRef, api: api}
 
 		commit, err := gbs.resolveCommitForGet(ctx, "k")
 		require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 				return git.OID(""), false, nil
 			},
 		}
-		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
+		gbs := &GitBlobstore{localRef: DoltDataRef, api: api}
 
 		_, err := gbs.resolveCommitForGet(ctx, "manifest")
 		var nf NotFound
@@ -138,7 +138,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 				return git.OID(""), false, nil
 			},
 		}
-		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
+		gbs := &GitBlobstore{localRef: DoltDataRef, api: api}
 
 		_, err := gbs.resolveCommitForGet(ctx, "somekey")
 		var rnf *git.RefNotFoundError
@@ -153,7 +153,7 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 				return git.OID(""), false, sentinel
 			},
 		}
-		gbs := &GitBlobstore{ref: DoltDataRef, api: api}
+		gbs := &GitBlobstore{localRef: DoltDataRef, api: api}
 
 		_, err := gbs.resolveCommitForGet(ctx, "k")
 		require.ErrorIs(t, err, sentinel)

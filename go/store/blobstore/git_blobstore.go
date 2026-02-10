@@ -24,9 +24,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/google/uuid"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
 )
@@ -254,11 +256,13 @@ func (c *concatReadCloser) Close() error {
 // of the commit referenced by a git ref (e.g. refs/dolt/data).
 type GitBlobstore struct {
 	gitDir            string
-	ref               string
+	remoteRef         string
+	localRef          string
 	runner            *git.Runner
 	api               git.GitAPI
 	remoteName        string
 	remoteTrackingRef string
+	mu                sync.Mutex
 	// identity, when non-nil, is used as the author/committer identity for new commits.
 	// When nil, we prefer whatever identity git derives from env/config, falling back
 	// to a deterministic default only if git reports the identity is missing.
@@ -308,11 +312,14 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 	if remoteName == "" {
 		remoteName = "origin"
 	}
-	remoteTrackingRef := DoltRemoteTrackingDataRef(remoteName)
+	remoteRef := ref
+	remoteTrackingRef := RemoteTrackingRef(remoteName, remoteRef)
+	localRef := OwnedLocalRef(remoteName, remoteRef, uuid.NewString())
 
 	return &GitBlobstore{
 		gitDir:            gitDir,
-		ref:               ref,
+		remoteRef:         remoteRef,
+		localRef:          localRef,
 		runner:            r,
 		api:               git.NewGitAPIImpl(r),
 		remoteName:        remoteName,
@@ -323,23 +330,44 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 }
 
 func (gbs *GitBlobstore) Path() string {
-	return fmt.Sprintf("%s@%s", gbs.gitDir, gbs.ref)
+	return fmt.Sprintf("%s@%s", gbs.gitDir, gbs.remoteRef)
 }
 
 func (gbs *GitBlobstore) validateRemoteManaged() error {
-	if gbs.remoteName == "" || gbs.remoteTrackingRef == "" {
-		return fmt.Errorf("gitblobstore: remote-managed mode misconfigured (remoteName=%q trackingRef=%q)", gbs.remoteName, gbs.remoteTrackingRef)
+	if gbs.remoteName == "" || gbs.remoteRef == "" || gbs.remoteTrackingRef == "" || gbs.localRef == "" {
+		return fmt.Errorf("gitblobstore: remote-managed mode misconfigured (remoteName=%q remoteRef=%q trackingRef=%q localRef=%q)", gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef, gbs.localRef)
 	}
 	return nil
+}
+
+// CleanupOwnedLocalRef best-effort deletes this blobstore instance's UUID-owned local ref.
+//
+// This is an optional hygiene API: by default, UUID-owned local refs may accumulate in the
+// repo over time. Callers that care about cleanup (e.g. tests) may invoke this explicitly.
+func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
+	gbs.mu.Lock()
+	defer gbs.mu.Unlock()
+
+	_, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	_, err = gbs.runner.Run(ctx, git.RunOptions{}, "update-ref", "-d", gbs.localRef)
+	return err
 }
 
 func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	if err := gbs.validateRemoteManaged(); err != nil {
 		return err
 	}
+	gbs.mu.Lock()
+	defer gbs.mu.Unlock()
 
 	// 1) Fetch remote ref into our remote-tracking ref.
-	if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.ref, gbs.remoteTrackingRef); err != nil {
+	if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
 		return err
 	}
 
@@ -351,49 +379,23 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		return &git.RefNotFoundError{Ref: gbs.remoteTrackingRef}
 	}
 
-	// 2) Align local ref to remote head via CAS (no merge; remote is source-of-truth).
-	policy := gbs.casRetryPolicy(ctx)
-	op := func() error {
-		old, okLocal, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		const zeroOID = git.OID("0000000000000000000000000000000000000000")
-		if okLocal {
-			err = gbs.api.UpdateRefCAS(ctx, gbs.ref, remoteHead, old, "gitblobstore: sync read")
-		} else {
-			err = gbs.api.UpdateRefCAS(ctx, gbs.ref, remoteHead, zeroOID, "gitblobstore: sync read")
-		}
-		if err == nil {
-			return nil
-		}
-		if gbs.refAdvanced(ctx, old) {
-			return err
-		}
-		return backoff.Permanent(err)
-	}
-
-	if err := backoff.Retry(op, policy); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return err
-	}
-	return nil
+	// 2) Force-set owned local ref to remote head (no merge; remote is source-of-truth).
+	return gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync read")
 }
 
 func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string, build func(parent git.OID, ok bool) (git.OID, error)) (string, error) {
 	if err := gbs.validateRemoteManaged(); err != nil {
 		return "", err
 	}
+	gbs.mu.Lock()
+	defer gbs.mu.Unlock()
 
 	policy := gbs.casRetryPolicy(ctx)
 
 	var ver string
 	op := func() error {
 		// 1) Fetch remote state into local tracking ref.
-		if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.ref, gbs.remoteTrackingRef); err != nil {
+		if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
 			return err
 		}
 		remoteHead, okRemote, err := gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
@@ -404,21 +406,8 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			return backoff.Permanent(&git.RefNotFoundError{Ref: gbs.remoteTrackingRef})
 		}
 
-		// 2) Align local ref to remote head via CAS (no merge; remote is source-of-truth).
-		oldLocal, okLocal, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		const zeroOID = git.OID("0000000000000000000000000000000000000000")
-		if okLocal {
-			err = gbs.api.UpdateRefCAS(ctx, gbs.ref, remoteHead, oldLocal, "gitblobstore: sync write")
-		} else {
-			err = gbs.api.UpdateRefCAS(ctx, gbs.ref, remoteHead, zeroOID, "gitblobstore: sync write")
-		}
-		if err != nil {
-			if gbs.refAdvanced(ctx, oldLocal) {
-				return err
-			}
+		// 2) Force-set owned local ref to remote head (remote is source-of-truth).
+		if err := gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync write"); err != nil {
 			return backoff.Permanent(err)
 		}
 
@@ -427,15 +416,12 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		if err != nil {
 			return backoff.Permanent(err)
 		}
-		if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, remoteHead, msg); err != nil {
-			if gbs.refAdvanced(ctx, remoteHead) {
-				return err
-			}
+		if err := gbs.api.UpdateRef(ctx, gbs.localRef, newCommit, msg); err != nil {
 			return backoff.Permanent(err)
 		}
 
 		// 4) Push local ref to remote with lease.
-		if err := gbs.api.PushRefWithLease(ctx, gbs.remoteName, gbs.ref, gbs.ref, remoteHead); err != nil {
+		if err := gbs.api.PushRefWithLease(ctx, gbs.remoteName, gbs.localRef, gbs.remoteRef, remoteHead); err != nil {
 			return err
 		}
 
@@ -490,7 +476,7 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	if err := gbs.syncForRead(ctx); err != nil {
 		return false, err
 	}
-	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
 	if err != nil {
 		return false, err
 	}
@@ -627,7 +613,7 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 }
 
 func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (commit git.OID, err error) {
-	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
 	if err != nil {
 		return git.OID(""), err
 	}
@@ -640,7 +626,7 @@ func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (c
 	if key == "manifest" {
 		return git.OID(""), NotFound{Key: key}
 	}
-	return git.OID(""), &git.RefNotFoundError{Ref: gbs.ref}
+	return git.OID(""), &git.RefNotFoundError{Ref: gbs.localRef}
 }
 
 func (gbs *GitBlobstore) resolveObjectForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, typ git.ObjectType, err error) {
@@ -689,7 +675,7 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 
 	msg := fmt.Sprintf("gitblobstore: put %s", key)
 
-	// Hash the contents once. If we need to retry due to concurrent updates to |gbs.ref|,
+	// Hash the contents once. If we need to retry due to a concurrent remote advance (lease failure),
 	// we can reuse the resulting object OIDs without re-reading |reader|.
 	plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
 	if err != nil {
@@ -768,44 +754,6 @@ func (gbs *GitBlobstore) hashParts(ctx context.Context, reader io.Reader) (parts
 		}
 	}
 	return parts, partOIDs, total, nil
-}
-
-func (gbs *GitBlobstore) putWithCASRetries(ctx context.Context, key string, plan putPlan, msg string) (string, error) {
-	// Make Put resilient to concurrent writers updating unrelated keys by using a CAS loop
-	// under the hood. This matches typical object-store semantics more closely than an
-	// unconditional ref update (which could clobber other keys).
-	policy := gbs.casRetryPolicy(ctx)
-
-	var ver string
-	op := func() error {
-		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		newCommit, err := gbs.buildCommitForKeyWrite(ctx, parent, ok, key, plan, msg)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-
-		if err := gbs.updateRefCASForWrite(ctx, parent, ok, newCommit, msg); err != nil {
-			return err
-		}
-
-		ver, err = gbs.resolveKeyVersionAtCommit(ctx, newCommit, key)
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		return nil
-	}
-
-	if err := backoff.Retry(op, policy); err != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
-		return "", err
-	}
-	return ver, nil
 }
 
 func (gbs *GitBlobstore) casRetryPolicy(ctx context.Context) backoff.BackOff {
@@ -907,39 +855,6 @@ func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent
 	}
 }
 
-func (gbs *GitBlobstore) updateRefCASForWrite(ctx context.Context, parent git.OID, haveParent bool, newCommit git.OID, msg string) error {
-	if !haveParent {
-		// Create-only CAS: oldOID=all-zero requires the ref to not exist. This avoids
-		// losing concurrent writes when multiple goroutines create the ref at once.
-		const zeroOID = git.OID("0000000000000000000000000000000000000000")
-		if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, zeroOID, msg); err != nil {
-			if gbs.refAdvanced(ctx, parent) {
-				return err
-			}
-			return backoff.Permanent(err)
-		}
-		return nil
-	}
-
-	if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, parent, msg); err != nil {
-		// If the ref changed since we read |parent|, retry on the new head. Otherwise
-		// surface the error (e.g. permissions, corruption).
-		if gbs.refAdvanced(ctx, parent) {
-			return err
-		}
-		return backoff.Permanent(err)
-	}
-	return nil
-}
-
-func (gbs *GitBlobstore) refAdvanced(ctx context.Context, old git.OID) bool {
-	if ctx.Err() != nil {
-		return false
-	}
-	cur, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
-	return err == nil && ok && cur != old
-}
-
 func (gbs *GitBlobstore) resolveKeyVersionAtCommit(ctx context.Context, commit git.OID, key string) (string, error) {
 	oid, _, err := gbs.api.ResolvePathObject(ctx, commit, key)
 	if err != nil {
@@ -953,7 +868,7 @@ func (gbs *GitBlobstore) tryFastSucceedPutIfKeyExists(ctx context.Context, key s
 		return "", false, nil
 	}
 
-	commit, haveCommit, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	commit, haveCommit, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
 	if err != nil {
 		return "", false, err
 	}
@@ -1028,7 +943,7 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 	}
 
 	// Resolve a snapshot commit for the sources.
-	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+	commit, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
 	if err != nil {
 		return "", err
 	}
@@ -1037,7 +952,7 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 		if key == "manifest" {
 			return "", NotFound{Key: key}
 		}
-		return "", &git.RefNotFoundError{Ref: gbs.ref}
+		return "", &git.RefNotFoundError{Ref: gbs.localRef}
 	}
 
 	totalSz, err := gbs.totalSizeAtCommit(ctx, commit, sources)
