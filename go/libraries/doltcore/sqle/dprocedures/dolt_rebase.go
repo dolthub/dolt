@@ -198,7 +198,7 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		}
 
 	case apr.Contains(cli.ContinueFlag):
-		result := continueRebase(ctx) // Skip-tests flag is now read from RebaseState
+		result := continueRebase(ctx)
 		return result.status, result.message, result.err
 
 	default:
@@ -217,7 +217,6 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 			return 1, "", fmt.Errorf("too many args")
 		}
 
-
 		skipVerification := apr.Contains(cli.SkipVerificationFlag)
 		err = startRebase(ctx, apr.Arg(0), commitBecomesEmptyHandling, emptyCommitHandling, skipVerification)
 		if err != nil {
@@ -230,7 +229,7 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		}
 
 		if !apr.Contains(cli.InteractiveFlag) {
-			result := continueRebase(ctx) // Skip-tests flag is now read from RebaseState
+			result := continueRebase(ctx)
 			return result.status, result.message, result.err
 		}
 

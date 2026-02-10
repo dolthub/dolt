@@ -29,21 +29,20 @@ import (
 )
 
 type CommitStagedProps struct {
-	Message    string
-	Date       time.Time
-	AllowEmpty bool
-	SkipEmpty  bool
-	Amend      bool
-	Force      bool
-	Name       string
-	Email      string
+	Message          string
+	Date             time.Time
+	AllowEmpty       bool
+	SkipEmpty        bool
+	Amend            bool
+	Force            bool
+	Name             string
+	Email            string
 	SkipVerification bool
 }
 
 // Test validation system variable names
 const (
 	DoltCommitRunTestGroups = "dolt_commit_run_test_groups"
-	DoltPushRunTestGroups   = "dolt_push_run_test_groups"
 )
 
 // GetCommitRunTestGroups returns the test groups to run for commit operations
@@ -51,28 +50,6 @@ const (
 // or specific group names if only those groups should be run
 func GetCommitRunTestGroups() []string {
 	_, val, ok := sql.SystemVariables.GetGlobal(DoltCommitRunTestGroups)
-	if !ok {
-		return nil
-	}
-	if stringVal, ok := val.(string); ok && stringVal != "" {
-		if stringVal == "*" {
-			return []string{"*"}
-		}
-		// Split by comma and trim whitespace
-		groups := strings.Split(stringVal, ",")
-		for i, group := range groups {
-			groups[i] = strings.TrimSpace(group)
-		}
-		return groups
-	}
-	return nil
-}
-
-// GetPushRunTestGroups returns the test groups to run for push operations
-// Returns empty slice if no tests should be run, ["*"] if all tests should be run,
-// or specific group names if only those groups should be run
-func GetPushRunTestGroups() []string {
-	_, val, ok := sql.SystemVariables.GetGlobal(DoltPushRunTestGroups)
 	if !ok {
 		return nil
 	}
@@ -215,28 +192,19 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engin
 		return nil
 	}
 
-	fmt.Printf("INFO: %s validation running against staged root for groups %v\n", operationType, testGroups)
-
-	// Create a temporary context that uses the staged root for database operations
-	// The key insight: we need to temporarily modify the session's database state
-	tempCtx, err := createTemporaryContextWithStagedRoot(ctx, root)
-	if err != nil {
-		return fmt.Errorf("failed to create temporary context with staged root: %w", err)
-	}
-
 	var allFailures []string
 
 	for _, group := range testGroups {
 		// Run dolt_test_run() for this group using the temporary context
 		query := fmt.Sprintf("SELECT * FROM dolt_test_run('%s')", group)
-		_, iter, _, err := engine.Query(tempCtx, query)
+		_, iter, _, err := engine.Query(ctx, query)
 		if err != nil {
 			return fmt.Errorf("failed to run dolt_test_run for group %s: %w", group, err)
 		}
 
 		// Process results
 		for {
-			row, rErr := iter.Next(tempCtx)
+			row, rErr := iter.Next(ctx)
 			if rErr == io.EOF {
 				break
 			}
@@ -265,23 +233,5 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engin
 		return fmt.Errorf("%s validation failed: %s", operationType, strings.Join(allFailures, ", "))
 	}
 
-	fmt.Printf("INFO: %s validation passed for groups %v\n", operationType, testGroups)
 	return nil
-}
-
-// createTemporaryContextWithStagedRoot creates a temporary context that uses the staged root
-func createTemporaryContextWithStagedRoot(ctx *sql.Context, stagedRoot doltdb.RootValue) (*sql.Context, error) {
-	// For now, implement a functional approach that still uses the current context
-	// The proper implementation would require:
-	// 1. Understanding how dolt database instances manage different roots
-	// 2. Creating a new database instance that uses stagedRoot as its working root
-	// 3. Creating a new provider and session that uses this modified database
-	// 4. Setting up the context to use this new session
-	//
-	// This is a complex operation that requires deep knowledge of dolt's session/database architecture
-	// For the immediate functional need, return the original context
-	// This means validation will run against the current session state, which should still work
-	// since the staged changes are available in the session
-	fmt.Printf("DEBUG: Validation using current session context (staged root switching pending implementation)\n")
-	return ctx, nil
 }

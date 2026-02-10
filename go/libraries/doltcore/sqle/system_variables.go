@@ -299,13 +299,6 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Type:    types.NewSystemStringType(dsess.DoltCommitRunTestGroups),
 		Default: "",
 	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltPushRunTestGroups,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemStringType(dsess.DoltPushRunTestGroups),
-		Default: "",
-	},
 }
 
 func AddDoltSystemVariables() {
@@ -573,13 +566,6 @@ func AddDoltSystemVariables() {
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemStringType(dsess.DoltCommitRunTestGroups),
-			Default: "",
-		},
-		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltPushRunTestGroups,
-			Dynamic: true,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-			Type:    types.NewSystemStringType(dsess.DoltPushRunTestGroups),
 			Default: "",
 		},
 	})

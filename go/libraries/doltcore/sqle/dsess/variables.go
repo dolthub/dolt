@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -72,9 +73,7 @@ const (
 
 	DoltAutoGCEnabled = "dolt_auto_gc_enabled"
 
-	// Test validation system variables
-	DoltCommitRunTestGroups = "dolt_commit_run_test_groups"
-	DoltPushRunTestGroups   = "dolt_push_run_test_groups"
+	DoltCommitRunTestGroups = actions.DoltCommitRunTestGroups
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"
@@ -195,50 +194,6 @@ func GetBooleanSystemVar(ctx *sql.Context, varName string) (bool, error) {
 	}
 
 	return i8 == int8(1), nil
-}
-
-// GetCommitRunTestGroups returns the test groups to run for commit operations
-// Returns empty slice if no tests should be run, ["*"] if all tests should be run,
-// or specific group names if only those groups should be run
-func GetCommitRunTestGroups() []string {
-	_, val, ok := sql.SystemVariables.GetGlobal(DoltCommitRunTestGroups)
-	if !ok {
-		return nil
-	}
-	if stringVal, ok := val.(string); ok && stringVal != "" {
-		if stringVal == "*" {
-			return []string{"*"}
-		}
-		// Split by comma and trim whitespace
-		groups := strings.Split(stringVal, ",")
-		for i, group := range groups {
-			groups[i] = strings.TrimSpace(group)
-		}
-		return groups
-	}
-	return nil
-}
-
-// GetPushRunTestGroups returns the test groups to run for push operations
-// Returns empty slice if no tests should be run, ["*"] if all tests should be run,
-// or specific group names if only those groups should be run
-func GetPushRunTestGroups() []string {
-	_, val, ok := sql.SystemVariables.GetGlobal(DoltPushRunTestGroups)
-	if !ok {
-		return nil
-	}
-	if stringVal, ok := val.(string); ok && stringVal != "" {
-		if stringVal == "*" {
-			return []string{"*"}
-		}
-		// Split by comma and trim whitespace
-		groups := strings.Split(stringVal, ",")
-		for i, group := range groups {
-			groups[i] = strings.TrimSpace(group)
-		}
-		return groups
-	}
-	return nil
 }
 
 // IgnoreReplicationErrors returns true if the dolt_skip_replication_errors system variable is set to true, which means
