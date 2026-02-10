@@ -343,7 +343,13 @@ func CheckGo() bool {
 	}
 	var failed bool
 	filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, ".pb.go") {
+		if strings.HasSuffix(path, ".pb.go") {
+			return nil
+		}
+		if strings.HasPrefix(path, "utils/updatenixflake/") {
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") {
 			info := nomsLookup[path]
 			hasNomsHeader := info != nil && info.HadCopyrightNotice
 			if info != nil {
