@@ -23,7 +23,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -394,7 +393,6 @@ var _ sql.RowIter = (*diffPartitionRowIter)(nil)
 
 type diffPartitionRowIter struct {
 	ddb              *doltdb.DoltDB
-	joiner           *rowconv.Joiner
 	currentPartition *DiffPartition
 	currentRowIter   *sql.RowIter
 }
