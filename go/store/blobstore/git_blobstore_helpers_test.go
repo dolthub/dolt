@@ -31,6 +31,7 @@ type fakeGitAPI struct {
 	resolvePathBlob     func(ctx context.Context, commit git.OID, path string) (git.OID, error)
 	resolvePathObject   func(ctx context.Context, commit git.OID, path string) (git.OID, git.ObjectType, error)
 	listTree            func(ctx context.Context, commit git.OID, treePath string) ([]git.TreeEntry, error)
+	listTreeRecursive   func(ctx context.Context, commit git.OID) ([]git.TreeEntry, error)
 	blobSize            func(ctx context.Context, oid git.OID) (int64, error)
 	blobReader          func(ctx context.Context, oid git.OID) (io.ReadCloser, error)
 	fetchRef            func(ctx context.Context, remote string, srcRef string, dstRef string) error
@@ -51,6 +52,12 @@ func (f fakeGitAPI) ResolvePathObject(ctx context.Context, commit git.OID, path 
 }
 func (f fakeGitAPI) ListTree(ctx context.Context, commit git.OID, treePath string) ([]git.TreeEntry, error) {
 	return f.listTree(ctx, commit, treePath)
+}
+func (f fakeGitAPI) ListTreeRecursive(ctx context.Context, commit git.OID) ([]git.TreeEntry, error) {
+	if f.listTreeRecursive == nil {
+		panic("unexpected call")
+	}
+	return f.listTreeRecursive(ctx, commit)
 }
 func (f fakeGitAPI) CatFileType(ctx context.Context, oid git.OID) (string, error) {
 	panic("unexpected call")
@@ -165,14 +172,10 @@ func TestGitBlobstoreHelpers_resolveObjectForGet(t *testing.T) {
 	commit := git.OID("0123456789abcdef0123456789abcdef01234567")
 
 	t.Run("ok", func(t *testing.T) {
-		api := fakeGitAPI{
-			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, git.ObjectType, error) {
-				require.Equal(t, commit, gotCommit)
-				require.Equal(t, "k", path)
-				return git.OID("89abcdef0123456789abcdef0123456789abcdef"), git.ObjectTypeBlob, nil
-			},
+		gbs := &GitBlobstore{
+			cacheHead:    commit,
+			cacheObjects: map[string]cachedGitObject{"k": {oid: git.OID("89abcdef0123456789abcdef0123456789abcdef"), typ: git.ObjectTypeBlob}},
 		}
-		gbs := &GitBlobstore{api: api}
 
 		oid, typ, err := gbs.resolveObjectForGet(ctx, commit, "k")
 		require.NoError(t, err)
@@ -181,12 +184,10 @@ func TestGitBlobstoreHelpers_resolveObjectForGet(t *testing.T) {
 	})
 
 	t.Run("pathNotFoundMapsToNotFound", func(t *testing.T) {
-		api := fakeGitAPI{
-			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, git.ObjectType, error) {
-				return git.OID(""), git.ObjectTypeUnknown, &git.PathNotFoundError{Commit: gotCommit.String(), Path: path}
-			},
+		gbs := &GitBlobstore{
+			cacheHead:    commit,
+			cacheObjects: map[string]cachedGitObject{},
 		}
-		gbs := &GitBlobstore{api: api}
 
 		_, _, err := gbs.resolveObjectForGet(ctx, commit, "k")
 		var nf NotFound
@@ -253,17 +254,16 @@ func TestGitBlobstoreHelpers_sizeAtCommit(t *testing.T) {
 
 	t.Run("blob", func(t *testing.T) {
 		api := fakeGitAPI{
-			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, git.ObjectType, error) {
-				require.Equal(t, commit, gotCommit)
-				require.Equal(t, "k", path)
-				return git.OID("89abcdef0123456789abcdef0123456789abcdef"), git.ObjectTypeBlob, nil
-			},
 			blobSize: func(ctx context.Context, gotOID git.OID) (int64, error) {
 				require.Equal(t, git.OID("89abcdef0123456789abcdef0123456789abcdef"), gotOID)
 				return 123, nil
 			},
 		}
-		gbs := &GitBlobstore{api: api}
+		gbs := &GitBlobstore{
+			api:          api,
+			cacheHead:    commit,
+			cacheObjects: map[string]cachedGitObject{"k": {oid: git.OID("89abcdef0123456789abcdef0123456789abcdef"), typ: git.ObjectTypeBlob}},
+		}
 		sz, err := gbs.sizeAtCommit(ctx, commit, "k")
 		require.NoError(t, err)
 		require.Equal(t, uint64(123), sz)
@@ -271,19 +271,6 @@ func TestGitBlobstoreHelpers_sizeAtCommit(t *testing.T) {
 
 	t.Run("chunkedTree", func(t *testing.T) {
 		api := fakeGitAPI{
-			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, git.ObjectType, error) {
-				require.Equal(t, commit, gotCommit)
-				require.Equal(t, "k", path)
-				return git.OID("treeoid"), git.ObjectTypeTree, nil
-			},
-			listTree: func(ctx context.Context, gotCommit git.OID, treePath string) ([]git.TreeEntry, error) {
-				require.Equal(t, commit, gotCommit)
-				require.Equal(t, "k", treePath)
-				return []git.TreeEntry{
-					{Name: "0001", Type: git.ObjectTypeBlob, OID: "0123456789abcdef0123456789abcdef01234567"},
-					{Name: "0002", Type: git.ObjectTypeBlob, OID: "89abcdef0123456789abcdef0123456789abcdef"},
-				}, nil
-			},
 			blobSize: func(ctx context.Context, oid git.OID) (int64, error) {
 				switch oid {
 				case "0123456789abcdef0123456789abcdef01234567":
@@ -295,19 +282,29 @@ func TestGitBlobstoreHelpers_sizeAtCommit(t *testing.T) {
 				}
 			},
 		}
-		gbs := &GitBlobstore{api: api}
+		gbs := &GitBlobstore{
+			api:       api,
+			cacheHead: commit,
+			cacheObjects: map[string]cachedGitObject{
+				"k": {oid: git.OID("treeoid"), typ: git.ObjectTypeTree},
+			},
+			cacheChildren: map[string][]git.TreeEntry{
+				"k": {
+					{Name: "0001", Type: git.ObjectTypeBlob, OID: "0123456789abcdef0123456789abcdef01234567"},
+					{Name: "0002", Type: git.ObjectTypeBlob, OID: "89abcdef0123456789abcdef0123456789abcdef"},
+				},
+			},
+		}
 		sz, err := gbs.sizeAtCommit(ctx, commit, "k")
 		require.NoError(t, err)
 		require.Equal(t, uint64(8), sz)
 	})
 
 	t.Run("notFound", func(t *testing.T) {
-		api := fakeGitAPI{
-			resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, git.ObjectType, error) {
-				return git.OID(""), git.ObjectTypeUnknown, &git.PathNotFoundError{Commit: gotCommit.String(), Path: path}
-			},
+		gbs := &GitBlobstore{
+			cacheHead:    commit,
+			cacheObjects: map[string]cachedGitObject{},
 		}
-		gbs := &GitBlobstore{api: api}
 		_, err := gbs.sizeAtCommit(ctx, commit, "missing")
 		var nf NotFound
 		require.ErrorAs(t, err, &nf)
@@ -320,9 +317,6 @@ func TestGitBlobstoreHelpers_totalSizeAtCommit_overflowInt64(t *testing.T) {
 	commit := git.OID("0123456789abcdef0123456789abcdef01234567")
 
 	api := fakeGitAPI{
-		resolvePathObject: func(ctx context.Context, gotCommit git.OID, path string) (git.OID, git.ObjectType, error) {
-			return git.OID(path + "_oid"), git.ObjectTypeBlob, nil
-		},
 		blobSize: func(ctx context.Context, gotOID git.OID) (int64, error) {
 			// Make the total exceed int64 max with two sources.
 			if gotOID == "a_oid" {
@@ -331,7 +325,14 @@ func TestGitBlobstoreHelpers_totalSizeAtCommit_overflowInt64(t *testing.T) {
 			return 1, nil
 		},
 	}
-	gbs := &GitBlobstore{api: api}
+	gbs := &GitBlobstore{
+		api:       api,
+		cacheHead: commit,
+		cacheObjects: map[string]cachedGitObject{
+			"a": {oid: git.OID("a_oid"), typ: git.ObjectTypeBlob},
+			"b": {oid: git.OID("b_oid"), typ: git.ObjectTypeBlob},
+		},
+	}
 	_, err := gbs.totalSizeAtCommit(ctx, commit, []string{"a", "b"})
 	require.Error(t, err)
 }
