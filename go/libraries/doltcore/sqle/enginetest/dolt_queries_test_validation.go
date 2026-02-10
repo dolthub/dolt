@@ -364,7 +364,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL dolt_commit('-m', 'Commit without dolt_tests table')",
-				ExpectedErrStr: "TBD: table dolt_tests contains no tests which match the specified test groups",
+				ExpectedErrStr: "failed to run dolt_test_run for group *: could not find tests for argument: *",
 			},
 		},
 	},
