@@ -85,6 +85,12 @@ func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {
 	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
+	runner, err := git.NewRunner(repo.GitDir)
+	require.NoError(t, err)
+	api := git.NewGitAPIImpl(runner)
+	manifestOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "manifest")
+	require.NoError(t, err)
+
 	ok, err := bs.Exists(ctx, "manifest")
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -100,14 +106,14 @@ func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {
 
 	got, ver, err := GetBytes(ctx, bs, "manifest", AllRange)
 	require.NoError(t, err)
-	require.Equal(t, commit, ver)
+	require.Equal(t, manifestOID.String(), ver)
 	require.Equal(t, want, got)
 
 	// Validate size + version on Get.
 	rc, sz, ver2, err := bs.Get(ctx, "manifest", NewBlobRange(0, 5))
 	require.NoError(t, err)
 	require.Equal(t, uint64(len(want)), sz)
-	require.Equal(t, commit, ver2)
+	require.Equal(t, manifestOID.String(), ver2)
 	_ = rc.Close()
 }
 
@@ -149,34 +155,40 @@ func TestGitBlobstore_BlobRangeSemantics(t *testing.T) {
 	bs, err := NewGitBlobstore(repo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
+	runner, err := git.NewRunner(repo.GitDir)
+	require.NoError(t, err)
+	api := git.NewGitAPIImpl(runner)
+	rangeOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "range")
+	require.NoError(t, err)
+
 	// full range
 	got, ver, err := GetBytes(ctx, bs, "range", AllRange)
 	require.NoError(t, err)
-	require.Equal(t, commit, ver)
+	require.Equal(t, rangeOID.String(), ver)
 	require.Equal(t, rangeData(0, maxValue), got)
 
 	// first 2048 bytes (1024 shorts)
 	got, ver, err = GetBytes(ctx, bs, "range", NewBlobRange(0, 2048))
 	require.NoError(t, err)
-	require.Equal(t, commit, ver)
+	require.Equal(t, rangeOID.String(), ver)
 	require.Equal(t, rangeData(0, 1024), got)
 
 	// bytes 2048..4096 of original
 	got, ver, err = GetBytes(ctx, bs, "range", NewBlobRange(2*1024, 2*1024))
 	require.NoError(t, err)
-	require.Equal(t, commit, ver)
+	require.Equal(t, rangeOID.String(), ver)
 	require.Equal(t, rangeData(1024, 2048), got)
 
 	// last 2048 bytes
 	got, ver, err = GetBytes(ctx, bs, "range", NewBlobRange(-2*1024, 0))
 	require.NoError(t, err)
-	require.Equal(t, commit, ver)
+	require.Equal(t, rangeOID.String(), ver)
 	require.Equal(t, rangeData(maxValue-1024, maxValue), got)
 
 	// tail slice: beginning 2048 bytes from end, size 512
 	got, ver, err = GetBytes(ctx, bs, "range", NewBlobRange(-2*1024, 512))
 	require.NoError(t, err)
-	require.Equal(t, commit, ver)
+	require.Equal(t, rangeOID.String(), ver)
 	require.Equal(t, rangeData(maxValue-1024, maxValue-768), got)
 }
 
@@ -243,7 +255,148 @@ func TestGitBlobstore_Put_RoundTripAndVersion(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestGitBlobstore_Put_Overwrite(t *testing.T) {
+func TestGitBlobstore_Concatenate_Basic(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	_, err = PutBytes(ctx, bs, "a", []byte("hi "))
+	require.NoError(t, err)
+	_, err = PutBytes(ctx, bs, "b", []byte("there"))
+	require.NoError(t, err)
+
+	ver, err := bs.Concatenate(ctx, "c", []string{"a", "b"})
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	got, ver2, err := GetBytes(ctx, bs, "c", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver, ver2)
+	require.Equal(t, []byte("hi there"), got)
+}
+
+func TestGitBlobstore_Concatenate_ChunkedResult(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(repo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		Identity:    testIdentity(),
+		MaxPartSize: 1024,
+	})
+	require.NoError(t, err)
+
+	a := bytes.Repeat([]byte("a"), 700)
+	b := bytes.Repeat([]byte("b"), 700)
+	want := append(append([]byte(nil), a...), b...)
+
+	_, err = PutBytes(ctx, bs, "a", a)
+	require.NoError(t, err)
+	_, err = PutBytes(ctx, bs, "b", b)
+	require.NoError(t, err)
+
+	ver, err := bs.Concatenate(ctx, "c", []string{"a", "b"})
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	// Verify the resulting key is stored as a chunked tree (not a single blob).
+	head, ok, err := bs.api.TryResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	require.True(t, ok)
+	oid, typ, err := bs.api.ResolvePathObject(ctx, head, "c")
+	require.NoError(t, err)
+	require.Equal(t, git.ObjectTypeTree, typ)
+	require.Equal(t, oid.String(), ver)
+
+	parts, err := bs.api.ListTree(ctx, head, "c")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(parts), 2)
+	require.Equal(t, "00000001", parts[0].Name)
+
+	got, ver2, err := GetBytes(ctx, bs, "c", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver, ver2)
+	require.Equal(t, want, got)
+}
+
+func TestGitBlobstore_Concatenate_KeyExistsFastSucceeds(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	ver1, err := PutBytes(ctx, bs, "c", []byte("original"))
+	require.NoError(t, err)
+	require.NotEmpty(t, ver1)
+
+	_, err = PutBytes(ctx, bs, "a", []byte("new "))
+	require.NoError(t, err)
+	_, err = PutBytes(ctx, bs, "b", []byte("value"))
+	require.NoError(t, err)
+
+	ver2, err := bs.Concatenate(ctx, "c", []string{"a", "b"})
+	require.NoError(t, err)
+	require.Equal(t, ver1, ver2, "expected concatenate to fast-succeed without overwriting existing key")
+
+	got, ver3, err := GetBytes(ctx, bs, "c", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver1, ver3)
+	require.Equal(t, []byte("original"), got)
+}
+
+func TestGitBlobstore_Concatenate_MissingSourceIsNotFound(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	_, err = PutBytes(ctx, bs, "present", []byte("x"))
+	require.NoError(t, err)
+
+	_, err = bs.Concatenate(ctx, "c", []string{"present", "missing"})
+	require.Error(t, err)
+	require.True(t, IsNotFoundError(err))
+	var nf NotFound
+	require.ErrorAs(t, err, &nf)
+	require.Equal(t, "missing", nf.Key)
+}
+
+func TestGitBlobstore_Concatenate_EmptySourcesErrors(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	repo, err := gitrepo.InitBare(ctx, t.TempDir()+"/repo.git")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	_, err = bs.Concatenate(ctx, "c", nil)
+	require.Error(t, err)
+}
+
+type putShouldNotRead struct{}
+
+func (putShouldNotRead) Read(_ []byte) (int, error) {
+	return 0, errors.New("read should not be called")
+}
+
+func TestGitBlobstore_Put_IdempotentIfKeyExists(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
@@ -257,15 +410,14 @@ func TestGitBlobstore_Put_Overwrite(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, ver1)
 
-	ver2, err := PutBytes(ctx, bs, "k", []byte("v2\n"))
+	ver2, err := bs.Put(ctx, "k", 3, putShouldNotRead{})
 	require.NoError(t, err)
-	require.NotEmpty(t, ver2)
-	require.NotEqual(t, ver1, ver2)
+	require.Equal(t, ver1, ver2)
 
 	got, ver3, err := GetBytes(ctx, bs, "k", AllRange)
 	require.NoError(t, err)
-	require.Equal(t, ver2, ver3)
-	require.Equal(t, []byte("v2\n"), got)
+	require.Equal(t, ver1, ver3)
+	require.Equal(t, []byte("v1\n"), got)
 }
 
 type hookGitAPI struct {
@@ -431,8 +583,14 @@ func TestGitBlobstore_CheckAndPut_MismatchDoesNotRead(t *testing.T) {
 	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
+	runner, err := git.NewRunner(repo.GitDir)
+	require.NoError(t, err)
+	api := git.NewGitAPIImpl(runner)
+	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "k")
+	require.NoError(t, err)
+
 	r := &failReader{}
-	_, err = bs.CheckAndPut(ctx, commit+"-wrong", "k", 1, r)
+	_, err = bs.CheckAndPut(ctx, keyOID.String()+"-wrong", "k", 1, r)
 	require.Error(t, err)
 	require.True(t, IsCheckAndPutError(err))
 	require.False(t, r.called.Load(), "expected reader not to be consumed on version mismatch")
@@ -454,11 +612,17 @@ func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
 	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
+	runner, err := git.NewRunner(repo.GitDir)
+	require.NoError(t, err)
+	api := git.NewGitAPIImpl(runner)
+	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "k")
+	require.NoError(t, err)
+
 	want := []byte("updated\n")
-	ver2, err := bs.CheckAndPut(ctx, commit, "k", int64(len(want)), bytes.NewReader(want))
+	ver2, err := bs.CheckAndPut(ctx, keyOID.String(), "k", int64(len(want)), bytes.NewReader(want))
 	require.NoError(t, err)
 	require.NotEmpty(t, ver2)
-	require.NotEqual(t, commit, ver2)
+	require.NotEqual(t, keyOID.String(), ver2)
 
 	got, ver3, err := GetBytes(ctx, bs, "k", AllRange)
 	require.NoError(t, err)
@@ -470,7 +634,7 @@ func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
 	require.Equal(t, []byte("keep\n"), got)
 }
 
-func TestGitBlobstore_CheckAndPut_ConcurrentUpdateReturnsMismatch(t *testing.T) {
+func TestGitBlobstore_CheckAndPut_ConcurrentUnrelatedUpdateStillSucceeds(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
@@ -485,6 +649,12 @@ func TestGitBlobstore_CheckAndPut_ConcurrentUpdateReturnsMismatch(t *testing.T) 
 	bs, err := NewGitBlobstoreWithIdentity(repo.GitDir, DoltDataRef, testIdentity())
 	require.NoError(t, err)
 
+	runner, err := git.NewRunner(repo.GitDir)
+	require.NoError(t, err)
+	api := git.NewGitAPIImpl(runner)
+	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "k")
+	require.NoError(t, err)
+
 	origAPI := bs.api
 	h := &hookGitAPI{GitAPI: origAPI, ref: DoltDataRef}
 	h.onFirstCAS = func(ctx context.Context, old git.OID) {
@@ -493,12 +663,17 @@ func TestGitBlobstore_CheckAndPut_ConcurrentUpdateReturnsMismatch(t *testing.T) 
 	}
 	bs.api = h
 
-	_, err = bs.CheckAndPut(ctx, commit, "k", 0, bytes.NewReader([]byte("mine\n")))
-	require.Error(t, err)
-	require.True(t, IsCheckAndPutError(err))
-
-	// Verify key did not change, since our CAS should have failed.
-	got, _, err := GetBytes(ctx, bs, "k", AllRange)
+	ver2, err := bs.CheckAndPut(ctx, keyOID.String(), "k", 0, bytes.NewReader([]byte("mine\n")))
 	require.NoError(t, err)
-	require.Equal(t, []byte("base\n"), got)
+	require.NotEmpty(t, ver2)
+	require.NotEqual(t, keyOID.String(), ver2)
+
+	got, ver3, err := GetBytes(ctx, bs, "k", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, ver2, ver3)
+	require.Equal(t, []byte("mine\n"), got)
+
+	got, _, err = GetBytes(ctx, bs, "external", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("external\n"), got)
 }
