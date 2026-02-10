@@ -576,10 +576,11 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			return backoff.Permanent(err)
 		}
 
-		ver, err = gbs.resolveKeyVersionAtCommit(ctx, newCommit, key)
-		if err != nil {
-			return backoff.Permanent(err)
+		obj, ok := gbs.cacheGetObject(key)
+		if !ok {
+			return backoff.Permanent(NotFound{Key: key})
 		}
+		ver = obj.oid.String()
 		return nil
 	}
 
@@ -668,7 +669,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 
 	case git.ObjectTypeTree:
 		// Per-key version: tree object id at this key.
-		rc, sz, _, err := gbs.openChunkedTreeRange(ctx, commit, key, br)
+		rc, sz, err := gbs.openChunkedTreeRange(ctx, commit, key, br)
 		return rc, sz, obj.oid.String(), err
 
 	default:
@@ -676,26 +677,24 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 	}
 }
 
-func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OID, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
-	ver := commit.String()
-
+func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OID, key string, br BlobRange) (io.ReadCloser, uint64, error) {
 	entries, ok := gbs.cacheListChildren(key)
 	if !ok {
-		return nil, 0, ver, NotFound{Key: key}
+		return nil, 0, NotFound{Key: key}
 	}
 	parts, totalSize, err := gbs.validateAndSizeChunkedParts(ctx, entries)
 	if err != nil {
-		return nil, 0, ver, err
+		return nil, 0, err
 	}
 
 	total := int64(totalSize)
 	start, end, err := normalizeRange(total, br.offset, br.length)
 	if err != nil {
-		return nil, totalSize, ver, err
+		return nil, totalSize, err
 	}
 	slices, err := sliceChunkParts(parts, start, end)
 	if err != nil {
-		return nil, totalSize, ver, err
+		return nil, totalSize, err
 	}
 
 	// Stream across part blobs.
@@ -704,7 +703,7 @@ func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OI
 		api:    gbs.api,
 		slices: slices,
 	}
-	return streamRC, totalSize, ver, nil
+	return streamRC, totalSize, nil
 }
 
 func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entries []git.TreeEntry) ([]chunkPartRef, uint64, error) {
@@ -769,14 +768,6 @@ func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (c
 		return git.OID(""), NotFound{Key: key}
 	}
 	return git.OID(""), &git.RefNotFoundError{Ref: gbs.localRef}
-}
-
-func (gbs *GitBlobstore) resolveObjectForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, typ git.ObjectType, err error) {
-	obj, ok := gbs.cacheGetObject(key)
-	if !ok {
-		return git.OID(""), git.ObjectTypeUnknown, NotFound{Key: key}
-	}
-	return obj.oid, obj.typ, nil
 }
 
 func (gbs *GitBlobstore) resolveBlobSizeForGet(ctx context.Context, commit git.OID, oid git.OID) (sz int64, ver string, err error) {
@@ -994,14 +985,6 @@ func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent
 	}
 }
 
-func (gbs *GitBlobstore) resolveKeyVersionAtCommit(ctx context.Context, commit git.OID, key string) (string, error) {
-	obj, ok := gbs.cacheGetObject(key)
-	if !ok {
-		return "", NotFound{Key: key}
-	}
-	return obj.oid.String(), nil
-}
-
 func (gbs *GitBlobstore) tryFastSucceedPutIfKeyExists(ctx context.Context, key string) (ver string, ok bool, err error) {
 	if key == "manifest" {
 		return "", false, nil
@@ -1111,15 +1094,15 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 }
 
 func (gbs *GitBlobstore) openReaderAtCommit(ctx context.Context, commit git.OID, key string) (io.ReadCloser, error) {
-	oid, typ, err := gbs.resolveObjectForGet(ctx, commit, key)
-	if err != nil {
-		return nil, err
+	obj, ok := gbs.cacheGetObject(key)
+	if !ok {
+		return nil, NotFound{Key: key}
 	}
-	switch typ {
+	switch obj.typ {
 	case git.ObjectTypeBlob:
-		return gbs.api.BlobReader(ctx, oid)
+		return gbs.api.BlobReader(ctx, obj.oid)
 	case git.ObjectTypeTree:
-		rc, _, _, err := gbs.openChunkedTreeRange(ctx, commit, key, AllRange)
+		rc, _, err := gbs.openChunkedTreeRange(ctx, commit, key, AllRange)
 		if err != nil {
 			// Defensive: resolveObjectForGet succeeded, but keep NotFound mapping consistent.
 			var pnf *git.PathNotFoundError
@@ -1130,7 +1113,7 @@ func (gbs *GitBlobstore) openReaderAtCommit(ctx context.Context, commit git.OID,
 		}
 		return rc, nil
 	default:
-		return nil, fmt.Errorf("gitblobstore: unsupported object type %q for key %q", typ, key)
+		return nil, fmt.Errorf("gitblobstore: unsupported object type %q for key %q", obj.typ, key)
 	}
 }
 

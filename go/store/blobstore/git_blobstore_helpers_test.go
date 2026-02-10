@@ -167,35 +167,6 @@ func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 	})
 }
 
-func TestGitBlobstoreHelpers_resolveObjectForGet(t *testing.T) {
-	ctx := context.Background()
-	commit := git.OID("0123456789abcdef0123456789abcdef01234567")
-
-	t.Run("ok", func(t *testing.T) {
-		gbs := &GitBlobstore{
-			cacheHead:    commit,
-			cacheObjects: map[string]cachedGitObject{"k": {oid: git.OID("89abcdef0123456789abcdef0123456789abcdef"), typ: git.ObjectTypeBlob}},
-		}
-
-		oid, typ, err := gbs.resolveObjectForGet(ctx, commit, "k")
-		require.NoError(t, err)
-		require.Equal(t, git.ObjectTypeBlob, typ)
-		require.Equal(t, git.OID("89abcdef0123456789abcdef0123456789abcdef"), oid)
-	})
-
-	t.Run("pathNotFoundMapsToNotFound", func(t *testing.T) {
-		gbs := &GitBlobstore{
-			cacheHead:    commit,
-			cacheObjects: map[string]cachedGitObject{},
-		}
-
-		_, _, err := gbs.resolveObjectForGet(ctx, commit, "k")
-		var nf NotFound
-		require.ErrorAs(t, err, &nf)
-		require.Equal(t, "k", nf.Key)
-	})
-}
-
 func TestGitBlobstoreHelpers_resolveBlobSizeForGet(t *testing.T) {
 	ctx := context.Background()
 	commit := git.OID("0123456789abcdef0123456789abcdef01234567")
