@@ -44,7 +44,7 @@ func newTestGitAPI(t *testing.T, ctx context.Context) (*git.Runner, git.GitAPI) 
 func mkCommit(t *testing.T, ctx context.Context, api git.GitAPI, parent *git.OID, files map[string][]byte, msg string) git.OID {
 	t.Helper()
 
-	_, indexFile, cleanup, err := newTempIndex()
+	_, indexFile, cleanup, err := git.NewTempIndex()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -365,7 +365,7 @@ func mergeUnits(base map[string]unit, local map[string]unit, remote map[string]u
 }
 
 func writeMergedTree(ctx context.Context, api git.GitAPI, merged map[string]unit, base treeSnapshot, local treeSnapshot, remote treeSnapshot) (git.OID, error) {
-	_, indexFile, cleanup, err := newTempIndex()
+	_, indexFile, cleanup, err := git.NewTempIndex()
 	if err != nil {
 		return "", err
 	}

@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -841,7 +839,7 @@ func (gbs *GitBlobstore) casRetryPolicy(ctx context.Context) backoff.BackOff {
 }
 
 func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.OID, hasParent bool, key string, plan putPlan, msg string) (git.OID, error) {
-	_, indexFile, cleanup, err := newTempIndex()
+	_, indexFile, cleanup, err := git.NewTempIndex()
 	if err != nil {
 		return "", err
 	}
@@ -1384,26 +1382,6 @@ func isMissingGitIdentityErr(err error) bool {
 	return strings.Contains(msg, "author identity unknown") ||
 		strings.Contains(msg, "unable to auto-detect email address") ||
 		strings.Contains(msg, "empty ident name")
-}
-
-func newTempIndex() (dir, indexFile string, cleanup func(), err error) {
-	// Create a unique temp index file. This is intentionally *not* placed under GIT_DIR:
-	// - some git dirs may be read-only or otherwise unsuitable for scratch files
-	// - we don't want to leave temp files inside the repo on crashes
-	//
-	// Note: git will also create a sibling lock file (<index>.lock) during index writes.
-	f, err := os.CreateTemp("", "dolt-gitblobstore-index-")
-	if err != nil {
-		return "", "", nil, err
-	}
-	indexFile = f.Name()
-	_ = f.Close()
-	dir = filepath.Dir(indexFile)
-	cleanup = func() {
-		_ = os.Remove(indexFile)
-		_ = os.Remove(indexFile + ".lock")
-	}
-	return dir, indexFile, cleanup, nil
 }
 
 // normalizeGitTreePath normalizes and validates a blobstore key for use as a git tree path.
