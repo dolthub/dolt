@@ -548,6 +548,44 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	return gbs.mergeCacheFromHead(ctx, remoteHead)
 }
 
+type gitblobstoreFetchRefError struct {
+	err error
+}
+
+func (e *gitblobstoreFetchRefError) Error() string { return e.err.Error() }
+func (e *gitblobstoreFetchRefError) Unwrap() error { return e.err }
+
+func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remoteHead git.OID, ok bool, err error) {
+	if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
+		// If the remote ref is missing, treat this as an empty store and bootstrap on write.
+		var rnf *git.RefNotFoundError
+		if errors.As(err, &rnf) && rnf.Ref == gbs.remoteRef {
+			return "", false, nil
+		}
+		return "", false, &gitblobstoreFetchRefError{err: err}
+	}
+
+	remoteHead, ok, err = gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
+		return "", false, &git.RefNotFoundError{Ref: gbs.remoteTrackingRef}
+	}
+
+	// Force-set owned local ref to remote head (remote is source-of-truth).
+	if err := gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync write"); err != nil {
+		return "", false, err
+	}
+
+	// Merge cache to reflect fetched contents.
+	if err := gbs.mergeCacheFromHead(ctx, remoteHead); err != nil {
+		return "", false, err
+	}
+
+	return remoteHead, true, nil
+}
+
 func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string, build func(parent git.OID, ok bool) (git.OID, error)) (string, error) {
 	if err := gbs.validateRemoteManaged(); err != nil {
 		return "", err
@@ -559,42 +597,16 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 
 	var ver string
 	op := func() error {
-		// 1) Fetch remote state into local tracking ref.
-		remoteMissing := false
-		if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
-			// If the remote ref is missing, treat this as an empty store and bootstrap on write.
-			var rnf *git.RefNotFoundError
-			if errors.As(err, &rnf) && rnf.Ref == gbs.remoteRef {
-				remoteMissing = true
-			} else {
-				return err
+		remoteHead, okRemote, err := gbs.fetchAlignAndMergeForWrite(ctx)
+		if err != nil {
+			var fe *gitblobstoreFetchRefError
+			if errors.As(err, &fe) {
+				return fe.err
 			}
+			return backoff.Permanent(err)
 		}
 
-		var remoteHead git.OID
-		var okRemote bool
-		if !remoteMissing {
-			var err error
-			remoteHead, okRemote, err = gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			if !okRemote {
-				return backoff.Permanent(&git.RefNotFoundError{Ref: gbs.remoteTrackingRef})
-			}
-
-			// 2) Force-set owned local ref to remote head (remote is source-of-truth).
-			if err := gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync write"); err != nil {
-				return backoff.Permanent(err)
-			}
-
-			// 2b) Merge cache to reflect fetched contents.
-			if err := gbs.mergeCacheFromHead(ctx, remoteHead); err != nil {
-				return backoff.Permanent(err)
-			}
-		}
-
-		// 3) Apply this operation's changes on top of the remote head.
+		// Apply this operation's changes on top of the remote head (or empty store).
 		newCommit, err := build(remoteHead, okRemote)
 		if err != nil {
 			return backoff.Permanent(err)
@@ -603,12 +615,12 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			return backoff.Permanent(err)
 		}
 
-		// 4) Push local ref to remote with lease.
+		// Push local ref to remote with lease.
 		if err := gbs.api.PushRefWithLease(ctx, gbs.remoteName, gbs.localRef, gbs.remoteRef, remoteHead); err != nil {
 			return err
 		}
 
-		// 5) Merge cache to reflect the new head after a successful push.
+		// Merge cache to reflect the new head after a successful push.
 		// When we successfully push a new head, it is safe (and required for correctness)
 		// to overwrite cache entries to reflect the new head's tree.
 		if err := gbs.mergeCacheFromHeadOverwriteAll(ctx, newCommit); err != nil {
