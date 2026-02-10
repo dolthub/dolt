@@ -4,13 +4,14 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package gitrebase
 
 import (
@@ -112,31 +113,39 @@ func detectChunkedParts(treePath string, entries []git.TreeEntry) (parts map[str
 	}
 	imm := make(map[string]git.OID)
 	for _, e := range entries {
-		if e.Type != git.ObjectTypeBlob {
-			continue
-		}
 		if !strings.HasPrefix(e.Name, prefix) {
 			continue
 		}
 		rest := strings.TrimPrefix(e.Name, prefix)
-		if rest == "" || strings.Contains(rest, "/") {
+		if rest == "" {
 			continue
+		}
+
+		// Deeper descendants disqualify this tree from being chunked, since chunked trees are
+		// expected to contain only immediate blob children named "0001", "0002", ...
+		if strings.Contains(rest, "/") {
+			return nil, false
+		}
+
+		// Immediate children must be blobs.
+		if e.Type != git.ObjectTypeBlob {
+			return nil, false
+		}
+
+		// Immediate child names must be exactly 4 digits.
+		if len(rest) != 4 {
+			return nil, false
+		}
+		for i := 0; i < 4; i++ {
+			c := rest[i]
+			if c < '0' || c > '9' {
+				return nil, false
+			}
 		}
 		imm[rest] = e.OID
 	}
 	if len(imm) == 0 {
 		return nil, false
-	}
-	for name := range imm {
-		if len(name) != 4 {
-			return nil, false
-		}
-		for i := 0; i < 4; i++ {
-			c := name[i]
-			if c < '0' || c > '9' {
-				return nil, false
-			}
-		}
 	}
 	parts = make(map[string]git.OID, len(imm))
 	for partName, oid := range imm {

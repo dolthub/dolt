@@ -38,7 +38,8 @@ func tempIndexFile(t *testing.T) string {
 func newTestRepo(t *testing.T, ctx context.Context) (*gitrepo.Repo, *Runner, GitAPI) {
 	t.Helper()
 
-	repo, err := gitrepo.InitBareTemp(ctx, "")
+	repoDir := filepath.Join(t.TempDir(), "repo.git")
+	repo, err := gitrepo.InitBare(ctx, repoDir)
 	if err != nil {
 		t.Fatal(err)
 	}

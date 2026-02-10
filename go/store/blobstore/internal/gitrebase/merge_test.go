@@ -4,19 +4,21 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package gitrebase
 
 import (
 	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
@@ -30,7 +32,8 @@ func testAuthor() *git.Identity {
 func newTestGitAPI(t *testing.T, ctx context.Context) (*git.Runner, git.GitAPI) {
 	t.Helper()
 
-	repo, err := gitrepo.InitBareTemp(ctx, "")
+	repoDir := filepath.Join(t.TempDir(), "repo.git")
+	repo, err := gitrepo.InitBare(ctx, repoDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,6 +275,31 @@ func TestMergeRemoteTrackingIntoLocalRef_ChunkedTreeAtomicConflict(t *testing.T)
 	}
 	if !found {
 		t.Fatalf("expected conflict on big, got %+v", ce.Conflicts)
+	}
+}
+
+func TestSnapshotFromRecursive_ChunkLikeDirWithSubdirIsNotChunked(t *testing.T) {
+	t.Parallel()
+
+	entries := []git.TreeEntry{
+		{Name: "k", Type: git.ObjectTypeTree, OID: "0123456789abcdef0123456789abcdef01234567"},
+		{Name: "k/0001", Type: git.ObjectTypeBlob, OID: "1111111111111111111111111111111111111111"},
+		{Name: "k/subdir", Type: git.ObjectTypeTree, OID: "2222222222222222222222222222222222222222"},
+		{Name: "k/subdir/file", Type: git.ObjectTypeBlob, OID: "3333333333333333333333333333333333333333"},
+	}
+
+	s, err := snapshotFromRecursive(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.chunked["k"]; ok {
+		t.Fatalf("expected k to not be classified as chunked")
+	}
+	if _, ok := s.files["k/0001"]; !ok {
+		t.Fatalf("expected k/0001 to be retained as a normal blob")
+	}
+	if _, ok := s.files["k/subdir/file"]; !ok {
+		t.Fatalf("expected k/subdir/file to be retained")
 	}
 }
 

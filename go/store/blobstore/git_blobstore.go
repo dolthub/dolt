@@ -362,7 +362,7 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	// 2) Merge tracking into local ref.
 	policy := gbs.casRetryPolicy(ctx)
 	op := func() error {
-		old, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+		old, _, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
 		if err != nil {
 			return backoff.Permanent(err)
 		}
@@ -375,7 +375,7 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		if err == nil {
 			return nil
 		}
-		if ok && gbs.refAdvanced(ctx, old) {
+		if gbs.refAdvanced(ctx, old) {
 			return err
 		}
 		return backoff.Permanent(err)
@@ -412,7 +412,7 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		}
 
 		// 2) Merge remote-tracking into local ref (remote is source-of-truth on conflicts).
-		oldLocal, okLocal, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+		oldLocal, _, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
 		if err != nil {
 			return backoff.Permanent(err)
 		}
@@ -423,7 +423,7 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		})
 		if err != nil {
 			// If local moved concurrently, retry; otherwise surface the error.
-			if okLocal && gbs.refAdvanced(ctx, oldLocal) {
+			if gbs.refAdvanced(ctx, oldLocal) {
 				return err
 			}
 			return backoff.Permanent(err)
