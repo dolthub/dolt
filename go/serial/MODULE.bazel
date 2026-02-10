@@ -1,0 +1,1 @@
+module(name = "com_github_dolthub_dolt_go_serial")
