@@ -205,7 +205,7 @@ func performMerge(
 	spec *merge.MergeSpec,
 	noCommit bool,
 	msg string,
-	skipTests bool,
+	skipVerification bool,
 ) (*doltdb.WorkingSet, string, int, int, string, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
@@ -235,7 +235,7 @@ func performMerge(
 	if canFF {
 		if spec.FFMode == merge.NoFastForward {
 			var commit *doltdb.Commit
-			ws, commit, err = executeNoFFMerge(ctx, sess, spec, msg, dbName, ws, noCommit)
+			ws, commit, err = executeNoFFMerge(ctx, sess, spec, msg, dbName, ws, noCommit, skipVerification)
 			if err == doltdb.ErrUnresolvedConflictsOrViolations {
 				// if there are unresolved conflicts, write the resulting working set back to the session and return an
 				// error message
@@ -309,7 +309,7 @@ func performMerge(
 		if spec.Force {
 			args = append(args, "--"+cli.ForceFlag)
 		}
-		if skipTests {
+		if skipVerification {
 			args = append(args, "--"+cli.SkipVerificationFlag)
 		}
 		commit, _, err = doDoltCommit(ctx, args)
@@ -409,6 +409,7 @@ func executeNoFFMerge(
 	dbName string,
 	ws *doltdb.WorkingSet,
 	noCommit bool,
+	skipVerification bool,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
@@ -453,7 +454,7 @@ func executeNoFFMerge(
 		Force:     spec.Force,
 		Name:      spec.Name,
 		Email:     spec.Email,
-		SkipTests: false, // NM4: Add support for --skip-verification in merge operations
+		SkipVerification: skipVerification,
 	})
 	if err != nil {
 		return nil, nil, err

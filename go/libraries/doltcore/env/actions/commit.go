@@ -37,7 +37,7 @@ type CommitStagedProps struct {
 	Force      bool
 	Name       string
 	Email      string
-	SkipTests  bool
+	SkipVerification bool
 }
 
 // Test validation system variable names
@@ -170,7 +170,7 @@ func GetCommitStaged(
 	}
 
 	// Run test validation against staged data if enabled and not skipped
-	if !props.SkipTests {
+	if !props.SkipVerification {
 		testGroups := GetCommitRunTestGroups()
 		if len(testGroups) > 0 {
 			// Use the new root-based validation approach

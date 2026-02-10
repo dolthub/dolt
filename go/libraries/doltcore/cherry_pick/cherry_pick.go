@@ -53,8 +53,8 @@ type CherryPickOptions struct {
 	// and Dolt rebase implementations, the default action is to keep commits that start off as empty.
 	EmptyCommitHandling doltdb.EmptyCommitHandling
 
-	// SkipTests controls whether test validation should be skipped before creating commits.
-	SkipTests bool
+	// SkipVerification controls whether test validation should be skipped before creating commits.
+	SkipVerification bool
 }
 
 // NewCherryPickOptions creates a new CherryPickOptions instance, filled out with default values for cherry-pick.
@@ -64,7 +64,7 @@ func NewCherryPickOptions() CherryPickOptions {
 		CommitMessage:              "",
 		CommitBecomesEmptyHandling: doltdb.ErrorOnEmptyCommit,
 		EmptyCommitHandling:        doltdb.ErrorOnEmptyCommit,
-		SkipTests:                  false,
+		SkipVerification:          false,
 	}
 }
 
@@ -166,7 +166,7 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 		Date:      originalMeta.Time(),
 		Name:      originalMeta.Name,
 		Email:     originalMeta.Email,
-		SkipTests: options.SkipTests,
+		SkipVerification: options.SkipVerification,
 	}
 
 	if options.CommitMessage != "" {
