@@ -121,7 +121,8 @@ type GitAPI interface {
 	FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error
 
 	// PushRefWithLease pushes |srcRef| to |dstRef| on |remote|, but only if the remote's |dstRef|
-	// equals |expectedDstOID| (force-with-lease).
+	// equals |expectedDstOID| (force-with-lease). If |expectedDstOID| is empty, it enforces that
+	// the remote |dstRef| is missing (bootstrap / create-if-missing semantics).
 	// Equivalent plumbing: GIT_DIR=... git push --force-with-lease=<dstRef>:<expectedDstOID> <remote> <srcRef>:<dstRef>
 	PushRefWithLease(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID OID) error
 }

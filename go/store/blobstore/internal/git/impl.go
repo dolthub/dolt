@@ -321,6 +321,9 @@ func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string,
 	srcRef = strings.TrimPrefix(srcRef, "+")
 	refspec := "+" + srcRef + ":" + dstRef
 	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", remote, refspec)
+	if err != nil && isRemoteRefNotFoundErr(err) {
+		return &RefNotFoundError{Ref: srcRef}
+	}
 	return err
 }
 
@@ -333,9 +336,6 @@ func (a *GitAPIImpl) PushRefWithLease(ctx context.Context, remote string, srcRef
 	}
 	if dstRef == "" {
 		return fmt.Errorf("git push: dst ref is required")
-	}
-	if expectedDstOID == "" {
-		return fmt.Errorf("git push: expected dst oid is required")
 	}
 	srcRef = strings.TrimPrefix(srcRef, "+")
 	refspec := srcRef + ":" + dstRef
@@ -358,6 +358,19 @@ func isRefNotFoundErr(err error) bool {
 	return strings.Contains(msg, "needed a single revision") ||
 		strings.Contains(msg, "unknown revision") ||
 		strings.Contains(msg, "not a valid object name")
+}
+
+func isRemoteRefNotFoundErr(err error) bool {
+	ce, ok := err.(*CmdError)
+	if !ok {
+		return false
+	}
+	msg := strings.ToLower(string(ce.Output))
+	// Typical fetch failure when the remote ref doesn't exist:
+	//   fatal: couldn't find remote ref refs/dolt/data
+	return strings.Contains(msg, "couldn't find remote ref") ||
+		strings.Contains(msg, "could not find remote ref") ||
+		strings.Contains(msg, "remote ref does not exist")
 }
 
 func isPathNotFoundErr(err error) bool {

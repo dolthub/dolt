@@ -635,6 +635,18 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
 }
 
+// NewNoConjoinGitStore returns an nbs implementation backed by a GitBlobstore, but disables conjoin.
+// This can be useful for deployments where conjoin's table rewrite cost is undesirable.
+func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+
+	bs, err := blobstore.NewGitBlobstoreWithOptions(gitDir, ref, opts)
+	if err != nil {
+		return nil, err
+	}
+	return NewNoConjoinBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+}
+
 // NewBSStore returns an nbs implementation backed by a Blobstore
 func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
