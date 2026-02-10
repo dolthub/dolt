@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -357,69 +356,6 @@ func TestMergeCommits(t *testing.T) {
 	require.Equal(t, eh.String(), h.String(), "table hashes do not equal")
 }
 
-func TestNomsMergeCommits(t *testing.T) {
-	if types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip()
-	}
-
-	vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
-
-	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
-	if err != nil {
-		t.Fatal(err)
-	}
-	opts := editor.TestEditorOptions(vrw)
-	merged, stats, err := merger.MergeTable(sql.NewContext(context.Background()), doltdb.TableName{Name: tableName}, opts, MergeOpts{IsCherryPick: false})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, expectedStats, stats, "received stats is incorrect")
-
-	tbl, _, err := root.GetTable(context.Background(), doltdb.TableName{Name: tableName})
-	assert.NoError(t, err)
-	sch, err := tbl.GetSchema(context.Background())
-	assert.NoError(t, err)
-	expected, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, expectedRows, nil, nil)
-	assert.NoError(t, err)
-	expected, err = editor.RebuildAllIndexes(context.Background(), expected, editor.TestEditorOptions(vrw))
-	assert.NoError(t, err)
-	conflictSchema := conflict.NewConflictSchema(sch, sch, sch)
-	assert.NoError(t, err)
-	expected, err = expected.SetConflicts(context.Background(), conflictSchema, durable.ConflictIndexFromNomsMap(expectedConflicts, vrw))
-	assert.NoError(t, err)
-
-	mergedRows, err := merged.table.GetNomsRowData(context.Background())
-	assert.NoError(t, err)
-	_, confIdx, err := merged.table.GetConflicts(context.Background())
-	assert.NoError(t, err)
-	conflicts := durable.NomsMapFromConflictIndex(confIdx)
-
-	if !mergedRows.Equals(expectedRows) {
-		t.Error(mustString(types.EncodedValue(context.Background(), expectedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), mergedRows)))
-	}
-	if !conflicts.Equals(expectedConflicts) {
-		t.Error(mustString(types.EncodedValue(context.Background(), expectedConflicts)), "\n!=\n", mustString(types.EncodedValue(context.Background(), conflicts)))
-	}
-
-	for _, index := range sch.Indexes().AllIndexes() {
-		mergedIndexRows, err := merged.table.GetNomsIndexRowData(context.Background(), index.Name())
-		assert.NoError(t, err)
-		expectedIndexRows, err := expected.GetNomsIndexRowData(context.Background(), index.Name())
-		assert.NoError(t, err)
-		assert.Equal(t, expectedRows.Len(), mergedIndexRows.Len(), "index %s incorrect row count", index.Name())
-		assert.Truef(t, expectedIndexRows.Equals(mergedIndexRows),
-			"index %s contents incorrect.\nExpected: \n%s\nReceived: \n%s\n", index.Name(),
-			mustString(types.EncodedValue(context.Background(), expectedIndexRows)),
-			mustString(types.EncodedValue(context.Background(), mergedIndexRows)))
-	}
-
-	h, err := merged.table.HashOf()
-	assert.NoError(t, err)
-	eh, err := expected.HashOf()
-	assert.NoError(t, err)
-	assert.Equal(t, eh.String(), h.String(), "table hashes do not equal")
-}
-
 func sortTests(t []testRow) {
 	sort.Slice(t, func(i, j int) bool {
 		return t[i].key < t[j].key
@@ -533,93 +469,6 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 	require.NoError(t, err)
 
 	return ddb, vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
-}
-
-func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, doltdb.RootValue, doltdb.RootValue, doltdb.RootValue, types.Map, types.Map, *MergeStats) {
-	ddb := mustMakeEmptyRepo(t)
-	vrw := ddb.ValueReadWriter()
-	ns := ddb.NodeStore()
-	sortTests(testRows)
-
-	var initalKVs []types.Value
-	var expectedKVs []types.Value
-	var expectedConflictsKVs []types.Value
-	for _, testCase := range testRows {
-		if testCase.initialValue != nil {
-			initalKVs = append(initalKVs, nomsKey(testCase.key), testCase.initialValue.nomsValue())
-		}
-		if testCase.expectedValue != nil {
-			expectedKVs = append(expectedKVs, nomsKey(testCase.key), testCase.expectedValue.nomsValue())
-		}
-		if testCase.conflict {
-			expectedConflictsKVs = append(
-				expectedConflictsKVs,
-				nomsKey(testCase.key),
-				mustTuple(conflict.NewConflict(
-					unwrapNoms(testCase.initialValue),
-					unwrapNoms(testCase.leftValue),
-					unwrapNoms(testCase.rightValue),
-				).ToNomsList(vrw)),
-			)
-		}
-	}
-	initialRows, err := types.NewMap(context.Background(), vrw, initalKVs...)
-	require.NoError(t, err)
-	expectedRows, err := types.NewMap(context.Background(), vrw, expectedKVs...)
-	require.NoError(t, err)
-	expectedConflicts, err := types.NewMap(context.Background(), vrw, expectedConflictsKVs...)
-	require.NoError(t, err)
-
-	leftE := initialRows.Edit()
-	rightE := initialRows.Edit()
-	for _, testCase := range testRows {
-		switch testCase.leftAction {
-		case NoopAction:
-			break
-		case InsertAction, UpdateAction:
-			leftE.Set(nomsKey(testCase.key), testCase.leftValue.nomsValue())
-		case DeleteAction:
-			leftE.Remove(nomsKey(testCase.key))
-		}
-
-		switch testCase.rightAction {
-		case NoopAction:
-			break
-		case InsertAction, UpdateAction:
-			rightE.Set(nomsKey(testCase.key), testCase.rightValue.nomsValue())
-		case DeleteAction:
-			rightE.Remove(nomsKey(testCase.key))
-		}
-	}
-
-	updatedRows, err := leftE.Map(context.Background())
-	require.NoError(t, err)
-	mergeRows, err := rightE.Map(context.Background())
-	require.NoError(t, err)
-
-	tbl, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, initialRows, nil, nil)
-	require.NoError(t, err)
-	tbl, err = editor.RebuildAllIndexes(context.Background(), tbl, editor.TestEditorOptions(vrw))
-	require.NoError(t, err)
-
-	updatedTbl, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, updatedRows, nil, nil)
-	require.NoError(t, err)
-	updatedTbl, err = editor.RebuildAllIndexes(context.Background(), updatedTbl, editor.TestEditorOptions(vrw))
-	require.NoError(t, err)
-
-	mergeTbl, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, mergeRows, nil, nil)
-	require.NoError(t, err)
-	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl, editor.TestEditorOptions(vrw))
-	require.NoError(t, err)
-
-	ancTable, err := doltdb.NewNomsTable(context.Background(), vrw, ns, sch, initialRows, nil, nil)
-	require.NoError(t, err)
-	ancTable, err = editor.RebuildAllIndexes(context.Background(), ancTable, editor.TestEditorOptions(vrw))
-	require.NoError(t, err)
-
-	rightCm, ancCommit, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, updatedTbl, mergeTbl, ancTable)
-
-	return vrw, ns, rightCm, ancCommit, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
 }
 
 // rebuildAllProllyIndexes builds the data for the secondary indexes in |tbl|'s

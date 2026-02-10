@@ -246,7 +246,7 @@ func (rm *RootMerger) MergeTable(
 		if types.IsFormat_DOLT(tm.vrw.Format()) {
 			tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, mergeInfo, diffInfo)
 		} else {
-			tbl, stats, err = mergeNomsTable(ctx, tm, mergeSch, rm.vrw, opts)
+			panic("data format not supported in this version of Dolt")
 		}
 		if err != nil {
 			return nil, nil, err

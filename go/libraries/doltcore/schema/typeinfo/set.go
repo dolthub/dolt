@@ -140,26 +140,6 @@ func (ti *setType) FormatValue(v types.Value) (*string, error) {
 	return &val, nil
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *setType) GetTypeIdentifier() Identifier {
-	return SetTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *setType) GetTypeParams() map[string]string {
-	var sb strings.Builder
-	enc := gob.NewEncoder(&sb)
-	err := enc.Encode(ti.sqlSetType.Values())
-	// this should never error, encoding an array of strings should always succeed
-	if err != nil {
-		panic(err)
-	}
-	return map[string]string{
-		setTypeParam_Collation: ti.sqlSetType.Collation().String(),
-		setTypeParam_Values:    sb.String(),
-	}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *setType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {

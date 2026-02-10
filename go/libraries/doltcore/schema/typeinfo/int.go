@@ -177,31 +177,6 @@ func (ti *intType) FormatValue(v types.Value) (*string, error) {
 	}
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *intType) GetTypeIdentifier() Identifier {
-	return IntTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *intType) GetTypeParams() map[string]string {
-	sqlParam := ""
-	switch ti.sqlIntType.Type() {
-	case sqltypes.Int8:
-		sqlParam = intTypeParams_Width_8
-	case sqltypes.Int16:
-		sqlParam = intTypeParams_Width_16
-	case sqltypes.Int24:
-		sqlParam = intTypeParams_Width_24
-	case sqltypes.Int32:
-		sqlParam = intTypeParams_Width_32
-	case sqltypes.Int64:
-		sqlParam = intTypeParams_Width_64
-	default:
-		panic(fmt.Errorf(`unknown int type info sql type "%v"`, ti.sqlIntType.Type().String()))
-	}
-	return map[string]string{intTypeParams_Width: sqlParam}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *intType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter or delete typeinfo package

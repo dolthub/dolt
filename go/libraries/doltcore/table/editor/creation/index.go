@@ -135,11 +135,7 @@ func CreateIndex(
 func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName string, opts editor.Options) (durable.Index, error) {
 	switch tbl.Format() {
 	case types.Format_LD_1:
-		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
-		if err != nil {
-			return nil, err
-		}
-		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter(), tbl.NodeStore()), nil
+		panic("LD_1 format is not supported in this version of Dolt")
 
 	case types.Format_DOLT:
 		sch, err := tbl.GetSchema(ctx)
