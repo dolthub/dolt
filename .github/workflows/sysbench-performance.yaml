@@ -11,6 +11,10 @@ jobs:
     name: Trigger Mini Benchmark Latency K8s Workflow
     runs-on: ubuntu-22.04
     steps:
+      - uses: dolthub/pull-request-comment-branch@v3
+        id: comment-branch
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Get pull number
         uses: actions/github-script@v7
         id: get_pull_number
