@@ -883,7 +883,64 @@ func TestIndexes(t *testing.T) {
 func TestVectorIndexes(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
-	enginetest.TestVectorIndexes(t, harness)
+	// GMS VectorIndexQueries includes tests that create vector indexes on nullable columns.
+	// Dolt now rejects this at DDL time (see TestVectorIndexDDL), so we skip those tests here
+	// and only run the ones that are compatible with the NOT NULL constraint.
+	for _, script := range queries.VectorIndexQueries {
+		if script.Name == "basic JSON vector index" || script.Name == "basic VECTOR vector index" {
+			t.Run(script.Name, func(t *testing.T) {
+				t.Skip("Dolt rejects vector indexes on nullable columns; see TestVectorIndexDDL")
+			})
+			continue
+		}
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func TestVectorIndexDDL(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	scripts := []queries.ScriptTest{
+		{
+			Name: "vector index on nullable column rejected",
+			SetUpScript: []string{
+				"CREATE TABLE t (id INT PRIMARY KEY, v VECTOR(3))",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:          "CREATE VECTOR INDEX idx ON t (v)",
+					ExpectedErrStr: "all parts of a VECTOR index must be NOT NULL",
+				},
+			},
+		},
+		{
+			Name: "vector index on NOT NULL column succeeds",
+			SetUpScript: []string{
+				"CREATE TABLE t (id INT PRIMARY KEY, v VECTOR(3) NOT NULL)",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "CREATE VECTOR INDEX idx ON t (v)",
+					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 0}}},
+				},
+			},
+		},
+		{
+			Name: "ALTER TABLE add vector index on nullable column rejected",
+			SetUpScript: []string{
+				"CREATE TABLE t (id INT PRIMARY KEY, v VECTOR(3))",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:          "ALTER TABLE t ADD VECTOR INDEX idx (v)",
+					ExpectedErrStr: "all parts of a VECTOR index must be NOT NULL",
+				},
+			},
+		},
+	}
+	for _, script := range scripts {
+		enginetest.TestScript(t, harness, script)
+	}
 }
 
 func TestVectorFunctions(t *testing.T) {

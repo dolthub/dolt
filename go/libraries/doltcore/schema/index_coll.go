@@ -214,7 +214,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 	for _, tag := range tags {
 		// we already validated the tag exists
 		c, _ := ixc.colColl.GetByTag(tag)
-		err := validateColumnIndexable(c)
+		err := validateColumnIndexable(c, props.IsVector)
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +243,10 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 }
 
 // validateColumnIndexable returns an error if the column given cannot be used in an index
-func validateColumnIndexable(c Column) error {
+func validateColumnIndexable(c Column, isVector bool) error {
+	if isVector && c.IsNullable() {
+		return fmt.Errorf("all parts of a VECTOR index must be NOT NULL")
+	}
 	return nil
 }
 
