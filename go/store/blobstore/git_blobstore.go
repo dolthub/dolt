@@ -254,6 +254,12 @@ func (c *concatReadCloser) Close() error {
 // GitBlobstore is a Blobstore implementation backed by a git repository's object
 // database (bare repo or .git directory). It stores keys as paths within the tree
 // of the commit referenced by a git ref (e.g. refs/dolt/data).
+//
+// Cache semantics:
+//   - GitBlobstore maintains an in-memory path->(oid,type) cache built from fetched heads.
+//   - The cache is monotonic/merge-only: once a non-manifest key is cached, it is treated
+//     as immutable and its mapping is not overwritten by later fetches.
+//   - The manifest is the exception: it is mutable and may be updated on fetch/merge.
 type GitBlobstore struct {
 	gitDir            string
 	remoteRef         string
@@ -276,8 +282,8 @@ type GitBlobstore struct {
 
 	// cacheMu guards all cache fields below.
 	cacheMu sync.RWMutex
-	// cacheHead is the commit OID this cache snapshot represents. An empty value
-	// means "no cache loaded".
+	// cacheHead is the last commit OID whose tree we merged into the cache.
+	// An empty value means "no cache merged yet".
 	cacheHead git.OID
 	// cacheObjects maps full tree paths to their object OID and type.
 	cacheObjects map[string]cachedGitObject
@@ -291,20 +297,6 @@ var _ Blobstore = (*GitBlobstore)(nil)
 type cachedGitObject struct {
 	oid git.OID
 	typ git.ObjectType
-}
-
-func (gbs *GitBlobstore) ensureCacheForCommit(ctx context.Context, commit git.OID) error {
-	if commit == "" {
-		return fmt.Errorf("gitblobstore: empty commit for cache ensure")
-	}
-
-	gbs.cacheMu.RLock()
-	same := gbs.cacheHead == commit
-	gbs.cacheMu.RUnlock()
-	if same {
-		return nil
-	}
-	return gbs.rebuildCache(ctx, commit)
 }
 
 func (gbs *GitBlobstore) cacheGetObject(path string) (cachedGitObject, bool) {
@@ -388,9 +380,9 @@ func splitGitPathParentBase(fullPath string) (parent string, base string) {
 	return fullPath[:i], fullPath[i+1:]
 }
 
-func (gbs *GitBlobstore) rebuildCache(ctx context.Context, head git.OID) error {
+func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) error {
 	if head == "" {
-		return fmt.Errorf("gitblobstore: cannot rebuild cache for empty head")
+		return fmt.Errorf("gitblobstore: cannot merge cache for empty head")
 	}
 
 	gbs.cacheMu.RLock()
@@ -405,37 +397,70 @@ func (gbs *GitBlobstore) rebuildCache(ctx context.Context, head git.OID) error {
 		return err
 	}
 
-	objects := make(map[string]cachedGitObject, len(entries))
-	children := make(map[string][]git.TreeEntry)
+	gbs.cacheMu.Lock()
+
+	// Double-check under write lock for concurrent callers.
+	if gbs.cacheHead == head {
+		gbs.cacheMu.Unlock()
+		return nil
+	}
+
+	// Defensive: allow zero-value GitBlobstore in tests; initialize once if nil.
+	if gbs.cacheObjects == nil {
+		gbs.cacheObjects = make(map[string]cachedGitObject)
+	}
+	if gbs.cacheChildren == nil {
+		gbs.cacheChildren = make(map[string][]git.TreeEntry)
+	}
+
+	touchedDirs := make(map[string]struct{})
 
 	for _, e := range entries {
 		if e.Name == "" {
 			continue
 		}
-		objects[e.Name] = cachedGitObject{oid: e.OID, typ: e.Type}
 
+		isManifest := e.Name == "manifest"
+
+		// Merge object mapping: manifest may update; other keys are treated as immutable once cached.
+		if _, ok := gbs.cacheObjects[e.Name]; !ok || isManifest {
+			gbs.cacheObjects[e.Name] = cachedGitObject{oid: e.OID, typ: e.Type}
+		}
+
+		// Merge parent -> child membership (ensure presence; update only for manifest).
 		parent, base := splitGitPathParentBase(e.Name)
 		if base == "" {
-			// Defensive: shouldn't happen with valid git paths.
 			continue
 		}
-		children[parent] = append(children[parent], git.TreeEntry{
-			Mode: e.Mode,
-			Type: e.Type,
-			OID:  e.OID,
-			Name: base,
-		})
+
+		child := git.TreeEntry{Mode: e.Mode, Type: e.Type, OID: e.OID, Name: base}
+		ents := gbs.cacheChildren[parent]
+
+		found := false
+		for i := range ents {
+			if ents[i].Name != base {
+				continue
+			}
+			found = true
+			if isManifest {
+				ents[i] = child
+				gbs.cacheChildren[parent] = ents
+				touchedDirs[parent] = struct{}{}
+			}
+			break
+		}
+		if !found {
+			gbs.cacheChildren[parent] = append(ents, child)
+			touchedDirs[parent] = struct{}{}
+		}
 	}
 
 	// Deterministic ordering for callers that require sorted names (e.g. chunk parts 0001..).
-	for dir := range children {
-		sort.Slice(children[dir], func(i, j int) bool { return children[dir][i].Name < children[dir][j].Name })
+	for dir := range touchedDirs {
+		sort.Slice(gbs.cacheChildren[dir], func(i, j int) bool { return gbs.cacheChildren[dir][i].Name < gbs.cacheChildren[dir][j].Name })
 	}
 
-	gbs.cacheMu.Lock()
 	gbs.cacheHead = head
-	gbs.cacheObjects = objects
-	gbs.cacheChildren = children
 	gbs.cacheMu.Unlock()
 	return nil
 }
@@ -495,8 +520,8 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		return err
 	}
 
-	// 3) Refresh cache to reflect fetched contents.
-	return gbs.rebuildCache(ctx, remoteHead)
+	// 3) Merge cache to reflect fetched contents.
+	return gbs.mergeCacheFromHead(ctx, remoteHead)
 }
 
 func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string, build func(parent git.OID, ok bool) (git.OID, error)) (string, error) {
@@ -527,8 +552,8 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			return backoff.Permanent(err)
 		}
 
-		// 2b) Refresh cache to reflect fetched contents.
-		if err := gbs.rebuildCache(ctx, remoteHead); err != nil {
+		// 2b) Merge cache to reflect fetched contents.
+		if err := gbs.mergeCacheFromHead(ctx, remoteHead); err != nil {
 			return backoff.Permanent(err)
 		}
 
@@ -546,8 +571,8 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			return err
 		}
 
-		// 5) Refresh cache to reflect the new head after a successful push.
-		if err := gbs.rebuildCache(ctx, newCommit); err != nil {
+		// 5) Merge cache to reflect the new head after a successful push.
+		if err := gbs.mergeCacheFromHead(ctx, newCommit); err != nil {
 			return backoff.Permanent(err)
 		}
 
@@ -602,6 +627,10 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	if err := gbs.syncForRead(ctx); err != nil {
 		return false, err
 	}
+	// Note: because the cache is merge-only and treats non-manifest keys as immutable once cached,
+	// Exists(key) may return true for keys that were seen in a past fetched head but are no longer
+	// present in the current remote head (e.g. after remote rewrites). This is acceptable for NBS
+	// tablefiles, which are content-addressed and coordinated by the manifest.
 	_, ok := gbs.cacheGetObject(key)
 	return ok, nil
 }
@@ -616,9 +645,6 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 	}
 	commit, err := gbs.resolveCommitForGet(ctx, key)
 	if err != nil {
-		return nil, 0, "", err
-	}
-	if err := gbs.ensureCacheForCommit(ctx, commit); err != nil {
 		return nil, 0, "", err
 	}
 
@@ -652,10 +678,6 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 
 func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OID, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	ver := commit.String()
-
-	if err := gbs.ensureCacheForCommit(ctx, commit); err != nil {
-		return nil, 0, ver, err
-	}
 
 	entries, ok := gbs.cacheListChildren(key)
 	if !ok {
@@ -750,9 +772,6 @@ func (gbs *GitBlobstore) resolveCommitForGet(ctx context.Context, key string) (c
 }
 
 func (gbs *GitBlobstore) resolveObjectForGet(ctx context.Context, commit git.OID, key string) (oid git.OID, typ git.ObjectType, err error) {
-	if err := gbs.ensureCacheForCommit(ctx, commit); err != nil {
-		return git.OID(""), git.ObjectTypeUnknown, err
-	}
 	obj, ok := gbs.cacheGetObject(key)
 	if !ok {
 		return git.OID(""), git.ObjectTypeUnknown, NotFound{Key: key}
@@ -976,9 +995,6 @@ func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent
 }
 
 func (gbs *GitBlobstore) resolveKeyVersionAtCommit(ctx context.Context, commit git.OID, key string) (string, error) {
-	if err := gbs.ensureCacheForCommit(ctx, commit); err != nil {
-		return "", err
-	}
 	obj, ok := gbs.cacheGetObject(key)
 	if !ok {
 		return "", NotFound{Key: key}
@@ -991,16 +1007,12 @@ func (gbs *GitBlobstore) tryFastSucceedPutIfKeyExists(ctx context.Context, key s
 		return "", false, nil
 	}
 
-	commit, haveCommit, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
+	_, haveCommit, err := gbs.api.TryResolveRefCommit(ctx, gbs.localRef)
 	if err != nil {
 		return "", false, err
 	}
 	if !haveCommit {
 		return "", false, nil
-	}
-
-	if err := gbs.ensureCacheForCommit(ctx, commit); err != nil {
-		return "", false, err
 	}
 	obj, ok := gbs.cacheGetObject(key)
 	if !ok {
@@ -1024,9 +1036,6 @@ func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, 
 	if !haveCommit {
 		// Ref missing => empty store => key missing.
 		return "", nil
-	}
-	if err := gbs.ensureCacheForCommit(ctx, commit); err != nil {
-		return "", err
 	}
 	obj, ok := gbs.cacheGetObject(key)
 	if !ok {
@@ -1129,10 +1138,6 @@ func (gbs *GitBlobstore) openReaderAtCommit(ctx context.Context, commit git.OID,
 // It supports both inline blobs and the chunked-tree representation used by GitBlobstore.
 // If |key| is missing at |commit|, it returns NotFound{Key: key}.
 func (gbs *GitBlobstore) sizeAtCommit(ctx context.Context, commit git.OID, key string) (uint64, error) {
-	if err := gbs.ensureCacheForCommit(ctx, commit); err != nil {
-		return 0, err
-	}
-
 	obj, ok := gbs.cacheGetObject(key)
 	if !ok {
 		return 0, NotFound{Key: key}
