@@ -171,7 +171,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
-		SkipTests:  apr.Contains(cli.SkipTestsFlag),
+		SkipTests:  apr.Contains(cli.SkipVerificationFlag),
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")

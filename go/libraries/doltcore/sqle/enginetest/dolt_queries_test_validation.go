@@ -147,7 +147,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 				ExpectedErrStr: "commit validation failed: test_will_fail (Expected '999' but got '2')",
 			},
 			{
-				Query:    "CALL dolt_commit('--skip-tests','-m', 'skip verification')",
+				Query:    "CALL dolt_commit('--skip-verification','-m', 'skip verification')",
 				Expected: []sql.Row{{commitHash}},
 			},
 		},
@@ -177,7 +177,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 				ExpectedErrStr: "commit validation failed: test_will_fail (Expected '999' but got '2')",
 			},
 			{
-				Query:    "CALL dolt_commit('--allow-empty', '--amend', '--skip-tests', '-m', 'skip the tests')",
+				Query:    "CALL dolt_commit('--allow-empty', '--amend', '--skip-verification', '-m', 'skip the tests')",
 				Expected: []sql.Row{{commitHash}},
 			},
 		},
@@ -191,15 +191,15 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
 				"('test_user_count_update', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1')",
 			"CALL dolt_add('.')",
-			"CALL dolt_commit('--skip-tests', '-m', 'add test')",
+			"CALL dolt_commit('--skip-verification', '-m', 'add test')",
 			"CALL dolt_checkout('-b', 'feature')",
 			"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
 			"UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_user_count_update'",
 			"CALL dolt_add('.')",
-			"call dolt_commit_hash_out(@commit_1_hash,'--skip-tests', '-m', 'Add Bob and update test')",
+			"call dolt_commit_hash_out(@commit_1_hash,'--skip-verification', '-m', 'Add Bob and update test')",
 			"INSERT INTO users VALUES (3, 'Charlie', 'chuck@exampl.com')",
 			"CALL dolt_add('.')",
-			"call dolt_commit_hash_out(@commit_2_hash,'--skip-tests', '-m', 'Add Charlie')",
+			"call dolt_commit_hash_out(@commit_2_hash,'--skip-verification', '-m', 'Add Charlie')",
 			"CALL dolt_checkout('main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -226,7 +226,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			"CALL dolt_checkout('-b', 'feature')",
 			"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
 			"CALL dolt_add('.')",
-			"call dolt_commit_hash_out(@commit_hash,'--skip-tests', '-m', 'Add Bob but dont update test')",
+			"call dolt_commit_hash_out(@commit_hash,'--skip-verification', '-m', 'Add Bob but dont update test')",
 			"CALL dolt_checkout('main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -235,7 +235,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 				ExpectedErrStr: "commit validation failed: test_users_count (Expected '1' but got '2')",
 			},
 			{
-				Query:    "CALL dolt_cherry_pick('--skip-tests', @commit_hash)",
+				Query:    "CALL dolt_cherry_pick('--skip-verification', @commit_hash)",
 				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
 			},
 			{
@@ -295,7 +295,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			"CALL dolt_checkout('main')",
 			"INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com')",
 			"CALL dolt_add('.')",
-			"CALL dolt_commit('--skip-tests', '-m', 'Add Charlie')", // this will trip the existing test.
+			"CALL dolt_commit('--skip-verification', '-m', 'Add Charlie')", // this will trip the existing test.
 			"CALL dolt_checkout('feature')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -308,7 +308,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "Interactive rebase aborted"}},
 			},
 			{
-				Query:    "CALL dolt_rebase('--skip-tests', 'main')",
+				Query:    "CALL dolt_rebase('--skip-verification', 'main')",
 				Expected: []sql.Row{{int64(0), successfulRebaseMessage}},
 			},
 			{
@@ -320,7 +320,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "interactive rebase with --skip-tests flag should persist across continue operations",
+		Name: "interactive rebase with --skip-verification flag should persist across continue operations",
 		SetUpScript: []string{
 			"SET GLOBAL dolt_commit_run_test_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
@@ -328,27 +328,27 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
 				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1')",
 			"CALL dolt_add('.')",
-			"CALL dolt_commit('--skip-tests', '-m', 'Initial commit')",
+			"CALL dolt_commit('--skip-verification', '-m', 'Initial commit')",
 			"CALL dolt_checkout('-b', 'feature')",
 			"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
 			"CALL dolt_add('.')",
-			"CALL dolt_commit('--skip-tests', '-m', 'Add Bob but dont update test')", // This will cause test to fail
+			"CALL dolt_commit('--skip-verification', '-m', 'Add Bob but dont update test')", // This will cause test to fail
 			"INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com')",
 			"CALL dolt_add('.')",
-			"CALL dolt_commit('--skip-tests', '-m', 'Add Charlie')",
+			"CALL dolt_commit('--skip-verification', '-m', 'Add Charlie')",
 			"CALL dolt_checkout('main')",
 			"INSERT INTO users VALUES (4, 'David', 'david@example.com')", // Add a commit to main to create divergence
 			"CALL dolt_add('.')",
-			"CALL dolt_commit('--skip-tests', '-m', 'Add David on main')",
+			"CALL dolt_commit('--skip-verification', '-m', 'Add David on main')",
 			"CALL dolt_checkout('feature')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL dolt_rebase('--interactive', '--skip-tests', 'main')",
+				Query:    "CALL dolt_rebase('--interactive', '--skip-verification', 'main')",
 				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_feature; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
-				Query:    "CALL dolt_rebase('--continue')", // This should NOT require --skip-tests flag but should still skip tests
+				Query:    "CALL dolt_rebase('--continue')", // This should NOT require --skip-verification flag but should still skip tests
 				Expected: []sql.Row{{int64(0), successfulRebaseMessage}},
 			},
 		},
@@ -470,7 +470,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			},
 		},
 		{
-			Name: "merge with --skip-tests flag bypasses validation",
+			Name: "merge with --skip-verification flag bypasses validation",
 			SetUpScript: []string{
 				"SET GLOBAL dolt_commit_run_test_groups = '*'",
 				"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
@@ -487,7 +487,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL dolt_merge('--skip-tests', 'feature')",
+					Query:    "CALL dolt_merge('--skip-verification', 'feature')",
 					Expected: []sql.Row{{commitHash}},
 				},
 			},
@@ -517,7 +517,7 @@ var DoltPushTestValidationScripts = []queries.ScriptTest{
 	},
 	/*
 		{
-			Name: "push with --skip-tests flag bypasses validation",
+			Name: "push with --skip-verification flag bypasses validation",
 			SetUpScript: []string{
 				"SET GLOBAL dolt_push_run_test_groups = '*'",
 				"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
@@ -529,7 +529,7 @@ var DoltPushTestValidationScripts = []queries.ScriptTest{
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:          "CALL dolt_push('--skip-tests', 'origin', 'main')",
+					Query:          "CALL dolt_push('--skip-verification', 'origin', 'main')",
 					ExpectedErrStr: "remote 'origin' not found", // Expected since we don't have a real remote
 				},
 			},

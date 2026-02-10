@@ -180,7 +180,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 		msg = userMsg
 	}
 
-	ws, commit, conflicts, fastForward, message, err := performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg, apr.Contains(cli.SkipTestsFlag))
+	ws, commit, conflicts, fastForward, message, err := performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg, apr.Contains(cli.SkipVerificationFlag))
 	if err != nil {
 		return commit, conflicts, fastForward, "", err
 	}
@@ -310,7 +310,7 @@ func performMerge(
 			args = append(args, "--"+cli.ForceFlag)
 		}
 		if skipTests {
-			args = append(args, "--"+cli.SkipTestsFlag)
+			args = append(args, "--"+cli.SkipVerificationFlag)
 		}
 		commit, _, err = doDoltCommit(ctx, args)
 		if err != nil {
@@ -453,7 +453,7 @@ func executeNoFFMerge(
 		Force:     spec.Force,
 		Name:      spec.Name,
 		Email:     spec.Email,
-		SkipTests: false, // NM4: Add support for --skip-tests in merge operations
+		SkipTests: false, // NM4: Add support for --skip-verification in merge operations
 	})
 	if err != nil {
 		return nil, nil, err

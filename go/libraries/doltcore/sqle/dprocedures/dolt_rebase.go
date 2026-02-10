@@ -218,7 +218,7 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		}
 
 
-		skipTests := apr.Contains(cli.SkipTestsFlag)
+		skipTests := apr.Contains(cli.SkipVerificationFlag)
 		err = startRebase(ctx, apr.Arg(0), commitBecomesEmptyHandling, emptyCommitHandling, skipTests)
 		if err != nil {
 			return 1, "", err
