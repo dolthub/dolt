@@ -62,6 +62,10 @@ type TupleTypeHandler interface {
 	DeserializeValue(ctx context.Context, val []byte) (any, error)
 	// FormatValue returns a string version of the value. Primarily intended for display.
 	FormatValue(val any) (string, error)
+	// SerializationCompatible returns true if this TupleTypeHandler is binary compatible with the other TupleTypeHandler.
+	SerializationCompatible(other TupleTypeHandler) bool
+	// ConvertSerialized converts |val| from the type handled by |other| to the type handled by this TupleTypeHandler.
+	ConvertSerialized(ctx context.Context, other TupleTypeHandler, val []byte) ([]byte, error)
 }
 
 // TupleDescriptorArgs are a set of optional arguments for TupleDesc creation.
@@ -755,6 +759,19 @@ type AddressTypeHandler struct {
 	childHandler TupleTypeHandler
 }
 
+func (handler AddressTypeHandler) SerializationCompatible(other TupleTypeHandler) bool {
+	_, ok := other.(AddressTypeHandler)
+	return ok
+}
+
+func (handler AddressTypeHandler) ConvertSerialized(ctx context.Context, other TupleTypeHandler, val []byte) ([]byte, error) {
+	panic("unexpected call to ConvertSerialized on AddressTypeHandler; this should never be necessary because " +
+		"AddressTypeHandler should only be used in contexts where the child handler's serialized form is never " +
+		"directly compared or converted")
+}
+
+var _ TupleTypeHandler = AddressTypeHandler{}
+
 func NewExtendedAddressTypeHandler(vs ValueStore, childHandler TupleTypeHandler) AddressTypeHandler {
 	return AddressTypeHandler{
 		vs:           vs,
@@ -814,4 +831,8 @@ func (handler AddressTypeHandler) DeserializeValue(ctx context.Context, val []by
 
 func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
 	return handler.childHandler.FormatValue(val)
+}
+
+func (handler AddressTypeHandler) ChildHandler() TupleTypeHandler {
+	return handler.childHandler
 }

@@ -586,7 +586,7 @@ func TestIndexedAccess(t *testing.T, e enginetest.QueryEngine, harness enginetes
 	a, err := analyzeQuery(ctx, e, query)
 	require.NoError(t, err)
 	var hasIndex bool
-	transform.Inspect(a, func(n sql.Node) bool {
+	transform.InspectWithOpaque(a, func(n sql.Node) bool {
 		if n == nil {
 			return false
 		}

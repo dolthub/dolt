@@ -158,7 +158,7 @@ func NewEmitter(emitterType string, pro EmitterConfigProvider) (events.Emitter, 
 
 // GRPCEmitterForConfig returns an event emitter for the given environment, or nil if the environment cannot
 // provide one
-func GRPCEmitterForConfig(pro EmitterConfigProvider) (*events.GrpcEmitter, func() error, error) {
+func GRPCEmitterForConfig(pro EmitterConfigProvider, opts ...events.GrpcEmitterOption) (*events.GrpcEmitter, func() error, error) {
 	cfg, err := GRPCEventRemoteConfig(pro)
 	if err != nil {
 		return nil, nil, err
@@ -169,7 +169,7 @@ func GRPCEmitterForConfig(pro EmitterConfigProvider) (*events.GrpcEmitter, func(
 		return nil, nil, err
 	}
 
-	return events.NewGrpcEmitter(conn), conn.Close, nil
+	return events.NewGrpcEmitter(conn, opts...), conn.Close, nil
 }
 
 // GRPCEventRemoteConfig returns a GRPCRemoteConfig for the given configuration provider

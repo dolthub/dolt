@@ -1576,7 +1576,7 @@ func ReadRangesFromQuery(ctx *sql.Context, eng *sqle.Engine, query string) ([]*n
 	}
 
 	var lookup sql.IndexLookup
-	transform.Inspect(analyzed, func(n sql.Node) bool {
+	transform.InspectWithOpaque(analyzed, func(n sql.Node) bool {
 		switch node := n.(type) {
 		case *plan.IndexedTableAccess:
 			lookup = plan.GetIndexLookup(node)

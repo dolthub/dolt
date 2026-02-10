@@ -41,7 +41,9 @@ type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
 func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, query string) ([]sql.Row, sql.Schema, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	deaf, err := dEnv.DbEaFactory(ctx)
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 
@@ -72,7 +74,9 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root do
 func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, query string) (doltdb.RootValue, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	deaf, err := dEnv.DbEaFactory(ctx)
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 

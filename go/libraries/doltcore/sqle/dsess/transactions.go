@@ -175,6 +175,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 
 // transactionWrite is the logic to write an updated working set (and optionally a commit) to the database
 type transactionWrite func(ctx *sql.Context,
+	dbName string,
 	tx *DoltTransaction, // the transaction being written
 	doltDb *doltdb.DoltDB, // the database to write to
 	startState *doltdb.WorkingSet, // the starting working set
@@ -186,6 +187,7 @@ type transactionWrite func(ctx *sql.Context,
 
 // doltCommit is a transactionWrite function that updates the working set and commits a pending commit atomically
 func doltCommit(ctx *sql.Context,
+	dbName string,
 	tx *DoltTransaction, // the transaction being written
 	doltDb *doltdb.DoltDB, // the database to write to
 	startState *doltdb.WorkingSet, // the starting working set
@@ -240,7 +242,7 @@ func doltCommit(ctx *sql.Context,
 			// is the value which we are trying to commit.
 			start := time.Now()
 
-			tableResolver, err := GetTableResolver(ctx)
+			tableResolver, err := GetTableResolver(ctx, dbName)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -276,6 +278,7 @@ func doltCommit(ctx *sql.Context,
 
 // txCommit is a transactionWrite function that updates the working set
 func txCommit(ctx *sql.Context,
+	dbName string,
 	tx *DoltTransaction, // the transaction being written
 	doltDb *doltdb.DoltDB, // the database to write to
 	_ *doltdb.WorkingSet, // the starting working set
@@ -383,10 +386,11 @@ func (tx *DoltTransaction) doCommit(
 	if !ok {
 		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
 	}
+	normalizedDbName := strings.ToLower(branchState.dbState.dbName)
 
 	// Load the start state for this working set from the noms root at tx start
 	// Get the base DB name from the db state, not the branch state
-	startPoint, ok := tx.dbStartPoints[strings.ToLower(branchState.dbState.dbName)]
+	startPoint, ok := tx.dbStartPoints[normalizedDbName]
 	if !ok {
 		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
 	}
@@ -400,7 +404,7 @@ func (tx *DoltTransaction) doCommit(
 
 	mergeOpts := branchState.EditOpts()
 
-	lockID := dbName + "\u0000" + workingSet.Ref().String()
+	lockID := normalizedDbName + "\u0000" + workingSet.Ref().String()
 
 	for i := 0; i < maxTxCommitRetries; i++ {
 		updatedWs, newCommit, err := func() (*doltdb.WorkingSet, *doltdb.Commit, error) {
@@ -440,7 +444,7 @@ func (tx *DoltTransaction) doCommit(
 				}
 
 				var newCommit *doltdb.Commit
-				workingSet, newCommit, err = writeFn(ctx, tx, startPoint.db, startState, commit, workingSet, existingWSHash, mergeOpts)
+				workingSet, newCommit, err = writeFn(ctx, dbName, tx, startPoint.db, startState, commit, workingSet, existingWSHash, mergeOpts)
 				if err == datas.ErrOptimisticLockFailed {
 					// this is effectively a `continue` in the loop
 					return nil, nil, nil
@@ -453,7 +457,7 @@ func (tx *DoltTransaction) doCommit(
 
 			// otherwise (not a ff), merge the working sets together
 			start := time.Now()
-			mergedWorkingSet, err := tx.mergeRoots(ctx, startState, existingWs, workingSet, mergeOpts)
+			mergedWorkingSet, err := tx.mergeRoots(ctx, dbName, startState, existingWs, workingSet, mergeOpts)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -465,7 +469,7 @@ func (tx *DoltTransaction) doCommit(
 			}
 
 			var newCommit *doltdb.Commit
-			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, startPoint.db, startState, commit, mergedWorkingSet, existingWSHash, mergeOpts)
+			mergedWorkingSet, newCommit, err = writeFn(ctx, dbName, tx, startPoint.db, startState, commit, mergedWorkingSet, existingWSHash, mergeOpts)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop
 				return nil, nil, nil
@@ -492,13 +496,13 @@ func (tx *DoltTransaction) doCommit(
 // Currently merges working and staged roots as necessary. HEAD root is only handled by the DoltCommit function.
 func (tx *DoltTransaction) mergeRoots(
 	ctx *sql.Context,
+	dbName string,
 	startState *doltdb.WorkingSet,
 	existingWorkingSet *doltdb.WorkingSet,
 	workingSet *doltdb.WorkingSet,
 	mergeOpts editor.Options,
 ) (*doltdb.WorkingSet, error) {
-
-	tableResolver, err := GetTableResolver(ctx)
+	tableResolver, err := GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -690,7 +694,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 							"\tTable: %s,\n"+
 							"\tReferencedTable: %s,\n"+
 							"\tIndex: %s,\n"+
-							"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedIndex, m.Index, m.ReferencedIndex)
+							"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedTable, m.Index, m.ReferencedIndex)
 
 					case prolly.ArtifactTypeUniqueKeyViol:
 						var m merge.UniqCVMeta

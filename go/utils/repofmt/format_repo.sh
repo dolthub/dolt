@@ -10,7 +10,7 @@ paths=`find . -maxdepth 1 -mindepth 1 \( -type d -print -o -type f -name '*.go' 
 goimports -w -local github.com/dolthub/dolt,github.com/dolthub/eventsapi_schema $paths
 
 bad_files=$(find $paths -name '*.go' | while read f; do
-    if [[ $(awk '/import \(/{flag=1;next}/\)/{flag=0}flag' < $f | egrep -c '$^') -gt 2 ]]; then
+    if [[ $(awk '/import \(/{flag=1;next}/\)/{flag=0}flag' < $f | grep -Ec '$^') -gt 2 ]]; then
         echo $f
     fi
 done)

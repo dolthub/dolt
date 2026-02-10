@@ -88,9 +88,11 @@ func doDoltStash(ctx *sql.Context, args []string) (int, error) {
 		}
 		err = doStashPush(ctx, dSess, dbData, roots, apr, stashName)
 	case "pop":
-		err = doStashPop(ctx, dbData, stashName, idx)
+		err = doStashPop(ctx, dbName, dbData, stashName, idx)
 	case "drop":
 		err = doStashDrop(ctx, dbData, stashName, idx)
+	case "apply":
+		err = doStashApply(ctx, dbName, dbData, stashName, idx)
 	case "clear":
 		if apr.NArg() > 2 { // Clear does not take extra arguments
 			return cmdFailure, fmt.Errorf("error: invalid arguments. Clear takes only subcommand and stash name")
@@ -158,8 +160,8 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 	return updateWorkingSetFromRoots(ctx, dbData, roots)
 }
 
-func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) error {
-	headCommit, result, meta, err := handleMerge(ctx, dbData, stashName, idx)
+func doStashPop(ctx *sql.Context, dbName string, dbData env.DbData[*sql.Context], stashName string, idx int) error {
+	headCommit, result, meta, err := handleMerge(ctx, dbName, dbData, stashName, idx)
 	if err != nil {
 		return err
 	}
@@ -187,6 +189,32 @@ func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName str
 	}
 
 	return dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
+}
+
+func doStashApply(ctx *sql.Context, dbName string, dbData env.DbData[*sql.Context], stashName string, idx int) error {
+	headCommit, result, meta, err := handleMerge(ctx, dbName, dbData, stashName, idx)
+	if err != nil {
+		return err
+	}
+
+	err = updateWorkingRoot(ctx, dbData, result.Root)
+	if err != nil {
+		return err
+	}
+
+	roots, err := getRoots(ctx, dbData, headCommit)
+	if err != nil {
+		return err
+	}
+
+	// added tables need to be staged
+	// since these tables are coming from a stash, don't filter for ignored table names.
+	roots, err = actions.StageTables(ctx, roots, doltdb.ToTableNames(meta.TablesToStage, doltdb.DefaultSchemaName), false)
+	if err != nil {
+		return err
+	}
+
+	return updateWorkingSetFromRoots(ctx, dbData, roots)
 }
 
 func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) error {
@@ -437,7 +465,7 @@ func gatherCommitData(ctx *sql.Context, dbData env.DbData[*sql.Context]) (*doltd
 
 }
 
-func handleMerge(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) (*doltdb.Commit, *merge.Result, *datas.StashMeta, error) {
+func handleMerge(ctx *sql.Context, dbName string, dbData env.DbData[*sql.Context], stashName string, idx int) (*doltdb.Commit, *merge.Result, *datas.StashMeta, error) {
 	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -487,7 +515,7 @@ func handleMerge(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName st
 		return nil, nil, nil, err
 	}
 
-	tableResolver, err := dsess.GetTableResolver(ctx)
+	tableResolver, err := dsess.GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, nil, nil, err
 	}

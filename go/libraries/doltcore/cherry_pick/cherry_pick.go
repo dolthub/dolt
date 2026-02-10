@@ -249,7 +249,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", nil, err
 	}
 
-	tableResolver, err := dsess.GetTableResolver(ctx)
+	tableResolver, err := dsess.GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, "", nil, err
 	}

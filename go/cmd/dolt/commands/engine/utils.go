@@ -51,9 +51,15 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 }
 
 func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEditor bool) (sqle.Database, error) {
-	deaf := dEnv.DbEaFactory(ctx)
+	var deaf editor.DbEaFactory
+	var err error
 	if useBulkEditor {
-		deaf = dEnv.BulkDbEaFactory(ctx)
+		deaf, err = dEnv.BulkDbEaFactory(ctx)
+	} else {
+		deaf, err = dEnv.DbEaFactory(ctx)
+	}
+	if err != nil {
+		return sqle.Database{}, err
 	}
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {

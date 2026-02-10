@@ -53,6 +53,7 @@ jobs:
           KUBECONFIG: "./kubeconfig"
           INIT_BIG_REPO: ${{ github.event.client_payload.init_big_repo }}
           NOMS_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+          SYSBENCH_TEST_TIME: ${{ github.event.client_payload.sysbench_test_time }}
           TEMPLATE_SCRIPT: ${{ github.event.client_payload.template_script }}
       - name: Create TPCC Performance Benchmarking K8s Job
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh

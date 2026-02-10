@@ -394,6 +394,60 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "expect_single_value with each comparison type, failing assertions",
+		SetUpScript: []string{
+			"CREATE TABLE test (i int, t text)",
+			"INSERT INTO test VALUES (1, 'text'), (2, 'text')",
+			"INSERT INTO dolt_tests VALUES " +
+				"('equal to', 'comparison tests', 'select sum(i) from test', 'expected_single_value', '==', '1')," +
+				"('not equal to', 'comparison tests', 'select sum(i) from test', 'expected_single_value', '!=', '3')," +
+				"('less than', 'comparison tests', 'select sum(i) from test', 'expected_single_value', '<', '2')," +
+				"('less than or equal to', 'comparison tests', 'select sum(i) from test', 'expected_single_value', '<=', '2')," +
+				"('greater than', 'comparison tests', 'select sum(i) from test', 'expected_single_value', '>', '4')," +
+				"('greater than or equal to', 'comparison tests', 'select sum(i) from test','expected_single_value', '>=', '4')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('comparison tests')",
+				Expected: []sql.Row{
+					{"equal to", "comparison tests", "select sum(i) from test", "FAIL", "Assertion failed: expected_single_value equal to 1, got 3"},
+					{"greater than", "comparison tests", "select sum(i) from test", "FAIL", "Assertion failed: expected_single_value greater than 4, got 3"},
+					{"greater than or equal to", "comparison tests", "select sum(i) from test", "FAIL", "Assertion failed: expected_single_value greater than or equal to 4, got 3"},
+					{"less than", "comparison tests", "select sum(i) from test", "FAIL", "Assertion failed: expected_single_value less than 2, got 3"},
+					{"less than or equal to", "comparison tests", "select sum(i) from test", "FAIL", "Assertion failed: expected_single_value less than or equal to 2, got 3"},
+					{"not equal to", "comparison tests", "select sum(i) from test", "FAIL", "Assertion failed: expected_single_value not equal to 3, got 3"},
+				},
+			},
+		},
+	},
+	{
+		Name: "expected_columns with each comparison type, failing assertions",
+		SetUpScript: []string{
+			"CREATE TABLE test (i int, t text)",
+			"INSERT INTO test VALUES (1, 'text'), (2, 'text')",
+			"INSERT INTO dolt_tests VALUES " +
+				"('equal to', 'column comparison tests', 'select * from test', 'expected_columns', '==', '1')," +
+				"('not equal to', 'column comparison tests', 'select * from test', 'expected_columns', '!=', '2')," +
+				"('less than', 'column comparison tests', 'select * from test', 'expected_columns', '<', '1')," +
+				"('less than or equal to', 'column comparison tests', 'select * from test', 'expected_columns', '<=', '1')," +
+				"('greater than', 'column comparison tests', 'select * from test', 'expected_columns', '>', '3')," +
+				"('greater than or equal to', 'column comparison tests', 'select * from test','expected_columns', '>=', '3')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('column comparison tests')",
+				Expected: []sql.Row{
+					{"equal to", "column comparison tests", "select * from test", "FAIL", "Assertion failed: expected_columns equal to 1, got 2"},
+					{"greater than", "column comparison tests", "select * from test", "FAIL", "Assertion failed: expected_columns greater than 3, got 2"},
+					{"greater than or equal to", "column comparison tests", "select * from test", "FAIL", "Assertion failed: expected_columns greater than or equal to 3, got 2"},
+					{"less than", "column comparison tests", "select * from test", "FAIL", "Assertion failed: expected_columns less than 1, got 2"},
+					{"less than or equal to", "column comparison tests", "select * from test", "FAIL", "Assertion failed: expected_columns less than or equal to 1, got 2"},
+					{"not equal to", "column comparison tests", "select * from test", "FAIL", "Assertion failed: expected_columns not equal to 2, got 2"},
+				},
+			},
+		},
+	},
+	{
 		Name: "Can use wildcard, multiple arguments to run all dolt unit tests",
 		SetUpScript: []string{
 			"INSERT INTO dolt_tests VALUES ('grouped test', 'wildcard tests', 'show tables;', 'expected_rows', '==', '0'), " +

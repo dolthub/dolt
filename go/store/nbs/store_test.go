@@ -48,7 +48,7 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	require.NoError(t, err)
 
 	// create a v5 manifest
-	fm, err := getFileManifest(ctx, nomsDir, asyncFlush)
+	fm, err := getFileManifest(ctx, nomsDir)
 	require.NoError(t, err)
 	_, err = fm.Update(ctx, hash.Hash{}, manifestContents{
 		nbfVers: constants.FormatDoltString,

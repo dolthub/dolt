@@ -17,7 +17,6 @@ package dsess
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -519,7 +518,6 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 	go func() {
 		select {
 		case <-a.cancelInit:
-			fmt.Printf("canceling it...\n")
 			cancel(errors.New("initialization canceled. did not complete successfully."))
 		case <-finishedCh:
 		}

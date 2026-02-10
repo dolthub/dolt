@@ -583,4 +583,81 @@ var DoltStashTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "simple stash apply",
+		SetUpScript: []string{
+			"CREATE TABLE test(id INT)",
+			"CALL DOLT_STASH('push', 'myStash', '-a')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM DOLT_STATUS",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "CALL DOLT_STASH('apply', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT * FROM DOLT_STATUS",
+				Expected: []sql.Row{
+					{"test", byte(0), "new table"},
+				},
+			},
+		},
+	},
+	{
+		Name: "stash apply maintains stash entry",
+		SetUpScript: []string{
+			"CALL DOLT_COMMIT('--allow-empty', '-m', 'First commit')", //Normal test initialization adds some weird commit
+			"CREATE TABLE test(id INT)",
+			"CALL DOLT_STASH('push', 'myStash', '-a')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM DOLT_STASHES",
+				Expected: []sql.Row{
+					{"myStash", "stash@{0}", "main", doltCommit, "First commit"},
+				},
+			},
+			{
+				Query:            "CALL DOLT_STASH('apply', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT * FROM DOLT_STASHES",
+				Expected: []sql.Row{
+					{"myStash", "stash@{0}", "main", doltCommit, "First commit"},
+				},
+			},
+		},
+	},
+	{
+		Name: "can apply specific stashes",
+		SetUpScript: []string{
+			"CREATE TABLE test1 (id INT)",
+			"CALL DOLT_STASH('push', 'myStash', '-a')",
+			"CREATE TABLE test2 (id INT)",
+			"CALL DOLT_STASH('push', 'myStash', '-a')",
+			"CREATE TABLE test3 (id INT)",
+			"CALL DOLT_STASH('push', 'myStash', '-a')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "CALL DOLT_STASH('apply', 'myStash', '1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "CALL DOLT_STASH('apply', 'myStash', 'stash@{2}')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "Select * from dolt_status",
+				Expected: []sql.Row{
+					{"test2", byte(0), "new table"},
+					{"test1", byte(0), "new table"},
+				},
+			},
+		},
+	},
 }

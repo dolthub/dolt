@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -97,6 +98,11 @@ type DoltEnv struct {
 	urlStr string
 	hdp    HomeDirProvider
 
+	// DBLoadParams are optional parameters passed through to doltdb.LoadDoltDBWithParams when this environment
+	// loads its underlying DoltDB. This allows higher layers (e.g. SQL engine / embedded driver) to influence
+	// dbfactory / storage open behavior.
+	DBLoadParams map[string]interface{}
+
 	UserPassConfig *creds.DoltCredsForPass
 }
 
@@ -121,11 +127,26 @@ func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 
 func (dEnv *DoltEnv) LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) error {
 	if dEnv.doltDB == nil {
-		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
+		if nbf == nil {
+			nbf = types.Format_Default
+		}
+		// Merge any environment-level DB load params without mutating the caller's map.
+		if len(dEnv.DBLoadParams) > 0 {
+			if params == nil {
+				params = maps.Clone(dEnv.DBLoadParams)
+			} else {
+				params = maps.Clone(params)
+				maps.Copy(params, dEnv.DBLoadParams)
+			}
+		}
+		ddb, err := doltdb.LoadDoltDBWithParams(ctx, nbf, urlStr, fs, params)
 		if err != nil {
+			dEnv.DBLoadError = err
 			return err
 		}
 		dEnv.doltDB = ddb
+		dEnv.urlStr = urlStr
+		dEnv.DBLoadError = nil
 	}
 	return nil
 }
@@ -222,6 +243,16 @@ func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *Do
 		var params map[string]interface{}
 		if mmapArchiveIndexes {
 			params = map[string]interface{}{dbfactory.MMapArchiveIndexesParam: struct{}{}}
+		}
+
+		// Merge any environment-level DB load params.
+		if len(dEnv.DBLoadParams) > 0 {
+			if params == nil {
+				params = make(map[string]interface{}, len(dEnv.DBLoadParams))
+			}
+			for k, v := range dEnv.DBLoadParams {
+				params[k] = v
+			}
 		}
 		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
 		dEnv.doltDB = ddb
@@ -481,9 +512,7 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinF
 		return err
 	}
 
-	dEnv.doltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
-
-	return err
+	return dEnv.LoadDoltDBWithParams(ctx, nbf, dEnv.urlStr, dEnv.FS, nil)
 }
 
 var ErrCannotCreateDirDoesNotExist = errors.New("dir does not exist")
@@ -615,13 +644,11 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 }
 
 func (dEnv *DoltEnv) InitDBWithCommitMetaGenerator(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
-	var err error
-	dEnv.doltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
-	if err != nil {
+	if err := dEnv.LoadDoltDBWithParams(ctx, nbf, dEnv.urlStr, dEnv.FS, nil); err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB(ctx).WriteEmptyRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
+	err := dEnv.DoltDB(ctx).WriteEmptyRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
 	if err != nil {
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
@@ -1305,20 +1332,38 @@ func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	return absPath, nil
 }
 
-func (dEnv *DoltEnv) DbEaFactory(ctx context.Context) editor.DbEaFactory {
+func (dEnv *DoltEnv) DbEaFactory(ctx context.Context) (editor.DbEaFactory, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return editor.NewDbEaFactory(tmpDir, dEnv.DoltDB(ctx).ValueReadWriter())
+
+	db := dEnv.DoltDB(ctx)
+	if db == nil {
+		if dEnv.DBLoadError != nil {
+			return nil, dEnv.DBLoadError
+		}
+		return nil, errors.New("DoltDB failed to initialize but no error was recorded")
+	}
+
+	return editor.NewDbEaFactory(tmpDir, db.ValueReadWriter()), nil
 }
 
-func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) editor.DbEaFactory {
+func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) (editor.DbEaFactory, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return editor.NewBulkImportTEAFactory(dEnv.DoltDB(ctx).ValueReadWriter(), tmpDir)
+
+	db := dEnv.DoltDB(ctx)
+	if db == nil {
+		if dEnv.DBLoadError != nil {
+			return nil, dEnv.DBLoadError
+		}
+		return nil, errors.New("DoltDB failed to initialize but no error was recorded")
+	}
+
+	return editor.NewBulkImportTEAFactory(db.ValueReadWriter(), tmpDir), nil
 }
 
 func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) (bool, error) {

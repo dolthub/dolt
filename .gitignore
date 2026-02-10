@@ -22,3 +22,8 @@ CLAUDE.md
 
 *~
 .dir-locals.el
+.beads
+.gitattributes
+
+.de/
+AGENTS.md

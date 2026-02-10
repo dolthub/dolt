@@ -379,7 +379,7 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 	}
 
 	// Get the first insert (wrapped with the error handler)
-	transform.Inspect(analyzed, func(node sql.Node) bool {
+	transform.InspectWithOpaque(analyzed, func(node sql.Node) bool {
 		switch n := node.(type) {
 		case *plan.InsertInto:
 			analyzed = n

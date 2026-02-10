@@ -162,6 +162,7 @@ func GeneratedSystemTableNames() []string {
 		GetBranchActivityTableName(),
 		// [dtables.StatusTable] now uses [adapters.DoltTableAdapterRegistry] in its constructor for Doltgres.
 		StatusTableName,
+		StatusIgnoredTableName,
 	}
 }
 
@@ -435,6 +436,9 @@ const (
 	// StatusTableName is the status system table name.
 	StatusTableName = "dolt_status"
 
+	// StatusIgnoredTableName is the status_ignored system table name.
+	StatusIgnoredTableName = "dolt_status_ignored"
+
 	// MergeStatusTableName is the merge status system table name.
 	MergeStatusTableName = "dolt_merge_status"
 
@@ -477,6 +481,7 @@ var DoltGeneratedTableNames = []string{
 	CommitsTableName,
 	CommitAncestorsTableName,
 	StatusTableName,
+	StatusIgnoredTableName,
 	MergeStatusTableName,
 	TagsTableName,
 }

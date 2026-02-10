@@ -74,7 +74,7 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 
 	switch {
 	case apr.Contains(cli.CopyFlag):
-		err = copyBranch(ctx, dbData, apr, &rsc)
+		err = copyBranch(ctx, dbData, apr, &rsc, true)
 	case apr.Contains(cli.MoveFlag):
 		err = renameBranch(ctx, dbData, apr, dSess, dbName, &rsc)
 	case apr.Contains(cli.DeleteFlag), apr.Contains(cli.DeleteForceFlag):
@@ -480,7 +480,9 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	return nil
 }
 
-func copyBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
+// copyBranch takes arguments from |apr| to create a branch from another branch. If |giveAdminPrivs| is true, then the
+// new branch will receive branch control admin privileges.
+func copyBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, giveAdminPrivs bool) error {
 	if apr.NArg() != 2 {
 		return InvalidArgErr
 	}
@@ -496,10 +498,12 @@ func copyBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparse
 	}
 
 	force := apr.Contains(cli.ForceFlag)
-	return copyABranch(ctx, dbData, srcBr, destBr, force, rsc)
+	return copyABranch(ctx, dbData, srcBr, destBr, force, giveAdminPrivs, rsc)
 }
 
-func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string, destBr string, force bool, rsc *doltdb.ReplicationStatusController) error {
+// copyABranch copies |srcBr| to |destBr|, forcing the copy if |force| is set, and giving branch control admin privileges
+// if |giveAdminPrivs| is set.
+func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string, destBr string, force bool, giveAdminPrivs bool, rsc *doltdb.ReplicationStatusController) error {
 	if err := branch_control.CanCreateBranch(ctx, destBr); err != nil {
 		return err
 	}
@@ -522,9 +526,11 @@ func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string
 			return fmt.Errorf("fatal: Unexpected error copying branch from '%s' to '%s'", srcBr, destBr)
 		}
 	}
-	err = branch_control.AddAdminForContext(ctx, destBr)
-	if err != nil {
-		return err
+
+	if giveAdminPrivs {
+		if err = branch_control.AddAdminForContext(ctx, destBr); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -64,7 +64,7 @@ type DoltSession struct {
 	branchController      *branch_control.Controller
 	dbCache               *DatabaseCache
 	dbStates              map[string]*DatabaseSessionState
-	tempTables            map[string][]sql.Table
+	tempTables            map[string]map[string]sql.Table
 	gcSafepointController *gcctx.GCSafepointController
 
 	writeSessProv WriteSessFunc
@@ -90,7 +90,7 @@ func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSessi
 		dbStates:         make(map[string]*DatabaseSessionState),
 		dbCache:          newDatabaseCache(),
 		provider:         pro,
-		tempTables:       make(map[string][]sql.Table),
+		tempTables:       make(map[string]map[string]sql.Table),
 		globalsConf:      config.NewMapConfig(make(map[string]string)),
 		branchController: branch_control.CreateDefaultController(context.TODO()), // Default sessions are fine with the default controller
 		mu:               &sync.Mutex{},
@@ -121,7 +121,7 @@ func NewDoltSession(
 		dbStates:              make(map[string]*DatabaseSessionState),
 		dbCache:               newDatabaseCache(),
 		provider:              pro,
-		tempTables:            make(map[string][]sql.Table),
+		tempTables:            make(map[string]map[string]sql.Table),
 		globalsConf:           globals,
 		branchController:      branchController,
 		statsProv:             statsProvider,
@@ -156,8 +156,7 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
 }
 
-func GetTableResolver(ctx *sql.Context) (doltdb.TableResolver, error) {
-	dbName := ctx.GetCurrentDatabase()
+func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, error) {
 	dSess := DSessFromSess(ctx.Session)
 	if dbName == "" {
 		// If no database is selected, there's no situation where we need to resolve nonlocal tables.
@@ -542,8 +541,9 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			message = trimmedString
 		}
 
+		dbName := ctx.GetCurrentDatabase()
 		var pendingCommit *doltdb.PendingCommit
-		pendingCommit, err = d.PendingCommitAllStaged(ctx, dirtyBranchState, actions.CommitStagedProps{
+		pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, actions.CommitStagedProps{
 			Message:    message,
 			Date:       ctx.QueryTime(),
 			AllowEmpty: false,
@@ -560,7 +560,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			return d.commitWorkingSet(ctx, dirtyBranchState, tx)
 		}
 
-		_, err = d.DoltCommit(ctx, ctx.GetCurrentDatabase(), tx, pendingCommit)
+		_, err = d.DoltCommit(ctx, dbName, tx, pendingCommit)
 		return err
 	} else {
 		return d.commitWorkingSet(ctx, dirtyBranchState, tx)
@@ -669,19 +669,19 @@ func (d *DoltSession) DoltCommit(
 		if err != nil {
 			return nil, nil, err
 		}
-
-		return ws, commit, err
+		return ws, commit, nil
 	}
 
 	c, err := d.commitCurrentHead(ctx, dbName, tx, commitFunc)
-
-	if err == nil {
-		branch, b, e := d.CurrentHead(ctx, dbName)
-		if e == nil && b {
-			doltdb.BranchActivityWriteEvent(ctx, dbName, branch)
-		}
+	if err != nil {
+		return nil, err
 	}
-	return c, err
+
+	branch, b, e := d.CurrentHead(ctx, dbName)
+	if e == nil && b {
+		doltdb.BranchActivityWriteEvent(ctx, dbName, branch)
+	}
+	return c, nil
 }
 
 // doCommitFunc is a function to write to the database, which involves updating the working set and potentially
@@ -726,7 +726,7 @@ func (d *DoltSession) commitCurrentHead(ctx *sql.Context, dbName string, tx sql.
 }
 
 // PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
-func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, branchState *branchState, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, dbName string, branchState *branchState, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
 	roots := branchState.roots()
 
 	var err error
@@ -735,7 +735,7 @@ func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, branchState *bran
 		return nil, err
 	}
 
-	return d.newPendingCommit(ctx, branchState, roots, props)
+	return d.newPendingCommit(ctx, dbName, branchState, roots, props)
 }
 
 // NewPendingCommit returns a new |doltdb.PendingCommit| for the database named, using the roots given, adding any
@@ -755,12 +755,12 @@ func (d *DoltSession) NewPendingCommit(
 		return nil, fmt.Errorf("session state for database %s not found", dbName)
 	}
 
-	return d.newPendingCommit(ctx, branchState, roots, props)
+	return d.newPendingCommit(ctx, dbName, branchState, roots, props)
 }
 
 // newPendingCommit returns a new |doltdb.PendingCommit| for the database and head named by |branchState|
 // See NewPendingCommit
-func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchState, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchState *branchState, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
 	headCommit := branchState.headCommit
 
 	if branchState.WorkingSet() == nil {
@@ -797,7 +797,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 		}
 	}
 
-	tableResolver, err := GetTableResolver(ctx)
+	tableResolver, err := GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -1503,32 +1503,29 @@ func (d *DoltSession) DatabaseCache(ctx *sql.Context) *DatabaseCache {
 }
 
 func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {
-	d.tempTables[strings.ToLower(db)] = append(d.tempTables[strings.ToLower(db)], tbl)
+	db = strings.ToLower(db)
+	if _, exists := d.tempTables[db]; !exists {
+		d.tempTables[db] = make(map[string]sql.Table)
+	}
+	d.tempTables[db][strings.ToLower(tbl.Name())] = tbl
 }
 
 func (d *DoltSession) DropTemporaryTable(ctx *sql.Context, db, name string) {
-	tables := d.tempTables[strings.ToLower(db)]
-	for i, tbl := range d.tempTables[strings.ToLower(db)] {
-		if strings.EqualFold(tbl.Name(), name) {
-			tables = append(tables[:i], tables[i+1:]...)
-			break
-		}
-	}
-	d.tempTables[strings.ToLower(db)] = tables
+	delete(d.tempTables[strings.ToLower(db)], strings.ToLower(name))
 }
 
 func (d *DoltSession) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.Table, bool) {
-	for _, tbl := range d.tempTables[strings.ToLower(db)] {
-		if strings.EqualFold(tbl.Name(), name) {
-			return tbl, true
-		}
-	}
-	return nil, false
+	tmpTbl, exists := d.tempTables[strings.ToLower(db)][strings.ToLower(name)]
+	return tmpTbl, exists
 }
 
 // GetAllTemporaryTables returns all temp tables for this session.
 func (d *DoltSession) GetAllTemporaryTables(ctx *sql.Context, db string) ([]sql.Table, error) {
-	return d.tempTables[strings.ToLower(db)], nil
+	tmpTables := make([]sql.Table, 0)
+	for _, tbl := range d.tempTables[strings.ToLower(db)] {
+		tmpTables = append(tmpTables, tbl)
+	}
+	return tmpTables, nil
 }
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named

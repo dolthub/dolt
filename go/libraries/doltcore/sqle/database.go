@@ -758,58 +758,23 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 			return nil, false, err
 		}
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
-			sess := dsess.DSessFromSess(ctx.Session)
-			var rootsProvider env.RootsProvider[*sql.Context]
-			rootsProvider = dsess.NewSessionStateAdapter(
-				sess, db.RevisionQualifiedName(),
-				concurrentmap.New[string, env.Remote](),
-				concurrentmap.New[string, env.BranchConfig](),
-				concurrentmap.New[string, env.Remote]())
-			ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
+			rootsProvider, ws, err := getStatusTableRootsProvider(ctx, db, ds, asOf)
 			if err != nil {
 				return nil, false, err
 			}
-
-			asOf, ok := asOf.(string)
-			if !ok {
-				return nil, false, fmt.Errorf(
-					"unexpected type for asOf param: %T", asOf)
-			}
-
-			// If |asOf| is set, then we need to get the correct roots for the
-			// status table to use. We skip the special revision spec, HEAD,
-			// because it represents the current branch.
-			if asOf != "" && !strings.EqualFold(asOf, "HEAD") {
-				// If |asOf| is a branch name, then grab the working set for that
-				// branch and use its data.
-				ddb, ok := ds.GetDoltDB(ctx, ctx.GetCurrentDatabase())
-				if !ok {
-					return nil, false, fmt.Errorf(
-						"unable to get DoltDB for database %s", ctx.GetCurrentDatabase())
-				}
-
-				_, hasBranch, err := ddb.HasBranch(ctx, asOf)
-				if err != nil {
-					return nil, false, err
-				}
-				if hasBranch {
-					branchRoots, err := getRootsForBranch(ctx, ddb, asOf)
-					if err != nil {
-						return nil, false, err
-					}
-					rootsProvider = &staticRootsProvider{
-						roots: branchRoots,
-					}
-				} else {
-					// If this isn't a branch, then it's a tag or a commit, or a
-					// commit spec. In all of these cases, dolt_status will have
-					// no data, because there is no valid head/working/staged roots,
-					// so we provide a nil rootsProvider
-					rootsProvider = nil
-				}
-			}
-
 			dt, found = dtables.NewStatusTable(ctx, lwrName, db.ddb, ws, rootsProvider), true
+		}
+	case doltdb.StatusIgnoredTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			rootsProvider, ws, err := getStatusTableRootsProvider(ctx, db, ds, asOf)
+			if err != nil {
+				return nil, false, err
+			}
+			dt, found = dtables.NewStatusIgnoredTable(ctx, lwrName, db.ddb, ws, rootsProvider), true
 		}
 	case doltdb.MergeStatusTableName, doltdb.GetMergeStatusTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
@@ -1295,6 +1260,68 @@ func (srp *staticRootsProvider) GetRoots(ctx *sql.Context) (doltdb.Roots, error)
 }
 
 var _ env.RootsProvider[*sql.Context] = (*staticRootsProvider)(nil)
+
+// getStatusTableRootsProvider returns the roots provider and working set needed for status tables
+// (dolt_status and dolt_status_ignored). This handles the asOf parameter to support querying status
+// for different branches, tags, or commits.
+func getStatusTableRootsProvider(
+	ctx *sql.Context,
+	db Database,
+	ds *dsess.DoltSession,
+	asOf interface{},
+) (env.RootsProvider[*sql.Context], *doltdb.WorkingSet, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+	var rootsProvider env.RootsProvider[*sql.Context]
+	rootsProvider = dsess.NewSessionStateAdapter(
+		sess, db.RevisionQualifiedName(),
+		concurrentmap.New[string, env.Remote](),
+		concurrentmap.New[string, env.BranchConfig](),
+		concurrentmap.New[string, env.Remote]())
+	ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	asOfStr, ok := asOf.(string)
+	if !ok {
+		return nil, nil, fmt.Errorf("unexpected type for asOf param: %T", asOf)
+	}
+
+	// If |asOf| is set, then we need to get the correct roots for the
+	// status table to use. We skip the special revision spec, HEAD,
+	// because it represents the current branch.
+	if asOfStr != "" && !strings.EqualFold(asOfStr, "HEAD") {
+		// If |asOf| is a branch name, then grab the working set for that
+		// branch and use its data.
+		ddb, ok := ds.GetDoltDB(ctx, ctx.GetCurrentDatabase())
+		if !ok {
+			return nil, nil, fmt.Errorf(
+				"unable to get DoltDB for database %s", ctx.GetCurrentDatabase())
+		}
+
+		_, hasBranch, err := ddb.HasBranch(ctx, asOfStr)
+		if err != nil {
+			return nil, nil, err
+		}
+		if hasBranch {
+			branchRoots, err := getRootsForBranch(ctx, ddb, asOfStr)
+			if err != nil {
+				return nil, nil, err
+			}
+			rootsProvider = &staticRootsProvider{
+				roots: branchRoots,
+			}
+		} else {
+			// If this isn't a branch, then it's a tag or a commit, or a
+			// commit spec. In all of these cases, the status table will have
+			// no data, because there is no valid head/working/staged roots,
+			// so we provide a nil rootsProvider
+			rootsProvider = nil
+		}
+	}
+
+	return rootsProvider, ws, nil
+}
 
 // workingSetStagedRoot returns the staged root for the current session in the database
 // named |dbName|. If a working set is not available (e.g. if a commit or tag is checked
@@ -2022,7 +2049,7 @@ OuterLoop:
 	}, nil
 }
 
-// createSqlTable is the private version of CreateTable. It doesn't enforce any table name checks.
+// createSqlTable is the private version of CreateTable.
 func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
@@ -2039,6 +2066,8 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	}
 
 	tableName := doltdb.TableName{Name: table, Schema: schemaName}
+	// TODO: This check is also done in createDoltTable, which is called at the end of this function, meaning it's done
+	// multiple times. Consider refactoring out.
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -2091,6 +2120,8 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 	}
 
 	tableName := doltdb.TableName{Name: table, Schema: schemaName}
+	// TODO: This check is also done in createDoltTable, which is called at the end of this function, meaning it's done
+	// multiple times. Consider refactoring out.
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -2133,6 +2164,8 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 
 // createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
 func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaName string, root doltdb.RootValue, doltSch schema.Schema) error {
+	// TODO: This check is also done in createSqlTable and createIndexedSqlTable, which both call createDoltTable,
+	// meaning it's done multiple times. Consider refactoring.
 	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
 		return err
 	} else if exists {
@@ -2175,13 +2208,18 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, db.Name(), db.editOpts, collation)
+	ds := dsess.DSessFromSess(ctx.Session)
+	databaseName := db.Name()
+	if _, exists := ds.GetTemporaryTable(ctx, databaseName, tableName); exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
+
+	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, databaseName, db.editOpts, collation)
 	if err != nil {
 		return err
 	}
 
-	ds := dsess.DSessFromSess(ctx.Session)
-	ds.AddTemporaryTable(ctx, db.Name(), tmp)
+	ds.AddTemporaryTable(ctx, databaseName, tmp)
 	return nil
 }
 

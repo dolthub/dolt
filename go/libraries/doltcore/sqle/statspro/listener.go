@@ -242,12 +242,17 @@ func (sc *StatsController) Gc(ctx *sql.Context) error {
 }
 
 func (sc *StatsController) Close() {
+	var (
+		doneCh chan struct{}
+		kv     StatsKv
+	)
+
 	sc.mu.Lock()
-	defer sc.mu.Unlock()
 
 	// Already closed.
 	select {
 	case <-sc.closed:
+		sc.mu.Unlock()
 		return
 	default:
 	}
@@ -260,5 +265,26 @@ func (sc *StatsController) Close() {
 	sc.signalListener(leStop)
 
 	close(sc.closed)
+	doneCh = sc.workerDoneCh
+	kv = sc.kv
+	sc.mu.Unlock()
+
+	// Best-effort wait for worker exit to avoid racing a close of underlying storage.
+	if doneCh != nil {
+		select {
+		case <-doneCh:
+		case <-time.After(1 * time.Second):
+		}
+	}
+
+	// If we're using a prolly-backed stats store, it owns a DoltDB with its own filesystem locks.
+	// Close it best-effort on shutdown so embedded callers can reopen without contention.
+	if ps, ok := kv.(*prollyStats); ok && ps != nil && ps.destDb != nil {
+		for _, ddb := range ps.destDb.DoltDatabases() {
+			if ddb != nil {
+				_ = ddb.Close()
+			}
+		}
+	}
 	return
 }

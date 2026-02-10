@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"path"
 	"path/filepath"
 	"strings"
@@ -588,7 +589,11 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 			return nil, fmt.Errorf("unable to make directory '%s', cause: %s", dbfactory.DoltStatsDir, err.Error())
 		}
 
-		dEnv = env.Load(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, urlPath, "test")
+		// Use LoadWithoutDB so DB load params can be applied before any DB is opened.
+		dEnv = env.LoadWithoutDB(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, urlPath, doltversion.Version)
+		if sc.hdpEnv != nil && len(sc.hdpEnv.DBLoadParams) > 0 {
+			dEnv.DBLoadParams = maps.Clone(sc.hdpEnv.DBLoadParams)
+		}
 		err = dEnv.InitRepo(ctx, types.Format_Default, "stats", "stats@stats.com", env.DefaultInitBranch)
 		if err != nil {
 			return nil, err
@@ -597,13 +602,19 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
 	} else {
 		dEnv = env.LoadWithoutDB(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, "", doltversion.Version)
+		if sc.hdpEnv != nil && len(sc.hdpEnv.DBLoadParams) > 0 {
+			dEnv.DBLoadParams = maps.Clone(sc.hdpEnv.DBLoadParams)
+		}
 	}
 
 	if err := dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params); err != nil {
 		return nil, err
 	}
 
-	deaf := dEnv.DbEaFactory(ctx)
+	deaf, err := dEnv.DbEaFactory(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {

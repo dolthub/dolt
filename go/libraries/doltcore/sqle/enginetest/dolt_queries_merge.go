@@ -3075,6 +3075,140 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "foreign key violation, parent row deleted",
+		SetUpScript: []string{
+			"create table parent (pk int primary key);",
+			"create table child (fk int, foreign key (fk) references parent(pk));",
+			"insert into parent values (1), (2);",
+			"insert into child values (1), (2);",
+			"call dolt_commit('-Am', 'setup');",
+			"call dolt_branch('other');",
+			"delete from child where fk = 1;",
+			"delete from parent where pk = 1;",
+			"call dolt_commit('-am', 'delete parent and child rows');",
+			"call dolt_checkout('other');",
+			"insert into child values (1);",
+			"call dolt_commit('-am', 'insert child row');",
+			"set dolt_force_transaction_commit = on;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_merge('main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select violation_type, fk from dolt_constraint_violations_child",
+				Expected: []sql.Row{
+					{"foreign key", 1},
+				},
+			},
+		},
+	},
+	{
+		Name: "foreign key violation, parent row deleted, child keyless",
+		SetUpScript: []string{
+			"create table parent (pk int primary key, a int);",
+			"create index idx_a on parent(pk, a);",
+			"create table child (fk1 int, fk2 int, foreign key (fk1, fk2) references parent(pk, a));",
+			"insert into parent values (10, 1), (20, 2);",
+			"insert into child values (10, 1), (20, 2);",
+			"call dolt_commit('-Am', 'setup');",
+			"call dolt_branch('other');",
+			"delete from child where fk2 = 1;",
+			"delete from parent where pk = 10;",
+			"call dolt_commit('-am', 'delete parent and child rows');",
+			"call dolt_checkout('other');",
+			"insert into child values (10, 1);",
+			"call dolt_commit('-am', 'insert child row');",
+			"set dolt_force_transaction_commit = on;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_merge('main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select violation_type, fk2 from dolt_constraint_violations_child",
+				Expected: []sql.Row{
+					{"foreign key", 1},
+				},
+			},
+		},
+	},
+	{
+		Name: "foreign key violation, parent row deleted, secondary index",
+		SetUpScript: []string{
+			"create table parent (pk int primary key, v1 int);",
+			"create index idx_v1 on parent(v1);",
+			"create table child (fk int, foreign key (fk) references parent(v1));",
+			"insert into parent values (1, 1), (2, 2);",
+			"insert into child values (1), (2);",
+			"call dolt_commit('-Am', 'setup');",
+			"call dolt_branch('other');",
+			"delete from child where fk = 1;",
+			"delete from parent where pk = 1;",
+			"call dolt_commit('-am', 'delete parent and child rows');",
+			"call dolt_checkout('other');",
+			"insert into child values (1);",
+			"call dolt_commit('-am', 'insert child row');",
+			"set dolt_force_transaction_commit = on;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_merge('main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select violation_type, fk from dolt_constraint_violations_child",
+				Expected: []sql.Row{
+					{"foreign key", 1},
+				},
+			},
+		},
+	},
+	{
+		Name: "Merge foreign keys, 2 column key, dangling child violation",
+		SetUpScript: []string{
+			`CREATE TABLE parent (
+            a VARCHAR(256),
+            b varchar(256),
+            c VARCHAR(256),
+            PRIMARY KEY (b, a)
+        );`,
+			`CREATE INDEX idx_parent_on_a_b ON parent (a, b);`,
+			`CREATE TABLE child (
+            d VARCHAR(256),
+            e VARCHAR(256),
+            f varchar(256),
+            PRIMARY KEY (e, d),
+            CONSTRAINT child_fk FOREIGN KEY (d, f) REFERENCES parent (a, b)
+        );`,
+			`INSERT INTO parent VALUES ('abc','def', 'xyz');`,
+			`INSERT INTO child VALUES ('abc','123','def');`,
+			`CALL DOLT_COMMIT('-Am', '1');`,
+			`CALL DOLT_BRANCH('other_branch');`,
+			`INSERT INTO child VALUES ('abc','www','def');`,
+			`CALL DOLT_COMMIT('-Am', '2');`,
+			`CREATE TABLE table3 (table3_col1 VARCHAR(256));`,
+			`CALL DOLT_COMMIT('-Am', '3');`,
+			`CALL DOLT_CHECKOUT('other_branch');`,
+			`delete from child where e='123';`,
+			`delete from parent where a='abc';`,
+			`CALL DOLT_COMMIT('-Am', '4');`,
+			`set dolt_force_transaction_commit=1;`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('main')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select violation_type, d, e, f from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", "abc", "www", "def"}},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
