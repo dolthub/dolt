@@ -17,6 +17,7 @@ package index
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
@@ -133,6 +134,8 @@ func (p prollyIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	time.Sleep(time.Millisecond)
 
 	row := make(sql.ValueRow, len(p.projections))
 	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
