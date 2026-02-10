@@ -669,7 +669,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 
 	case git.ObjectTypeTree:
 		// Per-key version: tree object id at this key.
-		rc, sz, err := gbs.openChunkedTreeRange(ctx, commit, key, br)
+		rc, sz, err := gbs.openChunkedTreeRange(ctx, key, br)
 		return rc, sz, obj.oid.String(), err
 
 	default:
@@ -677,7 +677,7 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 	}
 }
 
-func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, commit git.OID, key string, br BlobRange) (io.ReadCloser, uint64, error) {
+func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, error) {
 	entries, ok := gbs.cacheListChildren(key)
 	if !ok {
 		return nil, 0, NotFound{Key: key}
@@ -1102,13 +1102,8 @@ func (gbs *GitBlobstore) openReaderAtCommit(ctx context.Context, commit git.OID,
 	case git.ObjectTypeBlob:
 		return gbs.api.BlobReader(ctx, obj.oid)
 	case git.ObjectTypeTree:
-		rc, _, err := gbs.openChunkedTreeRange(ctx, commit, key, AllRange)
+		rc, _, err := gbs.openChunkedTreeRange(ctx, key, AllRange)
 		if err != nil {
-			// Defensive: resolveObjectForGet succeeded, but keep NotFound mapping consistent.
-			var pnf *git.PathNotFoundError
-			if errors.As(err, &pnf) {
-				return nil, NotFound{Key: key}
-			}
 			return nil, err
 		}
 		return rc, nil
