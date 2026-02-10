@@ -23,7 +23,7 @@ getHeadHash() {
 }
 
 @test "commit verification: system variables can be set" {
-    run dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    run dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     [ "$status" -eq 0 ]
     
     run dolt sql -q "SHOW GLOBAL VARIABLES LIKE 'dolt_commit_run_test_groups'"
@@ -32,7 +32,7 @@ getHeadHash() {
 }
 
 @test "commit verification: commit with tests enabled - all tests pass" {
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
     dolt sql <<SQL
 INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
@@ -47,7 +47,7 @@ SQL
 }
 
 @test "commit verification: abort commit, then skip verification to bypass" {
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
     dolt sql <<SQL
 INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
@@ -68,7 +68,7 @@ SQL
 
 @test "commit verification: specific test groups - only specified groups run" {
     # Set up test validation for unit tests only
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = 'unit'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = 'unit'"
     
     # Add tests in different groups
     dolt sql <<SQL
@@ -85,7 +85,7 @@ SQL
 }
 
 @test "commit verification: no tests configured - no validation occurs" {
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
     dolt add .
     
@@ -95,7 +95,7 @@ SQL
 }
 
 @test "commit verification: merge with tests enabled - tests pass" {
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
     dolt sql <<SQL
 INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
@@ -119,7 +119,7 @@ SQL
 }
 
 @test "commit verification: merge with tests enabled - tests fail, merge aborted" {
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
     dolt sql <<SQL
 INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
@@ -150,7 +150,7 @@ SQL
 }
 
 @test "commit verification: cherry-pick with tests enabled - tests pass" {
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
     dolt sql <<SQL
 INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
@@ -172,7 +172,7 @@ SQL
 }
 
 @test "commit verification: cherry-pick with tests enabled - tests fail, aborted" {
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
     dolt sql <<SQL
 INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
@@ -199,7 +199,7 @@ SQL
 }
 
 @test "commit verification: rebase with tests enabled - tests pass" {
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
     dolt sql <<SQL
 INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
@@ -228,7 +228,7 @@ SQL
 }
 
 @test "commit verification: rebase with tests enabled - tests fail, aborted" {
-    dolt sql -q "SET GLOBAL dolt_commit_run_test_groups = '*'"
+    dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
     dolt sql <<SQL
 INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
