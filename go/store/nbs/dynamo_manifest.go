@@ -32,6 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -165,7 +166,7 @@ func validateManifest(item map[string]ddbtypes.AttributeValue) (valid, hasSpecs,
 	return len(item) == 5, false, false
 }
 
-func (dm dynamoManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (dm dynamoManifest) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 

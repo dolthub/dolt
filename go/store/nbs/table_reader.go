@@ -33,6 +33,7 @@ import (
 	"github.com/golang/snappy"
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -719,7 +720,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	return nil
 }
 
-func (tr tableReader) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
+func (tr tableReader) reader(ctx context.Context, _ dherrors.FatalBehavior) (io.ReadCloser, uint64, error) {
 	i, _ := tr.index()
 	sz := i.tableFileSize()
 	r, err := tr.r.Reader(ctx)
@@ -729,7 +730,7 @@ func (tr tableReader) reader(ctx context.Context) (io.ReadCloser, uint64, error)
 	return r, sz, nil
 }
 
-func (tr tableReader) getRecordRanges(ctx context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+func (tr tableReader) getRecordRanges(ctx context.Context, behavior dherrors.FatalBehavior, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	// findOffsets sets getRecord.found
 	recs, _, gcb, err := tr.findOffsets(requests, keeper)
 	if err != nil {

@@ -25,6 +25,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -190,19 +191,19 @@ func (s journalChunkSource) suffix() string {
 }
 
 // reader implements chunkSource.
-func (s journalChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
-	rdr, sz, err := s.journal.snapshot(ctx)
+func (s journalChunkSource) reader(ctx context.Context, behavior dherrors.FatalBehavior) (io.ReadCloser, uint64, error) {
+	rdr, sz, err := s.journal.snapshot(ctx, behavior)
 	return rdr, uint64(sz), err
 }
 
-func (s journalChunkSource) getRecordRanges(ctx context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+func (s journalChunkSource) getRecordRanges(ctx context.Context, behavior dherrors.FatalBehavior, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	ranges := make(map[hash.Hash]Range, len(requests))
 	for _, req := range requests {
 		if req.found {
 			continue
 		}
 		h := *req.a
-		rng, ok, err := s.journal.getRange(ctx, h)
+		rng, ok, err := s.journal.getRange(ctx, behavior, h)
 		if err != nil {
 			return nil, gcBehavior_Continue, err
 		} else if !ok {

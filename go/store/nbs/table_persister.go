@@ -31,6 +31,7 @@ import (
 	"sort"
 	"time"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -47,13 +48,13 @@ type cleanupFunc func()
 type tablePersister interface {
 	// Persist makes the contents of mt durable. Chunks already present in
 	// |haver| may be dropped in the process.
-	Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error)
+	Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error)
 
 	// ConjoinAll conjoins all chunks in |sources| into a single, new
 	// chunkSource. It returns a |cleanupFunc| which can be called to
 	// potentially release resources associated with the |sources| once
 	// they are no longer needed.
-	ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error)
+	ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error)
 
 	// Open a table named |name|, containing |chunkCount| chunks.
 	Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error)
