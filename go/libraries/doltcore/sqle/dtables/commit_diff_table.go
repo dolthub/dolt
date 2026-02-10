@@ -25,7 +25,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -45,7 +44,6 @@ type CommitDiffTable struct {
 	requiredFilterErr error
 	ddb               *doltdb.DoltDB
 	table             *doltdb.Table
-	joiner            *rowconv.Joiner
 	tableName         doltdb.TableName
 	targetSchema      schema.Schema
 
@@ -76,7 +74,7 @@ func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableNam
 		return nil, err
 	}
 
-	diffTableSchema, j, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
+	diffTableSchema, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +92,6 @@ func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableNam
 		workingRoot:  wRoot,
 		stagedRoot:   sRoot,
 		headRef:      headRef,
-		joiner:       j,
 		sqlSch:       sqlSch,
 		targetSchema: sch,
 	}, nil
@@ -320,5 +317,5 @@ func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (dol
 
 func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
+	return dp.GetRowIter(ctx)
 }

@@ -625,7 +625,7 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 // fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columnsWithDiff, "diff_type", fromRef, toRef, tableName)
 // on sql engine, which returns the schema and rowIter of the final data diff result.
 func getDiffQuery(ctx *sql.Context, dbData env.DbData[*sql.Context], td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) (sql.Schema, []sql.Expression, sql.RowIter, error) {
-	diffTableSchema, j, err := dtables.GetDiffTableSchemaAndJoiner(td.ToTable.Format(), td.FromSch, td.ToSch)
+	diffTableSchema, err := dtables.GetDiffTableSchemaAndJoiner(td.ToTable.Format(), td.FromSch, td.ToSch)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -638,7 +638,7 @@ func getDiffQuery(ctx *sql.Context, dbData env.DbData[*sql.Context], td diff.Tab
 	diffQuerySqlSch, projections := getDiffQuerySqlSchemaAndProjections(diffPKSch.Schema, columnsWithDiff)
 
 	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRefDetails.hashStr, fromRefDetails.hashStr, toRefDetails.commitTime, fromRefDetails.commitTime, td.ToSch, td.FromSch, nil)
-	ri := dtables.NewDiffPartitionRowIter(dp, dbData.Ddb, j)
+	ri := dtables.NewDiffPartitionRowIter(dp, dbData.Ddb)
 
 	return diffQuerySqlSch, projections, ri, nil
 }
@@ -693,9 +693,9 @@ func getDiffQuerySqlSchemaAndProjections(diffTableSch sql.Schema, columns []stri
 	return cols, getFieldCols
 }
 
-//------------------------------------
+// ------------------------------------
 // patchTableFunctionRowIter
-//------------------------------------
+// ------------------------------------
 
 var _ sql.RowIter = (*patchTableFunctionRowIter)(nil)
 
@@ -761,9 +761,9 @@ func (itr *patchTableFunctionRowIter) Close(_ *sql.Context) error {
 	return nil
 }
 
-//------------------------------------
+// ------------------------------------
 // patchStatementsRowIter
-//------------------------------------
+// ------------------------------------
 
 var _ sql.RowIter = (*patchStatementsRowIter)(nil)
 
