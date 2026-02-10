@@ -9,7 +9,7 @@ on:
 jobs:
   performance:
     runs-on: ubuntu-22.04
-    name: Trigger Benchmark Latency K8s Workflow
+    name: Trigger Mini Benchmark Latency K8s Workflow
     steps:
       - uses: dolthub/pull-request-comment-branch@v3
         id: comment-branch
@@ -21,6 +21,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
+      - name: DEBUG INFO
+        id: debug
+        run: |
+          echo 'FROM VERSION: "${{ github.sha }}"'
+          echo 'TO VERSION: "${{ steps.comment-branch.outputs.head_sha }}"'
       - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
