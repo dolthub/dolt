@@ -380,6 +380,38 @@ func splitGitPathParentBase(fullPath string) (parent string, base string) {
 	return fullPath[:i], fullPath[i+1:]
 }
 
+const gitblobstoreManifestKey = "manifest"
+
+func (gbs *GitBlobstore) mergeCacheObjectLocked(path string, oid git.OID, typ git.ObjectType, overwrite bool) {
+	if _, ok := gbs.cacheObjects[path]; !ok || overwrite {
+		gbs.cacheObjects[path] = cachedGitObject{oid: oid, typ: typ}
+	}
+}
+
+func (gbs *GitBlobstore) mergeCacheChildLocked(parent string, child git.TreeEntry, overwrite bool) (touched bool) {
+	ents := gbs.cacheChildren[parent]
+	for i := range ents {
+		if ents[i].Name != child.Name {
+			continue
+		}
+		if overwrite {
+			ents[i] = child
+			gbs.cacheChildren[parent] = ents
+			return true
+		}
+		return false
+	}
+	gbs.cacheChildren[parent] = append(ents, child)
+	return true
+}
+
+func (gbs *GitBlobstore) sortCacheChildrenLocked(dirs map[string]struct{}) {
+	// Deterministic ordering for callers that require sorted names (e.g. chunk parts 0001..).
+	for dir := range dirs {
+		sort.Slice(gbs.cacheChildren[dir], func(i, j int) bool { return gbs.cacheChildren[dir][i].Name < gbs.cacheChildren[dir][j].Name })
+	}
+}
+
 func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) error {
 	if head == "" {
 		return fmt.Errorf("gitblobstore: cannot merge cache for empty head")
@@ -420,12 +452,8 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 			continue
 		}
 
-		isManifest := e.Name == "manifest"
-
-		// Merge object mapping: manifest may update; other keys are treated as immutable once cached.
-		if _, ok := gbs.cacheObjects[e.Name]; !ok || isManifest {
-			gbs.cacheObjects[e.Name] = cachedGitObject{oid: e.OID, typ: e.Type}
-		}
+		isManifest := e.Name == gitblobstoreManifestKey
+		gbs.mergeCacheObjectLocked(e.Name, e.OID, e.Type, isManifest)
 
 		// Merge parent -> child membership (ensure presence; update only for manifest).
 		parent, base := splitGitPathParentBase(e.Name)
@@ -434,31 +462,12 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 		}
 
 		child := git.TreeEntry{Mode: e.Mode, Type: e.Type, OID: e.OID, Name: base}
-		ents := gbs.cacheChildren[parent]
-
-		found := false
-		for i := range ents {
-			if ents[i].Name != base {
-				continue
-			}
-			found = true
-			if isManifest {
-				ents[i] = child
-				gbs.cacheChildren[parent] = ents
-				touchedDirs[parent] = struct{}{}
-			}
-			break
-		}
-		if !found {
-			gbs.cacheChildren[parent] = append(ents, child)
+		if gbs.mergeCacheChildLocked(parent, child, isManifest) {
 			touchedDirs[parent] = struct{}{}
 		}
 	}
 
-	// Deterministic ordering for callers that require sorted names (e.g. chunk parts 0001..).
-	for dir := range touchedDirs {
-		sort.Slice(gbs.cacheChildren[dir], func(i, j int) bool { return gbs.cacheChildren[dir][i].Name < gbs.cacheChildren[dir][j].Name })
-	}
+	gbs.sortCacheChildrenLocked(touchedDirs)
 
 	gbs.cacheHead = head
 	gbs.cacheMu.Unlock()
