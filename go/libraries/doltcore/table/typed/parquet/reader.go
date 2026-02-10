@@ -220,7 +220,7 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 			rowReadCounter++
 			if val != nil {
 				switch col.TypeInfo.ToSqlType().Type() {
-				case query.Type_DATETIME:
+				case query.Type_DATETIME, query.Type_TIMESTAMP, query.Type_DATE:
 					val = time.UnixMicro(val.(int64))
 				case query.Type_TIME:
 					val = gmstypes.Timespan(time.Duration(val.(int64)).Microseconds())

@@ -141,6 +141,8 @@ func (j *RowWriter) jsonDataForSchema(ctx *sql.Context, row sql.Row) ([]byte, er
 
 		switch col.TypeInfo.ToSqlType().Type() {
 		case query.Type_DATETIME,
+			query.Type_TIMESTAMP,
+			query.Type_DATE,
 			query.Type_DECIMAL,
 			query.Type_ENUM,
 			query.Type_VARBINARY,

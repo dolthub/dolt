@@ -507,8 +507,9 @@ func ValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value types.Value)
 		return "", err
 	}
 
-	switch ti.ToSqlType().Type() {
-	case querypb.Type_TIME, querypb.Type_YEAR, querypb.Type_DATETIME:
+	queryType := ti.ToSqlType().Type()
+	switch queryType {
+	case querypb.Type_TIME, querypb.Type_YEAR, querypb.Type_DATETIME, querypb.Type_TIMESTAMP, querypb.Type_DATE:
 		return singleQuote + *str + singleQuote, nil
 	case querypb.Type_BLOB, querypb.Type_VARBINARY, querypb.Type_BINARY, querypb.Type_JSON, querypb.Type_ENUM, querypb.Type_SET:
 		return quoteAndEscapeString(*str), nil
@@ -549,7 +550,7 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 		default:
 			return str, nil
 		}
-	case querypb.Type_TIME, querypb.Type_YEAR, querypb.Type_DATETIME:
+	case querypb.Type_TIME, querypb.Type_YEAR, querypb.Type_DATETIME, querypb.Type_TIMESTAMP, querypb.Type_DATE:
 		return singleQuote + str + singleQuote, nil
 	case querypb.Type_BINARY, querypb.Type_VARBINARY, querypb.Type_VECTOR:
 		value, err := sql.UnwrapAny(ctx, value)
