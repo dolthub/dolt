@@ -44,29 +44,7 @@ func NewConflictsTable(ctx *sql.Context, tblName doltdb.TableName, srcTable sql.
 		return newProllyConflictsTable(ctx, tbl, upd, tblName, root, rs)
 	}
 
-	return newNomsConflictsTable(ctx, tbl, tblName, root, rs)
-}
-
-func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName doltdb.TableName, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	rd, err := merge.NewConflictReader(ctx, tbl, tblName)
-	if err != nil {
-		return nil, err
-	}
-	confSch := rd.GetSchema()
-
-	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConfTablePrefix+tblName.Name, confSch)
-	if err != nil {
-		return nil, err
-	}
-
-	return ConflictsTable{
-		tblName: tblName,
-		sqlSch:  sqlSch,
-		root:    root,
-		tbl:     tbl,
-		rd:      rd,
-		rs:      rs,
-	}, nil
+	panic("Unsupported storage format for conflicts table: " + tbl.Format().VersionString())
 }
 
 var _ sql.Table = ConflictsTable{}

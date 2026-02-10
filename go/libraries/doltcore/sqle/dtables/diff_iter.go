@@ -21,178 +21,21 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// ldDiffRowItr is a sql.RowIter implementation which iterates over an LD formated DB in order to generate the
-// dolt_diff_{table} results. This is legacy code at this point, as the DOLT format is what we'll support going forward.
-type ldDiffRowItr struct {
-	ad             diff.RowDiffer
-	diffSrc        *diff.RowDiffSource
-	joiner         *rowconv.Joiner
-	sch            schema.Schema
-	fromCommitInfo commitInfo
-	toCommitInfo   commitInfo
-}
-
-var _ sql.RowIter = &ldDiffRowItr{}
-
 type commitInfo struct {
 	date    *types.Timestamp
 	name    types.String
 	nameTag uint64
 	dateTag uint64
-}
-
-func newLdDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition, lookup sql.IndexLookup) (*ldDiffRowItr, error) {
-	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
-
-	if err != nil {
-		return nil, err
-	}
-
-	toData, toSch, err := tableData(ctx, dp.to, ddb)
-
-	if err != nil {
-		return nil, err
-	}
-
-	fromConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), dp.fromSch, fromSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	toConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), dp.toSch, toSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	sch := joiner.GetSchema()
-	toCol, _ := sch.GetAllCols().GetByName(toCommit)
-	fromCol, _ := sch.GetAllCols().GetByName(fromCommit)
-	toDateCol, _ := sch.GetAllCols().GetByName(toCommitDate)
-	fromDateCol, _ := sch.GetAllCols().GetByName(fromCommitDate)
-
-	fromCmInfo := commitInfo{name: types.String(dp.fromName), date: dp.fromDate, nameTag: fromCol.Tag, dateTag: fromDateCol.Tag}
-	toCmInfo := commitInfo{name: types.String(dp.toName), date: dp.toDate, nameTag: toCol.Tag, dateTag: toDateCol.Tag}
-
-	rd := diff.NewRowDiffer(ctx, ddb.Format(), fromSch, toSch, 1024)
-	// TODO (dhruv) don't cast to noms map
-	// Use index lookup if it exists
-	if lookup.IsEmpty() {
-		rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
-	} else {
-		ranges, err := index.NomsRangesFromIndexLookup(ctx, lookup) // TODO: this is a testing method
-		if err != nil {
-			return nil, err
-		}
-		// TODO: maybe just use Check
-		rangeFunc := func(ctx context.Context, val types.Value) (bool, bool, error) {
-			v, ok := val.(types.Tuple)
-			if !ok {
-				return false, false, nil
-			}
-			return ranges[0].Check.Check(ctx, ddb.ValueReadWriter(), v)
-		}
-		rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), ranges[0].Start, rangeFunc)
-	}
-
-	src := diff.NewRowDiffSource(rd, joiner, ctx.Warn)
-	src.AddInputRowConversion(fromConv, toConv)
-
-	return &ldDiffRowItr{
-		ad:             rd,
-		diffSrc:        src,
-		joiner:         joiner,
-		sch:            joiner.GetSchema(),
-		fromCommitInfo: fromCmInfo,
-		toCommitInfo:   toCmInfo,
-	}, nil
-}
-
-// Next returns the next row
-func (itr *ldDiffRowItr) Next(ctx *sql.Context) (sql.Row, error) {
-	r, err := itr.diffSrc.NextDiff()
-
-	if err != nil {
-		return nil, err
-	}
-
-	toAndFromRows, err := itr.joiner.Split(r)
-	if err != nil {
-		return nil, err
-	}
-	_, hasTo := toAndFromRows[diff.To]
-	_, hasFrom := toAndFromRows[diff.From]
-
-	r, err = r.SetColVal(itr.toCommitInfo.nameTag, types.String(itr.toCommitInfo.name), itr.sch)
-	if err != nil {
-		return nil, err
-	}
-
-	r, err = r.SetColVal(itr.fromCommitInfo.nameTag, types.String(itr.fromCommitInfo.name), itr.sch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if itr.toCommitInfo.date != nil {
-		r, err = r.SetColVal(itr.toCommitInfo.dateTag, *itr.toCommitInfo.date, itr.sch)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if itr.fromCommitInfo.date != nil {
-		r, err = r.SetColVal(itr.fromCommitInfo.dateTag, *itr.fromCommitInfo.date, itr.sch)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	sqlRow, err := sqlutil.DoltRowToSqlRow(r, itr.sch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if hasTo && hasFrom {
-		sqlRow = append(sqlRow, diffTypeModified)
-	} else if hasTo && !hasFrom {
-		sqlRow = append(sqlRow, diffTypeAdded)
-	} else {
-		sqlRow = append(sqlRow, diffTypeRemoved)
-	}
-
-	return sqlRow, nil
-}
-
-// Close closes the iterator
-func (itr *ldDiffRowItr) Close(*sql.Context) (err error) {
-	defer itr.ad.Close()
-	defer func() {
-		closeErr := itr.diffSrc.Close()
-
-		if err == nil {
-			err = closeErr
-		}
-	}()
-
-	return nil
 }
 
 type commitInfo2 struct {

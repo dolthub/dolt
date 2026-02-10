@@ -48,6 +48,12 @@ var ErrMultipleViolationsForRow = errors.New("multiple violations for row not su
 
 var ErrSameTblAddedTwice = goerrors.NewKind("table with same name '%s' added in 2 commits can't be merged")
 
+const (
+	ConflictDiffTypeAdded    = "added"
+	ConflictDiffTypeModified = "modified"
+	ConflictDiffTypeRemoved  = "removed"
+)
+
 func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
 	optCmt, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
 	if err != nil {
