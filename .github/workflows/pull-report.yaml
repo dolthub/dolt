@@ -138,6 +138,84 @@ jobs:
           ACTOR: ${{ github.event.client_payload.actor }}
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           LABEL: 'correctness_approved'
+      - name: Remove Passing Performance Labels if performance regression detected
+        if: ${{ github.event.client_payload.is_performance_regression == true && github.event.client_payload.job_type == 'performance-benchmarking' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const { ACTOR, ISSUE_NUMBER, LABEL, GITHUB_WORKSPACE } = process.env;
+            const issue_number = parseInt(ISSUE_NUMBER, 10);
+            const { owner, repo } = context.repo;
+            try {
+                const res = await github.rest.issues.listLabelsOnIssue({
+                  issue_number,
+                  owner,
+                  repo,
+                });
+            
+                if (res.data) {
+                  const labels = res.data;
+            
+                  for (const label of labels) {
+                    if (label.name === LABEL) {
+                      await github.rest.issues.removeLabel({
+                        issue_number,
+                        owner,
+                        repo,
+                        name: label.name,
+                      });
+                    }
+                  }
+                }
+
+            } catch(e) {
+              console.error(e)
+            }
+        env:
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          LABEL: 'performance_approved'
+      - name: Add Passing Performance Labels if no regression detected
+        if: ${{ github.event.client_payload.is_performance_regression != true && github.event.client_payload.job_type == 'performance-benchmarking' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const { ACTOR, ISSUE_NUMBER, LABEL, GITHUB_WORKSPACE } = process.env;
+            const issue_number = parseInt(ISSUE_NUMBER, 10);
+            const { owner, repo } = context.repo;
+            try {
+                const res = await github.rest.issues.listLabelsOnIssue({
+                  issue_number,
+                  owner,
+                  repo,
+                });
+            
+                if (res.data) {
+                  const labels = res.data;
+            
+                  for (const label of labels) {
+                    if (label.name === LABEL) {
+                      return;
+                    }
+                  }
+            
+                  await github.rest.issues.addLabels({
+                    issue_number,
+                    owner,
+                    repo,
+                    labels: [LABEL],
+                  });
+                }
+
+            } catch(e) {
+              console.error(e)
+            }
+        env:
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          LABEL: 'performance_approved'
 
   update-correctness-file:
     name: Update Correctness File

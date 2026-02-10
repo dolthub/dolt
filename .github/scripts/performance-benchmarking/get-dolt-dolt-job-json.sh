@@ -50,6 +50,8 @@ tpccLatencyQuery="with result(test_name, from_latency, to_latency) as (select f.
 
 tpccTpsQuery="with result(test_name, from_server_name, from_server_version, from_tps, to_server_name, to_server_version, to_tps) as (select f.test_name, f.server_name, f.server_version, avg(f.sql_transactions_per_second), t.server_name, t.server_version, avg(t.sql_transactions_per_second) from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE 'tpcc%' group by f.test_name) select test_name, from_server_name, from_server_version, from_tps, to_server_name, to_server_version, to_tps, round(100 * ((to_tps - from_tps) / from_tps), 2) as percent_change from result;"
 
+perfRegressionQuery = "with result(from_lat, to_lat) as (select avg(f.latency_percentile), avg(t.latency_percentile) from from_results as f join to_results as t on f.test_name = t.test_name group by t.test_name) select sum((to_lat - from_lat) / from_lat  > 0.025) from result;"
+
 echo '
 {
   "apiVersion": "batch/v1",
@@ -102,6 +104,7 @@ echo '
               "--issue-number='$issueNumber'",
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
+              "--perf-regression-query='"$perfRegressionQuery"'"
               '"$sysbenchTestTime"'
               '"$withTpcc"'
               '"$initBigRepo"'
@@ -109,7 +112,7 @@ echo '
               "--sysbenchQueries='"$medianLatencyChangeReadsQuery"'",
               "--sysbenchQueries='"$medianLatencyChangeWritesQuery"'",
               "--tpccQueries='"$tpccLatencyQuery"'",
-              "--tpccQueries='"$tpccTpsQuery"'"
+              "--tpccQueries='"$tpccTpsQuery"'",
             ]
           }
         ],

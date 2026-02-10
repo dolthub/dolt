@@ -1,0 +1,21 @@
+name: Check for performance_approved label
+on:
+  pull_request:
+    paths:
+      - 'go/**'
+    branches: [main]
+    types: [opened, labeled, unlabeled, synchronize]
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: mheap/github-action-required-labels@v5
+        with:
+          mode: exactly
+          count: 1
+          labels: "performance_approved"
+          add_comment: true
+          message: "This PR is being tested for SQL correctness. Please allow ~12 mins for this to complete. If this PR does not result in a performance regression, the `performance_approved` label will be automatically added to this PR."
