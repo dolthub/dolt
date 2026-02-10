@@ -87,9 +87,7 @@ SQL
 @test "commit verification: no tests configured - no validation occurs" {
     dolt sql -q "SET @@PERSIST.dolt_commit_run_test_groups = '*'"
     
-    dolt add .
-    
-    run dolt commit -m "Commit without dolt_tests"
+    run dolt commit --allow-empty -m "Commit without dolt_tests"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "could not find tests for argument" ]]
 }
