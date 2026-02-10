@@ -17,7 +17,6 @@ package git
 import (
 	"errors"
 	"fmt"
-	"strings"
 )
 
 // ErrUnimplemented is returned by stubbed write-path APIs. It is intentionally
@@ -59,22 +58,5 @@ func (e *NotBlobError) Error() string {
 
 func IsPathNotFound(err error) bool {
 	var e *PathNotFoundError
-	return errors.As(err, &e)
-}
-
-// MergeConflictError indicates merge conflicts at GitBlobstore key/path granularity.
-type MergeConflictError struct {
-	Conflicts []string
-}
-
-func (e *MergeConflictError) Error() string {
-	if len(e.Conflicts) == 0 {
-		return "git merge conflict"
-	}
-	return fmt.Sprintf("git merge conflict at %d path(s): %s", len(e.Conflicts), strings.Join(e.Conflicts, ", "))
-}
-
-func IsMergeConflict(err error) bool {
-	var e *MergeConflictError
 	return errors.As(err, &e)
 }

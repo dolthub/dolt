@@ -29,7 +29,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
-	gitrebase "github.com/dolthub/dolt/go/store/blobstore/internal/gitrebase"
 )
 
 const gitblobstorePartNameWidth = 4 // "0001"
@@ -298,8 +297,8 @@ type GitBlobstoreOptions struct {
 	// MaxPartSize enables chunked-object writes when non-zero.
 	// Read paths always support chunked objects if encountered.
 	MaxPartSize uint64
-	// RemoteManaged enables automatic fetch/merge/push against a configured git remote for
-	// Get/Put/CheckAndPut/Concatenate.
+	// RemoteManaged enables automatic fetch/push sync against a configured git remote for
+	// Get/Put/CheckAndPut/Concatenate. Remote is source-of-truth; local ref is CAS-aligned to remote head.
 	RemoteManaged bool
 	// RemoteName is the git remote name to use for remote-managed mode (e.g. "origin").
 	// If empty and RemoteManaged is true, it defaults to "origin".
@@ -359,19 +358,28 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		return err
 	}
 
-	// 2) Merge tracking into local ref.
+	remoteHead, okRemote, err := gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
+	if err != nil {
+		return err
+	}
+	if !okRemote {
+		return &git.RefNotFoundError{Ref: gbs.remoteTrackingRef}
+	}
+
+	// 2) Align local ref to remote head via CAS (no merge; remote is source-of-truth).
 	policy := gbs.casRetryPolicy(ctx)
 	op := func() error {
-		old, _, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+		old, okLocal, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
 		if err != nil {
 			return backoff.Permanent(err)
 		}
 
-		_, _, err = gitrebase.MergeRemoteTrackingIntoLocalRefWithOptions(ctx, gbs.api, gbs.ref, gbs.remoteTrackingRef, gitrebase.MergeOptions{
-			Message:    "gitblobstore: sync read",
-			Author:     gbs.identity,
-			OnConflict: gitrebase.ConflictRemoteWins,
-		})
+		const zeroOID = git.OID("0000000000000000000000000000000000000000")
+		if okLocal {
+			err = gbs.api.UpdateRefCAS(ctx, gbs.ref, remoteHead, old, "gitblobstore: sync read")
+		} else {
+			err = gbs.api.UpdateRefCAS(ctx, gbs.ref, remoteHead, zeroOID, "gitblobstore: sync read")
+		}
 		if err == nil {
 			return nil
 		}
@@ -411,35 +419,34 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			return backoff.Permanent(&git.RefNotFoundError{Ref: gbs.remoteTrackingRef})
 		}
 
-		// 2) Merge remote-tracking into local ref (remote is source-of-truth on conflicts).
-		oldLocal, _, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+		// 2) Align local ref to remote head via CAS (no merge; remote is source-of-truth).
+		oldLocal, okLocal, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
 		if err != nil {
 			return backoff.Permanent(err)
 		}
-		_, _, err = gitrebase.MergeRemoteTrackingIntoLocalRefWithOptions(ctx, gbs.api, gbs.ref, gbs.remoteTrackingRef, gitrebase.MergeOptions{
-			Message:    "gitblobstore: sync write",
-			Author:     gbs.identity,
-			OnConflict: gitrebase.ConflictRemoteWins,
-		})
+		const zeroOID = git.OID("0000000000000000000000000000000000000000")
+		if okLocal {
+			err = gbs.api.UpdateRefCAS(ctx, gbs.ref, remoteHead, oldLocal, "gitblobstore: sync write")
+		} else {
+			err = gbs.api.UpdateRefCAS(ctx, gbs.ref, remoteHead, zeroOID, "gitblobstore: sync write")
+		}
 		if err != nil {
-			// If local moved concurrently, retry; otherwise surface the error.
 			if gbs.refAdvanced(ctx, oldLocal) {
 				return err
 			}
 			return backoff.Permanent(err)
 		}
 
-		// 3) Apply this operation's changes on top of the merged local head.
-		parent, ok, err := gbs.api.TryResolveRefCommit(ctx, gbs.ref)
+		// 3) Apply this operation's changes on top of the remote head.
+		newCommit, err := build(remoteHead, true)
 		if err != nil {
 			return backoff.Permanent(err)
 		}
-		newCommit, err := build(parent, ok)
-		if err != nil {
+		if err := gbs.api.UpdateRefCAS(ctx, gbs.ref, newCommit, remoteHead, msg); err != nil {
+			if gbs.refAdvanced(ctx, remoteHead) {
+				return err
+			}
 			return backoff.Permanent(err)
-		}
-		if err := gbs.updateRefCASForWrite(ctx, parent, ok, newCommit, msg); err != nil {
-			return err
 		}
 
 		// 4) Push local ref to remote with lease.
@@ -467,8 +474,8 @@ func (gbs *GitBlobstore) putWithRemoteSync(ctx context.Context, key string, plan
 	if !gbs.remoteManaged {
 		return gbs.putWithCASRetries(ctx, key, plan, msg)
 	}
-	return gbs.remoteManagedWrite(ctx, key, msg, func(parent git.OID, ok bool) (git.OID, error) {
-		return gbs.buildCommitForKeyWrite(ctx, parent, ok, key, plan, msg)
+	return gbs.remoteManagedWrite(ctx, key, msg, func(remoteHead git.OID, _ bool) (git.OID, error) {
+		return gbs.buildCommitForKeyWrite(ctx, remoteHead, true, key, plan, msg)
 	})
 }
 
@@ -477,8 +484,8 @@ func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expected
 		return "", fmt.Errorf("gitblobstore: internal error: checkAndPutWithRemoteSync called when remoteManaged=false")
 	}
 	var cachedPlan *putPlan
-	return gbs.remoteManagedWrite(ctx, key, msg, func(parent git.OID, ok bool) (git.OID, error) {
-		actualKeyVersion, err := gbs.currentKeyVersion(ctx, parent, ok, key)
+	return gbs.remoteManagedWrite(ctx, key, msg, func(remoteHead git.OID, _ bool) (git.OID, error) {
+		actualKeyVersion, err := gbs.currentKeyVersion(ctx, remoteHead, true, key)
 		if err != nil {
 			return git.OID(""), err
 		}
@@ -492,7 +499,7 @@ func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expected
 			}
 			cachedPlan = &plan
 		}
-		return gbs.buildCommitForKeyWrite(ctx, parent, ok, key, *cachedPlan, msg)
+		return gbs.buildCommitForKeyWrite(ctx, remoteHead, true, key, *cachedPlan, msg)
 	})
 }
 

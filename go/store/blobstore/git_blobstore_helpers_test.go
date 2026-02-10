@@ -100,15 +100,6 @@ func (f fakeGitAPI) PushRefWithLease(ctx context.Context, remote string, srcRef 
 	}
 	return f.pushRefWithLease(ctx, remote, srcRef, dstRef, expectedDstOID)
 }
-func (f fakeGitAPI) MergeBase(ctx context.Context, a git.OID, b git.OID) (git.OID, bool, error) {
-	panic("unexpected call")
-}
-func (f fakeGitAPI) ListTreeRecursive(ctx context.Context, commit git.OID, treePath string) ([]git.TreeEntry, error) {
-	panic("unexpected call")
-}
-func (f fakeGitAPI) CommitTreeWithParents(ctx context.Context, tree git.OID, parents []git.OID, message string, author *git.Identity) (git.OID, error) {
-	panic("unexpected call")
-}
 
 func TestGitBlobstoreHelpers_resolveCommitForGet(t *testing.T) {
 	ctx := context.Background()

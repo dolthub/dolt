@@ -117,7 +117,7 @@ func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {
 	_ = rc.Close()
 }
 
-func TestGitBlobstore_RemoteManaged_ExistsFetchesAndMerges(t *testing.T) {
+func TestGitBlobstore_RemoteManaged_ExistsFetchesAndAligns(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
@@ -247,11 +247,16 @@ func TestGitBlobstore_RemoteManaged_PutRetriesOnLeaseFailure(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	var externalHead atomic.Value // git.OID
+
 	// Advance the remote right before the first push to force a lease failure and trigger a retry.
 	bs.api = &hookPushGitAPI{
 		GitAPI: bs.api,
 		onFirstPush: func(ctx context.Context) {
-			_, _ = writeKeyToRef(ctx, remoteAPI, DoltDataRef, "external", []byte("external\n"), testIdentity())
+			oid, _ := writeKeyToRef(ctx, remoteAPI, DoltDataRef, "external", []byte("external\n"), testIdentity())
+			if oid != "" {
+				externalHead.Store(oid)
+			}
 		},
 	}
 
@@ -261,6 +266,17 @@ func TestGitBlobstore_RemoteManaged_PutRetriesOnLeaseFailure(t *testing.T) {
 
 	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
 	require.NoError(t, err)
+
+	// Verify we rebuilt on top of the advanced remote head (i.e. parent is externalHead).
+	if v := externalHead.Load(); v != nil {
+		wantParent := v.(git.OID)
+		out, err := remoteRunner.Run(ctx, git.RunOptions{}, "rev-parse", remoteHead.String()+"^")
+		require.NoError(t, err)
+		require.Equal(t, wantParent.String(), string(bytes.TrimSpace(out)))
+		_, err = remoteRunner.Run(ctx, git.RunOptions{}, "rev-parse", remoteHead.String()+"^2")
+		require.Error(t, err) // not a merge commit
+	}
+
 	oid, typ, err := remoteAPI.ResolvePathObject(ctx, remoteHead, "k")
 	require.NoError(t, err)
 	require.Equal(t, git.ObjectTypeBlob, typ)
@@ -273,7 +289,7 @@ func TestGitBlobstore_RemoteManaged_PutRetriesOnLeaseFailure(t *testing.T) {
 	require.Equal(t, []byte("after retry\n"), got)
 }
 
-func TestGitBlobstore_RemoteManaged_CheckAndPut_ConflictRemoteTruthAndReplay(t *testing.T) {
+func TestGitBlobstore_RemoteManaged_CheckAndPut_RemoteHeadTruth(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
@@ -318,7 +334,7 @@ func TestGitBlobstore_RemoteManaged_CheckAndPut_ConflictRemoteTruthAndReplay(t *
 	})
 	require.NoError(t, err)
 
-	// Remote is truth (conflict resolves to remote), then replay this operation's change on top.
+	// Remote is truth: CheckAndPut validates against remoteHead and applies changes on top of it.
 	newBytes := []byte("replayed\n")
 	ver, err := bs.CheckAndPut(ctx, remoteManifestOID.String(), "manifest", int64(len(newBytes)), bytes.NewReader(newBytes))
 	require.NoError(t, err)
@@ -334,6 +350,121 @@ func TestGitBlobstore_RemoteManaged_CheckAndPut_ConflictRemoteTruthAndReplay(t *
 	require.NoError(t, err)
 	require.NoError(t, rc.Close())
 	require.Equal(t, newBytes, got)
+}
+
+func TestGitBlobstore_RemoteManaged_CheckAndPut_ExpectedMatchesLocalButNotRemoteFails(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
+	require.NoError(t, err)
+	remoteAPI := git.NewGitAPIImpl(remoteRunner)
+
+	// Base manifest
+	base, err := writeKeyToRef(ctx, remoteAPI, DoltDataRef, "manifest", []byte("base\n"), testIdentity())
+	require.NoError(t, err)
+
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+	localAPI := git.NewGitAPIImpl(localRunner)
+
+	// Create a local-only manifest version.
+	require.NoError(t, localAPI.FetchRef(ctx, "origin", DoltDataRef, DoltRemoteTrackingDataRef("origin")))
+	require.NoError(t, localAPI.UpdateRef(ctx, DoltDataRef, base, "set local to base"))
+	_, err = writeKeyToRef(ctx, localAPI, DoltDataRef, "manifest", []byte("local\n"), testIdentity())
+	require.NoError(t, err)
+	localHead, err := localAPI.ResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	localManifestOID, _, err := localAPI.ResolvePathObject(ctx, localHead, "manifest")
+	require.NoError(t, err)
+
+	// Advance remote independently.
+	_, err = writeKeyToRef(ctx, remoteAPI, DoltDataRef, "manifest", []byte("remote\n"), testIdentity())
+	require.NoError(t, err)
+	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	remoteManifestOID, _, err := remoteAPI.ResolvePathObject(ctx, remoteHead, "manifest")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		RemoteManaged: true,
+		RemoteName:    "origin",
+		Identity:      testIdentity(),
+	})
+	require.NoError(t, err)
+
+	// Expected version matches local, but remote is truth, so this should fail.
+	_, err = bs.CheckAndPut(ctx, localManifestOID.String(), "manifest", int64(len("new\n")), bytes.NewReader([]byte("new\n")))
+	var capErr CheckAndPutError
+	require.ErrorAs(t, err, &capErr)
+	require.Equal(t, "manifest", capErr.Key)
+	require.Equal(t, localManifestOID.String(), capErr.ExpectedVersion)
+	require.Equal(t, remoteManifestOID.String(), capErr.ActualVersion)
+}
+
+func TestGitBlobstore_RemoteManaged_PutOverwritesDivergedLocalRef_NoMergeCommit(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
+	require.NoError(t, err)
+	remoteAPI := git.NewGitAPIImpl(remoteRunner)
+
+	// Seed + advance remote.
+	_, err = writeKeyToRef(ctx, remoteAPI, DoltDataRef, "base", []byte("base\n"), testIdentity())
+	require.NoError(t, err)
+	_, err = writeKeyToRef(ctx, remoteAPI, DoltDataRef, "remote", []byte("remote\n"), testIdentity())
+	require.NoError(t, err)
+	remoteHeadBefore, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+	localAPI := git.NewGitAPIImpl(localRunner)
+
+	// Make local diverge from remote.
+	require.NoError(t, localAPI.FetchRef(ctx, "origin", DoltDataRef, DoltRemoteTrackingDataRef("origin")))
+	require.NoError(t, localAPI.UpdateRef(ctx, DoltDataRef, remoteHeadBefore, "set local to remote head"))
+	_, err = writeKeyToRef(ctx, localAPI, DoltDataRef, "local", []byte("local\n"), testIdentity())
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		RemoteManaged: true,
+		RemoteName:    "origin",
+		Identity:      testIdentity(),
+	})
+	require.NoError(t, err)
+
+	_, err = PutBytes(ctx, bs, "k", []byte("from local\n"))
+	require.NoError(t, err)
+
+	remoteHeadAfter, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+
+	// New remote head is a normal (non-merge) commit built on remoteHeadBefore.
+	out, err := remoteRunner.Run(ctx, git.RunOptions{}, "rev-parse", remoteHeadAfter.String()+"^")
+	require.NoError(t, err)
+	require.Equal(t, remoteHeadBefore.String(), string(bytes.TrimSpace(out)))
+	_, err = remoteRunner.Run(ctx, git.RunOptions{}, "rev-parse", remoteHeadAfter.String()+"^2")
+	require.Error(t, err)
+
+	// Local-only divergence should not be present on remote.
+	_, _, err = remoteAPI.ResolvePathObject(ctx, remoteHeadAfter, "local")
+	require.Error(t, err)
 }
 
 func TestGitBlobstore_Get_NotFoundMissingKey(t *testing.T) {
