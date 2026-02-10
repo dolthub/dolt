@@ -45,7 +45,7 @@ type ArtifactIndex interface {
 func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx ArtifactIndex) (types.Ref, error) {
 	switch idx.Format() {
 	case types.Format_LD_1:
-		panic("TODO")
+		panic("Unsupported format " + idx.Format().VersionString())
 
 	case types.Format_DOLT:
 		b := shim.ValueFromMap(idx.(prollyArtifactIndex).index)
@@ -60,7 +60,7 @@ func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx Ar
 func NewEmptyArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema) (ArtifactIndex, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
-		panic("TODO")
+		panic("Unsupported format " + vrw.Format().VersionString())
 
 	case types.Format_DOLT:
 		kd := tableSch.GetKeyDescriptor(ns)
@@ -97,7 +97,7 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 
 	switch vrw.Format() {
 	case types.Format_LD_1:
-		panic("TODO")
+		panic("Unsupported format " + vrw.Format().VersionString())
 
 	case types.Format_DOLT:
 		root, fileId, err := shim.NodeFromValue(v)

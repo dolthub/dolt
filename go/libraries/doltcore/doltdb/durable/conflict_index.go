@@ -34,7 +34,7 @@ type ConflictIndex interface {
 func RefFromConflictIndex(ctx context.Context, vrw types.ValueReadWriter, idx ConflictIndex) (types.Ref, error) {
 	switch idx.Format() {
 	case types.Format_LD_1:
-		return refFromNomsValue(ctx, vrw, idx.(nomsConflictIndex).index)
+		panic("Unsupported format: " + idx.Format().VersionString())
 
 	case types.Format_DOLT:
 		return types.Ref{}, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
@@ -48,11 +48,7 @@ func RefFromConflictIndex(ctx context.Context, vrw types.ValueReadWriter, idx Co
 func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, oursSch, theirsSch, baseSch schema.Schema) (ConflictIndex, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
-		m, err := types.NewMap(ctx, vrw)
-		if err != nil {
-			return nil, err
-		}
-		return ConflictIndexFromNomsMap(m, vrw), nil
+		panic("Unsupported format: " + vrw.Format().VersionString())
 
 	case types.Format_DOLT:
 		return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
@@ -60,54 +56,4 @@ func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, ns tr
 	default:
 		return nil, errNbfUnknown
 	}
-}
-
-func ConflictIndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) ConflictIndex {
-	return nomsConflictIndex{
-		index: m,
-		vrw:   vrw,
-	}
-}
-
-func NomsMapFromConflictIndex(i ConflictIndex) types.Map {
-	return i.(nomsConflictIndex).index
-}
-
-func conflictIndexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, ourSch, theirSch, baseSch schema.Schema, r types.Ref) (ConflictIndex, error) {
-	return conflictIndexFromAddr(ctx, vrw, ns, ourSch, theirSch, baseSch, r.TargetHash())
-}
-
-func conflictIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, ourSch, theirSch, baseSch schema.Schema, addr hash.Hash) (ConflictIndex, error) {
-	v, err := vrw.ReadValue(ctx, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	switch vrw.Format() {
-	case types.Format_LD_1:
-		return ConflictIndexFromNomsMap(v.(types.Map), vrw), nil
-
-	case types.Format_DOLT:
-		return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
-
-	default:
-		return nil, errNbfUnknown
-	}
-}
-
-type nomsConflictIndex struct {
-	index types.Map
-	vrw   types.ValueReadWriter
-}
-
-func (i nomsConflictIndex) HashOf() (hash.Hash, error) {
-	return i.index.Hash(i.vrw.Format())
-}
-
-func (i nomsConflictIndex) Count() uint64 {
-	return i.index.Len()
-}
-
-func (i nomsConflictIndex) Format() *types.NomsBinFormat {
-	return i.vrw.Format()
 }
