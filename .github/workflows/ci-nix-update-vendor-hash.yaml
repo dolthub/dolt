@@ -1,0 +1,47 @@
+name: CI default.nix vendorHash
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go/go.mod'
+      - 'go/go.sum'
+      - 'default.nix'
+      - 'flake.nix'
+      - 'flake.lock'
+
+concurrency:
+  group: ci-nix-update-vendor-hash-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix-update-vendor-hash:
+    name: Update vendorHash in default.nix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+	with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - name: Run ./go/utils/updatenixflake
+        run: |
+          ./go/utils/updatenixflake/update.sh
+          changes=$(git status --porcelain)
+          if [ ! -z "$changes" ]; then
+            if [ "${{ github.repository }}" != "dolthub/dolt" ]; then
+              echo "Pull requests from forks must manually update default.flake."
+              echo "Please run ./go/utils/updatenixflake/update.sh to update the nix derivation."
+              exit 1;
+            fi
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+          fi
+      - uses: EndBug/add-and-commit@v9.1.4
+        if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
+        with:
+          message: "[ga-nix-vendor-hash-pr] Run ./go/utils/updatenixflake/update.sh"
+          add: "."
+          cwd: "."
+          pull: "--ff"

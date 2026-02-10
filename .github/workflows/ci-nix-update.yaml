@@ -1,0 +1,24 @@
+name: "Flake.lock: update Nix dependencies"
+
+on:
+  workflow_dispatch: # allows manual triggering
+  schedule:
+    - cron: '0 0 * * 0' # runs weekly on Sunday at 00:00
+
+jobs:
+  nix-flake-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install nix
+        uses: DeterminateSystems/determinate-nix-action@v3
+      - name: Update flake.nix
+        uses: DeterminateSystems/update-flake-lock@main
+        with:
+          pr-title: "Update Nix flake inputs"
+          pr-labels: |
+            dependencies
+	  token: ${{ secrets.REPO_ACCESS_TOKEN }}
+	  # Do not automatically update go-overlay.
+	  inputs: nixpkgs flake-utils

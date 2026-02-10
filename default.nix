@@ -1,5 +1,5 @@
-{ pkgs, self }:
-pkgs.buildGoModule {
+{ pkgs, go, self }:
+(pkgs.buildGoModule.override { inherit go; }) {
   pname = "dolt";
   version =
     let
@@ -14,12 +14,7 @@ pkgs.buildGoModule {
   subPackages = [ "cmd/dolt" ];
   doCheck = false;
 
-  # vendorHash must be updated when go.mod/go.sum change. When incorrect,
-  # `nix build` will fail and print the correct hash in the "got:" line.
-  # To compute without nix installed:
-  #   docker run --rm -v $(pwd):/workspace -w /workspace nixos/nix \
-  #     sh -c 'echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf && nix build .#default 2>&1'
-  vendorHash = pkgs.lib.fakeHash;
+  vendorHash = "sha256-cQRIb5EbWg1BULyrFyHuRJmcx//72R15STEONRbgQ+A=";
 
   nativeBuildInputs = [ pkgs.git ];
   buildInputs = [ pkgs.icu ];
