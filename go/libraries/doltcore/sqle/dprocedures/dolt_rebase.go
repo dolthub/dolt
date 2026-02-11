@@ -806,7 +806,7 @@ func commitManuallyStagedChangesForStep(ctx *sql.Context, step rebase.RebasePlan
 	}
 
 	options, err := createCherryPickOptionsForRebaseStep(ctx, &step, workingSet.RebaseState().CommitBecomesEmptyHandling(),
-		workingSet.RebaseState().EmptyCommitHandling(), false) // For manual commits, don't skip tests by default
+		workingSet.RebaseState().EmptyCommitHandling(), workingSet.RebaseState().SkipVerification())
 
 	doltDB, ok := doltSession.GetDoltDB(ctx, ctx.GetCurrentDatabase())
 	if !ok {
@@ -890,7 +890,13 @@ func processRebasePlanStep(
 	return handleRebaseCherryPick(ctx, planStep, *options)
 }
 
-func createCherryPickOptionsForRebaseStep(ctx *sql.Context, planStep *rebase.RebasePlanStep, commitBecomesEmptyHandling doltdb.EmptyCommitHandling, emptyCommitHandling doltdb.EmptyCommitHandling, skipVerification bool) (*cherry_pick.CherryPickOptions, error) {
+func createCherryPickOptionsForRebaseStep(
+	ctx *sql.Context,
+	planStep *rebase.RebasePlanStep,
+	commitBecomesEmptyHandling doltdb.EmptyCommitHandling,
+	emptyCommitHandling doltdb.EmptyCommitHandling,
+	skipVerification bool,
+) (*cherry_pick.CherryPickOptions, error) {
 	// Override the default empty commit handling options for cherry-pick, since
 	// rebase has slightly different defaults
 	options := cherry_pick.NewCherryPickOptions()
