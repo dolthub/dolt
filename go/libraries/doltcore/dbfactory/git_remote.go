@@ -221,16 +221,17 @@ func ensureGitRemoteURL(ctx context.Context, gitDir string, remoteName string, r
 	if strings.TrimSpace(remoteURL) == "" {
 		return fmt.Errorf("empty remote url")
 	}
-	got, err := runGitInDir(ctx, gitDir, "remote", "get-url", remoteName)
+	// Insert `--` so remoteName can't be interpreted as a flag.
+	got, err := runGitInDir(ctx, gitDir, "remote", "get-url", "--", remoteName)
 	if err != nil {
 		// Remote likely doesn't exist; attempt to add.
-		return runGitInDirNoOutput(ctx, gitDir, "remote", "add", remoteName, remoteURL)
+		return runGitInDirNoOutput(ctx, gitDir, "remote", "add", "--", remoteName, remoteURL)
 	}
 	got = strings.TrimSpace(got)
 	if got == remoteURL {
 		return nil
 	}
-	return runGitInDirNoOutput(ctx, gitDir, "remote", "set-url", remoteName, remoteURL)
+	return runGitInDirNoOutput(ctx, gitDir, "remote", "set-url", "--", remoteName, remoteURL)
 }
 
 func runGitInitBare(ctx context.Context, dir string) error {

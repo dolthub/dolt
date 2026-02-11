@@ -73,12 +73,13 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 
 	if ref, ok := apr.GetValue("ref"); ok {
 		ref = strings.TrimSpace(ref)
-		if ref != "" {
-			if !isGitRemote {
-				return nil, errhand.BuildDError("error: --ref is only supported for git remotes").Build()
-			}
-			remoteParms[dbfactory.GitRefParam] = ref
+		if ref == "" {
+			return nil, errhand.BuildDError("error: --ref cannot be empty").Build()
 		}
+		if !isGitRemote {
+			return nil, errhand.BuildDError("error: --ref is only supported for git remotes").Build()
+		}
+		remoteParms[dbfactory.GitRefParam] = ref
 	}
 
 	depth, ok := apr.GetInt(cli.DepthFlag)

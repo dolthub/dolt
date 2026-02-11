@@ -120,12 +120,13 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData[*sql.Context], apr 
 
 	if ref, ok := apr.GetValue("ref"); ok {
 		ref = strings.TrimSpace(ref)
-		if ref != "" {
-			if !isGitRemote {
-				return fmt.Errorf("error: --ref is only supported for git remotes")
-			}
-			params[dbfactory.GitRefParam] = ref
+		if ref == "" {
+			return fmt.Errorf("error: --ref cannot be empty")
 		}
+		if !isGitRemote {
+			return fmt.Errorf("error: --ref is only supported for git remotes")
+		}
+		params[dbfactory.GitRefParam] = ref
 	}
 
 	r := env.NewRemote(remoteName, absRemoteUrl, params)
