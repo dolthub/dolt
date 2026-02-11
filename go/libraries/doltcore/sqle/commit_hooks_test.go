@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
@@ -381,30 +380,8 @@ func createTestRowData(t *testing.T, vrw types.ValueReadWriter, ns tree.NodeStor
 		return idx
 	}
 
-	vals := []row.TaggedValues{
-		{idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
-		{idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
-		{idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
-		{idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
-	}
-
-	var err error
-	rows := make([]row.Row, len(vals))
-
-	m, err := types.NewMap(context.Background(), vrw)
-	assert.NoError(t, err)
-	ed := m.Edit()
-
-	for i, val := range vals {
-		r, err := row.New(vrw.Format(), sch, val)
-		require.NoError(t, err)
-		rows[i] = r
-		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
-	}
-
-	m, err = ed.Map(context.Background())
-	assert.NoError(t, err)
-	return durable.IndexFromNomsMap(m, vrw, ns)
+	t.Fatal("unsupported format")
+	return nil
 }
 
 func createHooksTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData durable.Index) (*doltdb.Table, error) {

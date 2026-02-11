@@ -329,7 +329,8 @@ func assertConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expec
 		assertProllyConflicts(t, ctx, tbl, expected)
 		return
 	}
-	assertNomsConflicts(t, ctx, tbl, expected)
+
+	panic("unsupported format: " + tbl.Format().VersionString())
 }
 
 func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
@@ -381,32 +382,6 @@ func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 
 }
 
-func assertNomsConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
-	_, confIdx, err := tbl.GetConflicts(ctx)
-	require.NoError(t, err)
-	conflicts := durable.NomsMapFromConflictIndex(confIdx)
-
-	assert.True(t, conflicts.Len() > 0)
-	assert.Equal(t, int(conflicts.Len()), len(expected))
-
-	expectedSet := expected.toTupleSet()
-
-	actual, err := conflicts.Iterator(ctx)
-	require.NoError(t, err)
-	for {
-		_, act, err := actual.Next(ctx)
-		if act == nil {
-			return
-		}
-		assert.NoError(t, err)
-		h, err := act.Hash(types.Format_Default)
-		assert.NoError(t, err)
-		exp, ok := expectedSet[h]
-		assert.True(t, ok)
-		assert.True(t, exp.Equals(act))
-	}
-}
-
 func mustGetRowValueFromTable(t *testing.T, ctx context.Context, tbl *doltdb.Table, key val.Tuple) val.Tuple {
 	idx, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
@@ -439,7 +414,7 @@ func assertKeylessRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, exp
 		return
 	}
 
-	assertKeylessNomsRows(t, ctx, tbl, expected)
+	panic("unsupported format: " + tbl.Format().VersionString())
 }
 
 func assertKeylessProllyRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected []keylessEntry) {
@@ -468,30 +443,6 @@ func assertKeylessProllyRows(t *testing.T, ctx context.Context, tbl *doltdb.Tabl
 	}
 
 	require.Equal(t, len(expected), c)
-}
-
-func assertKeylessNomsRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected keylessEntries) {
-	rowData, err := tbl.GetNomsRowData(ctx)
-	require.NoError(t, err)
-
-	assert.Equal(t, int(rowData.Len()), len(expected))
-
-	expectedSet := expected.toTupleSet()
-
-	actual, err := rowData.Iterator(ctx)
-	require.NoError(t, err)
-	for {
-		_, act, err := actual.Next(ctx)
-		if act == nil {
-			break
-		}
-		assert.NoError(t, err)
-		h, err := act.Hash(types.Format_Default)
-		assert.NoError(t, err)
-		exp, ok := expectedSet[h]
-		assert.True(t, ok)
-		assert.True(t, exp.Equals(act))
-	}
 }
 
 const tblName = "noKey"
