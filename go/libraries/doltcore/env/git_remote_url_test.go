@@ -43,6 +43,20 @@ func TestNormalizeGitRemoteUrl(t *testing.T) {
 		require.Empty(t, got)
 	})
 
+	t.Run("https .git with ref query is rejected", func(t *testing.T) {
+		got, ok, err := NormalizeGitRemoteUrl("https://example.com/org/repo.git?ref=refs/dolt/data")
+		require.Error(t, err)
+		require.False(t, ok)
+		require.Empty(t, got)
+	})
+
+	t.Run("schemeless host/path with ref query is rejected", func(t *testing.T) {
+		got, ok, err := NormalizeGitRemoteUrl("github.com/org/repo.git?ref=refs/dolt/data")
+		require.Error(t, err)
+		require.False(t, ok)
+		require.Empty(t, got)
+	})
+
 	t.Run("https .git becomes git+https", func(t *testing.T) {
 		got, ok, err := NormalizeGitRemoteUrl("https://example.com/org/repo.git")
 		require.NoError(t, err)

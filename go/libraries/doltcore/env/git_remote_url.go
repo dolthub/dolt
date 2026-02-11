@@ -62,9 +62,8 @@ func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error
 		if _, ok := supportedGitPlusSchemes[strings.ToLower(u.Scheme)]; !ok {
 			return "", false, fmt.Errorf("unsupported git dbfactory scheme %q", u.Scheme)
 		}
-		// Ref selection is configured via dolt remote parameters (e.g. `--ref`), not via URL query.
-		if qref := strings.TrimSpace(u.Query().Get("ref")); qref != "" {
-			return "", false, fmt.Errorf("git remote ref must be provided via --ref (not URL query ref=)")
+		if err := rejectGitRefQuery(u); err != nil {
+			return "", false, err
 		}
 		return u.String(), true, nil
 	}
@@ -96,6 +95,9 @@ func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error
 		if _, ok := supportedUnderlyingGitSchemes[s]; !ok {
 			return "", false, nil
 		}
+		if err := rejectGitRefQuery(u); err != nil {
+			return "", false, err
+		}
 		u.Scheme = "git+" + s
 		return u.String(), true, nil
 	}
@@ -117,6 +119,9 @@ func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error
 	// Schemeless host/path.git defaults to https.
 	u, err := url.Parse("git+https://" + urlArg)
 	if err != nil {
+		return "", false, err
+	}
+	if err := rejectGitRefQuery(u); err != nil {
 		return "", false, err
 	}
 	return u.String(), true, nil
@@ -171,4 +176,15 @@ func splitScpLike(s string) (host string, path string) {
 		return "", s
 	}
 	return s[:i], s[i+1:]
+}
+
+func rejectGitRefQuery(u *url.URL) error {
+	// Ref selection is configured via dolt remote parameters (e.g. `--ref`), not via URL query.
+	if u == nil {
+		return nil
+	}
+	if qref := strings.TrimSpace(u.Query().Get("ref")); qref != "" {
+		return fmt.Errorf("git remote ref must be provided via --ref (not URL query ref=)")
+	}
+	return nil
 }
