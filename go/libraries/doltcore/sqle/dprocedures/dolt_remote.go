@@ -104,20 +104,27 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData[*sql.Context], apr 
 	}
 
 	params := map[string]string{}
-	switch scheme {
-	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
-		if dir, ok := apr.GetValue("git-cache-dir"); ok {
-			dir = strings.TrimSpace(dir)
-			if dir == "" {
-				return fmt.Errorf("error: --git-cache-dir cannot be empty")
-			}
-			params[dbfactory.GitCacheDirParam] = dir
+
+	isGitRemote := scheme == dbfactory.GitFileScheme || scheme == dbfactory.GitHTTPScheme || scheme == dbfactory.GitHTTPSScheme || scheme == dbfactory.GitSSHScheme
+
+	if dir, ok := apr.GetValue("git-cache-dir"); ok {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			return fmt.Errorf("error: --git-cache-dir cannot be empty")
 		}
-		if ref, ok := apr.GetValue("ref"); ok {
-			ref = strings.TrimSpace(ref)
-			if ref != "" {
-				params[dbfactory.GitRefParam] = ref
+		if !isGitRemote {
+			return fmt.Errorf("error: --git-cache-dir is only supported for git remotes")
+		}
+		params[dbfactory.GitCacheDirParam] = dir
+	}
+
+	if ref, ok := apr.GetValue("ref"); ok {
+		ref = strings.TrimSpace(ref)
+		if ref != "" {
+			if !isGitRemote {
+				return fmt.Errorf("error: --ref is only supported for git remotes")
 			}
+			params[dbfactory.GitRefParam] = ref
 		}
 	}
 

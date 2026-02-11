@@ -57,25 +57,27 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
 		remoteParms[dbfactory.GRPCUsernameAuthParam] = user
 	}
-	if scheme == dbfactory.GitFileScheme || scheme == dbfactory.GitHTTPScheme || scheme == dbfactory.GitHTTPSScheme || scheme == dbfactory.GitSSHScheme {
-		if dir, ok := apr.GetValue("git-cache-dir"); ok {
-			dir = strings.TrimSpace(dir)
-			if dir == "" {
-				return nil, errhand.BuildDError("error: --git-cache-dir cannot be empty").Build()
-			}
-			remoteParms[dbfactory.GitCacheDirParam] = dir
+
+	isGitRemote := scheme == dbfactory.GitFileScheme || scheme == dbfactory.GitHTTPScheme || scheme == dbfactory.GitHTTPSScheme || scheme == dbfactory.GitSSHScheme
+
+	if dir, ok := apr.GetValue("git-cache-dir"); ok {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			return nil, errhand.BuildDError("error: --git-cache-dir cannot be empty").Build()
 		}
-	} else {
-		if _, ok := apr.GetValue("git-cache-dir"); ok {
+		if !isGitRemote {
 			return nil, errhand.BuildDError("error: --git-cache-dir is only supported for git remotes").Build()
 		}
+		remoteParms[dbfactory.GitCacheDirParam] = dir
 	}
+
 	if ref, ok := apr.GetValue("ref"); ok {
 		ref = strings.TrimSpace(ref)
-		if ref != "" && (scheme == dbfactory.GitFileScheme || scheme == dbfactory.GitHTTPScheme || scheme == dbfactory.GitHTTPSScheme || scheme == dbfactory.GitSSHScheme) {
+		if ref != "" {
+			if !isGitRemote {
+				return nil, errhand.BuildDError("error: --ref is only supported for git remotes").Build()
+			}
 			remoteParms[dbfactory.GitRefParam] = ref
-		} else if ref != "" {
-			return nil, errhand.BuildDError("error: --ref is only supported for git remotes").Build()
 		}
 	}
 
