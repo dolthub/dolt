@@ -29,10 +29,12 @@ sh_binary(
     args = [
         "$(rlocationpath :go_srcs)",
         "$(rlocationpath @com_github_dolthub_dolt_go_serial//:go_srcs.tar)",
+        "$(rlocationpath @org_golang_x_tools//cmd/goimports)",
     ],
     data = [
         ":go_srcs",
         "@com_github_dolthub_dolt_go_serial//:go_srcs.tar",
+        "@org_golang_x_tools//cmd/goimports",
     ],
     deps = [
         "@bazel_tools//tools/bash/runfiles",

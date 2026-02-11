@@ -14,4 +14,4 @@ go_sdk.download(version = "1.25.6")
 
 go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//:go.mod")
-use_repo(go_deps, "org_golang_google_api")
+use_repo(go_deps, "org_golang_google_protobuf", "org_golang_x_tools")

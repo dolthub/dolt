@@ -17,7 +17,6 @@
 package serial
 
 import (
-	"strconv"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 )
 
@@ -200,6 +199,7 @@ func RootValueStartSchemasVector(builder *flatbuffers.Builder, numElems int) fla
 func RootValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type DatabaseSchema struct {
 	_tab flatbuffers.Table
 }

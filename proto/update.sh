@@ -14,6 +14,7 @@ source "${RUNFILES_DIR:-/dev/null}/$f" 2>/dev/null || \
 GO_ROOT="$BUILD_WORKSPACE_DIRECTORY""/../go/"
 PBGO_TAR_FILE=$(rlocation "$1" | sed 's|C:|/c|')
 FBGO_TAR_FILE=$(rlocation "$2" | sed 's|C:|/c|')
+GOIMPORTS_BIN=$(rlocation "$3" | sed 's|C:|/c|')
 
 cd "$GO_ROOT"
 
@@ -25,3 +26,5 @@ rm -rf gen/fb
 # Then unpack generated sources into the correct place.
 tar -x -f "$PBGO_TAR_FILE"
 tar -x -f "$FBGO_TAR_FILE"
+
+"$GOIMPORTS_BIN" -w ./gen/
