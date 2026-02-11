@@ -102,11 +102,7 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return err
 	}
 
-	if types.IsFormat_DOLT(td.Format()) {
-		return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
-	}
-
-	panic("Unsupported format: " + td.Format().VersionString())
+	return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
 }
 
 func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool, from, to durable.Index, fromSch, toSch schema.Schema) error {

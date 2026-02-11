@@ -16,6 +16,7 @@ package types
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/constants"
@@ -56,6 +57,13 @@ func init() {
 
 func IsFormat_DOLT(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_DOLT
+}
+
+// AssertFormat_DOLT panics if the provided NomsBinFormat is not compatible with the DOLT format.
+func AssertFormat_DOLT(nbf *NomsBinFormat) {
+	if !IsFormat_DOLT(nbf) {
+		panic(fmt.Sprintf("Unsupported binary format %s, please migrate database to newer format", nbf.VersionString()))
+	}
 }
 
 func IsFormat_LD(nbf *NomsBinFormat) bool {
