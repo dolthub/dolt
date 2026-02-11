@@ -77,6 +77,18 @@ type DoltDatabaseProvider struct {
 	InitDatabaseHooks []InitDatabaseHook
 }
 
+type remoteDialerWithGitCacheRoot struct {
+	dbfactory.GRPCDialProvider
+	root string
+}
+
+func (d remoteDialerWithGitCacheRoot) GitCacheRoot() (string, bool) {
+	if strings.TrimSpace(d.root) == "" {
+		return "", false
+	}
+	return d.root, true
+}
+
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
@@ -502,10 +514,26 @@ func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlData
 }
 
 func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
-	if withCaching {
-		return r.GetRemoteDB(ctx, format, p.remoteDialer)
+	// For git remotes, thread through the initiating database's repo root so git caches can be located under
+	// `<repoRoot>/.dolt/...` instead of a user-global cache dir.
+	dialer := p.remoteDialer
+	if sqlCtx, ok := ctx.(*sql.Context); ok {
+		baseName, _ := doltdb.SplitRevisionDbName(sqlCtx.GetCurrentDatabase())
+		dbKey := strings.ToLower(baseName)
+		p.mu.RLock()
+		dbLoc, ok := p.dbLocations[dbKey]
+		p.mu.RUnlock()
+		if ok && dbLoc != nil {
+			if root, err := dbLoc.Abs("."); err == nil && strings.TrimSpace(root) != "" {
+				dialer = remoteDialerWithGitCacheRoot{GRPCDialProvider: p.remoteDialer, root: root}
+			}
+		}
 	}
-	return r.GetRemoteDBWithoutCaching(ctx, format, p.remoteDialer)
+
+	if withCaching {
+		return r.GetRemoteDB(ctx, format, dialer)
+	}
+	return r.GetRemoteDBWithoutCaching(ctx, format, dialer)
 }
 
 func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {
@@ -814,7 +842,11 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 	}
 
 	r := env.NewRemote(remoteName, remoteUrl, remoteParams)
-	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default, p.remoteDialer)
+	destRoot, err := p.fs.Abs(dbName)
+	if err != nil {
+		return err
+	}
+	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default, remoteDialerWithGitCacheRoot{GRPCDialProvider: p.remoteDialer, root: destRoot})
 	if err != nil {
 		return err
 	}

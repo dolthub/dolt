@@ -34,11 +34,20 @@ import (
 )
 
 const (
+	// GitCacheRootParam is the absolute path to the local Dolt repository root (the directory that contains `.dolt/`).
+	// When set for git remotes, callers can choose a per-repo cache location under `.dolt/`.
+	GitCacheRootParam    = "git_cache_root"
 	GitRefParam          = "git_ref"
 	GitRemoteNameParam   = "git_remote_name"
 	defaultGitRef        = "refs/dolt/data"
 	defaultGitRemoteName = "origin"
 )
+
+// GitCacheRootProvider provides the local Dolt repo root for per-repo git remote caches.
+// Implementations should return ok=false when no repo root is available.
+type GitCacheRootProvider interface {
+	GitCacheRoot() (string, bool)
+}
 
 // GitRemoteFactory opens a Dolt database backed by a Git remote, using a local bare
 // repository as an object cache and remote configuration store.
@@ -83,10 +92,14 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	cacheBase, err := defaultGitCacheBase()
+	cacheRoot, ok, err := resolveGitCacheRoot(params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
+	}
+	cacheBase := filepath.Join(cacheRoot, DoltDir, "git-remote-cache")
 
 	cacheRepo, err := cacheRepoPath(cacheBase, remoteURL.String(), ref)
 	if err != nil {
@@ -166,12 +179,24 @@ func resolveGitRemoteName(params map[string]interface{}) string {
 	return defaultGitRemoteName
 }
 
-func defaultGitCacheBase() (string, error) {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
+// resolveGitCacheRoot parses and validates the optional GitCacheRootParam.
+// It returns ok=false when the param is not present.
+func resolveGitCacheRoot(params map[string]interface{}) (root string, ok bool, err error) {
+	if params == nil {
+		return "", false, nil
 	}
-	return filepath.Join(base, "dolt", "git-remote-cache"), nil
+	v, ok := params[GitCacheRootParam]
+	if !ok || v == nil {
+		return "", false, nil
+	}
+	s, ok := v.(string)
+	if !ok {
+		return "", false, fmt.Errorf("%s must be a string", GitCacheRootParam)
+	}
+	if strings.TrimSpace(s) == "" {
+		return "", false, fmt.Errorf("%s cannot be empty", GitCacheRootParam)
+	}
+	return s, true, nil
 }
 
 func cacheRepoPath(cacheBase, remoteURL, ref string) (string, error) {

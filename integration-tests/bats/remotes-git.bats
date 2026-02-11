@@ -8,15 +8,11 @@ setup() {
     cd $BATS_TMPDIR
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
-
-    # Keep auto-selected git cache dir inside this test's sandbox.
-    export XDG_CACHE_HOME="$(mktemp -d)"
 }
 
 teardown() {
     assert_feature_version
     teardown_common
-    rm -rf "$XDG_CACHE_HOME"
 }
 
 @test "remotes-git: smoke push/clone/push-back/pull" {

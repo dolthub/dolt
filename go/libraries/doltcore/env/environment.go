@@ -184,6 +184,16 @@ func (dEnv *DoltEnv) UrlStr() string {
 	return dEnv.urlStr
 }
 
+// GitCacheRoot returns the absolute path to the local Dolt repository root (the directory that contains `.dolt/`).
+// It is used to place git-remote caches under `<repoRoot>/.dolt/...`.
+func (dEnv *DoltEnv) GitCacheRoot() (string, bool) {
+	doltDir := dEnv.GetDoltDir()
+	if doltDir == "" {
+		return "", false
+	}
+	return filepath.Dir(doltDir), true
+}
+
 func createRepoState(fs filesys.Filesys) (*RepoState, error) {
 	repoState, rsErr := LoadRepoState(fs)
 
