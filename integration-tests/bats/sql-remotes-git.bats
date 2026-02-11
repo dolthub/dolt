@@ -5,6 +5,9 @@ setup() {
     skiponwindows "tests are flaky on Windows"
     skip_if_remote
     setup_common
+    if ! command -v git >/dev/null 2>&1; then
+        skip "git not installed"
+    fi
     cd $BATS_TMPDIR
     cd dolt-repo-$$
 }
@@ -15,10 +18,6 @@ teardown() {
 }
 
 @test "sql-remotes-git: dolt_remote add supports --ref for git remotes" {
-    if ! command -v git >/dev/null 2>&1; then
-        skip "git not installed"
-    fi
-
     mkdir remote.git
     git init --bare remote.git
 
@@ -43,10 +42,6 @@ SQL
 }
 
 @test "sql-remotes-git: dolt_clone supports --ref for git remotes" {
-    if ! command -v git >/dev/null 2>&1; then
-        skip "git not installed"
-    fi
-
     mkdir remote.git
     git init --bare remote.git
 
@@ -81,10 +76,6 @@ SQL
 }
 
 @test "sql-remotes-git: dolt_backup sync-url supports --ref for git remotes" {
-    if ! command -v git >/dev/null 2>&1; then
-        skip "git not installed"
-    fi
-
     mkdir remote.git
     git init --bare remote.git
 
