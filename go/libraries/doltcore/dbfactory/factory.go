@@ -53,6 +53,12 @@ const (
 
 	OSSScheme = "oss"
 
+	// Git remote dbfactory schemes (Git remotes as Dolt remotes)
+	GitFileScheme  = "git+file"
+	GitHTTPScheme  = "git+http"
+	GitHTTPSScheme = "git+https"
+	GitSSHScheme   = "git+ssh"
+
 	defaultScheme       = HTTPSScheme
 	defaultMemTableSize = 256 * 1024 * 1024
 )
@@ -69,15 +75,19 @@ type DBFactory interface {
 // DBFactories is a map from url scheme name to DBFactory.  Additional factories can be added to the DBFactories map
 // from external packages.
 var DBFactories = map[string]DBFactory{
-	AWSScheme:     AWSFactory{},
-	OSSScheme:     OSSFactory{},
-	GSScheme:      GSFactory{},
-	OCIScheme:     OCIFactory{},
-	FileScheme:    FileFactory{},
-	MemScheme:     MemFactory{},
-	LocalBSScheme: LocalBSFactory{},
-	HTTPScheme:    NewDoltRemoteFactory(true),
-	HTTPSScheme:   NewDoltRemoteFactory(false),
+	AWSScheme:      AWSFactory{},
+	OSSScheme:      OSSFactory{},
+	GSScheme:       GSFactory{},
+	OCIScheme:      OCIFactory{},
+	FileScheme:     FileFactory{},
+	MemScheme:      MemFactory{},
+	LocalBSScheme:  LocalBSFactory{},
+	HTTPScheme:     NewDoltRemoteFactory(true),
+	HTTPSScheme:    NewDoltRemoteFactory(false),
+	GitFileScheme:  GitRemoteFactory{},
+	GitHTTPScheme:  GitRemoteFactory{},
+	GitHTTPSScheme: GitRemoteFactory{},
+	GitSSHScheme:   GitRemoteFactory{},
 }
 
 // CreateDB creates a database based on the supplied urlStr, and creation params.  The DBFactory used for creation is

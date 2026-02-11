@@ -99,7 +99,11 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	_, err := earl.Parse(urlStr)
 
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Invalid remote url").AddCause(err).Build(), usage)
+		if normalized, ok, nerr := env.NormalizeGitRemoteUrl(urlStr); nerr == nil && ok {
+			urlStr = normalized
+		} else {
+			return HandleVErrAndExitCode(errhand.BuildDError("Invalid remote url").AddCause(err).Build(), usage)
+		}
 	}
 
 	dir := apr.GetValueOrDefault(dirParamName, path.Base(urlStr))

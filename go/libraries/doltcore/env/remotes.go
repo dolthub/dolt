@@ -643,6 +643,12 @@ func NewPullSpec[C doltdb.Context](
 }
 
 func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {
+	if normalized, ok, nerr := NormalizeGitRemoteUrl(urlArg); nerr != nil {
+		return "", "", nerr
+	} else if ok {
+		urlArg = normalized
+	}
+
 	u, err := earl.Parse(urlArg)
 	if err != nil {
 		return "", "", err

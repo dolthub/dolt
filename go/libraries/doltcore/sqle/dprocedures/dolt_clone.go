@@ -82,7 +82,11 @@ func getDirectoryAndUrlString(apr *argparser.ArgParseResults) (string, string, e
 	urlStr := apr.Arg(0)
 	_, err := earl.Parse(urlStr)
 	if err != nil {
-		return "", "", errhand.BuildDError("error: invalid remote url: %s", urlStr).Build()
+		if normalized, ok, nerr := env.NormalizeGitRemoteUrl(urlStr); nerr == nil && ok {
+			urlStr = normalized
+		} else {
+			return "", "", errhand.BuildDError("error: invalid remote url: %s", urlStr).Build()
+		}
 	}
 
 	var dir string
