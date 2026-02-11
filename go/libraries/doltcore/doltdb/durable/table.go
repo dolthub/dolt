@@ -33,26 +33,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-const (
-	tableStructName = "table"
-
-	schemaRefKey            = "schema_ref"
-	tableRowsKey            = "rows"
-	artifactsKey            = "artifacts"
-	conflictsKey            = "conflicts"
-	conflictSchemasKey      = "conflict_schemas"
-	constraintViolationsKey = "constraint_violations"
-	indexesKey              = "indexes"
-	autoIncrementKey        = "auto_increment"
-)
-
 var (
-	ErrUnknownAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
-)
-
-var (
-	errNbfUnknown     = fmt.Errorf("unknown NomsBinFormat")
-	errNbfUnsupported = fmt.Errorf("operation unsupported for NomsBinFormat")
+	errNbfUnknown = fmt.Errorf("unknown NomsBinFormat")
 )
 
 // Table is a Dolt table that can be persisted.
