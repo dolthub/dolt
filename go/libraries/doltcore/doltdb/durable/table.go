@@ -113,8 +113,6 @@ func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 }
 
 // VrwFromTable returns the types.ValueReadWriter used by |t|.
-// todo(andy): this is a temporary method that will be removed when there is a
-// general-purpose abstraction to replace types.ValueReadWriter.
 func VrwFromTable(t Table) types.ValueReadWriter {
 	ddt := t.(doltDevTable)
 	return ddt.vrw
