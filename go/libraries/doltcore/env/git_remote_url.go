@@ -21,8 +21,6 @@ import (
 	"strings"
 )
 
-const defaultGitRemoteRef = "refs/dolt/data"
-
 var supportedGitPlusSchemes = map[string]struct{}{
 	"git+file":  {},
 	"git+http":  {},
@@ -64,7 +62,10 @@ func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error
 		if _, ok := supportedGitPlusSchemes[strings.ToLower(u.Scheme)]; !ok {
 			return "", false, fmt.Errorf("unsupported git dbfactory scheme %q", u.Scheme)
 		}
-		ensureDefaultRefQuery(u)
+		// Ref selection is configured via dolt remote parameters (e.g. `--ref`), not via URL query.
+		if qref := strings.TrimSpace(u.Query().Get("ref")); qref != "" {
+			return "", false, fmt.Errorf("git remote ref must be provided via --ref (not URL query ref=)")
+		}
 		return u.String(), true, nil
 	}
 
@@ -82,7 +83,6 @@ func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error
 		if err != nil {
 			return "", false, err
 		}
-		ensureDefaultRefQuery(u)
 		return u.String(), true, nil
 	}
 
@@ -97,7 +97,6 @@ func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error
 			return "", false, nil
 		}
 		u.Scheme = "git+" + s
-		ensureDefaultRefQuery(u)
 		return u.String(), true, nil
 	}
 
@@ -112,7 +111,6 @@ func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error
 		if err != nil {
 			return "", false, err
 		}
-		ensureDefaultRefQuery(u)
 		return u.String(), true, nil
 	}
 
@@ -121,7 +119,6 @@ func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error
 	if err != nil {
 		return "", false, err
 	}
-	ensureDefaultRefQuery(u)
 	return u.String(), true, nil
 }
 
@@ -174,12 +171,4 @@ func splitScpLike(s string) (host string, path string) {
 		return "", s
 	}
 	return s[:i], s[i+1:]
-}
-
-func ensureDefaultRefQuery(u *url.URL) {
-	q := u.Query()
-	if q.Get("ref") == "" {
-		q.Set("ref", defaultGitRemoteRef)
-		u.RawQuery = q.Encode()
-	}
 }

@@ -323,6 +323,12 @@ func newParams(apr *argparser.ArgParseResults, url string, urlScheme string) (ma
 				params[dbfactory.GitCacheDirParam] = dir
 			}
 		}
+		if ref, ok := apr.GetValue("ref"); ok {
+			ref = strings.TrimSpace(ref)
+			if ref != "" {
+				params[dbfactory.GitRefParam] = ref
+			}
+		}
 	default:
 		err = cli.VerifyNoAwsParams(apr)
 	}

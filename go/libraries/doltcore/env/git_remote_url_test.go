@@ -29,40 +29,47 @@ func TestNormalizeGitRemoteUrl(t *testing.T) {
 		require.Empty(t, got)
 	})
 
-	t.Run("explicit git+https keeps scheme and adds default ref", func(t *testing.T) {
+	t.Run("explicit git+https keeps scheme", func(t *testing.T) {
 		got, ok, err := NormalizeGitRemoteUrl("git+https://example.com/org/repo.git")
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Equal(t, "git+https://example.com/org/repo.git?ref=refs%2Fdolt%2Fdata", got)
+		require.Equal(t, "git+https://example.com/org/repo.git", got)
 	})
 
-	t.Run("https .git becomes git+https and adds default ref", func(t *testing.T) {
+	t.Run("explicit git+https with ref query is rejected", func(t *testing.T) {
+		got, ok, err := NormalizeGitRemoteUrl("git+https://example.com/org/repo.git?ref=refs/dolt/data")
+		require.Error(t, err)
+		require.False(t, ok)
+		require.Empty(t, got)
+	})
+
+	t.Run("https .git becomes git+https", func(t *testing.T) {
 		got, ok, err := NormalizeGitRemoteUrl("https://example.com/org/repo.git")
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Equal(t, "git+https://example.com/org/repo.git?ref=refs%2Fdolt%2Fdata", got)
+		require.Equal(t, "git+https://example.com/org/repo.git", got)
 	})
 
-	t.Run("scp-style becomes git+ssh and adds default ref", func(t *testing.T) {
+	t.Run("scp-style becomes git+ssh", func(t *testing.T) {
 		got, ok, err := NormalizeGitRemoteUrl("git@github.com:org/repo.git")
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Equal(t, "git+ssh://git@github.com/org/repo.git?ref=refs%2Fdolt%2Fdata", got)
+		require.Equal(t, "git+ssh://git@github.com/org/repo.git", got)
 	})
 
-	t.Run("schemeless host/path defaults to git+https and adds default ref", func(t *testing.T) {
+	t.Run("schemeless host/path defaults to git+https", func(t *testing.T) {
 		got, ok, err := NormalizeGitRemoteUrl("github.com/org/repo.git")
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Equal(t, "git+https://github.com/org/repo.git?ref=refs%2Fdolt%2Fdata", got)
+		require.Equal(t, "git+https://github.com/org/repo.git", got)
 	})
 
-	t.Run("local absolute path becomes git+file and adds default ref", func(t *testing.T) {
+	t.Run("local absolute path becomes git+file", func(t *testing.T) {
 		p := filepath.ToSlash(filepath.Join(t.TempDir(), "remote.git"))
 		got, ok, err := NormalizeGitRemoteUrl(p)
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Equal(t, "git+file://"+p+"?ref=refs%2Fdolt%2Fdata", got)
+		require.Equal(t, "git+file://"+p, got)
 	})
 
 	t.Run("non .git url not recognized", func(t *testing.T) {

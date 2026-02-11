@@ -35,6 +35,7 @@ import (
 
 const (
 	GitCacheDirParam = "git_cache_dir"
+	GitRefParam      = "git_ref"
 	GitCacheDirEnv   = "DOLT_GIT_REMOTE_CACHE_DIR"
 	defaultGitRef    = "refs/dolt/data"
 )
@@ -54,7 +55,7 @@ var _ DBFactory = GitRemoteFactory{}
 func (fact GitRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
 	switch strings.ToLower(urlObj.Scheme) {
 	case GitFileScheme:
-		remoteURL, _, err := parseGitRemoteFactoryURL(urlObj)
+		remoteURL, _, err := parseGitRemoteFactoryURL(urlObj, params)
 		if err != nil {
 			return err
 		}
@@ -77,7 +78,7 @@ func (fact GitRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFo
 }
 
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj)
+	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -112,7 +113,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	return db, vrw, ns, nil
 }
 
-func parseGitRemoteFactoryURL(urlObj *url.URL) (remoteURL *url.URL, ref string, err error) {
+func parseGitRemoteFactoryURL(urlObj *url.URL, params map[string]interface{}) (remoteURL *url.URL, ref string, err error) {
 	if urlObj == nil {
 		return nil, "", fmt.Errorf("nil url")
 	}
@@ -124,17 +125,33 @@ func parseGitRemoteFactoryURL(urlObj *url.URL) (remoteURL *url.URL, ref string, 
 	if underlyingScheme == "" {
 		return nil, "", fmt.Errorf("invalid git+ scheme %q", urlObj.Scheme)
 	}
-
-	ref = urlObj.Query().Get("ref")
-	if ref == "" {
-		ref = defaultGitRef
+	// Ref selection is configured via dolt remote parameters (e.g. `--ref`), not via URL query.
+	if qref := strings.TrimSpace(urlObj.Query().Get("ref")); qref != "" {
+		return nil, "", fmt.Errorf("git remote ref must be provided via git remote param %q (not URL query ref=)", GitRefParam)
 	}
+
+	ref = resolveGitRemoteRef(urlObj, params)
 
 	cp := *urlObj
 	cp.Scheme = underlyingScheme
 	cp.RawQuery = ""
 	cp.Fragment = ""
 	return &cp, ref, nil
+}
+
+func resolveGitRemoteRef(urlObj *url.URL, params map[string]interface{}) string {
+	// Prefer an explicit remote parameter (e.g. from `--ref`) over any URL query.
+	if params != nil {
+		if v, ok := params[GitRefParam]; ok && v != nil {
+			s, ok := v.(string)
+			if ok {
+				if s = strings.TrimSpace(s); s != "" {
+					return s
+				}
+			}
+		}
+	}
+	return defaultGitRef
 }
 
 func resolveGitCacheBase(params map[string]interface{}) (string, error) {

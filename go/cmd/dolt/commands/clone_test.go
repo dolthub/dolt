@@ -65,3 +65,14 @@ func TestParseDolthubRepos(t *testing.T) {
 	}
 
 }
+
+func TestCloneParseArgs_InferDirStripsQuery(t *testing.T) {
+	ap := CloneCmd{}.ArgParser()
+	apr, err := ap.Parse([]string{"https://example.com/org/repo.git?foo=bar"})
+	require.NoError(t, err)
+
+	dir, urlStr, verr := parseArgs(apr)
+	require.Nil(t, verr)
+	require.Equal(t, "repo.git", dir)
+	require.Equal(t, "https://example.com/org/repo.git?foo=bar", urlStr)
+}

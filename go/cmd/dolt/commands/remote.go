@@ -72,6 +72,7 @@ const (
 	removeRemoteId      = "remove"
 	removeRemoteShortId = "rm"
 	gitCacheDirFlag     = "git-cache-dir"
+	gitRefFlag          = "ref"
 )
 
 type RemoteCmd struct{}
@@ -221,11 +222,27 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 			}
 			params[dbfactory.GitCacheDirParam] = v
 		}
+		if v, ok := apr.GetValue(gitRefFlag); ok {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				return nil, errhand.BuildDError("error: --%s cannot be empty", gitRefFlag).Build()
+			}
+			params[dbfactory.GitRefParam] = v
+		}
 	default:
 		err = cli.VerifyNoAwsParams(apr)
 	}
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	// Flags that are only meaningful for git remotes should not be accepted for other schemes.
+	switch scheme {
+	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
+	default:
+		if _, ok := apr.GetValue(gitRefFlag); ok {
+			return nil, errhand.BuildDError("error: --%s is only supported for git remotes", gitRefFlag).Build()
+		}
 	}
 
 	return params, nil

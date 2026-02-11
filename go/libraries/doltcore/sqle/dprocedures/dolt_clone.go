@@ -46,7 +46,7 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	_, remoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), emptyConfig(), urlStr)
+	scheme, remoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), emptyConfig(), urlStr)
 	if err != nil {
 		return nil, errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
 	}
@@ -61,6 +61,14 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		dir = strings.TrimSpace(dir)
 		if dir != "" {
 			remoteParms[dbfactory.GitCacheDirParam] = dir
+		}
+	}
+	if ref, ok := apr.GetValue("ref"); ok {
+		ref = strings.TrimSpace(ref)
+		if ref != "" && (scheme == dbfactory.GitFileScheme || scheme == dbfactory.GitHTTPScheme || scheme == dbfactory.GitHTTPSScheme || scheme == dbfactory.GitSSHScheme) {
+			remoteParms[dbfactory.GitRefParam] = ref
+		} else if ref != "" {
+			return nil, errhand.BuildDError("error: --ref is only supported for git remotes").Build()
 		}
 	}
 

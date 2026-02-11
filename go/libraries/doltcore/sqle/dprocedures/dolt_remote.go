@@ -112,6 +112,12 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData[*sql.Context], apr 
 				params[dbfactory.GitCacheDirParam] = dir
 			}
 		}
+		if ref, ok := apr.GetValue("ref"); ok {
+			ref = strings.TrimSpace(ref)
+			if ref != "" {
+				params[dbfactory.GitRefParam] = ref
+			}
+		}
 	}
 
 	r := env.NewRemote(remoteName, absRemoteUrl, params)

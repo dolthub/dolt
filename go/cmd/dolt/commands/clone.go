@@ -199,9 +199,15 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	if apr.NArg() == 2 {
 		dir = apr.Arg(1)
 	} else {
-		dir = path.Base(urlStr)
+		// Infer directory name from the URL path only (not including query/fragment).
+		// This avoids creating directories like "repo.git?foo=bar".
+		pathStr := urlStr
+		if u, err := earl.Parse(urlStr); err == nil && u != nil && u.Path != "" {
+			pathStr = strings.TrimPrefix(u.Path, "/")
+		}
+		dir = path.Base(pathStr)
 		if dir == "." {
-			dir = path.Dir(urlStr)
+			dir = path.Dir(pathStr)
 		} else if dir == "/" {
 			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitly define a directory for this url").Build()
 		}
