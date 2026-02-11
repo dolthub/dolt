@@ -212,6 +212,8 @@ func (rm *RootMerger) MergeTable(
 		return nil, nil, err
 	}
 
+	types.AssertFormat_DOLT(tm.vrw.Format())
+
 	// short-circuit here if we can
 	finished, finishedRootObj, stats, err := rm.MaybeShortCircuit(ctx, tm, mergeOpts)
 	if finished != nil || finishedRootObj != nil || stats != nil || err != nil {
@@ -242,11 +244,7 @@ func (rm *RootMerger) MergeTable(
 	var tbl *doltdb.Table
 	var rootObj doltdb.RootObject
 	if !tm.InvolvesRootObjects() {
-		if types.IsFormat_DOLT(tm.vrw.Format()) {
-			tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, mergeInfo, diffInfo)
-		} else {
-			panic("data format not supported in this version of Dolt")
-		}
+		tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, mergeInfo, diffInfo)
 		if err != nil {
 			return nil, nil, err
 		}

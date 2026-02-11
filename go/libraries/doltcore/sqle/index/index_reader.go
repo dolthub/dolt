@@ -86,21 +86,18 @@ type IndexLookupKeyIterator interface {
 	NextKey(ctx *sql.Context) (row.TaggedValues, error)
 }
 
-func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, isDoltFmt bool) (sql.PartitionIter, error) {
+func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	mysqlRanges := lookup.Ranges.(sql.MySQLRangeCollection)
 	idx := lookup.Index.(*doltIndex)
-	if lookup.IsPointLookup && isDoltFmt {
+	if lookup.IsPointLookup {
 		return newPointPartitionIter(ctx, lookup, idx)
 	}
 
 	var prollyRanges []prolly.Range
 	var nomsRanges []*noms.ReadRange
 	var err error
-	if isDoltFmt {
-		prollyRanges, err = idx.prollyRanges(ctx, idx.ns, mysqlRanges...)
-	} else {
-		nomsRanges, err = idx.nomsRanges(ctx, mysqlRanges...)
-	}
+	prollyRanges, err = idx.prollyRanges(ctx, idx.ns, mysqlRanges...)
+
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +105,6 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 		nomsRanges:   nomsRanges,
 		prollyRanges: prollyRanges,
 		curr:         0,
-		isDoltFmt:    isDoltFmt,
 		isReverse:    lookup.IsReverse,
 	}, nil
 }
@@ -291,7 +287,6 @@ func NewIndexReaderBuilder(
 	key doltdb.DataCacheKey,
 	projections []uint64,
 	pkSch sql.PrimaryKeySchema,
-	isDoltFormat bool,
 ) (IndexScanBuilder, error) {
 	if projections == nil {
 		projections = idx.Schema().GetAllCols().Tags
@@ -309,24 +304,20 @@ func NewIndexReaderBuilder(
 		projections: projections,
 	}
 
-	if isDoltFormat {
-		secondaryIndex := durable.MapFromIndex(s.Secondary)
-		base.ns = secondaryIndex.NodeStore()
-		base.secKd, base.secVd = secondaryIndex.Descriptors()
-		base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
-		switch si := secondaryIndex.(type) {
-		case prolly.Map:
-			base.sec = si
-		case prolly.ProximityMap:
-			base.proximitySecondary = si
-		default:
-			return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
-		}
+	secondaryIndex := durable.MapFromIndex(s.Secondary)
+	base.ns = secondaryIndex.NodeStore()
+	base.secKd, base.secVd = secondaryIndex.Descriptors()
+	base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
+	switch si := secondaryIndex.(type) {
+	case prolly.Map:
+		base.sec = si
+	case prolly.ProximityMap:
+		base.proximitySecondary = si
+	default:
+		return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
 	}
 
 	switch {
-	case !isDoltFormat:
-		panic("Unsupported format " + idx.Format().VersionString())
 	case sql.IsKeyless(pkSch.Schema):
 		return &keylessIndexImplBuilder{
 			baseIndexImplBuilder: base,

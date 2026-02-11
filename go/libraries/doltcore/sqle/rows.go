@@ -69,10 +69,10 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, p
 }
 
 func ProllyRowIterFromPartition(
-		ctx context.Context,
-		sch schema.Schema,
-		projections []uint64,
-		partition doltTablePartition,
+	ctx context.Context,
+	sch schema.Schema,
+	projections []uint64,
+	partition doltTablePartition,
 ) (sql.RowIter, error) {
 	rows, err := durable.ProllyMapFromIndex(partition.rowData)
 	if err != nil {

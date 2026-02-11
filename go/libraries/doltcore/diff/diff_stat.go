@@ -62,11 +62,8 @@ func Stat(ctx context.Context, ch chan DiffStatProgress, from, to durable.Index,
 		return fmt.Errorf("cannot perform a diff between keyless and keyed schema")
 	}
 
-	if types.IsFormat_DOLT(from.Format()) {
-		return diffProllyTrees(ctx, ch, keyless, from, to, fromSch, toSch)
-	}
-
-	panic("Unsupported format: " + from.Format().VersionString())
+	types.AssertFormat_DOLT(from.Format())
+	return diffProllyTrees(ctx, ch, keyless, from, to, fromSch, toSch)
 }
 
 // StatForTableDelta pushes diff stat progress messages for the table delta given to the channel given

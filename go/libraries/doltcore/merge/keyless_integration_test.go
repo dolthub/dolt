@@ -325,12 +325,8 @@ func TestKeylessMergeConflicts(t *testing.T) {
 }
 
 func assertConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
-	if types.IsFormat_DOLT(tbl.Format()) {
-		assertProllyConflicts(t, ctx, tbl, expected)
-		return
-	}
-
-	panic("unsupported format: " + tbl.Format().VersionString())
+	types.AssertFormat_DOLT(tbl.Format())
+	assertProllyConflicts(t, ctx, tbl, expected)
 }
 
 func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
@@ -409,12 +405,8 @@ func mustGetRowValueFromRootIsh(t *testing.T, ctx context.Context, vrw types.Val
 
 // |expected| is a tupleSet to compensate for random storage order
 func assertKeylessRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected keylessEntries) {
-	if types.IsFormat_DOLT(tbl.Format()) {
-		assertKeylessProllyRows(t, ctx, tbl, expected)
-		return
-	}
-
-	panic("unsupported format: " + tbl.Format().VersionString())
+	types.AssertFormat_DOLT(tbl.Format())
+	assertKeylessProllyRows(t, ctx, tbl, expected)
 }
 
 func assertKeylessProllyRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected []keylessEntry) {

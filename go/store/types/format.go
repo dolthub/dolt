@@ -66,10 +66,6 @@ func AssertFormat_DOLT(nbf *NomsBinFormat) {
 	}
 }
 
-func IsFormat_LD(nbf *NomsBinFormat) bool {
-	return nbf.tag == formatTag_LD_1
-}
-
 func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
 	if s == constants.FormatLD1String {
 		return Format_LD_1, nil
