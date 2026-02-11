@@ -202,11 +202,11 @@ func TestCreateTable(t *testing.T) {
 		{
 			name: "Test quoted columns",
 			query: "create table testTable (" +
-					"`id` int, " +
-					"`age` int, " +
-					"`timestamp` varchar(80), " +
-					"`is married` bool, " +
-					"primary key (`id`, `age`))",
+				"`id` int, " +
+				"`age` int, " +
+				"`timestamp` varchar(80), " +
+				"`is married` bool, " +
+				"primary key (`id`, `age`))",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumn(t, "id", 4817, gmstypes.Int32, true, schema.NotNullConstraint{}),
@@ -575,11 +575,11 @@ func TestParseCreateTableStatement(t *testing.T) {
 		{
 			name: "Test quoted columns",
 			query: "create table testTable (" +
-					"`id` int, " +
-					"`age` int, " +
-					"`timestamp` varchar(80), " +
-					"`is married` bool, " +
-					"primary key (`id`, `age`))",
+				"`id` int, " +
+				"`age` int, " +
+				"`timestamp` varchar(80), " +
+				"`is married` bool, " +
+				"primary key (`id`, `age`))",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumn(t, "id", 4817, gmstypes.Int32, true, schema.NotNullConstraint{}),
