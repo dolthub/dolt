@@ -205,10 +205,6 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, engine *gms.Engine, testGrou
 				return fmt.Errorf("error reading test results: %w", rErr)
 			}
 
-			if len(row) < 4 {
-				continue
-			}
-
 			// Extract status (column 3)
 			status := fmt.Sprintf("%v", row[3])
 			if status != "PASS" {
