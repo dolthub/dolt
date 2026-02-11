@@ -17,9 +17,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-
             // For PR benchmarks, use the PR base commit (the exact target commit this PR was opened/updated against),
             // not the moving HEAD of `main`.
             const fromSha = context.payload.pull_request.base.sha;
