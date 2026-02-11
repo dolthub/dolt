@@ -60,36 +60,13 @@ func (i rowIterImpl) Close(ctx context.Context) error {
 // NewTableIterator creates a RowIter that iterates sql.Row's from |idx|.
 // |offset| can be supplied to read at some start point in |idx|.
 func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index) (RowIter, error) {
-	var rowItr sql.RowIter
 	if types.IsFormat_DOLT(idx.Format()) {
 		m := durable.MapFromIndex(idx)
 		itr, err := m.IterAll(ctx)
 		if err != nil {
 			return nil, err
 		}
-		rowItr = index.NewProllyRowIterForMap(sch, m, itr, nil)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-
-		noms := durable.NomsMapFromIndex(idx)
-		itr, err := noms.IteratorAt(ctx, 0)
-		if err != nil {
-			return nil, err
-		}
-		conv := makeNomsConverter(idx.Format(), sch)
-		rowItr = index.NewDoltMapIter(itr.NextTuple, nil, conv)
+		return NewRowIter(index.NewProllyRowIterForMap(sch, m, itr, nil)), nil
 	}
-	return NewRowIter(rowItr), nil
-}
-
-// makeNomsConverter creates a *index.KVToSqlRowConverter.
-func makeNomsConverter(nbf *types.NomsBinFormat, sch schema.Schema) *index.KVToSqlRowConverter {
-	cols := sch.GetAllCols().GetColumns()
-	tagToSqlColIdx := make(map[uint64]int)
-	for i, col := range cols {
-		tagToSqlColIdx[col.Tag] = i
-	}
-	return index.NewKVToSqlRowConverter(nbf, tagToSqlColIdx, cols, len(cols))
+	panic("Unsupported format: " + idx.Format().VersionString())
 }
