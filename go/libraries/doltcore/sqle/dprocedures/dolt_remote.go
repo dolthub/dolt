@@ -108,9 +108,12 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData[*sql.Context], apr 
 	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
 		if dir, ok := apr.GetValue("git-cache-dir"); ok {
 			dir = strings.TrimSpace(dir)
-			if dir != "" {
-				params[dbfactory.GitCacheDirParam] = dir
+			if dir == "" {
+				return fmt.Errorf("error: --git-cache-dir cannot be empty")
 			}
+			params[dbfactory.GitCacheDirParam] = dir
+		} else {
+			return fmt.Errorf("error: --git-cache-dir is required for git remotes")
 		}
 		if ref, ok := apr.GetValue("ref"); ok {
 			ref = strings.TrimSpace(ref)

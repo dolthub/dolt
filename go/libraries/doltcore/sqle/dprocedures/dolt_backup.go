@@ -319,9 +319,12 @@ func newParams(apr *argparser.ArgParseResults, url string, urlScheme string) (ma
 		err = cli.VerifyNoAwsParams(apr)
 		if dir, ok := apr.GetValue("git-cache-dir"); ok {
 			dir = strings.TrimSpace(dir)
-			if dir != "" {
-				params[dbfactory.GitCacheDirParam] = dir
+			if dir == "" {
+				return nil, fmt.Errorf("error: --git-cache-dir cannot be empty")
 			}
+			params[dbfactory.GitCacheDirParam] = dir
+		} else {
+			return nil, fmt.Errorf("error: --git-cache-dir is required for git remotes")
 		}
 		if ref, ok := apr.GetValue("ref"); ok {
 			ref = strings.TrimSpace(ref)

@@ -221,6 +221,8 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 				return nil, errhand.BuildDError("error: --%s cannot be empty", gitCacheDirFlag).Build()
 			}
 			params[dbfactory.GitCacheDirParam] = v
+		} else {
+			return nil, errhand.BuildDError("error: --%s is required for git remotes", gitCacheDirFlag).Build()
 		}
 		if v, ok := apr.GetValue(gitRefFlag); ok {
 			v = strings.TrimSpace(v)

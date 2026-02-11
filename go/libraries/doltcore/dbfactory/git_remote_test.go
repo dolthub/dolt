@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 	"github.com/dolthub/dolt/go/store/types"
@@ -102,4 +103,77 @@ func TestGitRemoteFactory_RejectsRefQueryParam(t *testing.T) {
 
 	_, _, _, err = CreateDB(ctx, types.Format_Default, urlStr, nil)
 	require.Error(t, err)
+}
+
+func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+
+	remotePath := filepath.ToSlash(remoteRepo.GitDir)
+	urlStr := "git+file://" + remotePath
+
+	noopGetAddrs := func(chunks.Chunk) chunks.GetAddrsCb {
+		return func(context.Context, hash.HashSet, chunks.PendingRefExists) error { return nil }
+	}
+
+	open := func(cacheDir string) (db datas.Database, cs chunks.ChunkStore) {
+		params := map[string]interface{}{
+			GitCacheDirParam: cacheDir,
+		}
+		d, vrw, _, err := CreateDB(ctx, types.Format_Default, urlStr, params)
+		require.NoError(t, err)
+		require.NotNil(t, d)
+		require.NotNil(t, vrw)
+
+		vs, ok := vrw.(*types.ValueStore)
+		require.True(t, ok, "expected ValueReadWriter to be *types.ValueStore, got %T", vrw)
+		return d, vs.ChunkStore()
+	}
+
+	cacheA := t.TempDir()
+	cacheB := t.TempDir()
+
+	// Client A writes a root pointing at chunk A.
+	dbA, csA := open(cacheA)
+	cA := chunks.NewChunk([]byte("clientA\n"))
+	require.NoError(t, csA.Put(ctx, cA, noopGetAddrs))
+	lastA, err := csA.Root(ctx)
+	require.NoError(t, err)
+	okCommitA, err := csA.Commit(ctx, cA.Hash(), lastA)
+	require.NoError(t, err)
+	require.True(t, okCommitA)
+	require.NoError(t, dbA.Close())
+
+	// Client B reads chunk A, then writes chunk B and updates the root.
+	dbB, csB := open(cacheB)
+	require.NoError(t, csB.Rebase(ctx))
+	rootB, err := csB.Root(ctx)
+	require.NoError(t, err)
+	require.Equal(t, cA.Hash(), rootB)
+	gotA, err := csB.Get(ctx, cA.Hash())
+	require.NoError(t, err)
+	require.Equal(t, "clientA\n", string(gotA.Data()))
+
+	cB := chunks.NewChunk([]byte("clientB\n"))
+	require.NoError(t, csB.Put(ctx, cB, noopGetAddrs))
+	okCommitB, err := csB.Commit(ctx, cB.Hash(), rootB)
+	require.NoError(t, err)
+	require.True(t, okCommitB)
+	require.NoError(t, dbB.Close())
+
+	// Client A re-opens (with the same cache dir as before) and should see B's update.
+	dbA2, csA2 := open(cacheA)
+	require.NoError(t, csA2.Rebase(ctx))
+	rootA2, err := csA2.Root(ctx)
+	require.NoError(t, err)
+	require.Equal(t, cB.Hash(), rootA2)
+	gotB, err := csA2.Get(ctx, cB.Hash())
+	require.NoError(t, err)
+	require.Equal(t, "clientB\n", string(gotB.Data()))
+	require.NoError(t, dbA2.Close())
 }

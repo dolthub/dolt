@@ -36,7 +36,6 @@ import (
 const (
 	GitCacheDirParam = "git_cache_dir"
 	GitRefParam      = "git_ref"
-	GitCacheDirEnv   = "DOLT_GIT_REMOTE_CACHE_DIR"
 	defaultGitRef    = "refs/dolt/data"
 )
 
@@ -167,14 +166,7 @@ func resolveGitCacheBase(params map[string]interface{}) (string, error) {
 			return s, nil
 		}
 	}
-	if v := strings.TrimSpace(os.Getenv(GitCacheDirEnv)); v != "" {
-		return v, nil
-	}
-	base, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "dolt", "git-remote-cache"), nil
+	return "", fmt.Errorf("%s is required for git remotes", GitCacheDirParam)
 }
 
 func cacheRepoPath(cacheBase, remoteURL, ref string) (string, error) {

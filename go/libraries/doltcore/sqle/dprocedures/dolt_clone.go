@@ -57,10 +57,19 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
 		remoteParms[dbfactory.GRPCUsernameAuthParam] = user
 	}
-	if dir, ok := apr.GetValue("git-cache-dir"); ok {
-		dir = strings.TrimSpace(dir)
-		if dir != "" {
+	if scheme == dbfactory.GitFileScheme || scheme == dbfactory.GitHTTPScheme || scheme == dbfactory.GitHTTPSScheme || scheme == dbfactory.GitSSHScheme {
+		if dir, ok := apr.GetValue("git-cache-dir"); ok {
+			dir = strings.TrimSpace(dir)
+			if dir == "" {
+				return nil, errhand.BuildDError("error: --git-cache-dir cannot be empty").Build()
+			}
 			remoteParms[dbfactory.GitCacheDirParam] = dir
+		} else {
+			return nil, errhand.BuildDError("error: --git-cache-dir is required for git remotes").Build()
+		}
+	} else {
+		if _, ok := apr.GetValue("git-cache-dir"); ok {
+			return nil, errhand.BuildDError("error: --git-cache-dir is only supported for git remotes").Build()
 		}
 	}
 	if ref, ok := apr.GetValue("ref"); ok {

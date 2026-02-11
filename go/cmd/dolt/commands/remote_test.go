@@ -149,7 +149,7 @@ func TestParseRemoteArgs_GitCacheDir(t *testing.T) {
 
 func TestParseRemoteArgs_GitRef(t *testing.T) {
 	ap := RemoteCmd{}.ArgParser()
-	apr, err := ap.Parse([]string{"add", "origin", "git+file:///tmp/remote.git", "--" + gitRefFlag, "refs/dolt/custom"})
+	apr, err := ap.Parse([]string{"add", "origin", "git+file:///tmp/remote.git", "--" + gitCacheDirFlag, "/tmp/cache", "--" + gitRefFlag, "refs/dolt/custom"})
 	assert.NoError(t, err)
 
 	params, verr := parseRemoteArgs(apr, dbfactory.GitFileScheme, "git+file:///tmp/remote.git")
