@@ -275,6 +275,42 @@ func TestGitBlobstore_RemoteManaged_PutPushesToRemote(t *testing.T) {
 	require.Equal(t, []byte("from local\n"), got)
 }
 
+func TestGitBlobstore_RemoteManaged_PutBootstrapsEmptyRemote(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+
+	// Do not seed refs/dolt/data in the remote: simulate a truly empty remote.
+	bs, err := NewGitBlobstoreWithIdentity(localRepo.GitDir, DoltDataRef, testIdentity())
+	require.NoError(t, err)
+
+	want := []byte("bootstrapped\n")
+	ver, err := bs.Put(ctx, "k", int64(len(want)), bytes.NewReader(want))
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	// Remote should now have refs/dolt/data and contain the key.
+	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
+	require.NoError(t, err)
+	remoteAPI := git.NewGitAPIImpl(remoteRunner)
+
+	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	require.NotEmpty(t, remoteHead)
+
+	oid, typ, err := remoteAPI.ResolvePathObject(ctx, remoteHead, "k")
+	require.NoError(t, err)
+	require.Equal(t, git.ObjectTypeBlob, typ)
+
+	rc, err := remoteAPI.BlobReader(ctx, oid)
+	require.NoError(t, err)
+	got, rerr := io.ReadAll(rc)
+	_ = rc.Close()
+	require.NoError(t, rerr)
+	require.Equal(t, want, got)
+}
+
 type hookPushGitAPI struct {
 	git.GitAPI
 	onFirstPush func(ctx context.Context)

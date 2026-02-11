@@ -830,6 +830,33 @@ func TestGitAPIImpl_FetchRef_ForcedUpdatesTrackingRef(t *testing.T) {
 	}
 }
 
+func TestGitAPIImpl_FetchRef_MissingRemoteRefReturnsRefNotFound(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	remoteRepo, _, _ := newTestRepo(t, ctx)
+
+	_, localRunner, localAPI := newTestRepo(t, ctx)
+	_, err := localRunner.Run(ctx, RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	remoteDataRef := "refs/dolt/data"
+	dstRef := "refs/dolt/remotes/origin/data"
+	err = localAPI.FetchRef(ctx, "origin", remoteDataRef, dstRef)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	var rnf *RefNotFoundError
+	if !errors.As(err, &rnf) {
+		t.Fatalf("expected RefNotFoundError, got %T: %v", err, err)
+	}
+	if rnf.Ref != remoteDataRef {
+		t.Fatalf("expected missing ref %q, got %q", remoteDataRef, rnf.Ref)
+	}
+}
+
 func TestGitAPIImpl_PushRefWithLease_SucceedsThenRejectsStaleLease(t *testing.T) {
 	t.Parallel()
 
@@ -917,5 +944,50 @@ func TestGitAPIImpl_PushRefWithLease_SucceedsThenRejectsStaleLease(t *testing.T)
 	}
 	if got != r2 {
 		t.Fatalf("remote ref changed unexpectedly on stale lease: got %q, want %q", got, r2)
+	}
+}
+
+func TestGitAPIImpl_PushRefWithLease_CreatesWhenMissing(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	remoteRepo, _, remoteAPI := newTestRepo(t, ctx)
+
+	_, localRunner, localAPI := newTestRepo(t, ctx)
+	_, err := localRunner.Run(ctx, RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a local commit l1 and set local refs/dolt/data to it (src ref for push).
+	indexFile := tempIndexFile(t)
+	if err := localAPI.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+	treeOID, err := localAPI.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l1, err := localAPI.CommitTree(ctx, treeOID, nil, "l1", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srcRef := "refs/dolt/data"
+	if err := localAPI.UpdateRef(ctx, srcRef, l1, "set local src"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Remote ref is missing. Push with an empty expected OID should create it.
+	if err := localAPI.PushRefWithLease(ctx, "origin", srcRef, srcRef, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := remoteAPI.ResolveRefCommit(ctx, srcRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != l1 {
+		t.Fatalf("remote ref mismatch after bootstrap push: got %q, want %q", got, l1)
 	}
 }
