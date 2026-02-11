@@ -89,22 +89,6 @@ func TestGitRemoteFactory_GitFile_UsesConfiguredCacheDirAndCanWrite(t *testing.T
 	require.NoError(t, err, "git rev-parse failed: %s", strings.TrimSpace(string(out)))
 }
 
-func TestGitRemoteFactory_RejectsRefQueryParam(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not found on PATH")
-	}
-
-	ctx := context.Background()
-	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
-	require.NoError(t, err)
-
-	remotePath := filepath.ToSlash(remoteRepo.GitDir)
-	urlStr := "git+file://" + remotePath + "?ref=refs/dolt/data"
-
-	_, _, _, err = CreateDB(ctx, types.Format_Default, urlStr, nil)
-	require.Error(t, err)
-}
-
 func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found on PATH")

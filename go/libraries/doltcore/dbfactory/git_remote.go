@@ -128,10 +128,6 @@ func parseGitRemoteFactoryURL(urlObj *url.URL, params map[string]interface{}) (r
 	if underlyingScheme == "" {
 		return nil, "", fmt.Errorf("invalid git+ scheme %q", urlObj.Scheme)
 	}
-	// Ref selection is configured via dolt remote parameters (e.g. `--ref`), not via URL query.
-	if qref := strings.TrimSpace(urlObj.Query().Get("ref")); qref != "" {
-		return nil, "", fmt.Errorf("git remote ref must be provided via git remote param %q (not URL query ref=)", GitRefParam)
-	}
 
 	ref = resolveGitRemoteRef(params)
 
