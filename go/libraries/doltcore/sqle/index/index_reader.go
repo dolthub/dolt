@@ -94,15 +94,12 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 	}
 
 	var prollyRanges []prolly.Range
-	var nomsRanges []*noms.ReadRange
 	var err error
 	prollyRanges, err = idx.prollyRanges(ctx, idx.ns, mysqlRanges...)
-
 	if err != nil {
 		return nil, err
 	}
 	return &rangePartitionIter{
-		nomsRanges:   nomsRanges,
 		prollyRanges: prollyRanges,
 		curr:         0,
 		isReverse:    lookup.IsReverse,
@@ -144,10 +141,8 @@ func (p *pointPartition) Next(c *sql.Context) (sql.Partition, error) {
 }
 
 type rangePartitionIter struct {
-	nomsRanges   []*noms.ReadRange
 	prollyRanges []prolly.Range
 	curr         int
-	isDoltFmt    bool
 	isReverse    bool
 }
 
@@ -158,10 +153,7 @@ func (itr *rangePartitionIter) Close(*sql.Context) error {
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
 func (itr *rangePartitionIter) Next(_ *sql.Context) (sql.Partition, error) {
-	if itr.isDoltFmt {
-		return itr.nextProllyPartition()
-	}
-	return itr.nextNomsPartition()
+	return itr.nextProllyPartition()
 }
 
 func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
@@ -178,23 +170,6 @@ func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
 		prollyRange: pr,
 		key:         bytes[:],
 		isReverse:   itr.isReverse,
-	}, nil
-}
-
-func (itr *rangePartitionIter) nextNomsPartition() (sql.Partition, error) {
-	if itr.curr >= len(itr.nomsRanges) {
-		return nil, io.EOF
-	}
-
-	var bytes [4]byte
-	binary.BigEndian.PutUint32(bytes[:], uint32(itr.curr))
-	nr := itr.nomsRanges[itr.curr]
-	itr.curr += 1
-
-	return rangePartition{
-		nomsRange: nr,
-		key:       bytes[:],
-		isReverse: itr.isReverse,
 	}, nil
 }
 
@@ -308,6 +283,7 @@ func NewIndexReaderBuilder(
 	base.ns = secondaryIndex.NodeStore()
 	base.secKd, base.secVd = secondaryIndex.Descriptors()
 	base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
+
 	switch si := secondaryIndex.(type) {
 	case prolly.Map:
 		base.sec = si
