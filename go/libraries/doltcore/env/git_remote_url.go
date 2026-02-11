@@ -130,7 +130,11 @@ func stripQueryAndFragment(s string) string {
 }
 
 func looksLikeLocalPath(s string) bool {
-	return strings.HasPrefix(s, "/") || strings.HasPrefix(s, "./") || strings.HasPrefix(s, "../")
+	// Treat absolute filesystem paths as local paths, including Windows drive-letter and UNC paths.
+	if filepath.IsAbs(s) {
+		return true
+	}
+	return strings.HasPrefix(s, "./") || strings.HasPrefix(s, "../")
 }
 
 func isScpLikeGitRemote(s string) bool {
