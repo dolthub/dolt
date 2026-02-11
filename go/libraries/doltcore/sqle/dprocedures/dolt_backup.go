@@ -315,6 +315,14 @@ func newParams(apr *argparser.ArgParseResults, url string, urlScheme string) (ma
 		// TODO(elianddb): This func mainly interfaces with apr to set the OSS key-vals in params, but the backup arg
 		//  parser does not include any OSS-related flags? I'm guessing they must be processed elsewhere?
 		err = cli.AddOSSParams(url, apr, params)
+	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
+		err = cli.VerifyNoAwsParams(apr)
+		if dir, ok := apr.GetValue("git-cache-dir"); ok {
+			dir = strings.TrimSpace(dir)
+			if dir != "" {
+				params[dbfactory.GitCacheDirParam] = dir
+			}
+		}
 	default:
 		err = cli.VerifyNoAwsParams(apr)
 	}

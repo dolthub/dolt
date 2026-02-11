@@ -52,7 +52,7 @@ var supportedUnderlyingGitSchemes = map[string]struct{}{
 func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error) {
 	urlArg = strings.TrimSpace(urlArg)
 	if urlArg == "" {
-		return "", false, fmt.Errorf("empty remote url")
+		return "", false, nil
 	}
 
 	// Fast-path: explicit git+* dbfactory URL.

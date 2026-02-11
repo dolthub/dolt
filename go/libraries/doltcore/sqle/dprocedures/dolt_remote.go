@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -97,12 +98,23 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData[*sql.Context], apr 
 		return err
 	}
 
-	_, absRemoteUrl, err := env.GetAbsRemoteUrl(dbFs, &config.MapConfig{}, remoteUrl)
+	scheme, absRemoteUrl, err := env.GetAbsRemoteUrl(dbFs, &config.MapConfig{}, remoteUrl)
 	if err != nil {
 		return err
 	}
 
-	r := env.NewRemote(remoteName, absRemoteUrl, map[string]string{})
+	params := map[string]string{}
+	switch scheme {
+	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
+		if dir, ok := apr.GetValue("git-cache-dir"); ok {
+			dir = strings.TrimSpace(dir)
+			if dir != "" {
+				params[dbfactory.GitCacheDirParam] = dir
+			}
+		}
+	}
+
+	r := env.NewRemote(remoteName, absRemoteUrl, params)
 	return dbd.Rsw.AddRemote(r)
 }
 

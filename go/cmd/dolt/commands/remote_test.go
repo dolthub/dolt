@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -134,4 +135,14 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 			assert.Equal(t, test.expectedScheme, actualScheme)
 		})
 	}
+}
+
+func TestParseRemoteArgs_GitCacheDir(t *testing.T) {
+	ap := RemoteCmd{}.ArgParser()
+	apr, err := ap.Parse([]string{"add", "origin", "git+file:///tmp/remote.git", "--" + gitCacheDirFlag, "/tmp/cache"})
+	assert.NoError(t, err)
+
+	params, verr := parseRemoteArgs(apr, dbfactory.GitFileScheme, "git+file:///tmp/remote.git")
+	assert.Nil(t, verr)
+	assert.Equal(t, "/tmp/cache", params[dbfactory.GitCacheDirParam])
 }

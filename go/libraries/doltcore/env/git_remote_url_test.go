@@ -22,6 +22,13 @@ import (
 )
 
 func TestNormalizeGitRemoteUrl(t *testing.T) {
+	t.Run("empty not recognized", func(t *testing.T) {
+		got, ok, err := NormalizeGitRemoteUrl("")
+		require.NoError(t, err)
+		require.False(t, ok)
+		require.Empty(t, got)
+	})
+
 	t.Run("explicit git+https keeps scheme and adds default ref", func(t *testing.T) {
 		got, ok, err := NormalizeGitRemoteUrl("git+https://example.com/org/repo.git")
 		require.NoError(t, err)

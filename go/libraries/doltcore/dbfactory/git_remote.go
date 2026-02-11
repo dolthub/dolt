@@ -34,8 +34,8 @@ import (
 )
 
 const (
-	gitCacheDirParam = "git_cache_dir"
-	gitCacheDirEnv   = "DOLT_GIT_REMOTE_CACHE_DIR"
+	GitCacheDirParam = "git_cache_dir"
+	GitCacheDirEnv   = "DOLT_GIT_REMOTE_CACHE_DIR"
 	defaultGitRef    = "refs/dolt/data"
 )
 
@@ -139,18 +139,18 @@ func parseGitRemoteFactoryURL(urlObj *url.URL) (remoteURL *url.URL, ref string, 
 
 func resolveGitCacheBase(params map[string]interface{}) (string, error) {
 	if params != nil {
-		if v, ok := params[gitCacheDirParam]; ok && v != nil {
+		if v, ok := params[GitCacheDirParam]; ok && v != nil {
 			s, ok := v.(string)
 			if !ok {
-				return "", fmt.Errorf("%s must be a string", gitCacheDirParam)
+				return "", fmt.Errorf("%s must be a string", GitCacheDirParam)
 			}
 			if strings.TrimSpace(s) == "" {
-				return "", fmt.Errorf("%s cannot be empty", gitCacheDirParam)
+				return "", fmt.Errorf("%s cannot be empty", GitCacheDirParam)
 			}
 			return s, nil
 		}
 	}
-	if v := strings.TrimSpace(os.Getenv(gitCacheDirEnv)); v != "" {
+	if v := strings.TrimSpace(os.Getenv(GitCacheDirEnv)); v != "" {
 		return v, nil
 	}
 	base, err := os.UserCacheDir()

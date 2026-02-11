@@ -71,6 +71,7 @@ const (
 	addRemoteId         = "add"
 	removeRemoteId      = "remove"
 	removeRemoteShortId = "rm"
+	gitCacheDirFlag     = "git-cache-dir"
 )
 
 type RemoteCmd struct{}
@@ -212,6 +213,14 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 		err = cli.AddAWSParams(remoteUrl, apr, params)
 	case dbfactory.OSSScheme:
 		err = cli.AddOSSParams(remoteUrl, apr, params)
+	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
+		if v, ok := apr.GetValue(gitCacheDirFlag); ok {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				return nil, errhand.BuildDError("error: --%s cannot be empty", gitCacheDirFlag).Build()
+			}
+			params[dbfactory.GitCacheDirParam] = v
+		}
 	default:
 		err = cli.VerifyNoAwsParams(apr)
 	}

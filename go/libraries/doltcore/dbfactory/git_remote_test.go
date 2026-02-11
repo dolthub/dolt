@@ -48,7 +48,7 @@ func TestGitRemoteFactory_GitFile_UsesConfiguredCacheDirAndCanWrite(t *testing.T
 	urlStr := "git+file://" + remotePath + "?ref=refs/dolt/data"
 
 	params := map[string]interface{}{
-		gitCacheDirParam: cacheDir,
+		GitCacheDirParam: cacheDir,
 	}
 
 	db, vrw, _, err := CreateDB(ctx, types.Format_Default, urlStr, params)

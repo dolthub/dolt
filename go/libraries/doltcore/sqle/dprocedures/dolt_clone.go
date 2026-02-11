@@ -16,6 +16,7 @@ package dprocedures
 
 import (
 	"path"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -55,6 +56,12 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	remoteParms := map[string]string{}
 	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
 		remoteParms[dbfactory.GRPCUsernameAuthParam] = user
+	}
+	if dir, ok := apr.GetValue("git-cache-dir"); ok {
+		dir = strings.TrimSpace(dir)
+		if dir != "" {
+			remoteParms[dbfactory.GitCacheDirParam] = dir
+		}
 	}
 
 	depth, ok := apr.GetInt(cli.DepthFlag)
