@@ -1090,40 +1090,12 @@ func (t *WritableDoltTable) truncate(
 }
 
 func copyConstraintViolationsAndConflicts(ctx context.Context, from, to *doltdb.Table) (*doltdb.Table, error) {
-	if !types.IsFormat_DOLT(to.Format()) {
-		if has, err := from.HasConflicts(ctx); err != nil {
-			return nil, err
-		} else if has {
-			confSch, conf, err := from.GetConflicts(ctx)
-			if err != nil {
-				return nil, err
-			}
-			to, err = to.SetConflicts(ctx, confSch, conf)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		viols, err := from.GetConstraintViolations(ctx)
-		if err != nil {
-			return nil, err
-		}
-		to, err = to.SetConstraintViolations(ctx, viols)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		arts, err := from.GetArtifacts(ctx)
-		if err != nil {
-			return nil, err
-		}
-		to, err = to.SetArtifacts(ctx, arts)
-		if err != nil {
-			return nil, err
-		}
+	types.AssertFormat_DOLT(to.Format())
+	arts, err := from.GetArtifacts(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	return to, nil
+	return to.SetArtifacts(ctx, arts)
 }
 
 // Updater implements sql.UpdatableTable
@@ -1264,7 +1236,7 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 
 	for i, fk := range declaredFks {
 		if len(fk.UnresolvedFKDetails.TableColumns) > 0 && len(fk.UnresolvedFKDetails.ReferencedTableColumns) > 0 {
-			//TODO: implement multi-db support for foreign keys
+			// TODO: implement multi-db support for foreign keys
 			toReturn[i] = sql.ForeignKeyConstraint{
 				Name:           fk.Name,
 				Database:       t.db.Name(),
@@ -1494,14 +1466,6 @@ func partitionsFromTableRows(rows durable.Index) ([]doltTablePartition, error) {
 // Key returns the key for this partition, which must uniquely identity the partition.
 func (p doltTablePartition) Key() []byte {
 	return []byte(strconv.FormatUint(p.start, 10) + " >= i < " + strconv.FormatUint(p.end, 10))
-}
-
-// IteratorForPartition returns a types.MapIterator implementation which will iterate through the values
-// for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
-// unless paired with a mutex
-func (p doltTablePartition) IteratorForPartition(ctx context.Context, idx durable.Index) (types.MapTupleIterator, error) {
-	m := durable.NomsMapFromIndex(idx)
-	return m.RangeIterator(ctx, p.start, p.end)
 }
 
 // AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
@@ -2189,66 +2153,6 @@ func (t *AlterableDoltTable) DropColumn(*sql.Context, string) error {
 	return fmt.Errorf("not implemented: AlterableDoltTable.DropColumn()")
 }
 
-// dropColumnData drops values for the specified column from the underlying storage layer
-func (t *AlterableDoltTable) dropColumnData(ctx *sql.Context, updatedTable *doltdb.Table, sch schema.Schema, columnName string) (*doltdb.Table, error) {
-	nomsRowData, err := updatedTable.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	column, ok := sch.GetAllCols().GetByName(columnName)
-	if !ok {
-		return nil, sql.ErrColumnNotFound.New(columnName)
-	}
-
-	mapEditor := nomsRowData.Edit()
-	defer mapEditor.Close(ctx)
-
-	err = nomsRowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		if t, ok := value.(types.Tuple); ok {
-			newTuple, err := types.NewTuple(nomsRowData.Format())
-			if err != nil {
-				return true, err
-			}
-
-			idx := uint64(0)
-			for idx < t.Len() {
-				tTag, err := t.Get(idx)
-				if err != nil {
-					return true, err
-				}
-
-				tValue, err := t.Get(idx + 1)
-				if err != nil {
-					return true, err
-				}
-
-				if tTag.Equals(types.Uint(column.Tag)) == false {
-					newTuple, err = newTuple.Append(tTag, tValue)
-					if err != nil {
-						return true, err
-					}
-				}
-
-				idx += 2
-			}
-			mapEditor.Set(key, newTuple)
-		}
-
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	newMapData, err := mapEditor.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return updatedTable.UpdateNomsRows(ctx, newMapData)
-}
-
 // ModifyColumn implements sql.AlterableTable. ModifyColumn operations are only used for operations that change only
 // the schema of a table, not the data. For those operations, |RewriteInserter| is used.
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
@@ -2512,9 +2416,8 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 
 // CreateFulltextIndex implements fulltext.IndexAlterableTable
 func (t *AlterableDoltTable) CreateFulltextIndex(ctx *sql.Context, idx sql.IndexDef, keyCols fulltext.KeyColumns, tableNames fulltext.IndexTableNames) error {
-	if !types.IsFormat_DOLT(t.Format()) {
-		return fmt.Errorf("FULLTEXT is not supported on storage format %s. Run `dolt migrate` to upgrade to the latest storage format.", t.Format().VersionString())
-	}
+	types.AssertFormat_DOLT(t.Format())
+
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}

@@ -551,20 +551,7 @@ func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, e
 		}
 
 	} else {
-		// types.Format_LD_1
-		rowData := durable.NomsMapFromIndex(idx)
-		_ = rowData.IterAll(ctx, func(key, value types.Value) error {
-			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
-			if err != nil {
-				return err
-			}
-			sqlRows = append(sqlRows, sqlRow)
-			return nil
-		})
+		panic("Unsupported format: " + idx.Format().VersionString())
 	}
 	return sqlRows, nil
 }

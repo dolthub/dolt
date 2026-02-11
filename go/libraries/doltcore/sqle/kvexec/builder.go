@@ -397,7 +397,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 			return prolly.Map{}, nil, nil, nil, nil, nil, err
 		}
 		if rowData.Format() != types.Format_DOLT {
-			return prolly.Map{}, nil, nil, nil, nil, nil, nil
+			panic("Unsupported index format in lookup join: " + rowData.Format().VersionString())
 		}
 		priMap, err = durable.ProllyMapFromIndex(rowData)
 		if err != nil {
@@ -568,7 +568,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		}
 
 		if idx.Format() != types.Format_DOLT {
-			return ms, nil
+			panic("Unsupported index format in merge join: " + idx.Format().VersionString())
 		}
 
 		secIdx, err := index.GetDurableIndex(ctx, doltTable, idx)

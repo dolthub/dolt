@@ -187,10 +187,10 @@ func SchemaMerge(
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
-	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) {
+	if !schema.ArePrimaryKeySetsDiffable(ourSch, theirSch) {
 		return nil, SchemaConflict{}, mergeInfo, diffInfo, ErrMergeWithDifferentPks.New(tblName)
 	}
-	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, ancSch) {
+	if !schema.ArePrimaryKeySetsDiffable(ourSch, ancSch) {
 		return nil, SchemaConflict{}, mergeInfo, diffInfo, ErrMergeWithDifferentPksFromAncestor.New(tblName)
 	}
 

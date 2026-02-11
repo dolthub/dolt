@@ -19,37 +19,19 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
 	// The number of rows we expect the test to end up with
 	indexEditorConcurrencyFinalCount = 100
-
-	idTag        = 0
-	firstTag     = 1
-	lastTag      = 2
-	isMarriedTag = 3
-	ageTag       = 4
-	emptyTag     = 5
-
-	testSchemaIndexName = "idx_name"
-	testSchemaIndexAge  = "idx_age"
 )
-
-var id0, _ = uuid.NewRandom()
-var id1, _ = uuid.NewRandom()
-var id2, _ = uuid.NewRandom()
-var id3, _ = uuid.NewRandom()
 
 func TestIndexEditorConcurrency(t *testing.T) {
 	format := types.Format_LD_1
@@ -450,101 +432,4 @@ func TestIndexEditorCapacityExceeded(t *testing.T) {
 	require.Contains(t, err.Error(), "unrecoverable state")
 	_, err = indexEditor.Map(ctx)
 	require.Contains(t, err.Error(), "unrecoverable state")
-}
-
-func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
-	return createTestRowDataFromTaggedValues(t, vrw, sch,
-		row.TaggedValues{
-			idTag: types.InlineBlob(id0[:]), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
-		row.TaggedValues{
-			idTag: types.InlineBlob(id1[:]), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Int(1), ageTag: types.Uint(21)},
-		row.TaggedValues{
-			idTag: types.InlineBlob(id2[:]), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Int(0), ageTag: types.Uint(53)},
-		row.TaggedValues{
-			idTag: types.InlineBlob(id3[:]), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
-	)
-}
-
-func createUpdatedTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
-	return createTestRowDataFromTaggedValues(t, vrw, sch,
-		row.TaggedValues{
-			idTag: types.InlineBlob(id0[:]), firstTag: types.String("jack"), lastTag: types.String("space"), ageTag: types.Uint(20)},
-		row.TaggedValues{
-			idTag: types.InlineBlob(id1[:]), firstTag: types.String("rick"), lastTag: types.String("drive"), isMarriedTag: types.Int(0), ageTag: types.Uint(21)},
-		row.TaggedValues{
-			idTag: types.InlineBlob(id2[:]), firstTag: types.String("tyler"), lastTag: types.String("eat"), isMarriedTag: types.Int(1), ageTag: types.Uint(22)},
-		row.TaggedValues{
-			idTag: types.InlineBlob(id3[:]), firstTag: types.String("moore"), lastTag: types.String("walk"), ageTag: types.Uint(23)},
-	)
-}
-
-func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema, vals ...row.TaggedValues) (types.Map, []row.Row) {
-	var err error
-	rows := make([]row.Row, len(vals))
-
-	m, err := types.NewMap(context.Background(), vrw)
-	assert.NoError(t, err)
-	ed := m.Edit()
-
-	for i, val := range vals {
-		r, err := row.New(types.Format_LD_1, sch, val)
-		require.NoError(t, err)
-		rows[i] = r
-		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
-	}
-
-	m, err = ed.Map(context.Background())
-	assert.NoError(t, err)
-
-	return m, rows
-}
-
-func createTestSchema(t *testing.T) schema.Schema {
-	colColl := schema.NewColCollection(
-		schema.NewColumn("id", idTag, types.InlineBlobKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", isMarriedTag, types.IntKind, false),
-		schema.NewColumn("age", ageTag, types.UintKind, false),
-		schema.NewColumn("empty", emptyTag, types.IntKind, false),
-	)
-	sch, err := schema.SchemaFromCols(colColl)
-	require.NoError(t, err)
-	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
-	require.NoError(t, err)
-	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
-	require.NoError(t, err)
-	return sch
-}
-
-func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rowData types.Map) (*doltdb.Table, error) {
-	return doltdb.NewNomsTable(ctx, vrw, ns, sch, rowData, nil, nil)
-}
-
-func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, indexAge schema.Index) (indexNameExpectedRows []row.Row, indexAgeExpectedRows []row.Row) {
-	indexNameExpectedRows = make([]row.Row, len(rows))
-	indexAgeExpectedRows = make([]row.Row, len(rows))
-	indexNameSch := indexName.Schema()
-	indexAgeSch := indexAge.Schema()
-	var err error
-	for i, r := range rows {
-		indexNameKey := make(row.TaggedValues)
-		for _, tag := range indexName.AllTags() {
-			val, ok := r.GetColVal(tag)
-			require.True(t, ok)
-			indexNameKey[tag] = val
-		}
-		indexNameExpectedRows[i], err = row.New(types.Format_LD_1, indexNameSch, indexNameKey)
-		require.NoError(t, err)
-
-		indexAgeKey := make(row.TaggedValues)
-		for _, tag := range indexAge.AllTags() {
-			val, ok := r.GetColVal(tag)
-			require.True(t, ok)
-			indexAgeKey[tag] = val
-		}
-		indexAgeExpectedRows[i], err = row.New(types.Format_LD_1, indexAgeSch, indexAgeKey)
-		require.NoError(t, err)
-	}
-	return
 }

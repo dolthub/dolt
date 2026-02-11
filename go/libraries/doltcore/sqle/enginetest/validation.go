@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -46,9 +45,6 @@ func ValidateDatabase(ctx context.Context, db sql.Database) (err error) {
 }
 
 func ValidateDoltDatabase(ctx context.Context, db sqle.Database) (err error) {
-	if !types.IsFormat_DOLT(db.GetDoltDB().Format()) {
-		return nil
-	}
 	for _, stage := range validationStages {
 		if err = stage(ctx, db); err != nil {
 			return err

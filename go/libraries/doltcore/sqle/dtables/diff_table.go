@@ -67,7 +67,6 @@ type DiffTable struct {
 	head              *doltdb.Commit
 	headCommitClosure *prolly.CommitClosure
 	table             *doltdb.Table
-	joiner            *rowconv.Joiner
 	tableName         doltdb.TableName
 	sqlSch            sql.PrimaryKeySchema
 	partitionFilters  []sql.Expression
@@ -105,7 +104,7 @@ func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb
 		return nil, err
 	}
 
-	diffTableSchema, j, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
+	diffTableSchema, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +124,6 @@ func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb
 		sqlSch:           sqlSch,
 		partitionFilters: nil,
 		table:            table,
-		joiner:           j,
 	}, nil
 }
 
@@ -250,7 +248,7 @@ func (dt *DiffTable) HeadHash() (hash.Hash, error) {
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
+	return dp.GetRowIter(ctx)
 }
 
 func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
@@ -677,7 +675,7 @@ func (dp DiffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
 }
 
-func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
+func (dp DiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
 	return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch, dp.ranges)
 }
 
@@ -709,7 +707,7 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 		return false, false, err
 	}
 
-	easyDiff := schema.ArePrimaryKeySetsDiffable(dp.from.Format(), fromSch, toSch)
+	easyDiff := schema.ArePrimaryKeySetsDiffable(fromSch, toSch)
 	if easyDiff {
 		return true, false, nil
 	}
@@ -910,37 +908,12 @@ func (dp DiffPartition) rowConvForSchema(ctx context.Context, vrw types.ValueRea
 // GetDiffTableSchemaAndJoiner returns the schema for the diff table given a
 // target schema for a row |sch|. In the old storage format, it also returns the
 // associated joiner.
-func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch schema.Schema) (diffTableSchema schema.Schema, j *rowconv.Joiner, err error) {
+func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch schema.Schema) (diffTableSchema schema.Schema, err error) {
 	if format == types.Format_DOLT {
-		diffTableSchema, err = CalculateDiffSchema(fromSch, toSch)
-		if err != nil {
-			return nil, nil, err
-		}
+		return CalculateDiffSchema(fromSch, toSch)
 	} else {
-		fromSch, toSch, err = expandFromToSchemas(fromSch, toSch)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		j, err = rowconv.NewJoiner(
-			[]rowconv.NamedSchema{{Name: diff.To, Sch: toSch}, {Name: diff.From, Sch: fromSch}},
-			map[string]rowconv.ColNamingFunc{
-				diff.To:   diff.ToColNamer,
-				diff.From: diff.FromColNamer,
-			})
-		if err != nil {
-			return nil, nil, err
-		}
-
-		diffTableSchema = j.GetSchema()
-		fullDiffCols := diffTableSchema.GetAllCols()
-		fullDiffCols = fullDiffCols.Append(
-			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false),
-		)
-		diffTableSchema = schema.MustSchemaFromCols(fullDiffCols)
+		panic("Unsupported format for diff table schema calculation: " + format.VersionString())
 	}
-
-	return
 }
 
 // expandFromToSchemas converts input schemas to schemas appropriate for diffs. One argument must be

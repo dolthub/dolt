@@ -890,3 +890,33 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 		})
 	}
 }
+
+func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
+	if sqlRows == nil {
+		return nil
+	}
+	newSqlRows := make([]sql.Row, len(sqlRows))
+	for i, sqlRow := range sqlRows {
+		newSqlRow := make(sql.Row, len(sqlRow))
+		for j := range sqlRow {
+			switch v := sqlRow[j].(type) {
+			case int:
+				newSqlRow[j] = int64(v)
+			case int8:
+				newSqlRow[j] = int64(v)
+			case int16:
+				newSqlRow[j] = int64(v)
+			case int32:
+				newSqlRow[j] = int64(v)
+			case int64:
+				newSqlRow[j] = v
+			case nil:
+				newSqlRow[j] = nil
+			default:
+				return sqlRows
+			}
+		}
+		newSqlRows[i] = newSqlRow
+	}
+	return newSqlRows
+}

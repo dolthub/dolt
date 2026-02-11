@@ -54,7 +54,6 @@ teardown() {
     [[ "$output" =~ "tag - Create, list, delete tags." ]] || false
     [[ "$output" =~ "blame - Show what revision and author last modified each row of a table." ]] || false
     [[ "$output" =~ "constraints - Commands for handling constraints." ]] || false
-    [[ "$output" =~ "migrate - Executes a database migration to use the latest Dolt data format." ]] || false
     [[ "$output" =~ "read-tables - Fetch table(s) at a specific commit into a new dolt repo" ]] || false
     [[ "$output" =~ "gc - Cleans up unreferenced data from the repository." ]] || false
     [[ "$output" =~ "filter-branch - Edits the commit history using the provided query." ]] || false
@@ -341,12 +340,6 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     # Check help output for supported commands
     [[ "$output" =~ "cat -" ]] || false
     [[ "$output" =~ "resolve -" ]] || false
-}
-
-@test "no-repo: dolt migrate outside of a dolt repository" {
-    run dolt migrate
-    [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
 @test "no-repo: initializing a dolt repository" {

@@ -339,7 +339,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			d := ArePrimaryKeySetsDiffable(types.Format_Default, test.From, test.To)
+			d := ArePrimaryKeySetsDiffable(test.From, test.To)
 			require.Equal(t, test.Diffable, d)
 
 			// If they are diffable then we should be able to map their schemas from one to another.
@@ -359,7 +359,6 @@ func TestArePrimaryKeySetsDiffableTypeChanges(t *testing.T) {
 		From     Schema
 		To       Schema
 		Diffable bool
-		Format   *types.NomsBinFormat
 	}{
 		{
 			Name: "Int -> String (New Format)",
@@ -368,22 +367,12 @@ func TestArePrimaryKeySetsDiffableTypeChanges(t *testing.T) {
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 0, types.StringKind, true))),
 			Diffable: false,
-			Format:   types.Format_DOLT,
-		},
-		{
-			Name: "Int -> String (Old Format)",
-			From: MustSchemaFromCols(NewColCollection(
-				NewColumn("pk", 0, types.IntKind, true))),
-			To: MustSchemaFromCols(NewColCollection(
-				NewColumn("pk", 0, types.StringKind, true))),
-			Diffable: true,
-			Format:   types.Format_LD_1,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			d := ArePrimaryKeySetsDiffable(test.Format, test.From, test.To)
+			d := ArePrimaryKeySetsDiffable(test.From, test.To)
 			require.Equal(t, test.Diffable, d)
 		})
 	}

@@ -25,3 +25,8 @@ type VersionableTable interface {
 	sql.Table
 	LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error)
 }
+
+// RootSetter is an interface that can be used to set the root of a working set.
+type RootSetter interface {
+	SetRoot(ctx *sql.Context, root doltdb.RootValue) error
+}

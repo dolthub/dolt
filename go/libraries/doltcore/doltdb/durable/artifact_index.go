@@ -30,7 +30,6 @@ import (
 type ArtifactIndex interface {
 	HashOf() (hash.Hash, error)
 	Count() (uint64, error)
-	Format() *types.NomsBinFormat
 	HasConflicts(ctx context.Context) (bool, error)
 	// ConflictCount returns the number of conflicts
 	ConflictCount(ctx context.Context) (uint64, error)
@@ -43,24 +42,15 @@ type ArtifactIndex interface {
 
 // RefFromArtifactIndex persists |idx| and returns the types.Ref targeting it.
 func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx ArtifactIndex) (types.Ref, error) {
-	switch idx.Format() {
-	case types.Format_LD_1:
-		panic("TODO")
-
-	case types.Format_DOLT:
-		b := shim.ValueFromMap(idx.(prollyArtifactIndex).index)
-		return refFromNomsValue(ctx, vrw, b)
-
-	default:
-		return types.Ref{}, errNbfUnknown
-	}
+	b := shim.ValueFromMap(idx.(prollyArtifactIndex).index)
+	return vrw.WriteValue(ctx, b)
 }
 
 // NewEmptyArtifactIndex returns an ArtifactIndex with no artifacts.
 func NewEmptyArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema) (ArtifactIndex, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
-		panic("TODO")
+		panic("Unsupported format " + vrw.Format().VersionString())
 
 	case types.Format_DOLT:
 		kd := tableSch.GetKeyDescriptor(ns)
@@ -85,10 +75,6 @@ func ProllyMapFromArtifactIndex(i ArtifactIndex) prolly.ArtifactMap {
 	return i.(prollyArtifactIndex).index
 }
 
-func artifactIndexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema, r types.Ref) (ArtifactIndex, error) {
-	return artifactIndexFromAddr(ctx, vrw, ns, tableSch, r.TargetHash())
-}
-
 func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema, addr hash.Hash) (ArtifactIndex, error) {
 	v, err := vrw.MustReadValue(ctx, addr)
 	if err != nil {
@@ -97,7 +83,7 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 
 	switch vrw.Format() {
 	case types.Format_LD_1:
-		panic("TODO")
+		panic("Unsupported format " + vrw.Format().VersionString())
 
 	case types.Format_DOLT:
 		root, fileId, err := shim.NodeFromValue(v)
@@ -127,10 +113,6 @@ func (i prollyArtifactIndex) HashOf() (hash.Hash, error) {
 func (i prollyArtifactIndex) Count() (uint64, error) {
 	c, err := i.index.Count()
 	return uint64(c), err
-}
-
-func (i prollyArtifactIndex) Format() *types.NomsBinFormat {
-	return i.index.Format()
 }
 
 func (i prollyArtifactIndex) HasConflicts(ctx context.Context) (bool, error) {

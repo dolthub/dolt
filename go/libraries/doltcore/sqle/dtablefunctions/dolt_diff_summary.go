@@ -352,7 +352,7 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 		return summ, nil
 	}
 
-	if !schema.ArePrimaryKeySetsDiffable(delta.Format(), delta.FromSch, delta.ToSch) {
+	if !schema.ArePrimaryKeySetsDiffable(delta.FromSch, delta.ToSch) {
 		if shouldErrorOnPKChange {
 			return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), diff.ErrPrimaryKeySetChanged)
 		}
@@ -408,9 +408,9 @@ func (ds *DiffSummaryTableFunction) evaluateArguments() (interface{}, interface{
 	return fromCommitVal, toCommitVal, nil, tableName, nil
 }
 
-//------------------------------------
+// ------------------------------------
 // diffSummaryTableFunctionRowIter
-//------------------------------------
+// ------------------------------------
 
 var _ sql.RowIter = &diffSummaryTableFunctionRowIter{}
 

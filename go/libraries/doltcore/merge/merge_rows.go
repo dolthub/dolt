@@ -20,7 +20,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -213,6 +212,8 @@ func (rm *RootMerger) MergeTable(
 		return nil, nil, err
 	}
 
+	types.AssertFormat_DOLT(tm.vrw.Format())
+
 	// short-circuit here if we can
 	finished, finishedRootObj, stats, err := rm.MaybeShortCircuit(ctx, tm, mergeOpts)
 	if finished != nil || finishedRootObj != nil || stats != nil || err != nil {
@@ -243,11 +244,7 @@ func (rm *RootMerger) MergeTable(
 	var tbl *doltdb.Table
 	var rootObj doltdb.RootObject
 	if !tm.InvolvesRootObjects() {
-		if types.IsFormat_DOLT(tm.vrw.Format()) {
-			tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, mergeInfo, diffInfo)
-		} else {
-			panic("data format not supported in this version of Dolt")
-		}
+		tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, mergeInfo, diffInfo)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -499,32 +496,6 @@ type MergeRootObject struct {
 // dual-location for the implementation to reside. Keeping this as a pointer makes it much simpler.
 var MergeRootObjects = func(ctx context.Context, mro MergeRootObject) (doltdb.RootObject, *MergeStats, error) {
 	return nil, nil, errors.New("Dolt does not operate on root objects")
-}
-
-func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
-	ancSch, err := ancTbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	mergeSch, err := mergeTbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	cs := conflict.NewConflictSchema(ancSch, sch, mergeSch)
-
-	tableToUpdate, err = tableToUpdate.SetConflicts(ctx, cs, cons)
-	if err != nil {
-		return nil, err
-	}
-
-	return tableToUpdate, nil
 }
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {

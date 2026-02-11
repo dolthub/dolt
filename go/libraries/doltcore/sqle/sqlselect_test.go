@@ -25,10 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -37,7 +35,7 @@ import (
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
-const singleSelectQueryTest = "" //"Natural join with join clause"
+const singleSelectQueryTest = "" // "Natural join with join clause"
 
 // Set to false to run tests known to be broken
 const skipBrokenSelect = true
@@ -1270,18 +1268,6 @@ func TestSelect(t *testing.T) {
 	}
 }
 
-func TestAsOfQueries(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip("") // todo: convert to enginetests
-	}
-	for _, test := range AsOfTests {
-		t.Run(test.Name, func(t *testing.T) {
-			// AS OF queries use the same history as the diff tests, so exercise the same test setup
-			testSelectDiffQuery(t, test)
-		})
-	}
-}
-
 func TestJoins(t *testing.T) {
 	for _, tt := range JoinTests {
 		if tt.Name == "Join from table with two key columns to table with one key column" {
@@ -1379,7 +1365,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	expectedRows := unwrapRows(t, test.ExpectedRows)
 	actualRows = unwrapRows(t, actualRows)
 	// JSON columns must be compared using like so
-	assert.Equal(t, len(expectedRows), len(actualRows))
+	require.Equal(t, len(expectedRows), len(actualRows))
 	for i := 0; i < len(expectedRows); i++ {
 		assert.Equal(t, len(expectedRows[i]), len(actualRows[i]))
 		for j := 0; j < len(expectedRows[i]); j++ {
@@ -1548,63 +1534,6 @@ var DiffSchema = dtestutils.MustSchema(
 	schema.NewColumn("diff_type", 14, types.StringKind, false),
 )
 
-func testSelectDiffQuery(t *testing.T, test SelectTest) {
-	validateTest(t, test)
-	ctx := context.Background()
-	cleanup := installTestCommitClock()
-	defer cleanup()
-	dEnv := dtestutils.CreateTestEnv()
-	initializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
-	if test.AdditionalSetup != nil {
-		test.AdditionalSetup(t, dEnv)
-	}
-
-	cs, err := doltdb.NewCommitSpec("main")
-	require.NoError(t, err)
-
-	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, nil)
-	require.NoError(t, err)
-
-	cm, ok := optCmt.ToCommit()
-	require.True(t, ok)
-
-	root, err := cm.GetRootValue(ctx)
-	require.NoError(t, err)
-
-	err = dEnv.UpdateStagedRoot(ctx, root)
-	require.NoError(t, err)
-
-	err = dEnv.UpdateWorkingRoot(ctx, root)
-	require.NoError(t, err)
-
-	root, err = dEnv.WorkingRoot(context.Background())
-	require.NoError(t, err)
-
-	root = updateTables(t, ctx, root, createWorkingRootUpdate())
-
-	err = dEnv.UpdateWorkingRoot(ctx, root)
-	require.NoError(t, err)
-
-	actualRows, sch, err := executeSelect(t, ctx, dEnv, root, test.Query)
-	if len(test.ExpectedErr) > 0 {
-		require.Error(t, err)
-		return
-	} else {
-		require.NoError(t, err)
-	}
-
-	assert.Equal(t, test.ExpectedRows, actualRows)
-
-	var sqlSchema sql.Schema
-	if test.ExpectedSqlSchema != nil {
-		sqlSchema = test.ExpectedSqlSchema
-	} else {
-		sqlSchema = mustSqlSchema(test.ExpectedSchema)
-	}
-
-	assertSchemasEqual(t, sqlSchema, sch)
-}
-
 // TODO: this shouldn't be here
 func createWorkingRootUpdate() map[string]TableUpdate {
 	return map[string]TableUpdate{
@@ -1615,114 +1544,6 @@ func createWorkingRootUpdate() map[string]TableUpdate {
 				})),
 			},
 		},
-	}
-}
-
-func updateTables(t *testing.T, ctx context.Context, root doltdb.RootValue, tblUpdates map[string]TableUpdate) doltdb.RootValue {
-	for tblName, updates := range tblUpdates {
-		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
-		require.NoError(t, err)
-
-		var sch schema.Schema
-		if updates.NewSch != nil {
-			sch = updates.NewSch
-		} else {
-			sch, err = tbl.GetSchema(ctx)
-			require.NoError(t, err)
-		}
-
-		var rowData types.Map
-		if updates.NewRowData == nil {
-			if ok {
-				rowData, err = tbl.GetNomsRowData(ctx)
-				require.NoError(t, err)
-			} else {
-				rowData, err = types.NewMap(ctx, root.VRW())
-				require.NoError(t, err)
-			}
-		} else {
-			rowData = *updates.NewRowData
-		}
-
-		if updates.RowUpdates != nil {
-			me := rowData.Edit()
-
-			for _, r := range updates.RowUpdates {
-				me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
-			}
-
-			rowData, err = me.Map(ctx)
-			require.NoError(t, err)
-		}
-
-		var indexData durable.IndexSet
-		require.NoError(t, err)
-		if tbl != nil {
-			indexData, err = tbl.GetIndexSet(ctx)
-			require.NoError(t, err)
-		}
-
-		tbl, err = doltdb.NewNomsTable(ctx, root.VRW(), root.NodeStore(), sch, rowData, indexData, nil)
-		require.NoError(t, err)
-
-		root, err = root.PutTable(ctx, doltdb.TableName{Name: tblName}, tbl)
-		require.NoError(t, err)
-	}
-
-	return root
-}
-
-// initializeWithHistory will go through the provided historyNodes and create the intended commit graph
-func initializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, historyNodes ...HistoryNode) {
-	for _, node := range historyNodes {
-		cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
-		require.NoError(t, err)
-
-		optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, nil)
-		require.NoError(t, err)
-
-		cm, ok := optCmt.ToCommit()
-		require.True(t, ok)
-
-		processNode(t, ctx, dEnv, node, cm)
-	}
-}
-
-func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node HistoryNode, parent *doltdb.Commit) {
-	branchRef := ref.NewBranchRef(node.Branch)
-	ok, err := dEnv.DoltDB(ctx).HasRef(ctx, branchRef)
-	require.NoError(t, err)
-
-	if !ok {
-		err = dEnv.DoltDB(ctx).NewBranchAtCommit(ctx, branchRef, parent, nil)
-		require.NoError(t, err)
-	}
-
-	cs, err := doltdb.NewCommitSpec(branchRef.String())
-	require.NoError(t, err)
-
-	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, nil)
-	require.NoError(t, err)
-
-	cm, ok := optCmt.ToCommit()
-	require.True(t, ok)
-
-	root, err := cm.GetRootValue(ctx)
-	require.NoError(t, err)
-
-	root = updateTables(t, ctx, root, node.Updates)
-	r, h, err := dEnv.DoltDB(ctx).WriteRootValue(ctx, root)
-	require.NoError(t, err)
-	root = r
-
-	meta, err := datas.NewCommitMeta("Ash Ketchum", "ash@poke.mon", node.CommitMsg)
-	require.NoError(t, err)
-
-	cm, err = dEnv.DoltDB(ctx).Commit(ctx, h, branchRef, meta)
-	require.NoError(t, err)
-
-	for _, child := range node.Children {
-		processNode(t, ctx, dEnv, child, cm)
 	}
 }
 

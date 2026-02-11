@@ -62,11 +62,8 @@ func Stat(ctx context.Context, ch chan DiffStatProgress, from, to durable.Index,
 		return fmt.Errorf("cannot perform a diff between keyless and keyed schema")
 	}
 
-	if types.IsFormat_DOLT(from.Format()) {
-		return diffProllyTrees(ctx, ch, keyless, from, to, fromSch, toSch)
-	}
-
-	return diffNomsMaps(ctx, ch, keyless, from, to, fromSch, toSch)
+	types.AssertFormat_DOLT(from.Format())
+	return diffProllyTrees(ctx, ch, keyless, from, to, fromSch, toSch)
 }
 
 // StatForTableDelta pushes diff stat progress messages for the table delta given to the channel given
@@ -88,7 +85,7 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if !schema.ArePrimaryKeySetsDiffable(td.Format(), fromSch, toSch) {
+	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
 		return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), ErrPrimaryKeySetChanged)
 	}
 
@@ -102,11 +99,7 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return err
 	}
 
-	if types.IsFormat_DOLT(td.Format()) {
-		return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
-	} else {
-		return diffNomsMaps(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
-	}
+	return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
 }
 
 func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool, from, to durable.Index, fromSch, toSch schema.Schema) error {
@@ -173,33 +166,6 @@ func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool
 		return err
 	}
 	return nil
-}
-
-func diffNomsMaps(ctx context.Context, ch chan DiffStatProgress, keyless bool, fromRows durable.Index, toRows durable.Index, fromSch, toSch schema.Schema) error {
-	var rpr nomsReporter
-	if keyless {
-		rpr = reportNomsKeylessChanges
-	} else {
-		fc, err := fromRows.Count()
-		if err != nil {
-			return err
-		}
-		cfc := uint64(len(fromSch.GetAllCols().GetColumns())) * fc
-		tc, err := toRows.Count()
-		if err != nil {
-			return err
-		}
-		ctc := uint64(len(toSch.GetAllCols().GetColumns())) * tc
-		rpr = reportNomsPkChanges
-		ch <- DiffStatProgress{
-			OldRowSize:  fc,
-			NewRowSize:  tc,
-			OldCellSize: cfc,
-			NewCellSize: ctc,
-		}
-	}
-
-	return statWithReporter(ctx, ch, durable.NomsMapFromIndex(fromRows), durable.NomsMapFromIndex(toRows), rpr, fromSch, toSch)
 }
 
 func statWithReporter(ctx context.Context, ch chan DiffStatProgress, from, to types.Map, rpr nomsReporter, fromSch, toSch schema.Schema) (err error) {
