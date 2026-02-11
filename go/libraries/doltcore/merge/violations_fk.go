@@ -19,17 +19,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // constraintViolationsLoadedTable is a collection of items needed to process constraint violations for a single table.
@@ -63,11 +60,11 @@ type FKViolationReceiver interface {
 // RegisterForeignKeyViolations emits constraint violations that have been created as a
 // result of the diff between |baseRoot| and |newRoot|. It sends violations to |receiver|.
 func RegisterForeignKeyViolations(
-	ctx *sql.Context,
-	tableResolver doltdb.TableResolver,
-	newRoot, baseRoot doltdb.RootValue,
-	tables *doltdb.TableNameSet,
-	receiver FKViolationReceiver,
+		ctx *sql.Context,
+		tableResolver doltdb.TableResolver,
+		newRoot, baseRoot doltdb.RootValue,
+		tables *doltdb.TableNameSet,
+		receiver FKViolationReceiver,
 ) error {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -320,11 +317,11 @@ var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
 
 // parentFkConstraintViolations processes foreign key constraint violations for the parent in a foreign key.
 func parentFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	preParent, postParent, postChild *constraintViolationsLoadedTable,
-	preParentRowData durable.Index,
-	receiver FKViolationReceiver,
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		preParent, postParent, postChild *constraintViolationsLoadedTable,
+		preParentRowData durable.Index,
+		receiver FKViolationReceiver,
 ) error {
 	if preParentRowData.Format() != types.Format_DOLT {
 		panic("unsupported format: " + preParentRowData.Format().VersionString())
@@ -360,12 +357,12 @@ func parentFkConstraintViolations(
 // childFkConstraintViolations handles processing the reference options on a child, or creating a violation if
 // necessary.
 func childFkConstraintViolations(
-	ctx context.Context,
-	vr types.ValueReader,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild, preChild *constraintViolationsLoadedTable,
-	preChildRowData durable.Index,
-	receiver FKViolationReceiver,
+		ctx context.Context,
+		vr types.ValueReader,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild, preChild *constraintViolationsLoadedTable,
+		preChildRowData durable.Index,
+		receiver FKViolationReceiver,
 ) error {
 	if preChildRowData.Format() != types.Format_DOLT {
 		panic("unsupported format: " + preChildRowData.Format().VersionString())
@@ -402,11 +399,11 @@ func childFkConstraintViolations(
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
 func newConstraintViolationsLoadedTable(
-	ctx *sql.Context,
-	tableResolver doltdb.TableResolver,
-	tblName doltdb.TableName,
-	idxName string,
-	root doltdb.RootValue,
+		ctx *sql.Context,
+		tableResolver doltdb.TableResolver,
+		tblName doltdb.TableName,
+		idxName string,
+		root doltdb.RootValue,
 ) (*constraintViolationsLoadedTable, bool, error) {
 	trueTblName, tbl, ok, err := tableResolver.ResolveTableInsensitive(ctx, root, tblName)
 	if err != nil {
@@ -542,17 +539,4 @@ func foreignKeyCVJson(foreignKey doltdb.ForeignKey, sch, refSch schema.Schema) (
 	}
 
 	return d, nil
-}
-
-func jsonDataToNomsValue(ctx context.Context, vrw types.ValueReadWriter, data []byte) (types.JSON, error) {
-	var doc interface{}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return types.JSON{}, err
-	}
-	sqlDoc := gmstypes.JSONDocument{Val: doc}
-	nomsJson, err := json2.NomsJSONFromJSONValue(ctx, vrw, sqlDoc)
-	if err != nil {
-		return types.JSON{}, err
-	}
-	return types.JSON(nomsJson), nil
 }
