@@ -75,10 +75,6 @@ func (v rowV) value() val.Tuple {
 	return tup
 }
 
-func (v rowV) nomsValue() types.Value {
-	return valsToTestTupleWithoutPks([]types.Value{types.Int(v.col1), types.Int(v.col2)})
-}
-
 const (
 	NoopAction ActionType = iota
 	InsertAction
