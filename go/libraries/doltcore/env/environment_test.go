@@ -38,6 +38,29 @@ const (
 	workingDir  = "/user/bheni/datasets/addresses"
 )
 
+func TestCanCreateDatabaseAtPathAllowsGitRemoteCache(t *testing.T) {
+	dir := "/user/bheni/datasets/allow_git_remote_cache"
+	doltDir := filepath.Join(dir, dbfactory.DoltDir)
+	cacheDir := filepath.Join(doltDir, "git-remote-cache")
+
+	// Any contents under .dolt/git-remote-cache should be ignored by CanCreateDatabaseAtPath.
+	fs := filesys.NewInMemFS(
+		[]string{
+			testHomeDir,
+			dir,
+			doltDir,
+			cacheDir,
+			filepath.Join(cacheDir, "somecache"),
+		},
+		map[string][]byte{},
+		dir,
+	)
+
+	ok, err := CanCreateDatabaseAtPath(fs, dir)
+	require.NoError(t, err)
+	require.True(t, ok)
+}
+
 func testHomeDirFunc() (string, error) {
 	return testHomeDir, nil
 }

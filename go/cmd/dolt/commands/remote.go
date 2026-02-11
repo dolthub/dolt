@@ -71,6 +71,7 @@ const (
 	addRemoteId         = "add"
 	removeRemoteId      = "remove"
 	removeRemoteShortId = "rm"
+	gitRefFlag          = "ref"
 )
 
 type RemoteCmd struct{}
@@ -212,6 +213,11 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 		err = cli.AddAWSParams(remoteUrl, apr, params)
 	case dbfactory.OSSScheme:
 		err = cli.AddOSSParams(remoteUrl, apr, params)
+	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
+		verr := addGitRemoteParams(apr, params)
+		if verr != nil {
+			return nil, verr
+		}
 	default:
 		err = cli.VerifyNoAwsParams(apr)
 	}
@@ -219,7 +225,27 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
+	// Flags that are only meaningful for git remotes should not be accepted for other schemes.
+	switch scheme {
+	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
+	default:
+		if _, ok := apr.GetValue(gitRefFlag); ok {
+			return nil, errhand.BuildDError("error: --%s is only supported for git remotes", gitRefFlag).Build()
+		}
+	}
+
 	return params, nil
+}
+
+func addGitRemoteParams(apr *argparser.ArgParseResults, params map[string]string) errhand.VerboseError {
+	if v, ok := apr.GetValue(gitRefFlag); ok {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return errhand.BuildDError("error: --%s cannot be empty", gitRefFlag).Build()
+		}
+		params[dbfactory.GitRefParam] = v
+	}
+	return nil
 }
 
 // callSQLRemoteAdd calls the SQL function `call `dolt_remote('add', remoteName, remoteUrl)`

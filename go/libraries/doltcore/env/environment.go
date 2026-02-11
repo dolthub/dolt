@@ -184,6 +184,16 @@ func (dEnv *DoltEnv) UrlStr() string {
 	return dEnv.urlStr
 }
 
+// GitCacheRoot returns the absolute path to the local Dolt repository root (the directory that contains `.dolt/`).
+// It is used to place git-remote caches under `<repoRoot>/.dolt/...`.
+func (dEnv *DoltEnv) GitCacheRoot() (string, bool) {
+	doltDir := dEnv.GetDoltDir()
+	if doltDir == "" {
+		return "", false
+	}
+	return filepath.Dir(doltDir), true
+}
+
 func createRepoState(fs filesys.Filesys) (*RepoState, error) {
 	repoState, rsErr := LoadRepoState(fs)
 
@@ -530,7 +540,8 @@ var ErrCannotCreateDoltDirAlreadyExists = errors.New(".dolt dir already exists")
 // * |dir|/.dolt exists and is a directory and is empty, or
 // * |dir|/.dolt exists and is a directory and has only one other entry in it, a directory with name "tmp", or
 // * |dir|/.dolt exists and is a directory and has only one other entry in it, a file with name "config.json", or
-// * |dir|/.dolt exists and is a directory and contains both a |tmp| directory and a |config.json| file and nothing else.
+// * |dir|/.dolt exists and is a directory and contains both a |tmp| directory and a |config.json| file and nothing else, or
+// * |dir|/.dolt exists and is a directory and contains a |git-remote-cache| directory (and any contents under it) plus any of the above.
 func CanCreateDatabaseAtPath(fs filesys.Filesys, dir string) (bool, error) {
 	absPath, err := fs.Abs(dir)
 	if err != nil {
@@ -550,6 +561,7 @@ func CanCreateDatabaseAtPath(fs filesys.Filesys, dir string) (bool, error) {
 		}
 		tmpPath := filepath.Join(doltDirPath, TmpDirName)
 		configPath := filepath.Join(doltDirPath, configFile)
+		gitRemoteCachePath := filepath.Join(doltDirPath, "git-remote-cache")
 		isOK := true
 		err := fs.Iter(doltDirPath, true, func(path string, sz int64, isDir bool) (stop bool) {
 			if path == doltDirPath {
@@ -557,6 +569,12 @@ func CanCreateDatabaseAtPath(fs filesys.Filesys, dir string) (bool, error) {
 			} else if path == tmpPath && isDir {
 				return false
 			} else if path == configPath && !isDir {
+				return false
+			} else if path == gitRemoteCachePath && isDir {
+				// Allow git remote cache contents to exist under .dolt/ when cloning / creating a DB.
+				return false
+			} else if strings.HasPrefix(path, gitRemoteCachePath+string(filepath.Separator)) {
+				// Allow any children of .dolt/git-remote-cache.
 				return false
 			} else {
 				isOK = false
