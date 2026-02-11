@@ -558,6 +558,11 @@ func (e *gitblobstoreFetchRefError) Unwrap() error { return e.err }
 func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remoteHead git.OID, ok bool, err error) {
 	if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
 		// If the remote ref is missing, treat this as an empty store and bootstrap on write.
+		// Note: there is no "empty ref" in Git; this means the ref is unborn (no commits yet).
+		// Callers will see ok=false and parent=="" and will:
+		// - build a root commit from an empty tree (no parent),
+		// - create/update gbs.localRef to that commit, and
+		// - push with an empty expected dst OID, which creates gbs.remoteRef on the remote.
 		var rnf *git.RefNotFoundError
 		if errors.As(err, &rnf) && rnf.Ref == gbs.remoteRef {
 			return "", false, nil
