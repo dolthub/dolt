@@ -63,11 +63,11 @@ type FKViolationReceiver interface {
 // RegisterForeignKeyViolations emits constraint violations that have been created as a
 // result of the diff between |baseRoot| and |newRoot|. It sends violations to |receiver|.
 func RegisterForeignKeyViolations(
-		ctx *sql.Context,
-		tableResolver doltdb.TableResolver,
-		newRoot, baseRoot doltdb.RootValue,
-		tables *doltdb.TableNameSet,
-		receiver FKViolationReceiver,
+	ctx *sql.Context,
+	tableResolver doltdb.TableResolver,
+	newRoot, baseRoot doltdb.RootValue,
+	tables *doltdb.TableNameSet,
+	receiver FKViolationReceiver,
 ) error {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -320,11 +320,11 @@ var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
 
 // parentFkConstraintViolations processes foreign key constraint violations for the parent in a foreign key.
 func parentFkConstraintViolations(
-		ctx context.Context,
-		foreignKey doltdb.ForeignKey,
-		preParent, postParent, postChild *constraintViolationsLoadedTable,
-		preParentRowData durable.Index,
-		receiver FKViolationReceiver,
+	ctx context.Context,
+	foreignKey doltdb.ForeignKey,
+	preParent, postParent, postChild *constraintViolationsLoadedTable,
+	preParentRowData durable.Index,
+	receiver FKViolationReceiver,
 ) error {
 	if preParentRowData.Format() != types.Format_DOLT {
 		panic("unsupported format: " + preParentRowData.Format().VersionString())
@@ -360,12 +360,12 @@ func parentFkConstraintViolations(
 // childFkConstraintViolations handles processing the reference options on a child, or creating a violation if
 // necessary.
 func childFkConstraintViolations(
-		ctx context.Context,
-		vr types.ValueReader,
-		foreignKey doltdb.ForeignKey,
-		postParent, postChild, preChild *constraintViolationsLoadedTable,
-		preChildRowData durable.Index,
-		receiver FKViolationReceiver,
+	ctx context.Context,
+	vr types.ValueReader,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild, preChild *constraintViolationsLoadedTable,
+	preChildRowData durable.Index,
+	receiver FKViolationReceiver,
 ) error {
 	if preChildRowData.Format() != types.Format_DOLT {
 		panic("unsupported format: " + preChildRowData.Format().VersionString())
@@ -402,11 +402,11 @@ func childFkConstraintViolations(
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
 func newConstraintViolationsLoadedTable(
-		ctx *sql.Context,
-		tableResolver doltdb.TableResolver,
-		tblName doltdb.TableName,
-		idxName string,
-		root doltdb.RootValue,
+	ctx *sql.Context,
+	tableResolver doltdb.TableResolver,
+	tblName doltdb.TableName,
+	idxName string,
+	root doltdb.RootValue,
 ) (*constraintViolationsLoadedTable, bool, error) {
 	trueTblName, tbl, ok, err := tableResolver.ResolveTableInsensitive(ctx, root, tblName)
 	if err != nil {

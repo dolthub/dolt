@@ -133,10 +133,10 @@ func validateSecondaryIndexes(ctx context.Context, db sqle.Database) error {
 }
 
 func validateIndexConsistency(
-		ctx context.Context,
-		sch schema.Schema,
-		def schema.Index,
-		primary, secondary prolly.MapInterface,
+	ctx context.Context,
+	sch schema.Schema,
+	def schema.Index,
+	primary, secondary prolly.MapInterface,
 ) error {
 	if schema.IsKeyless(sch) {
 		return validateKeylessIndex(ctx, sch, def, primary, secondary)
@@ -485,9 +485,9 @@ func ordinalMappingsForSecondaryIndex(sch schema.Schema, def schema.Index) (ord 
 
 // iterDatabaseTables is a utility to factor out common validation access patterns.
 func iterDatabaseTables(
-		ctx context.Context,
-		db sqle.Database,
-		cb func(name doltdb.TableName, t *doltdb.Table, sch schema.Schema) (bool, error),
+	ctx context.Context,
+	db sqle.Database,
+	cb func(name doltdb.TableName, t *doltdb.Table, sch schema.Schema) (bool, error),
 ) error {
 	ddb := db.GetDoltDB()
 	branches, err := ddb.GetBranches(ctx)
