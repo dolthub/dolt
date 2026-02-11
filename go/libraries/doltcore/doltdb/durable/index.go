@@ -179,19 +179,11 @@ func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd *val.
 	return IndexFromProximityMap(m), nil
 }
 
-type nomsIndex struct {
-	index types.Map
-	vrw   types.ValueReadWriter
-	ns    tree.NodeStore
-}
-
-var _ Index = nomsIndex{}
-
 func IterAllIndexes(
-	ctx context.Context,
-	sch schema.Schema,
-	set IndexSet,
-	cb func(name string, idx Index) error,
+		ctx context.Context,
+		sch schema.Schema,
+		set IndexSet,
+		cb func(name string, idx Index) error,
 ) error {
 	for _, def := range sch.Indexes().AllIndexes() {
 		idx, err := set.GetIndex(ctx, sch, nil, def.Name())
@@ -203,46 +195,6 @@ func IterAllIndexes(
 		}
 	}
 	return nil
-}
-
-var _ Index = nomsIndex{}
-
-// HashOf implements Index.
-func (i nomsIndex) HashOf() (hash.Hash, error) {
-	return i.index.Hash(i.vrw.Format())
-}
-
-// Count implements Index.
-func (i nomsIndex) Count() (uint64, error) {
-	return i.index.Len(), nil
-}
-
-// Empty implements Index.
-func (i nomsIndex) Empty() (bool, error) {
-	return i.index.Len() == 0, nil
-}
-
-// Format implements Index.
-func (i nomsIndex) Format() *types.NomsBinFormat {
-	return i.vrw.Format()
-}
-
-// bytes implements Index.
-func (i nomsIndex) bytes() ([]byte, error) {
-	rowschunk, err := types.EncodeValue(i.index, i.vrw.Format())
-	if err != nil {
-		return nil, err
-	}
-	return rowschunk.Data(), nil
-}
-
-func (i nomsIndex) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Index, error) {
-	// no-op for noms indexes because of tag-based mapping
-	return i, nil
-}
-
-func (i nomsIndex) DebugString(ctx context.Context, ns tree.NodeStore, schema schema.Schema) string {
-	panic("Not implemented")
 }
 
 type prollyIndex struct {
