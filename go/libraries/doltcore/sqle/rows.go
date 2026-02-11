@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -58,13 +57,6 @@ func (k keylessRowIter) Close(ctx *sql.Context) error {
 	return k.keyedIter.Close(ctx)
 }
 
-// An iterator over the rows of a table.
-type doltTableRowIter struct {
-	sql.RowIter
-	ctx    context.Context
-	reader table.SqlTableReader
-}
-
 // Returns a new row iterator for the table given
 func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, partition doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.GetSchema(ctx)
@@ -77,102 +69,7 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, p
 		return ProllyRowIterFromPartition(ctx, sch, projCols, partition)
 	}
 
-	mapIter, err := iterForPartition(ctx, partition)
-	if err != nil {
-		return nil, err
-	}
-
-	if schema.IsKeyless(sch) {
-		// would be more optimal to project columns into keyless tables also
-		return newKeylessRowIterator(ctx, tbl, projCols, mapIter)
-	} else {
-		return newKeyedRowIter(ctx, tbl, projCols, mapIter)
-	}
-}
-
-func newKeylessRowIterator(ctx context.Context, tbl *doltdb.Table, projectedCols []uint64, mapIter types.MapTupleIterator) (sql.RowIter, error) {
-
-	cols, tagToSqlColIdx, err := getTagToResColIdx(ctx, tbl, projectedCols)
-	if err != nil {
-		return nil, err
-	}
-
-	idxOfCardinality := len(cols)
-	tagToSqlColIdx[schema.KeylessRowCardinalityTag] = idxOfCardinality
-
-	colsCopy := make([]schema.Column, len(cols), len(cols)+1)
-	copy(colsCopy, cols)
-	colsCopy = append(colsCopy, schema.NewColumn("__cardinality__", schema.KeylessRowCardinalityTag, types.UintKind, false))
-
-	conv := index.NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, colsCopy, len(colsCopy))
-	keyedItr, err := index.NewDoltMapIter(mapIter.NextTuple, nil, conv), nil
-	if err != nil {
-		return nil, err
-	}
-
-	return &keylessRowIter{
-		keyedIter:   keyedItr,
-		cardIdx:     idxOfCardinality,
-		nonCardCols: len(cols),
-	}, nil
-}
-
-func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []uint64, mapIter types.MapTupleIterator) (sql.RowIter, error) {
-
-	cols, tagToSqlColIdx, err := getTagToResColIdx(ctx, tbl, projectedCols)
-	if err != nil {
-		return nil, err
-	}
-
-	conv := index.NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, cols, len(cols))
-	return index.NewDoltMapIter(mapIter.NextTuple, nil, conv), nil
-}
-
-func iterForPartition(ctx context.Context, partition doltTablePartition) (types.MapTupleIterator, error) {
-	if partition.end == NoUpperBound {
-		c, err := partition.rowData.Count()
-		if err != nil {
-			return nil, err
-		}
-		partition.end = c
-	}
-	return partition.IteratorForPartition(ctx, partition.rowData)
-}
-
-func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []uint64) ([]schema.Column, map[uint64]int, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	allCols := sch.GetAllCols().GetColumns()
-	tagToSqlColIdx := make(map[uint64]int)
-
-	if projectedCols != nil {
-		outCols := make([]schema.Column, len(projectedCols))
-		for i := range projectedCols {
-			t := projectedCols[i]
-			idx := sch.GetAllCols().TagToIdx[t]
-			tagToSqlColIdx[t] = i
-			outCols[i] = allCols[idx]
-		}
-		return outCols, tagToSqlColIdx, nil
-	}
-
-	for i, col := range allCols {
-		tagToSqlColIdx[col.Tag] = i
-	}
-	return allCols, tagToSqlColIdx, nil
-}
-
-// Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.
-func (itr *doltTableRowIter) Next() (sql.Row, error) {
-	return itr.reader.ReadSqlRow(itr.ctx)
-}
-
-// Close required by sql.RowIter interface
-func (itr *doltTableRowIter) Close(*sql.Context) error {
-	return nil
+	panic("Unsupported format: " + tbl.Format().VersionString())
 }
 
 func ProllyRowIterFromPartition(

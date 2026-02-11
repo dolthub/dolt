@@ -707,7 +707,7 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 		return false, false, err
 	}
 
-	easyDiff := schema.ArePrimaryKeySetsDiffable(dp.from.Format(), fromSch, toSch)
+	easyDiff := schema.ArePrimaryKeySetsDiffable(fromSch, toSch)
 	if easyDiff {
 		return true, false, nil
 	}

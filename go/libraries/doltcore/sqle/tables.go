@@ -1476,14 +1476,6 @@ func (p doltTablePartition) Key() []byte {
 	return []byte(strconv.FormatUint(p.start, 10) + " >= i < " + strconv.FormatUint(p.end, 10))
 }
 
-// IteratorForPartition returns a types.MapIterator implementation which will iterate through the values
-// for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
-// unless paired with a mutex
-func (p doltTablePartition) IteratorForPartition(ctx context.Context, idx durable.Index) (types.MapTupleIterator, error) {
-	m := durable.NomsMapFromIndex(idx)
-	return m.RangeIterator(ctx, p.start, p.end)
-}
-
 // AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
 type AlterableDoltTable struct {
 	WritableDoltTable
@@ -2167,66 +2159,6 @@ func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, tbl
 // DropColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) DropColumn(*sql.Context, string) error {
 	return fmt.Errorf("not implemented: AlterableDoltTable.DropColumn()")
-}
-
-// dropColumnData drops values for the specified column from the underlying storage layer
-func (t *AlterableDoltTable) dropColumnData(ctx *sql.Context, updatedTable *doltdb.Table, sch schema.Schema, columnName string) (*doltdb.Table, error) {
-	nomsRowData, err := updatedTable.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	column, ok := sch.GetAllCols().GetByName(columnName)
-	if !ok {
-		return nil, sql.ErrColumnNotFound.New(columnName)
-	}
-
-	mapEditor := nomsRowData.Edit()
-	defer mapEditor.Close(ctx)
-
-	err = nomsRowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		if t, ok := value.(types.Tuple); ok {
-			newTuple, err := types.NewTuple(nomsRowData.Format())
-			if err != nil {
-				return true, err
-			}
-
-			idx := uint64(0)
-			for idx < t.Len() {
-				tTag, err := t.Get(idx)
-				if err != nil {
-					return true, err
-				}
-
-				tValue, err := t.Get(idx + 1)
-				if err != nil {
-					return true, err
-				}
-
-				if tTag.Equals(types.Uint(column.Tag)) == false {
-					newTuple, err = newTuple.Append(tTag, tValue)
-					if err != nil {
-						return true, err
-					}
-				}
-
-				idx += 2
-			}
-			mapEditor.Set(key, newTuple)
-		}
-
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	newMapData, err := mapEditor.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return updatedTable.UpdateNomsRows(ctx, newMapData)
 }
 
 // ModifyColumn implements sql.AlterableTable. ModifyColumn operations are only used for operations that change only

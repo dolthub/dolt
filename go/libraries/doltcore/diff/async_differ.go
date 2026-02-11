@@ -22,26 +22,10 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-func NewRowDiffer(ctx context.Context, format *types.NomsBinFormat, fromSch, toSch schema.Schema, buf int) RowDiffer {
-	ad := NewAsyncDiffer(buf)
-
-	// Returns an EmptyRowDiffer if the two schemas are not diffable.
-	if !schema.ArePrimaryKeySetsDiffable(format, fromSch, toSch) {
-		return &EmptyRowDiffer{}
-	}
-
-	if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
-		return &keylessDiffer{AsyncDiffer: ad}
-	}
-
-	return ad
-}
 
 // todo: make package private
 type AsyncDiffer struct {
