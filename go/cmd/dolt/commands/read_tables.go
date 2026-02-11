@@ -208,7 +208,8 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 }
 
 func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string, dEnv *env.DoltEnv) (*doltdb.DoltDB, doltdb.RootValue, errhand.VerboseError) {
-	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv)
+	cacheRoot, _ := dEnv.GitCacheRoot()
+	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv, cacheRoot)
 
 	if verr != nil {
 		return nil, nil, verr

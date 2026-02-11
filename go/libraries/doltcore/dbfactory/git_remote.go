@@ -35,7 +35,8 @@ import (
 
 const (
 	// GitCacheRootParam is the absolute path to the local Dolt repository root (the directory that contains `.dolt/`).
-	// When set for git remotes, callers can choose a per-repo cache location under `.dolt/`.
+	// Required for git remotes. GitRemoteFactory stores its local cache repo under:
+	// `<git_cache_root>/.dolt/git-remote-cache/<sha256(remoteURL|remoteRef)>/repo.git`.
 	GitCacheRootParam    = "git_cache_root"
 	GitRefParam          = "git_ref"
 	GitRemoteNameParam   = "git_remote_name"
@@ -179,7 +180,7 @@ func resolveGitRemoteName(params map[string]interface{}) string {
 	return defaultGitRemoteName
 }
 
-// resolveGitCacheRoot parses and validates the optional GitCacheRootParam.
+// resolveGitCacheRoot parses and validates GitCacheRootParam.
 // It returns ok=false when the param is not present.
 func resolveGitCacheRoot(params map[string]interface{}) (root string, ok bool, err error) {
 	if params == nil {

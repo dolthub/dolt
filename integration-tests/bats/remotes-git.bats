@@ -189,7 +189,7 @@ teardown() {
 
 }
 
-@test "remotes-git: push works with auto-selected git cache dir" {
+@test "remotes-git: push works with per-repo git cache under .dolt/" {
     mkdir remote.git
     git init --bare remote.git
 
