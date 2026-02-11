@@ -42,9 +42,6 @@ type Table interface {
 	// HashOf returns the hash.Hash of this table.
 	HashOf() (hash.Hash, error)
 
-	// Format returns the types.NomsBinFormat for this table.
-	Format() *types.NomsBinFormat
-
 	// GetSchemaHash returns the hash.Hash of this table's schema.
 	GetSchemaHash(ctx context.Context) (hash.Hash, error)
 	// GetSchema returns this table's schema.
@@ -91,13 +88,11 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 
 // TableFromAddr deserializes the table in the chunk at |addr|.
 func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, addr hash.Hash) (Table, error) {
+	types.AssertFormat_DOLT(vrw.Format())
+
 	val, err := vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
-	}
-
-	if !vrw.Format().UsesFlatbuffers() {
-		panic("Unsupported format: " + vrw.Format().VersionString())
 	}
 
 	sm, ok := val.(types.SerialMessage)
