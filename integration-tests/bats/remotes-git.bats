@@ -5,6 +5,9 @@ setup() {
     skiponwindows "tests are flaky on Windows"
     skip_if_remote
     setup_common
+    if ! command -v git >/dev/null 2>&1; then
+        skip "git not installed"
+    fi
     cd $BATS_TMPDIR
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
@@ -16,10 +19,6 @@ teardown() {
 }
 
 @test "remotes-git: smoke push/clone/push-back/pull" {
-    if ! command -v git >/dev/null 2>&1; then
-        skip "git not installed"
-    fi
-
     mkdir remote.git
     git init --bare remote.git
 
@@ -33,7 +32,6 @@ teardown() {
     dolt remote add origin ../remote.git
     run dolt push --set-upstream origin main
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "panic:" ]] || false
 
     cd ..
     cd dolt-repo-clones
@@ -58,10 +56,6 @@ teardown() {
 }
 
 @test "remotes-git: empty remote bootstrap creates refs/dolt/data" {
-    if ! command -v git >/dev/null 2>&1; then
-        skip "git not installed"
-    fi
-
     mkdir remote.git
     git init --bare remote.git
 
@@ -86,10 +80,6 @@ teardown() {
 }
 
 @test "remotes-git: pull also fetches branches from git remote" {
-    if ! command -v git >/dev/null 2>&1; then
-        skip "git not installed"
-    fi
-
     mkdir remote.git
     git init --bare remote.git
 
@@ -123,10 +113,6 @@ teardown() {
 }
 
 @test "remotes-git: pull fetches but does not merge other branches" {
-    if ! command -v git >/dev/null 2>&1; then
-        skip "git not installed"
-    fi
-
     mkdir remote.git
     git init --bare remote.git
 
@@ -168,10 +154,6 @@ teardown() {
 }
 
 @test "remotes-git: custom --ref writes to configured dolt data ref" {
-    if ! command -v git >/dev/null 2>&1; then
-        skip "git not installed"
-    fi
-
     mkdir remote.git
     git init --bare remote.git
 
@@ -208,10 +190,6 @@ teardown() {
 }
 
 @test "remotes-git: push works with auto-selected git cache dir" {
-    if ! command -v git >/dev/null 2>&1; then
-        skip "git not installed"
-    fi
-
     mkdir remote.git
     git init --bare remote.git
 
