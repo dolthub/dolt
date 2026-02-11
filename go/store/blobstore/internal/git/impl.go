@@ -144,6 +144,31 @@ func (a *GitAPIImpl) ListTree(ctx context.Context, commit OID, treePath string) 
 	return entries, nil
 }
 
+func (a *GitAPIImpl) ListTreeRecursive(ctx context.Context, commit OID) ([]TreeEntry, error) {
+	// Include trees (-t) so callers can resolve directory paths as tree objects.
+	// Recurse (-r) so we get a full snapshot in one invocation.
+	out, err := a.r.Run(ctx, RunOptions{}, "ls-tree", "-r", "-t", commit.String()+"^{tree}")
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) == 1 && strings.TrimSpace(lines[0]) == "" {
+		return nil, nil
+	}
+	entries := make([]TreeEntry, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		e, err := parseLsTreeLine(line)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
 func (a *GitAPIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
 	out, err := a.r.Run(ctx, RunOptions{}, "cat-file", "-t", oid.String())
 	if err != nil {

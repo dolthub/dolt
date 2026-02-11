@@ -55,6 +55,11 @@ type GitAPI interface {
 	// It returns PathNotFoundError if |treePath| does not exist.
 	ListTree(ctx context.Context, commit OID, treePath string) ([]TreeEntry, error)
 
+	// ListTreeRecursive lists all entries under |commit|'s root tree recursively.
+	// Returned entries include both blobs and trees, and each entry Name is the full
+	// path from the root (e.g. "dir/file.txt", "dir/sub").
+	ListTreeRecursive(ctx context.Context, commit OID) ([]TreeEntry, error)
+
 	// CatFileType returns the git object type for |oid| (e.g. "blob", "tree", "commit").
 	CatFileType(ctx context.Context, oid OID) (string, error)
 

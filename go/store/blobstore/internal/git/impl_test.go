@@ -443,6 +443,83 @@ func TestGitAPIImpl_ListTree_NonRecursive(t *testing.T) {
 	}
 }
 
+func TestGitAPIImpl_ListTreeRecursive_IncludesTreesAndFullPaths(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	_, _, api := newTestRepo(t, ctx)
+
+	indexFile := tempIndexFile(t)
+	if err := api.ReadTreeEmpty(ctx, indexFile); err != nil {
+		t.Fatal(err)
+	}
+
+	oidA, err := api.HashObject(ctx, bytes.NewReader([]byte("a\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oidX, err := api.HashObject(ctx, bytes.NewReader([]byte("x\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", oidA, "dir/a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.UpdateIndexCacheInfo(ctx, indexFile, "100644", oidX, "dir/sub/x.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	treeOID, err := api.WriteTree(ctx, indexFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitOID, err := api.CommitTree(ctx, treeOID, nil, "seed", testAuthor())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := api.ListTreeRecursive(ctx, commitOID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Expect full paths for blobs and explicit tree entries for directories.
+	// With `git ls-tree -r -t`, we should see at least:
+	// - dir (tree)
+	// - dir/sub (tree)
+	// - dir/a.txt (blob)
+	// - dir/sub/x.txt (blob)
+	if len(entries) < 4 {
+		t.Fatalf("expected >= 4 entries, got %d: %+v", len(entries), entries)
+	}
+
+	got := map[string]TreeEntry{}
+	for _, e := range entries {
+		got[e.Name] = e
+	}
+
+	if e, ok := got["dir/a.txt"]; !ok {
+		t.Fatalf("missing entry dir/a.txt")
+	} else if e.Type != ObjectTypeBlob || e.OID != oidA {
+		t.Fatalf("unexpected dir/a.txt entry: %+v", e)
+	}
+	if e, ok := got["dir/sub/x.txt"]; !ok {
+		t.Fatalf("missing entry dir/sub/x.txt")
+	} else if e.Type != ObjectTypeBlob || e.OID != oidX {
+		t.Fatalf("unexpected dir/sub/x.txt entry: %+v", e)
+	}
+	if e, ok := got["dir"]; !ok {
+		t.Fatalf("missing entry dir (tree)")
+	} else if e.Type != ObjectTypeTree || e.OID == "" {
+		t.Fatalf("unexpected dir entry: %+v", e)
+	}
+	if e, ok := got["dir/sub"]; !ok {
+		t.Fatalf("missing entry dir/sub (tree)")
+	} else if e.Type != ObjectTypeTree || e.OID == "" {
+		t.Fatalf("unexpected dir/sub entry: %+v", e)
+	}
+}
+
 func TestGitAPIImpl_RemoveIndexPaths_RemovesFromIndex(t *testing.T) {
 	t.Parallel()
 
