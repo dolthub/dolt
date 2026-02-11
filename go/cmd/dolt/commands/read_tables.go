@@ -78,7 +78,6 @@ func (cmd ReadTablesCmd) ArgParser() *argparser.ArgParser {
 		{"table", " Optional tables to retrieve.  If omitted, all tables are retrieved."},
 	}
 	ap.SupportsString(dirParamName, "d", "directory", "directory to create and put retrieved table data.")
-	ap.SupportsString(gitCacheDirFlag, "", "dir", "Local directory to use for git remote cache (sets remote param git_cache_dir).")
 	ap.SupportsString(gitRefFlag, "", "ref", "Git ref to use as the Dolt data ref for git remotes (sets remote param git_ref).")
 	return ap
 }

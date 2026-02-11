@@ -8,11 +8,15 @@ setup() {
     cd $BATS_TMPDIR
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
+
+    # Keep auto-selected git cache dir inside this test's sandbox.
+    export XDG_CACHE_HOME="$(mktemp -d)"
 }
 
 teardown() {
     assert_feature_version
     teardown_common
+    rm -rf "$XDG_CACHE_HOME"
 }
 
 @test "remotes-git: smoke push/clone/push-back/pull" {
@@ -23,9 +27,6 @@ teardown() {
     mkdir remote.git
     git init --bare remote.git
 
-    cache1=$(mktemp -d)
-    cache2=$(mktemp -d)
-
     mkdir repo1
     cd repo1
     dolt init
@@ -33,14 +34,14 @@ teardown() {
     dolt add .
     dolt commit -m "create table"
 
-    dolt remote add --git-cache-dir "$cache1" origin ../remote.git
+    dolt remote add origin ../remote.git
     run dolt push --set-upstream origin main
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic:" ]] || false
 
     cd ..
     cd dolt-repo-clones
-    run dolt clone --git-cache-dir "$cache2" ../remote.git repo2
+    run dolt clone ../remote.git repo2
     [ "$status" -eq 0 ]
 
     cd repo2
@@ -58,7 +59,6 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "10" ]] || false
 
-    rm -rf "$cache1" "$cache2"
 }
 
 @test "remotes-git: empty remote bootstrap creates refs/dolt/data" {
@@ -73,8 +73,6 @@ teardown() {
     run git --git-dir remote.git show-ref refs/dolt/data
     [ "$status" -eq 1 ]
 
-    cache1=$(mktemp -d)
-
     mkdir repo1
     cd repo1
     dolt init
@@ -82,14 +80,13 @@ teardown() {
     dolt add .
     dolt commit -m "create table"
 
-    dolt remote add --git-cache-dir "$cache1" origin ../remote.git
+    dolt remote add origin ../remote.git
     run dolt push --set-upstream origin main
     [ "$status" -eq 0 ]
 
     run git --git-dir ../remote.git show-ref refs/dolt/data
     [ "$status" -eq 0 ]
 
-    rm -rf "$cache1"
 }
 
 @test "remotes-git: pull also fetches branches from git remote" {
@@ -100,18 +97,15 @@ teardown() {
     mkdir remote.git
     git init --bare remote.git
 
-    cache1=$(mktemp -d)
-    cache2=$(mktemp -d)
-
     mkdir repo1
     cd repo1
     dolt init
-    dolt remote add --git-cache-dir "$cache1" origin ../remote.git
+    dolt remote add origin ../remote.git
     dolt push origin main
 
     cd ..
     cd dolt-repo-clones
-    run dolt clone --git-cache-dir "$cache2" ../remote.git repo2
+    run dolt clone ../remote.git repo2
     [ "$status" -eq 0 ]
 
     cd repo2
@@ -130,7 +124,6 @@ teardown() {
     [[ "$output" =~ "main" ]] || false
     [[ "$output" =~ "other" ]] || false
 
-    rm -rf "$cache1" "$cache2"
 }
 
 @test "remotes-git: pull fetches but does not merge other branches" {
@@ -141,13 +134,10 @@ teardown() {
     mkdir remote.git
     git init --bare remote.git
 
-    cache1=$(mktemp -d)
-    cache2=$(mktemp -d)
-
     mkdir repo1
     cd repo1
     dolt init
-    dolt remote add --git-cache-dir "$cache1" origin ../remote.git
+    dolt remote add origin ../remote.git
     dolt push --set-upstream origin main
     dolt checkout -b other
     dolt commit --allow-empty -m "first commit on other"
@@ -155,7 +145,7 @@ teardown() {
 
     cd ..
     cd dolt-repo-clones
-    run dolt clone --git-cache-dir "$cache2" ../remote.git repo2
+    run dolt clone ../remote.git repo2
     [ "$status" -eq 0 ]
 
     cd repo2
@@ -179,7 +169,6 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "first commit on other" ]] || false
 
-    rm -rf "$cache1" "$cache2"
 }
 
 @test "remotes-git: custom --ref writes to configured dolt data ref" {
@@ -190,9 +179,6 @@ teardown() {
     mkdir remote.git
     git init --bare remote.git
 
-    cache1=$(mktemp -d)
-    cache2=$(mktemp -d)
-
     mkdir repo1
     cd repo1
     dolt init
@@ -201,7 +187,7 @@ teardown() {
     dolt add .
     dolt commit -m "seed"
 
-    dolt remote add --git-cache-dir "$cache1" --ref refs/dolt/custom origin ../remote.git
+    dolt remote add --ref refs/dolt/custom origin ../remote.git
     run dolt push --set-upstream origin main
     [ "$status" -eq 0 ]
 
@@ -212,7 +198,7 @@ teardown() {
 
     cd ..
     cd dolt-repo-clones
-    run dolt clone --git-cache-dir "$cache2" --ref refs/dolt/custom ../remote.git repo2
+    run dolt clone --ref refs/dolt/custom ../remote.git repo2
     [ "$status" -eq 0 ]
 
     cd repo2
@@ -223,10 +209,9 @@ teardown() {
     run git --git-dir ../../remote.git show-ref refs/dolt/data
     [ "$status" -ne 0 ]
 
-    rm -rf "$cache1" "$cache2"
 }
 
-@test "remotes-git: default git cache dir works when --git-cache-dir omitted" {
+@test "remotes-git: push works with auto-selected git cache dir" {
     if ! command -v git >/dev/null 2>&1; then
         skip "git not installed"
     fi

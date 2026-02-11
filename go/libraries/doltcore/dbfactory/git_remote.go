@@ -34,7 +34,6 @@ import (
 )
 
 const (
-	GitCacheDirParam     = "git_cache_dir"
 	GitRefParam          = "git_ref"
 	GitRemoteNameParam   = "git_remote_name"
 	defaultGitRef        = "refs/dolt/data"
@@ -84,7 +83,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	cacheBase, err := resolveGitCacheBase(params)
+	cacheBase, err := defaultGitCacheBase()
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -167,19 +166,7 @@ func resolveGitRemoteName(params map[string]interface{}) string {
 	return defaultGitRemoteName
 }
 
-func resolveGitCacheBase(params map[string]interface{}) (string, error) {
-	if params != nil {
-		if v, ok := params[GitCacheDirParam]; ok && v != nil {
-			s, ok := v.(string)
-			if !ok {
-				return "", fmt.Errorf("%s must be a string", GitCacheDirParam)
-			}
-			if strings.TrimSpace(s) == "" {
-				return "", fmt.Errorf("%s cannot be empty", GitCacheDirParam)
-			}
-			return s, nil
-		}
-	}
+func defaultGitCacheBase() (string, error) {
 	base, err := os.UserCacheDir()
 	if err != nil {
 		return "", err

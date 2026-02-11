@@ -49,7 +49,7 @@ func shortTempDir(t *testing.T) string {
 	return dir
 }
 
-func TestGitRemoteFactory_GitFile_UsesConfiguredCacheDirAndCanWrite(t *testing.T) {
+func TestGitRemoteFactory_GitFile_UsesDefaultCacheDirAndCanWrite(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found on PATH")
 	}
@@ -58,25 +58,24 @@ func TestGitRemoteFactory_GitFile_UsesConfiguredCacheDirAndCanWrite(t *testing.T
 	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
 	require.NoError(t, err)
 
-	cacheDir := shortTempDir(t)
-
 	remotePath := filepath.ToSlash(remoteRepo.GitDir)
 	remoteURL := "file://" + remotePath
 	urlStr := "git+file://" + remotePath
-
-	params := map[string]interface{}{
-		GitCacheDirParam: cacheDir,
-	}
+	params := map[string]interface{}{}
 
 	db, vrw, _, err := CreateDB(ctx, types.Format_Default, urlStr, params)
 	require.NoError(t, err)
 	require.NotNil(t, db)
 	require.NotNil(t, vrw)
 
-	// Ensure cache repo created under configured cache dir.
+	// Ensure cache repo created under default cache dir.
+	base, err := os.UserCacheDir()
+	require.NoError(t, err)
+	cacheBase := filepath.Join(base, "dolt", "git-remote-cache")
+
 	sum := sha256.Sum256([]byte(remoteURL + "|" + "refs/dolt/data"))
 	h := hex.EncodeToString(sum[:])
-	cacheRepo := filepath.Join(cacheDir, h, "repo.git")
+	cacheRepo := filepath.Join(cacheBase, h, "repo.git")
 	_, err = os.Stat(filepath.Join(cacheRepo, "HEAD"))
 	require.NoError(t, err)
 
@@ -121,10 +120,8 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 		return func(context.Context, hash.HashSet, chunks.PendingRefExists) error { return nil }
 	}
 
-	open := func(cacheDir string) (db datas.Database, cs chunks.ChunkStore) {
-		params := map[string]interface{}{
-			GitCacheDirParam: cacheDir,
-		}
+	open := func() (db datas.Database, cs chunks.ChunkStore) {
+		params := map[string]interface{}{}
 		d, vrw, _, err := CreateDB(ctx, types.Format_Default, urlStr, params)
 		require.NoError(t, err)
 		require.NotNil(t, d)
@@ -135,11 +132,8 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 		return d, vs.ChunkStore()
 	}
 
-	cacheA := shortTempDir(t)
-	cacheB := shortTempDir(t)
-
 	// Client A writes a root pointing at chunk A.
-	dbA, csA := open(cacheA)
+	dbA, csA := open()
 	cA := chunks.NewChunk([]byte("clientA\n"))
 	require.NoError(t, csA.Put(ctx, cA, noopGetAddrs))
 	lastA, err := csA.Root(ctx)
@@ -150,7 +144,7 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 	require.NoError(t, dbA.Close())
 
 	// Client B reads chunk A, then writes chunk B and updates the root.
-	dbB, csB := open(cacheB)
+	dbB, csB := open()
 	require.NoError(t, csB.Rebase(ctx))
 	rootB, err := csB.Root(ctx)
 	require.NoError(t, err)
@@ -166,8 +160,8 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 	require.True(t, okCommitB)
 	require.NoError(t, dbB.Close())
 
-	// Client A re-opens (with the same cache dir as before) and should see B's update.
-	dbA2, csA2 := open(cacheA)
+	// Client A re-opens and should see B's update.
+	dbA2, csA2 := open()
 	require.NoError(t, csA2.Rebase(ctx))
 	rootA2, err := csA2.Root(ctx)
 	require.NoError(t, err)

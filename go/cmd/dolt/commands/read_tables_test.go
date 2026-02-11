@@ -23,11 +23,9 @@ import (
 func TestReadTablesArgParser_AcceptsGitFlags(t *testing.T) {
 	ap := ReadTablesCmd{}.ArgParser()
 	apr, err := ap.Parse([]string{
-		"--" + gitCacheDirFlag, "/tmp/cache",
 		"--" + gitRefFlag, "refs/dolt/custom",
 		"git+file:///tmp/remote.git", "main",
 	})
 	require.NoError(t, err)
-	require.Equal(t, "/tmp/cache", apr.GetValueOrDefault(gitCacheDirFlag, ""))
 	require.Equal(t, "refs/dolt/custom", apr.GetValueOrDefault(gitRefFlag, ""))
 }

@@ -7,11 +7,15 @@ setup() {
     setup_common
     cd $BATS_TMPDIR
     cd dolt-repo-$$
+
+    # Keep auto-selected git cache dir inside this test's sandbox.
+    export XDG_CACHE_HOME="$(mktemp -d)"
 }
 
 teardown() {
     assert_feature_version
     teardown_common
+    rm -rf "$XDG_CACHE_HOME"
 }
 
 @test "sql-remotes-git: dolt_remote add supports --ref for git remotes" {
@@ -22,8 +26,6 @@ teardown() {
     mkdir remote.git
     git init --bare remote.git
 
-    cache1=$(mktemp -d)
-
     mkdir repo1
     cd repo1
     dolt init
@@ -33,7 +35,7 @@ teardown() {
     dolt commit -m "seed"
 
     run dolt sql <<SQL
-CALL dolt_remote('add', '--git-cache-dir', '$cache1', '--ref', 'refs/dolt/custom', 'origin', '../remote.git');
+CALL dolt_remote('add', '--ref', 'refs/dolt/custom', 'origin', '../remote.git');
 CALL dolt_push('origin', 'main');
 SQL
     [ "$status" -eq 0 ]
@@ -42,8 +44,6 @@ SQL
     [ "$status" -eq 0 ]
     run git --git-dir ../remote.git show-ref refs/dolt/data
     [ "$status" -ne 0 ]
-
-    rm -rf "$cache1"
 }
 
 @test "sql-remotes-git: dolt_clone supports --ref for git remotes" {
@@ -54,9 +54,6 @@ SQL
     mkdir remote.git
     git init --bare remote.git
 
-    cache1=$(mktemp -d)
-    cache2=$(mktemp -d)
-
     mkdir repo1
     cd repo1
     dolt init
@@ -65,7 +62,7 @@ SQL
     dolt add .
     dolt commit -m "seed"
 
-    dolt remote add --git-cache-dir "$cache1" --ref refs/dolt/custom origin ../remote.git
+    dolt remote add --ref refs/dolt/custom origin ../remote.git
     dolt push --set-upstream origin main
 
     cd ..
@@ -73,7 +70,7 @@ SQL
     cd host
     dolt init
 
-    run dolt sql -q "call dolt_clone('--git-cache-dir', '$cache2', '--ref', 'refs/dolt/custom', '../remote.git', 'repo2');"
+    run dolt sql -q "call dolt_clone('--ref', 'refs/dolt/custom', '../remote.git', 'repo2');"
     [ "$status" -eq 0 ]
 
     cd repo2
@@ -85,8 +82,6 @@ SQL
     [ "$status" -eq 0 ]
     run git --git-dir ../../remote.git show-ref refs/dolt/data
     [ "$status" -ne 0 ]
-
-    rm -rf "$cache1" "$cache2"
 }
 
 @test "sql-remotes-git: dolt_backup sync-url supports --ref for git remotes" {
@@ -97,8 +92,6 @@ SQL
     mkdir remote.git
     git init --bare remote.git
 
-    cache1=$(mktemp -d)
-
     mkdir repo1
     cd repo1
     dolt init
@@ -107,14 +100,12 @@ SQL
     dolt add .
     dolt commit -m "seed"
 
-    run dolt sql -q "call dolt_backup('sync-url', '--git-cache-dir', '$cache1', '--ref', 'refs/dolt/custom', '../remote.git');"
+    run dolt sql -q "call dolt_backup('sync-url', '--ref', 'refs/dolt/custom', '../remote.git');"
     [ "$status" -eq 0 ]
 
     run git --git-dir ../remote.git show-ref refs/dolt/custom
     [ "$status" -eq 0 ]
     run git --git-dir ../remote.git show-ref refs/dolt/data
     [ "$status" -ne 0 ]
-
-    rm -rf "$cache1"
 }
 

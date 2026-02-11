@@ -71,7 +71,6 @@ const (
 	addRemoteId         = "add"
 	removeRemoteId      = "remove"
 	removeRemoteShortId = "rm"
-	gitCacheDirFlag     = "git-cache-dir"
 	gitRefFlag          = "ref"
 )
 
@@ -230,9 +229,6 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 	switch scheme {
 	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
 	default:
-		if _, ok := apr.GetValue(gitCacheDirFlag); ok {
-			return nil, errhand.BuildDError("error: --%s is only supported for git remotes", gitCacheDirFlag).Build()
-		}
 		if _, ok := apr.GetValue(gitRefFlag); ok {
 			return nil, errhand.BuildDError("error: --%s is only supported for git remotes", gitRefFlag).Build()
 		}
@@ -242,13 +238,6 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 }
 
 func addGitRemoteParams(apr *argparser.ArgParseResults, params map[string]string) errhand.VerboseError {
-	if v, ok := apr.GetValue(gitCacheDirFlag); ok {
-		v = strings.TrimSpace(v)
-		if v == "" {
-			return errhand.BuildDError("error: --%s cannot be empty", gitCacheDirFlag).Build()
-		}
-		params[dbfactory.GitCacheDirParam] = v
-	}
 	if v, ok := apr.GetValue(gitRefFlag); ok {
 		v = strings.TrimSpace(v)
 		if v == "" {

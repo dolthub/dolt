@@ -310,9 +310,6 @@ func newParams(apr *argparser.ArgParseResults, url string, urlScheme string) (ma
 
 	isGitRemote := urlScheme == dbfactory.GitFileScheme || urlScheme == dbfactory.GitHTTPScheme || urlScheme == dbfactory.GitHTTPSScheme || urlScheme == dbfactory.GitSSHScheme
 	if !isGitRemote {
-		if _, ok := apr.GetValue("git-cache-dir"); ok {
-			return nil, fmt.Errorf("error: --git-cache-dir is only supported for git remotes")
-		}
 		if _, ok := apr.GetValue("ref"); ok {
 			return nil, fmt.Errorf("error: --ref is only supported for git remotes")
 		}
@@ -328,13 +325,6 @@ func newParams(apr *argparser.ArgParseResults, url string, urlScheme string) (ma
 		err = cli.AddOSSParams(url, apr, params)
 	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
 		err = cli.VerifyNoAwsParams(apr)
-		if dir, ok := apr.GetValue("git-cache-dir"); ok {
-			dir = strings.TrimSpace(dir)
-			if dir == "" {
-				return nil, fmt.Errorf("error: --git-cache-dir cannot be empty")
-			}
-			params[dbfactory.GitCacheDirParam] = dir
-		}
 		if ref, ok := apr.GetValue("ref"); ok {
 			ref = strings.TrimSpace(ref)
 			if ref == "" {
