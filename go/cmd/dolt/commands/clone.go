@@ -222,6 +222,12 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 		} else if dir == "/" {
 			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitly define a directory for this url").Build()
 		}
+		if strings.HasSuffix(dir, ".git") {
+			dir = strings.TrimSuffix(dir, ".git")
+			if dir == "" {
+				return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitly define a directory for this url").Build()
+			}
+		}
 	}
 
 	return dir, urlStr, nil

@@ -73,6 +73,17 @@ func TestCloneParseArgs_InferDir(t *testing.T) {
 
 	dir, urlStr, verr := parseArgs(apr)
 	require.Nil(t, verr)
-	require.Equal(t, "repo.git", dir)
+	require.Equal(t, "repo", dir)
 	require.Equal(t, "https://example.com/org/repo.git", urlStr)
+}
+
+func TestCloneParseArgs_InferDir_GitFile(t *testing.T) {
+	ap := CloneCmd{}.ArgParser()
+	apr, err := ap.Parse([]string{"git+file:///tmp/remote.git"})
+	require.NoError(t, err)
+
+	dir, urlStr, verr := parseArgs(apr)
+	require.Nil(t, verr)
+	require.Equal(t, "remote", dir)
+	require.Equal(t, "git+file:///tmp/remote.git", urlStr)
 }
