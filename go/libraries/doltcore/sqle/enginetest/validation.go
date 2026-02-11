@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -46,9 +45,6 @@ func ValidateDatabase(ctx context.Context, db sql.Database) (err error) {
 }
 
 func ValidateDoltDatabase(ctx context.Context, db sqle.Database) (err error) {
-	if !types.IsFormat_DOLT(db.GetDoltDB().Format()) {
-		return nil
-	}
 	for _, stage := range validationStages {
 		if err = stage(ctx, db); err != nil {
 			return err
@@ -137,10 +133,10 @@ func validateSecondaryIndexes(ctx context.Context, db sqle.Database) error {
 }
 
 func validateIndexConsistency(
-	ctx context.Context,
-	sch schema.Schema,
-	def schema.Index,
-	primary, secondary prolly.MapInterface,
+		ctx context.Context,
+		sch schema.Schema,
+		def schema.Index,
+		primary, secondary prolly.MapInterface,
 ) error {
 	if schema.IsKeyless(sch) {
 		return validateKeylessIndex(ctx, sch, def, primary, secondary)
@@ -489,9 +485,9 @@ func ordinalMappingsForSecondaryIndex(sch schema.Schema, def schema.Index) (ord 
 
 // iterDatabaseTables is a utility to factor out common validation access patterns.
 func iterDatabaseTables(
-	ctx context.Context,
-	db sqle.Database,
-	cb func(name doltdb.TableName, t *doltdb.Table, sch schema.Schema) (bool, error),
+		ctx context.Context,
+		db sqle.Database,
+		cb func(name doltdb.TableName, t *doltdb.Table, sch schema.Schema) (bool, error),
 ) error {
 	ddb := db.GetDoltDB()
 	branches, err := ddb.GetBranches(ctx)

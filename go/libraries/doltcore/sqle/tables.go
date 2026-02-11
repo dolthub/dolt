@@ -1090,20 +1090,12 @@ func (t *WritableDoltTable) truncate(
 }
 
 func copyConstraintViolationsAndConflicts(ctx context.Context, from, to *doltdb.Table) (*doltdb.Table, error) {
-	if types.IsFormat_DOLT(to.Format()) {
-		arts, err := from.GetArtifacts(ctx)
-		if err != nil {
-			return nil, err
-		}
-		to, err = to.SetArtifacts(ctx, arts)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		panic("Unsupported format: " + to.Format().VersionString())
+	types.AssertFormat_DOLT(to.Format())
+	arts, err := from.GetArtifacts(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	return to, nil
+	return to.SetArtifacts(ctx, arts)
 }
 
 // Updater implements sql.UpdatableTable
@@ -2424,9 +2416,8 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 
 // CreateFulltextIndex implements fulltext.IndexAlterableTable
 func (t *AlterableDoltTable) CreateFulltextIndex(ctx *sql.Context, idx sql.IndexDef, keyCols fulltext.KeyColumns, tableNames fulltext.IndexTableNames) error {
-	if !types.IsFormat_DOLT(t.Format()) {
-		return fmt.Errorf("FULLTEXT is not supported on storage format %s. Run `dolt migrate` to upgrade to the latest storage format.", t.Format().VersionString())
-	}
+	types.AssertFormat_DOLT(t.Format())
+
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}

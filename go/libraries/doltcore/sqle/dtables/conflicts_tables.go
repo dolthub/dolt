@@ -32,13 +32,10 @@ func NewConflictsTable(ctx *sql.Context, tblName doltdb.TableName, srcTable sql.
 		return nil, err
 	}
 
-	if types.IsFormat_DOLT(tbl.Format()) {
-		upd, ok := srcTable.(sql.UpdatableTable)
-		if !ok {
-			return nil, fmt.Errorf("%s can not have conflicts because it is not updateable", tblName)
-		}
-		return newProllyConflictsTable(ctx, tbl, upd, tblName, root, rs)
+	types.AssertFormat_DOLT(tbl.Format())
+	upd, ok := srcTable.(sql.UpdatableTable)
+	if !ok {
+		return nil, fmt.Errorf("%s can not have conflicts because it is not updateable", tblName)
 	}
-
-	panic("Unsupported storage format for conflicts table: " + tbl.Format().VersionString())
+	return newProllyConflictsTable(ctx, tbl, upd, tblName, root, rs)
 }

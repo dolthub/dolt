@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess/mutexmap"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type LockMode int64
@@ -374,41 +373,36 @@ func (a *AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table
 }
 
 func getMaxIndexValue(ctx *sql.Context, indexData durable.Index) (uint64, error) {
-	if types.IsFormat_DOLT(indexData.Format()) {
-		idx, err := durable.ProllyMapFromIndex(indexData)
-		if err != nil {
-			return 0, err
-		}
-
-		iter, err := idx.IterAllReverse(ctx)
-		if err != nil {
-			return 0, err
-		}
-
-		kd, _ := idx.Descriptors()
-		k, _, err := iter.Next(ctx)
-		if err == io.EOF {
-			return 0, nil
-		} else if err != nil {
-			return 0, err
-		}
-
-		// TODO: is the auto-inc column always the first column in the index?
-		field, err := tree.GetField(ctx, kd, 0, k, idx.NodeStore())
-		if err != nil {
-			return 0, err
-		}
-
-		maxVal, err := CoerceAutoIncrementValue(ctx, field)
-		if err != nil {
-			return 0, err
-		}
-
-		return maxVal, nil
+	idx, err := durable.ProllyMapFromIndex(indexData)
+	if err != nil {
+		return 0, err
 	}
 
-	// For an LD format table, this operation won't succeed
-	return math.MaxUint64, nil
+	iter, err := idx.IterAllReverse(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	kd, _ := idx.Descriptors()
+	k, _, err := iter.Next(ctx)
+	if err == io.EOF {
+		return 0, nil
+	} else if err != nil {
+		return 0, err
+	}
+
+	// TODO: is the auto-inc column always the first column in the index?
+	field, err := tree.GetField(ctx, kd, 0, k, idx.NodeStore())
+	if err != nil {
+		return 0, err
+	}
+
+	maxVal, err := CoerceAutoIncrementValue(ctx, field)
+	if err != nil {
+		return 0, err
+	}
+
+	return maxVal, nil
 }
 
 // AddNewTable initializes a new table with an auto increment column to the tracker, as necessary

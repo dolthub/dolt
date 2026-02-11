@@ -574,9 +574,9 @@ func (pm *PreviewMergeConflictsTableFunction) evaluateArguments() (interface{}, 
 	return leftBranchVal, rightBranchVal, tableName, nil
 }
 
-//--------------------------------------------------
+// --------------------------------------------------
 // previewMergeConflictsTableFunctionRowIter
-//--------------------------------------------------
+// --------------------------------------------------
 
 var _ sql.RowIter = &previewMergeConflictsTableFunctionRowIter{}
 
