@@ -1,0 +1,7 @@
+common --enable_platform_specific_config
+build --action_env=PATH=/usr/bin:/bin:/sbin
+build --action_env=TMPDIR=/tmp
+build --action_env=LD_LIBRARY_PATH=
+build --repo_env=PATH=/usr/bin:/bin:/sbin
+build --repo_env=TMPDIR=/tmp
+build --repo_env=LD_LIBRARY_PATH=

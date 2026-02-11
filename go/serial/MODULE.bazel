@@ -9,6 +9,6 @@ git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "g
 git_repository(
     name = "com_github_dolthub_flatbuffers",
     commit = "4df20763d862cac7ec092cdee53e4afde63399d9",
-    remote = "ssh://git@github.com:/dolthub/flatbuffers.git",
+    remote = "https://github.com/dolthub/flatbuffers.git",
 )
 
