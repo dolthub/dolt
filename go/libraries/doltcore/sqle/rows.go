@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -65,18 +64,15 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, p
 		return nil, err
 	}
 
-	if types.IsFormat_DOLT(tbl.Format()) {
-		return ProllyRowIterFromPartition(ctx, sch, projCols, partition)
-	}
-
-	panic("Unsupported format: " + tbl.Format().VersionString())
+	types.AssertFormat_DOLT(tbl.Format())
+	return ProllyRowIterFromPartition(ctx, sch, projCols, partition)
 }
 
 func ProllyRowIterFromPartition(
-	ctx context.Context,
-	sch schema.Schema,
-	projections []uint64,
-	partition doltTablePartition,
+		ctx context.Context,
+		sch schema.Schema,
+		projections []uint64,
+		partition doltTablePartition,
 ) (sql.RowIter, error) {
 	rows, err := durable.ProllyMapFromIndex(partition.rowData)
 	if err != nil {
@@ -123,46 +119,4 @@ func SqlTableToRowIter(ctx *sql.Context, table *DoltTable, columns []uint64) (sq
 	}
 
 	return newRowIterator(ctx, t, columns, p)
-}
-
-// DoltTablePartitionToRowIter returns a sql.RowIter for a partition of the clustered index of |table|.
-func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Table, start uint64, end uint64) (sql.Schema, sql.RowIter, error) {
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	pkSch, err := sqlutil.FromDoltSchema("", name, sch)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	data, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if !types.IsFormat_DOLT(data.Format()) {
-		panic("Unsupported format " + data.Format().VersionString())
-	}
-
-	idx, err := durable.ProllyMapFromIndex(data)
-	if err != nil {
-		return nil, nil, err
-	}
-	c, err := idx.Count()
-	if err != nil {
-		return nil, nil, err
-	}
-	if end > uint64(c) {
-		end = uint64(c)
-	}
-	iter, err := idx.IterOrdinalRange(ctx, start, end)
-	if err != nil {
-		return nil, nil, err
-	}
-	rowIter := index.NewProllyRowIterForMap(sch, idx, iter, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	return pkSch.Schema, rowIter, nil
 }
