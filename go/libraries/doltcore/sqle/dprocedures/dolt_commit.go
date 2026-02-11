@@ -163,14 +163,14 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	csp := actions.CommitStagedProps{
-		Message:    msg,
-		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
-		SkipEmpty:  apr.Contains(cli.SkipEmptyFlag),
-		Amend:      amend,
-		Force:      apr.Contains(cli.ForceFlag),
-		Name:       name,
-		Email:      email,
+		Message:          msg,
+		Date:             t,
+		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
+		SkipEmpty:        apr.Contains(cli.SkipEmptyFlag),
+		Amend:            amend,
+		Force:            apr.Contains(cli.ForceFlag),
+		Name:             name,
+		Email:            email,
 		SkipVerification: apr.Contains(cli.SkipVerificationFlag),
 	}
 
@@ -215,7 +215,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 
 		pendingCommit.CommitOptions.Meta.Signature = string(signature)
 	}
-
 
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
 	if err != nil {
@@ -274,4 +273,3 @@ func commitSignatureStr(ctx *sql.Context, dbName string, roots doltdb.Roots, csp
 
 	return strings.Join(lines, "\n"), nil
 }
-

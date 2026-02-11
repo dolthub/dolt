@@ -449,11 +449,11 @@ func executeNoFFMerge(
 	}
 
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message:   msg,
-		Date:      spec.Date,
-		Force:     spec.Force,
-		Name:      spec.Name,
-		Email:     spec.Email,
+		Message:          msg,
+		Date:             spec.Date,
+		Force:            spec.Force,
+		Name:             spec.Name,
+		Email:            spec.Email,
 		SkipVerification: skipVerification,
 	})
 	if err != nil {

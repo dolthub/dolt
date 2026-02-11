@@ -64,7 +64,7 @@ func NewCherryPickOptions() CherryPickOptions {
 		CommitMessage:              "",
 		CommitBecomesEmptyHandling: doltdb.ErrorOnEmptyCommit,
 		EmptyCommitHandling:        doltdb.ErrorOnEmptyCommit,
-		SkipVerification:          false,
+		SkipVerification:           false,
 	}
 }
 
@@ -163,9 +163,9 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 	}
 
 	commitProps := actions.CommitStagedProps{
-		Date:      originalMeta.Time(),
-		Name:      originalMeta.Name,
-		Email:     originalMeta.Email,
+		Date:             originalMeta.Time(),
+		Name:             originalMeta.Name,
+		Email:            originalMeta.Email,
 		SkipVerification: options.SkipVerification,
 	}
 
