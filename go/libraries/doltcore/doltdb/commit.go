@@ -81,15 +81,6 @@ func NewCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore
 	return &Commit{vrw, ns, parents, commit}, nil
 }
 
-// NewCommitFromValue generates a new Commit object that wraps a supplied types.Value.
-func NewCommitFromValue(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, value types.Value) (*Commit, error) {
-	commit, err := datas.CommitFromValue(vrw.Format(), value)
-	if err != nil {
-		return nil, err
-	}
-	return NewCommit(ctx, vrw, ns, commit)
-}
-
 // HashOf returns the hash of the commit
 func (c *Commit) HashOf() (hash.Hash, error) {
 	return c.dCommit.Addr(), nil

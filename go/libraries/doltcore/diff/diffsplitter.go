@@ -118,31 +118,6 @@ func mapQuerySchemaToTargetSchema(query, target sql.Schema) (mapping []int, err 
 	return
 }
 
-func mapToAndFromColumns(query sql.Schema) (mapping []int, err error) {
-	last := query[len(query)-1]
-	if last.Name != "diff_type" {
-		return nil, errors.New("expected last diff column to be 'diff_type'")
-	}
-	query = query[:len(query)-1]
-
-	mapping = make([]int, len(query))
-	for i, col := range query {
-		if strings.HasPrefix(col.Name, fromPrefix) {
-			// map "from_..." column to "to_..." column
-			base := col.Name[len(fromPrefix):]
-			mapping[i] = query.IndexOfColName(toPrefix + base)
-		} else if strings.HasPrefix(col.Name, toPrefix) {
-			// map "to_..." column to "from_..." column
-			base := col.Name[len(toPrefix):]
-			mapping[i] = query.IndexOfColName(fromPrefix + base)
-		} else {
-			return nil, errors.New("expected column prefix of 'to_' or 'from_' (" + col.Name + ")")
-		}
-	}
-	// |mapping| will contain -1 for unmapped columns
-	return
-}
-
 func (ds DiffSplitter) SplitDiffResultRow(ctx *sql.Context, row sql.Row) (from, to RowDiff, err error) {
 	from = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
 	to = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
