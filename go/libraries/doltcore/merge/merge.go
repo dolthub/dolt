@@ -413,14 +413,6 @@ type ArtifactStatus struct {
 	ConstraintViolationsTables []string
 }
 
-func (as ArtifactStatus) HasConflicts() bool {
-	return len(as.DataConflictTables) > 0 || len(as.SchemaConflictsTables) > 0
-}
-
-func (as ArtifactStatus) HasConstraintViolations() bool {
-	return len(as.ConstraintViolationsTables) > 0
-}
-
 // MergeWouldStompChanges returns list of table names that are stomped and the diffs map between head and working set.
 func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit *doltdb.Commit) ([]doltdb.TableName, map[doltdb.TableName]hash.Hash, error) {
 	mergeRoot, err := mergeCommit.GetRootValue(ctx)
