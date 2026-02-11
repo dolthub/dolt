@@ -56,63 +56,47 @@ func (srmv *successfulRebaseMessageValidator) Validate(val interface{}) (bool, e
 var commitHash = &commitHashValidator{}
 var successfulRebaseMessage = &successfulRebaseMessageValidator{}
 
-var DoltTestValidationScripts = []queries.ScriptTest{
+var DoltCommitVerificationScripts = []queries.ScriptTest{
 	{
-		Name: "test validation system variables exist and have correct defaults",
+		Name: "test verification system variables exist and have correct defaults",
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SHOW GLOBAL VARIABLES LIKE 'dolt_commit_run_test_groups'",
+				Query: "SHOW GLOBAL VARIABLES LIKE 'dolt_commit_verification_groups'",
 				Expected: []sql.Row{
-					{"dolt_commit_run_test_groups", ""},
-				},
-			},
-			{
-				Query: "SHOW GLOBAL VARIABLES LIKE 'dolt_push_run_test_groups'",
-				Expected: []sql.Row{
-					{"dolt_push_run_test_groups", ""},
+					{"dolt_commit_verification_groups", ""},
 				},
 			},
 		},
 	},
 	{
-		Name: "test validation system variables can be set",
+		Name: "test verification system variables can be set",
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SET GLOBAL dolt_commit_run_test_groups = '*'",
+				Query:    "SET GLOBAL dolt_commit_verification_groups = '*'",
 				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
-				Query: "SHOW GLOBAL VARIABLES LIKE 'dolt_commit_run_test_groups'",
+				Query: "SHOW GLOBAL VARIABLES LIKE 'dolt_commit_verification_groups'",
 				Expected: []sql.Row{
-					{"dolt_commit_run_test_groups", "*"},
+					{"dolt_commit_verification_groups", "*"},
 				},
 			},
 			{
-				Query:    "SET GLOBAL dolt_commit_run_test_groups = 'unit,integration'",
+				Query:    "SET GLOBAL dolt_commit_verification_groups = 'unit,integration'",
 				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
-				Query: "SHOW GLOBAL VARIABLES LIKE 'dolt_commit_run_test_groups'",
+				Query: "SHOW GLOBAL VARIABLES LIKE 'dolt_commit_verification_groups'",
 				Expected: []sql.Row{
-					{"dolt_commit_run_test_groups", "unit,integration"},
-				},
-			},
-			{
-				Query:    "SET GLOBAL dolt_push_run_test_groups = '*'",
-				Expected: []sql.Row{{types.OkResult{}}},
-			},
-			{
-				Query: "SHOW GLOBAL VARIABLES LIKE 'dolt_push_run_test_groups'",
-				Expected: []sql.Row{
-					{"dolt_push_run_test_groups", "*"},
+					{"dolt_commit_verification_groups", "unit,integration"},
 				},
 			},
 		},
 	},
 	{
-		Name: "commit with test validation enabled - all tests pass",
+		Name: "commit verification enabled - all tests pass",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -131,9 +115,9 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "commit with test validation enabled - tests fail, commit aborted",
+		Name: "commit verification enabled - tests fail, commit aborted",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -143,8 +127,8 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "CALL dolt_commit('-m', 'Commit that should fail validation')",
-				ExpectedErrStr: "commit validation failed: test_will_fail (Expected '999' but got '2')",
+				Query:          "CALL dolt_commit('-m', 'Commit that should fail verification')",
+				ExpectedErrStr: "commit verification failed: test_will_fail (Assertion failed: expected_single_value equal to 999, got 2)",
 			},
 			{
 				Query:    "CALL dolt_commit('--skip-verification','-m', 'skip verification')",
@@ -153,9 +137,9 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "commit with test validation - specific test groups",
+		Name: "commit with test verification - specific test groups",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = 'unit'",
+			"SET GLOBAL dolt_commit_verification_groups = 'unit'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -169,12 +153,12 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{commitHash}},
 			},
 			{
-				Query:            "SET GLOBAL dolt_commit_run_test_groups = 'integration'",
+				Query:            "SET GLOBAL dolt_commit_verification_groups = 'integration'",
 				SkipResultsCheck: true,
 			},
 			{
 				Query:          "CALL dolt_commit('--allow-empty', '--amend', '-m', 'fail please')",
-				ExpectedErrStr: "commit validation failed: test_will_fail (Expected '999' but got '2')",
+				ExpectedErrStr: "commit verification failed: test_will_fail (Assertion failed: expected_single_value equal to 999, got 2)",
 			},
 			{
 				Query:    "CALL dolt_commit('--allow-empty', '--amend', '--skip-verification', '-m', 'skip the tests')",
@@ -183,9 +167,9 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "cherry-pick with test validation enabled - tests pass",
+		Name: "cherry-pick with test verification enabled - tests pass",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -209,14 +193,14 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL dolt_cherry_pick(@commit_2_hash)",
-				ExpectedErrStr: "commit validation failed: test_user_count_update (Expected '2' but got '3')",
+				ExpectedErrStr: "commit verification failed: test_user_count_update (Assertion failed: expected_single_value equal to 2, got 3)",
 			},
 		},
 	},
 	{
-		Name: "cherry-pick with test validation enabled - tests fail, aborted",
+		Name: "cherry-pick with test verification enabled - tests fail, aborted",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -232,7 +216,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL dolt_cherry_pick(@commit_hash)",
-				ExpectedErrStr: "commit validation failed: test_users_count (Expected '1' but got '2')",
+				ExpectedErrStr: "commit verification failed: test_users_count (Assertion failed: expected_single_value equal to 1, got 2)",
 			},
 			{
 				Query:    "CALL dolt_cherry_pick('--skip-verification', @commit_hash)",
@@ -241,15 +225,15 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_test_run('*')",
 				Expected: []sql.Row{
-					{"test_users_count", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Expected '1' but got '2'"},
+					{"test_users_count", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Assertion failed: expected_single_value equal to 1, got 2"},
 				},
 			},
 		},
 	},
 	{
-		Name: "rebase with test validation enabled - tests pass",
+		Name: "rebase with test verification enabled - tests pass",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -278,9 +262,9 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 	},
 
 	{
-		Name: "rebase with test validation enabled - tests fail, aborted",
+		Name: "rebase with test verification enabled - tests fail, aborted",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -301,7 +285,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL dolt_rebase('main')",
-				ExpectedErrStr: "commit validation failed: test_users_count (Expected '2' but got '3')",
+				ExpectedErrStr: "commit verification failed: test_users_count (Assertion failed: expected_single_value equal to 2, got 3)",
 			},
 			{
 				Query:    "CALL dolt_rebase('--abort')",
@@ -314,7 +298,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_test_run('*')",
 				Expected: []sql.Row{
-					{"test_users_count", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Expected '2' but got '3'"},
+					{"test_users_count", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Assertion failed: expected_single_value equal to 2, got 3"},
 				},
 			},
 		},
@@ -322,7 +306,7 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 	{
 		Name: "interactive rebase with --skip-verification flag should persist across continue operations",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -354,9 +338,9 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "test validation with no dolt_tests table - no validation occurs",
+		Name: "test verification with no dolt_tests errors",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
 			"CALL dolt_add('.')",
@@ -369,9 +353,9 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "test validation with mixed test groups - only specified groups run",
+		Name: "test verification with mixed test groups - only specified groups run",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = 'unit'",
+			"SET GLOBAL dolt_commit_verification_groups = 'unit'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -387,9 +371,9 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "test validation error message includes test details",
+		Name: "test verification error message includes test details",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -399,15 +383,14 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL dolt_commit('-m', 'Commit with specific test failure')",
-				ExpectedErrStr: "commit validation failed: test_specific_failure (Expected '999' but got '2')",
+				ExpectedErrStr: "commit verification failed: test_specific_failure (Assertion failed: expected_single_value equal to 999, got 2)",
 			},
 		},
 	},
-	// Merge test validation scenarios
 	{
-		Name: "merge with test validation enabled - tests pass",
+		Name: "merge with test verification enabled - tests pass",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -430,9 +413,9 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "merge with test validation enabled - tests fail, merge aborted",
+		Name: "merge with test verification enabled - tests fail, merge aborted",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -451,14 +434,14 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL dolt_merge('feature')",
-				ExpectedErrStr: "commit validation failed: test_will_fail (Expected '999' but got '3')",
+				ExpectedErrStr: "commit verification failed: test_will_fail (Assertion failed: expected_single_value equal to 999, got 3)",
 			},
 		},
 	},
 	{
-		Name: "merge with --skip-verification flag bypasses validation",
+		Name: "merge with --skip-verification flag bypasses verification",
 		SetUpScript: []string{
-			"SET GLOBAL dolt_commit_run_test_groups = '*'",
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
 			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
 			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
@@ -482,51 +465,9 @@ var DoltTestValidationScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_test_run('*')",
 				Expected: []sql.Row{
-					{"test_will_fail", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Expected '999' but got '3'"},
+					{"test_will_fail", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Assertion failed: expected_single_value equal to 999, got 3"},
 				},
 			},
 		},
 	},
-}
-
-// Test validation for push operations (when implemented)
-var DoltPushTestValidationScripts = []queries.ScriptTest{
-	{
-		Name: "push with test validation enabled - tests pass",
-		SetUpScript: []string{
-			"SET GLOBAL dolt_push_run_test_groups = '*'",
-			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
-			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
-			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
-				"('test_alice_exists', 'unit', 'SELECT COUNT(*) FROM users WHERE name = \"Alice\"', 'expected_single_value', '==', '1')",
-			"CALL dolt_add('.')",
-			"CALL dolt_commit('-m', 'Initial commit')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "CALL dolt_push('origin', 'main')",
-				ExpectedErrStr: "remote 'origin' not found", // Expected since we don't have a real remote
-			},
-		},
-	},
-	/*
-		{
-			Name: "push with --skip-verification flag bypasses validation",
-			SetUpScript: []string{
-				"SET GLOBAL dolt_push_run_test_groups = '*'",
-				"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
-				"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
-				"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
-					"('test_will_fail', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999')",
-				"CALL dolt_add('.')",
-				"CALL dolt_commit('-m', 'Initial commit')",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:          "CALL dolt_push('--skip-verification', 'origin', 'main')",
-					ExpectedErrStr: "remote 'origin' not found", // Expected since we don't have a real remote
-				},
-			},
-		},
-	*/
 }

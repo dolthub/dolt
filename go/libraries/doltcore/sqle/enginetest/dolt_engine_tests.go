@@ -2202,7 +2202,7 @@ func RunTransactionTestsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engi
 }
 
 func RunDoltTestValidationScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
-	for _, script := range DoltTestValidationScripts {
+	for _, script := range DoltCommitVerificationScripts {
 		harness := harness.NewHarness(t)
 		enginetest.TestScript(t, harness, script)
 		harness.Close()

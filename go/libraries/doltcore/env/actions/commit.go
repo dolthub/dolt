@@ -40,16 +40,16 @@ type CommitStagedProps struct {
 	SkipVerification bool
 }
 
-// Test validation system variable names
 const (
-	DoltCommitRunTestGroups = "dolt_commit_run_test_groups"
+	// System variable name, defined here to avoid circular imports
+	DoltCommitVerificationGroups = "dolt_commit_verification_groups"
 )
 
 // GetCommitRunTestGroups returns the test groups to run for commit operations
 // Returns empty slice if no tests should be run, ["*"] if all tests should be run,
 // or specific group names if only those groups should be run
 func GetCommitRunTestGroups() []string {
-	_, val, ok := sql.SystemVariables.GetGlobal(DoltCommitRunTestGroups)
+	_, val, ok := sql.SystemVariables.GetGlobal(DoltCommitVerificationGroups)
 	if !ok {
 		return nil
 	}
@@ -146,12 +146,10 @@ func GetCommitStaged(
 		}
 	}
 
-	// Run test validation against staged data if enabled and not skipped
 	if !props.SkipVerification {
 		testGroups := GetCommitRunTestGroups()
 		if len(testGroups) > 0 {
-			// Use the new root-based validation approach
-			err := runTestValidationAgainstRoot(ctx, roots.Staged, testGroups, "commit")
+			err := runTestsAgainstRoot(ctx, roots.Staged, testGroups, "commit")
 			if err != nil {
 				return nil, err
 			}
@@ -166,9 +164,8 @@ func GetCommitStaged(
 	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
 }
 
-// runTestValidationAgainstRoot executes test validation against a specific root using the exposed internals
-func runTestValidationAgainstRoot(ctx *sql.Context, root doltdb.RootValue, testGroups []string, operationType string) error {
-	// Get session information to create engine
+// runTestsAgainstRoot executes test validation against a specific root.
+func runTestsAgainstRoot(ctx *sql.Context, root doltdb.RootValue, testGroups []string, operationType string) error {
 	type sessionInterface interface {
 		sql.Session
 		GenericProvider() sql.MutableDatabaseProvider
@@ -182,7 +179,6 @@ func runTestValidationAgainstRoot(ctx *sql.Context, root doltdb.RootValue, testG
 	provider := session.GenericProvider()
 	engine := gms.NewDefault(provider)
 
-	// Use the refactored dtablefunctions.RunTestsAgainstRoot
 	return runTestsUsingDtablefunctions(ctx, root, engine, testGroups, operationType)
 }
 
@@ -230,7 +226,7 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engin
 	}
 
 	if len(allFailures) > 0 {
-		return fmt.Errorf("%s validation failed: %s", operationType, strings.Join(allFailures, ", "))
+		return fmt.Errorf("%s verification failed: %s", operationType, strings.Join(allFailures, ", "))
 	}
 
 	return nil

@@ -18,6 +18,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
@@ -293,10 +294,10 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Default: int8(0),
 	},
 	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltCommitRunTestGroups,
+		Name:    actions.DoltCommitVerificationGroups,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemStringType(dsess.DoltCommitRunTestGroups),
+		Type:    types.NewSystemStringType(actions.DoltCommitVerificationGroups),
 		Default: "",
 	},
 }
@@ -560,13 +561,6 @@ func AddDoltSystemVariables() {
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
 			Type:    types.NewSystemBoolType(dsess.AllowCICreation),
 			Default: int8(0),
-		},
-		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltCommitRunTestGroups,
-			Dynamic: true,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-			Type:    types.NewSystemStringType(dsess.DoltCommitRunTestGroups),
-			Default: "",
 		},
 	})
 	sql.SystemVariables.AddSystemVariables(DoltSystemVariables)
