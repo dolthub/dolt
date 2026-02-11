@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
@@ -85,7 +86,7 @@ func TestNBS_GitBlobstore_EmptyRemote_FirstManifestUpdateBootstrapsRef(t *testin
 	want.lock = generateLockHash(want.root, want.specs, want.appendix, nil)
 
 	stats := NewStats()
-	got, err := blobstoreManifest{bs: bs}.Update(ctx, hash.Hash{}, want, stats, nil)
+	got, err := blobstoreManifest{bs: bs}.Update(ctx, dherrors.FatalBehaviorError, hash.Hash{}, want, stats, nil)
 	require.NoError(t, err)
 	require.Equal(t, want.lock, got.lock)
 	require.Equal(t, want.root, got.root)
