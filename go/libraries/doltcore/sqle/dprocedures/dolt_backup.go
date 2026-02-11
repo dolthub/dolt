@@ -323,8 +323,6 @@ func newParams(apr *argparser.ArgParseResults, url string, urlScheme string) (ma
 				return nil, fmt.Errorf("error: --git-cache-dir cannot be empty")
 			}
 			params[dbfactory.GitCacheDirParam] = dir
-		} else {
-			return nil, fmt.Errorf("error: --git-cache-dir is required for git remotes")
 		}
 		if ref, ok := apr.GetValue("ref"); ok {
 			ref = strings.TrimSpace(ref)

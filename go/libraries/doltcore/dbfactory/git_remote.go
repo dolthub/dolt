@@ -34,9 +34,11 @@ import (
 )
 
 const (
-	GitCacheDirParam = "git_cache_dir"
-	GitRefParam      = "git_ref"
-	defaultGitRef    = "refs/dolt/data"
+	GitCacheDirParam     = "git_cache_dir"
+	GitRefParam          = "git_ref"
+	GitRemoteNameParam   = "git_remote_name"
+	defaultGitRef        = "refs/dolt/data"
+	defaultGitRemoteName = "origin"
 )
 
 // GitRemoteFactory opens a Dolt database backed by a Git remote, using a local bare
@@ -95,13 +97,15 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
+	remoteName := resolveGitRemoteName(params)
+
 	// Ensure remote "origin" exists and points to the underlying git remote URL.
-	if err := ensureGitRemoteURL(ctx, cacheRepo, "origin", remoteURL.String()); err != nil {
+	if err := ensureGitRemoteURL(ctx, cacheRepo, remoteName, remoteURL.String()); err != nil {
 		return nil, nil, nil, err
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	cs, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: "origin"}, defaultMemTableSize, q)
+	cs, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: remoteName}, defaultMemTableSize, q)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -153,6 +157,20 @@ func resolveGitRemoteRef(urlObj *url.URL, params map[string]interface{}) string 
 	return defaultGitRef
 }
 
+func resolveGitRemoteName(params map[string]interface{}) string {
+	if params != nil {
+		if v, ok := params[GitRemoteNameParam]; ok && v != nil {
+			s, ok := v.(string)
+			if ok {
+				if s = strings.TrimSpace(s); s != "" {
+					return s
+				}
+			}
+		}
+	}
+	return defaultGitRemoteName
+}
+
 func resolveGitCacheBase(params map[string]interface{}) (string, error) {
 	if params != nil {
 		if v, ok := params[GitCacheDirParam]; ok && v != nil {
@@ -166,7 +184,11 @@ func resolveGitCacheBase(params map[string]interface{}) (string, error) {
 			return s, nil
 		}
 	}
-	return "", fmt.Errorf("%s is required for git remotes", GitCacheDirParam)
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "dolt", "git-remote-cache"), nil
 }
 
 func cacheRepoPath(cacheBase, remoteURL, ref string) (string, error) {

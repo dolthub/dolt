@@ -112,8 +112,6 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData[*sql.Context], apr 
 				return fmt.Errorf("error: --git-cache-dir cannot be empty")
 			}
 			params[dbfactory.GitCacheDirParam] = dir
-		} else {
-			return fmt.Errorf("error: --git-cache-dir is required for git remotes")
 		}
 		if ref, ok := apr.GetValue("ref"); ok {
 			ref = strings.TrimSpace(ref)

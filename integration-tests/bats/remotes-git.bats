@@ -226,7 +226,7 @@ teardown() {
     rm -rf "$cache1" "$cache2"
 }
 
-@test "remotes-git: --git-cache-dir is required and creates cache base content" {
+@test "remotes-git: default git cache dir works when --git-cache-dir omitted" {
     if ! command -v git >/dev/null 2>&1; then
         skip "git not installed"
     fi
@@ -239,22 +239,7 @@ teardown() {
     dolt init
     dolt commit --allow-empty -m "init"
 
-    run dolt remote add origin ../remote.git
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "git-cache-dir" ]] || false
-    [[ "$output" =~ "required" ]] || false
-
-    cache1=$(mktemp -d)
-    dolt remote add --git-cache-dir "$cache1" origin ../remote.git
+    dolt remote add origin ../remote.git
     run dolt push --set-upstream origin main
     [ "$status" -eq 0 ]
-
-    run ls -A "$cache1"
-    [ "$status" -eq 0 ]
-    [ "$output" != "" ]
-
-    run bash -c 'ls -d "$1"/*/repo.git >/dev/null 2>&1' _ "$cache1"
-    [ "$status" -eq 0 ]
-
-    rm -rf "$cache1"
 }

@@ -64,8 +64,6 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 				return nil, errhand.BuildDError("error: --git-cache-dir cannot be empty").Build()
 			}
 			remoteParms[dbfactory.GitCacheDirParam] = dir
-		} else {
-			return nil, errhand.BuildDError("error: --git-cache-dir is required for git remotes").Build()
 		}
 	} else {
 		if _, ok := apr.GetValue("git-cache-dir"); ok {

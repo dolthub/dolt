@@ -104,6 +104,9 @@ func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dial
 	}
 
 	params[dbfactory.GRPCDialProviderParam] = dialer
+	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
+		params[dbfactory.GitRemoteNameParam] = r.Name
+	}
 
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
@@ -117,6 +120,9 @@ func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer d
 	}
 
 	params[dbfactory.GRPCDialProviderParam] = dialer
+	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
+		params[dbfactory.GitRemoteNameParam] = r.Name
+	}
 
 	return dbfactory.PrepareDB(ctx, nbf, r.Url, params)
 }
@@ -128,6 +134,9 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 	}
 	params[dbfactory.NoCachingParameter] = "true"
 	params[dbfactory.GRPCDialProviderParam] = dialer
+	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
+		params[dbfactory.GitRemoteNameParam] = r.Name
+	}
 
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
