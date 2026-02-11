@@ -28,7 +28,7 @@ getHeadHash() {
     
     run dolt sql -q "SHOW GLOBAL VARIABLES LIKE 'dolt_commit_verification_groups'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "*" ]]
+    [[ "$output" =~ "*" ]] || false
 }
 
 @test "commit_verification: commit with tests enabled - all tests pass" {
@@ -58,9 +58,9 @@ SQL
     
     run dolt commit -m "Commit that should fail verification"
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "commit verification failed" ]]
-    [[ "$output" =~ "test_will_fail" ]]
-    [[ "$output" =~ "Expected '999' but got '1'" ]]
+    [[ "$output" =~ "commit verification failed" ]] || false
+    [[ "$output" =~ "test_will_fail" ]] || false
+    [[ "$output" =~ "Expected '999' but got '1'" ]] || false
 
     run dolt commit --skip-verification -m "Skip verification commit"
     [ "$status" -eq 0 ]
@@ -130,9 +130,9 @@ SQL
     
     run dolt merge feature
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "commit verification failed" ]]
-    [[ "$output" =~ "test_will_fail" ]]
-    [[ "$output" =~ "Expected '999' but got '3'" ]]
+    [[ "$output" =~ "commit verification failed" ]] || false
+    [[ "$output" =~ "test_will_fail" ]] || false
+    [[ "$output" =~ "Expected '999' but got '3'" ]] || false
 
     run dolt merge --skip-verification feature
     [ "$status" -eq 0 ]
@@ -179,9 +179,9 @@ SQL
     dolt checkout main
     run dolt cherry-pick $commit_hash
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "commit verification failed" ]]
-    [[ "$output" =~ "test_users_count" ]]
-    [[ "$output" =~ "Expected '1' but got '2'" ]]
+    [[ "$output" =~ "commit verification failed" ]] || false
+    [[ "$output" =~ "test_users_count" ]] || false
+    [[ "$output" =~ "Expected '1' but got '2'" ]] || false
 
     run dolt cherry-pick --skip-verification $commit_hash
     [ "$status" -eq 0 ]
@@ -213,7 +213,7 @@ SQL
     
     run dolt rebase main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully rebased" ]]
+    [[ "$output" =~ "Successfully rebased" ]] || false
 }
 
 @test "commit_verification: rebase with tests enabled - tests fail, aborted" {
@@ -243,11 +243,11 @@ SQL
     
     run dolt rebase main
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "commit verification failed" ]]
-    [[ "$output" =~ "test_users_count" ]]
-    [[ "$output" =~ "Expected '2' but got '3'" ]]
+    [[ "$output" =~ "commit verification failed" ]] || false
+    [[ "$output" =~ "test_users_count" ]] || false
+    [[ "$output" =~ "Expected '2' but got '3'" ]] || false
 
     run dolt rebase --skip-verification main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully rebased" ]]
+    [[ "$output" =~ "Successfully rebased" ]] || false
 }
