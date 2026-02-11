@@ -18,21 +18,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
-	diff2 "github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
@@ -70,11 +63,11 @@ type FKViolationReceiver interface {
 // RegisterForeignKeyViolations emits constraint violations that have been created as a
 // result of the diff between |baseRoot| and |newRoot|. It sends violations to |receiver|.
 func RegisterForeignKeyViolations(
-	ctx *sql.Context,
-	tableResolver doltdb.TableResolver,
-	newRoot, baseRoot doltdb.RootValue,
-	tables *doltdb.TableNameSet,
-	receiver FKViolationReceiver,
+		ctx *sql.Context,
+		tableResolver doltdb.TableResolver,
+		newRoot, baseRoot doltdb.RootValue,
+		tables *doltdb.TableNameSet,
+		receiver FKViolationReceiver,
 ) error {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -118,13 +111,13 @@ func RegisterForeignKeyViolations(
 			if err != nil {
 				return err
 			}
-			err = parentFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postParent, postChild, emptyIdx, receiver)
+			err = parentFkConstraintViolations(ctx, foreignKey, postParent, postParent, postChild, emptyIdx, receiver)
 			if err != nil {
 				return err
 			}
 		} else {
 			// Parent exists in the ancestor
-			err = parentFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, preParent, postParent, postChild, preParent.RowData, receiver)
+			err = parentFkConstraintViolations(ctx, foreignKey, preParent, postParent, postChild, preParent.RowData, receiver)
 			if err != nil {
 				return err
 			}
@@ -304,21 +297,18 @@ func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
 }
 
 func (f *foreignKeyViolationWriter) NomsFKViolationFound(ctx context.Context, rowKey, rowValue types.Tuple) error {
-
 	cvKey, cvVal, err := toConstraintViolationRow(ctx, CvType_ForeignKey, f.nomsVInfo, rowKey, rowValue)
 	if err != nil {
 		return err
 	}
 
 	f.violMapEditor.Set(cvKey, cvVal)
-
 	f.violatedTables.Add(f.currFk.TableName)
 
 	return nil
 }
 
 func (f *foreignKeyViolationWriter) ProllyFKViolationFound(ctx context.Context, rowKey, rowValue val.Tuple) error {
-
 	meta := prolly.ConstraintViolationMeta{VInfo: f.cInfoJsonData, Value: rowValue}
 
 	err := f.artEditor.ReplaceConstraintViolation(ctx, rowKey, f.theirRootIsh, prolly.ArtifactTypeForeignKeyViol, meta)
@@ -335,17 +325,16 @@ var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
 
 // parentFkConstraintViolations processes foreign key constraint violations for the parent in a foreign key.
 func parentFkConstraintViolations(
-	ctx context.Context,
-	vr types.ValueReader,
-	foreignKey doltdb.ForeignKey,
-	preParent, postParent, postChild *constraintViolationsLoadedTable,
-	preParentRowData durable.Index,
-	receiver FKViolationReceiver,
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		preParent, postParent, postChild *constraintViolationsLoadedTable,
+		preParentRowData durable.Index,
+		receiver FKViolationReceiver,
 ) error {
 	if preParentRowData.Format() != types.Format_DOLT {
-		m := durable.NomsMapFromIndex(preParentRowData)
-		return nomsParentFkConstraintViolations(ctx, vr, foreignKey, postParent, postChild, preParent.Schema, m, receiver)
+		panic("unsupported format: " + preParentRowData.Format().VersionString())
 	}
+
 	if preParent.IndexData == nil || postParent.Schema.GetPKCols().Size() == 0 || preParent.Schema.GetPKCols().Size() == 0 {
 		m, err := durable.ProllyMapFromIndex(preParentRowData)
 		if err != nil {
@@ -376,17 +365,17 @@ func parentFkConstraintViolations(
 // childFkConstraintViolations handles processing the reference options on a child, or creating a violation if
 // necessary.
 func childFkConstraintViolations(
-	ctx context.Context,
-	vr types.ValueReader,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild, preChild *constraintViolationsLoadedTable,
-	preChildRowData durable.Index,
-	receiver FKViolationReceiver,
+		ctx context.Context,
+		vr types.ValueReader,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild, preChild *constraintViolationsLoadedTable,
+		preChildRowData durable.Index,
+		receiver FKViolationReceiver,
 ) error {
 	if preChildRowData.Format() != types.Format_DOLT {
-		m := durable.NomsMapFromIndex(preChildRowData)
-		return nomsChildFkConstraintViolations(ctx, vr, foreignKey, postParent, postChild, preChild.Schema, m, receiver)
+		panic("unsupported format: " + preChildRowData.Format().VersionString())
 	}
+
 	if preChild.IndexData == nil || postChild.Schema.GetPKCols().Size() == 0 || preChild.Schema.GetPKCols().Size() == 0 {
 		m, err := durable.ProllyMapFromIndex(preChildRowData)
 		if err != nil {
@@ -415,272 +404,14 @@ func childFkConstraintViolations(
 	return prollyChildSecDiffFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, receiver)
 }
 
-func nomsParentFkConstraintViolations(
-	ctx context.Context,
-	vr types.ValueReader,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preParentSch schema.Schema,
-	preParentRowData types.Map,
-	receiver FKViolationReceiver) error {
-
-	postParentIndexTags := postParent.Index.IndexedColumnTags()
-	postChildIndexTags := postChild.Index.IndexedColumnTags()
-
-	differ := diff.NewRowDiffer(ctx, preParentRowData.Format(), preParentSch, postParent.Schema, 1024)
-	defer differ.Close()
-	differ.Start(ctx, preParentRowData, durable.NomsMapFromIndex(postParent.RowData))
-	for {
-		diffSlice, hasMore, err := differ.GetDiffs(1, 10*time.Second)
-		if err != nil {
-			return err
-		}
-		if len(diffSlice) != 1 {
-			if hasMore {
-				return fmt.Errorf("no diff returned but should have errored earlier")
-			}
-			break
-		}
-		rowDiff := diffSlice[0]
-		switch rowDiff.ChangeType {
-		case types.DiffChangeRemoved, types.DiffChangeModified:
-			postParentRow, err := row.FromNoms(postParent.Schema, rowDiff.KeyValue.(types.Tuple), rowDiff.OldValue.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			hasNulls := false
-			for _, tag := range postParentIndexTags {
-				if postParentRowEntry, ok := postParentRow.GetColVal(tag); !ok || types.IsNull(postParentRowEntry) {
-					hasNulls = true
-					break
-				}
-			}
-			if hasNulls {
-				continue
-			}
-
-			postParentIndexPartialKey, err := row.ReduceToIndexPartialKey(foreignKey.TableColumns, postParent.Index, postParentRow)
-			if err != nil {
-				return err
-			}
-
-			shouldContinue, err := func() (bool, error) {
-				var mapIter table.ReadCloser = noms.NewNomsRangeReader(
-					vr,
-					postParent.IndexSchema,
-					durable.NomsMapFromIndex(postParent.IndexData),
-					[]*noms.ReadRange{{Start: postParentIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postParentIndexPartialKey)}})
-				defer mapIter.Close(ctx)
-				if _, err := mapIter.ReadRow(ctx); err == nil {
-					// If the parent table has other rows that satisfy the partial key then we choose to do nothing
-					return true, nil
-				} else if err != io.EOF {
-					return false, err
-				}
-				return false, nil
-			}()
-			if err != nil {
-				return err
-			}
-			if shouldContinue {
-				continue
-			}
-
-			postParentIndexPartialKeySlice, err := postParentIndexPartialKey.AsSlice()
-			if err != nil {
-				return err
-			}
-			for i := 0; i < len(postChildIndexTags); i++ {
-				postParentIndexPartialKeySlice[2*i] = types.Uint(postChildIndexTags[i])
-			}
-			postChildIndexPartialKey, err := types.NewTuple(postChild.Table.Format(), postParentIndexPartialKeySlice...)
-			if err != nil {
-				return err
-			}
-			err = nomsParentFkConstraintViolationsProcess(ctx, vr, foreignKey, postChild, postChildIndexPartialKey, receiver)
-			if err != nil {
-				return err
-			}
-		case types.DiffChangeAdded:
-			// We don't do anything if a parent row was added
-		default:
-			return fmt.Errorf("unknown diff change type")
-		}
-		if !hasMore {
-			break
-		}
-	}
-
-	return nil
-}
-
-func nomsParentFkConstraintViolationsProcess(
-	ctx context.Context,
-	vr types.ValueReader,
-	foreignKey doltdb.ForeignKey,
-	postChild *constraintViolationsLoadedTable,
-	postChildIndexPartialKey types.Tuple,
-	receiver FKViolationReceiver,
-) error {
-	indexData := durable.NomsMapFromIndex(postChild.IndexData)
-	rowData := durable.NomsMapFromIndex(postChild.RowData)
-
-	mapIter := noms.NewNomsRangeReader(
-		vr,
-		postChild.IndexSchema,
-		indexData,
-		[]*noms.ReadRange{{Start: postChildIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postChildIndexPartialKey)}})
-	defer mapIter.Close(ctx)
-	var postChildIndexRow row.Row
-	var err error
-	for postChildIndexRow, err = mapIter.ReadRow(ctx); err == nil; postChildIndexRow, err = mapIter.ReadRow(ctx) {
-		postChildIndexKey, err := postChildIndexRow.NomsMapKey(postChild.IndexSchema).Value(ctx)
-		if err != nil {
-			return err
-		}
-		postChildRowKey, err := postChild.Index.ToTableTuple(ctx, postChildIndexKey.(types.Tuple), postChild.Table.Format())
-		if err != nil {
-			return err
-		}
-		postChildRowVal, ok, err := rowData.MaybeGetTuple(ctx, postChildRowKey)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("index %s on %s contains data that table does not", foreignKey.TableIndex, foreignKey.TableName)
-		}
-
-		err = receiver.NomsFKViolationFound(ctx, postChildRowKey, postChildRowVal)
-		if err != nil {
-			return err
-		}
-	}
-	if err != io.EOF {
-		return err
-	}
-	return nil
-}
-
-// nomsChildFkConstraintViolations processes foreign key constraint violations for the child in a foreign key.
-func nomsChildFkConstraintViolations(
-	ctx context.Context,
-	vr types.ValueReader,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preChildSch schema.Schema,
-	preChildRowData types.Map,
-	receiver FKViolationReceiver,
-) error {
-	var postParentIndexTags, postChildIndexTags []uint64
-	if postParent.Index.Name() == "" {
-		postParentIndexTags = foreignKey.ReferencedTableColumns
-		postChildIndexTags = foreignKey.TableColumns
-	} else {
-		postParentIndexTags = postParent.Index.IndexedColumnTags()
-		postChildIndexTags = postChild.Index.IndexedColumnTags()
-	}
-
-	differ := diff.NewRowDiffer(ctx, preChildRowData.Format(), preChildSch, postChild.Schema, 1024)
-	defer differ.Close()
-	differ.Start(ctx, preChildRowData, durable.NomsMapFromIndex(postChild.RowData))
-	for {
-		diffSlice, hasMore, err := differ.GetDiffs(1, 10*time.Second)
-		if err != nil {
-			return err
-		}
-		if len(diffSlice) != 1 {
-			if hasMore {
-				return fmt.Errorf("no diff returned but should have errored earlier")
-			}
-			break
-		}
-		rowDiff := diffSlice[0]
-		switch rowDiff.ChangeType {
-		case types.DiffChangeAdded, types.DiffChangeModified:
-			postChildRow, err := row.FromNoms(postChild.Schema, rowDiff.KeyValue.(types.Tuple), rowDiff.NewValue.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			hasNulls := false
-			for _, tag := range postChildIndexTags {
-				if postChildRowEntry, ok := postChildRow.GetColVal(tag); !ok || types.IsNull(postChildRowEntry) {
-					hasNulls = true
-					break
-				}
-			}
-			if hasNulls {
-				continue
-			}
-
-			postChildIndexPartialKey, err := row.ReduceToIndexPartialKey(postChildIndexTags, postChild.Index, postChildRow)
-			if err != nil {
-				return err
-			}
-			postChildIndexPartialKeySlice, err := postChildIndexPartialKey.AsSlice()
-			if err != nil {
-				return err
-			}
-			for i := 0; i < len(postParentIndexTags); i++ {
-				postChildIndexPartialKeySlice[2*i] = types.Uint(postParentIndexTags[i])
-			}
-			parentPartialKey, err := types.NewTuple(postChild.Table.Format(), postChildIndexPartialKeySlice...)
-			if err != nil {
-				return err
-			}
-			err = childFkConstraintViolationsProcess(ctx, vr, postParent, rowDiff, parentPartialKey, receiver)
-			if err != nil {
-				return err
-			}
-		case types.DiffChangeRemoved:
-			// We don't do anything if a child row was removed
-		default:
-			return fmt.Errorf("unknown diff change type")
-		}
-		if !hasMore {
-			break
-		}
-	}
-
-	return nil
-}
-
-// childFkConstraintViolationsProcess handles processing the constraint violations for the child of a foreign key.
-func childFkConstraintViolationsProcess(
-	ctx context.Context,
-	vr types.ValueReader,
-	postParent *constraintViolationsLoadedTable,
-	rowDiff *diff2.Difference,
-	parentPartialKey types.Tuple,
-	receiver FKViolationReceiver,
-) error {
-	var mapIter table.ReadCloser = noms.NewNomsRangeReader(
-		vr,
-		postParent.IndexSchema,
-		durable.NomsMapFromIndex(postParent.IndexData),
-		[]*noms.ReadRange{{Start: parentPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(parentPartialKey)}})
-	defer mapIter.Close(ctx)
-	// If the row exists in the parent, then we don't need to do anything
-	if _, err := mapIter.ReadRow(ctx); err != nil {
-		if err != io.EOF {
-			return err
-		}
-		err = receiver.NomsFKViolationFound(ctx, rowDiff.KeyValue.(types.Tuple), rowDiff.NewValue.(types.Tuple))
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-	return nil
-}
-
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
 func newConstraintViolationsLoadedTable(
-	ctx *sql.Context,
-	tableResolver doltdb.TableResolver,
-	tblName doltdb.TableName,
-	idxName string,
-	root doltdb.RootValue,
+		ctx *sql.Context,
+		tableResolver doltdb.TableResolver,
+		tblName doltdb.TableName,
+		idxName string,
+		root doltdb.RootValue,
 ) (*constraintViolationsLoadedTable, bool, error) {
 	trueTblName, tbl, ok, err := tableResolver.ResolveTableInsensitive(ctx, root, tblName)
 	if err != nil {

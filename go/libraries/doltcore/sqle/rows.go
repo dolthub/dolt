@@ -244,49 +244,28 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 		return nil, nil, err
 	}
 
-	if types.IsFormat_DOLT(data.Format()) {
-		idx, err := durable.ProllyMapFromIndex(data)
-		if err != nil {
-			return nil, nil, err
-		}
-		c, err := idx.Count()
-		if err != nil {
-			return nil, nil, err
-		}
-		if end > uint64(c) {
-			end = uint64(c)
-		}
-		iter, err := idx.IterOrdinalRange(ctx, start, end)
-		if err != nil {
-			return nil, nil, err
-		}
-		rowIter := index.NewProllyRowIterForMap(sch, idx, iter, nil)
-		if err != nil {
-			return nil, nil, err
-		}
-		return pkSch.Schema, rowIter, nil
+	if !types.IsFormat_DOLT(data.Format()) {
+		panic("Unsupported format " + data.Format().VersionString())
 	}
 
-	idx := durable.NomsMapFromIndex(data)
-	iterAt, err := idx.IteratorAt(ctx, start)
+	idx, err := durable.ProllyMapFromIndex(data)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	iter := types.NewLimitingMapIterator(iterAt, end-start)
-
-	var rowIter sql.RowIter
-	if schema.IsKeyless(sch) {
-		rowIter, err = newKeylessRowIterator(ctx, table, nil, iter)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else {
-		rowIter, err = newKeyedRowIter(ctx, table, nil, iter)
-		if err != nil {
-			return nil, nil, err
-		}
+	c, err := idx.Count()
+	if err != nil {
+		return nil, nil, err
 	}
-
+	if end > uint64(c) {
+		end = uint64(c)
+	}
+	iter, err := idx.IterOrdinalRange(ctx, start, end)
+	if err != nil {
+		return nil, nil, err
+	}
+	rowIter := index.NewProllyRowIterForMap(sch, idx, iter, nil)
+	if err != nil {
+		return nil, nil, err
+	}
 	return pkSch.Schema, rowIter, nil
 }
