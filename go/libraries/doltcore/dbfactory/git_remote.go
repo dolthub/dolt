@@ -99,7 +99,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 
 	remoteName := resolveGitRemoteName(params)
 
-	// Ensure remote "origin" exists and points to the underlying git remote URL.
+	// Ensure the configured git remote exists and points to the underlying git remote URL.
 	if err := ensureGitRemoteURL(ctx, cacheRepo, remoteName, remoteURL.String()); err != nil {
 		return nil, nil, nil, err
 	}
@@ -133,7 +133,7 @@ func parseGitRemoteFactoryURL(urlObj *url.URL, params map[string]interface{}) (r
 		return nil, "", fmt.Errorf("git remote ref must be provided via git remote param %q (not URL query ref=)", GitRefParam)
 	}
 
-	ref = resolveGitRemoteRef(urlObj, params)
+	ref = resolveGitRemoteRef(params)
 
 	cp := *urlObj
 	cp.Scheme = underlyingScheme
@@ -142,8 +142,8 @@ func parseGitRemoteFactoryURL(urlObj *url.URL, params map[string]interface{}) (r
 	return &cp, ref, nil
 }
 
-func resolveGitRemoteRef(urlObj *url.URL, params map[string]interface{}) string {
-	// Prefer an explicit remote parameter (e.g. from `--ref`) over any URL query.
+func resolveGitRemoteRef(params map[string]interface{}) string {
+	// Prefer an explicit remote parameter (e.g. from `--ref`).
 	if params != nil {
 		if v, ok := params[GitRefParam]; ok && v != nil {
 			s, ok := v.(string)
