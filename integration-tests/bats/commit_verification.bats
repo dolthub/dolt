@@ -22,7 +22,7 @@ getHeadHash() {
   echo "${lines[1]}"
 }
 
-@test "commit verification: system variables can be set" {
+@test "commit_verification: system variables can be set" {
     run dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
     [ "$status" -eq 0 ]
     
@@ -31,7 +31,7 @@ getHeadHash() {
     [[ "$output" =~ "*" ]]
 }
 
-@test "commit verification: commit with tests enabled - all tests pass" {
+@test "commit_verification: commit with tests enabled - all tests pass" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
     
     dolt sql <<SQL
@@ -46,7 +46,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "commit verification: abort commit, then skip verification to bypass" {
+@test "commit_verification: abort commit, then skip verification to bypass" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
     
     dolt sql <<SQL
@@ -66,7 +66,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "commit verification: specific test groups - only specified groups run" {
+@test "commit_verification: specific test groups - only specified groups run" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = 'unit'"
     
     # Add tests in different groups
@@ -83,7 +83,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "commit verification: merge with tests enabled - tests pass" {
+@test "commit_verification: merge with tests enabled - tests pass" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
     
     dolt sql <<SQL
@@ -107,7 +107,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "commit verification: merge with tests enabled - tests fail, merge aborted" {
+@test "commit_verification: merge with tests enabled - tests fail, merge aborted" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
     
     dolt sql <<SQL
@@ -138,7 +138,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "commit verification: cherry-pick with tests enabled - tests pass" {
+@test "commit_verification: cherry-pick with tests enabled - tests pass" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
     
     dolt sql <<SQL
@@ -160,7 +160,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "commit verification: cherry-pick with tests enabled - tests fail, aborted" {
+@test "commit_verification: cherry-pick with tests enabled - tests fail, aborted" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
     
     dolt sql <<SQL
@@ -187,7 +187,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "commit verification: rebase with tests enabled - tests pass" {
+@test "commit_verification: rebase with tests enabled - tests pass" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
     
     dolt sql <<SQL
@@ -216,7 +216,7 @@ SQL
     [[ "$output" =~ "Successfully rebased" ]]
 }
 
-@test "commit verification: rebase with tests enabled - tests fail, aborted" {
+@test "commit_verification: rebase with tests enabled - tests fail, aborted" {
     skip "Rebase restart of workflow on failed verification is currently busted."
 
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
