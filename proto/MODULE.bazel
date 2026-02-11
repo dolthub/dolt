@@ -1,7 +1,6 @@
 module(name = "com_github_dolthub_dolt_proto")
 
 bazel_dep(name = "com_github_dolthub_dolt_go_serial")
-
 bazel_dep(name = "rules_pkg", version = "1.2.0")
 bazel_dep(name = "rules_go", version = "0.59.0")
 bazel_dep(name = "gazelle", version = "0.45.0")
@@ -15,5 +14,4 @@ go_sdk.download(version = "1.25.6")
 
 go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//:go.mod")
-use_repo(go_deps, "org_golang_google_grpc", "org_golang_google_protobuf")
-
+use_repo(go_deps, "org_golang_google_api")

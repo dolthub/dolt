@@ -28,9 +28,11 @@ sh_binary(
     srcs = ["update.sh"],
     args = [
         "$(rlocationpath :go_srcs)",
+        "$(rlocationpath @com_github_dolthub_dolt_go_serial//:go_srcs.tar)",
     ],
     data = [
         ":go_srcs",
+        "@com_github_dolthub_dolt_go_serial//:go_srcs.tar",
     ],
     deps = [
         "@bazel_tools//tools/bash/runfiles",

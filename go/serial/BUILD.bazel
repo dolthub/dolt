@@ -1,3 +1,30 @@
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+
 package(default_visibility = ["//visibility:public"])
 
-exports_files(glob(["*.fbs"]))
+alias(
+    name = "flatc",
+    actual = "@com_github_dolthub_flatbuffers//:flatc",
+)
+
+genrule(
+    name = "go_srcs",
+    srcs = glob(["*.fbs"]),
+    outs = [n[:-4] + ".go" for n in glob(["*.fbs"])],
+    cmd = "$(location //:generate.sh) $(location //:flatc) $(RULEDIR) $(location :copyright.txt) $(SRCS)",
+    tools = [
+        ":flatc",
+        ":generate.sh",
+        ":copyright.txt",
+    ],
+)
+
+pkg_tar(
+    name = "go_srcs.tar",
+    srcs = [
+        ":go_srcs",
+        "fileidentifiers.go",
+    ],
+    package_dir = "gen/fb/serial",
+    mode = "0644",
+)

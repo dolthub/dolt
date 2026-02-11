@@ -226,7 +226,6 @@ func WorkingSetAddRebaseState(builder *flatbuffers.Builder, rebaseState flatbuff
 func WorkingSetEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type MergeState struct {
 	_tab flatbuffers.Table
 }
@@ -396,7 +395,6 @@ func MergeStateAddIsCherryPick(builder *flatbuffers.Builder, isCherryPick bool) 
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type RebaseState struct {
 	_tab flatbuffers.Table
 }

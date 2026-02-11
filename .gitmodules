@@ -2,6 +2,3 @@
 	path = integration-tests/mysql-client-tests/cpp/third_party/mysql-connector-cpp
 	url = https://github.com/mysql/mysql-connector-cpp.git
 	ignore = dirty
-[submodule "proto/third_party/flatbuffers"]
-	path = proto/third_party/flatbuffers
-	url = https://github.com/dolthub/flatbuffers.git

@@ -98,7 +98,6 @@ func BranchControlAddNamespaceTbl(builder *flatbuffers.Builder, namespaceTbl fla
 func BranchControlEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type BranchControlAccess struct {
 	_tab flatbuffers.Table
 }
@@ -303,7 +302,6 @@ func BranchControlAccessStartValuesVector(builder *flatbuffers.Builder, numElems
 func BranchControlAccessEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type BranchControlAccessValue struct {
 	_tab flatbuffers.Table
 }
@@ -403,7 +401,6 @@ func BranchControlAccessValueAddPermissions(builder *flatbuffers.Builder, permis
 func BranchControlAccessValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type BranchControlNamespace struct {
 	_tab flatbuffers.Table
 }
@@ -608,7 +605,6 @@ func BranchControlNamespaceStartValuesVector(builder *flatbuffers.Builder, numEl
 func BranchControlNamespaceEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type BranchControlNamespaceValue struct {
 	_tab flatbuffers.Table
 }
@@ -693,7 +689,6 @@ func BranchControlNamespaceValueAddHost(builder *flatbuffers.Builder, host flatb
 func BranchControlNamespaceValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type BranchControlBinlog struct {
 	_tab flatbuffers.Table
 }
@@ -763,7 +758,6 @@ func BranchControlBinlogStartRowsVector(builder *flatbuffers.Builder, numElems i
 func BranchControlBinlogEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type BranchControlBinlogRow struct {
 	_tab flatbuffers.Table
 }
@@ -878,7 +872,6 @@ func BranchControlBinlogRowAddPermissions(builder *flatbuffers.Builder, permissi
 func BranchControlBinlogRowEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type BranchControlMatchExpression struct {
 	_tab flatbuffers.Table
 }

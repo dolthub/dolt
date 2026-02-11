@@ -12,12 +12,16 @@ source "${RUNFILES_DIR:-/dev/null}/$f" 2>/dev/null || \
 # --- end runfiles.bash initialization v3 ---
 
 GO_ROOT="$BUILD_WORKSPACE_DIRECTORY""/../go/"
-TAR_FILE=$(rlocation "$1" | sed 's|C:|/c|')
+PBGO_TAR_FILE=$(rlocation "$1" | sed 's|C:|/c|')
+FBGO_TAR_FILE=$(rlocation "$2" | sed 's|C:|/c|')
+
+cd "$GO_ROOT"
 
 # First, clean up any existing files.
-
-(cd "$GO_ROOT" && find . -name '*.pb.go' -exec rm -f \{\} \;)
+find . -name '*.pb.go' -exec rm -f \{\} \;
+# XXX: Pretty gross :-/.
+rm -rf gen/fb
 
 # Then unpack generated sources into the correct place.
-
-(cd "$GO_ROOT" && tar -x -f "$TAR_FILE")
+tar -x -f "$PBGO_TAR_FILE"
+tar -x -f "$FBGO_TAR_FILE"
