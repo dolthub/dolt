@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -33,16 +34,31 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// t.TempDir() includes the test name on disk, which can create very long paths on Windows.
+// These tests create deep `refs/...` paths inside bare git repos and can hit MAX_PATH without
+// long path support enabled. Use a short temp prefix on Windows to keep paths under the limit.
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return t.TempDir()
+	}
+
+	dir, err := os.MkdirTemp("", "dolt")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func TestGitRemoteFactory_GitFile_UsesConfiguredCacheDirAndCanWrite(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found on PATH")
 	}
 
 	ctx := context.Background()
-	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
 	require.NoError(t, err)
 
-	cacheDir := t.TempDir()
+	cacheDir := shortTempDir(t)
 
 	remotePath := filepath.ToSlash(remoteRepo.GitDir)
 	remoteURL := "file://" + remotePath
@@ -95,7 +111,7 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
 	require.NoError(t, err)
 
 	remotePath := filepath.ToSlash(remoteRepo.GitDir)
@@ -119,8 +135,8 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 		return d, vs.ChunkStore()
 	}
 
-	cacheA := t.TempDir()
-	cacheB := t.TempDir()
+	cacheA := shortTempDir(t)
+	cacheB := shortTempDir(t)
 
 	// Client A writes a root pointing at chunk A.
 	dbA, csA := open(cacheA)
