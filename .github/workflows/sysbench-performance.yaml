@@ -11,14 +11,42 @@ jobs:
     name: Trigger Mini Benchmark Latency K8s Workflow
     runs-on: ubuntu-22.04
     steps:
-      - name: Get pull number
+      - name: Build benchmark payload (main HEAD + PR HEAD)
         uses: actions/github-script@v7
-        id: get_pull_number
+        id: build_payload
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
+          script: |
+            // For PR benchmarks, use the PR base commit (the exact target commit this PR was opened/updated against),
+            // not the moving HEAD of `main`.
+            const fromSha = context.payload.pull_request.base.sha;
+
+            // The latest commit on the PR branch.
+            const toSha = context.payload.pull_request.head.sha;
+
+            const payload = {
+              from_server: "dolt",
+              from_version: fromSha,
+              to_server: "dolt",
+              to_version: toSha,
+              mode: "pullRequest",
+              issue_number: String(context.issue.number),
+              init_big_repo: "true",
+              actor: context.actor,
+              sysbench_test_time: "10",
+              template_script: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh",
+            };
+
+            core.setOutput("from_sha", fromSha);
+            core.setOutput("to_sha", toSha);
+            core.setOutput("payload", JSON.stringify(payload));
+      - name: Log benchmark versions
+        shell: bash
+        run: |
+          echo "from_version_sha=${{ steps.build_payload.outputs.from_sha }}"
+          echo "to_version_sha=${{ steps.build_payload.outputs.to_sha }}"
       - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency
-          client-payload: '{"from_server": "dolt", "from_version": "${{ github.base_ref }}", "to_server": "dolt", "to_version": "${{ github.head_ref }}", "mode": "pullRequest", "issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "init_big_repo": "true", "actor": "${{ github.actor }}", "sysbench_test_time": "10", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"}'
+          client-payload: ${{ steps.build_payload.outputs.payload }}
