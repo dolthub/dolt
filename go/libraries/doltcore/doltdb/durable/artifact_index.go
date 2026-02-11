@@ -49,7 +49,7 @@ func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx Ar
 
 	case types.Format_DOLT:
 		b := shim.ValueFromMap(idx.(prollyArtifactIndex).index)
-		return refFromNomsValue(ctx, vrw, b)
+		return vrw.WriteValue(ctx, b)
 
 	default:
 		return types.Ref{}, errNbfUnknown

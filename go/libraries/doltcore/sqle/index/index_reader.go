@@ -58,13 +58,9 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 			return nil, err
 		}
 		return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState, lookup.IsReverse)
-	} else {
-		nomsRanges, err := idx.nomsRanges(ctx, mysqlRanges...)
-		if err != nil {
-			return nil, err
-		}
-		return RowIterForNomsRanges(ctx, idx, nomsRanges, columns, durableState)
 	}
+
+	panic("Unsupported format for RowIterForIndexLookup")
 }
 
 func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState, reverse bool) (sql.RowIter, error) {
@@ -83,21 +79,6 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, projections, durableState.Secondary)
 	}
 	return newProllyIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
-}
-
-func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, columns []uint64, durableState *durableIndexState) (sql.RowIter, error) {
-	if len(columns) == 0 {
-		columns = idx.Schema().GetAllCols().Tags
-	}
-	m := durable.NomsMapFromIndex(durableState.Secondary)
-	nrr := noms.NewNomsRangeReader(idx.valueReadWriter(), idx.IndexSchema(), m, ranges)
-
-	covers := idx.coversColumns(durableState, columns)
-	if covers || idx.ID() == "PRIMARY" {
-		return NewCoveringIndexRowIterAdapter(ctx, idx, nrr, columns), nil
-	} else {
-		return NewIndexLookupRowIterAdapter(ctx, idx, durableState, nrr, columns)
-	}
 }
 
 type IndexLookupKeyIterator interface {
@@ -345,10 +326,7 @@ func NewIndexReaderBuilder(
 
 	switch {
 	case !isDoltFormat:
-		return &nomsIndexImplBuilder{
-			baseIndexImplBuilder: base,
-			s:                    s,
-		}, nil
+		panic("Unsupported format " + idx.Format().VersionString())
 	case sql.IsKeyless(pkSch.Schema):
 		return &keylessIndexImplBuilder{
 			baseIndexImplBuilder: base,
@@ -412,7 +390,6 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 }
 
 var _ IndexScanBuilder = (*baseIndexImplBuilder)(nil)
-var _ IndexScanBuilder = (*nomsIndexImplBuilder)(nil)
 var _ IndexScanBuilder = (*coveringIndexImplBuilder)(nil)
 var _ IndexScanBuilder = (*keylessIndexImplBuilder)(nil)
 var _ IndexScanBuilder = (*nonCoveringIndexImplBuilder)(nil)
@@ -873,31 +850,6 @@ func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSa
 		pkBld:      pkBld,
 		prefixDesc: secondary.KeyDesc().PrefixDesc(cnt),
 	}, nil
-}
-
-type nomsIndexImplBuilder struct {
-	*baseIndexImplBuilder
-	s *durableIndexState
-}
-
-func (ib *nomsIndexImplBuilder) OutputSchema() schema.Schema {
-	return ib.baseIndexImplBuilder.idx.Schema()
-}
-
-// NewPartitionRowIter implements IndexScanBuilder
-func (ib *nomsIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	p := part.(rangePartition)
-	ranges := []*noms.ReadRange{p.nomsRange}
-	return RowIterForNomsRanges(ctx, ib.idx, ranges, ib.projections, ib.s)
-}
-
-// NewRangeMapIter implements IndexScanBuilder
-func (ib *nomsIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error) {
-	panic("cannot call NewMapIter on *nomsIndexImplBuilder")
-}
-
-func (ib *nomsIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) (SecondaryLookupIterGen, error) {
-	panic("cannot call NewSecondaryIter on *nomsIndexImplBuilder")
 }
 
 // boundsCase determines the case upon which the bounds are tested.

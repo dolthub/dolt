@@ -71,10 +71,6 @@ type IndexSet interface {
 	// PutIndex puts an index into the set.
 	PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error)
 
-	// PutNomsIndex puts a noms index into the set.
-	// todo(andy): this is a temporary stop-gap while abstracting types.Map
-	PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error)
-
 	// DropIndex removes an index from the set.
 	DropIndex(ctx context.Context, name string) (IndexSet, error)
 
@@ -86,11 +82,10 @@ type IndexSet interface {
 func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (types.Ref, error) {
 	switch idx.Format() {
 	case types.Format_LD_1:
-		return refFromNomsValue(ctx, vrw, idx.(nomsIndex).index)
-
+		panic("Unsupported format " + idx.Format().VersionString())
 	case types.Format_DOLT:
 		b := shim.ValueFromMap(MapFromIndex(idx))
-		return refFromNomsValue(ctx, vrw, b)
+		return vrw.WriteValue(ctx, b)
 
 	default:
 		return types.Ref{}, errNbfUnknown
@@ -111,7 +106,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 
 	switch vrw.Format() {
 	case types.Format_LD_1:
-		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
+		panic("Unsupported format " + vrw.Format().VersionString())
 
 	case types.Format_DOLT:
 		m, err := shim.MapInterfaceFromValue(ctx, v, sch, ns, isKeylessTable)
@@ -146,11 +141,7 @@ func NewEmptyIndexFromTableSchema(ctx context.Context, vrw types.ValueReadWriter
 func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isVector bool, isKeylessSecondary bool) (Index, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
-		m, err := types.NewMap(ctx, vrw)
-		if err != nil {
-			return nil, err
-		}
-		return IndexFromNomsMap(m, vrw, ns), nil
+		panic("Unsupported format " + vrw.Format().VersionString())
 
 	case types.Format_DOLT:
 		kd, vd := sch.GetMapDescriptors(ns)
@@ -212,20 +203,6 @@ func IterAllIndexes(
 		}
 	}
 	return nil
-}
-
-// NomsMapFromIndex unwraps the Index and returns the underlying types.Map.
-func NomsMapFromIndex(i Index) types.Map {
-	return i.(nomsIndex).index
-}
-
-// IndexFromNomsMap wraps a types.Map and returns it as an Index.
-func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter, ns tree.NodeStore) Index {
-	return nomsIndex{
-		index: m,
-		vrw:   vrw,
-		ns:    ns,
-	}
 }
 
 var _ Index = nomsIndex{}
@@ -432,14 +409,7 @@ func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeSto
 		return doltDevIndexSet{vrw, ns, emptyam}, nil
 	}
 
-	empty, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return nil, err
-	}
-	return nomsIndexSet{
-		indexes: empty,
-		vrw:     vrw,
-	}, nil
+	panic("Unsupported format " + vrw.Format().VersionString())
 }
 
 func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (IndexSet, error) {
@@ -458,98 +428,6 @@ func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter,
 		}
 	}
 	return s, nil
-}
-
-type nomsIndexSet struct {
-	indexes types.Map
-	vrw     types.ValueReadWriter
-	ns      tree.NodeStore
-}
-
-var _ IndexSet = nomsIndexSet{}
-
-// HashOf implements IndexSet.
-func (s nomsIndexSet) HashOf() (hash.Hash, error) {
-	return s.indexes.Hash(s.vrw.Format())
-}
-
-// HasIndex implements IndexSet.
-func (s nomsIndexSet) HasIndex(ctx context.Context, name string) (bool, error) {
-	_, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
-	if err != nil {
-		return false, err
-	}
-	return ok, nil
-}
-
-// GetIndex implements IndexSet.
-func (s nomsIndexSet) GetIndex(ctx context.Context, tableSch schema.Schema, idxSch schema.Schema, name string) (Index, error) {
-	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
-	if !ok {
-		err = fmt.Errorf("index %s not found in IndexSet", name)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	idx := tableSch.Indexes().GetByName(name)
-	if idx == nil {
-		return nil, fmt.Errorf("index not found: %s", name)
-	}
-
-	return indexFromRef(ctx, s.vrw, s.ns, idxSch, v.(types.Ref))
-}
-
-// PutNomsIndex implements IndexSet.
-func (s nomsIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
-	return s.PutIndex(ctx, name, IndexFromNomsMap(idx, s.vrw, s.ns))
-}
-
-// PutIndex implements IndexSet.
-func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {
-	ref, err := RefFromIndex(ctx, s.vrw, idx)
-	if err != nil {
-		return nil, err
-	}
-
-	im, err := s.indexes.Edit().Set(types.String(name), ref).Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return nomsIndexSet{indexes: im, vrw: s.vrw, ns: s.ns}, nil
-}
-
-// DropIndex implements IndexSet.
-func (s nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
-	im, err := s.indexes.Edit().Remove(types.String(name)).Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return nomsIndexSet{indexes: im, vrw: s.vrw, ns: s.ns}, nil
-}
-
-func (s nomsIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
-	v, ok, err := s.indexes.MaybeGet(ctx, types.String(oldName))
-	if !ok {
-		err = fmt.Errorf("index %s not found in IndexSet", oldName)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	edit := s.indexes.Edit()
-	im, err := edit.Set(types.String(newName), v).Remove(types.String(oldName)).Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return nomsIndexSet{indexes: im, vrw: s.vrw, ns: s.ns}, nil
-}
-
-func mapFromIndexSet(ic IndexSet) types.Map {
-	return ic.(nomsIndexSet).indexes
 }
 
 type doltDevIndexSet struct {
@@ -604,11 +482,7 @@ func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) 
 		return nil, err
 	}
 
-	return doltDevIndexSet{is.vrw, is.ns, am}, nil
-}
-
-func (is doltDevIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
-	return is.PutIndex(ctx, name, IndexFromNomsMap(idx, is.vrw, is.ns))
+	return doltDevIndexSet{vrw: is.vrw, ns: is.ns, am: am}, nil
 }
 
 func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
