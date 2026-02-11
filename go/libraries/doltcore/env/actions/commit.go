@@ -149,7 +149,7 @@ func GetCommitStaged(
 	if !props.SkipVerification {
 		testGroups := GetCommitRunTestGroups()
 		if len(testGroups) > 0 {
-			err := runTestsAgainstRoot(ctx, roots.Staged, testGroups, "commit")
+			err := runCommitVerification(ctx, testGroups)
 			if err != nil {
 				return nil, err
 			}
@@ -164,8 +164,7 @@ func GetCommitStaged(
 	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
 }
 
-// runTestsAgainstRoot executes test validation against a specific root.
-func runTestsAgainstRoot(ctx *sql.Context, root doltdb.RootValue, testGroups []string, operationType string) error {
+func runCommitVerification(ctx *sql.Context, testGroups []string) error {
 	type sessionInterface interface {
 		sql.Session
 		GenericProvider() sql.MutableDatabaseProvider
@@ -179,11 +178,11 @@ func runTestsAgainstRoot(ctx *sql.Context, root doltdb.RootValue, testGroups []s
 	provider := session.GenericProvider()
 	engine := gms.NewDefault(provider)
 
-	return runTestsUsingDtablefunctions(ctx, root, engine, testGroups, operationType)
+	return runTestsUsingDtablefunctions(ctx, engine, testGroups)
 }
 
 // runTestsUsingDtablefunctions runs tests using the dtablefunctions package against the staged root
-func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engine *gms.Engine, testGroups []string, operationType string) error {
+func runTestsUsingDtablefunctions(ctx *sql.Context, engine *gms.Engine, testGroups []string) error {
 	if len(testGroups) == 0 {
 		return nil
 	}
@@ -191,14 +190,12 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engin
 	var allFailures []string
 
 	for _, group := range testGroups {
-		// Run dolt_test_run() for this group using the temporary context
 		query := fmt.Sprintf("SELECT * FROM dolt_test_run('%s')", group)
 		_, iter, _, err := engine.Query(ctx, query)
 		if err != nil {
 			return fmt.Errorf("failed to run dolt_test_run for group %s: %w", group, err)
 		}
 
-		// Process results
 		for {
 			row, rErr := iter.Next(ctx)
 			if rErr == io.EOF {
@@ -216,17 +213,14 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, root doltdb.RootValue, engin
 			status := fmt.Sprintf("%v", row[3])
 			if status != "PASS" {
 				testName := fmt.Sprintf("%v", row[0])
-				message := ""
-				if len(row) > 4 {
-					message = fmt.Sprintf("%v", row[4])
-				}
+				message := fmt.Sprintf("%v", row[4])
 				allFailures = append(allFailures, fmt.Sprintf("%s (%s)", testName, message))
 			}
 		}
 	}
 
 	if len(allFailures) > 0 {
-		return fmt.Errorf("%s verification failed: %s", operationType, strings.Join(allFailures, ", "))
+		return fmt.Errorf("commit verification failed: %s", strings.Join(allFailures, ", "))
 	}
 
 	return nil
