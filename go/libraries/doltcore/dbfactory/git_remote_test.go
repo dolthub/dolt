@@ -64,6 +64,8 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 	ctx := context.Background()
 	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
 	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
 
 	localRepoRoot := shortTempDir(t)
 
@@ -120,6 +122,8 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 
 	ctx := context.Background()
 	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
 	require.NoError(t, err)
 
 	remotePath := filepath.ToSlash(remoteRepo.GitDir)
@@ -184,4 +188,25 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "clientB\n", string(gotB.Data()))
 	require.NoError(t, dbA2.Close())
+}
+
+func TestGitRemoteFactory_GitFile_RemoteWithNoBranchesFails(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+
+	localRepoRoot := shortTempDir(t)
+	remotePath := filepath.ToSlash(remoteRepo.GitDir)
+	urlStr := "git+file://" + remotePath
+	params := map[string]interface{}{
+		GitCacheRootParam: localRepoRoot,
+	}
+
+	_, _, _, err = CreateDB(ctx, types.Format_Default, urlStr, params)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrGitRemoteHasNoBranches)
 }

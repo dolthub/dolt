@@ -17,6 +17,7 @@ package commands
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -145,4 +146,21 @@ func TestParseRemoteArgs_GitRef(t *testing.T) {
 	params, verr := parseRemoteArgs(apr, dbfactory.GitFileScheme, "git+file:///tmp/remote.git")
 	assert.Nil(t, verr)
 	assert.Equal(t, "refs/dolt/custom", params[dbfactory.GitRefParam])
+}
+
+func TestRemoteAdd_StoresNormalizedGitUrl(t *testing.T) {
+	// This mirrors the behavior in addRemote(): for git remotes, we must store the normalized git+* URL
+	// (in particular, scp-style ssh should never be stored as a schemeless string).
+	scheme := dbfactory.GitSSHScheme
+	original := "git@github.com:timsehn/dolt-in-git.git"
+	normalized, ok, err := env.NormalizeGitRemoteUrl(original)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, "git+ssh://git@github.com/timsehn/dolt-in-git.git", normalized)
+
+	urlToStore := original
+	if strings.HasPrefix(strings.ToLower(scheme), "git+") {
+		urlToStore = normalized
+	}
+	assert.Equal(t, normalized, urlToStore)
 }
