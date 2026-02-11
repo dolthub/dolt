@@ -60,7 +60,7 @@ SQL
     [ "$status" -ne 0 ]
     [[ "$output" =~ "commit verification failed" ]] || false
     [[ "$output" =~ "test_will_fail" ]] || false
-    [[ "$output" =~ "Expected '999' but got '1'" ]] || false
+    [[ "$output" =~ "expected_single_value equal to 999, got 1" ]] || false
 
     run dolt commit --skip-verification -m "Skip verification commit"
     [ "$status" -eq 0 ]
@@ -132,7 +132,7 @@ SQL
     [ "$status" -ne 0 ]
     [[ "$output" =~ "commit verification failed" ]] || false
     [[ "$output" =~ "test_will_fail" ]] || false
-    [[ "$output" =~ "Expected '999' but got '3'" ]] || false
+    [[ "$output" =~ "expected_single_value equal to 999, got 3" ]] || false
 
     run dolt merge --skip-verification feature
     [ "$status" -eq 0 ]
@@ -181,7 +181,7 @@ SQL
     [ "$status" -ne 0 ]
     [[ "$output" =~ "commit verification failed" ]] || false
     [[ "$output" =~ "test_users_count" ]] || false
-    [[ "$output" =~ "Expected '1' but got '2'" ]] || false
+    [[ "$output" =~ "expected_single_value equal to 1, got 2" ]] || false
 
     run dolt cherry-pick --skip-verification $commit_hash
     [ "$status" -eq 0 ]
