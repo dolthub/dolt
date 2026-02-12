@@ -44,6 +44,8 @@ const (
 	defaultGitRemoteName = "origin"
 )
 
+var ErrGitRemoteHasNoBranches = errors.New("git remote has no branches")
+
 // GitCacheRootProvider provides the local Dolt repo root for per-repo git remote caches.
 // Implementations should return ok=false when no repo root is available.
 type GitCacheRootProvider interface {
@@ -116,6 +118,9 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err := ensureGitRemoteURL(ctx, cacheRepo, remoteName, remoteURL.String()); err != nil {
 		return nil, nil, nil, err
 	}
+	if err := ensureRemoteHasBranches(ctx, cacheRepo, remoteName, remoteURL.String()); err != nil {
+		return nil, nil, nil, err
+	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	cs, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: remoteName}, defaultMemTableSize, q)
@@ -127,6 +132,17 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 	return db, vrw, ns, nil
+}
+
+func ensureRemoteHasBranches(ctx context.Context, gitDir string, remoteName string, remoteURL string) error {
+	out, err := runGitInDir(ctx, gitDir, "ls-remote", "--heads", "--", remoteName)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(out) == "" {
+		return fmt.Errorf("%w: cannot push to %q; initialize the repository with an initial branch/commit first", ErrGitRemoteHasNoBranches, remoteURL)
+	}
+	return nil
 }
 
 func parseGitRemoteFactoryURL(urlObj *url.URL, params map[string]interface{}) (remoteURL *url.URL, ref string, err error) {

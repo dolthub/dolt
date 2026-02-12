@@ -168,7 +168,13 @@ func addRemote(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, ap
 	}
 
 	if len(params) == 0 {
-		err := callSQLRemoteAdd(sqlCtx, queryist, remoteName, remoteUrl)
+		// For git remotes, ensure the stored URL is the normalized git+* dbfactory URL (e.g. scp-style ssh becomes
+		// git+ssh://..., and local paths become git+file://...).
+		urlToStore := remoteUrl
+		if strings.HasPrefix(strings.ToLower(scheme), "git+") {
+			urlToStore = absRemoteUrl
+		}
+		err := callSQLRemoteAdd(sqlCtx, queryist, remoteName, urlToStore)
 		if err != nil {
 			return errhand.BuildDError("error: Unable to add remote.").AddCause(err).Build()
 		}

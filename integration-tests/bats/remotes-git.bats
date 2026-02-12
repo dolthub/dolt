@@ -18,9 +18,39 @@ teardown() {
     teardown_common
 }
 
+seed_git_remote_branch() {
+    # Create an initial branch on an otherwise-empty bare git remote.
+    # Dolt git remotes require at least one git branch to exist on the remote.
+    local remote_git_dir="$1"
+    local branch="${2:-main}"
+
+    local remote_abs
+    remote_abs="$(cd "$remote_git_dir" && pwd)"
+
+    local seed_dir
+    seed_dir="$(mktemp -d "${BATS_TMPDIR:-/tmp}/seed-repo.XXXXXX")"
+
+    (
+        set -euo pipefail
+        trap 'rm -rf "$seed_dir"' EXIT
+        cd "$seed_dir"
+
+        git init >/dev/null
+        git config user.email "bats@email.fake"
+        git config user.name "Bats Tests"
+        echo "seed" > README
+        git add README
+        git commit -m "seed" >/dev/null
+        git branch -M "$branch"
+        git remote add origin "$remote_abs"
+        git push origin "$branch" >/dev/null
+    )
+}
+
 @test "remotes-git: smoke push/clone/push-back/pull" {
     mkdir remote.git
     git init --bare remote.git
+    seed_git_remote_branch remote.git main
 
     mkdir repo1
     cd repo1
@@ -58,6 +88,7 @@ teardown() {
 @test "remotes-git: empty remote bootstrap creates refs/dolt/data" {
     mkdir remote.git
     git init --bare remote.git
+    seed_git_remote_branch remote.git main
 
     # Assert the dolt data ref doesn't exist yet.
     run git --git-dir remote.git show-ref refs/dolt/data
@@ -82,6 +113,7 @@ teardown() {
 @test "remotes-git: pull also fetches branches from git remote" {
     mkdir remote.git
     git init --bare remote.git
+    seed_git_remote_branch remote.git main
 
     mkdir repo1
     cd repo1
@@ -115,6 +147,7 @@ teardown() {
 @test "remotes-git: pull fetches but does not merge other branches" {
     mkdir remote.git
     git init --bare remote.git
+    seed_git_remote_branch remote.git main
 
     mkdir repo1
     cd repo1
@@ -156,6 +189,7 @@ teardown() {
 @test "remotes-git: custom --ref writes to configured dolt data ref" {
     mkdir remote.git
     git init --bare remote.git
+    seed_git_remote_branch remote.git main
 
     mkdir repo1
     cd repo1
@@ -192,6 +226,7 @@ teardown() {
 @test "remotes-git: push works with per-repo git cache under .dolt/" {
     mkdir remote.git
     git init --bare remote.git
+    seed_git_remote_branch remote.git main
 
     mkdir repo1
     cd repo1

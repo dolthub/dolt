@@ -17,9 +17,39 @@ teardown() {
     teardown_common
 }
 
+seed_git_remote_branch() {
+    # Create an initial branch on an otherwise-empty bare git remote.
+    # Dolt git remotes require at least one git branch to exist on the remote.
+    local remote_git_dir="$1"
+    local branch="${2:-main}"
+
+    local remote_abs
+    remote_abs="$(cd "$remote_git_dir" && pwd)"
+
+    local seed_dir
+    seed_dir="$(mktemp -d "${BATS_TMPDIR:-/tmp}/seed-repo.XXXXXX")"
+
+    (
+        set -euo pipefail
+        trap 'rm -rf "$seed_dir"' EXIT
+        cd "$seed_dir"
+
+        git init >/dev/null
+        git config user.email "bats@email.fake"
+        git config user.name "Bats Tests"
+        echo "seed" > README
+        git add README
+        git commit -m "seed" >/dev/null
+        git branch -M "$branch"
+        git remote add origin "$remote_abs"
+        git push origin "$branch" >/dev/null
+    )
+}
+
 @test "sql-remotes-git: dolt_remote add supports --ref for git remotes" {
     mkdir remote.git
     git init --bare remote.git
+    seed_git_remote_branch remote.git main
 
     mkdir repo1
     cd repo1
@@ -44,6 +74,7 @@ SQL
 @test "sql-remotes-git: dolt_clone supports --ref for git remotes" {
     mkdir remote.git
     git init --bare remote.git
+    seed_git_remote_branch remote.git main
 
     mkdir repo1
     cd repo1
@@ -78,6 +109,7 @@ SQL
 @test "sql-remotes-git: dolt_backup sync-url supports --ref for git remotes" {
     mkdir remote.git
     git init --bare remote.git
+    seed_git_remote_branch remote.git main
 
     mkdir repo1
     cd repo1
