@@ -51,7 +51,8 @@ func getNonlocalTablesRef(_ context.Context, valDesc *val.TupleDesc, valTuple va
 	return result
 }
 
-func GetGlobalTablePatterns(ctx context.Context, root RootValue, schema string, cb func(string)) error {
+// GetNonlocalTablePatterns invokes |cb| once for each table name pattern in dolt_nonlocal_tables on |root| and |schema|.
+func GetNonlocalTablePatterns(ctx context.Context, root RootValue, schema string, cb func(string)) error {
 	table_name := TableName{Name: NonlocalTableName, Schema: schema}
 	table, found, err := root.GetTable(ctx, table_name)
 	if err != nil {

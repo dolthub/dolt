@@ -57,7 +57,8 @@ func doDoltClean(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	roots, err = actions.CleanUntracked(ctx, roots, apr.Args, apr.ContainsAll(cli.DryRunFlag), false)
+	respectIgnoreRules := !apr.Contains(cli.ExcludeIgnoreRulesFlag)
+	roots, err = actions.CleanUntracked(ctx, roots, apr.Args, apr.ContainsAll(cli.DryRunFlag), false, respectIgnoreRules)
 	if err != nil {
 		return 1, fmt.Errorf("failed to clean; %w", err)
 	}

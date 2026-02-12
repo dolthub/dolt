@@ -1006,7 +1006,7 @@ SQL
   cd altDB
 
   # setup for cherry-pick.bats
-  dolt clean
+  dolt clean -x
   dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10), index(v))"
   dolt add .
   dolt commit -am "Created table"

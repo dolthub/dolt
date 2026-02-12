@@ -512,7 +512,8 @@ func RunStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range DoltProcedureTests {
+	scripts := append(DoltProcedureTests, DoltCleanProcedureScripts...)
+	for _, script := range scripts {
 		func() {
 			h := h.NewHarness(t)
 			h.UseLocalFileSystem()
@@ -523,7 +524,8 @@ func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunDoltStoredProceduresPreparedTest(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range DoltProcedureTests {
+	scripts := append(DoltProcedureTests, DoltCleanProcedureScripts...)
+	for _, script := range scripts {
 		func() {
 			h := h.NewHarness(t)
 			h.UseLocalFileSystem()

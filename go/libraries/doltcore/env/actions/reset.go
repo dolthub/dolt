@@ -270,60 +270,74 @@ func getUnionedTables(ctx context.Context, tables []doltdb.TableName, stagedRoot
 	return tables, nil
 }
 
-// CleanUntracked deletes untracked tables from the working root.
-// Evaluates untracked tables as: all working tables - all staged tables.
-func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryrun bool, force bool) (doltdb.Roots, error) {
+// CleanUntracked deletes from the working root the tables that are untracked (in working but not in staged/head). If
+// |tables| is non-empty it uses only those names as candidates; otherwise it uses all working tables. Tables matching
+// dolt_nonlocal_tables are always excluded. When |respectIgnoreRules| is true, tables matching dolt_ignore are also excluded. Does nothing when |dryrun| is true.
+func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryrun bool, force bool, respectIgnoreRules bool) (doltdb.Roots, error) {
 	untrackedTables := make(map[doltdb.TableName]struct{})
+	for _, name := range tables {
+		resolvedName, tblExists, err := resolve.TableName(ctx, roots.Working, name)
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
+		if !tblExists {
+			return doltdb.Roots{}, fmt.Errorf("%w: '%s'", doltdb.ErrTableNotFound, name)
+		}
+		untrackedTables[resolvedName] = struct{}{}
+	}
 
-	var err error
 	if len(tables) == 0 {
 		allTableNames, err := roots.Working.GetAllTableNames(ctx, true)
 		if err != nil {
-			return doltdb.Roots{}, nil
+			return doltdb.Roots{}, err
 		}
-		for _, tableName := range allTableNames {
-			untrackedTables[tableName] = struct{}{}
-		}
-	} else {
-		for i := range tables {
-			name := tables[i]
-			resolvedName, tblExists, err := resolve.TableName(ctx, roots.Working, name)
+		var candidates []doltdb.TableName
+		if respectIgnoreRules {
+			candidates, err = doltdb.ExcludeIgnoredTables(ctx, roots, allTableNames)
 			if err != nil {
 				return doltdb.Roots{}, err
 			}
-			if !tblExists {
-				return doltdb.Roots{}, fmt.Errorf("%w: '%s'", doltdb.ErrTableNotFound, name)
+		} else {
+			candidates = allTableNames
+		}
+		var nonlocalPatterns []string
+		err = doltdb.GetNonlocalTablePatterns(ctx, roots.Working, doltdb.DefaultSchemaName, func(p string) {
+			nonlocalPatterns = append(nonlocalPatterns, p)
+		})
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
+		compiled, err := doltdb.CompileTablePatterns(nonlocalPatterns)
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
+		for _, tableName := range candidates {
+			if compiled.TableMatchesAny(tableName.Name) {
+				continue
 			}
-			untrackedTables[resolvedName] = struct{}{}
+			untrackedTables[tableName] = struct{}{}
 		}
 	}
 
-	// untracked tables = working tables - staged tables
 	headTblNames := GetAllTableNames(ctx, roots.Staged)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
 	for _, name := range headTblNames {
 		delete(untrackedTables, name)
 	}
 
-	newRoot := roots.Working
-	var toDelete []doltdb.TableName
+	toDelete := make([]doltdb.TableName, 0, len(untrackedTables))
 	for t := range untrackedTables {
 		toDelete = append(toDelete, t)
-	}
-
-	newRoot, err = newRoot.RemoveTables(ctx, force, force, toDelete...)
-	if err != nil {
-		return doltdb.Roots{}, fmt.Errorf("failed to remove tables; %w", err)
 	}
 
 	if dryrun {
 		return roots, nil
 	}
-	roots.Working = newRoot
 
+	newRoot, err := roots.Working.RemoveTables(ctx, force, force, toDelete...)
+	if err != nil {
+		return doltdb.Roots{}, fmt.Errorf("failed to remove tables; %w", err)
+	}
+	roots.Working = newRoot
 	return roots, nil
 }
 
