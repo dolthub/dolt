@@ -578,21 +578,6 @@ func key(i int) val.Tuple {
 	return tup
 }
 
-func unwrapNoms(v *rowV) types.Value {
-	if v == nil {
-		return nil
-	}
-	return v.nomsValue()
-}
-
-func mustTuple(tpl types.Tuple, err error) types.Tuple {
-	if err != nil {
-		panic(err)
-	}
-
-	return tpl
-}
-
 func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {
 	s, err := prolly.DebugFormat(context.Background(), m)
 	require.NoError(t, err)
