@@ -19,10 +19,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-func init() {
-	DoltProcedureTests = append(DoltProcedureTests, DoltCleanProcedureScripts...)
-}
-
 // DoltCleanProcedureScripts are script tests for the dolt_clean procedure.
 var DoltCleanProcedureScripts = []queries.ScriptTest{
 	{

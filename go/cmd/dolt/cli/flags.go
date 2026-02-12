@@ -37,6 +37,7 @@ const (
 	DepthFlag              = "depth"
 	DryRunFlag             = "dry-run"
 	EmptyParam             = "empty"
+	ExcludeIgnoreRulesFlag = "x"
 	ForceFlag              = "force"
 	FullFlag               = "full"
 	GraphFlag              = "graph"
@@ -88,7 +89,6 @@ const (
 	TrackFlag              = "track"
 	UpperCaseAllFlag       = "ALL"
 	UserFlag               = "user"
-	ExcludeIgnoreRulesFlag = "x"
 )
 
 // Flags used by `dolt diff` command and `dolt_diff()` table function.
