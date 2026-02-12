@@ -6,6 +6,7 @@ ARG DOLT_VERSION
 RUN apt update -y && \
     apt install -y \
         curl \
+        git \
         tini \
         ca-certificates && \
     apt clean && \
