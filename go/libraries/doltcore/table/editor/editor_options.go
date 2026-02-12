@@ -22,6 +22,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	invalidEaId = 0xFFFFFFFF
+)
+
 type PKDuplicateCb func(newKeyString, indexName string, existingKey, existingVal types.Tuple, isPk bool) error
 
 // Options are properties that define different functionality for the tableEditSession.
