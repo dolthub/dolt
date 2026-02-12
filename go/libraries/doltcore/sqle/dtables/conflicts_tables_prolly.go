@@ -639,8 +639,9 @@ func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 	}
 }
 
+// Delete deletes the conflict artifact for the row |r|. The artifact key is: source PK, commit hash, artifact type,
+// violation-info hash (zeros for merge conflicts).
 func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error) {
-	// Artifact key is: source PK, commit hash, artifact type, disambiguator (zeros for conflicts).
 	numSourceKeyFields := cd.kd.Count() - 3
 	if !schema.IsKeyless(cd.ct.ourSch) {
 		err = cd.putPrimaryKeys(ctx, r, numSourceKeyFields)
@@ -668,8 +669,9 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error)
 	return nil
 }
 
+// putPrimaryKeys writes the first |numSourceKeyFields| key columns from row |r| into the tuple builder. It reads key
+// columns from either base, ours, or theirs depending on which are non-nil in |r|.
 func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row, numSourceKeyFields int) error {
-	// Get key columns from either base, ours, or theirs.
 	o := func() int {
 		if o := 1; r[o] != nil {
 			return o

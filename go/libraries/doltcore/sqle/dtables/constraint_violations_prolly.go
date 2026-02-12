@@ -320,36 +320,35 @@ type prollyCVDeleter struct {
 
 var _ sql.RowDeleter = (*prollyCVDeleter)(nil)
 
-// fillArtifactKeyPrefix writes the common key prefix (pk columns, root hash, artifact type) into kb from row r.
-// Used when building both new-format and legacy artifact keys so the same logic is not duplicated.
-func fillArtifactKeyPrefix(ctx *sql.Context, ns tree.NodeStore, kb *val.TupleBuilder, r sql.Row, numPks int, h hash.Hash, artType prolly.ArtifactType) error {
+// fillArtifactKeyPrefix writes the common key prefix (pk columns, root hash, artifact type) into |keyBuilder| from row
+// |r| for the given |numPks|, |rootHash|, and |artifactType|. Used when building new-format and legacy artifact keys.
+func fillArtifactKeyPrefix(ctx *sql.Context, nodeStore tree.NodeStore, keyBuilder *val.TupleBuilder, r sql.Row, numPks int, rootHash hash.Hash, artifactType prolly.ArtifactType) error {
 	for i := 0; i < numPks; i++ {
-		if err := tree.PutField(ctx, ns, kb, i, r[i+2]); err != nil {
+		if err := tree.PutField(ctx, nodeStore, keyBuilder, i, r[i+2]); err != nil {
 			return err
 		}
 	}
-	kb.PutCommitAddr(numPks, h)
-	kb.PutUint8(numPks+1, uint8(artType))
+	keyBuilder.PutCommitAddr(numPks, rootHash)
+	keyBuilder.PutUint8(numPks+1, uint8(artifactType))
 	return nil
 }
 
-// Delete implements the interface sql.RowDeleter.
-// Builds both the new-format key (with disambiguator) and the legacy key (without) so that
-// artifacts written before the multiple-violations-per-row change remain deletable.
+// Delete implements [sql.RowDeleter]. It builds both the new-format key (with violation-info hash) and the
+// legacy key (without) so that artifacts written before the multiple-violations-per-row change remain deletable.
 func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	numPks := d.kd.Count() - 3
-	ns := d.cvt.artM.NodeStore()
-	h := hash.Parse(r[0].(string))
-	artType := merge.UnmapCVType(r[1])
+	nodeStore := d.cvt.artM.NodeStore()
+	rootHash := hash.Parse(r[0].(string))
+	artifactType := merge.UnmapCVType(r[1])
 
-	if err := fillArtifactKeyPrefix(ctx, ns, d.kb, r, numPks, h, artType); err != nil {
+	if err := fillArtifactKeyPrefix(ctx, nodeStore, d.kb, r, numPks, rootHash, artifactType); err != nil {
 		return err
 	}
-	vinfoBytes, err := json.Marshal(r[len(r)-1])
+	violationInfoBytes, err := json.Marshal(r[len(r)-1])
 	if err != nil {
 		return err
 	}
-	d.kb.PutByteString(numPks+2, prolly.ConstraintViolationDisambiguator(vinfoBytes))
+	d.kb.PutByteString(numPks+2, prolly.ConstraintViolationInfoHash(violationInfoBytes))
 
 	newKey, err := d.kb.Build(d.pool)
 	if err != nil {
@@ -359,17 +358,17 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 		return err
 	}
 
-	// Legacy key (no disambiguator) for artifacts stored before multiple violations per row.
+	// Legacy key (no violation-info hash) for artifacts stored before multiple violations per row.
 	legacyDesc := d.kd.PrefixDesc(d.kd.Count() - 1)
-	legKb := val.NewTupleBuilder(legacyDesc, ns)
-	if err := fillArtifactKeyPrefix(ctx, ns, legKb, r, numPks, h, artType); err != nil {
+	legacyKeyBuilder := val.NewTupleBuilder(legacyDesc, nodeStore)
+	if err := fillArtifactKeyPrefix(ctx, nodeStore, legacyKeyBuilder, r, numPks, rootHash, artifactType); err != nil {
 		return err
 	}
-	legKey, err := legKb.Build(d.pool)
+	legacyKey, err := legacyKeyBuilder.Build(d.pool)
 	if err != nil {
 		return err
 	}
-	return d.ed.Delete(ctx, legKey)
+	return d.ed.Delete(ctx, legacyKey)
 }
 
 // StatementBegin implements the interface sql.TableEditor. Currently a no-op.

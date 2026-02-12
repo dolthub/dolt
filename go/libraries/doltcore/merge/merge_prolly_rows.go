@@ -845,8 +845,8 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 	return violations, err
 }
 
-// deleteArtifact deletes all unique constraint violation artifacts for the row identified by |key|
-// and returns whether at least one was deleted.
+// deleteArtifact deletes all unique constraint violation artifacts for the row identified by |key| and returns whether
+// at least one was deleted.
 func (uv uniqValidator) deleteArtifact(ctx context.Context, key val.Tuple) (bool, error) {
 	n, err := uv.edits.DeleteConstraintViolationsForRow(ctx, key, prolly.ArtifactTypeUniqueKeyViol)
 	if err != nil {

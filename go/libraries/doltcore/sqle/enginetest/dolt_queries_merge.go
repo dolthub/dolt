@@ -4337,7 +4337,8 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "Multiple foreign key violations for a given row reported (issue #6329)",
+		// https://github.com/dolthub/dolt/issues/6329
+		Name: "Multiple foreign key violations for a given row reported",
 		SetUpScript: []string{
 			"SET dolt_force_transaction_commit = on;",
 			`
@@ -4388,7 +4389,8 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "Multiple unique key violations for a given row reported (issue #6329)",
+		// https://github.com/dolthub/dolt/issues/6329
+		Name: "Multiple unique key violations for a given row reported",
 		SetUpScript: []string{
 			"SET dolt_force_transaction_commit = on;",
 			"CREATE table t (pk int PRIMARY KEY, col1 int UNIQUE, col2 int UNIQUE);",
@@ -4527,43 +4529,6 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 	},
 	{
 		// https://github.com/dolthub/dolt/issues/6329
-		Name: "merge reports multiple unique key violations for the same row",
-		SetUpScript: []string{
-			"SET dolt_force_transaction_commit = on;",
-			"CREATE TABLE t (pk int primary key, col1 int not null, col2 int not null, unique key unique1 (col1), unique key unique2 (col2));",
-			"INSERT INTO t VALUES (1, 2, 3);",
-			"CALL DOLT_COMMIT('-Am', 'adding table t on main branch');",
-			"CALL DOLT_BRANCH('other');",
-			"UPDATE t SET col1 = 0, col2 = 0;",
-			"CALL DOLT_COMMIT('-am', 'changing row 1 values on main branch');",
-			"CALL DOLT_CHECKOUT('other');",
-			"INSERT INTO t VALUES (100, 0, 0);",
-			"CALL DOLT_COMMIT('-am', 'adding a row on branch other');",
-			"CALL DOLT_CHECKOUT('main');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
-			},
-			{
-				Query:    "SELECT * FROM dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(4)}},
-			},
-			{
-				Query: "SELECT violation_type, pk, col1, col2, violation_info FROM dolt_constraint_violations_t ORDER BY pk, CAST(violation_info as CHAR);",
-				Expected: []sql.Row{
-					{"unique index", 1, 0, 0, merge.UniqCVMeta{Columns: []string{"col1"}, Name: "unique1"}},
-					{"unique index", 1, 0, 0, merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique2"}},
-					{"unique index", 100, 0, 0, merge.UniqCVMeta{Columns: []string{"col1"}, Name: "unique1"}},
-					{"unique index", 100, 0, 0, merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique2"}},
-				},
-			},
-		},
-	},
-	{
-		// Violation system tables (dolt_constraint_violations and dolt_constraint_violations_<table>)
-		// must support multiple violations for the same row and report them all.
 		Name: "violation system table supports multiple violations per row",
 		SetUpScript: []string{
 			"SET dolt_force_transaction_commit = on;",
@@ -4592,12 +4557,12 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query: "SELECT pk, violation_type, a, b FROM dolt_constraint_violations_t ORDER BY pk, CAST(violation_info AS CHAR);",
+				Query: "SELECT * FROM dolt_constraint_violations_t ORDER BY pk, CAST(violation_info AS CHAR);",
 				Expected: []sql.Row{
-					{1, "unique index", 0, 0},
-					{1, "unique index", 0, 0},
-					{2, "unique index", 0, 0},
-					{2, "unique index", 0, 0},
+					{doltCommit, "unique index", 1, 0, 0, merge.UniqCVMeta{Name: "ua", Columns: []string{"a"}}},
+					{doltCommit, "unique index", 1, 0, 0, merge.UniqCVMeta{Name: "ub", Columns: []string{"b"}}},
+					{doltCommit, "unique index", 2, 0, 0, merge.UniqCVMeta{Name: "ua", Columns: []string{"a"}}},
+					{doltCommit, "unique index", 2, 0, 0, merge.UniqCVMeta{Name: "ub", Columns: []string{"b"}}},
 				},
 			},
 			{
