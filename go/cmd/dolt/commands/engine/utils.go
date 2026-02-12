@@ -26,13 +26,13 @@ import (
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool) ([]dsess.SqlDatabase, []filesys.Filesys, error) {
+func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsess.SqlDatabase, []filesys.Filesys, error) {
 	var dbs []dsess.SqlDatabase
 	var locations []filesys.Filesys
 	var db dsess.SqlDatabase
 
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		db, err = newDatabase(ctx, name, dEnv, useBulkEditor)
+		db, err = newDatabase(ctx, name, dEnv)
 		if err != nil {
 			return false, err
 		}
@@ -50,14 +50,8 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool
 	return dbs, locations, nil
 }
 
-func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEditor bool) (sqle.Database, error) {
-	var deaf editor.DbEaFactory
-	var err error
-	if useBulkEditor {
-		deaf, err = dEnv.BulkDbEaFactory(ctx)
-	} else {
-		deaf, err = dEnv.DbEaFactory(ctx)
-	}
+func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv) (sqle.Database, error) {
+	deaf, err := dEnv.DbEaFactory(ctx)
 	if err != nil {
 		return sqle.Database{}, err
 	}

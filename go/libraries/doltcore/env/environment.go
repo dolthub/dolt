@@ -1367,23 +1367,6 @@ func (dEnv *DoltEnv) DbEaFactory(ctx context.Context) (editor.DbEaFactory, error
 	return editor.NewDbEaFactory(tmpDir, db.ValueReadWriter()), nil
 }
 
-func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) (editor.DbEaFactory, error) {
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-
-	db := dEnv.DoltDB(ctx)
-	if db == nil {
-		if dEnv.DBLoadError != nil {
-			return nil, dEnv.DBLoadError
-		}
-		return nil, errors.New("DoltDB failed to initialize but no error was recorded")
-	}
-
-	return editor.NewBulkImportTEAFactory(db.ValueReadWriter(), tmpDir), nil
-}
-
 func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) (bool, error) {
 	db := dEnv.DoltDB(ctx)
 	if db == nil {

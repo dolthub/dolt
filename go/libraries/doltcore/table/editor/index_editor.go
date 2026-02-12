@@ -80,20 +80,6 @@ type IndexEditor struct {
 	writeMutex *sync.Mutex
 }
 
-// NewIndexEditor creates a new index editor
-func NewIndexEditor(ctx context.Context, index schema.Index, indexData types.Map, tableSch schema.Schema, opts Options) *IndexEditor {
-	ie := &IndexEditor{
-		idxSch:       index.Schema(),
-		tblSch:       tableSch,
-		idx:          index,
-		iea:          opts.Deaf.NewIndexEA(ctx, indexData),
-		nbf:          indexData.Format(),
-		permanentErr: nil,
-		writeMutex:   &sync.Mutex{},
-	}
-	return ie
-}
-
 // InsertRow adds the given row to the index. If the row already exists and the index is unique, then an error is returned.
 // Otherwise, it is a no-op.
 func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tuple, value types.Tuple) error {
@@ -235,7 +221,7 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 		err := ie.DeleteRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
 			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
-				"attempted to undo previous insertion but encountered the following error: %v",
+					"attempted to undo previous insertion but encountered the following error: %v",
 				ie.idx.Name(), err)
 			return
 		}
@@ -243,7 +229,7 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 		err := ie.InsertRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
 			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
-				"attempted to undo previous deletion but encountered the following error: %v",
+					"attempted to undo previous deletion but encountered the following error: %v",
 				ie.idx.Name(), err)
 			return
 		}
