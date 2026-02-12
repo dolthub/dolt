@@ -216,7 +216,9 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		} else if apr.NArg() > 1 {
 			return 1, "", fmt.Errorf("too many args")
 		}
-		err = startRebase(ctx, apr.Arg(0), commitBecomesEmptyHandling, emptyCommitHandling)
+
+		skipVerification := apr.Contains(cli.SkipVerificationFlag)
+		err = startRebase(ctx, apr.Arg(0), commitBecomesEmptyHandling, emptyCommitHandling, skipVerification)
 		if err != nil {
 			return 1, "", err
 		}
@@ -263,7 +265,7 @@ func processCommitBecomesEmptyParams(apr *argparser.ArgParseResults) (doltdb.Emp
 // startRebase starts a new interactive rebase operation. |upstreamPoint| specifies the commit where the new rebased
 // commits will be based off of, |commitBecomesEmptyHandling| specifies how to  handle commits that are not empty, but
 // do not produce any changes when applied, and |emptyCommitHandling| specifies how to handle empty commits.
-func startRebase(ctx *sql.Context, upstreamPoint string, commitBecomesEmptyHandling doltdb.EmptyCommitHandling, emptyCommitHandling doltdb.EmptyCommitHandling) error {
+func startRebase(ctx *sql.Context, upstreamPoint string, commitBecomesEmptyHandling doltdb.EmptyCommitHandling, emptyCommitHandling doltdb.EmptyCommitHandling, skipVerification bool) error {
 	if upstreamPoint == "" {
 		return fmt.Errorf("no upstream branch specified")
 	}
@@ -351,7 +353,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string, commitBecomesEmptyHandl
 	}
 
 	newWorkingSet, err := workingSet.StartRebase(ctx, upstreamCommit, rebaseBranch, branchRoots.Working,
-		commitBecomesEmptyHandling, emptyCommitHandling)
+		commitBecomesEmptyHandling, emptyCommitHandling, skipVerification)
 	if err != nil {
 		return err
 	}
@@ -716,7 +718,8 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 
 			result := processRebasePlanStep(ctx, &step,
 				workingSet.RebaseState().CommitBecomesEmptyHandling(),
-				workingSet.RebaseState().EmptyCommitHandling())
+				workingSet.RebaseState().EmptyCommitHandling(),
+				workingSet.RebaseState().SkipVerification())
 			if result.err != nil || result.status != 0 || result.halt {
 				return result
 			}
@@ -803,7 +806,7 @@ func commitManuallyStagedChangesForStep(ctx *sql.Context, step rebase.RebasePlan
 	}
 
 	options, err := createCherryPickOptionsForRebaseStep(ctx, &step, workingSet.RebaseState().CommitBecomesEmptyHandling(),
-		workingSet.RebaseState().EmptyCommitHandling())
+		workingSet.RebaseState().EmptyCommitHandling(), workingSet.RebaseState().SkipVerification())
 
 	doltDB, ok := doltSession.GetDoltDB(ctx, ctx.GetCurrentDatabase())
 	if !ok {
@@ -861,6 +864,7 @@ func processRebasePlanStep(
 	planStep *rebase.RebasePlanStep,
 	commitBecomesEmptyHandling doltdb.EmptyCommitHandling,
 	emptyCommitHandling doltdb.EmptyCommitHandling,
+	skipVerification bool,
 ) rebaseResult {
 	// Make sure we have a transaction opened for the session
 	// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
@@ -878,7 +882,7 @@ func processRebasePlanStep(
 		return newRebaseSuccess("")
 	}
 
-	options, err := createCherryPickOptionsForRebaseStep(ctx, planStep, commitBecomesEmptyHandling, emptyCommitHandling)
+	options, err := createCherryPickOptionsForRebaseStep(ctx, planStep, commitBecomesEmptyHandling, emptyCommitHandling, skipVerification)
 	if err != nil {
 		return newRebaseError(err)
 	}
@@ -886,12 +890,19 @@ func processRebasePlanStep(
 	return handleRebaseCherryPick(ctx, planStep, *options)
 }
 
-func createCherryPickOptionsForRebaseStep(ctx *sql.Context, planStep *rebase.RebasePlanStep, commitBecomesEmptyHandling doltdb.EmptyCommitHandling, emptyCommitHandling doltdb.EmptyCommitHandling) (*cherry_pick.CherryPickOptions, error) {
+func createCherryPickOptionsForRebaseStep(
+	ctx *sql.Context,
+	planStep *rebase.RebasePlanStep,
+	commitBecomesEmptyHandling doltdb.EmptyCommitHandling,
+	emptyCommitHandling doltdb.EmptyCommitHandling,
+	skipVerification bool,
+) (*cherry_pick.CherryPickOptions, error) {
 	// Override the default empty commit handling options for cherry-pick, since
 	// rebase has slightly different defaults
 	options := cherry_pick.NewCherryPickOptions()
 	options.CommitBecomesEmptyHandling = commitBecomesEmptyHandling
 	options.EmptyCommitHandling = emptyCommitHandling
+	options.SkipVerification = skipVerification
 
 	switch planStep.Action {
 	case rebase.RebaseActionDrop, rebase.RebaseActionPick, rebase.RebaseActionEdit:
