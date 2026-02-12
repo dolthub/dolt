@@ -15,15 +15,12 @@
 package sqle
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -171,22 +168,6 @@ func DatetimeStrToTimestamp(datetime string) time.Time {
 	return time
 }
 
-func newAppsRow2(charId, epId int, comment string) row.Row {
-	vals := row.TaggedValues{
-		AppCharacterTag: types.Int(charId),
-		AppEpTag:        types.Int(epId),
-		AppCommentsTag:  types.String(comment),
-	}
-
-	r, err := row.New(types.Format_Default, AppearancesTestSchema, vals)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
 func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float64, uid uuid.UUID, numEpisodes uint64) row.Row {
 	isMarriedVal := types.Int(0)
@@ -228,23 +209,6 @@ var Ep1 = newEpsRow2(1, "Simpsons Roasting On an Open Fire", "1989-12-18 03:00:0
 var Ep2 = newEpsRow2(2, "Bart the Genius", "1990-01-15 03:00:00", 9.0)
 var Ep3 = newEpsRow2(3, "Homer's Odyssey", "1990-01-22 03:00:00", 7.0)
 var Ep4 = newEpsRow2(4, "There's No Disgrace Like Home", "1990-01-29 03:00:00", 8.5)
-var AllEpsRows = Rs(Ep1, Ep2, Ep3, Ep4)
-
-// These are made up, not the actual show data
-var app1 = newAppsRow2(HomerId, 1, "Homer is great in this one")
-var app2 = newAppsRow2(MargeId, 1, "Marge is here too")
-var app3 = newAppsRow2(HomerId, 2, "Homer is great in this one too")
-var app4 = newAppsRow2(BartId, 2, "This episode is named after Bart")
-var app5 = newAppsRow2(LisaId, 2, "Lisa is here too")
-var app6 = newAppsRow2(MoeId, 2, "I think there's a prank call scene")
-var app7 = newAppsRow2(HomerId, 3, "Homer is in every episode")
-var app8 = newAppsRow2(MargeId, 3, "Marge shows up a lot too")
-var app9 = newAppsRow2(LisaId, 3, "Lisa is the best Simpson")
-var app10 = newAppsRow2(BarneyId, 3, "I'm making this all up")
-
-// nobody in episode 4, that one was terrible
-// Unlike the other tables, you can't count on the order of these rows matching the insertion order.
-var AllAppsRows = Rs(app1, app2, app3, app4, app5, app6, app7, app8, app9, app10)
 
 // Convenience func to avoid the boilerplate of typing []row.Row{} all the time
 func Rs(rows ...row.Row) []row.Row {
@@ -306,24 +270,4 @@ func MutateRow(sch schema.Schema, r row.Row, tagsAndVals ...interface{}) row.Row
 	}
 
 	return mutated
-}
-
-func GetAllRows(root doltdb.RootValue, tableName string) ([]sql.Row, error) {
-	ctx := context.Background()
-	table, _, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
-	if err != nil {
-		return nil, err
-	}
-
-	rowIdx, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return SqlRowsFromDurableIndex(rowIdx, sch)
 }

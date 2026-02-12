@@ -313,20 +313,6 @@ func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 	return schema.UnkeyedSchemaFromCols(colColl)
 }
 
-// DoltSchemaFromAlterableTable is a utility for integration tests
-func DoltSchemaFromAlterableTable(t *AlterableDoltTable) schema.Schema {
-	return t.sch
-}
-
-// DoltTableFromAlterableTable is a utility for integration tests
-func DoltTableFromAlterableTable(ctx *sql.Context, t *AlterableDoltTable) *doltdb.Table {
-	dt, err := t.DoltTable.DoltTable(ctx)
-	if err != nil {
-		panic(err)
-	}
-	return dt
-}
-
 func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 	for {
 		_, err := iter.Next(ctx)

@@ -363,15 +363,6 @@ func interfaceToString(r interface{}) (string, error) {
 	return str, nil
 }
 
-func resolveRoot(ctx *sql.Context, sess *dsess.DoltSession, dbName, hashStr string) (*refDetails, error) {
-	root, commitTime, _, err := sess.ResolveRootForRef(ctx, dbName, hashStr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &refDetails{root: root, hashStr: hashStr, commitTime: commitTime}, nil
-}
-
 func resolveCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headRef ref.DoltRef, cSpecStr string) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
