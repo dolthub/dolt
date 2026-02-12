@@ -54,6 +54,7 @@ jobs:
         id: set_benchmark_mini
         run: |
           echo "benchmark=true" >> $GITHUB_OUTPUT
+          echo "withTpcc=false" >> $GITHUB_OUTPUT
           echo "sysbench-test-time=10" >> $GITHUB_OUTPUT
 
   performance:
