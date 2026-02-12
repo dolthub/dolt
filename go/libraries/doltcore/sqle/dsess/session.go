@@ -101,14 +101,14 @@ func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSessi
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
 func NewDoltSession(
-		sqlSess *sql.BaseSession,
-		pro DoltDatabaseProvider,
-		conf config.ReadWriteConfig,
-		branchController *branch_control.Controller,
-		statsProvider sql.StatsProvider,
-		writeSessProv WriteSessFunc,
-		gcSafepointController *gcctx.GCSafepointController,
-		branchActivityTracker *doltdb.BranchActivityTracker,
+	sqlSess *sql.BaseSession,
+	pro DoltDatabaseProvider,
+	conf config.ReadWriteConfig,
+	branchController *branch_control.Controller,
+	statsProvider sql.StatsProvider,
+	writeSessProv WriteSessFunc,
+	gcSafepointController *gcctx.GCSafepointController,
+	branchActivityTracker *doltdb.BranchActivityTracker,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -629,10 +629,10 @@ func (d *DoltSession) commitWorkingSet(ctx *sql.Context, branchState *branchStat
 // DoltCommit commits the working set and a new dolt commit with the properties given.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) DoltCommit(
-		ctx *sql.Context,
-		dbName string,
-		tx sql.Transaction,
-		commit *doltdb.PendingCommit,
+	ctx *sql.Context,
+	dbName string,
+	tx sql.Transaction,
+	commit *doltdb.PendingCommit,
 ) (*doltdb.Commit, error) {
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 		ws, commit, err := dtx.DoltCommit(
@@ -664,10 +664,10 @@ type doCommitFunc func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltd
 
 // commitBranchState performs a commit for the branch state given, using the doCommitFunc provided
 func (d *DoltSession) commitBranchState(
-		ctx *sql.Context,
-		branchState *branchState,
-		tx sql.Transaction,
-		commitFunc doCommitFunc,
+	ctx *sql.Context,
+	branchState *branchState,
+	tx sql.Transaction,
+	commitFunc doCommitFunc,
 ) (*doltdb.Commit, error) {
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
@@ -716,10 +716,10 @@ func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, dbName string, br
 // merge parent from an in progress merge as appropriate. The session working set is not updated with these new roots,
 // but they are set in the returned |doltdb.PendingCommit|. If there are no changes staged, this method returns nil.
 func (d *DoltSession) NewPendingCommit(
-		ctx *sql.Context,
-		dbName string,
-		roots doltdb.Roots,
-		props actions.CommitStagedProps,
+	ctx *sql.Context,
+	dbName string,
+	roots doltdb.Roots,
+	props actions.CommitStagedProps,
 ) (*doltdb.PendingCommit, error) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
@@ -1200,9 +1200,9 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 // session is dirty, this method returns an error. Clients can only switch branches with a clean working set, and so
 // must either commit or rollback any changes before attempting to switch working sets.
 func (d *DoltSession) SwitchWorkingSet(
-		ctx *sql.Context,
-		dbName string,
-		wsRef ref.WorkingSetRef,
+	ctx *sql.Context,
+	dbName string,
+	wsRef ref.WorkingSetRef,
 ) error {
 	headRef, err := wsRef.ToHeadRef()
 	if err != nil {

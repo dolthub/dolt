@@ -16,19 +16,16 @@ package store
 
 import (
 	"context"
-	"io"
 	"math/rand"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -206,46 +203,6 @@ func BenchmarkSimulatedCoveringIndex(b *testing.B) {
 			}
 		}
 	}
-}
-
-func BenchmarkMapItr(b *testing.B) {
-	ctx := context.Background()
-	generateTestData(ctx)
-
-	require.True(b, b.N < numRows, "b.N:%d >= numRows:%d", b.N, numRows)
-
-	_, vals := readTupleFromDB(ctx, b, simIdxBenchDataset)
-	m := vals[0].(types.Map)
-
-	itr, err := m.RangeIterator(ctx, 0, uint64(b.N))
-	require.NoError(b, err)
-
-	var closeFunc func() error
-	if cl, ok := itr.(io.Closer); ok {
-		closeFunc = cl.Close
-	}
-
-	sch, err := schema.SchemaFromCols(schema.NewColCollection(testDataCols...))
-	require.NoError(b, err)
-
-	dmItr := index.NewDoltMapIter(itr.NextTuple, closeFunc, index.NewKVToSqlRowConverterForCols(m.Format(), sch, nil))
-	sqlCtx := sql.NewContext(ctx)
-
-	b.ResetTimer()
-	for {
-		var r sql.Row
-		r, err = dmItr.Next(sqlCtx)
-
-		if r == nil || err != nil {
-			break
-		}
-	}
-	b.StopTimer()
-
-	if err != io.EOF {
-		require.NoError(b, err)
-	}
-	_ = dmItr.Close(sqlCtx)
 }
 
 /*func BenchmarkFullScan(b *testing.B) {

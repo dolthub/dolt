@@ -58,12 +58,7 @@ type DoltIndex interface {
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
 
-	valueReadWriter() types.ValueReadWriter
-
-	getDurableState(*sql.Context, DoltTableable) (*durableIndexState, error)
 	coversColumns(s *durableIndexState, columns []uint64) bool
-	sqlRowConverter(*durableIndexState, []uint64) *KVToSqlRowConverter
-	lookupTags(s *durableIndexState) map[uint64]int
 }
 
 func NewBranchNameIndex(i *doltIndex) *BranchNameIndex {
@@ -521,52 +516,6 @@ func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
 	return covers
 }
 
-func (s *durableIndexState) lookupTags(i *doltIndex) map[uint64]int {
-	cached := s.cachedLookupTags.Load()
-	if cached == nil {
-		tags := i.Schema().GetPKCols().Tags
-		sz := len(tags)
-		if sz == 0 {
-			sz = 1
-		}
-		tocache := make(map[uint64]int, sz)
-		for i, tag := range tags {
-			tocache[tag] = i
-		}
-		if len(tocache) == 0 {
-			tocache[schema.KeylessRowIdTag] = 0
-		}
-		s.cachedLookupTags.Store(tocache)
-		cached = tocache
-	}
-	return cached.(map[uint64]int)
-}
-
-func projectionsEqual(x, y []uint64) bool {
-	if len(x) != len(y) {
-		return false
-	}
-	var i, j int
-	for i < len(x) && j < len(y) {
-		if x[i] != y[j] {
-			return false
-		}
-		i++
-		j++
-	}
-	return true
-}
-func (s *durableIndexState) sqlRowConverter(i *doltIndex, proj []uint64) *KVToSqlRowConverter {
-	cachedProjections := s.cachedProjections.Load()
-	cachedConverter := s.cachedSqlRowConverter.Load()
-	if cachedConverter == nil || !projectionsEqual(proj, cachedProjections.([]uint64)) {
-		cachedConverter = NewKVToSqlRowConverterForCols(i.Format(), i.Schema(), proj)
-		s.cachedSqlRowConverter.Store(cachedConverter)
-		s.cachedProjections.Store(proj)
-	}
-	return cachedConverter.(*KVToSqlRowConverter)
-}
-
 type cachedDurableIndexes struct {
 	val atomic.Value
 }
@@ -769,14 +718,6 @@ func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ..
 		return nil, err
 	}
 	return pranges, nil
-}
-
-func (di *doltIndex) sqlRowConverter(s *durableIndexState, columns []uint64) *KVToSqlRowConverter {
-	return s.sqlRowConverter(di, columns)
-}
-
-func (di *doltIndex) lookupTags(s *durableIndexState) map[uint64]int {
-	return s.lookupTags(di)
 }
 
 func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
@@ -1283,21 +1224,6 @@ func getRangeCutValue(ctx context.Context, cut sql.MySQLRangeCut, typ sql.Type) 
 	return ret, err
 }
 
-// DropTrailingAllColumnExprs returns the Range with any |AllColumnExprs| at the end of it removed.
-//
-// Sometimes when we construct read ranges against laid out index structures,
-// we want to ignore these trailing clauses.
-func DropTrailingAllColumnExprs(r sql.MySQLRange) sql.MySQLRange {
-	i := len(r)
-	for i > 0 {
-		if r[i-1].Type() != sql.RangeType_All {
-			break
-		}
-		i--
-	}
-	return r[:i]
-}
-
 // SplitNullsFromRange given a sql.Range, splits it up into multiple ranges, where each column expr
 // that could be NULL and non-NULL is replaced with two column expressions, one
 // matching only NULL, and one matching the non-NULL component.
@@ -1344,19 +1270,6 @@ func SplitNullsFromRange(r sql.MySQLRange) ([]sql.MySQLRange, error) {
 	}
 
 	return res, nil
-}
-
-// SplitNullsFromRanges splits nulls from ranges.
-func SplitNullsFromRanges(rs []sql.MySQLRange) ([]sql.MySQLRange, error) {
-	var ret []sql.MySQLRange
-	for _, r := range rs {
-		nr, err := SplitNullsFromRange(r)
-		if err != nil {
-			return nil, err
-		}
-		ret = append(ret, nr...)
-	}
-	return ret, nil
 }
 
 // LookupToPointSelectStr converts a set of point lookups on string
