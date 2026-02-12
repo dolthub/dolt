@@ -80,20 +80,6 @@ type IndexEditor struct {
 	writeMutex *sync.Mutex
 }
 
-// NewIndexEditor creates a new index editor
-func NewIndexEditor(ctx context.Context, index schema.Index, indexData types.Map, tableSch schema.Schema, opts Options) *IndexEditor {
-	ie := &IndexEditor{
-		idxSch:       index.Schema(),
-		tblSch:       tableSch,
-		idx:          index,
-		iea:          opts.Deaf.NewIndexEA(ctx, indexData),
-		nbf:          indexData.Format(),
-		permanentErr: nil,
-		writeMutex:   &sync.Mutex{},
-	}
-	return ie
-}
-
 // InsertRow adds the given row to the index. If the row already exists and the index is unique, then an error is returned.
 // Otherwise, it is a no-op.
 func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tuple, value types.Tuple) error {
@@ -260,29 +246,6 @@ func (ie *IndexEditor) Map(ctx context.Context) (types.Map, error) {
 	}
 
 	return ie.iea.MaterializeEdits(ctx, ie.nbf)
-}
-
-// Index returns this editor's index.
-func (ie *IndexEditor) Index() schema.Index {
-	return ie.idx
-}
-
-// StatementStarted is analogous to the TableEditor implementation, but specific to the IndexEditor.
-func (ie *IndexEditor) StatementStarted(ctx context.Context) {
-}
-
-// StatementFinished is analogous to the TableEditor implementation, but specific to the IndexEditor.
-func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) error {
-	ie.writeMutex.Lock()
-	defer ie.writeMutex.Unlock()
-
-	if ie.permanentErr != nil {
-		return ie.permanentErr
-	} else if errored {
-		return ie.iea.Rollback(ctx)
-	}
-
-	return ie.iea.Commit(ctx, ie.nbf)
 }
 
 // Close is a no-op for an IndexEditor.

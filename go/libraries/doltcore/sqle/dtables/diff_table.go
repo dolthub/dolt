@@ -24,9 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -591,38 +589,6 @@ func (dt *DiffTable) PreciseMatch() bool {
 	return false
 }
 
-// tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)
-// and the schema of the table (or EmptySchema if tbl is null).
-func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (durable.Index, schema.Schema, error) {
-	var data durable.Index
-	var err error
-
-	if tbl == nil {
-		data, err = durable.NewEmptyPrimaryIndex(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), schema.EmptySchema)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else {
-		data, err = tbl.GetRowData(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	var sch schema.Schema
-	if tbl == nil {
-		sch = schema.EmptySchema
-	} else {
-		sch, err = tbl.GetSchema(ctx)
-
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	return data, sch, nil
-}
-
 type TblInfoAtCommit struct {
 	date    *types.Timestamp
 	tbl     *doltdb.Table
@@ -889,20 +855,6 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 
 func (dps *DiffPartitions) Close(*sql.Context) error {
 	return nil
-}
-
-// rowConvForSchema creates a RowConverter for transforming rows with the given schema a target schema.
-func (dp DiffPartition) rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, targetSch, srcSch schema.Schema) (*rowconv.RowConverter, error) {
-	if schema.SchemasAreEqual(srcSch, schema.EmptySchema) {
-		return rowconv.IdentityConverter, nil
-	}
-
-	fm, err := rowconv.TagMappingByTagAndName(srcSch, targetSch)
-	if err != nil {
-		return nil, err
-	}
-
-	return rowconv.NewRowConverter(ctx, vrw, fm)
 }
 
 // GetDiffTableSchemaAndJoiner returns the schema for the diff table given a

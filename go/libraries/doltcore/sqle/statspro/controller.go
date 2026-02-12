@@ -611,21 +611,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		return nil, err
 	}
 
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-	opts := editor.Options{
-		Deaf:    deaf,
-		Tempdir: tmpDir,
-	}
-
-	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(ctx), opts)
+	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, err
 	}

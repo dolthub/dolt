@@ -335,16 +335,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 // we set manually with the one at the working set of the HEAD being rebased.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
 func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue) (*sql.Context, *engine.SqlEngine, error) {
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, nil, err
-	}
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(ctx), opts)
+	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, nil, err
 	}

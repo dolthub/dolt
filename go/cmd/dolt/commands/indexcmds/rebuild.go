@@ -87,15 +87,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if !ok {
 		return HandleErr(errhand.BuildDError("The table `%s` does not exist.", tableName).Build(), nil)
 	}
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return HandleErr(errhand.BuildDError("error: ").AddCause(err).Build(), nil)
-	}
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return HandleErr(errhand.BuildDError("error: ").AddCause(err).Build(), nil)
-	}
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
+
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("could not get table schema").AddCause(err).Build(), nil)
@@ -104,7 +96,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if idxSch == nil {
 		return HandleErr(errhand.BuildDError("the index `%s` does not exist on table `%s`", indexName, tableName).Build(), nil)
 	}
-	indexRowData, err := creation.BuildSecondaryIndex(sql.NewContext(ctx), table, idxSch, tableName, opts)
+	indexRowData, err := creation.BuildSecondaryIndex(sql.NewContext(ctx), table, idxSch, tableName, editor.Options{})
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to rebuild index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)
 	}

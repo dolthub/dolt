@@ -45,15 +45,9 @@ func TestIsKeyFuncs(t *testing.T) {
 func TestNeedsToReloadEvents(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	tmpDir, err := dEnv.TempTableFilesDir()
-	require.NoError(t, err)
-	deaf, err := dEnv.DbEaFactory(ctx)
-	require.NoError(t, err)
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-
 	timestamp := time.Now().Truncate(time.Minute).UTC()
 
-	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), opts)
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
 	require.NoError(t, err)
 
 	_, sqlCtx, err := NewTestEngine(dEnv, ctx, db)

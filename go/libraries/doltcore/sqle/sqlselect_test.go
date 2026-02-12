@@ -1386,8 +1386,6 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	assertSchemasEqual(t, sqlSchema, sch)
 }
 
-const TableWithHistoryName = "test_table"
-
 var InitialHistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
 var AddAddrAt3HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
 var AddAgeAt4HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
@@ -1421,100 +1419,6 @@ type HistoryNode struct {
 	Children []HistoryNode
 }
 
-// mustRowData converts a slice of row.TaggedValues into a noms types.Map containing that data.
-func mustRowData(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, colVals []row.TaggedValues) *types.Map {
-	m, err := types.NewMap(ctx, vrw)
-	require.NoError(t, err)
-
-	me := m.Edit()
-	for _, taggedVals := range colVals {
-		r, err := row.New(types.Format_Default, sch, taggedVals)
-		require.NoError(t, err)
-
-		me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
-	}
-
-	m, err = me.Map(ctx)
-	require.NoError(t, err)
-
-	return &m
-}
-
-func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []HistoryNode {
-	vrw := dEnv.DoltDB(ctx).ValueReadWriter()
-
-	return []HistoryNode{
-		{
-			Branch:    "seed",
-			CommitMsg: "Seeding with initial user data",
-			Updates: map[string]TableUpdate{
-				TableWithHistoryName: {
-					NewSch: InitialHistSch,
-					NewRowData: mustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
-						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
-						{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")},
-						{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")},
-					}),
-				},
-			},
-			Children: []HistoryNode{
-				{
-					Branch:    "add-age",
-					CommitMsg: "Adding int age to users with tag 3",
-					Updates: map[string]TableUpdate{
-						TableWithHistoryName: {
-							NewSch: AddAgeAt4HistSch,
-							NewRowData: mustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
-								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 4: types.Int(35)},
-								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 4: types.Int(38)},
-								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 4: types.Int(37)},
-								{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 4: types.Int(37)},
-							}),
-						},
-					},
-					Children: nil,
-				},
-				{
-					Branch:    env.DefaultInitBranch,
-					CommitMsg: "Adding string address to users with tag 3",
-					Updates: map[string]TableUpdate{
-						TableWithHistoryName: {
-							NewSch: AddAddrAt3HistSch,
-							NewRowData: mustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
-								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
-								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")},
-								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")},
-								{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")},
-								{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")},
-							}),
-						},
-					},
-					Children: []HistoryNode{
-						{
-							Branch:    env.DefaultInitBranch,
-							CommitMsg: "Re-add age as a uint with tag 4",
-							Updates: map[string]TableUpdate{
-								TableWithHistoryName: {
-									NewSch: ReaddAgeAt5HistSch,
-									NewRowData: mustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
-										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35)},
-										{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38)},
-										{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37)},
-										{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 5: types.Uint(37)},
-										{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")},
-										{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins")},
-									}),
-								},
-							},
-							Children: nil,
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true)
 var firstColTag1TypeStr = schema.NewColumn("first_name", 1, types.StringKind, false)
 var lastColTag2TypeStr = schema.NewColumn("last_name", 2, types.StringKind, false)
@@ -1533,19 +1437,6 @@ var DiffSchema = dtestutils.MustSchema(
 	schema.NewColumn("from_addr", 10, types.StringKind, false),
 	schema.NewColumn("diff_type", 14, types.StringKind, false),
 )
-
-// TODO: this shouldn't be here
-func createWorkingRootUpdate() map[string]TableUpdate {
-	return map[string]TableUpdate{
-		TableWithHistoryName: {
-			RowUpdates: []row.Row{
-				mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{
-					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
-				})),
-			},
-		},
-	}
-}
 
 func validateTest(t *testing.T, test SelectTest) {
 	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil && test.ExpectedSqlSchema == nil) {

@@ -392,14 +392,6 @@ func parseStashIndex(apr *argparser.ArgParseResults) (int, error) {
 	return idx, nil
 }
 
-func bulkDbEaFactory(dbData env.DbData[*sql.Context]) editor.DbEaFactory {
-	tmpDir, err := dbData.Rsw.TempTableFilesDir()
-	if err != nil {
-		return nil
-	}
-	return editor.NewBulkImportTEAFactory(dbData.Ddb.ValueReadWriter(), tmpDir)
-}
-
 func updateWorkingRoot(ctx *sql.Context, dbData env.DbData[*sql.Context], newRoot doltdb.RootValue) error {
 	var h hash.Hash
 	var wsRef ref.WorkingSetRef
@@ -510,16 +502,12 @@ func handleMerge(ctx *sql.Context, dbName string, dbData env.DbData[*sql.Context
 		return nil, nil, nil, err
 	}
 
-	tmpDir, err := dbData.Rsw.TempTableFilesDir()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
 	tableResolver, err := dsess.GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	opts := editor.Options{Deaf: bulkDbEaFactory(dbData), Tempdir: tmpDir}
+
+	opts := editor.Options{}
 	result, err := merge.MergeRoots(ctx, tableResolver, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
 	if err != nil {
 		return nil, nil, nil, err

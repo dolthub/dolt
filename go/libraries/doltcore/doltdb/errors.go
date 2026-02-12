@@ -27,7 +27,6 @@ var ErrInvTableName = errors.New("not a valid table name")
 var ErrInvHash = errors.New("not a valid hash")
 var ErrInvalidAncestorSpec = errors.New("invalid ancestor spec")
 var ErrInvalidBranchOrHash = errors.New("string is not a valid branch or hash")
-var ErrInvalidHash = errors.New("string is not a valid hash")
 
 var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is not a commit")
 var ErrHashNotFound = errors.New("could not find a value for this hash")
@@ -39,7 +38,6 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 var ErrTableNotFound = errors.New("table not found")
 var ErrTableExists = errors.New("table already exists")
 var ErrAlreadyOnBranch = errors.New("Already on branch")
-var ErrAlreadyOnWorkspace = errors.New("Already on workspace")
 
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 
@@ -107,37 +105,6 @@ func (rt RootType) String() string {
 	}
 
 	return "unknown"
-}
-
-type RootTypeSet map[RootType]struct{}
-
-func NewRootTypeSet(rts ...RootType) RootTypeSet {
-	mp := make(map[RootType]struct{})
-
-	for _, rt := range rts {
-		mp[rt] = struct{}{}
-	}
-
-	return RootTypeSet(mp)
-}
-
-func (rts RootTypeSet) Contains(rt RootType) bool {
-	_, ok := rts[rt]
-	return ok
-}
-
-func (rts RootTypeSet) First(rtList []RootType) RootType {
-	for _, rt := range rtList {
-		if _, ok := rts[rt]; ok {
-			return rt
-		}
-	}
-
-	return InvalidRoot
-}
-
-func (rts RootTypeSet) IsEmpty() bool {
-	return len(rts) == 0
 }
 
 type RootValueUnreadable struct {

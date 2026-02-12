@@ -127,7 +127,6 @@ func testDataMergeHelper(t *testing.T, tests []dataMergeTest, flipSides bool) {
 
 					var mo merge.MergeOpts
 					var eo editor.Options
-					eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 					// attempt merge before skipping to assert no panics
 					result, err := merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
 
@@ -147,7 +146,6 @@ func testDataMergeHelper(t *testing.T, tests []dataMergeTest, flipSides bool) {
 func setupDataMergeTest(ctx context.Context, t *testing.T, schema namedSchema, test dataTest) (anc, left, right, merged doltdb.RootValue) {
 	denv := dtestutils.CreateTestEnv()
 	var eo editor.Options
-	eo = eo.WithDeaf(editor.NewInMemDeaf(denv.DoltDB(ctx).ValueReadWriter()))
 
 	ancestorTable := tbl(schema, test.ancestor...)
 	anc = makeRootWithTable(t, denv.DoltDB(ctx), eo, *ancestorTable)

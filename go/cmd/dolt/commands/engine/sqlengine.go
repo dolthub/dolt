@@ -143,7 +143,7 @@ func NewSqlEngine(
 		})
 	}
 
-	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
+	dbs, locations, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return nil, err
 	}

@@ -199,37 +199,6 @@ func RowAsUpdateStmt(ctx *sql.Context, r row.Row, tableName string, tableSch sch
 	return b.String(), nil
 }
 
-// RowAsTupleString converts a row into it's tuple string representation for SQL insert statements.
-func RowAsTupleString(ctx *sql.Context, r row.Row, tableSch schema.Schema) (string, error) {
-	var b strings.Builder
-
-	b.WriteString("(")
-	seenOne := false
-	// TAGS: Use of tags here is safe since it's constrained to a single table
-	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
-		if err != nil {
-			return true, err
-		}
-
-		b.WriteString(sqlString)
-		seenOne = true
-		return false, err
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(")")
-
-	return b.String(), nil
-}
-
 // InsertStatementPrefix returns the first part of an SQL insert query for a given table
 func InsertStatementPrefix(ctx *sql.Context, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
