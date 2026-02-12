@@ -1,6 +1,6 @@
 datasource db {
     provider = "mysql"
-    url      = env("DB_URL")
+    url      = "mysql://dolt@localhost:3306/dolt"
 }
 
 model Sample {

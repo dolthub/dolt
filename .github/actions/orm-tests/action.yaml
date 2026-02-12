@@ -1,0 +1,5 @@
+name: 'Dolt ORM integration tests'
+description: 'Smoke tests for ORM integrations'
+runs:
+  using: 'docker'
+  image: '../../../integration-tests/ORMDockerfile'

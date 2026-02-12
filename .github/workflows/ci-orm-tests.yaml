@@ -1,48 +1,31 @@
 name: Test ORM integrations
 
 on:
-  pull_request:
-    paths:
-      - 'go/**'
-      - 'integration-tests/**'
   workflow_dispatch:
   repository_dispatch:
     types: [ test-orm-integrations ]
-
-concurrency:
-  group: ci-orm-tests-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   orm_integrations_job:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
-    name: ORM tests
+    name: Run tests
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          path: dolt
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Build ORM test image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: dolt/integration-tests/orm-tests/Dockerfile
-          tags: orm-tests:latest
-          load: true
+      - name: Copy go package
+        run: cp -r ./go ./integration-tests/go
       - name: Test ORM integrations
-        run: docker run --rm orm-tests:latest
+        uses: ./.github/actions/orm-tests
       - name: Configure AWS Credentials
-        if: ${{ failure() && !env.ACT }}
+        if: ${{ failure() }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
       - name: Send Email
-        if: ${{ failure() && !env.ACT }}
+        if: ${{ failure() }}
         uses: ./.github/actions/ses-email-action
         with:
           template: 'OrmIntegrationFailureTemplate'
