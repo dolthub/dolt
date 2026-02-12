@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,9 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 	"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
 	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 	"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
+
+// ConstraintViolationsListPrefix is the label appended before the violation list in commit errors.
+const ConstraintViolationsListPrefix = "\nConstraint violations: "
 
 // TODO: remove this
 func TransactionsDisabled(ctx *sql.Context) bool {
@@ -648,91 +652,109 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
 		// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
 		if forceTransactionCommit.(int8) != 1 {
-			badTbls, err := doltdb.TablesWithConstraintViolations(ctx, workingRoot)
+			tablesWithViolations, err := doltdb.TablesWithConstraintViolations(ctx, workingRoot)
 			if err != nil {
 				return err
 			}
 
-			violations := make([]string, len(badTbls))
-			for i, name := range badTbls {
-				tbl, _, err := workingRoot.GetTable(ctx, name)
+			var messageBuilder strings.Builder
+			for tableIndex, tableName := range tablesWithViolations {
+				table, _, err := workingRoot.GetTable(ctx, tableName)
 				if err != nil {
 					return err
 				}
 
-				artIdx, err := tbl.GetArtifacts(ctx)
+				artifactIndex, err := table.GetArtifacts(ctx)
 				if err != nil {
 					return err
 				}
 
-				m := durable.ProllyMapFromArtifactIndex(artIdx)
-				itr, err := m.IterAllCVs(ctx)
+				artifactMap := durable.ProllyMapFromArtifactIndex(artifactIndex)
+				cvIterator, err := artifactMap.IterAllCVs(ctx)
+				if err != nil {
+					return err
+				}
 
+				countByDescription := make(map[string]int, 8)
 				for {
-					art, err := itr.Next(ctx)
+					artifact, err := cvIterator.Next(ctx)
 					if err != nil {
 						break
 					}
 
-					var meta prolly.ConstraintViolationMeta
-					err = json.Unmarshal(art.Metadata, &meta)
+					var constraintViolationMeta prolly.ConstraintViolationMeta
+					err = json.Unmarshal(artifact.Metadata, &constraintViolationMeta)
 					if err != nil {
 						return err
 					}
 
-					s := ""
-					switch art.ArtType {
+					var description string
+					switch artifact.ArtType {
 					case prolly.ArtifactTypeForeignKeyViol:
-						var m merge.FkCVMeta
-						err = json.Unmarshal(meta.VInfo, &m)
+						var foreignKeyMeta merge.FkCVMeta
+						err = json.Unmarshal(constraintViolationMeta.VInfo, &foreignKeyMeta)
 						if err != nil {
 							return err
 						}
-						s = fmt.Sprintf("\n"+
+						description = fmt.Sprintf("\n"+
 							"Type: Foreign Key Constraint Violation\n"+
 							"\tForeignKey: %s,\n"+
 							"\tTable: %s,\n"+
 							"\tReferencedTable: %s,\n"+
 							"\tIndex: %s,\n"+
-							"\tReferencedIndex: %s", m.ForeignKey, m.Table, m.ReferencedTable, m.Index, m.ReferencedIndex)
+							"\tReferencedIndex: %s", foreignKeyMeta.ForeignKey, foreignKeyMeta.Table, foreignKeyMeta.ReferencedTable, foreignKeyMeta.Index, foreignKeyMeta.ReferencedIndex)
 
 					case prolly.ArtifactTypeUniqueKeyViol:
-						var m merge.UniqCVMeta
-						err = json.Unmarshal(meta.VInfo, &m)
+						var uniqueKeyMeta merge.UniqCVMeta
+						err = json.Unmarshal(constraintViolationMeta.VInfo, &uniqueKeyMeta)
 						if err != nil {
 							return err
 						}
-						s = fmt.Sprintf("\n"+
+						description = fmt.Sprintf("\n"+
 							"Type: Unique Key Constraint Violation,\n"+
 							"\tName: %s,\n"+
-							"\tColumns: %v", m.Name, m.Columns)
+							"\tColumns: %v", uniqueKeyMeta.Name, uniqueKeyMeta.Columns)
 
 					case prolly.ArtifactTypeNullViol:
-						var m merge.NullViolationMeta
-						err = json.Unmarshal(meta.VInfo, &m)
+						var nullViolationMeta merge.NullViolationMeta
+						err = json.Unmarshal(constraintViolationMeta.VInfo, &nullViolationMeta)
 						if err != nil {
 							return err
 						}
-						s = fmt.Sprintf("\n"+
+						description = fmt.Sprintf("\n"+
 							"Type: Null Constraint Violation,\n"+
-							"\tColumns: %v", m.Columns)
+							"\tColumns: %v", nullViolationMeta.Columns)
 
 					case prolly.ArtifactTypeChkConsViol:
-						var m merge.CheckCVMeta
-						err = json.Unmarshal(meta.VInfo, &m)
+						var checkConstraintMeta merge.CheckCVMeta
+						err = json.Unmarshal(constraintViolationMeta.VInfo, &checkConstraintMeta)
 						if err != nil {
 							return err
 						}
-						s = fmt.Sprintf("\n"+
+						description = fmt.Sprintf("\n"+
 							"Type: Check Constraint Violation,\n"+
 							"\tName: %s,\n"+
-							"\tExpression: %v", m.Name, m.Expression)
+							"\tExpression: %v", checkConstraintMeta.Name, checkConstraintMeta.Expression)
 					}
 					if err != nil {
 						return err
 					}
+					countByDescription[description]++
+				}
 
-					violations[i] = s
+				sortedDescriptions := make([]string, 0, len(countByDescription))
+				for descriptionText := range countByDescription {
+					sortedDescriptions = append(sortedDescriptions, descriptionText)
+				}
+				sort.Strings(sortedDescriptions)
+				if tableIndex > 0 {
+					messageBuilder.WriteString(", ")
+				}
+				for _, description := range sortedDescriptions {
+					messageBuilder.WriteString(description)
+					if rowCount := countByDescription[description]; rowCount > 1 {
+						messageBuilder.WriteString(fmt.Sprintf(" (%d row(s))", rowCount))
+					}
 				}
 			}
 
@@ -741,8 +763,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			return fmt.Errorf("%s\n"+
-				"Constraint violations: %s", ErrUnresolvedConstraintViolationsCommit, strings.Join(violations, ", "))
+			return fmt.Errorf("%s%s%s", ErrUnresolvedConstraintViolationsCommit, ConstraintViolationsListPrefix, messageBuilder.String())
 		}
 	}
 

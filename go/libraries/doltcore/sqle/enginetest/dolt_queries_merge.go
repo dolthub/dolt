@@ -4561,6 +4561,55 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// Violation system tables (dolt_constraint_violations and dolt_constraint_violations_<table>)
+		// must support multiple violations for the same row and report them all.
+		Name: "violation system table supports multiple violations per row",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE TABLE t (pk int primary key, a int not null, b int not null, unique key ua (a), unique key ub (b));",
+			"INSERT INTO t VALUES (1, 10, 20);",
+			"CALL DOLT_COMMIT('-Am', 'init');",
+			"CALL DOLT_BRANCH('other');",
+			"UPDATE t SET a = 0, b = 0;",
+			"CALL DOLT_COMMIT('-am', 'main: row 1 -> (0,0)');",
+			"CALL DOLT_CHECKOUT('other');",
+			"INSERT INTO t VALUES (2, 0, 0);",
+			"CALL DOLT_COMMIT('-am', 'other: add row (2,0,0)');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(4)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_constraint_violations_t;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query: "SELECT pk, violation_type, a, b FROM dolt_constraint_violations_t ORDER BY pk, CAST(violation_info AS CHAR);",
+				Expected: []sql.Row{
+					{1, "unique index", 0, 0},
+					{1, "unique index", 0, 0},
+					{2, "unique index", 0, 0},
+					{2, "unique index", 0, 0},
+				},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_constraint_violations_t WHERE pk = 1;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_constraint_violations_t WHERE pk = 2;",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
 }
 
 var SchemaConflictScripts = []queries.ScriptTest{
