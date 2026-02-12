@@ -76,8 +76,7 @@ func (med *MapEditor) Map(ctx context.Context) (Map, error) {
 		return EmptyMap, err
 	}
 
-	m, _, err := ApplyEdits(ctx, edits, med.m)
-	return m, err
+	return ApplyEdits(ctx, edits, med.m)
 }
 
 // Set adds an edit

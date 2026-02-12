@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -50,7 +49,6 @@ type SqlEngineTableWriter struct {
 	force      bool
 	disableFks bool
 
-	stats   types.AppliedEditStats
 	statOps int32
 
 	importOption       TableImportOp
@@ -118,28 +116,6 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	updateStats := func(row sql.Row) {
-		if row == nil {
-			return
-		}
-
-		// If the length of the row does not match the schema then we have an update operation.
-		if len(row) != len(s.tableSchema.Schema) {
-			oldRow := row[:len(row)/2]
-			newRow := row[len(row)/2:]
-
-			if ok, err := oldRow.Equals(s.sqlCtx, newRow, s.tableSchema.Schema); err == nil {
-				if ok {
-					s.stats.SameVal++
-				} else {
-					s.stats.Modifications++
-				}
-			}
-		} else {
-			s.stats.Additions++
-		}
-	}
-
 	insertOrUpdateOperation, err := s.getInsertNode(inputChannel, false)
 	if err != nil {
 		return err
@@ -177,13 +153,12 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 
 	line := 1
 	for {
-		row, err := iter.Next(s.sqlCtx)
+		_, err := iter.Next(s.sqlCtx)
 		line += 1
 
 		// All other errors are handled by the errorHandler
 		if err == nil {
 			_ = atomic.AddInt32(&s.statOps, 1)
-			updateStats(row)
 		} else if err == io.EOF {
 			atomic.LoadInt32(&s.statOps)
 			atomic.StoreInt32(&s.statOps, 0)
