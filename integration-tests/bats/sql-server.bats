@@ -127,8 +127,9 @@ EOF
         skip "git not installed"
     fi
 
-    tempDir=$(mktemp -d)
-    cd $tempDir
+    tempDir="$(mktemp -d "${BATS_TMPDIR:-/tmp}/dolt-sql-server-clone-git.XXXXXX")"
+    trap 'rm -rf "$tempDir"' EXIT
+    cd "$tempDir"
 
     # Set up a bare git remote whose path ends with .git and seed it with a branch.
     mkdir first_dolt_remote.git
