@@ -22,11 +22,9 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/sqltypes"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -45,37 +43,9 @@ type blobStringType struct {
 var _ TypeInfo = (*blobStringType)(nil)
 
 var (
-	TinyTextType   TypeInfo = &blobStringType{sqlStringType: gmstypes.TinyText}
-	TextType       TypeInfo = &blobStringType{sqlStringType: gmstypes.Text}
-	MediumTextType TypeInfo = &blobStringType{sqlStringType: gmstypes.MediumText}
-	LongTextType   TypeInfo = &blobStringType{sqlStringType: gmstypes.LongText}
+	TextType     TypeInfo = &blobStringType{sqlStringType: gmstypes.Text}
+	LongTextType TypeInfo = &blobStringType{sqlStringType: gmstypes.LongText}
 )
-
-func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) {
-	collationStr, ok := params[blobStringTypeParam_Collate]
-	if !ok {
-		return nil, fmt.Errorf(`create blobstring type info is missing param "%v"`, blobStringTypeParam_Collate)
-	}
-	collation, err := sql.ParseCollation("", collationStr, false)
-	if err != nil {
-		return nil, err
-	}
-
-	maxLengthStr, ok := params[blobStringTypeParam_Length]
-	if !ok {
-		return nil, fmt.Errorf(`create blobstring type info is missing param "%v"`, blobStringTypeParam_Length)
-	}
-	length, err := strconv.ParseInt(maxLengthStr, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
-	sqlType, err := gmstypes.CreateString(sqltypes.Text, length, collation)
-	if err != nil {
-		return nil, err
-	}
-	return &blobStringType{sqlType}, nil
-}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *blobStringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {

@@ -16,7 +16,6 @@ package index
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -30,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -755,7 +753,7 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 }
 
 func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ...sql.MySQLRange) ([]prolly.Range, error) {
-	//todo(max): it is important that *doltIndexLookup maintains a reference
+	// todo(max): it is important that *doltIndexLookup maintains a reference
 	// to empty sqlRanges, otherwise the analyzer will dismiss the index and
 	// chose a less optimal lookup index. This is a GMS concern, so GMS should
 	// really not rely on the integrator to maintain this tenuous relationship.
@@ -771,113 +769,6 @@ func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ..
 		return nil, err
 	}
 	return pranges, nil
-}
-
-func (di *doltIndex) nomsRanges(ctx *sql.Context, iranges ...sql.MySQLRange) ([]*noms.ReadRange, error) {
-	// This might remain nil if the given nomsRanges each contain an EmptyRange for one of the columns. This will just
-	// cause the lookup to return no rows, which is the desired behavior.
-	var readRanges []*noms.ReadRange
-
-	ranges := make([]sql.MySQLRange, len(iranges))
-
-	for i := range iranges {
-		ranges[i] = DropTrailingAllColumnExprs(iranges[i])
-	}
-
-	ranges, err := SplitNullsFromRanges(ranges)
-	if err != nil {
-		return nil, err
-	}
-
-RangeLoop:
-	for _, rang := range ranges {
-		if len(rang) > len(di.columns) {
-			return nil, nil
-		}
-
-		var lowerKeys []interface{}
-		for _, rangeColumnExpr := range rang {
-			if rangeColumnExpr.HasLowerBound() {
-				lowerKeys = append(lowerKeys, sql.GetMySQLRangeCutKey(rangeColumnExpr.LowerBound))
-			} else {
-				break
-			}
-		}
-		lowerboundTuple, err := di.keysToTuple(ctx, lowerKeys)
-		if err != nil {
-			return nil, err
-		}
-
-		rangeCheck := make(nomsRangeCheck, len(rang))
-		for i, rangeColumnExpr := range rang {
-			// An empty column expression will mean that no values for this column can be matched, so we can discard the
-			// entire range.
-			if ok, err := rangeColumnExpr.IsEmpty(); err != nil {
-				return nil, err
-			} else if ok {
-				continue RangeLoop
-			}
-
-			cb := columnBounds{}
-			// We promote each type as the value has already been validated against the type
-			promotedType := di.columns[i].TypeInfo.Promote()
-			if rangeColumnExpr.HasLowerBound() {
-				key := sql.GetMySQLRangeCutKey(rangeColumnExpr.LowerBound)
-				val, err := promotedType.ConvertValueToNomsValue(ctx, di.vrw, key)
-				if err != nil {
-					return nil, err
-				}
-				if rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed {
-					// For each lowerbound case, we set the upperbound to infinity, as the upperbound can increment to
-					// get to the desired overall case while retaining whatever was set for the lowerbound.
-					cb.boundsCase = boundsCase_greaterEquals_infinity
-				} else {
-					cb.boundsCase = boundsCase_greater_infinity
-				}
-				cb.lowerbound = val
-			} else {
-				cb.boundsCase = boundsCase_infinity_infinity
-			}
-			if rangeColumnExpr.HasUpperBound() {
-				key := sql.GetMySQLRangeCutKey(rangeColumnExpr.UpperBound)
-				val, err := promotedType.ConvertValueToNomsValue(ctx, di.vrw, key)
-				if err != nil {
-					return nil, err
-				}
-				if rangeColumnExpr.UpperBound.TypeAsUpperBound() == sql.Closed {
-					// Bounds cases are enum aliases on bytes, and they're arranged such that we can increment the case
-					// that was previously set when evaluating the lowerbound to get the proper overall case.
-					cb.boundsCase += 1
-				} else {
-					cb.boundsCase += 2
-				}
-				cb.upperbound = val
-			}
-			if rangeColumnExpr.Type() == sql.RangeType_EqualNull {
-				cb.boundsCase = boundsCase_isNull
-			}
-			rangeCheck[i] = cb
-		}
-
-		// If the suffix checks will always succeed (both bounds are infinity) then they can be removed to reduce the
-		// number of checks that are called per-row. Always leave one check to skip NULLs.
-		for i := len(rangeCheck) - 1; i > 0 && len(rangeCheck) > 1; i-- {
-			if rangeCheck[i].boundsCase == boundsCase_infinity_infinity {
-				rangeCheck = rangeCheck[:i]
-			} else {
-				break
-			}
-		}
-
-		readRanges = append(readRanges, &noms.ReadRange{
-			Start:     lowerboundTuple,
-			Inclusive: true, // The checks handle whether a value is included or not
-			Reverse:   false,
-			Check:     rangeCheck,
-		})
-	}
-
-	return readRanges, nil
 }
 
 func (di *doltIndex) sqlRowConverter(s *durableIndexState, columns []uint64) *KVToSqlRowConverter {
@@ -1123,29 +1014,6 @@ func (di *doltIndex) FullTextKeyColumns(ctx *sql.Context) (fulltext.KeyColumns, 
 		Name:      di.fullTextProps.KeyName,
 		Positions: positions,
 	}, nil
-}
-
-// keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to
-// start at the very beginning.
-func (di *doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tuple, error) {
-	nbf := di.vrw.Format()
-	if len(keys) > len(di.columns) {
-		return types.EmptyTuple(nbf), errors.New("too many keys for the column count")
-	}
-
-	vals := make([]types.Value, len(keys)*2)
-	for i := range keys {
-		col := di.columns[i]
-		// As an example, if our TypeInfo is Int8, we should not fail to create a tuple if we are returning all keys
-		// that have a value of less than 9001, thus we promote the TypeInfo to the widest type.
-		val, err := col.TypeInfo.Promote().ConvertValueToNomsValue(ctx, di.vrw, keys[i])
-		if err != nil {
-			return types.EmptyTuple(nbf), err
-		}
-		vals[2*i] = types.Uint(col.Tag)
-		vals[2*i+1] = val
-	}
-	return types.NewTuple(nbf, vals...)
 }
 
 var sharePool = pool.NewBuffPool()
