@@ -209,4 +209,34 @@ var NonlocalScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/10462
+	{
+		Name: "nonlocal table is not affected by dolt_clean()",
+		SetUpScript: []string{
+			"CREATE TABLE global_test (id int auto_increment primary key, name varchar(100));",
+			"INSERT INTO global_test (id, name) VALUES (1, 'one');",
+			"CREATE TABLE foo (id int auto_increment primary key);",
+			"INSERT INTO dolt_nonlocal_tables (table_name, target_ref, options) VALUES ('global_*', 'main', 'immediate');",
+			"CALL dolt_add('dolt_nonlocal_tables');",
+			"CALL dolt_commit('-m', 'set up dolt_nonlocal_tables');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM global_test;",
+				Expected: []sql.Row{{1, "one"}},
+			},
+			{
+				Query:    "CALL dolt_clean();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM global_test;",
+				Expected: []sql.Row{{1, "one"}},
+			},
+			{
+				Query:    "SHOW TABLES;",
+				Expected: []sql.Row{{"global_test"}},
+			},
+		},
+	},
 }

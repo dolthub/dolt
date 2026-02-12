@@ -174,6 +174,7 @@ func CreateRemoteArgParser() *argparser.ArgParser {
 func CreateCleanArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("clean")
 	ap.SupportsFlag(DryRunFlag, "", "Tests removing untracked tables without modifying the working set.")
+	ap.SupportsFlag(ExcludeIgnoreRulesFlag, "x", "Do not respect dolt_ignore; remove untracked tables that match dolt_ignore. dolt_nonlocal_tables is always respected.")
 	return ap
 }
 

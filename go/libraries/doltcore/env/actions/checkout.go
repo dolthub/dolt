@@ -216,7 +216,7 @@ func CleanOldWorkingSet(
 	}
 
 	// we also have to do a clean, because we the ResetHard won't touch any new tables (tables only in the working set)
-	newRoots, err := CleanUntracked(ctx, resetRoots, []string{}, false, true)
+	newRoots, err := CleanUntracked(ctx, resetRoots, []string{}, false, true, true)
 	if err != nil {
 		return err
 	}

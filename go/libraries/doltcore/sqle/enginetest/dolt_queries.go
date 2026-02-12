@@ -910,6 +910,63 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/10462
+	{
+		Name: "dolt_clean does not drop tables matching dolt_ignore",
+		SetUpScript: []string{
+			"CREATE TABLE ignored_foo (id int primary key);",
+			"INSERT INTO ignored_foo VALUES (1);",
+			"INSERT INTO dolt_ignore VALUES ('ignored_*', true);",
+			"CALL dolt_add('dolt_ignore');",
+			"CALL dolt_commit('-m', 'add dolt_ignore');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM ignored_foo;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "CALL dolt_clean();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM ignored_foo;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SHOW TABLES;",
+				Expected: []sql.Row{{"ignored_foo"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_clean -x drops tables matching dolt_ignore",
+		SetUpScript: []string{
+			"CREATE TABLE ignored_bar (id int primary key);",
+			"INSERT INTO ignored_bar VALUES (1);",
+			"INSERT INTO dolt_ignore VALUES ('ignored_*', true);",
+			"CALL dolt_add('dolt_ignore');",
+			"CALL dolt_commit('-m', 'add dolt_ignore');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM ignored_bar;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "CALL dolt_clean('-x');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "SELECT * FROM ignored_bar;",
+				ExpectedErrStr: "table not found: ignored_bar",
+			},
+			{
+				Query:    "SHOW TABLES;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 	{
 		Name: "dolt_hashof_table tests",
 		SetUpScript: []string{
