@@ -841,9 +841,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 		return nil, nil, err
 	}
 
-	options := sqlDatabase.EditOptions()
-	options.ForeignKeyChecksDisabled = foreignKeyChecksDisabled
-	writeSession := writer.NewWriteSession(binFormat, ws, tracker, options)
+	writeSession := writer.NewWriteSession(binFormat, ws, tracker, sqlDatabase.EditOptions())
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	setter := ds.SetWorkingRoot

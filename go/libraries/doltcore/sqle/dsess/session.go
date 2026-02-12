@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -1302,40 +1301,6 @@ func (d *DoltSession) setHeadRefSessionVar(ctx *sql.Context, db, value string) e
 func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
-	convertedVal, _, err := sqltypes.Int64.Convert(ctx, value)
-	if err != nil {
-		return err
-	}
-	intVal := int64(0)
-	if convertedVal != nil {
-		intVal = convertedVal.(int64)
-	}
-
-	if intVal == 0 {
-		for _, dbState := range d.dbStates {
-			for _, branchState := range dbState.heads {
-				if ws := branchState.WriteSession(); ws != nil {
-					opts := ws.GetOptions()
-					opts.ForeignKeyChecksDisabled = true
-					ws.SetOptions(opts)
-				}
-			}
-		}
-	} else if intVal == 1 {
-		for _, dbState := range d.dbStates {
-			for _, branchState := range dbState.heads {
-				if ws := branchState.WriteSession(); ws != nil {
-					opts := ws.GetOptions()
-					opts.ForeignKeyChecksDisabled = false
-					ws.SetOptions(opts)
-				}
-			}
-		}
-	} else {
-		return sql.ErrInvalidSystemVariableValue.New("foreign_key_checks", intVal)
-	}
-
 	return d.Session.SetSessionVariable(ctx, key, value)
 }
 

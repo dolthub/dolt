@@ -990,23 +990,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	// Ensure any provider-supplied DB load params are applied before any lazy DB load occurs.
 	p.applyDBLoadParamsToEnv(newEnv)
 
-	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
-	if err != nil {
-		return err
-	}
-
-	deaf, err := newEnv.DbEaFactory(ctx)
-	if err != nil {
-		return err
-	}
-
-	opts := editor.Options{
-		Deaf: deaf,
-		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
-		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
-	}
-
-	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), opts)
+	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return err
 	}

@@ -51,18 +51,6 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsess.SqlDataba
 }
 
 func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv) (sqle.Database, error) {
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return sqle.Database{}, err
-	}
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return sqle.Database{}, err
-	}
-	opts := editor.Options{
-		Deaf:    deaf,
-		Tempdir: tmpDir,
-	}
 	dbdata := dEnv.DbData(ctx)
 	// Databases registered with the SQL engine are always
 	// configured for FatalBehaviorCrash. These are local
@@ -75,5 +63,5 @@ func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv) (sqle.Data
 	// See also sqle/database_provider.go, where we do this when
 	// creating new databases as well.
 	dbdata.Ddb.SetCrashOnFatalError()
-	return sqle.NewDatabase(ctx, name, dbdata, opts)
+	return sqle.NewDatabase(ctx, name, dbdata, editor.Options{})
 }

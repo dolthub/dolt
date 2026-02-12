@@ -134,16 +134,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root dol
 	}
 
 	for _, tn := range tablesToExport {
-		tmpDir, err := dEnv.TempTableFilesDir()
-		if err != nil {
-			return errhand.BuildDError("error: ").AddCause(err).Build()
-		}
-		deaf, err := dEnv.DbEaFactory(ctx)
-		if err != nil {
-			return errhand.BuildDError("error: ").AddCause(err).Build()
-		}
-		opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-		verr := exportTblSchema(ctx, tn, root, wr, opts)
+		verr := exportTblSchema(ctx, tn, root, wr, editor.Options{})
 		if verr != nil {
 			return verr
 		}

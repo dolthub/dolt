@@ -46,17 +46,7 @@ import (
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, statements string) (doltdb.RootValue, error) {
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return nil, err
-	}
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, err
 	}
@@ -166,17 +156,7 @@ func ExecuteSelect(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue
 		Rsr: dEnv.RepoStateReader(),
 	}
 
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return nil, err
-	}
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-	db, err := NewDatabase(context.Background(), "dolt", dbData, opts)
+	db, err := NewDatabase(context.Background(), "dolt", dbData, editor.Options{})
 	if err != nil {
 		return nil, err
 	}
