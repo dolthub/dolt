@@ -845,26 +845,14 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 	return violations, err
 }
 
-// deleteArtifact deletes the unique constraint violation artifact for the row identified by |key| and returns a
-// boolean that indicates if an artifact was deleted, as well as an error that indicates if there were any
-// unexpected errors encountered.
+// deleteArtifact deletes all unique constraint violation artifacts for the row identified by |key|
+// and returns whether at least one was deleted.
 func (uv uniqValidator) deleteArtifact(ctx context.Context, key val.Tuple) (bool, error) {
-	artifactKey, err := uv.edits.BuildArtifactKey(ctx, key, uv.srcHash, prolly.ArtifactTypeUniqueKeyViol)
+	n, err := uv.edits.DeleteConstraintViolationsForRow(ctx, key, prolly.ArtifactTypeUniqueKeyViol)
 	if err != nil {
 		return false, err
 	}
-
-	has, err := uv.edits.Has(ctx, artifactKey)
-	if err != nil || !has {
-		return false, err
-	}
-
-	err = uv.edits.Delete(ctx, artifactKey)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
+	return n > 0, nil
 }
 
 // clearArtifactsForValue deletes the unique constraint violation artifact for the row identified by |key| and |value|
@@ -1258,7 +1246,7 @@ func (m *conflictMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, _ sc
 	default:
 		return fmt.Errorf("invalid conflict type: %s", diff.Op)
 	}
-	return m.ae.Add(ctx, diff.Key, m.rightRootish, prolly.ArtifactTypeConflict, m.meta)
+	return m.ae.Add(ctx, diff.Key, m.rightRootish, prolly.ArtifactTypeConflict, m.meta, nil)
 }
 
 func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, error) {

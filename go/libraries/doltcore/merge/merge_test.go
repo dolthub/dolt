@@ -456,7 +456,7 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 
 	for _, testCase := range testRows {
 		if testCase.conflict {
-			err = artEditor.Add(ctx, key(testCase.key), rightCmHash, prolly.ArtifactTypeConflict, d)
+			err = artEditor.Add(ctx, key(testCase.key), rightCmHash, prolly.ArtifactTypeConflict, d, nil)
 			require.NoError(t, err)
 		}
 	}
