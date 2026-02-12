@@ -67,6 +67,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 					{"dolt_commit_verification_groups", ""},
 				},
 			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
@@ -92,6 +96,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 					{"dolt_commit_verification_groups", "unit,integration"},
 				},
 			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
@@ -112,6 +120,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 					{Name: "hash", Type: types.LongText, Nullable: false},
 				},
 				Expected: []sql.Row{{commitHash}},
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -134,6 +146,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL dolt_commit('--skip-verification','-m', 'skip verification')",
 				Expected: []sql.Row{{commitHash}},
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -165,6 +181,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 				Query:    "CALL dolt_commit('--allow-empty', '--amend', '--skip-verification', '-m', 'skip the tests')",
 				Expected: []sql.Row{{commitHash}},
 			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
@@ -195,6 +215,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 			{
 				Query:          "CALL dolt_cherry_pick(@commit_2_hash)",
 				ExpectedErrStr: "commit verification failed: test_user_count_update (Assertion failed: expected_single_value equal to 2, got 3)",
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -229,6 +253,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 					{"test_users_count", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Assertion failed: expected_single_value equal to 1, got 2"},
 				},
 			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
@@ -258,6 +286,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL dolt_rebase('main')",
 				Expected: []sql.Row{{int64(0), successfulRebaseMessage}},
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -302,6 +334,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 					{"test_users_count", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Assertion failed: expected_single_value equal to 2, got 3"},
 				},
 			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
@@ -336,6 +372,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 				Query:    "CALL dolt_rebase('--continue')", // This should NOT require --skip-verification flag but should still skip tests
 				Expected: []sql.Row{{int64(0), successfulRebaseMessage}},
 			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
@@ -350,6 +390,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 			{
 				Query:          "CALL dolt_commit('-m', 'Commit without dolt_tests table')",
 				ExpectedErrStr: "failed to run dolt_test_run for group *: could not find tests for argument: *",
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -369,6 +413,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 				Query:    "CALL dolt_commit('-m', 'Commit with unit tests only - should pass')",
 				Expected: []sql.Row{{commitHash}},
 			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
@@ -385,6 +433,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 			{
 				Query:          "CALL dolt_commit('-m', 'Commit with specific test failure')",
 				ExpectedErrStr: "commit verification failed: test_specific_failure (Assertion failed: expected_single_value equal to 999, got 2)",
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -411,6 +463,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 				Query:    "CALL dolt_merge('feature')",
 				Expected: []sql.Row{{commitHash, int64(1), int64(0), "merge successful"}},
 			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
@@ -436,6 +492,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 			{
 				Query:          "CALL dolt_merge('feature')",
 				ExpectedErrStr: "commit verification failed: test_will_fail (Assertion failed: expected_single_value equal to 999, got 3)",
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -468,6 +528,10 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"test_will_fail", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Assertion failed: expected_single_value equal to 999, got 3"},
 				},
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
 			},
 		},
 	},

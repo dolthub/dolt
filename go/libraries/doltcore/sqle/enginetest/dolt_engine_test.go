@@ -1239,9 +1239,9 @@ func TestDoltDdlScripts(t *testing.T) {
 	RunDoltDdlScripts(t, harness)
 }
 
-func TestDoltTestValidationScripts(t *testing.T) {
+func TestDoltCommitVerificationScripts(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
-	RunDoltTestValidationScriptsTest(t, harness)
+	RunDoltCommitVerificationScripts(t, harness)
 }
 
 func TestBrokenDdlScripts(t *testing.T) {
