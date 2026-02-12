@@ -70,6 +70,10 @@ const (
 	defaultMaxTables           = 256
 
 	defaultManifestCacheSize = 1 << 23 // 8MB
+
+	// defaultGitBlobstoreMaxPartSize is the default maximum size (in bytes) for a single part blob written to a
+	// git-backed blobstore. Large values may be rejected by some Git remotes.
+	defaultGitBlobstoreMaxPartSize uint64 = 50 * 1024 * 1024
 )
 
 var (
@@ -631,7 +635,7 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 	// A Git remote may reject large blobs. To keep git-backed remotes broadly usable by default, enable
 	// chunked-object writes with a conservative max part size unless the caller explicitly overrides it.
 	if opts.MaxPartSize == 0 {
-		opts.MaxPartSize = 50 * 1024 * 1024
+		opts.MaxPartSize = defaultGitBlobstoreMaxPartSize
 	}
 
 	bs, err := blobstore.NewGitBlobstoreWithOptions(gitDir, ref, opts)
@@ -647,7 +651,7 @@ func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, 
 	cacheOnce.Do(makeGlobalCaches)
 
 	if opts.MaxPartSize == 0 {
-		opts.MaxPartSize = 50 * 1024 * 1024
+		opts.MaxPartSize = defaultGitBlobstoreMaxPartSize
 	}
 
 	bs, err := blobstore.NewGitBlobstoreWithOptions(gitDir, ref, opts)

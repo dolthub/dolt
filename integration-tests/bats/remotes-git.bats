@@ -24,19 +24,27 @@ seed_git_remote_branch() {
     local remote_git_dir="$1"
     local branch="${2:-main}"
 
-    mkdir seed-repo
-    cd seed-repo
-    git init >/dev/null
-    git config user.email "bats@email.fake"
-    git config user.name "Bats Tests"
-    echo "seed" > README
-    git add README
-    git commit -m "seed" >/dev/null
-    git branch -M "$branch"
-    git remote add origin "../$remote_git_dir"
-    git push origin "$branch" >/dev/null
-    cd ..
-    rm -rf seed-repo
+    local remote_abs
+    remote_abs="$(cd "$remote_git_dir" && pwd)"
+
+    local seed_dir
+    seed_dir="$(mktemp -d "${BATS_TMPDIR:-/tmp}/seed-repo.XXXXXX")"
+
+    (
+        set -euo pipefail
+        trap 'rm -rf "$seed_dir"' EXIT
+        cd "$seed_dir"
+
+        git init >/dev/null
+        git config user.email "bats@email.fake"
+        git config user.name "Bats Tests"
+        echo "seed" > README
+        git add README
+        git commit -m "seed" >/dev/null
+        git branch -M "$branch"
+        git remote add origin "$remote_abs"
+        git push origin "$branch" >/dev/null
+    )
 }
 
 @test "remotes-git: smoke push/clone/push-back/pull" {
