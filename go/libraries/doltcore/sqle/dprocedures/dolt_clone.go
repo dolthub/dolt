@@ -113,6 +113,13 @@ func getDirectoryAndUrlString(apr *argparser.ArgParseResults) (string, string, e
 		} else if dir == "/" {
 			return "", "", errhand.BuildDError("Could not infer repo name. Please explicitly define a directory for this url").Build()
 		}
+		// Match `dolt clone` behavior: strip a trailing `.git` from inferred names.
+		if strings.HasSuffix(dir, ".git") {
+			dir = strings.TrimSuffix(dir, ".git")
+			if dir == "" {
+				return "", "", errhand.BuildDError("Could not infer repo name. Please explicitly define a directory for this url").Build()
+			}
+		}
 	}
 
 	return dir, urlStr, nil
