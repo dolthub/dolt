@@ -18,8 +18,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // extendedType is a type that refers to an ExtendedType in GMS. These are only supported in the new format, and have many

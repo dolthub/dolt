@@ -180,9 +180,9 @@ func (df *diffTypeFilter) isValid() bool {
 
 	for filterType := range df.filters {
 		if filterType != diff.DiffTypeAdded &&
-				filterType != diff.DiffTypeModified &&
-				filterType != diff.DiffTypeRenamed &&
-				filterType != diff.DiffTypeDropped {
+			filterType != diff.DiffTypeModified &&
+			filterType != diff.DiffTypeRenamed &&
+			filterType != diff.DiffTypeDropped {
 			return false
 		}
 	}
@@ -213,7 +213,7 @@ func shouldSkipRow(filter *diffTypeFilter, rowChangeType diff.ChangeType) bool {
 // all rows are filtered out in data-only diffs.
 func shouldUseLazyHeader(dArgs *diffArgs, tableSummary diff.TableDeltaSummary) bool {
 	return dArgs.filter != nil && dArgs.filter.filters != nil &&
-			!tableSummary.SchemaChange && !tableSummary.IsRename()
+		!tableSummary.SchemaChange && !tableSummary.IsRename()
 }
 
 // lazyRowWriter wraps a SqlRowDiffWriter and delays calling BeginTable
@@ -994,9 +994,9 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 func shouldPrintTableDelta(tablesToPrint *set.StrSet, toTableName, fromTableName string) bool {
 	// TODO: this should be case insensitive
 	return tablesToPrint.Contains(fromTableName) ||
-			tablesToPrint.Contains(toTableName) ||
-			strings.HasPrefix(fromTableName, diff.DBPrefix) ||
-			strings.HasPrefix(toTableName, diff.DBPrefix)
+		tablesToPrint.Contains(toTableName) ||
+		strings.HasPrefix(fromTableName, diff.DBPrefix) ||
+		strings.HasPrefix(toTableName, diff.DBPrefix)
 }
 
 func isDoltSchemasTable(toTableName, fromTableName string) bool {
@@ -1242,11 +1242,11 @@ func coallesceNilToUint64(val interface{}) (uint64, error) {
 }
 
 func diffUserTable(
-		queryist cli.Queryist,
-		sqlCtx *sql.Context,
-		tableSummary diff.TableDeltaSummary,
-		dArgs *diffArgs,
-		dw diffWriter,
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	tableSummary diff.TableDeltaSummary,
+	dArgs *diffArgs,
+	dw diffWriter,
 ) errhand.VerboseError {
 	fromTable := tableSummary.FromTableName
 	toTable := tableSummary.ToTableName
@@ -1344,14 +1344,14 @@ func diffUserTable(
 }
 
 func diffDoltSchemasTable(
-		queryist cli.Queryist,
-		sqlCtx *sql.Context,
-		dArgs *diffArgs,
-		dw diffWriter,
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	dArgs *diffArgs,
+	dw diffWriter,
 ) errhand.VerboseError {
 	query, err := dbr.InterpolateForDialect("select from_name,to_name,from_type,to_type,from_fragment,to_fragment "+
-			"from dolt_diff(?, ?, ?) "+
-			"order by coalesce(from_type, to_type), coalesce(from_name, to_name)",
+		"from dolt_diff(?, ?, ?) "+
+		"order by coalesce(from_type, to_type), coalesce(from_name, to_name)",
 		[]interface{}{dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName}, dialect.MySQL)
 	if err != nil {
 		return errhand.BuildDError("Error building diff query").AddCause(err).Build()
@@ -1457,11 +1457,11 @@ func diffDoltSchemasTable(
 }
 
 func diffDatabase(
-		queryist cli.Queryist,
-		sqlCtx *sql.Context,
-		tableSummary diff.TableDeltaSummary,
-		dArgs *diffArgs,
-		dw diffWriter,
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	tableSummary diff.TableDeltaSummary,
+	dArgs *diffArgs,
+	dw diffWriter,
 ) errhand.VerboseError {
 	if dArgs.diffParts&NameOnlyDiff != 0 {
 		cli.Println(tableSummary.FromTableName)
@@ -1522,7 +1522,7 @@ func arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo *diff.TableInfo) bool 
 		return false
 		// Empty case
 	} else if fromSch == nil || fromSch.GetAllCols().Size() == 0 ||
-			toSch == nil || toSch.GetAllCols().Size() == 0 {
+		toSch == nil || toSch.GetAllCols().Size() == 0 {
 		return true
 	}
 
@@ -1553,12 +1553,12 @@ func arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo *diff.TableInfo) bool 
 }
 
 func diffRows(
-		queryist cli.Queryist,
-		sqlCtx *sql.Context,
-		tableSummary diff.TableDeltaSummary,
-		fromTableInfo, toTableInfo *diff.TableInfo,
-		dArgs *diffArgs,
-		dw diffWriter,
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	tableSummary diff.TableDeltaSummary,
+	fromTableInfo, toTableInfo *diff.TableInfo,
+	dArgs *diffArgs,
+	dw diffWriter,
 ) errhand.VerboseError {
 	diffable := arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo)
 	canSqlDiff := !(toTableInfo == nil || (fromTableInfo != nil && !schema.SchemasAreEqual(fromTableInfo.Sch, toTableInfo.Sch)))
@@ -1840,13 +1840,13 @@ func getColumnNames(fromTableInfo, toTableInfo *diff.TableInfo) (colNames []stri
 }
 
 func writeDiffResults(
-		ctx *sql.Context,
-		diffQuerySch sql.Schema,
-		targetSch sql.Schema,
-		iter sql.RowIter,
-		writer diff.SqlRowDiffWriter,
-		modifiedColNames map[string]bool,
-		dArgs *diffArgs,
+	ctx *sql.Context,
+	diffQuerySch sql.Schema,
+	targetSch sql.Schema,
+	iter sql.RowIter,
+	writer diff.SqlRowDiffWriter,
+	modifiedColNames map[string]bool,
+	dArgs *diffArgs,
 ) error {
 	ds, err := diff.NewDiffSplitter(diffQuerySch, targetSch)
 	if err != nil {
@@ -1920,10 +1920,10 @@ func writeDiffResults(
 // unionSch refers to a joint schema between the schema before and after any schema changes pertaining to the diff,
 // while diffQuerySch refers to the schema returned by the "dolt_diff" sql query.
 func getModifiedCols(
-		ctx *sql.Context,
-		iter sql.RowIter,
-		unionSch sql.Schema,
-		diffQuerySch sql.Schema,
+	ctx *sql.Context,
+	iter sql.RowIter,
+	unionSch sql.Schema,
+	diffQuerySch sql.Schema,
 ) (map[string]bool, error) {
 	modifiedColNames := make(map[string]bool)
 	for {

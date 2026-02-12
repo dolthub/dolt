@@ -19,8 +19,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // This is a dolt implementation of the MySQL type Set, thus most of the functionality
