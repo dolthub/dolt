@@ -153,9 +153,10 @@ func newDoltHarnessForLocalFilesystem(t *testing.T) *DoltHarness {
 }
 
 var defaultSkippedQueries = []string{
-	"show variables",           // we set extra variables
-	"show create table fk_tbl", // we create an extra key for the FK that vanilla gms does not
-	"show indexes from",        // we create / expose extra indexes (for foreign keys)
+	"show variables",             // we set extra variables
+	"show create table fk_tbl",   // we create an extra key for the FK that vanilla gms does not
+	"show indexes from",          // we create / expose extra indexes (for foreign keys)
+	"show global variables like", // we set extra variables
 }
 
 // Setup sets the setup scripts for this DoltHarness's engine
@@ -189,7 +190,6 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	for i := range dbs {
 		db := dbs[i]
 		resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("use %s", db)})
-
 		// Any auto increment tables must be dropped and recreated to get a fresh state for the global auto increment
 		// sequence trackers
 		_, aiTables := enginetest.MustQuery(ctx, d.engine,
@@ -218,20 +218,8 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 		}
 	}
 
-	resetCmds = append(resetCmds, resetGlobalSystemVariables()...)
-
 	resetCmds = append(resetCmds, setup.SetupScript{"use mydb"})
 	return resetCmds
-}
-
-// resetGlobalSystemVariables returns setup scripts to reset global system variables to their default values
-func resetGlobalSystemVariables() []setup.SetupScript {
-	return []setup.SetupScript{
-		// Currently few tests require resetting session variables every time in the harness. This list can be extended
-		// without concern if the need should arise.
-
-		{"SET GLOBAL dolt_commit_verification_groups = ''"},
-	}
 }
 
 // commitScripts returns a set of queries that will commit the working sets of the given database names
