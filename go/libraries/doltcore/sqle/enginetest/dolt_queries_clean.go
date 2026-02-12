@@ -1,4 +1,4 @@
-// Copyright 2025 Dolthub, Inc.
+// Copyright 2026 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ func init() {
 	DoltProcedureTests = append(DoltProcedureTests, DoltCleanProcedureScripts...)
 }
 
-// DoltCleanProcedureScripts are script tests for the dolt_clean procedure (and the -x flag).
+// DoltCleanProcedureScripts are script tests for the dolt_clean procedure.
 var DoltCleanProcedureScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_clean does not drop tables matching dolt_ignore",
