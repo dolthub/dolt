@@ -237,7 +237,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 				return noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
 			}
 
-			ws, _, conflicts, fastForward, message, err = performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+			ws, _, conflicts, fastForward, message, err = performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg, apr.Contains(cli.SkipVerificationFlag))
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, fastForward, "", err
 			}

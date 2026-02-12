@@ -579,7 +579,19 @@ func (rcv *RebaseState) MutateRebasingStarted(n bool) bool {
 	return rcv._tab.MutateBoolSlot(16, n)
 }
 
-const RebaseStateNumFields = 7
+func (rcv *RebaseState) SkipVerification() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *RebaseState) MutateSkipVerification(n bool) bool {
+	return rcv._tab.MutateBoolSlot(18, n)
+}
+
+const RebaseStateNumFields = 8
 
 func RebaseStateStart(builder *flatbuffers.Builder) {
 	builder.StartObject(RebaseStateNumFields)
@@ -613,6 +625,9 @@ func RebaseStateAddLastAttemptedStep(builder *flatbuffers.Builder, lastAttempted
 }
 func RebaseStateAddRebasingStarted(builder *flatbuffers.Builder, rebasingStarted bool) {
 	builder.PrependBoolSlot(6, rebasingStarted, false)
+}
+func RebaseStateAddSkipVerification(builder *flatbuffers.Builder, skipVerification bool) {
+	builder.PrependBoolSlot(7, skipVerification, false)
 }
 func RebaseStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

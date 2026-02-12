@@ -52,6 +52,9 @@ type CherryPickOptions struct {
 	// and Dolt cherry-pick implementations, the default action is to fail when an empty commit is specified. In Git
 	// and Dolt rebase implementations, the default action is to keep commits that start off as empty.
 	EmptyCommitHandling doltdb.EmptyCommitHandling
+
+	// SkipVerification controls whether test validation should be skipped before creating commits.
+	SkipVerification bool
 }
 
 // NewCherryPickOptions creates a new CherryPickOptions instance, filled out with default values for cherry-pick.
@@ -61,6 +64,7 @@ func NewCherryPickOptions() CherryPickOptions {
 		CommitMessage:              "",
 		CommitBecomesEmptyHandling: doltdb.ErrorOnEmptyCommit,
 		EmptyCommitHandling:        doltdb.ErrorOnEmptyCommit,
+		SkipVerification:           false,
 	}
 }
 
@@ -159,9 +163,10 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 	}
 
 	commitProps := actions.CommitStagedProps{
-		Date:  originalMeta.Time(),
-		Name:  originalMeta.Name,
-		Email: originalMeta.Email,
+		Date:             originalMeta.Time(),
+		Name:             originalMeta.Name,
+		Email:            originalMeta.Email,
+		SkipVerification: options.SkipVerification,
 	}
 
 	if options.CommitMessage != "" {

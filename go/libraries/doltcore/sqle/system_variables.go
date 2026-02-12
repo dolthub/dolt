@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -291,6 +292,13 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
 		Type:    types.NewSystemBoolType(dsess.AllowCICreation),
 		Default: int8(0),
+	},
+	&sql.MysqlSystemVariable{
+		Name:    actions.DoltCommitVerificationGroups,
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+		Type:    types.NewSystemStringType(actions.DoltCommitVerificationGroups),
+		Default: "",
 	},
 }
 

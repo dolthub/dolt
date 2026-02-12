@@ -144,6 +144,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~branch-activity.bats~
 ~mutual-tls-auth.bats~
 ~requires-repo.bats~
+~commit_verification.bats~
 EOM
 )
 
