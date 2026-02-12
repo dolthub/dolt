@@ -27,21 +27,6 @@ import (
 
 var ErrTableNameMatchSheetName = errors.New("table name must match excel sheet name.")
 
-func UnmarshalFromXLSX(path string) ([][][]string, error) {
-	data, err := openFile(path)
-
-	if err != nil {
-		return nil, err
-	}
-
-	dataSlice, err := data.ToSlice()
-	if err != nil {
-		return nil, err
-	}
-
-	return dataSlice, nil
-}
-
 func openFile(path string) (*xlsx.File, error) {
 	data, err := xlsx.OpenFile(path)
 
