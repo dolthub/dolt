@@ -34,7 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func randomChunks(t *testing.T, r *rand.Rand, sz int) [][]byte {
@@ -157,30 +156,6 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			testIt(t, "a-namespace-here")
 		})
 	})
-}
-
-type waitOnStoreTableCache struct {
-	readers map[hash.Hash]io.ReaderAt
-	mu      sync.RWMutex
-	storeWG sync.WaitGroup
-}
-
-func (mtc *waitOnStoreTableCache) checkout(h hash.Hash) (io.ReaderAt, error) {
-	mtc.mu.RLock()
-	defer mtc.mu.RUnlock()
-	return mtc.readers[h], nil
-}
-
-func (mtc *waitOnStoreTableCache) checkin(h hash.Hash) error {
-	return nil
-}
-
-func (mtc *waitOnStoreTableCache) store(h hash.Hash, data io.Reader, size uint64) error {
-	defer mtc.storeWG.Done()
-	mtc.mu.Lock()
-	defer mtc.mu.Unlock()
-	mtc.readers[h] = data.(io.ReaderAt)
-	return nil
 }
 
 type failingFakeS3 struct {

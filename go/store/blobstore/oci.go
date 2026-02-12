@@ -22,7 +22,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"os"
 	"path"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
@@ -43,23 +42,6 @@ type toUpload struct {
 }
 
 type uploadFunc func(ctx context.Context, objectName, uploadID string, partNumber int, contentLength int64, reader io.Reader) (objectstorage.CommitMultipartUploadPartDetails, error)
-
-type tempLocalObject struct {
-	f    *os.File
-	path string
-}
-
-var _ io.ReadCloser = &tempLocalObject{}
-
-func (t *tempLocalObject) Read(p []byte) (int, error) {
-	return t.f.Read(p)
-}
-
-func (t *tempLocalObject) Close() error {
-	err := t.f.Close()
-	os.Remove(t.path)
-	return err
-}
 
 // OCIBlobstore provides an OCI implementation of the Blobstore interface
 type OCIBlobstore struct {

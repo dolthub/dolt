@@ -35,7 +35,6 @@ type rangeIter[K, V ~[]byte] interface {
 
 var _ rangeIter[val.Tuple, val.Tuple] = &tree.OrderedTreeIter[val.Tuple, val.Tuple]{}
 var _ rangeIter[val.Tuple, val.Tuple] = &memRangeIter{}
-var _ rangeIter[val.Tuple, val.Tuple] = emptyIter{}
 
 // mutableMapIter iterates over a Range of Tuples.
 type mutableMapIter[K, V ~[]byte, O tree.Ordering[K]] struct {
@@ -86,16 +85,6 @@ func (it mutableMapIter[K, V, O]) Next(ctx context.Context) (key K, value V, err
 
 		return key, value, nil
 	}
-}
-
-func (it mutableMapIter[K, V, O]) currentKeys() (memKey, proKey K) {
-	if it.memory != nil {
-		memKey, _ = it.memory.Current()
-	}
-	if it.prolly != nil {
-		proKey, _ = it.prolly.Current()
-	}
-	return
 }
 
 func (it mutableMapIter[K, V, O]) compareKeys(ctx context.Context, memKey, proKey K) int {
@@ -178,16 +167,6 @@ func (it *memRangeIter) Iterate(ctx context.Context) (err error) {
 		return
 	}
 }
-
-type emptyIter struct{}
-
-func (e emptyIter) Next(context.Context) (val.Tuple, val.Tuple, error) {
-	return nil, nil, io.EOF
-}
-
-func (e emptyIter) Iterate(ctx context.Context) (err error) { return }
-
-func (e emptyIter) Current() (key, value val.Tuple) { return }
 
 type filteredIter struct {
 	iter MapIter

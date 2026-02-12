@@ -59,10 +59,10 @@ type SqlEngineTableWriter struct {
 }
 
 func NewSqlEngineTableWriter(
-		ctx *sql.Context,
-		engine *sqle.Engine,
-		createTableSchema, rowOperationSchema schema.Schema,
-		options *MoverOptions,
+	ctx *sql.Context,
+	engine *sqle.Engine,
+	createTableSchema, rowOperationSchema schema.Schema,
+	options *MoverOptions,
 ) (*SqlEngineTableWriter, error) {
 	if engine.IsReadOnly() {
 		// SqlEngineTableWriter does not respect read only mode
