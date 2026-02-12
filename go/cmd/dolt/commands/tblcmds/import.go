@@ -643,7 +643,7 @@ func newImportSqlEngineMover(ctx *sql.Context, root doltdb.RootValue, dEnv *env.
 		}
 	}
 
-	mv, err := mvdata.NewSqlEngineTableWriter(ctx, engine, tableSchema, rowOperationSchema, moveOps, importStatsCB)
+	mv, err := mvdata.NewSqlEngineTableWriter(ctx, engine, tableSchema, rowOperationSchema, moveOps)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}

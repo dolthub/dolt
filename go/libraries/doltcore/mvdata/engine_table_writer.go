@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -51,7 +50,6 @@ type SqlEngineTableWriter struct {
 	force      bool
 	disableFks bool
 
-	statsCB noms.StatsCB
 	stats   types.AppliedEditStats
 	statOps int32
 
@@ -60,7 +58,12 @@ type SqlEngineTableWriter struct {
 	rowOperationSchema sql.PrimaryKeySchema
 }
 
-func NewSqlEngineTableWriter(ctx *sql.Context, engine *sqle.Engine, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*SqlEngineTableWriter, error) {
+func NewSqlEngineTableWriter(
+		ctx *sql.Context,
+		engine *sqle.Engine,
+		createTableSchema, rowOperationSchema schema.Schema,
+		options *MoverOptions,
+) (*SqlEngineTableWriter, error) {
 	if engine.IsReadOnly() {
 		// SqlEngineTableWriter does not respect read only mode
 		return nil, analyzererrors.ErrReadOnlyDatabase.New(ctx.GetCurrentDatabase())
@@ -85,8 +88,6 @@ func NewSqlEngineTableWriter(ctx *sql.Context, engine *sqle.Engine, createTableS
 
 		database:  ctx.GetCurrentDatabase(),
 		tableName: options.TableToWriteTo,
-
-		statsCB: statsCB,
 
 		importOption:       options.Operation,
 		tableSchema:        doltCreateTableSchema,
@@ -176,11 +177,6 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 
 	line := 1
 	for {
-		if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {
-			atomic.StoreInt32(&s.statOps, 0)
-			s.statsCB(s.stats)
-		}
-
 		row, err := iter.Next(s.sqlCtx)
 		line += 1
 
@@ -191,9 +187,6 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		} else if err == io.EOF {
 			atomic.LoadInt32(&s.statOps)
 			atomic.StoreInt32(&s.statOps, 0)
-			if s.statsCB != nil {
-				s.statsCB(s.stats)
-			}
 
 			return err
 		} else {
