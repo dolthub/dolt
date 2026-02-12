@@ -262,29 +262,6 @@ func (ie *IndexEditor) Map(ctx context.Context) (types.Map, error) {
 	return ie.iea.MaterializeEdits(ctx, ie.nbf)
 }
 
-// Index returns this editor's index.
-func (ie *IndexEditor) Index() schema.Index {
-	return ie.idx
-}
-
-// StatementStarted is analogous to the TableEditor implementation, but specific to the IndexEditor.
-func (ie *IndexEditor) StatementStarted(ctx context.Context) {
-}
-
-// StatementFinished is analogous to the TableEditor implementation, but specific to the IndexEditor.
-func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) error {
-	ie.writeMutex.Lock()
-	defer ie.writeMutex.Unlock()
-
-	if ie.permanentErr != nil {
-		return ie.permanentErr
-	} else if errored {
-		return ie.iea.Rollback(ctx)
-	}
-
-	return ie.iea.Commit(ctx, ie.nbf)
-}
-
 // Close is a no-op for an IndexEditor.
 func (ie *IndexEditor) Close() error {
 	return ie.permanentErr

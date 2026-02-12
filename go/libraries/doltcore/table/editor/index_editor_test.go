@@ -426,7 +426,6 @@ func TestIndexEditorCapacityExceeded(t *testing.T) {
 
 	require.Contains(t, indexEditor.InsertRow(ctx, fullKey, partialKey, value).Error(), "unrecoverable state")
 	require.Contains(t, indexEditor.DeleteRow(ctx, fullKey, partialKey, value).Error(), "unrecoverable state")
-	require.Contains(t, indexEditor.StatementFinished(ctx, false).Error(), "unrecoverable state")
 	require.Contains(t, indexEditor.Close().Error(), "unrecoverable state")
 	_, err = indexEditor.HasPartial(ctx, partialKey)
 	require.Contains(t, err.Error(), "unrecoverable state")
