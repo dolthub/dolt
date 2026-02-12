@@ -86,7 +86,7 @@ func TestBasics(t *testing.T) {
 		{NewDataLocation("file.csv", ""), CsvFile.ReadableStr() + ":file.csv", true},
 		{NewDataLocation("file.psv", ""), PsvFile.ReadableStr() + ":file.psv", true},
 		{NewDataLocation("file.json", ""), JsonFile.ReadableStr() + ":file.json", true},
-		//{NewDataLocation("file.nbf", ""), NbfFile, "file.nbf", true},
+		// {NewDataLocation("file.nbf", ""), NbfFile, "file.nbf", true},
 	}
 
 	for _, test := range tests {
@@ -133,7 +133,7 @@ func TestExists(t *testing.T) {
 		NewDataLocation("file.csv", ""),
 		NewDataLocation("file.psv", ""),
 		NewDataLocation("file.json", ""),
-		//NewDataLocation("file.nbf", ""),
+		// NewDataLocation("file.nbf", ""),
 	}
 
 	ddb, root, fs := createRootAndFS()
@@ -192,7 +192,7 @@ func TestCreateRdWr(t *testing.T) {
 		{NewDataLocation("file.csv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		{NewDataLocation("file.psv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		{NewDataLocation("file.json", ""), reflect.TypeOf((*json.JSONReader)(nil)).Elem(), reflect.TypeOf((*json.RowWriter)(nil)).Elem()},
-		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
+		// {NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
 
 	ctx := context.Background()
@@ -220,16 +220,6 @@ func TestCreateRdWr(t *testing.T) {
 
 		loc := test.dl
 
-		tmpDir, tdErr := dEnv.TempTableFilesDir()
-		if tdErr != nil {
-			t.Fatal("Unexpected error accessing .dolt directory.", tdErr)
-		}
-		deaf, err := dEnv.DbEaFactory(ctx)
-		if err != nil {
-			t.Fatal("Unexpected error accessing .dolt directory.", err)
-		}
-		opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-
 		filePath, fpErr := dEnv.FS.Abs(strings.Split(loc.String(), ":")[1])
 		if fpErr != nil {
 			t.Fatal("Unexpected error getting filepath", fpErr)
@@ -240,7 +230,7 @@ func TestCreateRdWr(t *testing.T) {
 			t.Fatal("Unexpected error opening file for writer.", wrErr)
 		}
 
-		wr, wErr := loc.NewCreatingWriter(context.Background(), mvOpts, root, fakeSchema, opts, writer)
+		wr, wErr := loc.NewCreatingWriter(context.Background(), mvOpts, root, fakeSchema, editor.Options{}, writer)
 		if wErr != nil {
 			t.Fatal("Unexpected error creating writer.", wErr)
 		}

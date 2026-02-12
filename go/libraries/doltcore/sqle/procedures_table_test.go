@@ -36,15 +36,9 @@ import (
 func TestProceduresMigration(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	tmpDir, err := dEnv.TempTableFilesDir()
-	require.NoError(t, err)
-	deaf, err := dEnv.DbEaFactory(ctx)
-	require.NoError(t, err)
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-
 	timestamp := time.Now().Truncate(time.Minute).UTC()
 
-	sqlCtx, db := newDatabaseWithProcedures(ctx, t, dEnv, opts, timestamp)
+	sqlCtx, db := newDatabaseWithProcedures(ctx, t, dEnv, editor.Options{}, timestamp)
 
 	t.Run("test migration logic", func(t *testing.T) {
 		// Call the logic to migrate it to the latest schema

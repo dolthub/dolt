@@ -164,13 +164,7 @@ func TestLookupJoin(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			defer dEnv.DoltDB(ctx).Close()
 
-			tmpDir, err := dEnv.TempTableFilesDir()
-			require.NoError(t, err)
-
-			deaf, err := dEnv.DbEaFactory(ctx)
-			require.NoError(t, err)
-			opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
+			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), editor.Options{})
 			require.NoError(t, err)
 
 			engine, sqlCtx, err := sqle.NewTestEngine(dEnv, context.Background(), db)

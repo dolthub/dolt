@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -1348,23 +1347,6 @@ func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	}
 
 	return absPath, nil
-}
-
-func (dEnv *DoltEnv) DbEaFactory(ctx context.Context) (editor.DbEaFactory, error) {
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-
-	db := dEnv.DoltDB(ctx)
-	if db == nil {
-		if dEnv.DBLoadError != nil {
-			return nil, dEnv.DBLoadError
-		}
-		return nil, errors.New("DoltDB failed to initialize but no error was recorded")
-	}
-
-	return editor.NewDbEaFactory(tmpDir, db.ValueReadWriter()), nil
 }
 
 func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) (bool, error) {
