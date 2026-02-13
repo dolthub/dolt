@@ -33,13 +33,13 @@ import (
 // Mock implementations
 
 type mockAzureClient struct {
-	getPropertiesFn       func(ctx context.Context, containerName, blobName string) (azureBlobProperties, error)
-	downloadStreamFn      func(ctx context.Context, containerName, blobName string, options *blob.DownloadStreamOptions) (azureDownloadResponse, error)
-	uploadBufferFn        func(ctx context.Context, containerName, blobName string, data []byte, options *azblob.UploadBufferOptions) (azureUploadResponse, error)
-	stageBlockFn          func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error
-	stageBlockFromURLFn   func(ctx context.Context, containerName, blobName, blockID, sourceURL string) error
-	commitBlockListFn     func(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error)
-	getBlobURLFn          func(containerName, blobName string) string
+	getPropertiesFn     func(ctx context.Context, containerName, blobName string) (azureBlobProperties, error)
+	downloadStreamFn    func(ctx context.Context, containerName, blobName string, options *blob.DownloadStreamOptions) (azureDownloadResponse, error)
+	uploadBufferFn      func(ctx context.Context, containerName, blobName string, data []byte, options *azblob.UploadBufferOptions) (azureUploadResponse, error)
+	stageBlockFn        func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error
+	stageBlockFromURLFn func(ctx context.Context, containerName, blobName, blockID, sourceURL string) error
+	commitBlockListFn   func(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error)
+	getBlobURLFn        func(containerName, blobName string) string
 }
 
 func (m *mockAzureClient) GetProperties(ctx context.Context, containerName, blobName string) (azureBlobProperties, error) {
@@ -827,4 +827,3 @@ func TestBuildCheckAndPutOptions(t *testing.T) {
 		assert.Nil(t, options.AccessConditions.ModifiedAccessConditions.IfNoneMatch)
 	})
 }
-

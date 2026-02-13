@@ -16,14 +16,15 @@ package blobstore
 
 import (
 	"context"
+	"io"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
-	"io"
 )
 
-// definet interfaces to abstract Azure Blob Storage operations for better testability
+// interfaces to abstract Azure Blob Storage operations for better testability
 
 // azureBlobProperties abstracts blob properties
 type azureBlobProperties interface {
