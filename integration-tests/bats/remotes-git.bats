@@ -85,6 +85,50 @@ seed_git_remote_branch() {
 
 }
 
+@test "remotes-git: uninitialized bare git remote (no branches) errors clearly" {
+    mkdir remote.git
+    git init --bare remote.git
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -m "init"
+
+    dolt remote add origin ../remote.git
+    run dolt push --set-upstream origin main
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "initialize the repository with an initial branch/commit first" ]] || false
+}
+
+@test "remotes-git: remote add --ref cannot be empty" {
+    mkdir remote.git
+    git init --bare remote.git
+    seed_git_remote_branch remote.git main
+
+    mkdir repo1
+    cd repo1
+    dolt init
+
+    run dolt remote add --ref "" origin ../remote.git
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "error: --ref cannot be empty" ]] || false
+}
+
+@test "remotes-git: remote add --ref is rejected for non-git remotes" {
+    mkdir non-git-remote
+    mkdir remote.git
+    git init --bare remote.git
+    seed_git_remote_branch remote.git main
+
+    mkdir repo1
+    cd repo1
+    dolt init
+
+    run dolt remote add --ref refs/dolt/custom origin file://../non-git-remote
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--ref is only supported for git remotes" ]] || false
+}
+
 @test "remotes-git: empty remote bootstrap creates refs/dolt/data" {
     mkdir remote.git
     git init --bare remote.git
@@ -184,6 +228,228 @@ seed_git_remote_branch() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "first commit on other" ]] || false
 
+}
+
+@test "remotes-git: fetch --prune removes deleted branch from git remote" {
+    mkdir remote.git
+    git init --bare remote.git
+    seed_git_remote_branch remote.git main
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt remote add origin ../remote.git
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt commit --allow-empty -m "first commit on other"
+    dolt push --set-upstream origin other
+
+    cd ..
+    cd dolt-repo-clones
+    run dolt clone ../remote.git repo2
+    [ "$status" -eq 0 ]
+
+    cd repo2
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/other" ]] || false
+
+    # Delete the remote branch using dolt semantics (empty source ref), then prune it locally.
+    cd ../../repo1
+    run dolt push origin :other
+    [ "$status" -eq 0 ]
+
+    cd ../dolt-repo-clones/repo2
+    run dolt fetch -p
+    [ "$status" -eq 0 ]
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "remotes/origin/other" ]] || false
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+}
+
+@test "remotes-git: non-fast-forward push rejected, then force push succeeds" {
+    mkdir remote.git
+    git init --bare remote.git
+    seed_git_remote_branch remote.git main
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt sql -q "create table t(pk int primary key, v int);"
+    dolt sql -q "insert into t values (1, 1);"
+    dolt add .
+    dolt commit -m "seed t"
+    dolt remote add origin ../remote.git
+    run dolt push --set-upstream origin main
+    [ "$status" -eq 0 ]
+
+    cd ..
+    cd dolt-repo-clones
+    run dolt clone ../remote.git repo2
+    [ "$status" -eq 0 ]
+
+    cd repo2
+    dolt sql -q "insert into t values (2, 2);"
+    dolt add .
+    dolt commit -m "repo2 advances main"
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+
+    cd ../../repo1
+    dolt sql -q "insert into t values (3, 3);"
+    dolt add .
+    dolt commit -m "repo1 diverges"
+
+    run dolt push origin main
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "non-fast-forward" ]] || false
+
+    run dolt push -f origin main
+    [ "$status" -eq 0 ]
+
+    cd ../dolt-repo-clones
+    run dolt clone ../remote.git repo3
+    [ "$status" -eq 0 ]
+
+    cd repo3
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "repo1 diverges" ]] || false
+}
+
+@test "remotes-git: pull from git remote produces data conflict; resolve and complete merge" {
+    mkdir remote.git
+    git init --bare remote.git
+    seed_git_remote_branch remote.git main
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt sql -q "create table t(pk int primary key, v int);"
+    dolt sql -q "insert into t values (1, 0);"
+    dolt add .
+    dolt commit -m "base"
+    dolt remote add origin ../remote.git
+    dolt push --set-upstream origin main
+
+    cd ..
+    cd dolt-repo-clones
+    run dolt clone ../remote.git repo2
+    [ "$status" -eq 0 ]
+
+    cd repo2
+    dolt sql -q "update t set v = 200 where pk = 1;"
+    dolt add .
+    dolt commit -m "repo2 local edit"
+
+    cd ../../repo1
+    dolt sql -q "update t set v = 100 where pk = 1;"
+    dolt add .
+    dolt commit -m "repo1 remote edit"
+    dolt push origin main
+
+    cd ../dolt-repo-clones/repo2
+    run dolt pull
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "unmerged" ]] || false
+
+    run dolt conflicts cat t
+    [ "$status" -eq 0 ]
+
+    run dolt conflicts resolve --theirs t
+    [ "$status" -eq 0 ]
+
+    dolt add t
+    dolt commit -m "resolve conflict"
+
+    run dolt sql -q "select v from t where pk = 1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "100" ]] || false
+
+    # Push the resolution back to the remote, then ensure another clone can pull it.
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+
+    cd ../../repo1
+    run dolt pull
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select v from t where pk = 1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "100" ]] || false
+}
+
+@test "remotes-git: pull from git remote produces schema conflict; resolve via abort+align+rerepull" {
+    mkdir remote.git
+    git init --bare remote.git
+    seed_git_remote_branch remote.git main
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt sql -q "create table t(pk int primary key, c0 int);"
+    dolt add .
+    dolt commit -m "base"
+    dolt remote add origin ../remote.git
+    dolt push --set-upstream origin main
+
+    cd ..
+    cd dolt-repo-clones
+    run dolt clone ../remote.git repo2
+    [ "$status" -eq 0 ]
+
+    cd repo2
+    dolt sql -q "alter table t modify c0 datetime(6);"
+    dolt add .
+    dolt commit -m "repo2 schema change"
+
+    cd ../../repo1
+    dolt sql -q "alter table t modify c0 varchar(20);"
+    dolt add .
+    dolt commit -m "repo1 schema change"
+    dolt push origin main
+
+    cd ../dolt-repo-clones/repo2
+    run dolt pull
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "CONFLICT (schema)" ]] || false
+
+    run dolt conflicts cat .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "varchar(20)" ]] || false
+    [[ "$output" =~ "datetime(6)" ]] || false
+
+    # Work around current schema conflict resolution limitations:
+    # abort merge, align schemas, then pull again.
+    run dolt merge --abort
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "alter table t modify c0 varchar(20);"
+    dolt add .
+    dolt commit -m "align schema with remote"
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+
+    run dolt schema show t
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "varchar(20)" ]] || false
+
+    # Push the resolved history and ensure the other clone can pull it.
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+
+    cd ../../repo1
+    run dolt pull
+    [ "$status" -eq 0 ]
+    run dolt schema show t
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "varchar(20)" ]] || false
 }
 
 @test "remotes-git: custom --ref writes to configured dolt data ref" {
