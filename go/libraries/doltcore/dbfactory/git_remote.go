@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/utils/termprogress"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -135,6 +136,8 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 }
 
 func ensureRemoteHasBranches(ctx context.Context, gitDir string, remoteName string, remoteURL string) error {
+	resume := termprogress.Suspend()
+	defer resume()
 	out, err := runGitInDir(ctx, gitDir, "ls-remote", "--heads", "--", remoteName)
 	if err != nil {
 		return err
@@ -283,6 +286,7 @@ func runGitInDir(ctx context.Context, gitDir string, args ...string) (string, er
 	}
 	all := append([]string{"--git-dir", gitDir}, args...)
 	cmd := exec.CommandContext(ctx, "git", all...) //nolint:gosec // controlled args
+	cmd.Stdin = os.Stdin
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s failed: %w\noutput:\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))

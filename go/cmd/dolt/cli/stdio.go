@@ -28,6 +28,7 @@ import (
 	"github.com/vbauerster/mpb/v8/cwriter"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/termprogress"
 )
 
 var colorOutput = color.Output
@@ -153,6 +154,11 @@ func DeleteAndPrint(prevMsgLen int, msg string) int {
 	if outputIsClosed() {
 		return 0
 	}
+	if termprogress.Suspended() {
+		// Preserve the caller's notion of how many chars are currently printed.
+		// We intentionally do not emit terminal control output while suspended.
+		return prevMsgLen
+	}
 
 	msgLen := len(msg)
 	backspacesAndMsg := make([]byte, prevMsgLen+msgLen, 2*prevMsgLen+msgLen)
@@ -220,6 +226,9 @@ func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
 	if outputIsClosed() {
 		return
 	}
+	if termprogress.Suspended() {
+		return
+	}
 
 	str := fmt.Sprintf(format, a...)
 	lines := strings.Split(str, "\n")
@@ -243,6 +252,9 @@ func (e *EphemeralPrinter) Display() {
 	defer e.mu.Unlock()
 
 	if outputIsClosed() {
+		return
+	}
+	if termprogress.Suspended() {
 		return
 	}
 

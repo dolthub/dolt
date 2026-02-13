@@ -503,3 +503,44 @@ seed_git_remote_branch() {
     run dolt push --set-upstream origin main
     [ "$status" -eq 0 ]
 }
+
+@test "remotes-git: spinner does not corrupt ssh passphrase prompt" {
+    if ! command -v timeout >/dev/null 2>&1; then
+        skip "timeout not installed"
+    fi
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -m "init"
+
+    # Use an ssh-style git remote URL, but override ssh with a local wrapper that
+    # emits a passphrase prompt (no newline) and blocks briefly.
+    dolt remote add github git@fakehost:fake/repo.git
+
+    mkdir -p "$BATS_TMPDIR/fakebin"
+    cat > "$BATS_TMPDIR/fakebin/ssh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo -n "Enter passphrase for key '/tmp/fake_key': " >&2
+sleep 0.5
+echo >&2
+echo "Permission denied (publickey)." >&2
+exit 255
+EOF
+    chmod +x "$BATS_TMPDIR/fakebin/ssh"
+
+    export GIT_SSH_COMMAND="$BATS_TMPDIR/fakebin/ssh"
+    export GIT_SSH="$BATS_TMPDIR/fakebin/ssh"
+
+    run timeout 5s dolt push github main
+    [ "$status" -ne 0 ]
+
+    prompt="Enter passphrase for key '/tmp/fake_key': "
+    [[ "$output" == *"$prompt"* ]] || false
+
+    # Ensure spinner/progress output doesn't interleave on the prompt line.
+    rest="${output#*"$prompt"}"
+    line="${rest%%$'\n'*}"
+    [[ ! "$line" =~ Uploading ]] || false
+}

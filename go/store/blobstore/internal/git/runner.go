@@ -122,6 +122,8 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 
 	if opts.Stdin != nil {
 		cmd.Stdin = opts.Stdin
+	} else {
+		cmd.Stdin = os.Stdin
 	}
 
 	// Capture combined output unless caller provided destinations.
@@ -176,6 +178,8 @@ func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io
 	cmd.Env = r.env(opts)
 	if opts.Stdin != nil {
 		cmd.Stdin = opts.Stdin
+	} else {
+		cmd.Stdin = os.Stdin
 	}
 
 	stdout, err := cmd.StdoutPipe()
