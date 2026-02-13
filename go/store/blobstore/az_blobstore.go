@@ -17,6 +17,7 @@ package blobstore
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -88,6 +89,11 @@ func (bs *AzureBlobstore) Exists(ctx context.Context, key string) (bool, error) 
 
 // isBlobNotFoundError checks if an error indicates a blob doesn't exist
 func isBlobNotFoundError(err error) bool {
+	var respErr *azcore.ResponseError
+	if errors.As(err, &respErr) {
+		return respErr.StatusCode == 404
+	}
+
 	errMsg := err.Error()
 	return strings.Contains(errMsg, "BlobNotFound") || strings.Contains(errMsg, "404")
 }
@@ -125,10 +131,12 @@ func (bs *AzureBlobstore) Get(ctx context.Context, key string, br BlobRange) (io
 				return nil, 0, "", fmt.Errorf("blob properties missing ContentLength for blob %s", absKey)
 			}
 
+			// Convert negative range to a positive offset/length based on the blob size.
+			pr := br.positiveRange(*contentLength)
 			downloadOptions = &blob.DownloadStreamOptions{
 				Range: blob.HTTPRange{
-					Offset: *contentLength + br.offset, // Negative offset means distance from end of blob
-					Count:  0,                          // Length of 0 means read to end of blob
+					Offset: pr.offset,
+					Count:  pr.length,
 				},
 			}
 		}
@@ -180,12 +188,22 @@ func (bs *AzureBlobstore) Put(ctx context.Context, key string, totalSize int64, 
 
 // blobExistsWhenShouldnt checks if error indicates blob exists when it shouldn't (409)
 func blobExistsWhenShouldnt(expectedVersion string, err error) bool {
+	var respErr *azcore.ResponseError
+	if errors.As(err, &respErr) {
+		return expectedVersion == "" && respErr.StatusCode == 409
+	}
+
 	errMsg := err.Error()
 	return expectedVersion == "" && (strings.Contains(errMsg, "BlobAlreadyExists") || strings.Contains(errMsg, "409"))
 }
 
 // blobHasChanged checks if error indicates blob version has changed (412)
 func blobHasChanged(expectedVersion string, err error) bool {
+	var respErr *azcore.ResponseError
+	if !errors.As(err, &respErr) {
+		return expectedVersion != "" && respErr.StatusCode == 412
+	}
+
 	errMsg := err.Error()
 	return expectedVersion != "" && (strings.Contains(errMsg, "ConditionNotMet") || strings.Contains(errMsg, "412"))
 }

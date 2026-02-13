@@ -391,6 +391,7 @@ func TestAzureBlobstore_Get(t *testing.T) {
 		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
 		rc, size, version, err := bs.Get(ctx, "mykey", AllRange)
 		require.NoError(t, err)
+		defer rc.Close()
 		assert.Equal(t, uint64(len(expectedData)), size)
 		assert.Equal(t, "test-etag", version)
 
@@ -418,6 +419,7 @@ func TestAzureBlobstore_Get(t *testing.T) {
 		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
 		rc, size, version, err := bs.Get(ctx, "mykey", NewBlobRange(10, 4))
 		require.NoError(t, err)
+		defer rc.Close()
 		assert.Equal(t, uint64(100), size) // Extracted from Content-Range
 		assert.Equal(t, "test-etag", version)
 
@@ -449,6 +451,7 @@ func TestAzureBlobstore_Get(t *testing.T) {
 		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
 		rc, size, version, err := bs.Get(ctx, "mykey", NewBlobRange(-3, 0))
 		require.NoError(t, err)
+		defer rc.Close()
 		assert.Equal(t, uint64(3), size)
 		assert.Equal(t, "test-etag", version)
 
@@ -465,8 +468,9 @@ func TestAzureBlobstore_Get(t *testing.T) {
 		}
 
 		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
-		_, _, _, err := bs.Get(ctx, "mykey", AllRange)
+		rc, _, _, err := bs.Get(ctx, "mykey", AllRange)
 		require.Error(t, err)
+		defer rc.Close()
 		assert.True(t, IsNotFoundError(err))
 	})
 }
