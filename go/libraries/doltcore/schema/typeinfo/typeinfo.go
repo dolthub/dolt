@@ -42,10 +42,7 @@ type TypeInfo interface {
 
 	// Equals returns whether the given TypeInfo is equivalent to this TypeInfo.
 	Equals(other TypeInfo) bool
-
-	// FormatValue returns the stringified version of the value.
-	FormatValue(v types.Value) (*string, error)
-
+	
 	// IsValid takes in a types.Value and returns whether it is valid for this type.
 	IsValid(v types.Value) bool
 

@@ -16,12 +16,8 @@ package diff
 
 import (
 	"context"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/store/diff"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // ChangeType is an enum that represents the type of change in a diff
@@ -49,23 +45,6 @@ const (
 	ModeInPlace Mode = 2
 	ModeContext Mode = 3
 )
-
-type RowDiffer interface {
-	// Start starts the RowDiffer.
-	Start(ctx context.Context, from, to types.Map)
-
-	// StartWithRange starts the RowDiffer with the specified range
-	StartWithRange(ctx context.Context, from, to types.Map, start types.Value, inRange types.ValueInRange)
-
-	// GetDiffs returns the requested number of diff.Differences, or times out.
-	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error)
-
-	// GetDiffsWithFilter returns the requested number of filtered diff.Differences, or times out.
-	GetDiffsWithFilter(numDiffs int, timeout time.Duration, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error)
-
-	// Close closes the RowDiffer.
-	Close() error
-}
 
 // SqlRowDiffWriter knows how to write diff rows for a table to an arbitrary format and destination.
 type SqlRowDiffWriter interface {
