@@ -71,7 +71,7 @@ func getConstraintViolationsSchema(ctx context.Context, t *doltdb.Table, tn dolt
 
 	cols := make([]schema.Column, 0, baseColColl.Size()+schSize)
 	cols = append(cols, baseCols[0:2]...)
-	infoCol, err := schema.NewColumnWithTypeInfo("violation_info", schema.DoltConstraintViolationsInfoTag, typeinfo.JSONType, false, "", false, "")
+	infoCol, err := schema.NewColumnWithTypeInfo("violation_info", schema.DoltConstraintViolationsInfoTag, typeinfo.JSONType, true, "", false, "")
 	if err != nil {
 		return nil, err
 	}
