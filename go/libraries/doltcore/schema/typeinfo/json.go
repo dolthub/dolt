@@ -87,7 +87,8 @@ func (ti *jsonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 
 // Equals implements TypeInfo interface.
 func (ti *jsonType) Equals(other TypeInfo) bool {
-	return ti.GetTypeIdentifier() == other.GetTypeIdentifier()
+	_, ok := other.(*jsonType)
+	return ok
 }
 
 // FormatValue implements TypeInfo interface.
@@ -104,16 +105,6 @@ func (ti *jsonType) FormatValue(v types.Value) (*string, error) {
 		return &s, nil
 	}
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *jsonType) GetTypeIdentifier() Identifier {
-	return JSONTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *jsonType) GetTypeParams() map[string]string {
-	return nil
 }
 
 // IsValid implements TypeInfo interface.

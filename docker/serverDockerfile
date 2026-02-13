@@ -4,7 +4,7 @@ FROM debian:bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
-        curl tini ca-certificates && \
+        curl git tini ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 

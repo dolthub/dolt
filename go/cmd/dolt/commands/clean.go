@@ -32,16 +32,17 @@ const (
 
 var cleanDocContent = cli.CommandDocumentationContent{
 	ShortDesc: "Deletes untracked working tables",
-	LongDesc: "{{.EmphasisLeft}}dolt clean [--dry-run]{{.EmphasisRight}}\n\n" +
+	LongDesc: "{{.EmphasisLeft}}dolt clean [--dry-run] [-x]{{.EmphasisRight}}\n\n" +
 		"The default (parameterless) form clears the values for all untracked working {{.LessThan}}tables{{.GreaterThan}} ." +
-		"This command permanently deletes unstaged or uncommitted tables.\n\n" +
+		"This command permanently deletes unstaged or uncommitted tables. By default, tables matching dolt_ignore or dolt_nonlocal_tables are not removed.\n\n" +
 		"The {{.EmphasisLeft}}--dry-run{{.EmphasisRight}} flag can be used to test whether the clean can succeed without " +
 		"deleting any tables from the current working set.\n\n" +
-		"{{.EmphasisLeft}}dolt clean [--dry-run] {{.LessThan}}tables{{.GreaterThan}}...{{.EmphasisRight}}\n\n" +
+		"The {{.EmphasisLeft}}-x{{.EmphasisRight}} flag causes dolt_ignore to be ignored so that untracked tables matching dolt_ignore are removed; dolt_nonlocal_tables is always respected (similar to git clean -x).\n\n" +
+		"{{.EmphasisLeft}}dolt clean [--dry-run] [-x] {{.LessThan}}tables{{.GreaterThan}}...{{.EmphasisRight}}\n\n" +
 		"If {{.LessThan}}tables{{.GreaterThan}} is specified, only those table names are considered for deleting.\n\n",
 	Synopsis: []string{
-		"[--dry-run]",
-		"[--dry-run] {{.LessThan}}tables{{.GreaterThan}}...",
+		"[--dry-run] [-x]",
+		"[--dry-run] [-x] {{.LessThan}}tables{{.GreaterThan}}...",
 	},
 }
 
@@ -85,6 +86,13 @@ func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	buffer.WriteString("CALL DOLT_CLEAN(")
 	if apr.Contains(cli.DryRunFlag) {
 		buffer.WriteString("\"--dry-run\"")
+		firstParamDone = true
+	}
+	if apr.Contains(cli.ExcludeIgnoreRulesFlag) {
+		if firstParamDone {
+			buffer.WriteString(", ")
+		}
+		buffer.WriteString("\"-x\"")
 		firstParamDone = true
 	}
 	if apr.NArg() > 0 {

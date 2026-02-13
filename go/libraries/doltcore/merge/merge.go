@@ -48,6 +48,12 @@ var ErrMultipleViolationsForRow = errors.New("multiple violations for row not su
 
 var ErrSameTblAddedTwice = goerrors.NewKind("table with same name '%s' added in 2 commits can't be merged")
 
+const (
+	ConflictDiffTypeAdded    = "added"
+	ConflictDiffTypeModified = "modified"
+	ConflictDiffTypeRemoved  = "removed"
+)
+
 func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
 	optCmt, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
 	if err != nil {
@@ -169,23 +175,12 @@ func MergeRoots(
 	mergeOpts MergeOpts,
 ) (*Result, error) {
 	var (
-		conflictStash  *conflictStash
-		violationStash *violationStash
-		nbf            *types.NomsBinFormat
-		err            error
+		nbf *types.NomsBinFormat
+		err error
 	)
 
 	nbf = ourRoot.VRW().Format()
-	if !types.IsFormat_DOLT(nbf) {
-		ourRoot, conflictStash, err = stashConflicts(ctx, ourRoot)
-		if err != nil {
-			return nil, err
-		}
-		ancRoot, violationStash, err = stashViolations(ctx, ancRoot)
-		if err != nil {
-			return nil, err
-		}
-	}
+	types.AssertFormat_DOLT(nbf)
 
 	// merge collations
 	oColl, err := ourRoot.GetCollation(ctx)
@@ -284,12 +279,7 @@ func MergeRoots(
 			continue
 		}
 		if mergedTable.conflict.Count() > 0 {
-			if types.IsFormat_DOLT(nbf) {
-				schConflicts = append(schConflicts, mergedTable.conflict)
-			} else {
-				// return schema conflict as error
-				return nil, mergedTable.conflict
-			}
+			schConflicts = append(schConflicts, mergedTable.conflict)
 		}
 
 		if mergedTable.table != nil {
@@ -387,37 +377,9 @@ func MergeRoots(
 		return nil, err
 	}
 
-	if types.IsFormat_DOLT(ourRoot.VRW().Format()) {
-		err = getConstraintViolationStats(ctx, mergedRoot, tblToStats)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Result{
-			Root:            mergedRoot,
-			SchemaConflicts: schConflicts,
-			Stats:           tblToStats,
-		}, nil
-	}
-
-	mergedRoot, err = mergeCVsWithStash(ctx, mergedRoot, violationStash)
-	if err != nil {
-		return nil, err
-	}
-
 	err = getConstraintViolationStats(ctx, mergedRoot, tblToStats)
 	if err != nil {
 		return nil, err
-	}
-
-	mergedHasTableConflicts := checkForTableConflicts(tblToStats)
-	if !conflictStash.Empty() && mergedHasTableConflicts {
-		return nil, ErrCantOverwriteConflicts
-	} else if !conflictStash.Empty() {
-		mergedRoot, err = applyConflictStash(ctx, conflictStash.Stash, mergedRoot)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return &Result{
@@ -425,54 +387,6 @@ func MergeRoots(
 		SchemaConflicts: schConflicts,
 		Stats:           tblToStats,
 	}, nil
-}
-
-// mergeCVsWithStash merges the table constraint violations in |stash| with |root|.
-// Returns an updated root with all the merged CVs.
-func mergeCVsWithStash(ctx context.Context, root doltdb.RootValue, stash *violationStash) (doltdb.RootValue, error) {
-	updatedRoot := root
-	for name, stashed := range stash.Stash {
-		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: name})
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			// the table with the CVs was deleted
-			continue
-		}
-		curr, err := tbl.GetConstraintViolations(ctx)
-		if err != nil {
-			return nil, err
-		}
-		unioned, err := types.UnionMaps(ctx, curr, stashed, func(key types.Value, currV types.Value, stashV types.Value) (types.Value, error) {
-			if !currV.Equals(stashV) {
-				panic(fmt.Sprintf("encountered conflict when merging constraint violations, conflicted key: %v\ncurrent value: %v\nstashed value: %v\n", key, currV, stashV))
-			}
-			return currV, nil
-		})
-		if err != nil {
-			return nil, err
-		}
-		tbl, err = tbl.SetConstraintViolations(ctx, unioned)
-		if err != nil {
-			return nil, err
-		}
-		updatedRoot, err = root.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return updatedRoot, nil
-}
-
-// Checks if a table conflict occurred during the merge
-func checkForTableConflicts(tblToStats map[doltdb.TableName]*MergeStats) bool {
-	for _, stat := range tblToStats {
-		if stat.HasConflicts() && !stat.HasRootObjectConflicts() {
-			return true
-		}
-	}
-	return false
 }
 
 // populates tblToStats with violation statistics
@@ -497,14 +411,6 @@ type ArtifactStatus struct {
 	SchemaConflictsTables      []string
 	DataConflictTables         []string
 	ConstraintViolationsTables []string
-}
-
-func (as ArtifactStatus) HasConflicts() bool {
-	return len(as.DataConflictTables) > 0 || len(as.SchemaConflictsTables) > 0
-}
-
-func (as ArtifactStatus) HasConstraintViolations() bool {
-	return len(as.ConstraintViolationsTables) > 0
 }
 
 // MergeWouldStompChanges returns list of table names that are stomped and the diffs map between head and working set.

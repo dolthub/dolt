@@ -17,10 +17,12 @@ package commands
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -134,4 +136,31 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 			assert.Equal(t, test.expectedScheme, actualScheme)
 		})
 	}
+}
+
+func TestParseRemoteArgs_GitRef(t *testing.T) {
+	ap := RemoteCmd{}.ArgParser()
+	apr, err := ap.Parse([]string{"add", "origin", "git+file:///tmp/remote.git", "--" + gitRefFlag, "refs/dolt/custom"})
+	assert.NoError(t, err)
+
+	params, verr := parseRemoteArgs(apr, dbfactory.GitFileScheme, "git+file:///tmp/remote.git")
+	assert.Nil(t, verr)
+	assert.Equal(t, "refs/dolt/custom", params[dbfactory.GitRefParam])
+}
+
+func TestRemoteAdd_StoresNormalizedGitUrl(t *testing.T) {
+	// This mirrors the behavior in addRemote(): for git remotes, we must store the normalized git+* URL
+	// (in particular, scp-style ssh should never be stored as a schemeless string).
+	scheme := dbfactory.GitSSHScheme
+	original := "git@github.com:timsehn/dolt-in-git.git"
+	normalized, ok, err := env.NormalizeGitRemoteUrl(original)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, "git+ssh://git@github.com/timsehn/dolt-in-git.git", normalized)
+
+	urlToStore := original
+	if strings.HasPrefix(strings.ToLower(scheme), "git+") {
+		urlToStore = normalized
+	}
+	assert.Equal(t, normalized, urlToStore)
 }

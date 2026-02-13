@@ -30,12 +30,6 @@ import (
 
 type FloatWidth int8
 
-const (
-	floatTypeParam_Width    = "width"
-	floatTypeParam_Width_32 = "32"
-	floatTypeParam_Width_64 = "64"
-)
-
 type floatType struct {
 	sqlFloatType sql.NumberType
 }
@@ -45,20 +39,6 @@ var (
 	Float32Type = &floatType{gmstypes.Float32}
 	Float64Type = &floatType{gmstypes.Float64}
 )
-
-func CreateFloatTypeFromParams(params map[string]string) (TypeInfo, error) {
-	if width, ok := params[floatTypeParam_Width]; ok {
-		switch width {
-		case floatTypeParam_Width_32:
-			return Float32Type, nil
-		case floatTypeParam_Width_64:
-			return Float64Type, nil
-		default:
-			return nil, fmt.Errorf(`create float type info has "%v" param with value "%v"`, floatTypeParam_Width, width)
-		}
-	}
-	return nil, fmt.Errorf(`create float type info is missing "%v" param`, floatTypeParam_Width)
-}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *floatType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -144,25 +124,6 @@ func (ti *floatType) FormatValue(v types.Value) (*string, error) {
 	default:
 		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 	}
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *floatType) GetTypeIdentifier() Identifier {
-	return FloatTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *floatType) GetTypeParams() map[string]string {
-	sqlParam := ""
-	switch ti.sqlFloatType.Type() {
-	case sqltypes.Float32:
-		sqlParam = floatTypeParam_Width_32
-	case sqltypes.Float64:
-		sqlParam = floatTypeParam_Width_64
-	default:
-		panic(fmt.Errorf(`unknown float type info sql type "%v"`, ti.sqlFloatType.Type().String()))
-	}
-	return map[string]string{floatTypeParam_Width: sqlParam}
 }
 
 // IsValid implements TypeInfo interface.

@@ -43,7 +43,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
@@ -513,7 +512,8 @@ func RunStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range DoltProcedureTests {
+	scripts := append(DoltProcedureTests, DoltCleanProcedureScripts...)
+	for _, script := range scripts {
 		func() {
 			h := h.NewHarness(t)
 			h.UseLocalFileSystem()
@@ -524,7 +524,8 @@ func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunDoltStoredProceduresPreparedTest(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range DoltProcedureTests {
+	scripts := append(DoltProcedureTests, DoltCleanProcedureScripts...)
+	for _, script := range scripts {
 		func() {
 			h := h.NewHarness(t)
 			h.UseLocalFileSystem()
@@ -802,9 +803,7 @@ func RunDoltDdlScripts(t *testing.T, harness DoltEnginetestHarness) {
 		require.NoError(t, err)
 		enginetest.TestScriptWithEngine(t, e, harness, script)
 	}
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("not fixing unique index on keyless tables for old format")
-	}
+
 	for _, script := range AddIndexScripts {
 		e, err := harness.NewEngine(t)
 		require.NoError(t, err)
@@ -952,21 +951,16 @@ func RunDoltConflictsTableNameTableTests(t *testing.T, h DoltEnginetestHarness) 
 		}()
 	}
 
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, script := range Dolt1ConflictTableNameTableTests {
-			func() {
-				h := h.NewHarness(t)
-				defer h.Close()
-				enginetest.TestScript(t, h, script)
-			}()
-		}
+	for _, script := range Dolt1ConflictTableNameTableTests {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
 	}
 }
 
 func RunKeylessDoltMergeCVsAndConflictsTests(t *testing.T, h DoltEnginetestHarness) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip()
-	}
 	for _, script := range KeylessMergeCVsAndConflictsScripts {
 		func() {
 			h := h.NewHarness(t)
@@ -1174,9 +1168,6 @@ func RunUnscopedDiffSystemTableTestsPrepared(t *testing.T, h DoltEnginetestHarne
 }
 
 func RunColumnDiffSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("correct behavior of dolt_column_diff only guaranteed on new format")
-	}
 	for _, test := range ColumnDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, h.NewHarness(t), test)
@@ -1185,9 +1176,6 @@ func RunColumnDiffSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunColumnDiffSystemTableTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("correct behavior of dolt_column_diff only guaranteed on new format")
-	}
 	for _, test := range ColumnDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, h.NewHarness(t), test)
@@ -1393,10 +1381,6 @@ func RunCommitDiffSystemTableTestsPrepared(t *testing.T, harness DoltEnginetestH
 }
 
 func RunDoltDiffSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	for _, test := range DiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			h = h.NewHarness(t)
@@ -1406,23 +1390,17 @@ func RunDoltDiffSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
 		})
 	}
 
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, test := range Dolt1DiffSystemTableScripts {
-			func() {
-				h = h.NewHarness(t)
-				defer h.Close()
-				h.Setup(setup.MydbData)
-				enginetest.TestScript(t, h, test)
-			}()
-		}
+	for _, test := range Dolt1DiffSystemTableScripts {
+		func() {
+			h = h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, test)
+		}()
 	}
 }
 
 func RunDoltDiffSystemTableTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	for _, test := range DiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			h = h.NewHarness(t)
@@ -1432,23 +1410,17 @@ func RunDoltDiffSystemTableTestsPrepared(t *testing.T, h DoltEnginetestHarness) 
 		})
 	}
 
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, test := range Dolt1DiffSystemTableScripts {
-			func() {
-				h = h.NewHarness(t)
-				defer h.Close()
-				h.Setup(setup.MydbData)
-				enginetest.TestScriptPrepared(t, h, test)
-			}()
-		}
+	for _, test := range Dolt1DiffSystemTableScripts {
+		func() {
+			h = h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, test)
+		}()
 	}
 }
 
 func RunNonlocalTableTests(t *testing.T, h DoltEnginetestHarness) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	for _, test := range NonlocalScripts {
 		t.Run(test.Name, func(t *testing.T) {
 			h = h.NewHarness(t)
@@ -1460,10 +1432,6 @@ func RunNonlocalTableTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunNonlocalTableTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	for _, test := range NonlocalScripts {
 		t.Run(test.Name, func(t *testing.T) {
 			h = h.NewHarness(t)
@@ -1519,10 +1487,6 @@ func RunQueryDiffTests(t *testing.T, harness DoltEnginetestHarness) {
 }
 
 func RunSystemTableIndexesTests(t *testing.T, harness DoltEnginetestHarness) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	for _, stt := range SystemTableIndexTests {
 		harness = harness.NewHarness(t).WithParallelism(1)
 		defer harness.Close()
@@ -1572,10 +1536,6 @@ var biasedCosters = []memo.Coster{
 }
 
 func RunSystemTableIndexesTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	for _, stt := range SystemTableIndexTests {
 		harness = harness.NewHarness(t).WithParallelism(2)
 		defer harness.Close()
@@ -1919,12 +1879,7 @@ func RunDoltVerifyConstraintsTests(t *testing.T, harness DoltEnginetestHarness) 
 }
 
 func RunDoltStorageFormatTests(t *testing.T, h DoltEnginetestHarness) {
-	var expectedFormatString string
-	if types.IsFormat_DOLT(types.Format_Default) {
-		expectedFormatString = "NEW ( __DOLT__ )"
-	} else {
-		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
-	}
+	var expectedFormatString = "NEW ( __DOLT__ )"
 	script := queries.ScriptTest{
 		Name: "dolt storage format function works",
 		Assertions: []queries.ScriptTestAssertion{
@@ -1939,7 +1894,6 @@ func RunDoltStorageFormatTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunThreeWayMergeWithSchemaChangeScripts(t *testing.T, h DoltEnginetestHarness) {
-	skipOldFormat(t)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsBasicCases, "basic cases", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", false)
@@ -1962,7 +1916,6 @@ func RunThreeWayMergeWithSchemaChangeScripts(t *testing.T, h DoltEnginetestHarne
 }
 
 func RunThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T, h DoltEnginetestHarness) {
-	skipOldFormat(t)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsBasicCases, "basic cases", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", false)
@@ -2030,12 +1983,6 @@ var newFormatSkippedScripts = []string{
 	// Different query plans
 	"Partial indexes are used and return the expected result",
 	"Multiple indexes on the same columns in a different order",
-}
-
-func skipOldFormat(t *testing.T) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip()
-	}
 }
 
 func skipPreparedTests(t *testing.T) {
@@ -2198,5 +2145,14 @@ func RunTransactionTestsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engi
 
 			enginetest.TestTransactionScriptWithEngine(t, engine, harness, test, false)
 		})
+	}
+}
+
+func RunDoltCommitVerificationScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range DoltCommitVerificationScripts {
+		harness := harness.NewHarness(t)
+
+		enginetest.TestScript(t, harness, script)
+		harness.Close()
 	}
 }

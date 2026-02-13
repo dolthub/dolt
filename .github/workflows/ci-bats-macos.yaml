@@ -89,7 +89,7 @@ jobs:
       - name: Install Maven
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.11/binaries/apache-maven-3.9.12-bin.tar.gz
+          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.12/binaries/apache-maven-3.9.12-bin.tar.gz
           tar -xf apache-maven-3.9.12-bin.tar.gz
           echo "$(pwd)/apache-maven-3.9.12/bin" >> $GITHUB_PATH
       - name: Install Hadoop

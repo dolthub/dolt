@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -99,7 +100,7 @@ func TestDynamoManifestUpdateWontClobberOldVersion(t *testing.T) {
 	badRoot := hash.Of([]byte("bad root"))
 	ddb.putRecord(db, lock[:], badRoot[:], "0", "", "")
 
-	_, err := mm.Update(context.Background(), lock, manifestContents{nbfVers: constants.FormatLD1String}, stats, nil)
+	_, err := mm.Update(context.Background(), dherrors.FatalBehaviorError, lock, manifestContents{nbfVers: constants.FormatLD1String}, stats, nil)
 	assert.Error(err)
 }
 
@@ -110,7 +111,7 @@ func TestDynamoManifestUpdate(t *testing.T) {
 
 	// First, test winning the race against another process.
 	contents := makeContents("locker", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}}, nil)
-	upstream, err := mm.Update(context.Background(), hash.Hash{}, contents, stats, func() error {
+	upstream, err := mm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
@@ -124,12 +125,12 @@ func TestDynamoManifestUpdate(t *testing.T) {
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
 	rejected := makeContents("locker 2", "new root 2", nil, nil)
-	upstream, err = mm.Update(context.Background(), hash.Hash{}, rejected, stats, nil)
+	upstream, err = mm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, rejected, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
-	upstream, err = mm.Update(context.Background(), upstream.lock, rejected, stats, nil)
+	upstream, err = mm.Update(context.Background(), dherrors.FatalBehaviorError, upstream.lock, rejected, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(rejected.lock, upstream.lock)
 	assert.Equal(rejected.root, upstream.root)
@@ -141,7 +142,7 @@ func TestDynamoManifestUpdate(t *testing.T) {
 	ddb.putRecord(db, jerkLock[:], upstream.root[:], constants.FormatLD1String, tableName.String()+":1", "")
 
 	newContents3 := makeContents("locker 3", "new root 3", nil, nil)
-	upstream, err = mm.Update(context.Background(), upstream.lock, newContents3, stats, nil)
+	upstream, err = mm.Update(context.Background(), dherrors.FatalBehaviorError, upstream.lock, newContents3, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(rejected.root, upstream.root)
@@ -162,7 +163,7 @@ func TestDynamoManifestUpdateAppendix(t *testing.T) {
 	app := []tableSpec{{computeAddr([]byte("app-a")), 3}}
 	contents := makeContents("locker", "nuroot", specs, app)
 
-	upstream, err := mm.Update(context.Background(), hash.Hash{}, contents, stats, func() error {
+	upstream, err := mm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
@@ -177,14 +178,14 @@ func TestDynamoManifestUpdateAppendix(t *testing.T) {
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
 	rejected := makeContents("locker 2", "new root 2", nil, nil)
-	upstream, err = mm.Update(context.Background(), hash.Hash{}, rejected, stats, nil)
+	upstream, err = mm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, rejected, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
 	assert.Equal(contents.appendix, upstream.appendix)
 
-	upstream, err = mm.Update(context.Background(), upstream.lock, rejected, stats, nil)
+	upstream, err = mm.Update(context.Background(), dherrors.FatalBehaviorError, upstream.lock, rejected, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(rejected.lock, upstream.lock)
 	assert.Equal(rejected.root, upstream.root)
@@ -200,7 +201,7 @@ func TestDynamoManifestUpdateAppendix(t *testing.T) {
 	ddb.putRecord(db, jerkLock[:], upstream.root[:], constants.FormatLD1String, specsStr, appStr)
 
 	newContents3 := makeContents("locker 3", "new root 3", nil, nil)
-	upstream, err = mm.Update(context.Background(), upstream.lock, newContents3, stats, nil)
+	upstream, err = mm.Update(context.Background(), dherrors.FatalBehaviorError, upstream.lock, newContents3, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(rejected.root, upstream.root)
@@ -232,14 +233,14 @@ func TestDynamoManifestCaching(t *testing.T) {
 	// When failing the optimistic lock, we should hit persistent storage.
 	reads = ddb.NumGets()
 	contents := makeContents("lock2", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}}, nil)
-	upstream, err := mm.Update(context.Background(), hash.Hash{}, contents, stats, nil)
+	upstream, err := mm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, nil)
 	require.NoError(t, err)
 	assert.NotEqual(contents.lock, upstream.lock)
 	assert.Equal(reads+1, ddb.NumGets())
 
 	// Successful update should NOT hit persistent storage.
 	reads = ddb.NumGets()
-	upstream, err = mm.Update(context.Background(), upstream.lock, contents, stats, nil)
+	upstream, err = mm.Update(context.Background(), dherrors.FatalBehaviorError, upstream.lock, contents, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(reads, ddb.NumGets())
@@ -251,7 +252,7 @@ func TestDynamoManifestUpdateEmpty(t *testing.T) {
 	stats := &Stats{}
 
 	contents := manifestContents{nbfVers: constants.FormatLD1String, lock: computeAddr([]byte{0x01})}
-	upstream, err := mm.Update(context.Background(), hash.Hash{}, contents, stats, nil)
+	upstream, err := mm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.True(upstream.root.IsEmpty())

@@ -18,12 +18,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
-
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var IdentityConverter = &RowConverter{nil, true, nil}
@@ -94,56 +91,6 @@ func panicOnDuplicateMappings(mapping *FieldMapping) {
 		}
 		destToSrcMapping[destTag] = srcTag
 	}
-}
-
-// ConvertWithWarnings takes an input row, maps its columns to their destination columns, performing any type
-// conversions needed to create a row of the expected destination schema, and uses the optional WarnFunction
-// callback to let callers handle logging a warning when a field cannot be cleanly converted.
-func (rc *RowConverter) ConvertWithWarnings(inRow row.Row, warnFn WarnFunction) (row.Row, error) {
-	return rc.convert(inRow, warnFn)
-}
-
-// convert takes a row and maps its columns to their destination columns, automatically performing any type conversion
-// needed, and using the optional WarnFunction to let callers log warnings on any type conversion errors.
-func (rc *RowConverter) convert(inRow row.Row, warnFn WarnFunction) (row.Row, error) {
-	if rc.IdentityConverter {
-		return inRow, nil
-	}
-
-	outTaggedVals := make(row.TaggedValues, len(rc.SrcToDest))
-	_, err := inRow.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
-		convFunc, ok := rc.ConvFuncs[tag]
-
-		if ok {
-			outTag := rc.SrcToDest[tag]
-			outVal, err := convFunc(val)
-
-			if sql.ErrInvalidValue.Is(err) && warnFn != nil {
-				col, _ := rc.SrcSch.GetAllCols().GetByTag(tag)
-				warnFn(DatatypeCoercionFailureWarningCode, DatatypeCoercionFailureWarning, col.Name)
-				outVal = types.NullValue
-				err = nil
-			}
-
-			if err != nil {
-				return false, err
-			}
-
-			if types.IsNull(outVal) {
-				return false, nil
-			}
-
-			outTaggedVals[outTag] = outVal
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return row.New(inRow.Format(), rc.DestSch, outTaggedVals)
 }
 
 func IsNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) (bool, error) {

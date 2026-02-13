@@ -61,6 +61,7 @@ func CreateCommitArgParser(supportsBranchFlag bool) *argparser.ArgParser {
 	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables and databases (including new tables) in the working set to the staged set.")
 	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")
 	ap.SupportsOptionalString(SignFlag, "S", "key-id", "Sign the commit using GPG. If no key-id is provided the key-id is taken from 'user.signingkey' the in the configuration")
+	ap.SupportsFlag(SkipVerificationFlag, "", "Skip commit verification")
 	if supportsBranchFlag {
 		ap.SupportsString(BranchParam, "", "branch", "Commit to the specified branch instead of the current branch.")
 	}
@@ -96,6 +97,7 @@ func CreateMergeArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
 	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
+	ap.SupportsFlag(SkipVerificationFlag, "", "Skip commit verification before merge")
 
 	return ap
 }
@@ -116,6 +118,7 @@ func CreateRebaseArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AbortParam, "", "Abort an interactive rebase and return the working set to the pre-rebase state")
 	ap.SupportsFlag(ContinueFlag, "", "Continue an interactive rebase after adjusting the rebase plan")
 	ap.SupportsFlag(InteractiveFlag, "i", "Start an interactive rebase")
+	ap.SupportsFlag(SkipVerificationFlag, "", "Skip commit verification before rebase")
 	return ap
 }
 
@@ -146,6 +149,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(RemoteParam, "", "name", "Name of the remote to be added to the cloned database. The default is 'origin'.")
 	ap.SupportsString(BranchParam, "b", "branch", "The branch to be cloned. If not specified all branches will be cloned.")
 	ap.SupportsString(DepthFlag, "", "depth", "Clone a single branch and limit history to the given commit depth.")
+	ap.SupportsString("ref", "", "ref", "Git ref to use as the Dolt data ref for git remotes (default: refs/dolt/data).")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
@@ -166,12 +170,14 @@ func CreateResetArgParser() *argparser.ArgParser {
 
 func CreateRemoteArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("remote")
+	ap.SupportsString("ref", "", "ref", "Git ref to use as the Dolt data ref for git remotes (default: refs/dolt/data).")
 	return ap
 }
 
 func CreateCleanArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("clean")
 	ap.SupportsFlag(DryRunFlag, "", "Tests removing untracked tables without modifying the working set.")
+	ap.SupportsFlag(ExcludeIgnoreRulesFlag, "x", "Do not respect dolt_ignore; remove untracked tables that match dolt_ignore. dolt_nonlocal_tables is always respected.")
 	return ap
 }
 
@@ -190,6 +196,7 @@ func CreateCherryPickArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AllowEmptyFlag, "", "Allow empty commits to be cherry-picked. "+
 		"Note that use of this option only keeps commits that were initially empty. "+
 		"Commits which become empty, due to a previous commit, will cause cherry-pick to fail.")
+	ap.SupportsFlag(SkipVerificationFlag, "", "Skip commit verification before cherry-pick")
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
 		return errors.New("cherry-picking multiple commits is not supported yet.")
 	}
@@ -227,6 +234,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.SupportsString(UserFlag, "", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	ap.SupportsFlag(PruneFlag, "p", "After fetching, remove any remote-tracking references that don't exist on the remote.")
 	ap.SupportsFlag(SilentFlag, "", "Suppress progress information.")
+	ap.SupportsFlag(SkipVerificationFlag, "", "Skip commit verification before merge")
 	return ap
 }
 
@@ -266,6 +274,7 @@ func CreateBackupArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
 	ap.SupportsFlag(VerboseFlag, "v", "When printing the list of backups adds additional details.")
 	ap.SupportsFlag(ForceFlag, "f", "When restoring a backup, overwrite the contents of the existing database with the same name.")
+	ap.SupportsString("ref", "", "ref", "Git ref to use as the Dolt data ref for git remotes (default: refs/dolt/data).")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")

@@ -68,7 +68,6 @@ var doltSubCommands = []cli.Command{
 	commands.BlameCmd{},
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
-	commands.MigrateCmd{},
 	indexcmds.Commands,
 	commands.ReadTablesCmd{},
 	commands.GarbageCollectionCmd{},

@@ -99,16 +99,6 @@ func (ti *timeType) FormatValue(v types.Value) (*string, error) {
 	return &val, nil
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *timeType) GetTypeIdentifier() Identifier {
-	return TimeTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *timeType) GetTypeParams() map[string]string {
-	return nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *timeType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.Int); ok {

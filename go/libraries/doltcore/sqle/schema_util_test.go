@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -61,100 +60,6 @@ func NewResultSetRow(colVals ...types.Value) row.Row {
 	}
 
 	return r
-}
-
-// NewRow creates a new row with the values given, using ascending tag numbers starting at 0.
-// Uses the first value as the primary key.
-func NewRow(colVals ...types.Value) row.Row {
-	return NewRowWithPks(colVals[0:1], colVals[1:]...)
-}
-
-// NewRowWithPks creates a new row with the values given, using ascending tag numbers starting at 0.
-func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
-	var cols []schema.Column
-	taggedVals := make(row.TaggedValues)
-	var tag int64
-
-	for _, val := range pkColVals {
-		var constraints []schema.ColConstraint
-		constraints = append(constraints, schema.NotNullConstraint{})
-		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), true, constraints...))
-		taggedVals[uint64(tag)] = val
-		tag++
-	}
-
-	for _, val := range nonPkVals {
-		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), false))
-		taggedVals[uint64(tag)] = val
-		tag++
-	}
-
-	colColl := schema.NewColCollection(cols...)
-	sch := schema.MustSchemaFromCols(colColl)
-
-	r, err := row.New(types.Format_Default, sch, taggedVals)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-// NewRowWithSchema creates a new row with the using the provided schema.
-func NewRowWithSchema(sch schema.Schema, vals ...types.Value) row.Row {
-	tv := make(row.TaggedValues)
-	var i int
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		tv[tag] = vals[i]
-		i++
-		return false, nil
-	})
-
-	r, err := row.New(types.Format_Default, sch, tv)
-	if err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-// NewSchema creates a new schema with the pairs of column names and types given.
-// Uses the first column as the primary key.
-func NewSchema(colNamesAndTypes ...interface{}) schema.Schema {
-	return NewSchemaForTable("", colNamesAndTypes...)
-}
-
-// NewSchemaForTable creates a new schema for the table with the name given with the pairs of column names and types
-// given. Uses the first column as the primary key.
-func NewSchemaForTable(tableName string, colNamesAndTypes ...interface{}) schema.Schema {
-	if len(colNamesAndTypes)%2 != 0 {
-		panic("Non-even number of inputs passed to NewSchema")
-	}
-
-	// existingTags *set.Uint64Set, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind
-	nomsKinds := make([]types.NomsKind, 0)
-	tags := make(schema.TagMapping)
-
-	cols := make([]schema.Column, len(colNamesAndTypes)/2)
-	for i := 0; i < len(colNamesAndTypes); i += 2 {
-		name := colNamesAndTypes[i].(string)
-		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
-
-		tag := schema.AutoGenerateTag(tags, tableName, nomsKinds, name, nomsKind)
-		tags.Add(tag, tableName)
-		nomsKinds = append(nomsKinds, nomsKind)
-
-		isPk := i/2 == 0
-		var constraints []schema.ColConstraint
-		if isPk {
-			constraints = append(constraints, schema.NotNullConstraint{})
-		}
-		cols[i/2] = schema.NewColumn(name, tag, nomsKind, isPk, constraints...)
-	}
-
-	colColl := schema.NewColCollection(cols...)
-	return schema.MustSchemaFromCols(colColl)
 }
 
 // Returns the logical concatenation of the schemas and rows given, rewriting all tag numbers to begin at zero. The row

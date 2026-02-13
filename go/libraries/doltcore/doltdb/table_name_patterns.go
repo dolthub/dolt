@@ -43,6 +43,35 @@ func MatchTablePattern(pattern string, table string) (bool, error) {
 	return re.MatchString(table), nil
 }
 
+// CompiledTablePatterns holds compiled table name patterns for reuse when matching many names without recompiling.
+type CompiledTablePatterns []*regexp.Regexp
+
+// CompileTablePatterns compiles each of |patterns| once and returns them for use with TableMatchesAny. Returns (nil, nil) when |patterns| is empty.
+func CompileTablePatterns(patterns []string) (CompiledTablePatterns, error) {
+	if len(patterns) == 0 {
+		return nil, nil
+	}
+	compiled := make(CompiledTablePatterns, 0, len(patterns))
+	for _, p := range patterns {
+		re, err := compilePattern(p)
+		if err != nil {
+			return nil, err
+		}
+		compiled = append(compiled, re)
+	}
+	return compiled, nil
+}
+
+// TableMatchesAny reports whether |table| matches any of the patterns in |c|.
+func (c CompiledTablePatterns) TableMatchesAny(table string) bool {
+	for _, re := range c {
+		if re.MatchString(table) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetMatchingTables returns all tables that match a pattern
 func GetMatchingTables(ctx *sql.Context, root RootValue, schemaName string, pattern string) (results []string, err error) {
 	// If the pattern doesn't contain any special characters, look up that name.

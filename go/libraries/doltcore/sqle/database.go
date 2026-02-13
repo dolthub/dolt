@@ -1955,7 +1955,10 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return err
 	}
 
-	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) && !doltdb.IsFullTextTable(tableName) && !doltdb.HasDoltCIPrefix(tableName) {
+	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) &&
+		!doltdb.IsFullTextTable(tableName) &&
+		!doltdb.HasDoltCIPrefix(tableName) &&
+		tableName != doltdb.TestsTableName { // NM4 - determine why this is required now.
 		return ErrReservedTableName.New(tableName)
 	}
 

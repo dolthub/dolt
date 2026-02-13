@@ -40,7 +40,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type schemaMergeTest struct {
@@ -1651,10 +1650,9 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 
 				var mo merge.MergeOpts
 				var eo editor.Options
-				eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 				// attempt merge before skipping to assert no panics
 				result, err := merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
-				maybeSkip(t, a.VRW().Format(), test, flipSides)
+				maybeSkip(t, test, flipSides)
 
 				if test.conflict {
 					// TODO: Test the conflict error message more deeply
@@ -1694,7 +1692,6 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 func setupSchemaMergeTest(ctx context.Context, t *testing.T, test schemaMergeTest) (anc, left, right, merged doltdb.RootValue) {
 	denv := dtestutils.CreateTestEnv()
 	var eo editor.Options
-	eo = eo.WithDeaf(editor.NewInMemDeaf(denv.DoltDB(ctx).ValueReadWriter()))
 	anc = makeRootWithTable(t, denv.DoltDB(ctx), eo, test.ancestor)
 	assert.NotNil(t, anc)
 	if test.left != nil {
@@ -1829,15 +1826,9 @@ func verifyMerge(t *testing.T, ctx context.Context, m doltdb.RootValue, result *
 	}
 }
 
-func maybeSkip(t *testing.T, nbf *types.NomsBinFormat, test schemaMergeTest, flipSides bool) {
-	if types.IsFormat_DOLT(nbf) {
-		if test.skipNewFmt || flipSides && test.skipFlipOnNewFormat {
-			t.Skip()
-		}
-	} else {
-		if test.skipOldFmt || flipSides && test.skipFlipOnOldFormat {
-			t.Skip()
-		}
+func maybeSkip(t *testing.T, test schemaMergeTest, flipSides bool) {
+	if test.skipNewFmt || flipSides && test.skipFlipOnNewFormat {
+		t.Skip()
 	}
 }
 

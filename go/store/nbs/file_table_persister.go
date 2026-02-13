@@ -35,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -91,7 +92,7 @@ func (ftp *fsTablePersister) Exists(ctx context.Context, name string, chunkCount
 	return archiveFileExists(ctx, ftp.dir, name)
 }
 
-func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
+func (ftp *fsTablePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	t1 := time.Now()
 	defer stats.PersistLatency.SampleTimeSince(t1)
 
@@ -103,7 +104,7 @@ func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		return emptyChunkSource{}, gcb, nil
 	}
 
-	src, err := ftp.persistTable(ctx, name, data, chunkCount, stats)
+	src, err := ftp.persistTable(ctx, behavior, name, data, chunkCount, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -175,7 +176,7 @@ func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, fil
 	return w.FlushToFile(path)
 }
 
-func (ftp *fsTablePersister) persistTable(ctx context.Context, name hash.Hash, data []byte, chunkCount uint32, stats *Stats) (cs chunkSource, err error) {
+func (ftp *fsTablePersister) persistTable(ctx context.Context, behavior dherrors.FatalBehavior, name hash.Hash, data []byte, chunkCount uint32, stats *Stats) (cs chunkSource, err error) {
 	if chunkCount == 0 {
 		return emptyChunkSource{}, nil
 	}
@@ -235,7 +236,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name hash.Hash, d
 	return ftp.Open(ctx, name, chunkCount, stats)
 }
 
-func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
+func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
 	plan, err := planRangeCopyConjoin(ctx, sources, ftp.q, stats)
 	if err != nil {
 		return emptyChunkSource{}, nil, err
@@ -272,7 +273,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 		for _, sws := range plan.sources.sws {
 			var r io.ReadCloser
-			r, _, ferr = sws.source.reader(ctx)
+			r, _, ferr = sws.source.reader(ctx, behavior)
 			if ferr != nil {
 				return "", cleanup, ferr
 			}

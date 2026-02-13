@@ -15,16 +15,12 @@
 package row
 
 import (
-	"context"
-	"errors"
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-var ErrRowNotValid = errors.New("invalid row for current schema")
 
 type Row interface {
 	// Iterates over all the columns in the row. Columns that have no value set will not be visited.
@@ -82,21 +78,6 @@ func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
 	return pkRowFromNoms(sch, nomsKey, nomsVal)
 }
 
-// ToNoms returns the storage-layer tuples corresponding to |r|.
-func ToNoms(ctx context.Context, sch schema.Schema, r Row) (key, val types.Tuple, err error) {
-	k, err := r.NomsMapKey(sch).Value(ctx)
-	if err != nil {
-		return key, val, err
-	}
-
-	v, err := r.NomsMapValue(sch).Value(ctx)
-	if err != nil {
-		return key, val, err
-	}
-
-	return k.(types.Tuple), v.(types.Tuple), nil
-}
-
 func GetFieldByName(colName string, r Row, sch schema.Schema) (types.Value, bool) {
 	col, ok := sch.GetAllCols().GetByName(colName)
 
@@ -121,71 +102,6 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 
 		return val
 	}
-}
-
-// ReduceToIndexKeysFromTagMap creates a full key and a partial key from the given map of tags (first tuple being the
-// full key). Please refer to the note in the index editor for more information regarding partial keys.
-func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tagToVal map[uint64]types.Value, tf *types.TupleFactory) (types.Tuple, types.Tuple, error) {
-	vals := make([]types.Value, 0, len(idx.AllTags())*2)
-	for _, tag := range idx.AllTags() {
-		val, ok := tagToVal[tag]
-		if !ok {
-			val = types.NullValue
-		}
-		vals = append(vals, types.Uint(tag), val)
-	}
-
-	if tf == nil {
-		fullKey, err := types.NewTuple(nbf, vals...)
-		if err != nil {
-			return types.Tuple{}, types.Tuple{}, err
-		}
-
-		partialKey, err := types.NewTuple(nbf, vals[:idx.Count()*2]...)
-		if err != nil {
-			return types.Tuple{}, types.Tuple{}, err
-		}
-
-		return fullKey, partialKey, nil
-	} else {
-		fullKey, err := tf.Create(vals...)
-		if err != nil {
-			return types.Tuple{}, types.Tuple{}, err
-		}
-
-		partialKey, err := tf.Create(vals[:idx.Count()*2]...)
-		if err != nil {
-			return types.Tuple{}, types.Tuple{}, err
-		}
-
-		return fullKey, partialKey, nil
-	}
-}
-
-// ReduceToIndexPartialKey creates an index record from a primary storage record.
-func ReduceToIndexPartialKey(tags []uint64, idx schema.Index, r Row) (types.Tuple, error) {
-	var vals []types.Value
-	if idx.Name() != "" {
-		tags = idx.IndexedColumnTags()
-	}
-	for _, tag := range tags {
-		val, ok := r.GetColVal(tag)
-		if !ok {
-			val = types.NullValue
-		}
-		vals = append(vals, types.Uint(tag), val)
-	}
-
-	return types.NewTuple(r.Format(), vals...)
-}
-
-func IsEmpty(r Row) (b bool) {
-	b = true
-	_, _ = r.IterCols(func(_ uint64, _ types.Value) (stop bool, err error) {
-		b = false
-		return true, nil
-	})
-	return b
 }
 
 // IsValid returns whether the row given matches the types and satisfies all the constraints of the schema given.
@@ -264,78 +180,4 @@ func AreEqual(row1, row2 Row, sch schema.Schema) bool {
 	}
 
 	return true
-}
-
-func TaggedValsEqualForSch(tv, other TaggedValues, sch schema.Schema) bool {
-	if tv == nil && other == nil {
-		return true
-	} else if tv == nil || other == nil {
-		return false
-	}
-
-	for _, tag := range sch.GetAllCols().Tags {
-		val1, _ := tv[tag]
-		val2, _ := other[tag]
-
-		if !valutil.NilSafeEqCheck(val1, val2) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func KeyAndTaggedValuesForRow(r Row, sch schema.Schema) (types.Tuple, TaggedValues, error) {
-	switch typed := r.(type) {
-	case nomsRow:
-		pkCols := sch.GetPKCols()
-		keyVals := make([]types.Value, 0, pkCols.Size()*2)
-		tv := make(TaggedValues)
-		err := pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			val, ok := typed.key[tag]
-			if !ok || types.IsNull(val) {
-				return false, errors.New("invalid key contains null values")
-			}
-
-			tv[tag] = val
-			keyVals = append(keyVals, types.Uint(tag))
-			keyVals = append(keyVals, val)
-			return false, nil
-		})
-
-		if err != nil {
-			return types.Tuple{}, nil, err
-		}
-
-		nonPkCols := sch.GetNonPKCols()
-		_, err = typed.value.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
-			if _, ok := nonPkCols.TagToIdx[tag]; ok {
-				tv[tag] = val
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return types.Tuple{}, nil, err
-		}
-
-		t, err := types.NewTuple(r.Format(), keyVals...)
-		if err != nil {
-			return types.Tuple{}, nil, err
-		}
-
-		return t, tv, nil
-
-	case keylessRow:
-		tv, err := typed.TaggedValues()
-		if err != nil {
-			return types.Tuple{}, nil, err
-		}
-
-		return typed.key, tv, nil
-
-	default:
-		panic("unknown row type")
-	}
 }

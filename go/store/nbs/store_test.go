@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -50,7 +51,7 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	// create a v5 manifest
 	fm, err := getFileManifest(ctx, nomsDir)
 	require.NoError(t, err)
-	_, err = fm.Update(ctx, hash.Hash{}, manifestContents{
+	_, err = fm.Update(ctx, dherrors.FatalBehaviorError, hash.Hash{}, manifestContents{
 		nbfVers: constants.FormatDoltString,
 		lock:    journalAddr, // Any valid address will do here
 	}, &Stats{}, nil)
@@ -386,7 +387,7 @@ func persistTableFileSources(t *testing.T, p tablePersister, numTableFiles int) 
 		require.True(t, ok)
 		tableFileMap[fileIDHash] = uint32(i + 1)
 		mapIds[i] = fileIDHash
-		cs, _, err := p.Persist(context.Background(), createMemTable(chunkData), nil, nil, &Stats{})
+		cs, _, err := p.Persist(context.Background(), dherrors.FatalBehaviorError, createMemTable(chunkData), nil, nil, &Stats{})
 		require.NoError(t, err)
 		require.NoError(t, cs.close())
 

@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -105,17 +104,6 @@ func (ti *linestringType) FormatValue(v types.Value) (*string, error) {
 	}
 
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *linestringType) GetTypeIdentifier() Identifier {
-	return LineStringTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *linestringType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlLineStringType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlLineStringType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -207,25 +195,4 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
-}
-
-func CreateLineStringTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var (
-		err     error
-		sridVal uint64
-		def     bool
-	)
-	if s, ok := params["SRID"]; ok {
-		sridVal, err = strconv.ParseUint(s, 10, 32)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if d, ok := params["DefinedSRID"]; ok {
-		def, err = strconv.ParseBool(d)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &linestringType{sqlLineStringType: gmstypes.LineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

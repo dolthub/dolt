@@ -33,6 +33,7 @@ import (
 
 	"github.com/dolthub/fslock"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -85,7 +86,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return nil
 	}
 
-	_, err = updateWithChecker(ctx, dir, check, contents.lock, contents, nil)
+	_, err = updateWithChecker(ctx, dherrors.FatalBehaviorError, dir, check, contents.lock, contents, nil)
 
 	if err != nil {
 		return false, err
@@ -161,7 +162,7 @@ func (fm fileManifest) ParseIfExists(
 	return parseIfExists(ctx, fm.dir, readHook)
 }
 
-func (fm fileManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (fm fileManifest) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -182,10 +183,10 @@ func (fm fileManifest) Update(ctx context.Context, lastLock hash.Hash, newConten
 		return nil
 	}
 
-	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, behavior, fm.dir, checker, lastLock, newContents, writeHook)
 }
 
-func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (fm fileManifest) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -199,7 +200,7 @@ func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newC
 		}
 	}()
 
-	return updateWithChecker(ctx, fm.dir, updateGCGenManifestCheck, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, behavior, fm.dir, updateGCGenManifestCheck, lastLock, newContents, writeHook)
 }
 
 // parseV5Manifest parses the v5 manifest from the Reader given. Assumes the first field (the manifest version and
@@ -361,7 +362,7 @@ func parseIfExists(_ context.Context, dir string, readHook func() error) (exists
 }
 
 // updateWithChecker updates the manifest if |validate| is satisfied, callers must hold the file lock.
-func updateWithChecker(_ context.Context, dir string, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+func updateWithChecker(_ context.Context, behavior dherrors.FatalBehavior, dir string, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
@@ -375,7 +376,6 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 
 		defer func() {
 			closeErr := temp.Close()
-
 			if ferr == nil {
 				ferr = closeErr
 			}
@@ -460,11 +460,14 @@ func updateWithChecker(_ context.Context, dir string, validate manifestChecker, 
 
 	err = file.Rename(tempManifestPath, manifestPath)
 	if err != nil {
-		return manifestContents{}, err
+		// Errors up until this point are fallible, because the manifest itself hasn't been
+		// committed. An error here or later, however, means the directory could be in an unknown
+		// state. So these are treated as fatal errors.
+		return manifestContents{}, dherrors.Fatalf(behavior, "%w: error renaming file store manifest", err)
 	}
 
 	if err = file.SyncDirectoryHandle(dir); err != nil {
-		return manifestContents{}, err
+		return manifestContents{}, dherrors.Fatalf(behavior, "%w: error fsyncing directory after manifest file rename", err)
 	}
 
 	return newContents, nil

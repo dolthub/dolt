@@ -35,27 +35,6 @@ func (t *StaticErrorTable) LookupPartitions(_ *sql.Context, _ sql.IndexLookup) (
 	return nil, t.err
 }
 
-func NewStaticErrorTable(orig sql.Table, err error) sql.Table {
-	return &StaticErrorTable{orig, err}
-}
-
-type StaticErrorRowIter struct {
-	err error
-}
-
-func NewStaticErrorRowIter(err error) sql.RowIter {
-	return &StaticErrorRowIter{err}
-}
-
-func (i *StaticErrorRowIter) Next(*sql.Context) (sql.Row, error) {
-	return nil, i.err
-}
-
-func (i *StaticErrorRowIter) Close(*sql.Context) error {
-	// Or i.err?
-	return nil
-}
-
 type StaticErrorEditor struct {
 	err error
 }

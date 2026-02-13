@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -195,37 +196,6 @@ func RowAsUpdateStmt(ctx *sql.Context, r row.Row, tableName string, tableSch sch
 	}
 
 	b.WriteString(");")
-	return b.String(), nil
-}
-
-// RowAsTupleString converts a row into it's tuple string representation for SQL insert statements.
-func RowAsTupleString(ctx *sql.Context, r row.Row, tableSch schema.Schema) (string, error) {
-	var b strings.Builder
-
-	b.WriteString("(")
-	seenOne := false
-	// TAGS: Use of tags here is safe since it's constrained to a single table
-	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
-		if err != nil {
-			return true, err
-		}
-
-		b.WriteString(sqlString)
-		seenOne = true
-		return false, err
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(")")
-
 	return b.String(), nil
 }
 
@@ -506,18 +476,13 @@ func ValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value types.Value)
 		return "", err
 	}
 
-	switch ti.GetTypeIdentifier() {
-	case typeinfo.BoolTypeIdentifier:
-		// todo: unclear if we want this to output with "TRUE/FALSE" or 1/0
-		if value.(types.Bool) {
-			return "TRUE", nil
-		}
-		return "FALSE", nil
-	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier, typeinfo.DatetimeTypeIdentifier:
+	queryType := ti.ToSqlType().Type()
+	switch queryType {
+	case querypb.Type_TIME, querypb.Type_YEAR, querypb.Type_DATETIME, querypb.Type_TIMESTAMP, querypb.Type_DATE:
 		return singleQuote + *str + singleQuote, nil
-	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
+	case querypb.Type_BLOB, querypb.Type_VARBINARY, querypb.Type_BINARY, querypb.Type_JSON, querypb.Type_ENUM, querypb.Type_SET:
 		return quoteAndEscapeString(*str), nil
-	case typeinfo.VarStringTypeIdentifier:
+	case querypb.Type_VARCHAR:
 		s, ok := value.(types.String)
 		if !ok {
 			return "", fmt.Errorf("typeinfo.VarStringTypeIdentifier is not types.String")
@@ -533,22 +498,30 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 		return "NULL", nil
 	}
 
-	str, err := sqlutil.SqlColToStr(ctx, ti.ToSqlType(), value)
+	sqlType := ti.ToSqlType()
+	str, err := sqlutil.SqlColToStr(ctx, sqlType, value)
 	if err != nil {
 		return "", err
 	}
 
-	switch ti.GetTypeIdentifier() {
-	case typeinfo.BoolTypeIdentifier:
-		if value.(bool) {
-			return "1", nil
+	switch sqlType.Type() {
+	case querypb.Type_UINT8:
+		switch v := value.(type) {
+		case uint8:
+			return fmt.Sprintf("%d", v), nil
+		case int8:
+			return fmt.Sprintf("%d", uint8(v)), nil
+		case bool:
+			if v {
+				return "1", nil
+			}
+			return "0", nil
+		default:
+			return str, nil
 		}
-		return "0", nil
-	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier:
+	case querypb.Type_TIME, querypb.Type_YEAR, querypb.Type_DATETIME, querypb.Type_TIMESTAMP, querypb.Type_DATE:
 		return singleQuote + str + singleQuote, nil
-	case typeinfo.DatetimeTypeIdentifier:
-		return singleQuote + str + singleQuote, nil
-	case typeinfo.InlineBlobTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.VectorTypeIdentifier:
+	case querypb.Type_BINARY, querypb.Type_VARBINARY, querypb.Type_VECTOR:
 		value, err := sql.UnwrapAny(ctx, value)
 		if err != nil {
 			return "", err
@@ -561,22 +534,24 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 		default:
 			return "", fmt.Errorf("unexpected type for binary value: %T (SQL type info: %v)", value, ti)
 		}
-	case typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier, typeinfo.BlobStringTypeIdentifier:
+	case querypb.Type_TEXT:
+		value, ok, err := sql.Unwrap[string](ctx, value)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", fmt.Errorf("expected string, got %T", value)
+		}
+		return quoteAndEscapeString(value), nil
+	case querypb.Type_JSON, querypb.Type_ENUM, querypb.Type_SET, querypb.Type_BLOB:
 		return quoteAndEscapeString(str), nil
-	case typeinfo.VarStringTypeIdentifier:
+	case querypb.Type_VARCHAR, querypb.Type_CHAR:
 		s, ok := value.(string)
 		if !ok {
-			return "", fmt.Errorf("typeinfo.VarStringTypeIdentifier is not types.String")
+			return "", fmt.Errorf("expected string, got %T", value)
 		}
 		return quoteAndEscapeString(s), nil
-	case typeinfo.GeometryTypeIdentifier,
-		typeinfo.PointTypeIdentifier,
-		typeinfo.LineStringTypeIdentifier,
-		typeinfo.PolygonTypeIdentifier,
-		typeinfo.MultiPointTypeIdentifier,
-		typeinfo.MultiLineStringTypeIdentifier,
-		typeinfo.MultiPolygonTypeIdentifier,
-		typeinfo.GeometryCollectionTypeIdentifier:
+	case querypb.Type_GEOMETRY:
 		return singleQuote + str + singleQuote, nil
 	default:
 		return str, nil

@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -105,17 +104,6 @@ func (ti *pointType) FormatValue(v types.Value) (*string, error) {
 	}
 
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *pointType) GetTypeIdentifier() Identifier {
-	return PointTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *pointType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlPointType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlPointType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -207,28 +195,6 @@ func pointTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (t
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
-}
-
-func CreatePointTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var (
-		err     error
-		sridVal uint64
-		def     bool
-	)
-	if s, ok := params["SRID"]; ok {
-		sridVal, err = strconv.ParseUint(s, 10, 32)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if d, ok := params["DefinedSRID"]; ok {
-		def, err = strconv.ParseBool(d)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return CreatePointTypeFromSqlPointType(gmstypes.PointType{SRID: uint32(sridVal), DefinedSRID: def}), nil
 }
 
 func CreatePointTypeFromSqlPointType(sqlPointType gmstypes.PointType) TypeInfo {

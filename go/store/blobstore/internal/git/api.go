@@ -19,6 +19,17 @@ import (
 	"io"
 )
 
+// ObjectType is a git object type returned by plumbing (e.g. "blob", "tree").
+type ObjectType string
+
+const (
+	ObjectTypeUnknown ObjectType = ""
+	ObjectTypeBlob    ObjectType = "blob"
+	ObjectTypeTree    ObjectType = "tree"
+	ObjectTypeCommit  ObjectType = "commit"
+	ObjectTypeTag     ObjectType = "tag"
+)
+
 // GitAPI defines the git plumbing operations needed by GitBlobstore. It includes both
 // read and write operations to allow swapping implementations (e.g. git CLI vs a Go git
 // library) while keeping callers stable.
@@ -33,6 +44,21 @@ type GitAPI interface {
 	// It returns PathNotFoundError if the path does not exist, and NotBlobError if it
 	// resolves to a non-blob object.
 	ResolvePathBlob(ctx context.Context, commit OID, path string) (OID, error)
+
+	// ResolvePathObject resolves |path| within |commit| to an object OID and type.
+	// It returns PathNotFoundError if the path does not exist.
+	ResolvePathObject(ctx context.Context, commit OID, path string) (oid OID, typ ObjectType, err error)
+
+	// ListTree lists the entries of the tree at |treePath| within |commit|.
+	// The listing is non-recursive: it returns only immediate children.
+	//
+	// It returns PathNotFoundError if |treePath| does not exist.
+	ListTree(ctx context.Context, commit OID, treePath string) ([]TreeEntry, error)
+
+	// ListTreeRecursive lists all entries under |commit|'s root tree recursively.
+	// Returned entries include both blobs and trees, and each entry Name is the full
+	// path from the root (e.g. "dir/file.txt", "dir/sub").
+	ListTreeRecursive(ctx context.Context, commit OID) ([]TreeEntry, error)
 
 	// CatFileType returns the git object type for |oid| (e.g. "blob", "tree", "commit").
 	CatFileType(ctx context.Context, oid OID) (string, error)
@@ -63,6 +89,11 @@ type GitAPI interface {
 	//   GIT_DIR=... GIT_INDEX_FILE=<indexFile> git update-index --add --cacheinfo <mode> <oid> <path>
 	UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid OID, path string) error
 
+	// RemoveIndexPaths removes |paths| from |indexFile| if present.
+	// Equivalent plumbing:
+	//   GIT_DIR=... GIT_INDEX_FILE=<indexFile> git update-index --remove -z --stdin
+	RemoveIndexPaths(ctx context.Context, indexFile string, paths []string) error
+
 	// WriteTree writes a tree object from the contents of |indexFile| and returns its oid.
 	// Equivalent plumbing:
 	//   GIT_DIR=... GIT_INDEX_FILE=<indexFile> git write-tree
@@ -82,6 +113,26 @@ type GitAPI interface {
 	// Equivalent plumbing:
 	//   GIT_DIR=... git update-ref -m <msg> <ref> <new>
 	UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error
+
+	// FetchRef fetches |srcRef| from |remote| and updates |dstRef| in the local repo.
+	// It is expected to force-update (tracking refs follow remote truth).
+	// Equivalent plumbing:
+	//   GIT_DIR=... git fetch <remote> +<srcRef>:<dstRef>
+	FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error
+
+	// PushRefWithLease pushes |srcRef| to |dstRef| on |remote|, but only if the remote's |dstRef|
+	// equals |expectedDstOID| (force-with-lease). If |expectedDstOID| is empty, it enforces that
+	// the remote |dstRef| is missing (bootstrap / create-if-missing semantics).
+	// Equivalent plumbing: GIT_DIR=... git push --force-with-lease=<dstRef>:<expectedDstOID> <remote> <srcRef>:<dstRef>
+	PushRefWithLease(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID OID) error
+}
+
+// TreeEntry describes one entry in a git tree listing.
+type TreeEntry struct {
+	Mode string
+	Type ObjectType
+	OID  OID
+	Name string
 }
 
 // Identity represents git author/committer metadata. A future implementation may set

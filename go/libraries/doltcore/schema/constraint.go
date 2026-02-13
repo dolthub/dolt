@@ -42,18 +42,6 @@ const (
 	NotNullConstraintType = "not_null"
 )
 
-// ColConstraintFromTypeAndParams takes in a string representing the type of the constraint and a map of parameters
-// that can be used to determine the behavior of the constraint.  An example might be a constraint which validated
-// a value is in a given range.  For this the constraint type might by "in_range_constraint", and the parameters might
-// be {"min": -10, "max": 10}
-func ColConstraintFromTypeAndParams(colCnstType string, params map[string]string) ColConstraint {
-	switch colCnstType {
-	case NotNullConstraintType:
-		return NotNullConstraint{}
-	}
-	panic("Unknown column constraint type: " + colCnstType)
-}
-
 // NotNullConstraint validates that a value is not null.  It does not restrict 0 length strings, or 0 valued ints, or
 // anything other than non nil values
 type NotNullConstraint struct{}

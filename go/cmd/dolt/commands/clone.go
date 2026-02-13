@@ -49,6 +49,18 @@ This default configuration is achieved by creating references to the remote bran
 	},
 }
 
+type remoteDialerWithGitCacheRoot struct {
+	dbfactory.GRPCDialProvider
+	root string
+}
+
+func (d remoteDialerWithGitCacheRoot) GitCacheRoot() (string, bool) {
+	if strings.TrimSpace(d.root) == "" {
+		return "", false
+	}
+	return d.root, true
+}
+
 type CloneCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -130,7 +142,11 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 
 	var r env.Remote
 	var srcDB *doltdb.DoltDB
-	r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params, dEnv)
+	cloneRoot, err := dEnv.FS.Abs(dir)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params, dEnv, cloneRoot)
 	if verr != nil {
 		return verr
 	}
@@ -187,31 +203,45 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 
 	urlStr := apr.Arg(0)
 	_, err := earl.Parse(urlStr)
-
 	if err != nil {
-		return "", "", errhand.BuildDError("error: invalid remote url: %s", urlStr).Build()
+		if normalized, ok, nerr := env.NormalizeGitRemoteUrl(urlStr); nerr == nil && ok {
+			urlStr = normalized
+		} else {
+			return "", "", errhand.BuildDError("error: invalid remote url: %s", urlStr).Build()
+		}
 	}
 
 	var dir string
 	if apr.NArg() == 2 {
 		dir = apr.Arg(1)
 	} else {
+		// Infer directory name from the URL.
 		dir = path.Base(urlStr)
 		if dir == "." {
 			dir = path.Dir(urlStr)
 		} else if dir == "/" {
 			return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitly define a directory for this url").Build()
 		}
+		if strings.HasSuffix(dir, ".git") {
+			dir = strings.TrimSuffix(dir, ".git")
+			if dir == "" {
+				return "", "", errhand.BuildDError("Could not infer repo name.  Please explicitly define a directory for this url").Build()
+			}
+		}
 	}
 
 	return dir, urlStr, nil
 }
 
-func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
+func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv, cloneRoot string) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
+	dialer := dbfactory.GRPCDialProvider(dEnv)
+	if strings.TrimSpace(cloneRoot) != "" {
+		dialer = remoteDialerWithGitCacheRoot{GRPCDialProvider: dEnv, root: cloneRoot}
+	}
+	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dialer)
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
 		return env.NoRemote, nil, bdr.Build()

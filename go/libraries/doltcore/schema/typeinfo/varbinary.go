@@ -16,7 +16,6 @@ package typeinfo
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"strconv"
@@ -24,14 +23,8 @@ import (
 	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
-)
-
-const (
-	varBinaryTypeParam_Length = "length"
 )
 
 // As a type, this is modeled more after MySQL's story for binary data. There, it's treated
@@ -45,31 +38,6 @@ type varBinaryType struct {
 }
 
 var _ TypeInfo = (*varBinaryType)(nil)
-
-var (
-	TinyBlobType   TypeInfo = &varBinaryType{sqlBinaryType: gmstypes.TinyBlob}
-	BlobType       TypeInfo = &varBinaryType{sqlBinaryType: gmstypes.Blob}
-	MediumBlobType TypeInfo = &varBinaryType{sqlBinaryType: gmstypes.MediumBlob}
-	LongBlobType   TypeInfo = &varBinaryType{sqlBinaryType: gmstypes.LongBlob}
-)
-
-func CreateVarBinaryTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var length int64
-	var err error
-	if lengthStr, ok := params[varBinaryTypeParam_Length]; ok {
-		length, err = strconv.ParseInt(lengthStr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf(`create varbinary type info is missing param "%v"`, varBinaryTypeParam_Length)
-	}
-	sqlType, err := gmstypes.CreateBinary(sqltypes.Blob, length)
-	if err != nil {
-		return nil, err
-	}
-	return &varBinaryType{sqlType}, nil
-}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *varBinaryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -142,18 +110,6 @@ func (ti *varBinaryType) FormatValue(v types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *varBinaryType) GetTypeIdentifier() Identifier {
-	return VarBinaryTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *varBinaryType) GetTypeParams() map[string]string {
-	return map[string]string{
-		varBinaryTypeParam_Length: strconv.FormatInt(ti.sqlBinaryType.MaxCharacterLength(), 10),
-	}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *varBinaryType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Blob); ok {
@@ -209,29 +165,6 @@ func fromBlob(b types.Blob) ([]byte, error) {
 	// This is inspired by Go's own source code in strings.Builder.String(): https://golang.org/src/strings/builder.go#L48
 	// This is also marked as a valid strategy in unsafe.Pointer's own method documentation.
 	return str, nil
-}
-
-// hasPrefix finds out if a Blob has a prefixed integer. Initially blobs for varBinary prepended an integer indicating
-// the length, which was unnecessary (as the underlying sequence tracks the total size). It's been removed, but this
-// may be used to see if a Blob is one of those older Blobs. A false positive is possible, but EXTREMELY unlikely.
-func hasPrefix(b types.Blob, ctx context.Context) (bool, error) {
-	blobLength := b.Len()
-	if blobLength < 8 {
-		return false, nil
-	}
-	countBytes := make([]byte, 8)
-	n, err := b.ReadAt(ctx, countBytes, 0)
-	if err != nil {
-		return false, err
-	}
-	if n != 8 {
-		return false, fmt.Errorf("wanted 8 bytes from blob for count, got %d", n)
-	}
-	prefixedLength := binary.LittleEndian.Uint64(countBytes)
-	if prefixedLength == blobLength-8 {
-		return true, nil
-	}
-	return false, nil
 }
 
 // varBinaryTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.

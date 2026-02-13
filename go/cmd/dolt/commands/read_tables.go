@@ -78,6 +78,7 @@ func (cmd ReadTablesCmd) ArgParser() *argparser.ArgParser {
 		{"table", " Optional tables to retrieve.  If omitted, all tables are retrieved."},
 	}
 	ap.SupportsString(dirParamName, "d", "directory", "directory to create and put retrieved table data.")
+	ap.SupportsString(gitRefFlag, "", "ref", "Git ref to use as the Dolt data ref for git remotes (default: refs/dolt/data).")
 	return ap
 }
 
@@ -99,7 +100,11 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	_, err := earl.Parse(urlStr)
 
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Invalid remote url").AddCause(err).Build(), usage)
+		if normalized, ok, nerr := env.NormalizeGitRemoteUrl(urlStr); nerr == nil && ok {
+			urlStr = normalized
+		} else {
+			return HandleVErrAndExitCode(errhand.BuildDError("Invalid remote url").AddCause(err).Build(), usage)
+		}
 	}
 
 	dir := apr.GetValueOrDefault(dirParamName, path.Base(urlStr))
@@ -203,7 +208,8 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 }
 
 func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string, dEnv *env.DoltEnv) (*doltdb.DoltDB, doltdb.RootValue, errhand.VerboseError) {
-	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv)
+	cacheRoot, _ := dEnv.GitCacheRoot()
+	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv, cacheRoot)
 
 	if verr != nil {
 		return nil, nil, verr

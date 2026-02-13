@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/parquet"
@@ -32,7 +33,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -219,10 +219,10 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 			val := pr.fileData[col.Name][rowReadCounter]
 			rowReadCounter++
 			if val != nil {
-				switch col.TypeInfo.GetTypeIdentifier() {
-				case typeinfo.DatetimeTypeIdentifier:
+				switch col.TypeInfo.ToSqlType().Type() {
+				case query.Type_DATETIME, query.Type_TIMESTAMP, query.Type_DATE:
 					val = time.UnixMicro(val.(int64))
-				case typeinfo.TimeTypeIdentifier:
+				case query.Type_TIME:
 					val = gmstypes.Timespan(time.Duration(val.(int64)).Microseconds())
 				}
 			}

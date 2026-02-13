@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -48,39 +47,6 @@ var (
 
 func CreateDatetimeTypeFromSqlType(typ sql.DatetimeType) *datetimeType {
 	return &datetimeType{typ}
-}
-
-func CreateDatetimeTypeFromParams(params map[string]string) (TypeInfo, error) {
-	if sqlType, ok := params[datetimeTypeParam_SQL]; ok {
-		precision := 6
-		if precisionParam, ok := params[datetimeTypeParam_Precision]; ok {
-			var err error
-			precision, err = strconv.Atoi(precisionParam)
-			if err != nil {
-				return nil, err
-			}
-		}
-		switch sqlType {
-		case datetimeTypeParam_SQL_Date:
-			return DateType, nil
-		case datetimeTypeParam_SQL_Datetime:
-			gmsType, err := gmstypes.CreateDatetimeType(sqltypes.Datetime, precision)
-			if err != nil {
-				return nil, err
-			}
-			return CreateDatetimeTypeFromSqlType(gmsType), nil
-		case datetimeTypeParam_SQL_Timestamp:
-			gmsType, err := gmstypes.CreateDatetimeType(sqltypes.Timestamp, precision)
-			if err != nil {
-				return nil, err
-			}
-			return CreateDatetimeTypeFromSqlType(gmsType), nil
-		default:
-			return nil, fmt.Errorf(`create datetime type info has invalid param "%v"`, sqlType)
-		}
-	} else {
-		return nil, fmt.Errorf(`create datetime type info is missing param "%v"`, datetimeTypeParam_SQL)
-	}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
@@ -121,7 +87,7 @@ func (ti *datetimeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReade
 
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *datetimeType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
-	//TODO: handle the zero value as a special case that is valid for all ranges
+	// TODO: handle the zero value as a special case that is valid for all ranges
 	if v == nil {
 		return types.NullValue, nil
 	}
@@ -167,29 +133,6 @@ func (ti *datetimeType) FormatValue(v types.Value) (*string, error) {
 		res := val.Format(sql.TimestampDatetimeLayout)
 		return &res, nil
 	}
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *datetimeType) GetTypeIdentifier() Identifier {
-	return DatetimeTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *datetimeType) GetTypeParams() map[string]string {
-	params := map[string]string{}
-	switch ti.sqlDatetimeType.Type() {
-	case sqltypes.Date:
-		params[datetimeTypeParam_SQL] = datetimeTypeParam_SQL_Date
-	case sqltypes.Datetime:
-		params[datetimeTypeParam_SQL] = datetimeTypeParam_SQL_Datetime
-		params[datetimeTypeParam_Precision] = strconv.Itoa(ti.sqlDatetimeType.Precision())
-	case sqltypes.Timestamp:
-		params[datetimeTypeParam_SQL] = datetimeTypeParam_SQL_Timestamp
-		params[datetimeTypeParam_Precision] = strconv.Itoa(ti.sqlDatetimeType.Precision())
-	default:
-		panic(fmt.Errorf(`unknown datetime type info sql type "%v"`, ti.sqlDatetimeType.Type().String()))
-	}
-	return params
 }
 
 // IsValid implements TypeInfo interface.

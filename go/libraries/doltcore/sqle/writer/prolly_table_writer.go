@@ -33,6 +33,12 @@ import (
 // todo(andy): get from NodeStore
 var sharePool = pool.NewBuffPool()
 
+// AutoIncrementGetter is implemented by editors that support AUTO_INCREMENT to return the next value that will be
+// inserted.
+type AutoIncrementGetter interface {
+	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
+}
+
 type prollyTableWriter struct {
 	sch                    schema.Schema
 	errEncountered         error

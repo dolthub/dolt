@@ -16,6 +16,7 @@ package dprocedures
 
 import (
 	"path"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -45,7 +46,7 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	_, remoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), emptyConfig(), urlStr)
+	scheme, remoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), emptyConfig(), urlStr)
 	if err != nil {
 		return nil, errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
 	}
@@ -55,6 +56,19 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	remoteParms := map[string]string{}
 	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
 		remoteParms[dbfactory.GRPCUsernameAuthParam] = user
+	}
+
+	isGitRemote := scheme == dbfactory.GitFileScheme || scheme == dbfactory.GitHTTPScheme || scheme == dbfactory.GitHTTPSScheme || scheme == dbfactory.GitSSHScheme
+
+	if ref, ok := apr.GetValue("ref"); ok {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			return nil, errhand.BuildDError("error: --ref cannot be empty").Build()
+		}
+		if !isGitRemote {
+			return nil, errhand.BuildDError("error: --ref is only supported for git remotes").Build()
+		}
+		remoteParms[dbfactory.GitRefParam] = ref
 	}
 
 	depth, ok := apr.GetInt(cli.DepthFlag)
@@ -82,7 +96,11 @@ func getDirectoryAndUrlString(apr *argparser.ArgParseResults) (string, string, e
 	urlStr := apr.Arg(0)
 	_, err := earl.Parse(urlStr)
 	if err != nil {
-		return "", "", errhand.BuildDError("error: invalid remote url: %s", urlStr).Build()
+		if normalized, ok, nerr := env.NormalizeGitRemoteUrl(urlStr); nerr == nil && ok {
+			urlStr = normalized
+		} else {
+			return "", "", errhand.BuildDError("error: invalid remote url: %s", urlStr).Build()
+		}
 	}
 
 	var dir string
@@ -94,6 +112,13 @@ func getDirectoryAndUrlString(apr *argparser.ArgParseResults) (string, string, e
 			dir = path.Dir(urlStr)
 		} else if dir == "/" {
 			return "", "", errhand.BuildDError("Could not infer repo name. Please explicitly define a directory for this url").Build()
+		}
+		// Match `dolt clone` behavior: strip a trailing `.git` from inferred names.
+		if strings.HasSuffix(dir, ".git") {
+			dir = strings.TrimSuffix(dir, ".git")
+			if dir == "" {
+				return "", "", errhand.BuildDError("Could not infer repo name. Please explicitly define a directory for this url").Build()
+			}
 		}
 	}
 

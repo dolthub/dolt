@@ -26,15 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	uintTypeParam_Width    = "width"
-	uintTypeParam_Width_8  = "8"
-	uintTypeParam_Width_16 = "16"
-	uintTypeParam_Width_24 = "24"
-	uintTypeParam_Width_32 = "32"
-	uintTypeParam_Width_64 = "64"
-)
-
 type uintType struct {
 	sqlUintType sql.NumberType
 }
@@ -47,26 +38,6 @@ var (
 	Uint32Type = &uintType{gmstypes.Uint32}
 	Uint64Type = &uintType{gmstypes.Uint64}
 )
-
-func CreateUintTypeFromParams(params map[string]string) (TypeInfo, error) {
-	if width, ok := params[uintTypeParam_Width]; ok {
-		switch width {
-		case uintTypeParam_Width_8:
-			return Uint8Type, nil
-		case uintTypeParam_Width_16:
-			return Uint16Type, nil
-		case uintTypeParam_Width_24:
-			return Uint24Type, nil
-		case uintTypeParam_Width_32:
-			return Uint32Type, nil
-		case uintTypeParam_Width_64:
-			return Uint64Type, nil
-		default:
-			return nil, fmt.Errorf(`create uint type info has "%v" param with value "%v"`, uintTypeParam_Width, width)
-		}
-	}
-	return nil, fmt.Errorf(`create uint type info is missing "%v" param`, uintTypeParam_Width)
-}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *uintType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
@@ -175,31 +146,6 @@ func (ti *uintType) FormatValue(v types.Value) (*string, error) {
 	default:
 		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 	}
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *uintType) GetTypeIdentifier() Identifier {
-	return UintTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *uintType) GetTypeParams() map[string]string {
-	sqlParam := ""
-	switch ti.sqlUintType.Type() {
-	case sqltypes.Uint8:
-		sqlParam = uintTypeParam_Width_8
-	case sqltypes.Uint16:
-		sqlParam = uintTypeParam_Width_16
-	case sqltypes.Uint24:
-		sqlParam = uintTypeParam_Width_24
-	case sqltypes.Uint32:
-		sqlParam = uintTypeParam_Width_32
-	case sqltypes.Uint64:
-		sqlParam = uintTypeParam_Width_64
-	default:
-		panic(fmt.Errorf(`unknown uint type info sql type "%v"`, ti.sqlUintType.Type().String()))
-	}
-	return map[string]string{uintTypeParam_Width: sqlParam}
 }
 
 // IsValid implements TypeInfo interface.

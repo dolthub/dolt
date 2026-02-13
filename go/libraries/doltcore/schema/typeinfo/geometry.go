@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -189,17 +188,6 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 	}
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *geometryType) GetTypeIdentifier() Identifier {
-	return GeometryTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *geometryType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlGeometryType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlGeometryType.DefinedSRID)}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *geometryType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -298,28 +286,6 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
-}
-
-func CreateGeometryTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var (
-		err     error
-		sridVal uint64
-		def     bool
-	)
-	if s, ok := params["SRID"]; ok {
-		sridVal, err = strconv.ParseUint(s, 10, 32)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if d, ok := params["DefinedSRID"]; ok {
-		def, err = strconv.ParseBool(d)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return CreateGeometryTypeFromSqlGeometryType(gmstypes.GeometryType{SRID: uint32(sridVal), DefinedSRID: def}), nil
 }
 
 func CreateGeometryTypeFromSqlGeometryType(sqlGeometryType gmstypes.GeometryType) TypeInfo {

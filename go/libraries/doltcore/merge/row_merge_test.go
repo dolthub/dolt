@@ -15,7 +15,6 @@
 package merge
 
 import (
-	"context"
 	"strconv"
 	"testing"
 
@@ -26,15 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
-
-type nomsRowMergeTest struct {
-	name                  string
-	row, mergeRow, ancRow types.Value
-	sch                   schema.Schema
-	expectedResult        types.Value
-	expectCellMerge       bool
-	expectConflict        bool
-}
 
 type rowMergeTest struct {
 	name                                  string
@@ -68,39 +58,6 @@ func build(ints ...int) []*int {
 		out[i] = &t
 	}
 	return out
-}
-
-var convergentEditCases = []testCase{
-	{
-		"add same row",
-		build(1, 2),
-		build(1, 2),
-		nil,
-		2, 2, 2,
-		build(1, 2),
-		false,
-		false,
-	},
-	{
-		"both delete row",
-		nil,
-		nil,
-		build(1, 2),
-		2, 2, 2,
-		nil,
-		false,
-		false,
-	},
-	{
-		"modify row to equal value",
-		build(2, 2),
-		build(2, 2),
-		build(1, 1),
-		2, 2, 2,
-		build(2, 2),
-		false,
-		false,
-	},
 }
 
 var testCases = []testCase{
@@ -175,7 +132,7 @@ var testCases = []testCase{
 		false,
 	},
 	// TODO (dhruv): need to fix this test case for new storage format
-	//{
+	// {
 	//	"add rows but one holds a new column",
 	//	build(1, 1),
 	//	build(1, 1, 1),
@@ -184,7 +141,7 @@ var testCases = []testCase{
 	//	build(1, 1, 1),
 	//	true,
 	//	false,
-	//},
+	// },
 	{
 		"Delete a row in one, set all null in the other",
 		build(0, 0, 0), // build translates zeros into NULL values
@@ -222,59 +179,6 @@ func TestRowMerge(t *testing.T) {
 	}
 }
 
-func TestNomsRowMerge(t *testing.T) {
-	if types.Format_Default == types.Format_DOLT {
-		t.Skip()
-	}
-
-	testCases := append(testCases, convergentEditCases...)
-	tests := make([]nomsRowMergeTest, len(testCases))
-	for i, t := range testCases {
-		tests[i] = createNomsRowMergeStruct(t)
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			rowMergeResult, err := nomsPkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
-			assert.NoError(t, err)
-			assert.Equal(t, test.expectedResult, rowMergeResult.mergedRow,
-				"expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+
-					"got "+mustString(types.EncodedValue(context.Background(), rowMergeResult.mergedRow)))
-			assert.Equal(t, test.expectCellMerge, rowMergeResult.didCellMerge)
-			assert.Equal(t, test.expectConflict, rowMergeResult.isConflict)
-		})
-	}
-}
-
-func valsToTestTupleWithoutPks(vals []types.Value) types.Value {
-	return valsToTestTuple(vals, false)
-}
-
-func valsToTestTupleWithPks(vals []types.Value) types.Value {
-	return valsToTestTuple(vals, true)
-}
-
-func valsToTestTuple(vals []types.Value, includePrimaryKeys bool) types.Value {
-	if vals == nil {
-		return nil
-	}
-
-	tplVals := make([]types.Value, 0, 2*len(vals))
-	for i, val := range vals {
-		if !types.IsNull(val) {
-			tag := i
-			// Assume one primary key tag, add 1 to all other tags
-			if includePrimaryKeys {
-				tag++
-			}
-			tplVals = append(tplVals, types.Uint(tag))
-			tplVals = append(tplVals, val)
-		}
-	}
-
-	return mustTuple(types.NewTuple(types.Format_Default, tplVals...))
-}
-
 func createRowMergeStruct(t testCase) rowMergeTest {
 	mergedSch := calcMergedSchema(t)
 	leftSch := calcSchema(t.rowCnt)
@@ -292,16 +196,6 @@ func createRowMergeStruct(t testCase) rowMergeTest {
 		expectedTpl,
 		t.expectCellMerge,
 		t.expectConflict}
-}
-
-func createNomsRowMergeStruct(t testCase) nomsRowMergeTest {
-	sch := calcMergedSchema(t)
-
-	tpl := valsToTestTupleWithPks(toVals(t.row))
-	mergeTpl := valsToTestTupleWithPks(toVals(t.mergeRow))
-	ancTpl := valsToTestTupleWithPks(toVals(t.ancRow))
-	expectedTpl := valsToTestTupleWithPks(toVals(t.expectedResult))
-	return nomsRowMergeTest{t.name, tpl, mergeTpl, ancTpl, sch, expectedTpl, t.expectCellMerge, t.expectConflict}
 }
 
 func calcMergedSchema(t testCase) schema.Schema {
@@ -347,21 +241,4 @@ func buildTup(sch schema.Schema, r []*int) val.Tuple {
 		panic(err)
 	}
 	return tup
-}
-
-func toVals(ints []*int) []types.Value {
-	if ints == nil {
-		return nil
-	}
-
-	v := make([]types.Value, len(ints))
-	for i, d := range ints {
-		if d == nil {
-			v[i] = types.NullValue
-			continue
-		}
-
-		v[i] = types.Int(*d)
-	}
-	return v
 }

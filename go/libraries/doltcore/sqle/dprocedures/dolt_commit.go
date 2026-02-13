@@ -163,14 +163,15 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	csp := actions.CommitStagedProps{
-		Message:    msg,
-		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
-		SkipEmpty:  apr.Contains(cli.SkipEmptyFlag),
-		Amend:      amend,
-		Force:      apr.Contains(cli.ForceFlag),
-		Name:       name,
-		Email:      email,
+		Message:          msg,
+		Date:             t,
+		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
+		SkipEmpty:        apr.Contains(cli.SkipEmptyFlag),
+		Amend:            amend,
+		Force:            apr.Contains(cli.ForceFlag),
+		Name:             name,
+		Email:            email,
+		SkipVerification: apr.Contains(cli.SkipVerificationFlag),
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")

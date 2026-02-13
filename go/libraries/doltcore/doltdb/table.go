@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"unicode"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -60,17 +59,6 @@ type Table struct {
 	overriddenSchema schema.Schema
 }
 
-// NewNomsTable creates a noms Struct which stores row data, index data, and schema.
-// Deprecated: use NewTable instead.
-func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
-	dt, err := durable.NewNomsTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Table{table: dt}, nil
-}
-
 // NewTable creates a durable object which stores row data, index data, and schema.
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows durable.Index, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
 	dt, err := durable.NewTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
@@ -78,11 +66,6 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 		return nil, err
 	}
 	return &Table{table: dt}, nil
-}
-
-// NewTableFromDurable creates a table from the given durable object.
-func NewTableFromDurable(table durable.Table) *Table {
-	return &Table{table: table}
 }
 
 func NewEmptyTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (*Table, error) {
@@ -127,24 +110,6 @@ func (t *Table) GetOverriddenSchema() schema.Schema {
 	return t.overriddenSchema
 }
 
-// SetConflicts sets the merge conflicts for this table.
-func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData durable.ConflictIndex) (*Table, error) {
-	table, err := t.table.SetConflicts(ctx, schemas, conflictData)
-	if err != nil {
-		return nil, err
-	}
-	return &Table{table: table}, nil
-}
-
-// GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table.
-func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, durable.ConflictIndex, error) {
-	if t.Format() == types.Format_DOLT {
-		panic("should use artifacts")
-	}
-
-	return t.table.GetConflicts(ctx)
-}
-
 // HasConflicts returns true if this table contains merge conflicts.
 func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
 	if t.Format() == types.Format_DOLT {
@@ -155,7 +120,8 @@ func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
 
 		return art.HasConflicts(ctx)
 	}
-	return t.table.HasConflicts(ctx)
+
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 // GetArtifacts returns the merge artifacts for this table.
@@ -182,20 +148,7 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 		return artIdx.ConflictCount(ctx)
 	}
 
-	ok, err := t.table.HasConflicts(ctx)
-	if err != nil {
-		return 0, err
-	}
-	if !ok {
-		return 0, nil
-	}
-
-	_, cons, err := t.table.GetConflicts(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	return cons.Count(), nil
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 // NumConstraintViolations returns the number of constraint violations for this table.
@@ -208,12 +161,7 @@ func (t *Table) NumConstraintViolations(ctx context.Context) (uint64, error) {
 		return artIdx.ConstraintViolationCount(ctx)
 	}
 
-	cvs, err := t.table.GetConstraintViolations(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	return cvs.Len(), nil
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 // ClearConflicts deletes all merge conflicts for this table.
@@ -222,7 +170,7 @@ func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
 		return t.clearArtifactConflicts(ctx)
 	}
 
-	return t.clearConflicts(ctx)
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 func (t *Table) clearArtifactConflicts(ctx context.Context) (*Table, error) {
@@ -241,21 +189,13 @@ func (t *Table) clearArtifactConflicts(ctx context.Context) (*Table, error) {
 	return &Table{table: table}, nil
 }
 
-func (t *Table) clearConflicts(ctx context.Context) (*Table, error) {
-	table, err := t.table.ClearConflicts(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &Table{table: table}, nil
-}
-
 // GetConflictSchemas returns the merge conflict schemas for this table.
 func (t *Table) GetConflictSchemas(ctx context.Context, tblName TableName) (base, sch, mergeSch schema.Schema, err error) {
 	if t.Format() == types.Format_DOLT {
 		return t.getProllyConflictSchemas(ctx, tblName)
 	}
 
-	return t.getNomsConflictSchemas(ctx)
+	panic("Unsupported format: " + t.Format().VersionString())
 }
 
 // The conflict schema is implicitly determined based on the first conflict in the artifacts table.
@@ -337,36 +277,6 @@ func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, ns tree.No
 	return tbl, ok, nil
 }
 
-func (t *Table) getNomsConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
-	cs, _, err := t.table.GetConflicts(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return cs.Base, cs.Schema, cs.MergeSchema, nil
-}
-
-// GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
-// whether the table has any violations.
-func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) {
-	if t.Format() == types.Format_DOLT {
-		panic("should use artifacts")
-	}
-	return t.table.GetConstraintViolations(ctx)
-}
-
-// SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
-// violations entry on the embedded struct is removed.
-func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (*Table, error) {
-	if t.Format() == types.Format_DOLT {
-		panic("should use artifacts")
-	}
-	table, err := t.table.SetConstraintViolations(ctx, violationsMap)
-	if err != nil {
-		return nil, err
-	}
-	return &Table{table: table}, nil
-}
-
 // GetSchema returns the schema.Schema for this Table.
 func (t *Table) GetSchema(ctx context.Context) (schema.Schema, error) {
 	return t.table.GetSchema(ctx)
@@ -406,18 +316,6 @@ func (t *Table) HashOf() (hash.Hash, error) {
 	return t.table.HashOf()
 }
 
-// UpdateNomsRows replaces the current row data and returns and updated Table.
-// Calls to UpdateNomsRows will not be written to the database.  The root must
-// be updated with the updated table, and the root must be committed or written.
-// Deprecated: use Table.UpdateRows() instead.
-func (t *Table) UpdateNomsRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
-	table, err := t.table.SetTableRows(ctx, durable.IndexFromNomsMap(updatedRows, t.ValueReadWriter(), t.NodeStore()))
-	if err != nil {
-		return nil, err
-	}
-	return &Table{table: table}, nil
-}
-
 // UpdateRows replaces the current row data and returns and updated Table.
 // Calls to UpdateRows will not be written to the database. The root must
 // be updated with the updated table, and the root must be committed or written.
@@ -427,17 +325,6 @@ func (t *Table) UpdateRows(ctx context.Context, updatedRows durable.Index) (*Tab
 		return nil, err
 	}
 	return &Table{table: table}, nil
-}
-
-// GetNomsRowData retrieves the underlying map which is a map from a primary key to a list of field values.
-// Deprecated: use Table.GetRowData() instead.
-func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
-	idx, err := t.table.GetTableRows(ctx)
-	if err != nil {
-		return types.Map{}, err
-	}
-
-	return durable.NomsMapFromIndex(idx), nil
 }
 
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
@@ -458,57 +345,6 @@ func (t *Table) GetRowDataHash(ctx context.Context) (hash.Hash, error) {
 	return idx.HashOf()
 }
 
-// ResolveConflicts resolves conflicts for this table.
-func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
-	removed := 0
-	conflictSchema, confIdx, err := t.GetConflicts(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	if confIdx.Format() == types.Format_DOLT {
-		panic("resolve conflicts not implemented for new storage format")
-	}
-
-	confData := durable.NomsMapFromConflictIndex(confIdx)
-
-	confEdit := confData.Edit()
-	for _, pkTupleVal := range pkTuples {
-		if has, err := confData.Has(ctx, pkTupleVal); err != nil {
-			return nil, nil, nil, err
-		} else if has {
-			removed++
-			confEdit.Remove(pkTupleVal)
-		} else {
-			notFound = append(notFound, pkTupleVal)
-		}
-	}
-
-	if removed == 0 {
-		return invalid, notFound, tbl, ErrNoConflictsResolved
-	}
-
-	conflicts, err := confEdit.Map(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	if conflicts.Len() == 0 {
-		table, err := t.table.ClearConflicts(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		return invalid, notFound, &Table{table: table}, nil
-	}
-
-	table, err := t.table.SetConflicts(ctx, conflictSchema, durable.ConflictIndexFromNomsMap(conflicts, t.ValueReadWriter()))
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return invalid, notFound, &Table{table: table}, nil
-}
-
 // GetIndexSet returns the internal index map which goes from index name to a ref of the row data map.
 func (t *Table) GetIndexSet(ctx context.Context) (durable.IndexSet, error) {
 	return t.table.GetIndexes(ctx)
@@ -521,27 +357,6 @@ func (t *Table) SetIndexSet(ctx context.Context, indexes durable.IndexSet) (*Tab
 		return nil, err
 	}
 	return &Table{table: table}, nil
-}
-
-// GetNomsIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
-// Deprecated: use Table.GetIndexRowData() instead.
-func (t *Table) GetNomsIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	indexes, err := t.GetIndexSet(ctx)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	idx, err := indexes.GetIndex(ctx, sch, nil, indexName)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	return durable.NomsMapFromIndex(idx), nil
 }
 
 // GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
@@ -567,22 +382,6 @@ func (t *Table) SetIndexRows(ctx context.Context, indexName string, idx durable.
 	}
 
 	indexes, err = indexes.PutIndex(ctx, indexName, idx)
-	if err != nil {
-		return nil, err
-	}
-
-	return t.SetIndexSet(ctx, indexes)
-}
-
-// SetNomsIndexRows replaces the current row data for the given index and returns an updated Table.
-// Deprecated: use Table.SetIndexRows() instead.
-func (t *Table) SetNomsIndexRows(ctx context.Context, indexName string, idx types.Map) (*Table, error) {
-	indexes, err := t.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	indexes, err = indexes.PutNomsIndex(ctx, indexName, idx)
 	if err != nil {
 		return nil, err
 	}

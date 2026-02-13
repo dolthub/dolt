@@ -28,15 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	varStringTypeParam_Collate     = "collate"
-	varStringTypeParam_Length      = "length"
-	varStringTypeParam_SQL         = "sql"
-	varStringTypeParam_SQL_Char    = "char"
-	varStringTypeParam_SQL_VarChar = "varchar"
-	varStringTypeParam_SQL_Text    = "text"
-)
-
 // varStringType handles CHAR and VARCHAR. The TEXT types are handled by blobStringType. For any repositories that were
 // created before the introduction of blobStringType, they will use varStringType for TEXT types. As varStringType makes
 // use of the String Value type, it does not actually support all viable lengths of a TEXT string, meaning all such
@@ -58,48 +49,6 @@ var (
 
 func CreateVarStringTypeFromSqlType(stringType sql.StringType) TypeInfo {
 	return &varStringType{stringType}
-}
-
-func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var length int64
-	var collation sql.CollationID
-	var err error
-	if collationStr, ok := params[varStringTypeParam_Collate]; ok {
-		collation, err = sql.ParseCollation("", collationStr, false)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf(`create varstring type info is missing param "%v"`, varStringTypeParam_Collate)
-	}
-	if maxLengthStr, ok := params[varStringTypeParam_Length]; ok {
-		length, err = strconv.ParseInt(maxLengthStr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-
-	} else {
-		return nil, fmt.Errorf(`create varstring type info is missing param "%v"`, varStringTypeParam_Length)
-	}
-	if sqlStr, ok := params[varStringTypeParam_SQL]; ok {
-		var sqlType sql.StringType
-		switch sqlStr {
-		case varStringTypeParam_SQL_Char:
-			sqlType, err = gmstypes.CreateString(sqltypes.Char, length, collation)
-		case varStringTypeParam_SQL_VarChar:
-			sqlType, err = gmstypes.CreateString(sqltypes.VarChar, length, collation)
-		case varStringTypeParam_SQL_Text:
-			sqlType, err = gmstypes.CreateString(sqltypes.Text, length, collation)
-		default:
-			return nil, fmt.Errorf(`create varstring type info has "%v" param with value "%v"`, varStringTypeParam_SQL, sqlStr)
-		}
-		if err != nil {
-			return nil, err
-		}
-		return &varStringType{sqlType}, nil
-	} else {
-		return nil, fmt.Errorf(`create varstring type info is missing param "%v"`, varStringTypeParam_Length)
-	}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
@@ -192,30 +141,6 @@ func (ti *varStringType) FormatValue(v types.Value) (*string, error) {
 		return nil, nil
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *varStringType) GetTypeIdentifier() Identifier {
-	return VarStringTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *varStringType) GetTypeParams() map[string]string {
-	typeParams := map[string]string{
-		varStringTypeParam_Collate: ti.sqlStringType.Collation().String(),
-		varStringTypeParam_Length:  strconv.FormatInt(ti.sqlStringType.MaxCharacterLength(), 10),
-	}
-	switch ti.sqlStringType.Type() {
-	case sqltypes.Char:
-		typeParams[varStringTypeParam_SQL] = varStringTypeParam_SQL_Char
-	case sqltypes.VarChar:
-		typeParams[varStringTypeParam_SQL] = varStringTypeParam_SQL_VarChar
-	case sqltypes.Text:
-		typeParams[varStringTypeParam_SQL] = varStringTypeParam_SQL_Text
-	default:
-		panic(fmt.Errorf(`unknown varstring type info sql type "%v"`, ti.sqlStringType.Type().String()))
-	}
-	return typeParams
 }
 
 // IsValid implements TypeInfo interface.

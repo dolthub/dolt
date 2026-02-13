@@ -16,12 +16,10 @@ package typeinfo
 
 import (
 	"context"
-	"encoding/gob"
 	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -38,34 +36,6 @@ type enumType struct {
 }
 
 var _ TypeInfo = (*enumType)(nil)
-
-func CreateEnumTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var collation sql.CollationID
-	var err error
-	if collationStr, ok := params[enumTypeParam_Collation]; ok {
-		collation, err = sql.ParseCollation("", collationStr, false)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf(`create enum type info is missing param "%v"`, enumTypeParam_Collation)
-	}
-	var values []string
-	if valuesStr, ok := params[enumTypeParam_Values]; ok {
-		dec := gob.NewDecoder(strings.NewReader(valuesStr))
-		err = dec.Decode(&values)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf(`create enum type info is missing param "%v"`, enumTypeParam_Values)
-	}
-	sqlEnumType, err := gmstypes.CreateEnumType(values, collation)
-	if err != nil {
-		return nil, err
-	}
-	return CreateEnumTypeFromSqlEnumType(sqlEnumType), nil
-}
 
 func CreateEnumTypeFromSqlEnumType(sqlEnumType sql.EnumType) TypeInfo {
 	return &enumType{sqlEnumType}
@@ -139,26 +109,6 @@ func (ti *enumType) FormatValue(v types.Value) (*string, error) {
 		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 	}
 	return &val, nil
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *enumType) GetTypeIdentifier() Identifier {
-	return EnumTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *enumType) GetTypeParams() map[string]string {
-	var sb strings.Builder
-	enc := gob.NewEncoder(&sb)
-	err := enc.Encode(ti.sqlEnumType.Values())
-	// this should never error, encoding an array of strings should always succeed
-	if err != nil {
-		panic(err)
-	}
-	return map[string]string{
-		enumTypeParam_Collation: ti.sqlEnumType.Collation().String(),
-		enumTypeParam_Values:    sb.String(),
-	}
 }
 
 // IsValid implements TypeInfo interface.

@@ -24,9 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -67,7 +65,6 @@ type DiffTable struct {
 	head              *doltdb.Commit
 	headCommitClosure *prolly.CommitClosure
 	table             *doltdb.Table
-	joiner            *rowconv.Joiner
 	tableName         doltdb.TableName
 	sqlSch            sql.PrimaryKeySchema
 	partitionFilters  []sql.Expression
@@ -105,7 +102,7 @@ func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb
 		return nil, err
 	}
 
-	diffTableSchema, j, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
+	diffTableSchema, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +122,6 @@ func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb
 		sqlSch:           sqlSch,
 		partitionFilters: nil,
 		table:            table,
-		joiner:           j,
 	}, nil
 }
 
@@ -250,7 +246,7 @@ func (dt *DiffTable) HeadHash() (hash.Hash, error) {
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
+	return dp.GetRowIter(ctx)
 }
 
 func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
@@ -593,38 +589,6 @@ func (dt *DiffTable) PreciseMatch() bool {
 	return false
 }
 
-// tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)
-// and the schema of the table (or EmptySchema if tbl is null).
-func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (durable.Index, schema.Schema, error) {
-	var data durable.Index
-	var err error
-
-	if tbl == nil {
-		data, err = durable.NewEmptyPrimaryIndex(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), schema.EmptySchema)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else {
-		data, err = tbl.GetRowData(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	var sch schema.Schema
-	if tbl == nil {
-		sch = schema.EmptySchema
-	} else {
-		sch, err = tbl.GetSchema(ctx)
-
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	return data, sch, nil
-}
-
 type TblInfoAtCommit struct {
 	date    *types.Timestamp
 	tbl     *doltdb.Table
@@ -677,7 +641,7 @@ func (dp DiffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
 }
 
-func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
+func (dp DiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
 	return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch, dp.ranges)
 }
 
@@ -709,7 +673,7 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 		return false, false, err
 	}
 
-	easyDiff := schema.ArePrimaryKeySetsDiffable(dp.from.Format(), fromSch, toSch)
+	easyDiff := schema.ArePrimaryKeySetsDiffable(fromSch, toSch)
 	if easyDiff {
 		return true, false, nil
 	}
@@ -893,54 +857,15 @@ func (dps *DiffPartitions) Close(*sql.Context) error {
 	return nil
 }
 
-// rowConvForSchema creates a RowConverter for transforming rows with the given schema a target schema.
-func (dp DiffPartition) rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, targetSch, srcSch schema.Schema) (*rowconv.RowConverter, error) {
-	if schema.SchemasAreEqual(srcSch, schema.EmptySchema) {
-		return rowconv.IdentityConverter, nil
-	}
-
-	fm, err := rowconv.TagMappingByTagAndName(srcSch, targetSch)
-	if err != nil {
-		return nil, err
-	}
-
-	return rowconv.NewRowConverter(ctx, vrw, fm)
-}
-
 // GetDiffTableSchemaAndJoiner returns the schema for the diff table given a
 // target schema for a row |sch|. In the old storage format, it also returns the
 // associated joiner.
-func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch schema.Schema) (diffTableSchema schema.Schema, j *rowconv.Joiner, err error) {
+func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch schema.Schema) (diffTableSchema schema.Schema, err error) {
 	if format == types.Format_DOLT {
-		diffTableSchema, err = CalculateDiffSchema(fromSch, toSch)
-		if err != nil {
-			return nil, nil, err
-		}
+		return CalculateDiffSchema(fromSch, toSch)
 	} else {
-		fromSch, toSch, err = expandFromToSchemas(fromSch, toSch)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		j, err = rowconv.NewJoiner(
-			[]rowconv.NamedSchema{{Name: diff.To, Sch: toSch}, {Name: diff.From, Sch: fromSch}},
-			map[string]rowconv.ColNamingFunc{
-				diff.To:   diff.ToColNamer,
-				diff.From: diff.FromColNamer,
-			})
-		if err != nil {
-			return nil, nil, err
-		}
-
-		diffTableSchema = j.GetSchema()
-		fullDiffCols := diffTableSchema.GetAllCols()
-		fullDiffCols = fullDiffCols.Append(
-			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false),
-		)
-		diffTableSchema = schema.MustSchemaFromCols(fullDiffCols)
+		panic("Unsupported format for diff table schema calculation: " + format.VersionString())
 	}
-
-	return
 }
 
 // expandFromToSchemas converts input schemas to schemas appropriate for diffs. One argument must be

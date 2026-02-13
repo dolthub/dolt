@@ -46,17 +46,7 @@ import (
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, statements string) (doltdb.RootValue, error) {
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return nil, err
-	}
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, err
 	}
@@ -166,17 +156,7 @@ func ExecuteSelect(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue
 		Rsr: dEnv.RepoStateReader(),
 	}
 
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return nil, err
-	}
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-	db, err := NewDatabase(context.Background(), "dolt", dbData, opts)
+	db, err := NewDatabase(context.Background(), "dolt", dbData, editor.Options{})
 	if err != nil {
 		return nil, err
 	}
@@ -311,20 +291,6 @@ func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 	}
 	colColl := schema.NewColCollection(cols...)
 	return schema.UnkeyedSchemaFromCols(colColl)
-}
-
-// DoltSchemaFromAlterableTable is a utility for integration tests
-func DoltSchemaFromAlterableTable(t *AlterableDoltTable) schema.Schema {
-	return t.sch
-}
-
-// DoltTableFromAlterableTable is a utility for integration tests
-func DoltTableFromAlterableTable(ctx *sql.Context, t *AlterableDoltTable) *doltdb.Table {
-	dt, err := t.DoltTable.DoltTable(ctx)
-	if err != nil {
-		panic(err)
-	}
-	return dt
 }
 
 func drainIter(ctx *sql.Context, iter sql.RowIter) error {
@@ -551,20 +517,7 @@ func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, e
 		}
 
 	} else {
-		// types.Format_LD_1
-		rowData := durable.NomsMapFromIndex(idx)
-		_ = rowData.IterAll(ctx, func(key, value types.Value) error {
-			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
-			if err != nil {
-				return err
-			}
-			sqlRows = append(sqlRows, sqlRow)
-			return nil
-		})
+		panic("Unsupported format: " + idx.Format().VersionString())
 	}
 	return sqlRows, nil
 }

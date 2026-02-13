@@ -16,19 +16,12 @@ package typeinfo
 
 import (
 	"context"
-	"encoding/gob"
 	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
-)
-
-const (
-	setTypeParam_Collation = "collate"
-	setTypeParam_Values    = "vals"
 )
 
 // This is a dolt implementation of the MySQL type Set, thus most of the functionality
@@ -38,33 +31,6 @@ type setType struct {
 }
 
 var _ TypeInfo = (*setType)(nil)
-
-func CreateSetTypeFromParams(params map[string]string) (TypeInfo, error) {
-	collationStr, ok := params[setTypeParam_Collation]
-	if !ok {
-		return nil, fmt.Errorf(`create set type info is missing param "%v"`, setTypeParam_Collation)
-	}
-	collation, err := sql.ParseCollation("", collationStr, false)
-	if err != nil {
-		return nil, err
-	}
-
-	valuesStr, ok := params[setTypeParam_Values]
-	if !ok {
-		return nil, fmt.Errorf(`create set type info is missing param "%v"`, setTypeParam_Values)
-	}
-	var values []string
-	dec := gob.NewDecoder(strings.NewReader(valuesStr))
-	if err = dec.Decode(&values); err != nil {
-		return nil, err
-	}
-
-	sqlSetType, err := gmstypes.CreateSetType(values, collation)
-	if err != nil {
-		return nil, err
-	}
-	return CreateSetTypeFromSqlSetType(sqlSetType), nil
-}
 
 func CreateSetTypeFromSqlSetType(sqlSetType sql.SetType) TypeInfo {
 	return &setType{sqlSetType}
@@ -138,26 +104,6 @@ func (ti *setType) FormatValue(v types.Value) (*string, error) {
 		return nil, err
 	}
 	return &val, nil
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *setType) GetTypeIdentifier() Identifier {
-	return SetTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *setType) GetTypeParams() map[string]string {
-	var sb strings.Builder
-	enc := gob.NewEncoder(&sb)
-	err := enc.Encode(ti.sqlSetType.Values())
-	// this should never error, encoding an array of strings should always succeed
-	if err != nil {
-		panic(err)
-	}
-	return map[string]string{
-		setTypeParam_Collation: ti.sqlSetType.Collation().String(),
-		setTypeParam_Values:    sb.String(),
-	}
 }
 
 // IsValid implements TypeInfo interface.

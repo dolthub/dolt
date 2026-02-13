@@ -307,6 +307,14 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 // not AWS, it verifies that no AWS parameters are present in |apr|.
 func newParams(apr *argparser.ArgParseResults, url string, urlScheme string) (map[string]string, error) {
 	params := map[string]string{}
+
+	isGitRemote := urlScheme == dbfactory.GitFileScheme || urlScheme == dbfactory.GitHTTPScheme || urlScheme == dbfactory.GitHTTPSScheme || urlScheme == dbfactory.GitSSHScheme
+	if !isGitRemote {
+		if _, ok := apr.GetValue("ref"); ok {
+			return nil, fmt.Errorf("error: --ref is only supported for git remotes")
+		}
+	}
+
 	var err error
 	switch urlScheme {
 	case dbfactory.AWSScheme:
@@ -315,6 +323,15 @@ func newParams(apr *argparser.ArgParseResults, url string, urlScheme string) (ma
 		// TODO(elianddb): This func mainly interfaces with apr to set the OSS key-vals in params, but the backup arg
 		//  parser does not include any OSS-related flags? I'm guessing they must be processed elsewhere?
 		err = cli.AddOSSParams(url, apr, params)
+	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
+		err = cli.VerifyNoAwsParams(apr)
+		if ref, ok := apr.GetValue("ref"); ok {
+			ref = strings.TrimSpace(ref)
+			if ref == "" {
+				return nil, fmt.Errorf("error: --ref cannot be empty")
+			}
+			params[dbfactory.GitRefParam] = ref
+		}
 	default:
 		err = cli.VerifyNoAwsParams(apr)
 	}

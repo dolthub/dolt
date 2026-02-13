@@ -325,11 +325,8 @@ func TestKeylessMergeConflicts(t *testing.T) {
 }
 
 func assertConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
-	if types.IsFormat_DOLT(tbl.Format()) {
-		assertProllyConflicts(t, ctx, tbl, expected)
-		return
-	}
-	assertNomsConflicts(t, ctx, tbl, expected)
+	types.AssertFormat_DOLT(tbl.Format())
+	assertProllyConflicts(t, ctx, tbl, expected)
 }
 
 func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
@@ -381,32 +378,6 @@ func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 
 }
 
-func assertNomsConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
-	_, confIdx, err := tbl.GetConflicts(ctx)
-	require.NoError(t, err)
-	conflicts := durable.NomsMapFromConflictIndex(confIdx)
-
-	assert.True(t, conflicts.Len() > 0)
-	assert.Equal(t, int(conflicts.Len()), len(expected))
-
-	expectedSet := expected.toTupleSet()
-
-	actual, err := conflicts.Iterator(ctx)
-	require.NoError(t, err)
-	for {
-		_, act, err := actual.Next(ctx)
-		if act == nil {
-			return
-		}
-		assert.NoError(t, err)
-		h, err := act.Hash(types.Format_Default)
-		assert.NoError(t, err)
-		exp, ok := expectedSet[h]
-		assert.True(t, ok)
-		assert.True(t, exp.Equals(act))
-	}
-}
-
 func mustGetRowValueFromTable(t *testing.T, ctx context.Context, tbl *doltdb.Table, key val.Tuple) val.Tuple {
 	idx, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
@@ -434,12 +405,8 @@ func mustGetRowValueFromRootIsh(t *testing.T, ctx context.Context, vrw types.Val
 
 // |expected| is a tupleSet to compensate for random storage order
 func assertKeylessRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected keylessEntries) {
-	if types.IsFormat_DOLT(tbl.Format()) {
-		assertKeylessProllyRows(t, ctx, tbl, expected)
-		return
-	}
-
-	assertKeylessNomsRows(t, ctx, tbl, expected)
+	types.AssertFormat_DOLT(tbl.Format())
+	assertKeylessProllyRows(t, ctx, tbl, expected)
 }
 
 func assertKeylessProllyRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected []keylessEntry) {
@@ -470,30 +437,6 @@ func assertKeylessProllyRows(t *testing.T, ctx context.Context, tbl *doltdb.Tabl
 	require.Equal(t, len(expected), c)
 }
 
-func assertKeylessNomsRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected keylessEntries) {
-	rowData, err := tbl.GetNomsRowData(ctx)
-	require.NoError(t, err)
-
-	assert.Equal(t, int(rowData.Len()), len(expected))
-
-	expectedSet := expected.toTupleSet()
-
-	actual, err := rowData.Iterator(ctx)
-	require.NoError(t, err)
-	for {
-		_, act, err := actual.Next(ctx)
-		if act == nil {
-			break
-		}
-		assert.NoError(t, err)
-		h, err := act.Hash(types.Format_Default)
-		assert.NoError(t, err)
-		exp, ok := expectedSet[h]
-		assert.True(t, ok)
-		assert.True(t, exp.Equals(act))
-	}
-}
-
 const tblName = "noKey"
 
 var keylessSch = dtu.MustSchema(
@@ -513,18 +456,6 @@ type keylessEntry struct {
 	card int
 	c1   int
 	c2   int
-}
-
-func (e keylessEntries) toTupleSet() tupleSet {
-	tups := make([]types.Tuple, len(e))
-	for i, t := range e {
-		tups[i] = t.ToNomsTuple()
-	}
-	return mustTupleSet(tups...)
-}
-
-func (e keylessEntry) ToNomsTuple() types.Tuple {
-	return dtu.MustTuple(cardTag, types.Uint(e.card), c1Tag, types.Int(e.c1), c2Tag, types.Int(e.c2))
 }
 
 func (e keylessEntry) HashAndValue() ([]byte, val.Tuple, error) {
@@ -554,14 +485,6 @@ func (e conflictEntries) toConflictSet(t *testing.T) conflictSet {
 	return s
 }
 
-func (e conflictEntries) toTupleSet() tupleSet {
-	tups := make([]types.Tuple, len(e))
-	for i, t := range e {
-		tups[i] = t.ToNomsTuple()
-	}
-	return mustTupleSet(tups...)
-}
-
 func (e conflictEntry) Key(t *testing.T) (h [16]byte) {
 	if e.base != nil {
 		h2, _, err := e.base.HashAndValue()
@@ -582,34 +505,6 @@ func (e conflictEntry) Key(t *testing.T) (h [16]byte) {
 		return
 	}
 
-	return
-}
-
-func (e conflictEntry) ToNomsTuple() types.Tuple {
-	var b, o, t types.Value = types.NullValue, types.NullValue, types.NullValue
-	if e.base != nil {
-		b = e.base.ToNomsTuple()
-	}
-	if e.ours != nil {
-		o = e.ours.ToNomsTuple()
-	}
-	if e.theirs != nil {
-		t = e.theirs.ToNomsTuple()
-	}
-	return dtu.MustTuple(b, o, t)
-}
-
-type tupleSet map[hash.Hash]types.Tuple
-
-func mustTupleSet(tt ...types.Tuple) (s tupleSet) {
-	s = make(tupleSet, len(tt))
-	for _, tup := range tt {
-		h, err := tup.Hash(types.Format_Default)
-		if err != nil {
-			panic(err)
-		}
-		s[h] = tup
-	}
 	return
 }
 

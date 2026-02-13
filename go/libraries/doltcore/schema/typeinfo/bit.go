@@ -129,18 +129,6 @@ func (ti *bitType) FormatValue(v types.Value) (*string, error) {
 	return &res, nil
 }
 
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *bitType) GetTypeIdentifier() Identifier {
-	return BitTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *bitType) GetTypeParams() map[string]string {
-	return map[string]string{
-		bitTypeParam_Bits: strconv.FormatInt(int64(ti.sqlBitType.NumberOfBits()), 10),
-	}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *bitType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {

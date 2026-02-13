@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -105,17 +104,6 @@ func (ti *geomcollType) FormatValue(v types.Value) (*string, error) {
 	}
 
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-}
-
-// GetTypeIdentifier implements TypeInfo interface.
-func (ti *geomcollType) GetTypeIdentifier() Identifier {
-	return GeometryCollectionTypeIdentifier
-}
-
-// GetTypeParams implements TypeInfo interface.
-func (ti *geomcollType) GetTypeParams() map[string]string {
-	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlGeomCollType.SRID), 10),
-		"DefinedSRID": strconv.FormatBool(ti.sqlGeomCollType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -207,26 +195,4 @@ func geomcollTypeConverter(ctx context.Context, src *geomcollType, destTi TypeIn
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
-}
-
-func CreateGeomCollTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var (
-		err     error
-		sridVal uint64
-		def     bool
-	)
-	if s, ok := params["SRID"]; ok {
-		sridVal, err = strconv.ParseUint(s, 10, 32)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if d, ok := params["DefinedSRID"]; ok {
-		def, err = strconv.ParseBool(d)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &geomcollType{sqlGeomCollType: gmstypes.GeomCollType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

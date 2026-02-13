@@ -197,10 +197,6 @@ func SchemaTableSchema() schema.Schema {
 	return schema.MustSchemaFromCols(schemasTableCols)
 }
 
-func NewEmptySchemaTable() sql.Table {
-	return &SchemaTable{}
-}
-
 func NewSchemaTable(backingTable sql.Table) *SchemaTable {
 	if backingTable == nil {
 		return &SchemaTable{}

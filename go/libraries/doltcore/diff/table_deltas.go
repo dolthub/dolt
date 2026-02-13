@@ -594,7 +594,7 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
-	return !schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
+	return !schema.ArePrimaryKeySetsDiffable(td.FromSch, td.ToSch)
 }
 
 func (td TableDelta) HasChanges() (bool, error) {
@@ -656,17 +656,6 @@ func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, er
 		td.ToSch = schema.EmptySchema
 	}
 	return td.FromSch, td.ToSch, nil
-}
-
-// Format returns the format of the tables in this delta.
-func (td TableDelta) Format() *types.NomsBinFormat {
-	if td.FromRootObject != nil || td.ToRootObject != nil {
-		return types.Format_DOLT
-	}
-	if td.FromTable != nil {
-		return td.FromTable.Format()
-	}
-	return td.ToTable.Format()
 }
 
 func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {

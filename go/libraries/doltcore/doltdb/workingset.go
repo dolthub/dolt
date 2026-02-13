@@ -75,6 +75,8 @@ type RebaseState struct {
 	// rebasingStarted is true once the rebase plan has been started to execute. Once rebasingStarted is true, the
 	// value in lastAttemptedStep has been initialized and is valid to read.
 	rebasingStarted bool
+	// skipVerification indicates whether test validation should be skipped during rebase operations.
+	skipVerification bool
 }
 
 // Branch returns the name of the branch being actively rebased. This is the branch that will be updated to point
@@ -118,6 +120,10 @@ func (rs RebaseState) RebasingStarted() bool {
 func (rs RebaseState) WithRebasingStarted(rebasingStarted bool) *RebaseState {
 	rs.rebasingStarted = rebasingStarted
 	return &rs
+}
+
+func (rs RebaseState) SkipVerification() bool {
+	return rs.skipVerification
 }
 
 type MergeState struct {
@@ -322,13 +328,14 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 // the branch that is being rebased, and |previousRoot| is root value of the branch being rebased. The HEAD and STAGED
 // root values of the branch being rebased must match |previousRoot|; WORKING may be a different root value, but ONLY
 // if it contains only ignored tables.
-func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string, previousRoot RootValue, commitBecomesEmptyHandling EmptyCommitHandling, emptyCommitHandling EmptyCommitHandling) (*WorkingSet, error) {
+func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string, previousRoot RootValue, commitBecomesEmptyHandling EmptyCommitHandling, emptyCommitHandling EmptyCommitHandling, skipVerification bool) (*WorkingSet, error) {
 	ws.rebaseState = &RebaseState{
 		ontoCommit:                 ontoCommit,
 		preRebaseWorking:           previousRoot,
 		branch:                     branch,
 		commitBecomesEmptyHandling: commitBecomesEmptyHandling,
 		emptyCommitHandling:        emptyCommitHandling,
+		skipVerification:           skipVerification,
 	}
 
 	ontoRoot, err := ontoCommit.GetRootValue(ctx)
@@ -549,6 +556,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			emptyCommitHandling:        EmptyCommitHandling(dsws.RebaseState.EmptyCommitHandling(ctx)),
 			lastAttemptedStep:          dsws.RebaseState.LastAttemptedStep(ctx),
 			rebasingStarted:            dsws.RebaseState.RebasingStarted(ctx),
+			skipVerification:           dsws.RebaseState.SkipVerification(ctx),
 		}
 	}
 
@@ -646,7 +654,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 
 		rebaseState = datas.NewRebaseState(preRebaseWorking.TargetHash(), dCommit.Addr(), ws.rebaseState.branch,
 			uint8(ws.rebaseState.commitBecomesEmptyHandling), uint8(ws.rebaseState.emptyCommitHandling),
-			ws.rebaseState.lastAttemptedStep, ws.rebaseState.rebasingStarted)
+			ws.rebaseState.lastAttemptedStep, ws.rebaseState.rebasingStarted, ws.rebaseState.skipVerification)
 	}
 
 	return &datas.WorkingSetSpec{

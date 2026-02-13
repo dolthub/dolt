@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -57,7 +56,6 @@ type DiffTableFunction struct {
 	database         sql.Database
 	overriddenSchema schema.Schema
 	ctx              *sql.Context
-	joiner           *rowconv.Joiner
 	fromDate         *types.Timestamp
 	toDate           *types.Timestamp
 	includeCols      map[string]struct{}
@@ -233,7 +231,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 
 	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toCommitStr, fromCommitStr, dtf.toDate, dtf.fromDate, toSchForPartition, fromSchForPartition, nil)
 
-	return dtables.NewDiffPartitionRowIter(dp, ddb, dtf.joiner), nil
+	return dtables.NewDiffPartitionRowIter(dp, ddb), nil
 }
 
 // findMatchingDelta returns the best matching table delta for the table name
@@ -363,15 +361,6 @@ func interfaceToString(r interface{}) (string, error) {
 		return "", fmt.Errorf("received '%v' when expecting commit hash string", r)
 	}
 	return str, nil
-}
-
-func resolveRoot(ctx *sql.Context, sess *dsess.DoltSession, dbName, hashStr string) (*refDetails, error) {
-	root, commitTime, _, err := sess.ResolveRootForRef(ctx, dbName, hashStr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &refDetails{root: root, hashStr: hashStr, commitTime: commitTime}, nil
 }
 
 func resolveCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headRef ref.DoltRef, cSpecStr string) (*doltdb.Commit, error) {
@@ -678,11 +667,10 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		toSchForJoiner = dtf.overriddenSchema
 	}
 
-	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(format, fromSchForJoiner, toSchForJoiner)
+	diffTableSch, err := dtables.GetDiffTableSchemaAndJoiner(format, fromSchForJoiner, toSchForJoiner)
 	if err != nil {
 		return err
 	}
-	dtf.joiner = j
 
 	// TODO: sql.Columns include a Source that indicates the table it came from, but we don't have a real table
 	//       when the column comes from a table function, so we omit the table name when we create these columns.

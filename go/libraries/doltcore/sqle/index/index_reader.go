@@ -58,13 +58,9 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 			return nil, err
 		}
 		return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState, lookup.IsReverse)
-	} else {
-		nomsRanges, err := idx.nomsRanges(ctx, mysqlRanges...)
-		if err != nil {
-			return nil, err
-		}
-		return RowIterForNomsRanges(ctx, idx, nomsRanges, columns, durableState)
 	}
+
+	panic("Unsupported format for RowIterForIndexLookup")
 }
 
 func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState, reverse bool) (sql.RowIter, error) {
@@ -85,49 +81,27 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 	return newProllyIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
 }
 
-func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, columns []uint64, durableState *durableIndexState) (sql.RowIter, error) {
-	if len(columns) == 0 {
-		columns = idx.Schema().GetAllCols().Tags
-	}
-	m := durable.NomsMapFromIndex(durableState.Secondary)
-	nrr := noms.NewNomsRangeReader(idx.valueReadWriter(), idx.IndexSchema(), m, ranges)
-
-	covers := idx.coversColumns(durableState, columns)
-	if covers || idx.ID() == "PRIMARY" {
-		return NewCoveringIndexRowIterAdapter(ctx, idx, nrr, columns), nil
-	} else {
-		return NewIndexLookupRowIterAdapter(ctx, idx, durableState, nrr, columns)
-	}
-}
-
 type IndexLookupKeyIterator interface {
 	// NextKey returns the next key if it exists, and io.EOF if it does not.
 	NextKey(ctx *sql.Context) (row.TaggedValues, error)
 }
 
-func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, isDoltFmt bool) (sql.PartitionIter, error) {
+func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	mysqlRanges := lookup.Ranges.(sql.MySQLRangeCollection)
 	idx := lookup.Index.(*doltIndex)
-	if lookup.IsPointLookup && isDoltFmt {
+	if lookup.IsPointLookup {
 		return newPointPartitionIter(ctx, lookup, idx)
 	}
 
 	var prollyRanges []prolly.Range
-	var nomsRanges []*noms.ReadRange
 	var err error
-	if isDoltFmt {
-		prollyRanges, err = idx.prollyRanges(ctx, idx.ns, mysqlRanges...)
-	} else {
-		nomsRanges, err = idx.nomsRanges(ctx, mysqlRanges...)
-	}
+	prollyRanges, err = idx.prollyRanges(ctx, idx.ns, mysqlRanges...)
 	if err != nil {
 		return nil, err
 	}
 	return &rangePartitionIter{
-		nomsRanges:   nomsRanges,
 		prollyRanges: prollyRanges,
 		curr:         0,
-		isDoltFmt:    isDoltFmt,
 		isReverse:    lookup.IsReverse,
 	}, nil
 }
@@ -167,10 +141,8 @@ func (p *pointPartition) Next(c *sql.Context) (sql.Partition, error) {
 }
 
 type rangePartitionIter struct {
-	nomsRanges   []*noms.ReadRange
 	prollyRanges []prolly.Range
 	curr         int
-	isDoltFmt    bool
 	isReverse    bool
 }
 
@@ -181,10 +153,7 @@ func (itr *rangePartitionIter) Close(*sql.Context) error {
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
 func (itr *rangePartitionIter) Next(_ *sql.Context) (sql.Partition, error) {
-	if itr.isDoltFmt {
-		return itr.nextProllyPartition()
-	}
-	return itr.nextNomsPartition()
+	return itr.nextProllyPartition()
 }
 
 func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
@@ -201,23 +170,6 @@ func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
 		prollyRange: pr,
 		key:         bytes[:],
 		isReverse:   itr.isReverse,
-	}, nil
-}
-
-func (itr *rangePartitionIter) nextNomsPartition() (sql.Partition, error) {
-	if itr.curr >= len(itr.nomsRanges) {
-		return nil, io.EOF
-	}
-
-	var bytes [4]byte
-	binary.BigEndian.PutUint32(bytes[:], uint32(itr.curr))
-	nr := itr.nomsRanges[itr.curr]
-	itr.curr += 1
-
-	return rangePartition{
-		nomsRange: nr,
-		key:       bytes[:],
-		isReverse: itr.isReverse,
 	}, nil
 }
 
@@ -310,7 +262,6 @@ func NewIndexReaderBuilder(
 	key doltdb.DataCacheKey,
 	projections []uint64,
 	pkSch sql.PrimaryKeySchema,
-	isDoltFormat bool,
 ) (IndexScanBuilder, error) {
 	if projections == nil {
 		projections = idx.Schema().GetAllCols().Tags
@@ -328,27 +279,21 @@ func NewIndexReaderBuilder(
 		projections: projections,
 	}
 
-	if isDoltFormat {
-		secondaryIndex := durable.MapFromIndex(s.Secondary)
-		base.ns = secondaryIndex.NodeStore()
-		base.secKd, base.secVd = secondaryIndex.Descriptors()
-		base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
-		switch si := secondaryIndex.(type) {
-		case prolly.Map:
-			base.sec = si
-		case prolly.ProximityMap:
-			base.proximitySecondary = si
-		default:
-			return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
-		}
+	secondaryIndex := durable.MapFromIndex(s.Secondary)
+	base.ns = secondaryIndex.NodeStore()
+	base.secKd, base.secVd = secondaryIndex.Descriptors()
+	base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
+
+	switch si := secondaryIndex.(type) {
+	case prolly.Map:
+		base.sec = si
+	case prolly.ProximityMap:
+		base.proximitySecondary = si
+	default:
+		return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
 	}
 
 	switch {
-	case !isDoltFormat:
-		return &nomsIndexImplBuilder{
-			baseIndexImplBuilder: base,
-			s:                    s,
-		}, nil
 	case sql.IsKeyless(pkSch.Schema):
 		return &keylessIndexImplBuilder{
 			baseIndexImplBuilder: base,
@@ -412,7 +357,6 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 }
 
 var _ IndexScanBuilder = (*baseIndexImplBuilder)(nil)
-var _ IndexScanBuilder = (*nomsIndexImplBuilder)(nil)
 var _ IndexScanBuilder = (*coveringIndexImplBuilder)(nil)
 var _ IndexScanBuilder = (*keylessIndexImplBuilder)(nil)
 var _ IndexScanBuilder = (*nonCoveringIndexImplBuilder)(nil)
@@ -799,45 +743,6 @@ func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly
 	return &keylessLookupIter{pri: clustered, secIter: indexIter, pkMap: indexMap, pkBld: keyBld, prefixDesc: keyDesc}, nil
 }
 
-type keylessMapIter struct {
-	indexIter prolly.MapIter
-
-	// clusteredMap transforms secondary index keys
-	// into clustered index keys
-	clusteredMap val.OrdinalMapping
-	clusteredBld *val.TupleBuilder
-	clustered    prolly.Map
-}
-
-var _ prolly.MapIter = (*keylessMapIter)(nil)
-
-// Next implements prolly.MapIter
-func (i *keylessMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
-	idxKey, _, err := i.indexIter.Next(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for to := range i.clusteredMap {
-		from := i.clusteredMap.MapOrdinal(to)
-		i.clusteredBld.PutRaw(to, idxKey.GetField(from))
-	}
-	pk, err := i.clusteredBld.Build(sharePool)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var value val.Tuple
-	err = i.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
-		value = v
-		return nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	return pk, value, nil
-}
-
 // NewPartitionRowIter implements IndexScanBuilder
 func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	var prollyRange prolly.Range
@@ -873,209 +778,4 @@ func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSa
 		pkBld:      pkBld,
 		prefixDesc: secondary.KeyDesc().PrefixDesc(cnt),
 	}, nil
-}
-
-type nomsIndexImplBuilder struct {
-	*baseIndexImplBuilder
-	s *durableIndexState
-}
-
-func (ib *nomsIndexImplBuilder) OutputSchema() schema.Schema {
-	return ib.baseIndexImplBuilder.idx.Schema()
-}
-
-// NewPartitionRowIter implements IndexScanBuilder
-func (ib *nomsIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	p := part.(rangePartition)
-	ranges := []*noms.ReadRange{p.nomsRange}
-	return RowIterForNomsRanges(ctx, ib.idx, ranges, ib.projections, ib.s)
-}
-
-// NewRangeMapIter implements IndexScanBuilder
-func (ib *nomsIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error) {
-	panic("cannot call NewMapIter on *nomsIndexImplBuilder")
-}
-
-func (ib *nomsIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) (SecondaryLookupIterGen, error) {
-	panic("cannot call NewSecondaryIter on *nomsIndexImplBuilder")
-}
-
-// boundsCase determines the case upon which the bounds are tested.
-type boundsCase byte
-
-// For each boundsCase, the first element is the lowerbound and the second element is the upperbound
-const (
-	boundsCase_infinity_infinity boundsCase = iota
-	boundsCase_infinity_lessEquals
-	boundsCase_infinity_less
-	boundsCase_greaterEquals_infinity
-	boundsCase_greaterEquals_lessEquals
-	boundsCase_greaterEquals_less
-	boundsCase_greater_infinity
-	boundsCase_greater_lessEquals
-	boundsCase_greater_less
-	boundsCase_isNull
-)
-
-// columnBounds are used to compare a given value in the noms row iterator.
-type columnBounds struct {
-	lowerbound types.Value
-	upperbound types.Value
-	boundsCase
-}
-
-// nomsRangeCheck is used to compare a tuple against a set of comparisons in the noms row iterator.
-type nomsRangeCheck []columnBounds
-
-var _ noms.InRangeCheck = nomsRangeCheck{}
-
-// Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
-// the bounds and above the upperbound.
-func (cb columnBounds) Between(ctx context.Context, vr types.ValueReader, val types.Value) (ok bool, over bool, err error) {
-	// Only boundCase_isNull matches NULL values,
-	// otherwise we terminate the range scan.
-	// This is checked early to bypass unpredictable
-	// null type comparisons.
-	if val.Kind() == types.NullKind {
-		isNullCase := cb.boundsCase == boundsCase_isNull
-		return isNullCase, !isNullCase, nil
-	}
-
-	switch cb.boundsCase {
-	case boundsCase_infinity_infinity:
-		return true, false, nil
-	case boundsCase_infinity_lessEquals:
-		ok, err := cb.upperbound.Less(ctx, vr.Format(), val)
-		if err != nil || ok {
-			return false, true, err
-		}
-	case boundsCase_infinity_less:
-		ok, err := val.Less(ctx, vr.Format(), cb.upperbound)
-		if err != nil || !ok {
-			return false, true, err
-		}
-	case boundsCase_greaterEquals_infinity:
-		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
-		if err != nil || ok {
-			return false, false, err
-		}
-	case boundsCase_greaterEquals_lessEquals:
-		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
-		if err != nil || ok {
-			return false, false, err
-		}
-		ok, err = cb.upperbound.Less(ctx, vr.Format(), val)
-		if err != nil || ok {
-			return false, true, err
-		}
-	case boundsCase_greaterEquals_less:
-		ok, err := val.Less(ctx, vr.Format(), cb.lowerbound)
-		if err != nil || ok {
-			return false, false, err
-		}
-		ok, err = val.Less(ctx, vr.Format(), cb.upperbound)
-		if err != nil || !ok {
-			return false, true, err
-		}
-	case boundsCase_greater_infinity:
-		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
-		if err != nil || !ok {
-			return false, false, err
-		}
-	case boundsCase_greater_lessEquals:
-		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
-		if err != nil || !ok {
-			return false, false, err
-		}
-		ok, err = cb.upperbound.Less(ctx, vr.Format(), val)
-		if err != nil || ok {
-			return false, true, err
-		}
-	case boundsCase_greater_less:
-		ok, err := cb.lowerbound.Less(ctx, vr.Format(), val)
-		if err != nil || !ok {
-			return false, false, err
-		}
-		ok, err = val.Less(ctx, vr.Format(), cb.upperbound)
-		if err != nil || !ok {
-			return false, true, err
-		}
-	case boundsCase_isNull:
-		// an isNull scan skips non-nulls, but does not terminate
-		return false, false, nil
-	default:
-		return false, false, fmt.Errorf("unknown bounds")
-	}
-	return true, false, nil
-}
-
-// Equals returns whether the calling columnBounds is equivalent to the given columnBounds.
-func (cb columnBounds) Equals(otherBounds columnBounds) bool {
-	if cb.boundsCase != otherBounds.boundsCase {
-		return false
-	}
-	if cb.lowerbound == nil || otherBounds.lowerbound == nil {
-		if cb.lowerbound != nil || otherBounds.lowerbound != nil {
-			return false
-		}
-	} else if !cb.lowerbound.Equals(otherBounds.lowerbound) {
-		return false
-	}
-	if cb.upperbound == nil || otherBounds.upperbound == nil {
-		if cb.upperbound != nil || otherBounds.upperbound != nil {
-			return false
-		}
-	} else if !cb.upperbound.Equals(otherBounds.upperbound) {
-		return false
-	}
-	return true
-}
-
-// Check implements the interface noms.InRangeCheck.
-func (nrc nomsRangeCheck) Check(ctx context.Context, vr types.ValueReader, tuple types.Tuple) (valid bool, skip bool, err error) {
-	itr := types.TupleItrPool.Get().(*types.TupleIterator)
-	defer types.TupleItrPool.Put(itr)
-	err = itr.InitForTuple(tuple)
-	if err != nil {
-		return false, false, err
-	}
-
-	for i := 0; i < len(nrc) && itr.HasMore(); i++ {
-		if err := itr.Skip(); err != nil {
-			return false, false, err
-		}
-		_, val, err := itr.Next()
-		if err != nil {
-			return false, false, err
-		}
-		if val == nil {
-			break
-		}
-
-		ok, over, err := nrc[i].Between(ctx, vr, val)
-		if err != nil {
-			return false, false, err
-		}
-		if !ok {
-			return i != 0 || !over, true, nil
-		}
-	}
-	return true, false, nil
-}
-
-// Equals returns whether the calling nomsRangeCheck is equivalent to the given nomsRangeCheck.
-func (nrc nomsRangeCheck) Equals(otherNrc nomsRangeCheck) bool {
-	if len(nrc) != len(otherNrc) {
-		return false
-	}
-	for i := range nrc {
-		if !nrc[i].Equals(otherNrc[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-type nomsKeyIter interface {
-	ReadKey(ctx context.Context) (types.Tuple, error)
 }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -97,12 +98,27 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData[*sql.Context], apr 
 		return err
 	}
 
-	_, absRemoteUrl, err := env.GetAbsRemoteUrl(dbFs, &config.MapConfig{}, remoteUrl)
+	scheme, absRemoteUrl, err := env.GetAbsRemoteUrl(dbFs, &config.MapConfig{}, remoteUrl)
 	if err != nil {
 		return err
 	}
 
-	r := env.NewRemote(remoteName, absRemoteUrl, map[string]string{})
+	params := map[string]string{}
+
+	isGitRemote := scheme == dbfactory.GitFileScheme || scheme == dbfactory.GitHTTPScheme || scheme == dbfactory.GitHTTPSScheme || scheme == dbfactory.GitSSHScheme
+
+	if ref, ok := apr.GetValue("ref"); ok {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			return fmt.Errorf("error: --ref cannot be empty")
+		}
+		if !isGitRemote {
+			return fmt.Errorf("error: --ref is only supported for git remotes")
+		}
+		params[dbfactory.GitRefParam] = ref
+	}
+
+	r := env.NewRemote(remoteName, absRemoteUrl, params)
 	return dbd.Rsw.AddRemote(r)
 }
 

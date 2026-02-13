@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -175,7 +176,7 @@ func (acs archiveChunkSource) currentSize() uint64 {
 }
 
 // reader returns a reader for the entire archive file.
-func (acs archiveChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
+func (acs archiveChunkSource) reader(ctx context.Context, _ dherrors.FatalBehavior) (io.ReadCloser, uint64, error) {
 	rd, err := acs.aRdr.reader.Reader(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -198,7 +199,7 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 	return archiveChunkSource{reader, acs.file}, nil
 }
 
-func (acs archiveChunkSource) getRecordRanges(_ context.Context, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	result := make(map[hash.Hash]Range, len(records))
 	for i, req := range records {
 		if req.found {
