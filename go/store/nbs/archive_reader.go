@@ -27,13 +27,13 @@ import (
 	"os"
 	"sync/atomic"
 
-	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs/zstd"
 )
 
 // reconstructHashFromPrefixAndSuffix creates a hash from a prefix and suffix
@@ -516,7 +516,7 @@ func (ar archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) (
 	}
 
 	var result []byte
-	result, err = gozstd.DecompressDict(nil, data, dict.dDict)
+	result, err = zstd.DecompressDict(nil, data, dict.dDict)
 	if err != nil {
 		return nil, err
 	}
@@ -673,7 +673,7 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 	byteSpanCounter := uint32(1)
 
 	buf := make([]byte, 4*1024*1024)
-	loadedDictionaries := make(map[uint32]*gozstd.DDict)
+	loadedDictionaries := make(map[uint32]*zstd.DDict)
 
 	for byteSpanCounter <= ar.footer.byteSpanCount {
 		if ctx.Err() != nil {
@@ -730,7 +730,7 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 					panic("Reverse Index incomplete: Dictionary ID not found in loaded dictionaries")
 				}
 
-				chunkData, err = gozstd.DecompressDict(nil, spanData, dict)
+				chunkData, err = zstd.DecompressDict(nil, spanData, dict)
 				if err != nil {
 					return fmt.Errorf("error decompressing span: %d, %v, %w", byteSpanCounter, span, err)
 				}
