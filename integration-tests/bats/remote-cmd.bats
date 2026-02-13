@@ -29,6 +29,24 @@ teardown() {
     [[ "$output" =~ "origin http://customhost/org/db" ]] || false
 }
 
+@test "remote-cmd: stores normalized git+ssh url for scp-style input" {
+    run dolt remote add origin git@github.com:org/repo.git
+    [ "$status" -eq 0 ]
+
+    run dolt remote -v
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ origin[[:space:]]git[+]ssh://git@github.com/org/repo[.]git ]] || false
+}
+
+@test "remote-cmd: stores normalized git+https url for https .git input" {
+    run dolt remote add other https://example.com/org/repo.git
+    [ "$status" -eq 0 ]
+
+    run dolt remote -v
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ other[[:space:]]git[+]https://example.com/org/repo[.]git ]] || false
+}
+
 @test "remote-cmd: perform re-add" {
     dolt remote add origin http://customhost/org/db
 
