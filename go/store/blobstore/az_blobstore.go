@@ -15,7 +15,6 @@
 package blobstore
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -256,16 +255,8 @@ func etagToString(etag *azcore.ETag) string {
 	return string(*etag)
 }
 
-// readSeekCloser wraps a bytes.Reader to implement io.ReadSeekCloser
-type readSeekCloser struct {
-	*bytes.Reader
-}
-
-func (rsc *readSeekCloser) Close() error {
-	return nil
-}
-
 // Concatenate creates a new blob named |key| by concatenating |sources|
+// Uses Azure's server-side StageBlockFromURL for efficient copying without client egress
 func (bs *AzureBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
 	absKey := bs.absKey(key)
 
@@ -275,18 +266,14 @@ func (bs *AzureBlobstore) Concatenate(ctx context.Context, key string, sources [
 		blockIDs[i] = generateBlockID(i)
 	}
 
-	// Stage each source blob as a block
+	// Stage each source blob as a block using server-side copy
 	for i, source := range sources {
 		sourceKey := bs.absKey(source)
-		data, err := bs.downloadBlob(ctx, sourceKey)
-		if err != nil {
-			return "", fmt.Errorf("failed to download source blob %s: %w", source, err)
-		}
+		sourceURL := bs.azClient.GetBlobURL(bs.containerName, sourceKey)
 
-		reader := &readSeekCloser{bytes.NewReader(data)}
-		err = bs.azClient.StageBlock(ctx, bs.containerName, absKey, blockIDs[i], reader)
+		err := bs.azClient.StageBlockFromURL(ctx, bs.containerName, absKey, blockIDs[i], sourceURL)
 		if err != nil {
-			return "", fmt.Errorf("failed to stage block for source %s: %w", source, err)
+			return "", fmt.Errorf("failed to stage block from URL for source %s: %w", source, err)
 		}
 	}
 
@@ -303,20 +290,4 @@ func (bs *AzureBlobstore) Concatenate(ctx context.Context, key string, sources [
 func generateBlockID(index int) string {
 	blockIDRaw := fmt.Sprintf("%064d", index)
 	return base64.StdEncoding.EncodeToString([]byte(blockIDRaw))
-}
-
-// downloadBlob downloads a blob and returns its contents
-func (bs *AzureBlobstore) downloadBlob(ctx context.Context, absKey string) ([]byte, error) {
-	resp, err := bs.azClient.DownloadStream(ctx, bs.containerName, absKey, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := io.ReadAll(resp.GetBody())
-	resp.GetBody().Close()
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
 }

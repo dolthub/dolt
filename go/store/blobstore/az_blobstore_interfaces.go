@@ -50,7 +50,9 @@ type azureBlobClient interface {
 	DownloadStream(ctx context.Context, containerName, blobName string, options *blob.DownloadStreamOptions) (azureDownloadResponse, error)
 	UploadBuffer(ctx context.Context, containerName, blobName string, data []byte, options *azblob.UploadBufferOptions) (azureUploadResponse, error)
 	StageBlock(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error
+	StageBlockFromURL(ctx context.Context, containerName, blobName, blockID, sourceURL string) error
 	CommitBlockList(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error)
+	GetBlobURL(containerName, blobName string) string
 }
 
 // realAzClient wraps the actual Azure SDK client
@@ -101,6 +103,17 @@ func (c *realAzClient) CommitBlockList(ctx context.Context, containerName, blobN
 		return nil, err
 	}
 	return &realAzUploadResponse{etag: resp.ETag}, nil
+}
+
+func (c *realAzClient) StageBlockFromURL(ctx context.Context, containerName, blobName, blockID, sourceURL string) error {
+	blockBlobClient := c.client.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(blobName)
+	_, err := blockBlobClient.StageBlockFromURL(ctx, blockID, sourceURL, &blockblob.StageBlockFromURLOptions{})
+	return err
+}
+
+func (c *realAzClient) GetBlobURL(containerName, blobName string) string {
+	blobClient := c.client.ServiceClient().NewContainerClient(containerName).NewBlobClient(blobName)
+	return blobClient.URL()
 }
 
 // azureDownloadResponse abstracts download response

@@ -33,11 +33,13 @@ import (
 // Mock implementations
 
 type mockAzureClient struct {
-	getPropertiesFn   func(ctx context.Context, containerName, blobName string) (azureBlobProperties, error)
-	downloadStreamFn  func(ctx context.Context, containerName, blobName string, options *blob.DownloadStreamOptions) (azureDownloadResponse, error)
-	uploadBufferFn    func(ctx context.Context, containerName, blobName string, data []byte, options *azblob.UploadBufferOptions) (azureUploadResponse, error)
-	stageBlockFn      func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error
-	commitBlockListFn func(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error)
+	getPropertiesFn       func(ctx context.Context, containerName, blobName string) (azureBlobProperties, error)
+	downloadStreamFn      func(ctx context.Context, containerName, blobName string, options *blob.DownloadStreamOptions) (azureDownloadResponse, error)
+	uploadBufferFn        func(ctx context.Context, containerName, blobName string, data []byte, options *azblob.UploadBufferOptions) (azureUploadResponse, error)
+	stageBlockFn          func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error
+	stageBlockFromURLFn   func(ctx context.Context, containerName, blobName, blockID, sourceURL string) error
+	commitBlockListFn     func(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error)
+	getBlobURLFn          func(containerName, blobName string) string
 }
 
 func (m *mockAzureClient) GetProperties(ctx context.Context, containerName, blobName string) (azureBlobProperties, error) {
@@ -68,11 +70,25 @@ func (m *mockAzureClient) StageBlock(ctx context.Context, containerName, blobNam
 	return errors.New("not implemented")
 }
 
+func (m *mockAzureClient) StageBlockFromURL(ctx context.Context, containerName, blobName, blockID, sourceURL string) error {
+	if m.stageBlockFromURLFn != nil {
+		return m.stageBlockFromURLFn(ctx, containerName, blobName, blockID, sourceURL)
+	}
+	return errors.New("not implemented")
+}
+
 func (m *mockAzureClient) CommitBlockList(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error) {
 	if m.commitBlockListFn != nil {
 		return m.commitBlockListFn(ctx, containerName, blobName, blockIDs)
 	}
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockAzureClient) GetBlobURL(containerName, blobName string) string {
+	if m.getBlobURLFn != nil {
+		return m.getBlobURLFn(containerName, blobName)
+	}
+	return fmt.Sprintf("https://mockaccount.blob.core.windows.net/%s/%s", containerName, blobName)
 }
 
 type mockBlobProperties struct {
@@ -548,28 +564,16 @@ func TestAzureBlobstore_Concatenate(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("concatenate_multiple_blobs", func(t *testing.T) {
-		blobData := map[string][]byte{
-			"prefix/part1": []byte("Hello "),
-			"prefix/part2": []byte("World"),
-		}
-
 		var stagedBlocks []string
-		var stagedData [][]byte
+		var stagedSourceURLs []string
 
 		mockClient := &mockAzureClient{
-			downloadStreamFn: func(ctx context.Context, containerName, blobName string, options *blob.DownloadStreamOptions) (azureDownloadResponse, error) {
-				data, ok := blobData[blobName]
-				if !ok {
-					return nil, fmt.Errorf("blob not found: %s", blobName)
-				}
-				return &mockDownloadResponse{
-					body: io.NopCloser(bytes.NewReader(data)),
-				}, nil
+			getBlobURLFn: func(containerName, blobName string) string {
+				return fmt.Sprintf("https://mockaccount.blob.core.windows.net/%s/%s", containerName, blobName)
 			},
-			stageBlockFn: func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error {
+			stageBlockFromURLFn: func(ctx context.Context, containerName, blobName, blockID, sourceURL string) error {
 				stagedBlocks = append(stagedBlocks, blockID)
-				data, _ := io.ReadAll(body)
-				stagedData = append(stagedData, data)
+				stagedSourceURLs = append(stagedSourceURLs, sourceURL)
 				return nil
 			},
 			commitBlockListFn: func(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error) {
@@ -585,8 +589,8 @@ func TestAzureBlobstore_Concatenate(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "concat-etag", version)
 		assert.Equal(t, 2, len(stagedBlocks))
-		assert.Equal(t, []byte("Hello "), stagedData[0])
-		assert.Equal(t, []byte("World"), stagedData[1])
+		assert.Equal(t, "https://mockaccount.blob.core.windows.net/container/prefix/part1", stagedSourceURLs[0])
+		assert.Equal(t, "https://mockaccount.blob.core.windows.net/container/prefix/part2", stagedSourceURLs[1])
 	})
 
 	t.Run("concatenate_empty_list", func(t *testing.T) {
@@ -607,8 +611,11 @@ func TestAzureBlobstore_Concatenate(t *testing.T) {
 
 	t.Run("concatenate_source_not_found", func(t *testing.T) {
 		mockClient := &mockAzureClient{
-			downloadStreamFn: func(ctx context.Context, containerName, blobName string, options *blob.DownloadStreamOptions) (azureDownloadResponse, error) {
-				return nil, errors.New("BlobNotFound")
+			getBlobURLFn: func(containerName, blobName string) string {
+				return fmt.Sprintf("https://mockaccount.blob.core.windows.net/%s/%s", containerName, blobName)
+			},
+			stageBlockFromURLFn: func(ctx context.Context, containerName, blobName, blockID, sourceURL string) error {
+				return errors.New("BlobNotFound")
 			},
 		}
 
@@ -616,7 +623,7 @@ func TestAzureBlobstore_Concatenate(t *testing.T) {
 		version, err := bs.Concatenate(ctx, "result", []string{"missing"})
 		require.Error(t, err)
 		assert.Empty(t, version)
-		assert.Contains(t, err.Error(), "failed to download source blob")
+		assert.Contains(t, err.Error(), "failed to stage block from URL")
 	})
 }
 
@@ -821,23 +828,3 @@ func TestBuildCheckAndPutOptions(t *testing.T) {
 	})
 }
 
-func TestReadSeekCloser(t *testing.T) {
-	data := []byte("test data")
-	rsc := &readSeekCloser{bytes.NewReader(data)}
-
-	// Test Read
-	buf := make([]byte, 4)
-	n, err := rsc.Read(buf)
-	require.NoError(t, err)
-	assert.Equal(t, 4, n)
-	assert.Equal(t, []byte("test"), buf)
-
-	// Test Seek
-	offset, err := rsc.Seek(0, io.SeekStart)
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), offset)
-
-	// Test Close (should be no-op)
-	err = rsc.Close()
-	require.NoError(t, err)
-}
