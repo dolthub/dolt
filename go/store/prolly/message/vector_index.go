@@ -68,7 +68,7 @@ func (s VectorIndexSerializer) Serialize(keys, values [][]byte, subtrees []uint6
 	)
 
 	keySz, valSz, bufSz := estimateVectorIndexSize(keys, values, subtrees)
-	b := getFlatbufferBuilder(s.pool, bufSz)
+	b := getFlatbufferBuilder(bufSz)
 
 	// serialize keys and offStart
 	keyTups = writeItemBytes(b, keys, keySz)

@@ -41,11 +41,12 @@ const (
 var prollyMapFileID = []byte(serial.ProllyTreeNodeFileID)
 
 func NewProllyMapSerializer(valueDesc *val.TupleDesc, pool pool.BuffPool) ProllyMapSerializer {
-	return ProllyMapSerializer{valDesc: valueDesc, pool: pool}
+	return ProllyMapSerializer{
+		valDesc: valueDesc,
+	}
 }
 
 type ProllyMapSerializer struct {
-	pool    pool.BuffPool
 	valDesc *val.TupleDesc
 }
 
@@ -59,8 +60,12 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		refArr, cardArr  fb.UOffsetT
 	)
 
+	// TODO: it appears we do this to avoid flatbufferBuilder.growByteSlice(), but if we reuse builder correctly...
 	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
-	b := getFlatbufferBuilder(s.pool, bufSz)
+	b := getFlatbufferBuilder(bufSz)
+	defer func() {
+		fbBuilderPool.Put(b)
+	}()
 
 	// serialize keys and offStart
 	keyTups = writeItemBytes(b, keys, keySz)

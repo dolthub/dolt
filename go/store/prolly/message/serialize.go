@@ -16,11 +16,11 @@ package message
 
 import (
 	"math"
+	"sync"
 
 	fb "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -28,9 +28,17 @@ const (
 	MaxVectorOffset = uint64(math.MaxUint16)
 )
 
-func getFlatbufferBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
-	b = fb.NewBuilder(0)
-	b.Bytes = pool.Get(uint64(sz))
+var fbBuilderPool = sync.Pool{
+	New: func() interface{} {
+		return fb.NewBuilder(0) // TODO: pick good initial size
+	},
+}
+
+func getFlatbufferBuilder(sz int) (b *fb.Builder) {
+	b = fbBuilderPool.Get().(*fb.Builder)
+	if cap(b.Bytes) < sz {
+		b.Bytes = make([]byte, sz)
+	}
 	b.Reset()
 	return
 }
