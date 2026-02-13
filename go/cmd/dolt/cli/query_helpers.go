@@ -16,9 +16,21 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
+
+// unsupportedVariableWarned tracks variable names we have already warned about so we warn at most once per variable.
+var unsupportedVariableWarned = struct {
+	mu   sync.Mutex
+	seen map[string]struct{}
+}{seen: make(map[string]struct{})}
+
+// unsupportedVariableWarningWriter is where warnings are printed; nil means os.Stderr.
+var unsupportedVariableWarningWriter io.Writer
 
 // GetInt8ColAsBool returns the value of an int8 column as a bool
 // This is necessary because Queryist may return an int8 column as a bool (when using SQLEngine)
@@ -84,8 +96,25 @@ func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.
 	return rows, nil
 }
 
+// QueryBooleanSessionVariableWithFallback returns the boolean session variable, or fallback and at most one warning per variable name when the server does not support the variable.
+func QueryBooleanSessionVariableWithFallback(sqlCtx *sql.Context, queryist Queryist, varName string, fallback bool) (bool, error) {
+	val, err := QuerySessionVariable(sqlCtx, queryist, varName)
+	if err != nil {
+		return fallback, err
+	}
+	if val == nil {
+		return fallback, nil
+	}
+	b, err := GetInt8ColAsBool(val)
+	if err != nil {
+		emitUnsupportedVariableWarningOnce(varName)
+		return fallback, nil
+	}
+	return b, nil
+}
+
 // QuerySessionVariable returns the value of a session variable from the [Queryist].
-func QuerySessionVariable(queryist Queryist, sqlCtx *sql.Context, varName string) (interface{}, error) {
+func QuerySessionVariable(sqlCtx *sql.Context, queryist Queryist, varName string) (interface{}, error) {
 	rows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("SELECT @@%s", varName))
 	if err != nil {
 		return nil, err
@@ -97,15 +126,20 @@ func QuerySessionVariable(queryist Queryist, sqlCtx *sql.Context, varName string
 	return rows[0][0], nil
 }
 
-// QueryBooleanSessionVariable returns the value of a boolean session variable from the [Queryist].
-func QueryBooleanSessionVariable(queryist Queryist, sqlCtx *sql.Context, varName string) (bool, error) {
-	val, err := QuerySessionVariable(queryist, sqlCtx, varName)
-	if err != nil {
-		return false, err
+// emitUnsupportedVariableWarningOnce prints a warning at most once per variable name.
+func emitUnsupportedVariableWarningOnce(varName string) {
+	unsupportedVariableWarned.mu.Lock()
+	_, already := unsupportedVariableWarned.seen[varName]
+	if !already {
+		unsupportedVariableWarned.seen[varName] = struct{}{}
 	}
-	if val == nil {
-		return false, nil
+	unsupportedVariableWarned.mu.Unlock()
+	if already {
+		return
 	}
-
-	return GetInt8ColAsBool(val)
+	w := unsupportedVariableWarningWriter
+	if w == nil {
+		w = os.Stderr
+	}
+	_, _ = fmt.Fprintf(w, "warning: session variable %s is not supported by this server; using default.\n", varName)
 }

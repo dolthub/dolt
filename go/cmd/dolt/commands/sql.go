@@ -955,13 +955,10 @@ func preprocessQuery(query, lastQuery string, cliCtx cli.CliContext) (CommandTyp
 	return SqlShellCommand, nil, query, nil
 }
 
-// postCommandUpdate is a helper function that is run after the shell has completed a command. It updates the the database
-// if needed, and generates new prompts for the shell (based on the branch and if the workspace is dirty).
+// postCommandUpdate runs after each shell command and returns new prompts from the current session (branch and dirty
+// state). Session database name is left as-is so mydb@main stays mydb@main, consistent with select database() in tests.
 func postCommandUpdate(sqlCtx *sql.Context, qryist cli.Queryist) (string, string) {
-	db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
-	if ok {
-		sqlCtx.SetCurrentDatabase(doltdb.RevisionDbName(db, branch))
-	}
+	db, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
 	dirty := false
 	if branch != "" {
 		dirty, _ = isDirty(sqlCtx, qryist)
@@ -996,6 +993,20 @@ func formattedPrompts(db, branch string, dirty bool) (string, string) {
 	cyanDb := color.CyanString(db)
 	yellowBr := color.YellowString(branch)
 	return fmt.Sprintf("%s/%s%s> ", cyanDb, yellowBr, dirtyStr), multi
+}
+
+// splitRevisionDbNameForShellPrompt returns base name and revision for prompt display from a revision-qualified
+// database name. When |revisionDelimiterAliasEnabled| is true, splits on "/" or "@"; when false, splits only on "/" so
+// "@" is not treated as a delimiter.
+func splitRevisionDbNameForShellPrompt(dbName string, revisionDelimiterAliasEnabled bool) (baseName, revision string) {
+	delim := doltdb.DbRevisionDelimiter
+	if revisionDelimiterAliasEnabled {
+		delim = doltdb.DbRevisionDelimiter + doltdb.DbRevisionDelimiterAlias
+	}
+	if idx := strings.IndexAny(dbName, delim); idx >= 0 {
+		return dbName[:idx], dbName[idx+1:]
+	}
+	return dbName, ""
 }
 
 // getDBBranchFromSession returns the current database name and current branch  for the session, handling all the errors
@@ -1033,16 +1044,9 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 	if row[0] == nil {
 		db = ""
 	} else {
-		revisionDelimiterAliasEnabled, err := cli.QueryBooleanSessionVariable(qryist, sqlCtx, dsess.DoltEnableRevisionDelimiterAlias)
-		if err != nil {
-			cli.Println(color.RedString("Failure in querying revision delimiter session variable for DB): " + err.Error()))
-		}
-		db, _, _ = doltdb.RewriteRevisionDelimiter(row[0].(string), revisionDelimiterAliasEnabled)
-		// It is possible to `use mydb/branch`, and as far as your session is concerned your database is mydb/branch. We
-		// allow that, but also want to show the user the branch name in the prompt. So we munge the DB in this case.
-		if strings.HasSuffix(strings.ToLower(db), strings.ToLower("/"+branch)) {
-			db = db[:len(db)-len(branch)-1]
-		}
+		fullName := row[0].(string)
+		revisionDelimiterAliasEnabled, _ := cli.QueryBooleanSessionVariableWithFallback(sqlCtx, qryist, dsess.DoltEnableRevisionDelimiterAlias, false)
+		db, _ = splitRevisionDbNameForShellPrompt(fullName, revisionDelimiterAliasEnabled)
 	}
 
 	return db, branch, true
