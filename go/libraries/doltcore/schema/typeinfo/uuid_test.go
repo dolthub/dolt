@@ -141,34 +141,6 @@ func TestUuidConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestUuidFormatValue(t *testing.T) {
-	tests := []struct {
-		input  types.UUID
-		output string
-	}{
-		{
-			types.UUID(uuid.UUID{0}),
-			"00000000-0000-0000-0000-000000000000",
-		},
-		{
-			types.UUID(uuid.UUID{1, 2, 3, 4}),
-			"01020304-0000-0000-0000-000000000000",
-		},
-		{
-			types.UUID(uuid.UUID{11, 22, 33, 44, 55, 66, 77, 88, 99}),
-			"0b16212c-3742-4d58-6300-000000000000",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, UuidType.String(), test.input), func(t *testing.T) {
-			output, err := UuidType.FormatValue(test.input)
-			require.NoError(t, err)
-			require.Equal(t, test.output, *output)
-		})
-	}
-}
-
 func TestUuidParseValue(t *testing.T) {
 	tests := []struct {
 		input       string

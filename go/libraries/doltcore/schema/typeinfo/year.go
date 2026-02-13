@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -83,26 +82,6 @@ func (ti *yearType) Equals(other TypeInfo) bool {
 	}
 	_, ok := other.(*yearType)
 	return ok
-}
-
-// FormatValue implements TypeInfo interface.
-func (ti *yearType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Int); ok {
-		convVal, err := ti.ConvertNomsValueToValue(val)
-		if err != nil {
-			return nil, err
-		}
-		val, ok := convVal.(int16)
-		if !ok {
-			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-		}
-		res := strconv.FormatInt(int64(val), 10)
-		return &res, nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
 }
 
 // IsValid implements TypeInfo interface.

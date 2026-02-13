@@ -62,11 +62,6 @@ func (ti *extendedType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements the TypeInfo interface.
-func (ti *extendedType) FormatValue(v types.Value) (*string, error) {
-	return nil, fmt.Errorf(`"%v" is not valid in the old format`, ti.String())
-}
-
 // IsValid implements the TypeInfo interface.
 func (ti *extendedType) IsValid(v types.Value) bool {
 	return true

@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -101,27 +100,6 @@ func (ti *floatType) Equals(other TypeInfo) bool {
 		return ti.sqlFloatType.Type() == ti2.sqlFloatType.Type()
 	}
 	return false
-}
-
-// FormatValue implements TypeInfo interface.
-func (ti *floatType) FormatValue(v types.Value) (*string, error) {
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	fltVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	switch val := fltVal.(type) {
-	case float32:
-		res := strconv.FormatFloat(float64(val), 'f', -1, 64)
-		return &res, nil
-	case float64:
-		res := strconv.FormatFloat(val, 'f', -1, 64)
-		return &res, nil
-	default:
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
 }
 
 // IsValid implements TypeInfo interface.

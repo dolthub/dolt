@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -119,33 +118,6 @@ func (ti *intType) Equals(other TypeInfo) bool {
 			ti.sqlIntType.DisplayWidth() == ti2.sqlIntType.DisplayWidth()
 	}
 	return false
-}
-
-// FormatValue implements TypeInfo interface.
-func (ti *intType) FormatValue(v types.Value) (*string, error) {
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	intVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	switch val := intVal.(type) {
-	case int8:
-		res := strconv.FormatInt(int64(val), 10)
-		return &res, nil
-	case int16:
-		res := strconv.FormatInt(int64(val), 10)
-		return &res, nil
-	case int32:
-		res := strconv.FormatInt(int64(val), 10)
-		return &res, nil
-	case int64:
-		res := strconv.FormatInt(val, 10)
-		return &res, nil
-	default:
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
 }
 
 // IsValid implements TypeInfo interface.

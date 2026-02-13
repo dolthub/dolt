@@ -150,52 +150,6 @@ func TestDatetimeConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestDatetimeFormatValue(t *testing.T) {
-	tests := []struct {
-		typ         *datetimeType
-		input       types.Timestamp
-		output      string
-		expectedErr bool
-	}{
-		{
-			DateType,
-			types.Timestamp(time.Date(1880, 1, 2, 4, 6, 3, 472382485, time.UTC)),
-			"1880-01-02",
-			false,
-		},
-		{
-			TimestampType,
-			types.Timestamp(time.Date(2030, 1, 2, 4, 6, 3, 472382485, time.UTC)),
-			"2030-01-02 04:06:03.472382",
-			false,
-		},
-		{
-			DatetimeType,
-			types.Timestamp(time.Date(5800, 1, 2, 4, 6, 3, 472382485, time.UTC)),
-			"5800-01-02 04:06:03.472382",
-			false,
-		},
-		{
-			DatetimeType,
-			types.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC)),
-			"9999-12-31 23:59:59.999999",
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			output, err := test.typ.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
-			}
-		})
-	}
-}
-
 func TestDatetimeConversion(t *testing.T) {
 	tests := []struct {
 		typ         *datetimeType
@@ -245,13 +199,13 @@ func TestDatetimeConversion(t *testing.T) {
 			types.Timestamp{},
 			true,
 		},
-		//{
+		// {
 		//  todo: this doesn't error
 		//	DatetimeType,
 		//	"",
 		//	types.Timestamp{},
 		//	true,
-		//},
+		// },
 	}
 
 	for _, test := range tests {

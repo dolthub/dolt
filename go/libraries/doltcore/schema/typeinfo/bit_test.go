@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -114,52 +113,6 @@ func TestBitConvertValueToNomsValue(t *testing.T) {
 				assert.Equal(t, test.output, output)
 			} else {
 				assert.Error(t, err)
-			}
-		})
-	}
-}
-
-func TestBitFormatValue(t *testing.T) {
-	tests := []struct {
-		typ         *bitType
-		input       types.Uint
-		output      string
-		expectedErr bool
-	}{
-		{
-			generateBitType(t, 1),
-			0,
-			"0",
-			false,
-		},
-		{
-			generateBitType(t, 1),
-			1,
-			"1",
-			false,
-		},
-		{
-			generateBitType(t, 11),
-			250,
-			"250",
-			false,
-		},
-		{
-			generateBitType(t, 64),
-			math.MaxUint64,
-			strconv.FormatUint(math.MaxUint64, 10),
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			output, err := test.typ.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
 			}
 		})
 	}

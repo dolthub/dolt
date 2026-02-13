@@ -49,11 +49,6 @@ func (ti *unknownType) Equals(TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *unknownType) FormatValue(types.Value) (*string, error) {
-	return nil, fmt.Errorf(`"Unknown" cannot convert any Noms value to a string`)
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *unknownType) IsValid(types.Value) bool {
 	return false

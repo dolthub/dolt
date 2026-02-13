@@ -116,47 +116,6 @@ func TestBlobStringConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestBlobStringFormatValue(t *testing.T) {
-	vrw := types.NewMemoryValueStore()
-	tests := []struct {
-		typ         *blobStringType
-		input       types.Blob
-		output      string
-		expectedErr bool
-	}{
-		{
-			generateBlobStringType(t, 10),
-			mustBlobString(t, vrw, "0  "),
-			"0  ",
-			false,
-		},
-		{
-			generateBlobStringType(t, 80),
-			mustBlobString(t, vrw, "this is some text that will be returned"),
-			"this is some text that will be returned",
-			false,
-		},
-		{
-			&blobStringType{gmstypes.CreateLongText(sql.Collation_Default)},
-			mustBlobString(t, vrw, "  This is a sentence.  "),
-			"  This is a sentence.  ",
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			output, err := test.typ.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
-			}
-		})
-	}
-}
-
 func TestBlobStringParseValue(t *testing.T) {
 	vrw := types.NewMemoryValueStore()
 	tests := []struct {

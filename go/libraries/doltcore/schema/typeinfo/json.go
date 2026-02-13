@@ -91,22 +91,6 @@ func (ti *jsonType) Equals(other TypeInfo) bool {
 	return ok
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *jsonType) FormatValue(v types.Value) (*string, error) {
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	if noms, ok := v.(types.JSON); ok {
-		// TODO(andy) fix context
-		s, err := json.NomsJSON(noms).JSONString()
-		if err != nil {
-			return nil, err
-		}
-		return &s, nil
-	}
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *jsonType) IsValid(v types.Value) bool {
 	if v == nil {

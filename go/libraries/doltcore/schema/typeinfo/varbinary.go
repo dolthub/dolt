@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -92,21 +91,6 @@ func (ti *varBinaryType) Equals(other TypeInfo) bool {
 		return ti.sqlBinaryType.MaxCharacterLength() == ti2.sqlBinaryType.MaxCharacterLength()
 	}
 	return false
-}
-
-// FormatValue implements TypeInfo interface.
-func (ti *varBinaryType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Blob); ok {
-		resStr, err := fromBlob(val)
-		if err != nil {
-			return nil, err
-		}
-		return (*string)(unsafe.Pointer(&resStr)), nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
 }
 
 // IsValid implements TypeInfo interface.

@@ -111,34 +111,6 @@ func TestInlineBlobConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestInlineBlobFormatValue(t *testing.T) {
-	tests := []struct {
-		input  types.InlineBlob
-		output string
-	}{
-		{
-			[]byte("hi"),
-			"hi",
-		},
-		{
-			[]byte("hello there"),
-			"hello there",
-		},
-		{
-			[]byte("هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر"),
-			"هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, DefaultInlineBlobType.String(), test.input), func(t *testing.T) {
-			output, err := DefaultInlineBlobType.FormatValue(test.input)
-			require.NoError(t, err)
-			require.Equal(t, test.output, *output)
-		})
-	}
-}
-
 func TestInlineBlobParseValue(t *testing.T) {
 	tests := []struct {
 		input  string

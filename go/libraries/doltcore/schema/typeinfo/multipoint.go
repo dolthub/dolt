@@ -93,19 +93,6 @@ func (ti *multipointType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *multipointType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.MultiPoint); ok {
-		resStr := string(types.SerializeMultiPoint(val))
-		return &resStr, nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *multipointType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.MultiPoint); ok {

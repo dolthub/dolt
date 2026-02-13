@@ -93,19 +93,6 @@ func (ti *multipolygonType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *multipolygonType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.MultiPolygon); ok {
-		resStr := string(types.SerializeMultiPolygon(val))
-		return &resStr, nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *multipolygonType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.MultiPolygon); ok {

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
-	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -113,21 +112,6 @@ func (ti *blobStringType) Equals(other TypeInfo) bool {
 			ti.sqlStringType.Collation().Equals(ti2.sqlStringType.Collation())
 	}
 	return false
-}
-
-// FormatValue implements TypeInfo interface.
-func (ti *blobStringType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Blob); ok {
-		resStr, err := fromBlob(val)
-		if err != nil {
-			return nil, err
-		}
-		return (*string)(unsafe.Pointer(&resStr)), nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
 }
 
 // IsValid implements TypeInfo interface.

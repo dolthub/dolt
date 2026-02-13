@@ -135,52 +135,6 @@ func TestTimeConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestTimeFormatValue(t *testing.T) {
-	tests := []struct {
-		input       types.Int
-		output      string
-		expectedErr bool
-	}{
-		{
-			1000000,
-			"00:00:01",
-			false,
-		},
-		{
-			113000000,
-			"00:01:53",
-			false,
-		},
-		{
-			247019000000,
-			"68:36:59",
-			false,
-		},
-		{
-			458830485214,
-			"127:27:10.485214",
-			false,
-		},
-		{
-			-3020399000000,
-			"-838:59:59",
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v`, test.input), func(t *testing.T) {
-			output, err := TimeType.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
-			}
-		})
-	}
-}
-
 func TestTimeParseValue(t *testing.T) {
 	tests := []struct {
 		input       string

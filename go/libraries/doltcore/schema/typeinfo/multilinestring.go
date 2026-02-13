@@ -93,19 +93,6 @@ func (ti *multilinestringType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *multilinestringType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.MultiLineString); ok {
-		resStr := string(types.SerializeMultiLineString(val))
-		return &resStr, nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *multilinestringType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.MultiLineString); ok {

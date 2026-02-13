@@ -138,58 +138,6 @@ func TestIntConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestIntFormatValue(t *testing.T) {
-	tests := []struct {
-		typ         *intType
-		input       types.Int
-		output      string
-		expectedErr bool
-	}{
-		{
-			Int8Type,
-			120,
-			"120",
-			false,
-		},
-		{
-			Int16Type,
-			30000,
-			"30000",
-			false,
-		},
-		{
-			Int24Type,
-			7000000,
-			"7000000",
-			false,
-		},
-		{
-			Int32Type,
-			2000000000,
-			"2000000000",
-			false,
-		},
-		{
-			Int64Type,
-			math.MaxInt64,
-			strconv.FormatInt(math.MaxInt64, 10),
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			output, err := test.typ.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
-			}
-		})
-	}
-}
-
 func TestIntParseValue(t *testing.T) {
 	tests := []struct {
 		typ         *intType

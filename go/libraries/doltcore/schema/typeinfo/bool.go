@@ -124,23 +124,6 @@ func (ti *boolType) Equals(other TypeInfo) bool {
 	return ok
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *boolType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Bool); ok {
-		res := ""
-		if val {
-			res = "1"
-		} else {
-			res = "0"
-		}
-		return &res, nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *boolType) IsValid(v types.Value) bool {
 	_, err := ti.ConvertNomsValueToValue(v)

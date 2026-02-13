@@ -129,27 +129,6 @@ func (ti *decimalType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *decimalType) FormatValue(v types.Value) (*string, error) {
-	// TODO: Add context parameter to FormatValue
-	ctx := context.Background()
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	strVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	val, ok, err := sql.Unwrap[string](ctx, strVal)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
-	return &val, nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *decimalType) IsValid(v types.Value) bool {
 	// TODO: Add context parameter

@@ -106,23 +106,6 @@ func (ti *bitType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *bitType) FormatValue(v types.Value) (*string, error) {
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	uintVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	val, ok := uintVal.(uint64)
-	if !ok {
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
-	res := strconv.FormatUint(val, 10)
-	return &res, nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *bitType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {

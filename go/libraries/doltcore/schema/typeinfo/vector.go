@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -97,22 +96,6 @@ func (ti *vectorType) Equals(other TypeInfo) bool {
 		return ti.sqlVectorType.Dimensions == ti2.sqlVectorType.Dimensions
 	}
 	return false
-}
-
-// FormatValue implements TypeInfo interface.
-func (ti *vectorType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Blob); ok {
-		resStr, err := fromBlob(val)
-		if err != nil {
-			return nil, err
-		}
-		// This is safe (See https://go101.org/article/unsafe.html)
-		return (*string)(unsafe.Pointer(&resStr)), nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti, v.Kind())
 }
 
 // IsValid implements TypeInfo interface.

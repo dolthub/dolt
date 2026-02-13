@@ -109,37 +109,6 @@ func TestBoolConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestBoolFormatValue(t *testing.T) {
-	tests := []struct {
-		input       types.Bool
-		output      string
-		expectedErr bool
-	}{
-		{
-			false,
-			"0",
-			false,
-		},
-		{
-			true,
-			"1",
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, BoolType.String(), test.input), func(t *testing.T) {
-			output, err := BoolType.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
-			}
-		})
-	}
-}
-
 func TestBoolParseValue(t *testing.T) {
 	tests := []struct {
 		input       string

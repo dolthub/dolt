@@ -86,18 +86,6 @@ func (ti *uuidType) Equals(other TypeInfo) bool {
 	return ok
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *uuidType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.UUID); ok {
-		res := val.String()
-		return &res, nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *uuidType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.UUID); ok {

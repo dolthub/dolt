@@ -139,52 +139,6 @@ func TestVarStringConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestVarStringFormatValue(t *testing.T) {
-	tests := []struct {
-		typ         *varStringType
-		input       types.String
-		output      string
-		expectedErr bool
-	}{
-		{
-			generateVarStringType(t, 10, false),
-			"0  ",
-			"0  ",
-			false,
-		},
-		{
-			generateVarStringType(t, 10, true),
-			"0  ",
-			"0",
-			false,
-		},
-		{
-			generateVarStringType(t, 80, false),
-			"this is some text that will be returned",
-			"this is some text that will be returned",
-			false,
-		},
-		{
-			&varStringType{gmstypes.CreateLongText(sql.Collation_Default)},
-			"  This is a sentence.  ",
-			"  This is a sentence.  ",
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			output, err := test.typ.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
-			}
-		})
-	}
-}
-
 func TestVarStringParseValue(t *testing.T) {
 	tests := []struct {
 		typ         *varStringType

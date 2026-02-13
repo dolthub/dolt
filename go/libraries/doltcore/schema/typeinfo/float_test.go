@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strconv"
 	"testing"
 	"time"
 
@@ -122,52 +121,6 @@ func TestFloatConvertValueToNomsValue(t *testing.T) {
 				assert.Equal(t, test.output, output)
 			} else {
 				assert.Error(t, err)
-			}
-		})
-	}
-}
-
-func TestFloatFormatValue(t *testing.T) {
-	tests := []struct {
-		typ         *floatType
-		input       types.Float
-		output      string
-		expectedErr bool
-	}{
-		{
-			Float32Type,
-			0,
-			"0",
-			false,
-		},
-		{
-			Float64Type,
-			1,
-			"1",
-			false,
-		},
-		{
-			Float32Type,
-			250,
-			"250",
-			false,
-		},
-		{
-			Float64Type,
-			math.MaxFloat64,
-			strconv.FormatFloat(math.MaxFloat64, 'f', -1, 64),
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			output, err := test.typ.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
 			}
 		})
 	}

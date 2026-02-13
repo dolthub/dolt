@@ -114,47 +114,6 @@ func TestYearConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestYearFormatValue(t *testing.T) {
-	tests := []struct {
-		input       types.Int
-		output      string
-		expectedErr bool
-	}{
-		{
-			2001,
-			"2001",
-			false,
-		},
-		{
-			1901,
-			"1901",
-			false,
-		},
-		{
-			2000,
-			"2000",
-			false,
-		},
-		{
-			1989,
-			"1989",
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, YearType.String(), test.input), func(t *testing.T) {
-			output, err := YearType.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
-			}
-		})
-	}
-}
-
 func TestYearParseValue(t *testing.T) {
 	tests := []struct {
 		input       string

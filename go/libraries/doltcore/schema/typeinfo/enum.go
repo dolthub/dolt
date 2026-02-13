@@ -95,22 +95,6 @@ func (ti *enumType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *enumType) FormatValue(v types.Value) (*string, error) {
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	convVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	val, ok := ti.sqlEnumType.At(int(convVal.(uint16)))
-	if !ok {
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
-	return &val, nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *enumType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {

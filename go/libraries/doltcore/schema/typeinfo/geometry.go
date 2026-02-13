@@ -141,53 +141,6 @@ func (ti *geometryType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
-	// Received null value
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-
-	// Expect one of the Geometry types
-	switch val := v.(type) {
-	case types.Point:
-		return PointType.FormatValue(val)
-	case types.LineString:
-		return LineStringType.FormatValue(val)
-	case types.Polygon:
-		return PolygonType.FormatValue(val)
-	case types.MultiPoint:
-		return MultiPointType.FormatValue(val)
-	case types.MultiLineString:
-		return MultiLineStringType.FormatValue(val)
-	case types.MultiPolygon:
-		return MultiPolygonType.FormatValue(val)
-	case types.GeomColl:
-		return GeomCollType.FormatValue(val)
-	case types.Geometry:
-		switch inner := val.Inner.(type) {
-		case types.Point:
-			return PointType.FormatValue(inner)
-		case types.LineString:
-			return LineStringType.FormatValue(inner)
-		case types.Polygon:
-			return PolygonType.FormatValue(inner)
-		case types.MultiPoint:
-			return MultiPointType.FormatValue(inner)
-		case types.MultiLineString:
-			return MultiLineStringType.FormatValue(inner)
-		case types.MultiPolygon:
-			return MultiPolygonType.FormatValue(val)
-		case types.GeomColl:
-			return GeomCollType.FormatValue(val)
-		default:
-			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-		}
-	default:
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-	}
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *geometryType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.Null); ok || v == nil {

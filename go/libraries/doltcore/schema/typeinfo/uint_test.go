@@ -138,58 +138,6 @@ func TestUintConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestUintFormatValue(t *testing.T) {
-	tests := []struct {
-		typ         *uintType
-		input       types.Uint
-		output      string
-		expectedErr bool
-	}{
-		{
-			Uint8Type,
-			120,
-			"120",
-			false,
-		},
-		{
-			Uint16Type,
-			30000,
-			"30000",
-			false,
-		},
-		{
-			Uint24Type,
-			7000000,
-			"7000000",
-			false,
-		},
-		{
-			Uint32Type,
-			2000000000,
-			"2000000000",
-			false,
-		},
-		{
-			Uint64Type,
-			math.MaxUint64,
-			strconv.FormatUint(math.MaxUint64, 10),
-			false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			output, err := test.typ.FormatValue(test.input)
-			if test.expectedErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.output, *output)
-			}
-		})
-	}
-}
-
 func TestUintParseValue(t *testing.T) {
 	tests := []struct {
 		typ         *uintType

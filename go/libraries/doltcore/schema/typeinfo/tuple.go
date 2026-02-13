@@ -69,11 +69,6 @@ func (ti *tupleType) Equals(other TypeInfo) bool {
 	return ok
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *tupleType) FormatValue(v types.Value) (*string, error) {
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *tupleType) IsValid(v types.Value) bool {
 	if v == nil {

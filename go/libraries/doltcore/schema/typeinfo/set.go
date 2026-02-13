@@ -90,22 +90,6 @@ func (ti *setType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *setType) FormatValue(v types.Value) (*string, error) {
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	convVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	val, err := ti.sqlSetType.BitsToString(convVal.(uint64))
-	if err != nil {
-		return nil, err
-	}
-	return &val, nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *setType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {

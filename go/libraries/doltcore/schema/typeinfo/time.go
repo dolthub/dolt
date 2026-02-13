@@ -86,19 +86,6 @@ func (ti *timeType) Equals(other TypeInfo) bool {
 	return ok
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *timeType) FormatValue(v types.Value) (*string, error) {
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	convVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	val := convVal.(gmstypes.Timespan).String()
-	return &val, nil
-}
-
 // IsValid implements TypeInfo interface.
 func (ti *timeType) IsValid(v types.Value) bool {
 	if _, ok := v.(types.Int); ok {

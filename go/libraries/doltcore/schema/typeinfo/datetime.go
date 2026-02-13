@@ -19,11 +19,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/sqltypes"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -111,28 +109,6 @@ func (ti *datetimeType) Equals(other TypeInfo) bool {
 		return ti.sqlDatetimeType.Type() == ti2.sqlDatetimeType.Type()
 	}
 	return false
-}
-
-// FormatValue implements TypeInfo interface.
-func (ti *datetimeType) FormatValue(v types.Value) (*string, error) {
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	timeVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	val, ok := timeVal.(time.Time)
-	if !ok {
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
-	if ti.sqlDatetimeType.Type() == sqltypes.Date {
-		res := val.Format(sql.DateLayout)
-		return &res, nil
-	} else {
-		res := val.Format(sql.TimestampDatetimeLayout)
-		return &res, nil
-	}
 }
 
 // IsValid implements TypeInfo interface.
