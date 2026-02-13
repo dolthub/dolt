@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -39,6 +38,9 @@ const (
 	// tableWriterStatUpdateRate is the number of writes that will process before the updated stats are displayed.
 	tableWriterStatUpdateRate = 64 * 1024
 )
+
+// StatsCb is a callback for reporting stats about the rows that have been processed so far
+type StatsCb func(types.AppliedEditStats)
 
 // SqlEngineTableWriter is a utility for importing a set of rows through the sql engine.
 type SqlEngineTableWriter struct {
@@ -51,7 +53,7 @@ type SqlEngineTableWriter struct {
 	force      bool
 	disableFks bool
 
-	statsCB noms.StatsCB
+	statsCB StatsCb
 	stats   types.AppliedEditStats
 	statOps int32
 
@@ -60,7 +62,7 @@ type SqlEngineTableWriter struct {
 	rowOperationSchema sql.PrimaryKeySchema
 }
 
-func NewSqlEngineTableWriter(ctx *sql.Context, engine *sqle.Engine, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*SqlEngineTableWriter, error) {
+func NewSqlEngineTableWriter(ctx *sql.Context, engine *sqle.Engine, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB StatsCb) (*SqlEngineTableWriter, error) {
 	if engine.IsReadOnly() {
 		// SqlEngineTableWriter does not respect read only mode
 		return nil, analyzererrors.ErrReadOnlyDatabase.New(ctx.GetCurrentDatabase())

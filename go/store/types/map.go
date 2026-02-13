@@ -26,8 +26,6 @@ import (
 	"errors"
 	"fmt"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -91,98 +89,6 @@ func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) (Map, error) 
 
 	seq, err := ch.Done(ctx)
 
-	if err != nil {
-		return EmptyMap, err
-	}
-
-	return newMap(seq.(orderedSequence)), nil
-}
-
-// NewStreamingMap takes an input channel of values and returns a value that
-// will produce a finished Map when |.Wait()| is called.  Values sent to the
-// input channel must be alternating keys and values. (e.g.  k1, v1, k2,
-// v2...). Moreover keys need to be added to the channel in Noms sortorder,
-// adding key values to the input channel out of order will result in an error.
-// Once the input channel is closed by the caller, a finished Map will be
-// available from the |Wait| call.
-//
-// See graph_builder.go for building collections with values that are not in
-// order.
-func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value) *StreamingMap {
-	d.PanicIfTrue(vrw == nil)
-	sm := &StreamingMap{}
-	sm.eg, sm.egCtx = errgroup.WithContext(ctx)
-	sm.eg.Go(func() error {
-		m, err := readMapInput(sm.egCtx, vrw, kvs)
-		sm.m = m
-		return err
-	})
-	return sm
-}
-
-type StreamingMap struct {
-	eg    *errgroup.Group
-	egCtx context.Context
-	m     Map
-}
-
-func (sm *StreamingMap) Wait() (Map, error) {
-	err := sm.eg.Wait()
-	return sm.m, err
-}
-
-// Done returns a signal channel which is closed once the StreamingMap is no
-// longer reading from the key/values channel. A send to the key/value channel
-// should be in a select with a read from this channel to ensure that the send
-// does not deadlock.
-func (sm *StreamingMap) Done() <-chan struct{} {
-	return sm.egCtx.Done()
-}
-
-func readMapInput(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value) (Map, error) {
-	ch, err := newEmptyMapSequenceChunker(ctx, vrw)
-	if err != nil {
-		return EmptyMap, err
-	}
-
-	var lastK Value
-	nextIsKey := true
-	var k Value
-LOOP:
-	for {
-		select {
-		case v, ok := <-kvs:
-			if !ok {
-				break LOOP
-			}
-			if nextIsKey {
-				k = v
-
-				if lastK != nil {
-					isLess, err := lastK.Less(ctx, vrw.Format(), k)
-					if err != nil {
-						return EmptyMap, err
-					}
-					if !isLess {
-						return EmptyMap, ErrKeysNotOrdered
-					}
-				}
-				lastK = k
-				nextIsKey = false
-			} else {
-				_, err := ch.Append(ctx, mapEntry{key: k, value: v})
-				if err != nil {
-					return EmptyMap, err
-				}
-
-				nextIsKey = true
-			}
-		case <-ctx.Done():
-			return EmptyMap, ctx.Err()
-		}
-	}
-
-	seq, err := ch.Done(ctx)
 	if err != nil {
 		return EmptyMap, err
 	}

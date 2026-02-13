@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"context"
-	"encoding/base32"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -403,13 +402,6 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
-}
-
-var encoding = base32.NewEncoding("0123456789abcdefghijklmnopqrstuv")
-
-// encode returns the base32 encoding in the Dolt alphabet.
-func encode(data []byte) string {
-	return encoding.EncodeToString(data)
 }
 
 func randomCompressedChunks(cnt int) (compressed map[hash.Hash]CompressedChunk) {

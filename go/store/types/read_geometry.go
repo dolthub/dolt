@@ -200,10 +200,6 @@ func DeserializeEWKBHeader(buf []byte) (uint32, bool, uint32, error) {
 	return types.DeserializeEWKBHeader(buf)
 }
 
-func DeserializeWKBHeader(buf []byte) (bool, uint32, error) {
-	return types.DeserializeWKBHeader(buf)
-}
-
 func DeserializePoint(buf []byte, isBig bool, srid uint32) types.Point {
 	p, _, err := types.DeserializePoint(buf, isBig, srid)
 	if err != nil {

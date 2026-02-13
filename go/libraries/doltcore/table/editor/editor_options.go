@@ -15,10 +15,6 @@
 package editor
 
 import (
-	"context"
-	"fmt"
-	"strings"
-
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -37,34 +33,4 @@ type Options struct {
 
 func TestEditorOptions(vrw types.ValueReadWriter) Options {
 	return Options{}
-}
-
-// formatKey returns a comma-separated string representation of the key given.
-func formatKey(ctx context.Context, key types.Value) (string, error) {
-	tuple, ok := key.(types.Tuple)
-	if !ok {
-		return "", fmt.Errorf("Expected types.Tuple but got %T", key)
-	}
-
-	var vals []string
-	iter, err := tuple.Iterator()
-	if err != nil {
-		return "", err
-	}
-
-	for iter.HasMore() {
-		i, val, err := iter.Next()
-		if err != nil {
-			return "", err
-		}
-		if i%2 == 1 {
-			str, err := types.EncodedValue(ctx, val)
-			if err != nil {
-				return "", err
-			}
-			vals = append(vals, str)
-		}
-	}
-
-	return fmt.Sprintf("[%s]", strings.Join(vals, ",")), nil
 }

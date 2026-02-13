@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/spec"
@@ -140,16 +139,6 @@ func (r *Resolver) GetDatabase(ctx context.Context, str string) (datas.Database,
 	return sp.GetDatabase(ctx), sp.GetVRW(ctx), sp.GetNodeStore(ctx), nil
 }
 
-// Resolve string to a chunkstore. Like ResolveDatabase, but returns the underlying ChunkStore
-func (r *Resolver) GetChunkStore(ctx context.Context, str string) (chunks.ChunkStore, error) {
-	dbc := r.DbConfigForDbSpec(str)
-	sp, err := spec.ForDatabaseOpts(r.verbose(ctx, str, dbc.Url), specOptsForConfig(r.config, dbc))
-	if err != nil {
-		return nil, err
-	}
-	return sp.NewChunkStore(ctx), nil
-}
-
 // Resolve string to a dataset. If a config is present,
 //   - if no db prefix is present, assume the default db
 //   - if the db prefix is an alias, replace it
@@ -177,10 +166,4 @@ func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, typ
 	}
 
 	return sp.GetDatabase(ctx), sp.GetVRW(ctx), value, nil
-}
-
-// GetDatabaseSpecForPath returns the database and a VRW for the path given, but does not attempt to load a value
-func (r *Resolver) GetDatabaseSpecForPath(ctx context.Context, str string) (spec.Spec, error) {
-	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
-	return spec.ForPathOpts(r.verbose(ctx, str, specStr), specOptsForConfig(r.config, dbc))
 }

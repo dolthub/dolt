@@ -212,14 +212,6 @@ func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, r
 	return remaining, gcBehavior_Continue, nil
 }
 
-func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) error {
-	for _, hrec := range mt.order {
-		chunks <- extractRecord{a: *hrec.a, data: mt.chunks[*hrec.a], err: nil}
-	}
-
-	return nil
-}
-
 func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name hash.Hash, data []byte, splitOffset uint64, chunkCount uint32, gcb gcBehavior, err error) {
 	gcb = gcBehavior_Continue
 	numChunks := uint64(len(mt.order))
