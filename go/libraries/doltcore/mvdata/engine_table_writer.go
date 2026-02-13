@@ -31,6 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -49,6 +51,8 @@ type SqlEngineTableWriter struct {
 	force      bool
 	disableFks bool
 
+	statsCB noms.StatsCB
+	stats   types.AppliedEditStats
 	statOps int32
 
 	importOption       TableImportOp
@@ -56,12 +60,7 @@ type SqlEngineTableWriter struct {
 	rowOperationSchema sql.PrimaryKeySchema
 }
 
-func NewSqlEngineTableWriter(
-	ctx *sql.Context,
-	engine *sqle.Engine,
-	createTableSchema, rowOperationSchema schema.Schema,
-	options *MoverOptions,
-) (*SqlEngineTableWriter, error) {
+func NewSqlEngineTableWriter(ctx *sql.Context, engine *sqle.Engine, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*SqlEngineTableWriter, error) {
 	if engine.IsReadOnly() {
 		// SqlEngineTableWriter does not respect read only mode
 		return nil, analyzererrors.ErrReadOnlyDatabase.New(ctx.GetCurrentDatabase())
@@ -86,6 +85,8 @@ func NewSqlEngineTableWriter(
 
 		database:  ctx.GetCurrentDatabase(),
 		tableName: options.TableToWriteTo,
+
+		statsCB: statsCB,
 
 		importOption:       options.Operation,
 		tableSchema:        doltCreateTableSchema,
@@ -114,6 +115,28 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 	err = s.createOrEmptyTableIfNeeded()
 	if err != nil {
 		return err
+	}
+
+	updateStats := func(row sql.Row) {
+		if row == nil {
+			return
+		}
+
+		// If the length of the row does not match the schema then we have an update operation.
+		if len(row) != len(s.tableSchema.Schema) {
+			oldRow := row[:len(row)/2]
+			newRow := row[len(row)/2:]
+
+			if ok, err := oldRow.Equals(s.sqlCtx, newRow, s.tableSchema.Schema); err == nil {
+				if ok {
+					s.stats.SameVal++
+				} else {
+					s.stats.Modifications++
+				}
+			}
+		} else {
+			s.stats.Additions++
+		}
 	}
 
 	insertOrUpdateOperation, err := s.getInsertNode(inputChannel, false)
@@ -153,15 +176,24 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 
 	line := 1
 	for {
-		_, err := iter.Next(s.sqlCtx)
+		if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {
+			atomic.StoreInt32(&s.statOps, 0)
+			s.statsCB(s.stats)
+		}
+
+		row, err := iter.Next(s.sqlCtx)
 		line += 1
 
 		// All other errors are handled by the errorHandler
 		if err == nil {
 			_ = atomic.AddInt32(&s.statOps, 1)
+			updateStats(row)
 		} else if err == io.EOF {
 			atomic.LoadInt32(&s.statOps)
 			atomic.StoreInt32(&s.statOps, 0)
+			if s.statsCB != nil {
+				s.statsCB(s.stats)
+			}
 
 			return err
 		} else {

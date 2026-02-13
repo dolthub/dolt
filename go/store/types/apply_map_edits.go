@@ -79,6 +79,26 @@ const (
 	batchSizeMax   = 5000
 )
 
+// AppliedEditStats contains statistics on what edits were applied in types.ApplyEdits
+type AppliedEditStats struct {
+	// Additions counts the number of elements added to the map
+	Additions int64
+
+	// Modifications counts the number of map entries that were modified
+	Modifications int64
+
+	// SamVal counts the number of edits that had no impact because a value was set to the same value that is already
+	// stored in the map
+	SameVal int64
+
+	// Deletions counts the number of items deleted from the map
+	Deletions int64
+
+	// NonexistentDeletes counts the number of items where a deletion was attempted, but the key didn't exist in the map
+	// so there was no impact
+	NonExistentDeletes int64
+}
+
 // ApplyEdits applies all the edits to a given Map and returns the resulting map, and some statistics about the edits
 // that were applied.
 func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, error) {
