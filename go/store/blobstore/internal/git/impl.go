@@ -21,8 +21,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-
-	"github.com/dolthub/dolt/go/libraries/utils/termprogress"
 )
 
 // GitAPIImpl implements GitAPI using the git CLI plumbing commands, via Runner.
@@ -319,8 +317,6 @@ func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string,
 	if dstRef == "" {
 		return fmt.Errorf("git fetch: dst ref is required")
 	}
-	resume := termprogress.Suspend()
-	defer resume()
 	// Forced refspec to keep tracking refs in sync with remote truth.
 	srcRef = strings.TrimPrefix(srcRef, "+")
 	refspec := "+" + srcRef + ":" + dstRef
@@ -341,8 +337,6 @@ func (a *GitAPIImpl) PushRefWithLease(ctx context.Context, remote string, srcRef
 	if dstRef == "" {
 		return fmt.Errorf("git push: dst ref is required")
 	}
-	resume := termprogress.Suspend()
-	defer resume()
 	srcRef = strings.TrimPrefix(srcRef, "+")
 	refspec := srcRef + ":" + dstRef
 	lease := "--force-with-lease=" + dstRef + ":" + expectedDstOID.String()

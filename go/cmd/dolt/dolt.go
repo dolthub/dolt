@@ -59,6 +59,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/gitcreds"
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -469,6 +470,7 @@ func runMain() int {
 		}
 	}
 	defer tempfiles.MovableTempFileProvider.Clean()
+	defer gitcreds.Close()
 
 	// Find all database names and add global variables for them. This needs to
 	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database

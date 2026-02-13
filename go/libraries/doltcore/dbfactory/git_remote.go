@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/utils/gitcreds"
 	"github.com/dolthub/dolt/go/libraries/utils/termprogress"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -272,6 +273,7 @@ func runGitInitBare(ctx context.Context, dir string) error {
 		return fmt.Errorf("git not found on PATH: %w", err)
 	}
 	cmd := exec.CommandContext(ctx, "git", "init", "--bare", dir) //nolint:gosec // controlled args
+	cmd.Env = append(os.Environ(), gitcreds.Env()...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git init --bare failed: %w\noutput:\n%s", err, strings.TrimSpace(string(out)))
@@ -287,6 +289,7 @@ func runGitInDir(ctx context.Context, gitDir string, args ...string) (string, er
 	all := append([]string{"--git-dir", gitDir}, args...)
 	cmd := exec.CommandContext(ctx, "git", all...) //nolint:gosec // controlled args
 	cmd.Stdin = os.Stdin
+	cmd.Env = append(os.Environ(), gitcreds.Env()...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s failed: %w\noutput:\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))

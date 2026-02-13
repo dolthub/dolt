@@ -25,6 +25,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/gitcreds"
 )
 
 const maxCapturedOutputBytes = 64 * 1024
@@ -242,6 +244,7 @@ func (r *Runner) env(opts RunOptions) []string {
 	if opts.IndexFile != "" {
 		env = append(env, "GIT_INDEX_FILE="+opts.IndexFile)
 	}
+	env = append(env, gitcreds.Env()...)
 	env = append(env, r.extraEnv...)
 	env = append(env, opts.Env...)
 	return env
