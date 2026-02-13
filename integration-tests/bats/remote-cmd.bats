@@ -35,7 +35,7 @@ teardown() {
 
     run dolt remote -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ origin[[:space:]]git[+]ssh://git@github.com/org/repo[.]git ]] || false
+    [[ "$output" =~ origin[[:blank:]]git[+]ssh://git@github.com/org/repo[.]git ]] || false
 }
 
 @test "remote-cmd: stores normalized git+https url for https .git input" {
@@ -44,7 +44,7 @@ teardown() {
 
     run dolt remote -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ other[[:space:]]git[+]https://example.com/org/repo[.]git ]] || false
+    [[ "$output" =~ other[[:blank:]]git[+]https://example.com/org/repo[.]git ]] || false
 }
 
 @test "remote-cmd: perform re-add" {
