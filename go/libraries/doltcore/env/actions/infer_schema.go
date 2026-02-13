@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -258,8 +259,8 @@ func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
 		return typeinfo.UnknownType
 	}
 
-	dt, err := typeinfo.StringDefaultType.ConvertToType(context.Background(), nil, typeinfo.DatetimeType, types.String(strVal))
-	if err == nil {
+	dt, inRange, err := typeinfo.DatetimeType.ToSqlType().Convert(nil, strVal)
+	if err == nil && inRange == sql.InRange {
 		t := time.Time(dt.(types.Timestamp))
 		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
 			return typeinfo.DateType
@@ -268,8 +269,8 @@ func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
 		return typeinfo.DatetimeType
 	}
 
-	_, err = typeinfo.StringDefaultType.ConvertToType(context.Background(), nil, typeinfo.TimeType, types.String(strVal))
-	if err == nil {
+	_, inRange, err = typeinfo.TimeType.ToSqlType().Convert(nil, strVal)
+	if err == nil && inRange == sql.InRange {
 		return typeinfo.TimeType
 	}
 
@@ -294,15 +295,15 @@ func numericTypes() []typeinfo.TypeInfo {
 	//   ints over floats
 	//   smaller over larger
 	return []typeinfo.TypeInfo{
-		//typeinfo.Uint8Type,
-		//typeinfo.Uint16Type,
-		//typeinfo.Uint24Type,
-		//typeinfo.Uint32Type,
-		//typeinfo.Uint64Type,
+		// typeinfo.Uint8Type,
+		// typeinfo.Uint16Type,
+		// typeinfo.Uint24Type,
+		// typeinfo.Uint32Type,
+		// typeinfo.Uint64Type,
 
-		//typeinfo.Int8Type,
-		//typeinfo.Int16Type,
-		//typeinfo.Int24Type,
+		// typeinfo.Int8Type,
+		// typeinfo.Int16Type,
+		// typeinfo.Int24Type,
 		typeinfo.Int32Type,
 		typeinfo.Int64Type,
 
@@ -375,7 +376,7 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 
 	nonChronoTypes := []typeinfo.TypeInfo{
 		// todo: BIT implementation parses all uint8
-		//typeinfo.PseudoBoolType,
+		// typeinfo.PseudoBoolType,
 		typeinfo.BoolType,
 		typeinfo.UuidType,
 	}

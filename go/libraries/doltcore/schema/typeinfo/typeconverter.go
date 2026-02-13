@@ -35,7 +35,7 @@ type TypeConverter func(ctx context.Context, vrw types.ValueReadWriter, v types.
 
 // wrapConvertValueToNomsValue is a helper function that takes a ConvertValueToNomsValue function and returns a TypeConverter.
 func wrapConvertValueToNomsValue(
-		cvtnv func(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error),
+	cvtnv func(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error),
 ) (tc TypeConverter, needsConversion bool, err error) {
 	return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
 		if v == nil || v == types.NullValue {

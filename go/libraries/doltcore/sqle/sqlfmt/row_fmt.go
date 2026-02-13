@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
@@ -52,151 +51,6 @@ func QuoteTableName(n doltdb.TableName) string {
 // QuoteComment quotes the given string with apostrophes, and escapes any contained within the string.
 func QuoteComment(s string) string {
 	return `'` + strings.ReplaceAll(s, `'`, `\'`) + `'`
-}
-
-func RowAsInsertStmt(ctx *sql.Context, r row.Row, tableName string, tableSch schema.Schema) (string, error) {
-	var b strings.Builder
-	b.WriteString("INSERT INTO ")
-	b.WriteString(QuoteIdentifier(ctx, tableName))
-	b.WriteString(" ")
-
-	b.WriteString("(")
-	seenOne := false
-	err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		b.WriteString(QuoteIdentifier(ctx, col.Name))
-		seenOne = true
-		return false, nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(")")
-
-	b.WriteString(" VALUES (")
-	seenOne = false
-	// TAGS: Use of tags here is safe since it's constrained to a single table
-	_, err = r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
-		if err != nil {
-			return true, err
-		}
-		b.WriteString(sqlString)
-		seenOne = true
-		return false, nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(");")
-
-	return b.String(), nil
-}
-
-func RowAsDeleteStmt(ctx *sql.Context, r row.Row, tableName string, tableSch schema.Schema) (string, error) {
-	var b strings.Builder
-	b.WriteString("DELETE FROM ")
-	b.WriteString(QuoteIdentifier(ctx, tableName))
-
-	b.WriteString(" WHERE (")
-	seenOne := false
-	isKeyless := tableSch.GetPKCols().Size() == 0
-	// TAGS: Use of tags here is safe since it's constrained to a single table
-	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
-		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		if col.IsPartOfPK || isKeyless {
-			if seenOne {
-				b.WriteString(" AND ")
-			}
-			sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
-			if err != nil {
-				return true, err
-			}
-			b.WriteString(QuoteIdentifier(ctx, col.Name))
-			b.WriteRune('=')
-			b.WriteString(sqlString)
-			seenOne = true
-		}
-		return false, nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(");")
-	return b.String(), nil
-}
-
-func RowAsUpdateStmt(ctx *sql.Context, r row.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
-	var b strings.Builder
-	b.WriteString("UPDATE ")
-	b.WriteString(QuoteIdentifier(ctx, tableName))
-	b.WriteString(" ")
-
-	b.WriteString("SET ")
-	seenOne := false
-	// TAGS: Use of tags here is safe since it's constrained to a single table
-	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
-		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		exists := colsToUpdate.Contains(col.Name)
-		if !col.IsPartOfPK && exists {
-			if seenOne {
-				b.WriteRune(',')
-			}
-			sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
-			if err != nil {
-				return true, err
-			}
-			b.WriteString(QuoteIdentifier(ctx, col.Name))
-			b.WriteRune('=')
-			b.WriteString(sqlString)
-			seenOne = true
-		}
-		return false, nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(" WHERE (")
-	seenOne = false
-	// TAGS: Use of tags here is safe since it's constrained to a single table
-	_, err = r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
-		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		if col.IsPartOfPK {
-			if seenOne {
-				b.WriteString(" AND ")
-			}
-			sqlString, err := ValueAsSqlString(ctx, col.TypeInfo, val)
-			if err != nil {
-				return true, err
-			}
-			b.WriteString(QuoteIdentifier(ctx, col.Name))
-			b.WriteRune('=')
-			b.WriteString(sqlString)
-			seenOne = true
-		}
-		return false, nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(");")
-	return b.String(), nil
 }
 
 // InsertStatementPrefix returns the first part of an SQL insert query for a given table
@@ -463,34 +317,6 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 
 	b.WriteString(";")
 	return b.String(), nil
-}
-
-func ValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value types.Value) (string, error) {
-	if types.IsNull(value) {
-		return "NULL", nil
-	}
-
-	str, err := ti.FormatValue(value)
-
-	if err != nil {
-		return "", err
-	}
-
-	queryType := ti.ToSqlType().Type()
-	switch queryType {
-	case querypb.Type_TIME, querypb.Type_YEAR, querypb.Type_DATETIME, querypb.Type_TIMESTAMP, querypb.Type_DATE:
-		return singleQuote + *str + singleQuote, nil
-	case querypb.Type_BLOB, querypb.Type_VARBINARY, querypb.Type_BINARY, querypb.Type_JSON, querypb.Type_ENUM, querypb.Type_SET:
-		return quoteAndEscapeString(*str), nil
-	case querypb.Type_VARCHAR:
-		s, ok := value.(types.String)
-		if !ok {
-			return "", fmt.Errorf("typeinfo.VarStringTypeIdentifier is not types.String")
-		}
-		return quoteAndEscapeString(string(s)), nil
-	default:
-		return *str, nil
-	}
 }
 
 func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value interface{}) (string, error) {
