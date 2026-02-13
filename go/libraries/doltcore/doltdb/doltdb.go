@@ -2387,8 +2387,6 @@ func (ddb *DoltDB) PurgeCaches() {
 const (
 	DbRevisionDelimiter      = "/"
 	DbRevisionDelimiterAlias = "@"
-	// TODO(elianddb): This was added to allow for compatibility with Prisma, but other drivers/ORMs play nice with this
-	//  alias. We may want to consider configurable for the end user as some sort of persistent global variable.
 )
 
 // RevisionDbName returns the name of the revision db for the base name and revision string given
@@ -2409,7 +2407,7 @@ func SplitRevisionDbName(dbName string) (string, string) {
 // RewriteRevisionDelimiter inspects the database name for a DbRevisionDelimiterAlias and if found, decides to rewrite
 // database name to contain the normal DbRevisionDelimiter (a potential revision database) when the
 // |revisionDelimiterAliasEnabled|.
-func RewriteRevisionDelimiter(dbName string, revisionDelimiterAliasEnabled bool) (resolved string, usesDelimiterAlias bool, err error) {
+func RewriteRevisionDelimiter(dbName string, revisionDelimiterAliasEnabled bool) (rewrite string, usesDelimiterAlias bool, err error) {
 	if !strings.Contains(dbName, DbRevisionDelimiterAlias) {
 		return dbName, false, nil
 	}

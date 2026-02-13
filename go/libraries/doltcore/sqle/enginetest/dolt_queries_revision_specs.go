@@ -375,7 +375,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema;",
+				Query:    "execute stmt_list_base_tables using @schema, @schema;",
 				Expected: []sql.Row{{"_prisma_migrations"}, {"t01"}},
 			},
 			{
@@ -383,7 +383,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema;",
+				Query:    "execute stmt_list_base_tables using @schema, @schema;",
 				Expected: []sql.Row{{"_prisma_migrations"}, {"t01"}},
 			},
 			{
@@ -399,7 +399,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				Query:    "EXECUTE stmt_list_base_tables USING @schema, @schema;",
+				Query:    "execute stmt_list_base_tables using @schema, @schema;",
 				Expected: []sql.Row{{"_prisma_migrations"}, {"t01"}},
 			},
 		},
@@ -424,7 +424,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}},
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb@main"}, {"mysql"}},
 			},
 			{
 				Query:    "use `mydb@branch1`;",
@@ -432,7 +432,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}},
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb@branch1"}, {"mysql"}},
 			},
 			{
 				Query:    "select database();",
@@ -636,6 +636,40 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				Query:    "show databases;",
 				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb/branch1"}, {"mydb/main"}, {"mydb@branch1"}, {"mydb@branch1/main"}, {"mysql"}},
+			},
+		},
+	},
+	{
+		Name: "database revision specs: commit id with revision delimiter alias '@'",
+		SetUpScript: []string{
+			"create table t01 (pk int primary key, c1 int);",
+			"call dolt_add('.');",
+			"call dolt_commit('-am', 'creating table t01 on main');",
+			"set @h = (select hashof('main') limit 1);",
+			"set @use_sql = concat('use `mydb@', @h, '`');",
+			"prepare use_stmt from @use_sql;",
+			"insert into t01 values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'adding rows to table t01 on main');",
+			"set @h = (select hashof('main') limit 1);",
+			"set @select_sql = concat('select * from `mydb@', @h, '`.t01');",
+			"prepare select_stmt from @select_sql;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "execute use_stmt;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select length(database());",
+				Expected: []sql.Row{{37}},
+			},
+			{
+				Query:    "select * from t01;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "execute select_stmt;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},
 		},
 	},

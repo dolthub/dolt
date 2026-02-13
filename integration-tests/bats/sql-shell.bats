@@ -1149,7 +1149,7 @@ expect eof
 
 # bats test_tags=no_lambda
 @test "sql-shell: sql shell respects revision database as current database" {
-    skiponwindows "Need to install expect and make this script work on windows."
+#    skiponwindows "Need to install expect and make this script work on windows."
     run expect "$BATS_TEST_DIRNAME"/sql-shell-revision-db.expect
     [ "$status" -eq 0 ]
 }
