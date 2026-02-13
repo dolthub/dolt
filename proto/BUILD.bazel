@@ -1,0 +1,42 @@
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+filegroup(
+    name = "go_srcs_files",
+    srcs = [
+        "//dolt/services/remotesapi/v1alpha1:remotesapi_go_proto",
+        "//dolt/services/replicationapi/v1alpha1:replicationapi_go_proto",
+    ],
+    output_group = "go_generated_srcs",
+)
+
+pkg_tar(
+    name = "go_srcs",
+    srcs = [
+        ":go_srcs_files",
+    ],
+    mode = "0644",
+    remap_paths = {
+        "dolt/services/remotesapi/v1alpha1/remotesapi_go_proto_/github.com/dolthub/dolt/go": "/",
+        "dolt/services/replicationapi/v1alpha1/replicationapi_go_proto_/github.com/dolthub/dolt/go": "/",
+    },
+    strip_prefix = "./",
+)
+
+sh_binary(
+    name = "update",
+    srcs = ["update.sh"],
+    args = [
+        "$(rlocationpath :go_srcs)",
+        "$(rlocationpath @com_github_dolthub_dolt_go_serial//:go_srcs.tar)",
+        "$(rlocationpath @org_golang_x_tools//cmd/goimports)",
+    ],
+    data = [
+        ":go_srcs",
+        "@com_github_dolthub_dolt_go_serial//:go_srcs.tar",
+        "@org_golang_x_tools//cmd/goimports",
+    ],
+    deps = [
+        "@bazel_tools//tools/bash/runfiles",
+    ],
+)

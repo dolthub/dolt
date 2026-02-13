@@ -1,0 +1,19 @@
+load("@rules_go//proto:def.bzl", "go_proto_library")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+
+package(default_visibility = ["//visibility:public"])
+
+proto_library(
+    name = "remotesapi_proto",
+    srcs = glob(["*.proto"]),
+    deps = [
+        "@protobuf//:timestamp_proto",
+    ],
+)
+
+go_proto_library(
+    name = "remotesapi_go_proto",
+    compilers = ["@rules_go//proto:go_grpc"],
+    importpath = "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1",
+    proto = ":remotesapi_proto",
+)

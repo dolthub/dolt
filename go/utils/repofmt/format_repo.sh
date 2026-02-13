@@ -5,7 +5,7 @@ set -eo pipefail
 script_dir=$(dirname "$0")
 cd $script_dir/../..
 
-paths=`find . -maxdepth 1 -mindepth 1 \( -type d -print -o -type f -name '*.go' -print \)`
+paths=`find . -maxdepth 1 -mindepth 1 \( -name gen -prune -o -type d -print -o -type f -name '*.go' -print \)`
 
 goimports -w -local github.com/dolthub/dolt,github.com/dolthub/eventsapi_schema $paths
 
@@ -20,5 +20,5 @@ if [ "$bad_files" != "" ]; then
         awk '/import \(/{flag=1}/\)/{flag=0}flag&&!/^$/||!flag' < "$f" > "$f.bak"
         mv "$f.bak" "$f"
     done
-    goimports -w -local github.com/dolthub/dolt,github.com/dolthub/eventsapi_schema .
+    goimports -w -local github.com/dolthub/dolt,github.com/dolthub/eventsapi_schema $paths
 fi
