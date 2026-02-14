@@ -316,6 +316,15 @@ func TestParse(t *testing.T) {
 			},
 			false,
 		},
+		{
+			urlStr: "az://STORAGE_ACCOUNT.blob.core.windows.net/container_name/path",
+			expectedUrl: url.URL{
+				Scheme: "az",
+				Host:   "STORAGE_ACCOUNT.blob.core.windows.net",
+				Path:   "/container_name/path",
+			},
+			expectErr: false,
+		},
 	}
 
 	for _, test := range tests {
