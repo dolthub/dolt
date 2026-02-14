@@ -41,20 +41,20 @@ func concatSQLRows(rows ...sql.Row) sql.Row {
 
 // People rows as returned by SELECT * FROM people (full Simpsons data set)
 var (
-	lHomer  = sql.Row{int64(0), "Homer", "Simpson", int64(1), int64(40), 8.5, nil, nil}
-	lMarge  = sql.Row{int64(1), "Marge", "Simpson", int64(1), int64(38), 8.0, "00000000-0000-0000-0000-000000000001", uint64(111)}
-	lBart   = sql.Row{int64(2), "Bart", "Simpson", int64(0), int64(10), 9.0, "00000000-0000-0000-0000-000000000002", uint64(222)}
-	lLisa   = sql.Row{int64(3), "Lisa", "Simpson", int64(0), int64(8), 10.0, "00000000-0000-0000-0000-000000000003", uint64(333)}
-	lMoe    = sql.Row{int64(4), "Moe", "Szyslak", int64(0), int64(48), 6.5, "00000000-0000-0000-0000-000000000004", uint64(444)}
-	lBarney = sql.Row{int64(5), "Barney", "Gumble", int64(0), int64(40), 4.0, "00000000-0000-0000-0000-000000000005", uint64(555)}
+	Homer  = sql.Row{int64(0), "Homer", "Simpson", int64(1), int64(40), 8.5, nil, nil}
+	Marge  = sql.Row{int64(1), "Marge", "Simpson", int64(1), int64(38), 8.0, "00000000-0000-0000-0000-000000000001", uint64(111)}
+	Bart   = sql.Row{int64(2), "Bart", "Simpson", int64(0), int64(10), 9.0, "00000000-0000-0000-0000-000000000002", uint64(222)}
+	Lisa   = sql.Row{int64(3), "Lisa", "Simpson", int64(0), int64(8), 10.0, "00000000-0000-0000-0000-000000000003", uint64(333)}
+	Moe    = sql.Row{int64(4), "Moe", "Szyslak", int64(0), int64(48), 6.5, "00000000-0000-0000-0000-000000000004", uint64(444)}
+	Barney = sql.Row{int64(5), "Barney", "Gumble", int64(0), int64(40), 4.0, "00000000-0000-0000-0000-000000000005", uint64(555)}
 )
 
 // Episode rows as returned by SELECT * FROM episodes
 var (
-	lEp1 = sql.Row{int64(1), "Simpsons Roasting On an Open Fire", time.Date(1989, time.December, 18, 3, 0, 0, 0, time.UTC), 8.0}
-	lEp2 = sql.Row{int64(2), "Bart the Genius", time.Date(1990, time.January, 15, 3, 0, 0, 0, time.UTC), 9.0}
-	lEp3 = sql.Row{int64(3), "Homer's Odyssey", time.Date(1990, time.January, 22, 3, 0, 0, 0, time.UTC), 7.0}
-	lEp4 = sql.Row{int64(4), "There's No Disgrace Like Home", time.Date(1990, time.January, 29, 3, 0, 0, 0, time.UTC), 8.5}
+	Ep1 = sql.Row{int64(1), "Simpsons Roasting On an Open Fire", time.Date(1989, time.December, 18, 3, 0, 0, 0, time.UTC), 8.0}
+	Ep2 = sql.Row{int64(2), "Bart the Genius", time.Date(1990, time.January, 15, 3, 0, 0, 0, time.UTC), 9.0}
+	Ep3 = sql.Row{int64(3), "Homer's Odyssey", time.Date(1990, time.January, 22, 3, 0, 0, 0, time.UTC), 7.0}
+	Ep4 = sql.Row{int64(4), "There's No Disgrace Like Home", time.Date(1990, time.January, 29, 3, 0, 0, 0, time.UTC), 8.5}
 )
 
 // Setup script that creates and populates the Simpsons test tables.
@@ -142,27 +142,27 @@ var LegacySelectScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from people where id = 2",
-				Expected: []sql.Row{lBart},
+				Expected: []sql.Row{Bart},
 			},
 			{
 				Query:    "select * from people",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people limit 1",
-				Expected: []sql.Row{lHomer},
+				Expected: []sql.Row{Homer},
 			},
 			{
 				Query:    "select * from people limit 0,1",
-				Expected: []sql.Row{lHomer},
+				Expected: []sql.Row{Homer},
 			},
 			{
 				Query:    "select * from people limit 1 offset 1",
-				Expected: []sql.Row{lMarge},
+				Expected: []sql.Row{Marge},
 			},
 			{
 				Query:    "select * from people limit 5,1",
-				Expected: []sql.Row{lBarney},
+				Expected: []sql.Row{Barney},
 			},
 			{
 				Query:    "select * from people limit 6,1",
@@ -186,167 +186,167 @@ var LegacySelectScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from people limit 100",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where age < 40",
-				Expected: []sql.Row{lMarge, lBart, lLisa},
+				Expected: []sql.Row{Marge, Bart, Lisa},
 			},
 			{
 				Query:    "select * from people where age < 40 limit 1",
-				Expected: []sql.Row{lMarge},
+				Expected: []sql.Row{Marge},
 			},
 			{
 				Query:    "select * from people where age < 40 limit 2",
-				Expected: []sql.Row{lMarge, lBart},
+				Expected: []sql.Row{Marge, Bart},
 			},
 			{
 				Query:    "select * from people where age < 40 limit 100",
-				Expected: []sql.Row{lMarge, lBart, lLisa},
+				Expected: []sql.Row{Marge, Bart, Lisa},
 			},
 			{
 				Query:    "select * from people order by id",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people order by id desc",
-				Expected: []sql.Row{lBarney, lMoe, lLisa, lBart, lMarge, lHomer},
+				Expected: []sql.Row{Barney, Moe, Lisa, Bart, Marge, Homer},
 			},
 			{
 				Query:    "select * from people order by rating",
-				Expected: []sql.Row{lBarney, lMoe, lMarge, lHomer, lBart, lLisa},
+				Expected: []sql.Row{Barney, Moe, Marge, Homer, Bart, Lisa},
 			},
 			{
 				Query:    "select * from people order by first_name",
-				Expected: []sql.Row{lBarney, lBart, lHomer, lLisa, lMarge, lMoe},
+				Expected: []sql.Row{Barney, Bart, Homer, Lisa, Marge, Moe},
 			},
 			{
 				Query:    "select * from people order by last_name desc, first_name asc",
-				Expected: []sql.Row{lMoe, lBart, lHomer, lLisa, lMarge, lBarney},
+				Expected: []sql.Row{Moe, Bart, Homer, Lisa, Marge, Barney},
 			},
 			{
 				Query:    "select * from people order by first_name limit 2",
-				Expected: []sql.Row{lBarney, lBart},
+				Expected: []sql.Row{Barney, Bart},
 			},
 			{
 				Query:    "select * from people order by last_name desc, first_name asc limit 2",
-				Expected: []sql.Row{lMoe, lBart},
+				Expected: []sql.Row{Moe, Bart},
 			},
 			{
 				Query:    "select * from people where 40 > age",
-				Expected: []sql.Row{lMarge, lBart, lLisa},
+				Expected: []sql.Row{Marge, Bart, Lisa},
 			},
 			{
 				Query:    "select * from people where age <= 40",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lBarney},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Barney},
 			},
 			{
 				Query:    "select * from people where 40 >= age",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lBarney},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Barney},
 			},
 			{
 				Query:    "select * from people where age > 40",
-				Expected: []sql.Row{lMoe},
+				Expected: []sql.Row{Moe},
 			},
 			{
 				Query:    "select * from people where 40 < age",
-				Expected: []sql.Row{lMoe},
+				Expected: []sql.Row{Moe},
 			},
 			{
 				Query:    "select * from people where age >= 40",
-				Expected: []sql.Row{lHomer, lMoe, lBarney},
+				Expected: []sql.Row{Homer, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where 40 <= age",
-				Expected: []sql.Row{lHomer, lMoe, lBarney},
+				Expected: []sql.Row{Homer, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where last_name > 'Simpson'",
-				Expected: []sql.Row{lMoe},
+				Expected: []sql.Row{Moe},
 			},
 			{
 				Query:    "select * from people where last_name < 'Simpson'",
-				Expected: []sql.Row{lBarney},
+				Expected: []sql.Row{Barney},
 			},
 			{
 				Query:    "select * from people where last_name = 'Simpson'",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa},
 			},
 			{
 				Query:    "select * from people where rating > 8.0 order by id",
-				Expected: []sql.Row{lHomer, lBart, lLisa},
+				Expected: []sql.Row{Homer, Bart, Lisa},
 			},
 			{
 				Query:    "select * from people where rating < 8.0",
-				Expected: []sql.Row{lMoe, lBarney},
+				Expected: []sql.Row{Moe, Barney},
 			},
 			{
 				Query:    "select * from people where rating = 8.0",
-				Expected: []sql.Row{lMarge},
+				Expected: []sql.Row{Marge},
 			},
 			{
 				Query:    "select * from people where 8.0 < rating",
-				Expected: []sql.Row{lHomer, lBart, lLisa},
+				Expected: []sql.Row{Homer, Bart, Lisa},
 			},
 			{
 				Query:    "select * from people where 8.0 > rating",
-				Expected: []sql.Row{lMoe, lBarney},
+				Expected: []sql.Row{Moe, Barney},
 			},
 			{
 				Query:    "select * from people where 8.0 = rating",
-				Expected: []sql.Row{lMarge},
+				Expected: []sql.Row{Marge},
 			},
 			{
 				Query:    "select * from people where is_married = true",
-				Expected: []sql.Row{lHomer, lMarge},
+				Expected: []sql.Row{Homer, Marge},
 			},
 			{
 				Query:    "select * from people where is_married = false",
-				Expected: []sql.Row{lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where is_married <> false",
-				Expected: []sql.Row{lHomer, lMarge},
+				Expected: []sql.Row{Homer, Marge},
 			},
 			{
 				Query:    "select * from people where is_married",
-				Expected: []sql.Row{lHomer, lMarge},
+				Expected: []sql.Row{Homer, Marge},
 			},
 			{
 				Query:    "select * from people where is_married and age > 38",
-				Expected: []sql.Row{lHomer},
+				Expected: []sql.Row{Homer},
 			},
 			{
 				Query:    "select * from people where is_married or age < 20",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa},
 			},
 			{
 				Query:    "select * from people where first_name in ('Homer', 'Marge')",
-				Expected: []sql.Row{lHomer, lMarge},
+				Expected: []sql.Row{Homer, Marge},
 			},
 			{
 				Query:    "select * from people where age in (-10, 40)",
-				Expected: []sql.Row{lHomer, lBarney},
+				Expected: []sql.Row{Homer, Barney},
 			},
 			{
 				Query:    "select * from people where rating in (-10.0, 8.5)",
-				Expected: []sql.Row{lHomer},
+				Expected: []sql.Row{Homer},
 			},
 			{
 				Query:    "select * from people where first_name in ('Homer', 40)",
-				Expected: []sql.Row{lHomer},
+				Expected: []sql.Row{Homer},
 			},
 			{
 				Query:    "select * from people where age in (-10.0, 40)",
-				Expected: []sql.Row{lHomer, lBarney},
+				Expected: []sql.Row{Homer, Barney},
 			},
 			{
 				Query:    "select * from people where first_name not in ('Homer', 'Marge')",
-				Expected: []sql.Row{lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where first_name in ('Homer')",
-				Expected: []sql.Row{lHomer},
+				Expected: []sql.Row{Homer},
 			},
 			{
 				Query:    "select * from people where first_name in (1.0)",
@@ -354,31 +354,31 @@ var LegacySelectScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from people where uuid is null",
-				Expected: []sql.Row{lHomer},
+				Expected: []sql.Row{Homer},
 			},
 			{
 				Query:    "select * from people where uuid is not null",
-				Expected: []sql.Row{lMarge, lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Marge, Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where is_married is true",
-				Expected: []sql.Row{lHomer, lMarge},
+				Expected: []sql.Row{Homer, Marge},
 			},
 			{
 				Query:    "select * from people where is_married is not true",
-				Expected: []sql.Row{lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where is_married is false",
-				Expected: []sql.Row{lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where is_married is not false",
-				Expected: []sql.Row{lHomer, lMarge},
+				Expected: []sql.Row{Homer, Marge},
 			},
 			{
 				Query:    "select * from people where age is true",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select age + 1 as a from people where is_married order by a",
@@ -398,36 +398,36 @@ var LegacySelectScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from people where -rating = -8.5",
-				Expected: []sql.Row{lHomer},
+				Expected: []sql.Row{Homer},
 			},
 			// -first_name evaluates to 0 for all rows (string->num conversion), 'Homer' also evaluates to 0
 			{
 				Query:    "select * from people where -first_name = 'Homer'",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where age + 1 = 41",
-				Expected: []sql.Row{lHomer, lBarney},
+				Expected: []sql.Row{Homer, Barney},
 			},
 			{
 				Query:    "select * from people where age - 1 = 39",
-				Expected: []sql.Row{lHomer, lBarney},
+				Expected: []sql.Row{Homer, Barney},
 			},
 			{
 				Query:    "select * from people where age / 2 = 20",
-				Expected: []sql.Row{lHomer, lBarney},
+				Expected: []sql.Row{Homer, Barney},
 			},
 			{
 				Query:    "select * from people where age * 2 = 80",
-				Expected: []sql.Row{lHomer, lBarney},
+				Expected: []sql.Row{Homer, Barney},
 			},
 			{
 				Query:    "select * from people where age % 4 = 0",
-				Expected: []sql.Row{lHomer, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Homer, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where age / 4 + 2 * 2 = 14",
-				Expected: []sql.Row{lHomer, lBarney},
+				Expected: []sql.Row{Homer, Barney},
 			},
 			{
 				Query:    "select * from people where first_name + 1 = 41",
@@ -448,11 +448,11 @@ var LegacySelectScriptTests = []queries.ScriptTest{
 			// 0 % 4 = 0 for all rows (string first_name -> 0)
 			{
 				Query:    "select * from people where first_name % 4 = 0",
-				Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lMoe, lBarney},
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
 			},
 			{
 				Query:    "select * from people where `uuid` is not null and first_name <> 'Marge' order by last_name desc, age",
-				Expected: []sql.Row{lMoe, lLisa, lBart, lBarney},
+				Expected: []sql.Row{Moe, Lisa, Bart, Barney},
 			},
 			{
 				Query:    "select first_name, last_name from people where age >= 40",
@@ -509,7 +509,7 @@ var LegacySelectScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from people where age <> 40",
-				Expected: []sql.Row{lMarge, lBart, lLisa, lMoe},
+				Expected: []sql.Row{Marge, Bart, Lisa, Moe},
 			},
 			{
 				Query:    "select * from people where age > 80",
@@ -545,7 +545,7 @@ var LegacySelectScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    `select * from people where id = "0"`,
-				Expected: []sql.Row{lHomer},
+				Expected: []sql.Row{Homer},
 			},
 		},
 	},
@@ -560,36 +560,36 @@ var LegacyJoinScriptTests = []queries.ScriptTest{
 			{
 				Query: `select * from people, episodes order by people.id, episodes.id`,
 				Expected: []sql.Row{
-					concatSQLRows(lHomer, lEp1), concatSQLRows(lHomer, lEp2), concatSQLRows(lHomer, lEp3), concatSQLRows(lHomer, lEp4),
-					concatSQLRows(lMarge, lEp1), concatSQLRows(lMarge, lEp2), concatSQLRows(lMarge, lEp3), concatSQLRows(lMarge, lEp4),
-					concatSQLRows(lBart, lEp1), concatSQLRows(lBart, lEp2), concatSQLRows(lBart, lEp3), concatSQLRows(lBart, lEp4),
-					concatSQLRows(lLisa, lEp1), concatSQLRows(lLisa, lEp2), concatSQLRows(lLisa, lEp3), concatSQLRows(lLisa, lEp4),
-					concatSQLRows(lMoe, lEp1), concatSQLRows(lMoe, lEp2), concatSQLRows(lMoe, lEp3), concatSQLRows(lMoe, lEp4),
-					concatSQLRows(lBarney, lEp1), concatSQLRows(lBarney, lEp2), concatSQLRows(lBarney, lEp3), concatSQLRows(lBarney, lEp4),
+					concatSQLRows(Homer, Ep1), concatSQLRows(Homer, Ep2), concatSQLRows(Homer, Ep3), concatSQLRows(Homer, Ep4),
+					concatSQLRows(Marge, Ep1), concatSQLRows(Marge, Ep2), concatSQLRows(Marge, Ep3), concatSQLRows(Marge, Ep4),
+					concatSQLRows(Bart, Ep1), concatSQLRows(Bart, Ep2), concatSQLRows(Bart, Ep3), concatSQLRows(Bart, Ep4),
+					concatSQLRows(Lisa, Ep1), concatSQLRows(Lisa, Ep2), concatSQLRows(Lisa, Ep3), concatSQLRows(Lisa, Ep4),
+					concatSQLRows(Moe, Ep1), concatSQLRows(Moe, Ep2), concatSQLRows(Moe, Ep3), concatSQLRows(Moe, Ep4),
+					concatSQLRows(Barney, Ep1), concatSQLRows(Barney, Ep2), concatSQLRows(Barney, Ep3), concatSQLRows(Barney, Ep4),
 				},
 			},
 			{
 				Query: `select * from people p, episodes e where e.id = p.id order by p.id`,
 				Expected: []sql.Row{
-					concatSQLRows(lMarge, lEp1),
-					concatSQLRows(lBart, lEp2),
-					concatSQLRows(lLisa, lEp3),
-					concatSQLRows(lMoe, lEp4),
+					concatSQLRows(Marge, Ep1),
+					concatSQLRows(Bart, Ep2),
+					concatSQLRows(Lisa, Ep3),
+					concatSQLRows(Moe, Ep4),
 				},
 			},
 			{
 				Query: `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id order by p.id, e.id`,
 				Expected: []sql.Row{
-					concatSQLRows(lHomer, lEp1),
-					concatSQLRows(lHomer, lEp2),
-					concatSQLRows(lHomer, lEp3),
-					concatSQLRows(lMarge, lEp1),
-					concatSQLRows(lMarge, lEp3),
-					concatSQLRows(lBart, lEp2),
-					concatSQLRows(lLisa, lEp2),
-					concatSQLRows(lLisa, lEp3),
-					concatSQLRows(lMoe, lEp2),
-					concatSQLRows(lBarney, lEp3),
+					concatSQLRows(Homer, Ep1),
+					concatSQLRows(Homer, Ep2),
+					concatSQLRows(Homer, Ep3),
+					concatSQLRows(Marge, Ep1),
+					concatSQLRows(Marge, Ep3),
+					concatSQLRows(Bart, Ep2),
+					concatSQLRows(Lisa, Ep2),
+					concatSQLRows(Lisa, Ep3),
+					concatSQLRows(Moe, Ep2),
+					concatSQLRows(Barney, Ep3),
 				},
 			},
 			{
@@ -630,25 +630,25 @@ var LegacyJoinScriptTests = []queries.ScriptTest{
 			{
 				Query: `select * from people p join episodes e on e.id = p.id order by p.id`,
 				Expected: []sql.Row{
-					concatSQLRows(lMarge, lEp1),
-					concatSQLRows(lBart, lEp2),
-					concatSQLRows(lLisa, lEp3),
-					concatSQLRows(lMoe, lEp4),
+					concatSQLRows(Marge, Ep1),
+					concatSQLRows(Bart, Ep2),
+					concatSQLRows(Lisa, Ep3),
+					concatSQLRows(Moe, Ep4),
 				},
 			},
 			{
 				Query: `select p.*, e.* from people p join appearances a on a.character_id = p.id join episodes e on a.episode_id = e.id order by p.id, e.id`,
 				Expected: []sql.Row{
-					concatSQLRows(lHomer, lEp1),
-					concatSQLRows(lHomer, lEp2),
-					concatSQLRows(lHomer, lEp3),
-					concatSQLRows(lMarge, lEp1),
-					concatSQLRows(lMarge, lEp3),
-					concatSQLRows(lBart, lEp2),
-					concatSQLRows(lLisa, lEp2),
-					concatSQLRows(lLisa, lEp3),
-					concatSQLRows(lMoe, lEp2),
-					concatSQLRows(lBarney, lEp3),
+					concatSQLRows(Homer, Ep1),
+					concatSQLRows(Homer, Ep2),
+					concatSQLRows(Homer, Ep3),
+					concatSQLRows(Marge, Ep1),
+					concatSQLRows(Marge, Ep3),
+					concatSQLRows(Bart, Ep2),
+					concatSQLRows(Lisa, Ep2),
+					concatSQLRows(Lisa, Ep3),
+					concatSQLRows(Moe, Ep2),
+					concatSQLRows(Barney, Ep3),
 				},
 			},
 			{
@@ -745,7 +745,7 @@ var LegacyInsertScriptTests = []queries.ScriptTest{
 		SetUpScript: legacyEmptySetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "insert into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)", SkipResultsCheck: true},
-			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{lBart}},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
 		},
 	},
 	{
@@ -767,7 +767,7 @@ var LegacyInsertScriptTests = []queries.ScriptTest{
 		SetUpScript: legacyEmptySetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)", SkipResultsCheck: true},
-			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{lBart}},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
 		},
 	},
 	{
@@ -775,7 +775,7 @@ var LegacyInsertScriptTests = []queries.ScriptTest{
 		SetUpScript: legacyEmptySetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "insert into people (num_episodes, uuid, rating, age, is_married, last_name, first_name, id) values (222, '00000000-0000-0000-0000-000000000002', 9, 10, false, 'Simpson', 'Bart', 2)", SkipResultsCheck: true},
-			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{lBart}},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
 		},
 	},
 	{
@@ -1079,7 +1079,7 @@ var LegacyUpdateScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: `update people set first_name = 'Homer', last_name = 'Simpson', is_married = true, rating = 8.5, age = 40,
 				num_episodes = null, uuid = null where id = 0`, SkipResultsCheck: true},
-			{Query: `select * from people where id = 0`, Expected: []sql.Row{lHomer}},
+			{Query: `select * from people where id = 0`, Expected: []sql.Row{Homer}},
 		},
 	},
 	{
@@ -1111,7 +1111,7 @@ var LegacyUpdateScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: `update people set first_name = 'Changed', rating = 0.0 where last_name = 'Flanders'`, SkipResultsCheck: true},
-			{Query: `select * from people`, Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lMoe, lBarney}},
+			{Query: `select * from people`, Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney}},
 		},
 	},
 	{
@@ -1200,7 +1200,7 @@ var LegacyUpdateScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: `update people set first_name = 'Homer' where last_name = 'Simpson'`, SkipResultsCheck: true},
 			{Query: `select * from people where last_name = 'Simpson'`, Expected: []sql.Row{
-				lHomer,
+				Homer,
 				{int64(1), "Homer", "Simpson", int64(1), int64(38), 8.0, "00000000-0000-0000-0000-000000000001", uint64(111)},
 				{int64(2), "Homer", "Simpson", int64(0), int64(10), 9.0, "00000000-0000-0000-0000-000000000002", uint64(222)},
 				{int64(3), "Homer", "Simpson", int64(0), int64(8), 10.0, "00000000-0000-0000-0000-000000000003", uint64(333)},
@@ -1213,7 +1213,7 @@ var LegacyUpdateScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: `update people set last_name = 'Simpson' where last_name <> 'Simpson'`, SkipResultsCheck: true},
 			{Query: `select * from people`, Expected: []sql.Row{
-				lHomer, lMarge, lBart, lLisa,
+				Homer, Marge, Bart, Lisa,
 				{int64(4), "Moe", "Simpson", int64(0), int64(48), 6.5, "00000000-0000-0000-0000-000000000004", uint64(444)},
 				{int64(5), "Barney", "Simpson", int64(0), int64(40), 4.0, "00000000-0000-0000-0000-000000000005", uint64(555)},
 			}},
@@ -1272,7 +1272,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people where id = 2", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lHomer, lMarge, lLisa, lMoe, lBarney}},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Lisa, Moe, Barney}},
 		},
 	},
 	{
@@ -1280,7 +1280,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people where id < 3", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lLisa, lMoe, lBarney}},
+			{Query: "select * from people", Expected: []sql.Row{Lisa, Moe, Barney}},
 		},
 	},
 	{
@@ -1288,7 +1288,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people where id > 3", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lHomer, lMarge, lBart, lLisa}},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart, Lisa}},
 		},
 	},
 	{
@@ -1296,7 +1296,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people where id <= 3", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lMoe, lBarney}},
+			{Query: "select * from people", Expected: []sql.Row{Moe, Barney}},
 		},
 	},
 	{
@@ -1304,7 +1304,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people where id >= 3", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lHomer, lMarge, lBart}},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart}},
 		},
 	},
 	{
@@ -1312,7 +1312,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people where id = 9999", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lHomer, lMarge, lBart, lLisa, lMoe, lBarney}},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney}},
 		},
 	},
 	{
@@ -1320,7 +1320,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people where last_name = 'Simpson'", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lMoe, lBarney}},
+			{Query: "select * from people", Expected: []sql.Row{Moe, Barney}},
 		},
 	},
 	{
@@ -1328,7 +1328,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people where last_name <> 'Simpson'", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lHomer, lMarge, lBart, lLisa}},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart, Lisa}},
 		},
 	},
 	{
@@ -1336,7 +1336,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people where last_name like '%pson'", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lMoe, lBarney}},
+			{Query: "select * from people", Expected: []sql.Row{Moe, Barney}},
 		},
 	},
 	{
@@ -1352,7 +1352,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people order by id asc limit 3", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lLisa, lMoe, lBarney}},
+			{Query: "select * from people", Expected: []sql.Row{Lisa, Moe, Barney}},
 		},
 	},
 	{
@@ -1360,7 +1360,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people order by id desc limit 3", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lHomer, lMarge, lBart}},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart}},
 		},
 	},
 	{
@@ -1368,7 +1368,7 @@ var LegacyDeleteScriptTests = []queries.ScriptTest{
 		SetUpScript: legacySetupWithData,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "delete from people order by id desc limit 3 offset 1", SkipResultsCheck: true},
-			{Query: "select * from people", Expected: []sql.Row{lHomer, lMarge, lBarney}},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Barney}},
 		},
 	},
 	{
@@ -1394,7 +1394,7 @@ var LegacyReplaceScriptTests = []queries.ScriptTest{
 		SetUpScript: legacyEmptySetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "replace into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)", SkipResultsCheck: true},
-			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{lBart}},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
 		},
 	},
 	{
@@ -1402,7 +1402,7 @@ var LegacyReplaceScriptTests = []queries.ScriptTest{
 		SetUpScript: legacyEmptySetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "replace into people set id = 2, first_name = 'Bart', last_name = 'Simpson', is_married = false, age = 10, rating = 9, uuid = '00000000-0000-0000-0000-000000000002', num_episodes = 222", SkipResultsCheck: true},
-			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{lBart}},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
 		},
 	},
 	{
@@ -1424,7 +1424,7 @@ var LegacyReplaceScriptTests = []queries.ScriptTest{
 		SetUpScript: legacyEmptySetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "replace into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)", SkipResultsCheck: true},
-			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{lBart}},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
 		},
 	},
 	{
@@ -1432,7 +1432,7 @@ var LegacyReplaceScriptTests = []queries.ScriptTest{
 		SetUpScript: legacyEmptySetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "replace into people (num_episodes, uuid, rating, age, is_married, last_name, first_name, id) values (222, '00000000-0000-0000-0000-000000000002', 9, 10, false, 'Simpson', 'Bart', 2)", SkipResultsCheck: true},
-			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{lBart}},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
 		},
 	},
 	{
