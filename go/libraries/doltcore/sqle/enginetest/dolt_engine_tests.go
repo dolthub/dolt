@@ -663,6 +663,66 @@ func RunDoltScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
+func RunLegacySelectScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacySelectScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyJoinScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyJoinScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyInsertScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyInsertScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyUpdateScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyUpdateScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyDeleteScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyDeleteScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyReplaceScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyReplaceScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
 func RunDoltTempTableScripts(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltTempTableScripts {
 		harness := harness.NewHarness(t)

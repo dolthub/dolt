@@ -1185,6 +1185,36 @@ func TestConcurrentTransactions(t *testing.T) {
 	enginetest.TestConcurrentTransactions(t, h)
 }
 
+func TestLegacySelectScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacySelectScripts(t, harness)
+}
+
+func TestLegacyJoinScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyJoinScripts(t, harness)
+}
+
+func TestLegacyInsertScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyInsertScripts(t, harness)
+}
+
+func TestLegacyUpdateScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyUpdateScripts(t, harness)
+}
+
+func TestLegacyDeleteScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyDeleteScripts(t, harness)
+}
+
+func TestLegacyReplaceScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyReplaceScripts(t, harness)
+}
+
 func TestDoltScripts(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltScriptsTest(t, harness)
