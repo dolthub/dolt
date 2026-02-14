@@ -2106,9 +2106,8 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ COMMIT;",
-				ExpectedErrStr: "Committing this transaction resulted in a working set with constraint violations, transaction rolled back. This constraint violation may be the result of a previous merge or the result of transaction sequencing. Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.\n" +
-					"Constraint violations: \n" +
-					"Type: Foreign Key Constraint Violation\n" +
+				ExpectedErrStr: dsess.ErrUnresolvedConstraintViolationsCommit.Error() + dsess.ConstraintViolationsListPrefix +
+					"\nType: Foreign Key Constraint Violation\n" +
 					"\tForeignKey: child_ibfk_1,\n" +
 					"\tTable: child,\n" +
 					"\tReferencedTable: parent,\n" +
@@ -2139,14 +2138,10 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "/* client a */ CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
-					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
-					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
-					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.\n" +
-					"Constraint violations: \n" +
-					"Type: Unique Key Constraint Violation,\n" +
+				ExpectedErrStr: dsess.ErrUnresolvedConstraintViolationsCommit.Error() + dsess.ConstraintViolationsListPrefix +
+					"\nType: Unique Key Constraint Violation,\n" +
 					"\tName: col1,\n" +
-					"\tColumns: [col1]",
+					"\tColumns: [col1] (2 row(s))",
 			},
 			{
 				Query:    "/* client a */ SELECT * from DOLT_CONSTRAINT_VIOLATIONS;",
@@ -2226,12 +2221,8 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ COMMIT;",
-				ExpectedErrStr: "Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
-					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
-					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
-					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.\n" +
-					"Constraint violations: \n" +
-					"Type: Foreign Key Constraint Violation\n" +
+				ExpectedErrStr: dsess.ErrUnresolvedConstraintViolationsCommit.Error() + dsess.ConstraintViolationsListPrefix +
+					"\nType: Foreign Key Constraint Violation\n" +
 					"\tForeignKey: fk_name,\n" +
 					"\tTable: child,\n" +
 					"\tReferencedTable: parent,\n" +

@@ -639,10 +639,12 @@ func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 	}
 }
 
+// Delete deletes the conflict artifact for the row |r|. The artifact key is: source PK, commit hash, artifact type,
+// violation-info hash (zeros for merge conflicts).
 func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error) {
-	// first part of the artifact key is the keys of the source table
+	numSourceKeyFields := cd.kd.Count() - 3
 	if !schema.IsKeyless(cd.ct.ourSch) {
-		err = cd.putPrimaryKeys(ctx, r)
+		err = cd.putPrimaryKeys(ctx, r, numSourceKeyFields)
 	} else {
 		err = cd.putKeylessHash(ctx, r)
 	}
@@ -650,12 +652,10 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error)
 		return err
 	}
 
-	// then the hash follows. It is the first column of the row and the second to last in the key
 	h := hash.Parse(r[0].(string))
-	cd.kB.PutCommitAddr(cd.kd.Count()-2, h)
-
-	// Finally the artifact type which is always a conflict
-	cd.kB.PutUint8(cd.kd.Count()-1, uint8(prolly.ArtifactTypeConflict))
+	cd.kB.PutCommitAddr(numSourceKeyFields, h)
+	cd.kB.PutUint8(numSourceKeyFields+1, uint8(prolly.ArtifactTypeConflict))
+	cd.kB.PutByteString(numSourceKeyFields+2, make([]byte, hash.ByteLen))
 
 	key, err := cd.kB.Build(cd.pool)
 	if err != nil {
@@ -669,8 +669,9 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error)
 	return nil
 }
 
-func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) error {
-	// get keys from either base, ours, or theirs
+// putPrimaryKeys writes the first |numSourceKeyFields| key columns from row |r| into the tuple builder. It reads key
+// columns from either base, ours, or theirs depending on which are non-nil in |r|.
+func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row, numSourceKeyFields int) error {
 	o := func() int {
 		if o := 1; r[o] != nil {
 			return o
@@ -683,14 +684,12 @@ func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) err
 		}
 	}()
 
-	for i := 0; i < cd.kd.Count()-2; i++ {
+	for i := 0; i < numSourceKeyFields; i++ {
 		err := tree.PutField(ctx, cd.ed.NodeStore(), cd.kB, i, r[o+i])
-
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
