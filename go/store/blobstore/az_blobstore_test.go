@@ -334,15 +334,20 @@ func TestAzureBlobstore_Exists(t *testing.T) {
 func TestAzureBlobstore_Put(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("successful_put", func(t *testing.T) {
+	t.Run("successful_put_small_data", func(t *testing.T) {
 		expectedData := []byte("test data")
-		var capturedData []byte
+		var stagedData []byte
 
 		mockClient := &mockAzureClient{
-			uploadBufferFn: func(ctx context.Context, containerName, blobName string, data []byte, options *azblob.UploadBufferOptions) (azureUploadResponse, error) {
-				capturedData = data
+			stageBlockFn: func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error {
 				assert.Equal(t, "container", containerName)
 				assert.Equal(t, "prefix/mykey", blobName)
+				data, _ := io.ReadAll(body)
+				stagedData = append(stagedData, data...)
+				return nil
+			},
+			commitBlockListFn: func(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error) {
+				assert.Equal(t, 1, len(blockIDs))
 				return &mockUploadResponse{
 					etag: newMockETag("test-etag"),
 				}, nil
@@ -353,13 +358,70 @@ func TestAzureBlobstore_Put(t *testing.T) {
 		version, err := bs.Put(ctx, "mykey", int64(len(expectedData)), bytes.NewReader(expectedData))
 		require.NoError(t, err)
 		assert.Equal(t, "test-etag", version)
-		assert.Equal(t, expectedData, capturedData)
+		assert.Equal(t, expectedData, stagedData)
 	})
 
-	t.Run("upload_error", func(t *testing.T) {
+	t.Run("successful_put_large_data", func(t *testing.T) {
+		// Create data larger than a single block (20MB)
+		expectedData := make([]byte, 20*1024*1024)
+		for i := range expectedData {
+			expectedData[i] = byte(i % 256)
+		}
+
+		var stagedBlocks []string
+		var allData []byte
+
 		mockClient := &mockAzureClient{
-			uploadBufferFn: func(ctx context.Context, containerName, blobName string, data []byte, options *azblob.UploadBufferOptions) (azureUploadResponse, error) {
-				return nil, errors.New("upload failed")
+			stageBlockFn: func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error {
+				stagedBlocks = append(stagedBlocks, blockID)
+				data, _ := io.ReadAll(body)
+				allData = append(allData, data...)
+				return nil
+			},
+			commitBlockListFn: func(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error) {
+				// 20MB should result in 3 blocks (8MB + 8MB + 4MB)
+				assert.Equal(t, 3, len(blockIDs))
+				return &mockUploadResponse{
+					etag: newMockETag("test-etag"),
+				}, nil
+			},
+		}
+
+		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
+		version, err := bs.Put(ctx, "mykey", int64(len(expectedData)), bytes.NewReader(expectedData))
+		require.NoError(t, err)
+		assert.Equal(t, "test-etag", version)
+		assert.Equal(t, 3, len(stagedBlocks))
+		assert.Equal(t, expectedData, allData)
+	})
+
+	t.Run("put_empty_data", func(t *testing.T) {
+		expectedData := []byte{}
+
+		mockClient := &mockAzureClient{
+			stageBlockFn: func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error {
+				data, _ := io.ReadAll(body)
+				assert.Empty(t, data)
+				return nil
+			},
+			commitBlockListFn: func(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error) {
+				assert.Equal(t, 1, len(blockIDs))
+				return &mockUploadResponse{
+					etag: newMockETag("test-etag"),
+				}, nil
+			},
+		}
+
+		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
+		version, err := bs.Put(ctx, "mykey", 0, bytes.NewReader(expectedData))
+		require.NoError(t, err)
+		assert.Equal(t, "test-etag", version)
+	})
+
+	t.Run("stage_block_error", func(t *testing.T) {
+		mockClient := &mockAzureClient{
+			stageBlockFn: func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error {
+				return errors.New("stage block failed")
 			},
 		}
 
@@ -367,6 +429,24 @@ func TestAzureBlobstore_Put(t *testing.T) {
 		version, err := bs.Put(ctx, "mykey", 9, bytes.NewReader([]byte("test data")))
 		require.Error(t, err)
 		assert.Empty(t, version)
+		assert.Contains(t, err.Error(), "failed to stage block")
+	})
+
+	t.Run("commit_block_list_error", func(t *testing.T) {
+		mockClient := &mockAzureClient{
+			stageBlockFn: func(ctx context.Context, containerName, blobName, blockID string, body io.ReadSeekCloser) error {
+				return nil
+			},
+			commitBlockListFn: func(ctx context.Context, containerName, blobName string, blockIDs []string) (azureUploadResponse, error) {
+				return nil, errors.New("commit failed")
+			},
+		}
+
+		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
+		version, err := bs.Put(ctx, "mykey", 9, bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+		assert.Empty(t, version)
+		assert.Contains(t, err.Error(), "failed to commit block list")
 	})
 }
 
@@ -439,7 +519,7 @@ func TestAzureBlobstore_Get(t *testing.T) {
 			downloadStreamFn: func(ctx context.Context, containerName, blobName string, options *blob.DownloadStreamOptions) (azureDownloadResponse, error) {
 				require.NotNil(t, options)
 				assert.Equal(t, int64(97), options.Range.Offset) // 100 + (-3) = 97
-				assert.Equal(t, int64(0), options.Range.Count)   // 0 means to end
+				assert.Equal(t, int64(3), options.Range.Count)   // positiveRange calculates actual length
 				return &mockDownloadResponse{
 					body:          io.NopCloser(bytes.NewReader(expectedData)),
 					etag:          newMockETag("test-etag"),
@@ -470,7 +550,7 @@ func TestAzureBlobstore_Get(t *testing.T) {
 		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
 		rc, _, _, err := bs.Get(ctx, "mykey", AllRange)
 		require.Error(t, err)
-		defer rc.Close()
+		assert.Nil(t, rc)
 		assert.True(t, IsNotFoundError(err))
 	})
 }

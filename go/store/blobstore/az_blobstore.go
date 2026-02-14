@@ -15,6 +15,7 @@
 package blobstore
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -167,20 +168,80 @@ func (bs *AzureBlobstore) Get(ctx context.Context, key string, br BlobRange) (io
 	return resp.GetBody(), size, version, nil
 }
 
+// Default block size for streaming uploads (8MB)
+// Azure supports up to 4000 MiB per block, but 8MB is a good balance
+const defaultBlockSize = 8 * 1024 * 1024
+
+// readSeekCloser wraps a bytes.Reader to implement io.ReadSeekCloser
+type readSeekCloser struct {
+	*bytes.Reader
+}
+
+func (rsc *readSeekCloser) Close() error {
+	return nil
+}
+
 // Put creates a new blob from |reader| keyed by |key|
+// Uses streaming block upload to avoid loading entire file into memory
 func (bs *AzureBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	absKey := bs.absKey(key)
 
-	// Read all data from reader into a buffer
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return "", err
+	// Determine optimal buffer size based on totalSize
+	bufferSize := defaultBlockSize
+	if totalSize > 0 && totalSize < defaultBlockSize {
+		bufferSize = int(totalSize)
 	}
 
-	// Upload the blob
-	resp, err := bs.azClient.UploadBuffer(ctx, bs.containerName, absKey, data, nil)
+	// Use block blob API for streaming upload
+	blockIDs := make([]string, 0)
+	blockIndex := 0
+	buffer := make([]byte, bufferSize)
+
+	for {
+		// Read a chunk from the reader
+		n, err := io.ReadFull(reader, buffer)
+		if err == io.EOF {
+			break
+		}
+		if err != nil && err != io.ErrUnexpectedEOF {
+			return "", fmt.Errorf("failed to read from source: %w", err)
+		}
+
+		// Stage this chunk as a block
+		blockID := generateBlockID(blockIndex)
+		blockIDs = append(blockIDs, blockID)
+
+		chunk := buffer[:n]
+		rsc := &readSeekCloser{bytes.NewReader(chunk)}
+		err = bs.azClient.StageBlock(ctx, bs.containerName, absKey, blockID, rsc)
+		if err != nil {
+			return "", fmt.Errorf("failed to stage block %d: %w", blockIndex, err)
+		}
+
+		blockIndex++
+
+		// If we read less than the buffer, we're done
+		if n < bufferSize {
+			break
+		}
+	}
+
+	// Handle empty file case
+	if len(blockIDs) == 0 {
+		// Stage an empty block
+		blockID := generateBlockID(0)
+		blockIDs = append(blockIDs, blockID)
+		rsc := &readSeekCloser{bytes.NewReader([]byte{})}
+		err := bs.azClient.StageBlock(ctx, bs.containerName, absKey, blockID, rsc)
+		if err != nil {
+			return "", fmt.Errorf("failed to stage empty block: %w", err)
+		}
+	}
+
+	// Commit all blocks to finalize the blob
+	resp, err := bs.azClient.CommitBlockList(ctx, bs.containerName, absKey, blockIDs)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to commit block list: %w", err)
 	}
 
 	return etagToString(resp.GetETag()), nil
@@ -200,7 +261,7 @@ func blobExistsWhenShouldnt(expectedVersion string, err error) bool {
 // blobHasChanged checks if error indicates blob version has changed (412)
 func blobHasChanged(expectedVersion string, err error) bool {
 	var respErr *azcore.ResponseError
-	if !errors.As(err, &respErr) {
+	if errors.As(err, &respErr) {
 		return expectedVersion != "" && respErr.StatusCode == 412
 	}
 
