@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/text/message"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -50,6 +51,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/store/types"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
@@ -553,6 +555,16 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return 0
 }
 
+var displayStrLen int
+
+func importStatsCB(stats types.AppliedEditStats) {
+	noEffect := stats.NonExistentDeletes + stats.SameVal
+	total := noEffect + stats.Modifications + stats.Additions
+	p := message.NewPrinter(message.MatchLanguage("en")) // adds commas
+	displayStr := p.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
+	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
+}
+
 func newImportDataReader(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.SqlRowReader, *mvdata.DataMoverCreationError) {
 	var err error
 
@@ -631,7 +643,7 @@ func newImportSqlEngineMover(ctx *sql.Context, root doltdb.RootValue, dEnv *env.
 		}
 	}
 
-	mv, err := mvdata.NewSqlEngineTableWriter(ctx, engine, tableSchema, rowOperationSchema, moveOps)
+	mv, err := mvdata.NewSqlEngineTableWriter(ctx, engine, tableSchema, rowOperationSchema, moveOps, importStatsCB)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}
