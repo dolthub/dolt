@@ -18,11 +18,9 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"hash/crc32"
 	"io"
 
-	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -91,91 +89,6 @@ func journalIndexRecordSize(idx []byte) (recordSz uint32) {
 	recordSz += uint32(len(idx))
 	recordSz += indexRecChecksumSz
 	return
-}
-
-func writeJournalIndexRecord(buf []byte, root hash.Hash, start, end uint64, idx []byte) (n uint32) {
-	//defer trace.StartRegion(ctx, "writeJournalIndexRecord").End()
-
-	// length
-	l := journalIndexRecordSize(idx)
-	writeUint32(buf[:indexRecLenSz], l)
-	n += indexRecLenSz
-	// last root
-	buf[n] = byte(lastRootIndexRecTag)
-	n += indexRecTagSz
-	copy(buf[n:], root[:])
-	n += indexRecLastRootSz
-	// start offset
-	buf[n] = byte(startOffsetIndexRecTag)
-	n += indexRecTagSz
-	writeUint64(buf[n:], start)
-	n += indexRecOffsetSz
-	// end offset
-	buf[n] = byte(endOffsetIndexRecTag)
-	n += indexRecTagSz
-	writeUint64(buf[n:], end)
-	n += indexRecOffsetSz
-	// kind
-	buf[n] = byte(kindIndexRecTag)
-	n += indexRecTagSz
-	buf[n] = byte(tableIndexRecKind)
-	n += indexRecKindSz
-	// payload
-	buf[n] = byte(payloadIndexRecTag)
-	n += indexRecTagSz
-	copy(buf[n:], idx)
-	n += uint32(len(idx))
-	// checksum
-	writeUint32(buf[n:], crc(buf[:n]))
-	n += indexRecChecksumSz
-	d.PanicIfFalse(l == n)
-	return
-}
-
-func readJournalIndexRecord(buf []byte) (rec indexRec, err error) {
-	rec.length = readUint32(buf)
-	buf = buf[indexRecLenSz:]
-	for len(buf) > indexRecChecksumSz {
-		tag := indexRecTag(buf[0])
-		buf = buf[indexRecTagSz:]
-		switch tag {
-		case lastRootIndexRecTag:
-			copy(rec.lastRoot[:], buf)
-			buf = buf[indexRecLastRootSz:]
-		case startOffsetIndexRecTag:
-			rec.start = readUint64(buf)
-			buf = buf[indexRecOffsetSz:]
-		case endOffsetIndexRecTag:
-			rec.end = readUint64(buf)
-			buf = buf[indexRecOffsetSz:]
-		case kindIndexRecTag:
-			rec.kind = indexRecKind(buf[0])
-			buf = buf[indexRecKindSz:]
-		case payloadIndexRecTag:
-			sz := len(buf) - indexRecChecksumSz
-			rec.payload = buf[:sz]
-			buf = buf[sz:]
-		case unknownIndexRecTag:
-			fallthrough
-		default:
-			err = fmt.Errorf("unknown record field tag: %d", tag)
-			return
-		}
-	}
-	rec.checksum = readUint32(buf[:indexRecChecksumSz])
-	return
-}
-
-func validateIndexRecord(buf []byte) bool {
-	if len(buf) < (indexRecLenSz + indexRecChecksumSz) {
-		return false
-	}
-	off := readUint32(buf)
-	if int(off) > len(buf) {
-		return false
-	}
-	off -= indexRecChecksumSz
-	return crc(buf[:off]) == readUint32(buf[off:])
 }
 
 type lookupMeta struct {

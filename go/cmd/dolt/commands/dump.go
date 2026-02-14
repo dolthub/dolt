@@ -623,16 +623,6 @@ func dumpTable(ctx *sql.Context, dEnv *env.DoltEnv, engine *sqle.Engine, root do
 }
 
 func getTableWriter(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, outSch schema.Schema, filePath string) (table.SqlRowWriter, errhand.VerboseError) {
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, errhand.BuildDError("error: ").AddCause(err).Build()
-	}
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return nil, errhand.BuildDError("error: ").AddCause(err).Build()
-	}
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-
 	writer, err := dEnv.FS.OpenForWriteAppend(filePath, os.ModePerm)
 	if err != nil {
 		return nil, errhand.BuildDError("Error opening writer for %s.", tblOpts.DestName()).AddCause(err).Build()
@@ -643,7 +633,7 @@ func getTableWriter(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOption
 		return nil, errhand.BuildDError("Could not create table writer for %s", tblOpts.tableName).AddCause(err).Build()
 	}
 
-	wr, err := tblOpts.dest.NewCreatingWriter(ctx, tblOpts, root, outSch, opts, writer)
+	wr, err := tblOpts.dest.NewCreatingWriter(ctx, tblOpts, root, outSch, editor.Options{}, writer)
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", tblOpts.tableName).AddCause(err).Build()
 	}

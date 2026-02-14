@@ -301,16 +301,7 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 }
 
 func sqlNewEngine(ctx context.Context, dEnv *env.DoltEnv) (*sqle.Engine, dsess.DoltDatabaseProvider, error) {
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, nil, err
-	}
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	opts := editor.Options{Deaf: deaf, Tempdir: tmpDir}
-	db, err := dsql.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
+	db, err := dsql.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, nil, err
 	}

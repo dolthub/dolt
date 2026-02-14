@@ -31,7 +31,6 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -739,13 +738,6 @@ func makeCommitStructType(metaType, parentsType, parentsListType, parentsClosure
 			},
 		)
 	}
-}
-
-func getRefElementType(t *types.Type) *types.Type {
-	// precondition checks
-	d.PanicIfFalse(t.TargetKind() == types.RefKind)
-
-	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
 func firstError(l, r error) error {

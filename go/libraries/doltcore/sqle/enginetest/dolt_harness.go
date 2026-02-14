@@ -190,7 +190,6 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	for i := range dbs {
 		db := dbs[i]
 		resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("use %s", db)})
-
 		// Any auto increment tables must be dropped and recreated to get a fresh state for the global auto increment
 		// sequence trackers
 		_, aiTables := enginetest.MustQuery(ctx, d.engine,
@@ -218,6 +217,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 			resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("drop database if exists %s", db)})
 		}
 	}
+
 	resetCmds = append(resetCmds, setup.SetupScript{"use mydb"})
 	return resetCmds
 }
@@ -229,7 +229,7 @@ func commitScripts(dbs []string) []setup.SetupScript {
 		db := dbs[i]
 		commitCmds = append(commitCmds, fmt.Sprintf("use %s", db))
 		commitCmds = append(commitCmds, "call dolt_add('.')")
-		commitCmds = append(commitCmds, fmt.Sprintf("call dolt_commit('--allow-empty', '-am', 'checkpoint enginetest database %s', '--date', '1970-01-01T12:00:00')", db))
+		commitCmds = append(commitCmds, fmt.Sprintf("call dolt_commit('--allow-empty', '-am', 'checkpoint enginetest database %s', '--date', '1970-01-01T12:00:00', '--skip-verification')", db))
 	}
 	commitCmds = append(commitCmds, "use mydb")
 	return []setup.SetupScript{commitCmds}

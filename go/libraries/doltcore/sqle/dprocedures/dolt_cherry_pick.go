@@ -103,6 +103,8 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, e
 		cherryPickOptions.EmptyCommitHandling = doltdb.KeepEmptyCommit
 	}
 
+	cherryPickOptions.SkipVerification = apr.Contains(cli.SkipVerificationFlag)
+
 	commit, mergeResult, err := cherry_pick.CherryPick(ctx, cherryStr, cherryPickOptions)
 	if err != nil {
 		return "", 0, 0, 0, err

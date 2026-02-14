@@ -15,64 +15,22 @@
 package editor
 
 import (
-	"context"
-	"fmt"
-	"strings"
-
 	"github.com/dolthub/dolt/go/store/types"
+)
+
+const (
+	invalidEaId = 0xFFFFFFFF
 )
 
 type PKDuplicateCb func(newKeyString, indexName string, existingKey, existingVal types.Tuple, isPk bool) error
 
 // Options are properties that define different functionality for the tableEditSession.
+// TODO next: all these fields are write-only, remove them
 type Options struct {
-	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
-	Deaf                     DbEaFactory
-	Tempdir                  string
-
 	// TargetStaging is true if the table is being edited in the staging root, as opposed to the working root (rare).
 	TargetStaging bool
 }
 
-// WithDeaf returns a new Options with the given  edit accumulator factory class
-func (o Options) WithDeaf(deaf DbEaFactory) Options {
-	o.Deaf = deaf
-	return o
-}
-
 func TestEditorOptions(vrw types.ValueReadWriter) Options {
-	return Options{
-		ForeignKeyChecksDisabled: false,
-		Deaf:                     NewInMemDeaf(vrw),
-	}
-}
-
-// formatKey returns a comma-separated string representation of the key given.
-func formatKey(ctx context.Context, key types.Value) (string, error) {
-	tuple, ok := key.(types.Tuple)
-	if !ok {
-		return "", fmt.Errorf("Expected types.Tuple but got %T", key)
-	}
-
-	var vals []string
-	iter, err := tuple.Iterator()
-	if err != nil {
-		return "", err
-	}
-
-	for iter.HasMore() {
-		i, val, err := iter.Next()
-		if err != nil {
-			return "", err
-		}
-		if i%2 == 1 {
-			str, err := types.EncodedValue(ctx, val)
-			if err != nil {
-				return "", err
-			}
-			vals = append(vals, str)
-		}
-	}
-
-	return fmt.Sprintf("[%s]", strings.Join(vals, ",")), nil
+	return Options{}
 }

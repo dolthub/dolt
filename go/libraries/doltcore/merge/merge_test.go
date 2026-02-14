@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -74,10 +73,6 @@ func (v rowV) value() val.Tuple {
 		panic(err)
 	}
 	return tup
-}
-
-func (v rowV) nomsValue() types.Value {
-	return valsToTestTupleWithoutPks([]types.Value{types.Int(v.col1), types.Int(v.col2)})
 }
 
 const (
@@ -505,68 +500,6 @@ func rebuildAllProllyIndexes(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table
 	return tbl.SetIndexSet(ctx, indexes)
 }
 
-func calcExpectedStats(t *testing.T) *MergeStats {
-	s := &MergeStats{Operation: TableModified}
-	for _, testCase := range testRows {
-		if (testCase.leftAction == InsertAction) != (testCase.rightAction == InsertAction) {
-			if testCase.leftAction == UpdateAction || testCase.rightAction == UpdateAction ||
-				testCase.leftAction == DeleteAction || testCase.rightAction == DeleteAction {
-				// Either the row exists in the ancestor commit and we are
-				// deleting or updating it, or the row doesn't exist and we are
-				// inserting it.
-				t.Fatalf("it's impossible for an insert to be paired with an update or delete")
-			}
-		}
-
-		if testCase.leftAction == NoopAction {
-			switch testCase.rightAction {
-			case NoopAction:
-			case DeleteAction:
-				s.Deletes++
-			case InsertAction:
-				s.Adds++
-			case UpdateAction:
-				s.Modifications++
-			}
-			continue
-		}
-
-		if testCase.rightAction == NoopAction {
-			switch testCase.leftAction {
-			case NoopAction:
-			case DeleteAction:
-				s.Deletes++
-			case InsertAction:
-				s.Adds++
-			case UpdateAction:
-				s.Modifications++
-			}
-			continue
-		}
-
-		if testCase.conflict {
-			// (UpdateAction, DeleteAction),
-			// (DeleteAction, UpdateAction),
-			// (UpdateAction, UpdateAction) with conflict,
-			// (InsertAction, InsertAction) with conflict
-			s.DataConflicts++
-			continue
-		}
-
-		if testCase.leftAction == InsertAction && testCase.rightAction == InsertAction {
-			// Equivalent inserts
-			continue
-		}
-
-		if !valutil.NilSafeEqCheck(unwrapNoms(testCase.leftValue), unwrapNoms(testCase.rightValue)) {
-			s.Modifications++
-			continue
-		}
-	}
-
-	return s
-}
-
 func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
 	err := ddb.WriteEmptyRepo(context.Background(), env.DefaultInitBranch, name, email)
@@ -643,40 +576,6 @@ func key(i int) val.Tuple {
 		panic(err)
 	}
 	return tup
-}
-
-func nomsKey(i int) types.Value {
-	return mustTuple(types.NewTuple(types.Format_Default, types.Uint(idTag), types.Int(i)))
-}
-
-func unwrap(v *rowV) val.Tuple {
-	if v == nil {
-		return nil
-	}
-	return v.value()
-}
-
-func unwrapNoms(v *rowV) types.Value {
-	if v == nil {
-		return nil
-	}
-	return v.nomsValue()
-}
-
-func mustTuple(tpl types.Tuple, err error) types.Tuple {
-	if err != nil {
-		panic(err)
-	}
-
-	return tpl
-}
-
-func mustString(str string, err error) string {
-	if err != nil {
-		panic(err)
-	}
-
-	return str
 }
 
 func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {

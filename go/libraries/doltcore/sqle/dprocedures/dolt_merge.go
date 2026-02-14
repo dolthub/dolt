@@ -180,7 +180,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 		msg = userMsg
 	}
 
-	ws, commit, conflicts, fastForward, message, err := performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+	ws, commit, conflicts, fastForward, message, err := performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg, apr.Contains(cli.SkipVerificationFlag))
 	if err != nil {
 		return commit, conflicts, fastForward, "", err
 	}
@@ -205,6 +205,7 @@ func performMerge(
 	spec *merge.MergeSpec,
 	noCommit bool,
 	msg string,
+	skipVerification bool,
 ) (*doltdb.WorkingSet, string, int, int, string, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
@@ -234,7 +235,7 @@ func performMerge(
 	if canFF {
 		if spec.FFMode == merge.NoFastForward {
 			var commit *doltdb.Commit
-			ws, commit, err = executeNoFFMerge(ctx, sess, spec, msg, dbName, ws, noCommit)
+			ws, commit, err = executeNoFFMerge(ctx, sess, spec, msg, dbName, ws, noCommit, skipVerification)
 			if err == doltdb.ErrUnresolvedConflictsOrViolations {
 				// if there are unresolved conflicts, write the resulting working set back to the session and return an
 				// error message
@@ -306,7 +307,10 @@ func performMerge(
 		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
 		args := []string{"-m", msg, "--author", author}
 		if spec.Force {
-			args = append(args, "--force")
+			args = append(args, "--"+cli.ForceFlag)
+		}
+		if skipVerification {
+			args = append(args, "--"+cli.SkipVerificationFlag)
 		}
 		commit, _, err = doDoltCommit(ctx, args)
 		if err != nil {
@@ -405,6 +409,7 @@ func executeNoFFMerge(
 	dbName string,
 	ws *doltdb.WorkingSet,
 	noCommit bool,
+	skipVerification bool,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
@@ -444,11 +449,12 @@ func executeNoFFMerge(
 	}
 
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message: msg,
-		Date:    spec.Date,
-		Force:   spec.Force,
-		Name:    spec.Name,
-		Email:   spec.Email,
+		Message:          msg,
+		Date:             spec.Date,
+		Force:            spec.Force,
+		Name:             spec.Name,
+		Email:            spec.Email,
+		SkipVerification: skipVerification,
 	})
 	if err != nil {
 		return nil, nil, err

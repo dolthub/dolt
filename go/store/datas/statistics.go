@@ -49,18 +49,6 @@ func (s *Statistics) Count() (int, error) {
 	return s.m.Count()
 }
 
-// IsStatistic determines whether the types.Value is a stash list object.
-func IsStatistic(v types.Value) (bool, error) {
-	if _, ok := v.(types.Struct); ok {
-		// this should not return true as stash is not supported for old format
-		return false, nil
-	} else if sm, ok := v.(types.SerialMessage); ok {
-		return serial.GetFileID(sm) == serial.StatisticFileID, nil
-	} else {
-		return false, nil
-	}
-}
-
 // LoadStatistics attempts to dereference a database's statistics Dataset into a typed Statistics object.
 func LoadStatistics(ctx context.Context, nbf *types.NomsBinFormat, ns tree.NodeStore, vr types.ValueReader, ds Dataset) (*Statistics, error) {
 	if !nbf.UsesFlatbuffers() {

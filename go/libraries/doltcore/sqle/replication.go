@@ -55,16 +55,7 @@ func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer) ([
 // skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
 // that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (ReadReplicaDatabase, error) {
-	deaf, err := dEnv.DbEaFactory(ctx)
-	if err != nil {
-		return ReadReplicaDatabase{}, err
-	}
-
-	opts := editor.Options{
-		Deaf: deaf,
-	}
-
-	db, err := NewDatabase(ctx, name, dEnv.DbData(ctx), opts)
+	db, err := NewDatabase(ctx, name, dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return ReadReplicaDatabase{}, err
 	}

@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -460,64 +459,6 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 // Close closes the iterator.
 func (itr *doltDiffCommitHistoryRowItr) Close(*sql.Context) error {
 	return nil
-}
-
-// isTableDataEmpty return true if the table does not contain any data
-func isTableDataEmpty(ctx *sql.Context, table *doltdb.Table) (bool, error) {
-	rowData, err := table.GetRowData(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	return rowData.Empty()
-}
-
-// commitFilterForDiffTableFilterExprs returns CommitFilter used for CommitItr.
-func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.CommitFilter[*sql.Context], error) {
-	filters = transformFilters(filters...)
-
-	return func(ctx *sql.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
-		cm, ok := optCmt.ToCommit()
-		if !ok {
-			return false, doltdb.ErrGhostCommitEncountered
-		}
-
-		meta, err := cm.GetCommitMeta(ctx)
-		if err != nil {
-			return false, err
-		}
-		for _, filter := range filters {
-			res, err := filter.Eval(ctx, sql.Row{h.String(), meta.Name, meta.Time()})
-			if err != nil {
-				return false, err
-			}
-			b, ok := res.(bool)
-			if ok && !b {
-				return true, nil
-			}
-		}
-
-		return false, err
-	}, nil
-}
-
-// transformFilters return filter expressions with index specified for rows used in CommitFilter.
-func transformFilters(filters ...sql.Expression) []sql.Expression {
-	for i := range filters {
-		filters[i], _, _ = transform.Expr(filters[i], func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
-			gf, ok := e.(*expression.GetField)
-			if !ok {
-				return e, transform.SameTree, nil
-			}
-			switch gf.Name() {
-			case commitHashCol:
-				return gf.WithIndex(0), transform.NewTree, nil
-			default:
-				return gf, transform.SameTree, nil
-			}
-		})
-	}
-	return filters
 }
 
 func getCommitsFromCommitHashEquality(ctx *sql.Context, ddb *doltdb.DoltDB, filters []sql.Expression) ([]*doltdb.Commit, bool) {

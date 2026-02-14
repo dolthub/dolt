@@ -42,16 +42,6 @@ func NewJSONDoc(nbf *NomsBinFormat, vrw ValueReadWriter, value Value) (JSON, err
 	return JSON{valueImpl{vrw, nbf, w.data(), nil}}, nil
 }
 
-func NewTestJSONDoc(nbf *NomsBinFormat, vrw ValueReadWriter, buf []byte) (JSON, error) {
-	w := newBinaryNomsWriter()
-	if err := JSONKind.writeTo(&w, nbf); err != nil {
-		return emptyJSONDoc(nbf), err
-	}
-
-	w.writeString(string(buf))
-	return JSON{valueImpl{vrw, nbf, w.data(), nil}}, nil
-}
-
 // emptyJSONDoc creates and empty JSON value.
 func emptyJSONDoc(nbf *NomsBinFormat) JSON {
 	w := newBinaryNomsWriter()
@@ -146,12 +136,6 @@ func (t JSON) typeOf() (*Type, error) {
 // Kind implements the Valuable interface.
 func (t JSON) Kind() NomsKind {
 	return JSONKind
-}
-
-func (t JSON) decoderSkipToFields() (valueDecoder, uint64) {
-	dec := t.decoder()
-	dec.skipKind()
-	return dec, uint64(1)
 }
 
 // Len implements the Value interface.

@@ -149,11 +149,3 @@ func (v Geometry) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 func (v Geometry) HumanReadableString() string {
 	return v.Inner.HumanReadableString()
 }
-
-func EncodeGeometryWKB(v Geometry) ([]byte, error) {
-	wr := &binaryNomsWriter{make([]byte, 128), 0}
-	if err := v.writeTo(wr, nil); err != nil {
-		return nil, err
-	}
-	return wr.data()[1:], nil // trim NomsKind
-}

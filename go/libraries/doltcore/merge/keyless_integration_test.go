@@ -458,18 +458,6 @@ type keylessEntry struct {
 	c2   int
 }
 
-func (e keylessEntries) toTupleSet() tupleSet {
-	tups := make([]types.Tuple, len(e))
-	for i, t := range e {
-		tups[i] = t.ToNomsTuple()
-	}
-	return mustTupleSet(tups...)
-}
-
-func (e keylessEntry) ToNomsTuple() types.Tuple {
-	return dtu.MustTuple(cardTag, types.Uint(e.card), c1Tag, types.Int(e.c1), c2Tag, types.Int(e.c2))
-}
-
 func (e keylessEntry) HashAndValue() ([]byte, val.Tuple, error) {
 	valBld.PutUint64(0, uint64(e.card))
 	valBld.PutInt64(1, int64(e.c1))
@@ -497,14 +485,6 @@ func (e conflictEntries) toConflictSet(t *testing.T) conflictSet {
 	return s
 }
 
-func (e conflictEntries) toTupleSet() tupleSet {
-	tups := make([]types.Tuple, len(e))
-	for i, t := range e {
-		tups[i] = t.ToNomsTuple()
-	}
-	return mustTupleSet(tups...)
-}
-
 func (e conflictEntry) Key(t *testing.T) (h [16]byte) {
 	if e.base != nil {
 		h2, _, err := e.base.HashAndValue()
@@ -525,34 +505,6 @@ func (e conflictEntry) Key(t *testing.T) (h [16]byte) {
 		return
 	}
 
-	return
-}
-
-func (e conflictEntry) ToNomsTuple() types.Tuple {
-	var b, o, t types.Value = types.NullValue, types.NullValue, types.NullValue
-	if e.base != nil {
-		b = e.base.ToNomsTuple()
-	}
-	if e.ours != nil {
-		o = e.ours.ToNomsTuple()
-	}
-	if e.theirs != nil {
-		t = e.theirs.ToNomsTuple()
-	}
-	return dtu.MustTuple(b, o, t)
-}
-
-type tupleSet map[hash.Hash]types.Tuple
-
-func mustTupleSet(tt ...types.Tuple) (s tupleSet) {
-	s = make(tupleSet, len(tt))
-	for _, tup := range tt {
-		h, err := tup.Hash(types.Format_Default)
-		if err != nil {
-			panic(err)
-		}
-		s[h] = tup
-	}
 	return
 }
 

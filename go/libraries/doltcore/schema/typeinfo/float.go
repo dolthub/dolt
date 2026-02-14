@@ -30,12 +30,6 @@ import (
 
 type FloatWidth int8
 
-const (
-	floatTypeParam_Width    = "width"
-	floatTypeParam_Width_32 = "32"
-	floatTypeParam_Width_64 = "64"
-)
-
 type floatType struct {
 	sqlFloatType sql.NumberType
 }
@@ -45,20 +39,6 @@ var (
 	Float32Type = &floatType{gmstypes.Float32}
 	Float64Type = &floatType{gmstypes.Float64}
 )
-
-func CreateFloatTypeFromParams(params map[string]string) (TypeInfo, error) {
-	if width, ok := params[floatTypeParam_Width]; ok {
-		switch width {
-		case floatTypeParam_Width_32:
-			return Float32Type, nil
-		case floatTypeParam_Width_64:
-			return Float64Type, nil
-		default:
-			return nil, fmt.Errorf(`create float type info has "%v" param with value "%v"`, floatTypeParam_Width, width)
-		}
-	}
-	return nil, fmt.Errorf(`create float type info is missing "%v" param`, floatTypeParam_Width)
-}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *floatType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {

@@ -23,7 +23,6 @@ package spec
 
 import (
 	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func CreateDatabaseSpecString(protocol, db string) string {
@@ -34,8 +33,4 @@ func CreateValueSpecString(protocol, db, path string) string {
 	p, err := NewAbsolutePath(path)
 	d.Chk.NoError(err)
 	return Spec{Protocol: protocol, DatabaseName: db, Path: p}.String()
-}
-
-func CreateHashSpecString(protocol, db string, h hash.Hash) string {
-	return Spec{Protocol: protocol, DatabaseName: db, Path: AbsolutePath{Hash: h}}.String()
 }

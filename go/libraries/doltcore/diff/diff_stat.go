@@ -19,13 +19,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -39,7 +36,6 @@ type DiffStatProgress struct {
 }
 
 type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error
-type nomsReporter func(ctx context.Context, change *diff.Difference, fromSch, toSch schema.Schema, ch chan<- DiffStatProgress) error
 
 // Stat reports a stat of diff changes between two values
 // todo: make package private once dolthub is migrated
@@ -168,38 +164,6 @@ func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool
 	return nil
 }
 
-func statWithReporter(ctx context.Context, ch chan DiffStatProgress, from, to types.Map, rpr nomsReporter, fromSch, toSch schema.Schema) (err error) {
-	ad := NewAsyncDiffer(1024)
-	ad.Start(ctx, from, to)
-	defer func() {
-		if cerr := ad.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	var more bool
-	var diffs []*diff.Difference
-	for {
-		diffs, more, err = ad.GetDiffs(100, time.Millisecond)
-		if err != nil {
-			return err
-		}
-
-		for _, df := range diffs {
-			err = rpr(ctx, df, fromSch, toSch, ch)
-			if err != nil {
-				return err
-			}
-		}
-
-		if !more {
-			break
-		}
-	}
-
-	return nil
-}
-
 func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error {
 	var stat DiffStatProgress
 	switch change.Type {
@@ -279,67 +243,4 @@ func prollyCountCellDiff(ctx context.Context, mapping val.OrdinalMapping, fromD,
 	// some columns were added
 	changed += newCols
 	return changed
-}
-
-func reportNomsPkChanges(ctx context.Context, change *diff.Difference, fromSch, toSch schema.Schema, ch chan<- DiffStatProgress) error {
-	var stat DiffStatProgress
-	switch change.ChangeType {
-	case types.DiffChangeAdded:
-		stat = DiffStatProgress{Adds: 1}
-	case types.DiffChangeRemoved:
-		stat = DiffStatProgress{Removes: 1}
-	case types.DiffChangeModified:
-		oldTuple := change.OldValue.(types.Tuple)
-		newTuple := change.NewValue.(types.Tuple)
-		cellChanges, err := row.CountCellDiffs(oldTuple, newTuple, fromSch, toSch)
-		if err != nil {
-			return err
-		}
-		stat = DiffStatProgress{Changes: 1, CellChanges: cellChanges}
-	default:
-		return errors.New("unknown change type")
-	}
-	select {
-	case ch <- stat:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func reportNomsKeylessChanges(ctx context.Context, change *diff.Difference, fromSch, toSch schema.Schema, ch chan<- DiffStatProgress) error {
-	var oldCard uint64
-	if change.OldValue != nil {
-		v, err := change.OldValue.(types.Tuple).Get(row.KeylessCardinalityValIdx)
-		if err != nil {
-			return err
-		}
-		oldCard = uint64(v.(types.Uint))
-	}
-
-	var newCard uint64
-	if change.NewValue != nil {
-		v, err := change.NewValue.(types.Tuple).Get(row.KeylessCardinalityValIdx)
-		if err != nil {
-			return err
-		}
-		newCard = uint64(v.(types.Uint))
-	}
-
-	var stat DiffStatProgress
-	delta := int64(newCard) - int64(oldCard)
-	if delta > 0 {
-		stat = DiffStatProgress{Adds: uint64(delta)}
-	} else if delta < 0 {
-		stat = DiffStatProgress{Removes: uint64(-delta)}
-	} else {
-		return fmt.Errorf("diff with delta = 0 for key: %s", change.KeyValue.HumanReadableString())
-	}
-
-	select {
-	case ch <- stat:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }

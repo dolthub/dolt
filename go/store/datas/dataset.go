@@ -169,6 +169,7 @@ type RebaseState struct {
 	commitBecomesEmptyHandling uint8
 	emptyCommitHandling        uint8
 	rebasingStarted            bool
+	skipVerification           bool
 }
 
 func (rs *RebaseState) PreRebaseWorkingAddr() hash.Hash {
@@ -204,6 +205,10 @@ func (rs *RebaseState) CommitBecomesEmptyHandling(_ context.Context) uint8 {
 
 func (rs *RebaseState) EmptyCommitHandling(_ context.Context) uint8 {
 	return rs.emptyCommitHandling
+}
+
+func (rs *RebaseState) SkipVerification(_ context.Context) bool {
+	return rs.skipVerification
 }
 
 type MergeState struct {
@@ -457,6 +462,7 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 			rebaseState.EmptyCommitHandling(),
 			rebaseState.LastAttemptedStep(),
 			rebaseState.RebasingStarted(),
+			rebaseState.SkipVerification(),
 		)
 	}
 
@@ -525,72 +531,8 @@ func newStatisticHead(sm types.SerialMessage, addr hash.Hash) serialStashListHea
 	return serialStashListHead{sm, addr}
 }
 
-type statisticsHead struct {
-	msg  types.SerialMessage
-	addr hash.Hash
-}
-
-var _ dsHead = statisticsHead{}
-
-// TypeName implements dsHead
-func (s statisticsHead) TypeName() string {
-	return "Statistics"
-}
-
-// Addr implements dsHead
-func (s statisticsHead) Addr() hash.Hash {
-	return s.addr
-}
-
-// HeadTag implements dsHead
-func (s statisticsHead) HeadTag() (*TagMeta, hash.Hash, error) {
-	return nil, hash.Hash{}, errors.New("HeadTag called on statistic")
-}
-
-// HeadWorkingSet implements dsHead
-func (s statisticsHead) HeadWorkingSet() (*WorkingSetHead, error) {
-	return nil, errors.New("HeadWorkingSet called on statistic")
-}
-
-// value implements dsHead
-func (s statisticsHead) value() types.Value {
-	return s.msg
-}
-
 func newTupleHead(sm types.SerialMessage, addr hash.Hash) serialStashListHead {
 	return serialStashListHead{sm, addr}
-}
-
-type tupleHead struct {
-	msg  types.SerialMessage
-	addr hash.Hash
-}
-
-var _ dsHead = tupleHead{}
-
-// TypeName implements dsHead
-func (s tupleHead) TypeName() string {
-	return "Tuple"
-}
-
-// Addr implements dsHead
-func (s tupleHead) Addr() hash.Hash {
-	return s.addr
-}
-
-// HeadTag implements dsHead
-func (s tupleHead) HeadTag() (*TagMeta, hash.Hash, error) {
-	return nil, hash.Hash{}, errors.New("HeadTag called on tuple")
-}
-
-// HeadWorkingSet implements dsHead
-func (s tupleHead) HeadWorkingSet() (*WorkingSetHead, error) {
-	return nil, errors.New("HeadWorkingSet called on statistic")
-}
-
-// value implements dsHead
-func (s tupleHead) value() types.Value {
-	return s.msg
 }
 
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is

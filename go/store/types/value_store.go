@@ -130,11 +130,6 @@ func newTestValueStore() *ValueStore {
 	return NewValueStore(ts.NewViewWithDefaultFormat())
 }
 
-func newTestValueStore_LD_1() *ValueStore {
-	ts := &chunks.TestStorage{}
-	return NewValueStore(ts.NewView())
-}
-
 // NewMemoryValueStore creates a simple struct that satisfies ValueReadWriter
 // and is backed by a chunks.TestStore. Used for dolt operations outside of noms.
 func NewMemoryValueStore() *ValueStore {

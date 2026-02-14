@@ -142,18 +142,6 @@ func (s *StashList) getStashAtIdx(ctx context.Context, idx int) (hash.Hash, erro
 	return stash.addr, nil
 }
 
-// IsStashList determines whether the types.Value is a stash list object.
-func IsStashList(v types.Value) (bool, error) {
-	if _, ok := v.(types.Struct); ok {
-		// this should not return true as stash is not supported for old format
-		return false, nil
-	} else if sm, ok := v.(types.SerialMessage); ok {
-		return serial.GetFileID(sm) == serial.StashListFileID, nil
-	} else {
-		return false, nil
-	}
-}
-
 // GetStashAtIdx returns hash address of stash at given index in the stash list.
 func GetStashAtIdx(ctx context.Context, ns tree.NodeStore, val types.Value, idx int) (hash.Hash, error) {
 	stashList, err := getExistingStashList(ctx, ns, val)

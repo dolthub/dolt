@@ -19,13 +19,8 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
-)
-
-const (
-	extendedTypeParams_string_encoded = "string_encoded"
 )
 
 // extendedType is a type that refers to an ExtendedType in GMS. These are only supported in the new format, and have many
@@ -35,18 +30,6 @@ type extendedType struct {
 }
 
 var _ TypeInfo = (*extendedType)(nil)
-
-// CreateExtendedTypeFromParams creates a TypeInfo from the given parameter map.
-func CreateExtendedTypeFromParams(params map[string]string) (TypeInfo, error) {
-	if encodedString, ok := params[extendedTypeParams_string_encoded]; ok {
-		t, err := gmstypes.DeserializeTypeFromString(encodedString)
-		if err != nil {
-			return nil, err
-		}
-		return &extendedType{t}, nil
-	}
-	return nil, fmt.Errorf(`create extended type info is missing "%v" param`, extendedTypeParams_string_encoded)
-}
 
 // CreateExtendedTypeFromSqlType creates a TypeInfo from the given extended type.
 func CreateExtendedTypeFromSqlType(typ sql.ExtendedType) TypeInfo {

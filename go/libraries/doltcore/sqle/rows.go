@@ -26,36 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var _ sql.RowIter = (*keylessRowIter)(nil)
-
-type keylessRowIter struct {
-	keyedIter   *index.DoltMapIter
-	lastRead    sql.Row
-	cardIdx     int
-	nonCardCols int
-	lastCard    uint64
-}
-
-func (k *keylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	if k.lastCard == 0 {
-		r, err := k.keyedIter.Next(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
-		k.lastCard = r[k.cardIdx].(uint64)
-		k.lastRead = r[:k.nonCardCols]
-	}
-
-	k.lastCard--
-	return k.lastRead, nil
-}
-
-func (k keylessRowIter) Close(ctx *sql.Context) error {
-	return k.keyedIter.Close(ctx)
-}
-
 // Returns a new row iterator for the table given
 func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, partition doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.GetSchema(ctx)

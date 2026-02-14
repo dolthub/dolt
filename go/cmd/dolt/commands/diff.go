@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	ast "github.com/dolthub/vitess/go/vt/sqlparser"
-	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
@@ -547,20 +546,6 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 	}
 
 	return tableNames, nil
-}
-
-func isTableNotFoundError(err error) bool {
-	if sql.ErrTableNotFound.Is(err) {
-		return true
-	}
-	mse, ok := err.(*mysql.MySQLError)
-	if ok {
-		if strings.HasPrefix(mse.Message, "table not found:") {
-			return true
-		}
-	}
-
-	return false
 }
 
 // applyDiffRoots applies the appropriate |from| and |to| root values to the receiver and returns the table names

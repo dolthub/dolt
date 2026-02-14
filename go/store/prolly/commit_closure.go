@@ -122,13 +122,6 @@ func (c CommitClosure) ContainsKey(ctx context.Context, h hash.Hash, height uint
 	return c.closure.Has(ctx, k)
 }
 
-func DecodeCommitClosureKey(key []byte) (height uint64, addr hash.Hash) {
-	height = binary.LittleEndian.Uint64(key)
-	addr = hash.New(key[prefixWidth:])
-
-	return
-}
-
 func (c CommitClosure) AsHashSet(ctx context.Context) (hash.HashSet, error) {
 	closureIter, err := c.IterAllReverse(ctx)
 	if err != nil {

@@ -233,10 +233,6 @@ func (t *TempTable) Collation() sql.CollationID {
 	return sql.CollationID(t.sch.GetCollation())
 }
 
-func (t *TempTable) sqlSchema() sql.PrimaryKeySchema {
-	return t.pkSch
-}
-
 func (t *TempTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	rows, err := t.table.GetRowData(ctx)
 	if err != nil {

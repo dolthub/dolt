@@ -20,12 +20,10 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
@@ -542,17 +540,4 @@ func foreignKeyCVJson(foreignKey doltdb.ForeignKey, sch, refSch schema.Schema) (
 	}
 
 	return d, nil
-}
-
-func jsonDataToNomsValue(ctx context.Context, vrw types.ValueReadWriter, data []byte) (types.JSON, error) {
-	var doc interface{}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return types.JSON{}, err
-	}
-	sqlDoc := gmstypes.JSONDocument{Val: doc}
-	nomsJson, err := json2.NomsJSONFromJSONValue(ctx, vrw, sqlDoc)
-	if err != nil {
-		return types.JSON{}, err
-	}
-	return types.JSON(nomsJson), nil
 }

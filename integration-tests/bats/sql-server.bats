@@ -120,6 +120,64 @@ EOF
     dolt --use-db 'test01' sql -q "call dolt_clone('file:///$tempDir/remote')"
 }
 
+@test "sql-server: dolt_clone strips .git suffix for git remotes" {
+    skiponwindows "tests are flaky on Windows"
+    skip_if_remote
+    if ! command -v git >/dev/null 2>&1; then
+        skip "git not installed"
+    fi
+
+    tempDir="$(mktemp -d "${BATS_TMPDIR:-/tmp}/dolt-sql-server-clone-git.XXXXXX")"
+    trap 'rm -rf "$tempDir"' EXIT
+    cd "$tempDir"
+
+    # Set up a bare git remote whose path ends with .git and seed it with a branch.
+    mkdir first_dolt_remote.git
+    git init --bare first_dolt_remote.git
+    seed_dir="$(mktemp -d "${BATS_TMPDIR:-/tmp}/seed-repo.XXXXXX")"
+    (
+        set -euo pipefail
+        trap 'rm -rf "$seed_dir"' EXIT
+        cd "$seed_dir"
+        git init >/dev/null
+        git config user.email "bats@email.fake"
+        git config user.name "Bats Tests"
+        echo "seed" > README
+        git add README
+        git commit -m "seed" >/dev/null
+        git branch -M main
+        git remote add origin "$tempDir/first_dolt_remote.git"
+        git push origin main >/dev/null
+    )
+
+    # Push dolt data to the git remote.
+    mkdir src
+    cd src
+    dolt init
+    dolt sql -q "create table test(pk int primary key, v int);"
+    dolt sql -q "insert into test values (1, 111);"
+    dolt add .
+    dolt commit -m "seed dolt"
+    dolt remote add origin "$tempDir/first_dolt_remote.git"
+    dolt push origin main
+
+    # Start an empty server and clone into it via the stored procedure.
+    cd "$tempDir"
+    mkdir empty_server
+    cd empty_server
+    start_sql_server
+
+    dolt sql -q "create database hostdb"
+    run dolt --use-db hostdb sql -q "call dolt_clone('$tempDir/first_dolt_remote.git'); show databases;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first_dolt_remote" ]] || false
+    [[ ! "$output" =~ "first_dolt_remote.git" ]] || false
+
+    run dolt --use-db first_dolt_remote sql -q "select v from test where pk=1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "111" ]] || false
+}
+
 @test "sql-server: loglevels are case insensitive" {
     # assert that loglevel on command line is not case sensitive
     cd repo1
