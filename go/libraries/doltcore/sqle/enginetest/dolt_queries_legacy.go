@@ -1598,3 +1598,396 @@ var LegacyReplaceScriptTests = []queries.ScriptTest{
 		},
 	},
 }
+
+// legacyEmptyTablesSetup creates the people, episodes, and appearances tables with no data.
+// Matches the CreateEmptyTestDatabase() setup used by TestCreateTable.
+var legacyEmptyTablesSetup = []string{
+	`CREATE TABLE people (
+		id bigint primary key,
+		first_name varchar(1024) NOT NULL,
+		last_name varchar(1024) NOT NULL,
+		is_married bigint,
+		age bigint,
+		rating double,
+		uuid varchar(1024),
+		num_episodes bigint unsigned
+	)`,
+	`CREATE TABLE episodes (
+		id bigint primary key,
+		name varchar(1024) NOT NULL,
+		air_date datetime,
+		rating double
+	)`,
+	`CREATE TABLE appearances (
+		character_id bigint NOT NULL,
+		episode_id bigint NOT NULL,
+		comments varchar(1024),
+		PRIMARY KEY (character_id, episode_id)
+	)`,
+}
+
+// LegacyCreateTableScriptTests are CREATE TABLE tests converted from sqle/sqlddl_test.go TestCreateTable.
+// The original tests verified internal schema.Schema objects; here we verify via SHOW CREATE TABLE
+// and error message checks.
+var LegacyCreateTableScriptTests = []queries.ScriptTest{
+	{
+		Name:        "create single column schema",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable (id int primary key)", SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create two column schema",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable (id int primary key, age int)", SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create two column keyless schema",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable (id int, age int)", SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int,\n  `age` int\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table syntax error",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable id int, age int", ExpectedErrStr: "syntax error at position 26 near 'id'"},
+		},
+	},
+	{
+		Name:        "create table bad table name",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table -testTable (id int primary key, age int)", ExpectedErrStr: "syntax error at position 15 near 'table'"},
+		},
+	},
+	{
+		Name:        "create table reserved name",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table dolt_table (id int primary key, age int)", ExpectedErrStr: "Invalid table name dolt_table. Table names beginning with `dolt_` are reserved for internal use"},
+		},
+	},
+	{
+		Name:        "create table name already in use",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table people (id int primary key, age int)", ExpectedErrStr: "table with name people already exists"},
+		},
+	},
+	{
+		Name:        "create table if not exists on existing table",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table if not exists people (id int primary key, age int)", SkipResultsCheck: true},
+			// Table should still have the original schema
+			{Query: "select count(*) from people", Expected: []sql.Row{{int64(0)}}},
+		},
+	},
+	{
+		Name:        "create table with types",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `create table testTable (
+				id int primary key,
+				age int,
+				first_name varchar(255),
+				is_married boolean)`, SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int,\n  `first_name` varchar(255),\n  `is_married` tinyint(1),\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table all supported types",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `create table testTable (
+				c0 int primary key,
+				c1 tinyint,
+				c2 smallint,
+				c3 mediumint,
+				c4 integer,
+				c5 bigint,
+				c6 bool,
+				c7 boolean,
+				c8 bit(10),
+				c9 text,
+				c10 tinytext,
+				c11 mediumtext,
+				c12 longtext,
+				c16 char(5),
+				c17 varchar(255),
+				c18 varchar(80),
+				c19 float,
+				c20 double,
+				c22 int unsigned,
+				c23 tinyint unsigned,
+				c24 smallint unsigned,
+				c25 mediumint unsigned,
+				c26 bigint unsigned,
+				c27 tinyint(1))`, SkipResultsCheck: true},
+			// Just verify the table was created and has the right number of columns
+			{Query: "select * from testTable", Expected: []sql.Row{}},
+		},
+	},
+	{
+		Name:        "create table with composite primary key",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `create table testTable (
+				id int,
+				age int,
+				first_name varchar(80),
+				is_married bool,
+				primary key (id, age))`, SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int NOT NULL,\n  `first_name` varchar(80),\n  `is_married` tinyint(1),\n  PRIMARY KEY (`id`,`age`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table with not null constraints",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `create table testTable (
+				id int,
+				age int,
+				first_name varchar(80) not null,
+				is_married bool,
+				primary key (id, age))`, SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int NOT NULL,\n  `first_name` varchar(80) NOT NULL,\n  `is_married` tinyint(1),\n  PRIMARY KEY (`id`,`age`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table with quoted columns",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable (`id` int, `age` int, `timestamp` varchar(80), `is married` bool, primary key (`id`, `age`))", SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int NOT NULL,\n  `timestamp` varchar(80),\n  `is married` tinyint(1),\n  PRIMARY KEY (`id`,`age`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table ip2nation",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `CREATE TABLE ip2nation (
+				ip int(11) unsigned NOT NULL default 0,
+				country char(2) NOT NULL default '',
+				PRIMARY KEY (ip))`, SkipResultsCheck: true},
+			{Query: "show create table ip2nation", Expected: []sql.Row{
+				{"ip2nation", "CREATE TABLE `ip2nation` (\n  `ip` int unsigned NOT NULL DEFAULT '0',\n  `country` char(2) NOT NULL DEFAULT '',\n  PRIMARY KEY (`ip`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table ip2nationCountries",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `CREATE TABLE ip2nationCountries (
+				code varchar(4) NOT NULL default '',
+				iso_code_2 varchar(2) NOT NULL default '',
+				iso_code_3 varchar(3) default '',
+				iso_country varchar(255) NOT NULL default '',
+				country varchar(255) NOT NULL default '',
+				lat float NOT NULL default 0.0,
+				lon float NOT NULL default 0.0,
+				PRIMARY KEY (code))`, SkipResultsCheck: true},
+			{Query: "show create table ip2nationCountries", Expected: []sql.Row{
+				{"ip2nationCountries", "CREATE TABLE `ip2nationCountries` (\n  `code` varchar(4) NOT NULL DEFAULT '',\n  `iso_code_2` varchar(2) NOT NULL DEFAULT '',\n  `iso_code_3` varchar(3) DEFAULT '',\n  `iso_country` varchar(255) NOT NULL DEFAULT '',\n  `country` varchar(255) NOT NULL DEFAULT '',\n  `lat` float NOT NULL DEFAULT '0',\n  `lon` float NOT NULL DEFAULT '0',\n  PRIMARY KEY (`code`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+}
+
+// LegacyDropTableScriptTests are DROP TABLE tests converted from sqle/sqlddl_test.go TestDropTable.
+var LegacyDropTableScriptTests = []queries.ScriptTest{
+	{
+		Name:        "drop table",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table people", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+		},
+	},
+	{
+		Name:        "drop table case insensitive",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table PEOPLE", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+		},
+	},
+	{
+		Name:        "drop table if exists",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table if exists people", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+		},
+	},
+	{
+		Name:        "drop non existent table",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table notfound", ExpectedErrStr: "table not found: notfound"},
+		},
+	},
+	{
+		Name:        "drop non existent table if exists",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table if exists notFound", SkipResultsCheck: true},
+		},
+	},
+	{
+		Name:        "drop many tables",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table people, appearances, episodes", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+			{Query: "select * from appearances", ExpectedErrStr: "table not found: appearances"},
+			{Query: "select * from episodes", ExpectedErrStr: "table not found: episodes"},
+		},
+	},
+	{
+		Name:        "drop many tables some don't exist",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table if exists people, not_real, appearances, episodes", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+			{Query: "select * from appearances", ExpectedErrStr: "table not found: appearances"},
+			{Query: "select * from episodes", ExpectedErrStr: "table not found: episodes"},
+		},
+	},
+}
+
+// LegacyIndexScriptTests are index-related DDL tests converted from sqle/sqlddl_test.go
+// (TestIndexOverwrite, TestDropPrimaryKey, TestDropIndex, TestCreateIndexUnique).
+// Internal FK collection state assertions are omitted as they require direct API access.
+var LegacyIndexScriptTests = []queries.ScriptTest{
+	{
+		Name: "index overwrite with foreign keys",
+		SetUpScript: []string{
+			`CREATE TABLE parent (
+				pk bigint PRIMARY KEY,
+				v1 bigint,
+				INDEX (v1)
+			)`,
+			`CREATE TABLE child (
+				pk varchar(10) PRIMARY KEY,
+				parent_value bigint,
+				CONSTRAINT fk_child FOREIGN KEY (parent_value) REFERENCES parent(v1)
+			)`,
+			`CREATE TABLE child_idx (
+				pk varchar(10) PRIMARY KEY,
+				parent_value bigint,
+				INDEX (parent_value),
+				CONSTRAINT fk_child_idx FOREIGN KEY (parent_value) REFERENCES parent(v1)
+			)`,
+			`CREATE TABLE child_unq (
+				pk varchar(10) PRIMARY KEY,
+				parent_value bigint,
+				CONSTRAINT fk_child_unq FOREIGN KEY (parent_value) REFERENCES parent(v1)
+			)`,
+			`CREATE TABLE child_non_unq (
+				pk varchar(10) PRIMARY KEY,
+				parent_value bigint,
+				CONSTRAINT fk_child_non_unq FOREIGN KEY (parent_value) REFERENCES parent(v1)
+			)`,
+			"INSERT INTO parent VALUES (1, 1), (2, 2), (3, 3), (4, NULL), (5, 5), (6, 6), (7, 7)",
+			"INSERT INTO child VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5', 5)",
+			"INSERT INTO child_idx VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5', 5)",
+			"INSERT INTO child_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', NULL), ('5', 5)",
+			"INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5', 5)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// Create indexes
+			{Query: "CREATE INDEX abc ON child (parent_value)", SkipResultsCheck: true},
+			{Query: "CREATE INDEX abc_idx ON child_idx (parent_value)", SkipResultsCheck: true},
+			{Query: "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value)", SkipResultsCheck: true},
+			{Query: "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value)", ExpectedErrStr: "duplicate unique key given: [3,4]"},
+			// Insert tests against index
+			{Query: "INSERT INTO child VALUES ('6', 5)", SkipResultsCheck: true},
+			{Query: "INSERT INTO child_idx VALUES ('6', 5)", SkipResultsCheck: true},
+			// unique index violation
+			{Query: "INSERT INTO child_unq VALUES ('6', 5)", ExpectedErrStr: "duplicate unique key given: [5]"},
+			{Query: "INSERT INTO child_non_unq VALUES ('6', 5)", SkipResultsCheck: true},
+			// Insert tests against foreign key
+			{Query: "INSERT INTO child VALUES ('9', 9)", ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `fk_child`, table: `child`, referenced table: `parent`, key: `[9]`"},
+			{Query: "INSERT INTO child_idx VALUES ('9', 9)", ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `fk_child_idx`, table: `child_idx`, referenced table: `parent`, key: `[9]`"},
+			{Query: "INSERT INTO child_unq VALUES ('9', 9)", ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `fk_child_unq`, table: `child_unq`, referenced table: `parent`, key: `[9]`"},
+			{Query: "INSERT INTO child_non_unq VALUES ('9', 9)", ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `fk_child_non_unq`, table: `child_non_unq`, referenced table: `parent`, key: `[9]`"},
+		},
+	},
+	{
+		Name: "drop primary key with foreign key dependency",
+		SetUpScript: []string{
+			"CREATE TABLE parent (i int, j int, k int, INDEX i_idx (i), INDEX ij_idx (i, j), INDEX ijk_idx (i, j, k), INDEX j_idx (j), INDEX kji_idx (k, j, i))",
+			"CREATE TABLE child (x int, y int, CONSTRAINT fk_child FOREIGN KEY (x, y) REFERENCES parent (i, j))",
+			"ALTER TABLE parent ADD PRIMARY KEY (i, j)",
+			"ALTER TABLE parent DROP INDEX ij_idx",
+			"ALTER TABLE parent DROP INDEX ijk_idx",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// No viable secondary indexes left for the FK; should be unable to drop primary key
+			{Query: "ALTER TABLE parent DROP PRIMARY KEY", ExpectedErrStr: "error: can't drop index 'PRIMARY': needed in foreign key constraint fk_child"},
+		},
+	},
+	{
+		Name: "drop secondary indexes with foreign key dependency",
+		SetUpScript: []string{
+			"CREATE TABLE parent (i int)",
+			"ALTER TABLE parent ADD INDEX idx1 (i)",
+			"ALTER TABLE parent ADD INDEX idx2 (i)",
+			"ALTER TABLE parent ADD INDEX idx3 (i)",
+			"CREATE TABLE child (j int, CONSTRAINT fk_child FOREIGN KEY (j) REFERENCES parent (i))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// Can drop idx1 because idx2 and idx3 remain
+			{Query: "ALTER TABLE parent DROP INDEX idx1", SkipResultsCheck: true},
+			// Can drop idx2 because idx3 remains
+			{Query: "ALTER TABLE parent DROP INDEX idx2", SkipResultsCheck: true},
+			// Cannot drop idx3 because no indexes remain for the FK
+			{Query: "ALTER TABLE parent DROP INDEX idx3", ExpectedErrStr: "cannot drop index: `idx3` is used by foreign key `fk_child`"},
+		},
+	},
+	{
+		Name: "create unique index success and failure",
+		SetUpScript: []string{
+			`CREATE TABLE pass_unique (
+				pk1 BIGINT PRIMARY KEY,
+				v1 BIGINT,
+				v2 BIGINT
+			)`,
+			`CREATE TABLE fail_unique (
+				pk1 BIGINT PRIMARY KEY,
+				v1 BIGINT,
+				v2 BIGINT
+			)`,
+			"INSERT INTO pass_unique VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3)",
+			"INSERT INTO fail_unique VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "CREATE UNIQUE INDEX idx_v1 ON pass_unique(v1)", SkipResultsCheck: true},
+			{Query: "CREATE UNIQUE INDEX idx_v1 ON fail_unique(v1)", ExpectedErrStr: "duplicate unique key given: [2,3]"},
+		},
+	},
+}

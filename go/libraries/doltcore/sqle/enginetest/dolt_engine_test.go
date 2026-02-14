@@ -1215,6 +1215,21 @@ func TestLegacyReplaceScripts(t *testing.T) {
 	RunLegacyReplaceScripts(t, harness)
 }
 
+func TestLegacyCreateTableScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyCreateTableScripts(t, harness)
+}
+
+func TestLegacyDropTableScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyDropTableScripts(t, harness)
+}
+
+func TestLegacyIndexScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyIndexScripts(t, harness)
+}
+
 func TestDoltScripts(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltScriptsTest(t, harness)

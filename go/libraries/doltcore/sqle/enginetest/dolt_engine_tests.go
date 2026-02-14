@@ -723,6 +723,36 @@ func RunLegacyReplaceScripts(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
+func RunLegacyCreateTableScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyCreateTableScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyDropTableScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyDropTableScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyIndexScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyIndexScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
 func RunDoltTempTableScripts(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltTempTableScripts {
 		harness := harness.NewHarness(t)
