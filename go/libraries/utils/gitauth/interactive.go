@@ -15,4 +15,3 @@ func DisableInteractivePrompts() {
 	// For SSH remotes, prevent passphrase/password prompting.
 	_ = os.Setenv("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
 }
-
