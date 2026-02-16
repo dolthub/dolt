@@ -2394,26 +2394,21 @@ func RevisionDbName(baseName string, rev string) string {
 	return baseName + DbRevisionDelimiter + rev
 }
 
+// SplitRevisionDbName inspects the |dbName| for the DbRevisionDelimiter or DbRevisionDelimiterAlias and returns the
+// separated base name and revision.
 func SplitRevisionDbName(dbName string) (string, string) {
-	var baseName, rev string
-	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
-	baseName = parts[0]
-	if len(parts) > 1 {
-		rev = parts[1]
+	index := strings.IndexAny(dbName, DbRevisionDelimiter+DbRevisionDelimiterAlias)
+	if index == -1 {
+		return dbName, ""
 	}
-	return baseName, rev
+	return dbName[:index], dbName[index+1:]
 }
 
-// RewriteRevisionDelimiter inspects the database name for a DbRevisionDelimiterAlias and if found, decides to rewrite
-// database name to contain the normal DbRevisionDelimiter (a potential revision database) when the
-// |revisionDelimiterAliasEnabled|.
-func RewriteRevisionDelimiter(dbName string, revisionDelimiterAliasEnabled bool) (rewrite string, usesDelimiterAlias bool, err error) {
+// NormalizeRevisionDelimiter inspects the database name for a DbRevisionDelimiterAlias and if found, rewrites the
+// database name to contain the normal DbRevisionDelimiter.
+func NormalizeRevisionDelimiter(dbName string) (rewrite string, usesDelimiterAlias bool, err error) {
 	if !strings.Contains(dbName, DbRevisionDelimiterAlias) {
 		return dbName, false, nil
-	}
-
-	if !revisionDelimiterAliasEnabled {
-		return dbName, true, nil
 	}
 
 	base, revision, found := strings.Cut(dbName, DbRevisionDelimiterAlias)

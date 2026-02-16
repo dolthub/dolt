@@ -176,14 +176,6 @@ func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, er
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
 	dbName = strings.ToLower(dbName)
-	revisionDelimiterAliasEnabled, err := GetBooleanSystemVar(ctx, DoltEnableRevisionDelimiterAlias)
-	if err != nil {
-		return nil, false, err
-	}
-	dbName, _, err = doltdb.RewriteRevisionDelimiter(dbName, revisionDelimiterAliasEnabled)
-	if err != nil {
-		return nil, false, err
-	}
 
 	var baseName, rev string
 	baseName, rev = doltdb.SplitRevisionDbName(dbName)

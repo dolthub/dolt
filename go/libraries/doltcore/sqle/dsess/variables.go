@@ -57,7 +57,6 @@ const (
 	DoltLogLevel                         = "dolt_log_level"
 	ShowSystemTables                     = "dolt_show_system_tables"
 	AllowCICreation                      = "dolt_allow_ci_creation"
-	DoltEnableRevisionDelimiterAlias     = "dolt_enable_revision_delimiter_alias"
 
 	DoltClusterRoleVariable         = "dolt_cluster_role"
 	DoltClusterRoleEpochVariable    = "dolt_cluster_role_epoch"

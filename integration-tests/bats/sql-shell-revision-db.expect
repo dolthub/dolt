@@ -34,13 +34,9 @@ expect_with_defaults {>} { send "execute use_stmt;\r" }
 
 expect_with_defaults_after {Empty set} {mydb\*?>} { send "show tables;\r" }
 
-expect_with_defaults_after {Empty set} {mydb\*?>} {send "set dolt_enable_revision_delimiter_alias = 0;\r" }
-
 expect_with_defaults {>} { send "create database `mydb@branch1`;\r" }
 
-expect_with_defaults {>} { send "use `mydb@branch1`;\r" }
-
-expect_with_defaults_after {Database Changed} {mydb@branch1/main*?>} { send "exit;\r" }
+expect_with_defaults_after {database exists} {mydb\*?>} { send "exit;\r" }
 
 expect eof
 exit 0

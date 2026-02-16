@@ -405,7 +405,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "database revision specs: db revision delimiter alias '@' when dolt_enable_revision_delimiter_alias is ON",
+		Name: "database revision specs: db revision delimiter alias '@'",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int);",
 			"call dolt_add('.');",
@@ -549,93 +549,6 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			{
 				Query:       "create schema `mydb@branch1`;",
 				ExpectedErr: sql.ErrDatabaseExists,
-			},
-		},
-	},
-	{
-		Name: "database revision specs: db revision delimiter alias '@' when dolt_enable_revision_delimiter_alias is OFF",
-		SetUpScript: []string{
-			"create table t01 (pk int primary key, c1 int);",
-			"call dolt_add('.');",
-			"call dolt_commit('-am', 'creating table t01 on main');",
-			"call dolt_branch('branch1');",
-			"set dolt_enable_revision_delimiter_alias = 0;",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:       "use `mydb@branch1`;",
-				ExpectedErr: sql.ErrDatabaseNotFound,
-			},
-			{
-				Query:       "select * from `mydb@branch1`.t01;",
-				ExpectedErr: sql.ErrDatabaseNotFound,
-			},
-			{
-				Query:    "use `mydb/branch1`;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:       "use `mydb@branch1`;",
-				ExpectedErr: sql.ErrDatabaseNotFound,
-			},
-			{
-				Query:    "create table t02(pk int primary key);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				Query:    "select * from t02;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query: "call dolt_commit('-Am', 'add t2 table to branch');",
-			},
-			{
-				Query:    "use `mydb/main`;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "create schema `mydb@branch1`;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
-			},
-			{
-				Query:    "use `mydb@branch1`;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:       "select * from t02;",
-				ExpectedErr: sql.ErrTableNotFound,
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb@branch1"}, {"mysql"}},
-			},
-			{
-				Query:    "set dolt_show_branch_databases = on;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb/branch1"}, {"mydb/main"}, {"mydb@branch1"}, {"mydb@branch1/main"}, {"mysql"}},
-			},
-			{
-				Query:    "set dolt_enable_revision_delimiter_alias = 1;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				Query:    "select * from t02;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb/main"}, {"mydb@branch1"}, {"mysql"}},
-			},
-			{
-				Query:    "set dolt_enable_revision_delimiter_alias = 0;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mydb/branch1"}, {"mydb/main"}, {"mydb@branch1"}, {"mydb@branch1/main"}, {"mysql"}},
 			},
 		},
 	},

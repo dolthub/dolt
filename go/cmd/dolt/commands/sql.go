@@ -45,7 +45,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -955,8 +954,8 @@ func preprocessQuery(query, lastQuery string, cliCtx cli.CliContext) (CommandTyp
 	return SqlShellCommand, nil, query, nil
 }
 
-// postCommandUpdate runs after each shell command and returns new prompts from the current session (branch and dirty
-// state). Session database name is left as-is so mydb@main stays mydb@main, consistent with select database() in tests.
+// postCommandUpdate is a helper function that is run after the shell has completed a command. It updates the the database
+// if needed, and generates new prompts for the shell (based on the branch and if the workspace is dirty).
 func postCommandUpdate(sqlCtx *sql.Context, qryist cli.Queryist) (string, string) {
 	db, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
 	dirty := false
@@ -995,20 +994,6 @@ func formattedPrompts(db, branch string, dirty bool) (string, string) {
 	return fmt.Sprintf("%s/%s%s> ", cyanDb, yellowBr, dirtyStr), multi
 }
 
-// splitRevisionDbNameForShellPrompt returns base name and revision for prompt display from a revision-qualified
-// database name. When |revisionDelimiterAliasEnabled| is true, splits on "/" or "@"; when false, splits only on "/" so
-// "@" is not treated as a delimiter.
-func splitRevisionDbNameForShellPrompt(dbName string, revisionDelimiterAliasEnabled bool) (baseName, revision string) {
-	delim := doltdb.DbRevisionDelimiter
-	if revisionDelimiterAliasEnabled {
-		delim = doltdb.DbRevisionDelimiter + doltdb.DbRevisionDelimiterAlias
-	}
-	if idx := strings.IndexAny(dbName, delim); idx >= 0 {
-		return dbName[:idx], dbName[idx+1:]
-	}
-	return dbName, ""
-}
-
 // getDBBranchFromSession returns the current database name and current branch  for the session, handling all the errors
 // along the way by printing red error messages to the CLI. If there was an issue getting the db name, the ok return
 // value will be false and the strings will be empty.
@@ -1045,8 +1030,7 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 		db = ""
 	} else {
 		fullName := row[0].(string)
-		revisionDelimiterAliasEnabled, _ := cli.QueryBooleanSessionVariableWithFallback(sqlCtx, qryist, dsess.DoltEnableRevisionDelimiterAlias, false)
-		db, _ = splitRevisionDbNameForShellPrompt(fullName, revisionDelimiterAliasEnabled)
+		db, _ = doltdb.SplitRevisionDbName(fullName)
 	}
 
 	return db, branch, true

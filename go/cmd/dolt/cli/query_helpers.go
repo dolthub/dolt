@@ -20,9 +20,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// unsupportedVariableWarned tracks variable names we have already warned about so we warn at most once per variable. Only used from the client shell goroutine.
-var unsupportedVariableWarned = make(map[string]struct{})
-
 // GetInt8ColAsBool returns the value of an int8 column as a bool
 // This is necessary because Queryist may return an int8 column as a bool (when using SQLEngine)
 // or as a string (when using ConnectionQueryist).
@@ -85,41 +82,4 @@ func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.
 	}
 
 	return rows, nil
-}
-
-// QueryBooleanSessionVariableWithFallback returns the boolean session variable, or fallback and at most one warning per variable name when the server does not support the variable.
-func QueryBooleanSessionVariableWithFallback(sqlCtx *sql.Context, queryist Queryist, varName string, fallback bool) (bool, error) {
-	val, err := QuerySessionVariable(sqlCtx, queryist, varName)
-	if err != nil || val == nil {
-		emitUnsupportedVariableWarningOnce(varName)
-		return fallback, nil
-	}
-	b, err := GetInt8ColAsBool(val)
-	if err != nil {
-		emitUnsupportedVariableWarningOnce(varName)
-		return fallback, nil
-	}
-	return b, nil
-}
-
-// QuerySessionVariable returns the value of a session variable from the [Queryist].
-func QuerySessionVariable(sqlCtx *sql.Context, queryist Queryist, varName string) (interface{}, error) {
-	rows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("SELECT @@%s", varName))
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 || len(rows[0]) == 0 {
-		return nil, nil
-	}
-
-	return rows[0][0], nil
-}
-
-// emitUnsupportedVariableWarningOnce prints a warning at most once per variable name.
-func emitUnsupportedVariableWarningOnce(varName string) {
-	if _, already := unsupportedVariableWarned[varName]; already {
-		return
-	}
-	unsupportedVariableWarned[varName] = struct{}{}
-	PrintErrf("warning: session variable %s is not supported by this server; using default.\n", varName)
 }
