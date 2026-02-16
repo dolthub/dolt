@@ -55,17 +55,17 @@ jobs:
               const { data: comments } = await github.rest.issues.listComments({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
-                repo: context.repo.repo,
-              })
+                repo: context.repo.repo
+              });
             
               // Delete existing comments
-              const filteredComments = comments.filter(comment => comment.body.includes(commentMarker))
+              const filteredComments = comments.filter(comment => comment.body.includes(commentMarker));
               for (const comment of filteredComments) {
                 await github.rest.issues.deleteComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   comment_id: comment.id
-                })
+                });
               })
             }
 
