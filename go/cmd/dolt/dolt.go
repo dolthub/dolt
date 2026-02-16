@@ -57,6 +57,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/events"
+	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
@@ -214,7 +215,7 @@ func runMain() int {
 
 	// Dolt must never block on interactive git credential prompts. Enforce a
 	// non-interactive git policy for the entire process (CLI + sql-server).
-	disableInteractiveGitPrompts()
+	gitauth.DisableInteractivePrompts()
 
 	if len(args) == 0 {
 		doltCommand.PrintUsage("dolt")
@@ -567,15 +568,6 @@ or check the docs for questions about usage.`)
 	}
 
 	return res
-}
-
-func disableInteractiveGitPrompts() {
-	// For HTTPS remotes, disable username/password prompting.
-	_ = os.Setenv("GIT_TERMINAL_PROMPT", "0")
-	// Disable interactive Git Credential Manager flows (where installed).
-	_ = os.Setenv("GCM_INTERACTIVE", "Never")
-	// For SSH remotes, prevent passphrase/password prompting.
-	_ = os.Setenv("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
 }
 
 // resolveDataDirDeeply goes through three levels of resolution for the data directory. The simple case is to look at

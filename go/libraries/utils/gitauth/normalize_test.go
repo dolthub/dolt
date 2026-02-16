@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestNormalize_WrapsCommonAuthPromptFailures(t *testing.T) {
+func TestNormalizeError_WrapsCommonAuthPromptFailures(t *testing.T) {
 	tests := []struct {
 		name   string
 		output string
@@ -26,7 +26,7 @@ func TestNormalize_WrapsCommonAuthPromptFailures(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			base := errors.New(tt.errMsg)
-			got := Normalize(base, []byte(tt.output))
+			got := NormalizeError(base, []byte(tt.output))
 
 			var niae *NonInteractiveAuthError
 			if !errors.As(got, &niae) {
@@ -53,19 +53,19 @@ func TestNormalize_WrapsCommonAuthPromptFailures(t *testing.T) {
 	}
 }
 
-func TestNormalize_NoMatch_ReturnsOriginalError(t *testing.T) {
+func TestNormalizeError_NoMatch_ReturnsOriginalError(t *testing.T) {
 	base := errors.New("some other failure")
-	got := Normalize(base, []byte("unrelated output"))
+	got := NormalizeError(base, []byte("unrelated output"))
 	if got != base {
 		t.Fatalf("expected original error, got %T: %v", got, got)
 	}
 }
 
-func TestNormalize_Idempotent(t *testing.T) {
+func TestNormalizeError_Idempotent(t *testing.T) {
 	base := errors.New("fatal: could not read Username for 'https://example.com': terminal prompts disabled")
-	got1 := Normalize(base, nil)
-	got2 := Normalize(got1, []byte("different output"))
+	got1 := NormalizeError(base, nil)
+	got2 := NormalizeError(got1, []byte("different output"))
 	if got1 != got2 {
-		t.Fatalf("expected Normalize to be idempotent when already normalized")
+		t.Fatalf("expected NormalizeError to be idempotent when already normalized")
 	}
 }

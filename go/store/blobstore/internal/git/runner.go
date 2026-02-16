@@ -161,7 +161,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		Output:   out,
 		Cause:    err,
 	}
-	return out, gitauth.Normalize(cerr, out)
+	return out, gitauth.NormalizeError(cerr, out)
 }
 
 // Start starts "git <args...>" and returns a ReadCloser for stdout.
@@ -233,7 +233,7 @@ func (c *cmdReadCloser) Close() error {
 		Output:   c.stderr.Bytes(),
 		Cause:    err,
 	}
-	return gitauth.Normalize(cerr, cerr.Output)
+	return gitauth.NormalizeError(cerr, cerr.Output)
 }
 
 func (r *Runner) env(opts RunOptions) []string {

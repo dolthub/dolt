@@ -35,11 +35,11 @@ func (e *NonInteractiveAuthError) Error() string {
 
 func (e *NonInteractiveAuthError) Unwrap() error { return e.Cause }
 
-// Normalize wraps err in a NonInteractiveAuthError when output and/or err indicate
+// NormalizeError wraps err in a NonInteractiveAuthError when output and/or err indicate
 // a credentials prompt or auth failure that would normally require prompting.
 //
-// output is optional; when empty, Normalize falls back to err.Error() for pattern matching.
-func Normalize(err error, output []byte) error {
+// output is optional; when empty, NormalizeError falls back to err.Error() for pattern matching.
+func NormalizeError(err error, output []byte) error {
 	if err == nil {
 		return nil
 	}

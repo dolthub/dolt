@@ -274,7 +274,7 @@ func runGitInitBare(ctx context.Context, dir string) error {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		base := fmt.Errorf("git init --bare failed: %w\noutput:\n%s", err, strings.TrimSpace(string(out)))
-		return gitauth.Normalize(base, out)
+		return gitauth.NormalizeError(base, out)
 	}
 	return nil
 }
@@ -290,7 +290,7 @@ func runGitInDir(ctx context.Context, gitDir string, args ...string) (string, er
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		base := fmt.Errorf("git %s failed: %w\noutput:\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-		return "", gitauth.Normalize(base, out)
+		return "", gitauth.NormalizeError(base, out)
 	}
 	return string(out), nil
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
+	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
@@ -35,7 +36,7 @@ var result []byte
 
 func main() {
 	// This is a long-running daemon and must never block on interactive git credential prompts.
-	disableInteractiveGitPrompts()
+	gitauth.DisableInteractivePrompts()
 
 	readOnlyParam := flag.Bool("read-only", false, "run a read-only server which does not allow writes")
 	repoModeParam := flag.Bool("repo-mode", false, "act as a remote for an existing dolt directory, instead of stand alone")
@@ -110,15 +111,6 @@ func main() {
 	}()
 	waitForSignal()
 	server.GracefulStop()
-}
-
-func disableInteractiveGitPrompts() {
-	// For HTTPS remotes, disable username/password prompting.
-	_ = os.Setenv("GIT_TERMINAL_PROMPT", "0")
-	// Disable interactive Git Credential Manager flows (where installed).
-	_ = os.Setenv("GCM_INTERACTIVE", "Never")
-	// For SSH remotes, prevent passphrase/password prompting.
-	_ = os.Setenv("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
 }
 
 func waitForSignal() {
