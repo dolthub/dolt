@@ -60,7 +60,7 @@ jobs:
             
               // Delete existing comments
               const filteredComments = comments.filter(comment => comment.body.includes(commentMarker))
-              filteredComments.forEach((comment) => {
+              for (const comment of filteredComments) {
                 await github.rest.issues.deleteComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
