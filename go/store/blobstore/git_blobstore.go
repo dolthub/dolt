@@ -638,7 +638,11 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		gbs.mergeCacheObjectLocked(key, keyOID, keyType, true)
 		parent, base := splitGitPathParentBase(key)
 		if base != "" {
-			child := git.TreeEntry{Mode: "100644", Type: keyType, OID: keyOID, Name: base}
+			mode := "100644"
+			if keyType == git.ObjectTypeTree {
+				mode = "040000"
+			}
+			child := git.TreeEntry{Mode: mode, Type: keyType, OID: keyOID, Name: base}
 			gbs.mergeCacheChildLocked(parent, child, true)
 		}
 		gbs.cacheMu.Unlock()
