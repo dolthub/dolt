@@ -53,7 +53,7 @@ jobs:
             
               // List comments on the PR
               const { data: comments } = await github.rest.issues.listComments({
-                issue_number: context.issue.number,
+                issue_number: issue_number,
                 owner: context.repo.owner,
                 repo: context.repo.repo
               });
