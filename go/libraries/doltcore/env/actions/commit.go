@@ -30,19 +30,19 @@ import (
 
 // CommitStagedProps contains the parameters for a staged commit operation.
 type CommitStagedProps struct {
-	Message    		 string
-	Date       		 *time.Time
-	AllowEmpty 		 bool
-	SkipEmpty  		 bool
-	Amend      		 bool
-	Force      		 bool
-	Name       		 string
-	Email      		 string
+	Message          string
+	Date             *time.Time
+	AllowEmpty       bool
+	SkipEmpty        bool
+	Amend            bool
+	Force            bool
+	Name             string
+	Email            string
 	SkipVerification bool
 
-	CommitterDate    *time.Time
-	CommitterName    string
-	CommitterEmail   string
+	CommitterDate  *time.Time
+	CommitterName  string
+	CommitterEmail string
 }
 
 const (
