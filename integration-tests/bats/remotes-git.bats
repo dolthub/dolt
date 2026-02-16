@@ -503,3 +503,100 @@ seed_git_remote_branch() {
     run dolt push --set-upstream origin main
     [ "$status" -eq 0 ]
 }
+
+@test "remotes-git: non-interactive git auth fails fast with normalized error" {
+    if ! command -v timeout >/dev/null 2>&1; then
+        skip "timeout not installed"
+    fi
+
+    install_fake_git_auth_failure
+
+    old_path="$PATH"
+    export PATH="$BATS_TMPDIR/fakebin:$PATH"
+    export DOLT_IGNORE_LOCK_FILE=1
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -m "init"
+    dolt remote add origin https://example.com/org/repo.git
+
+    # Ensure the URL was normalized into git-remote-backed form.
+    run dolt remote -v
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ origin[[:blank:]]git[+]https://example.com/org/repo[.]git ]] || false
+
+    # The command must fail quickly (no hang) and present a normalized auth error.
+    run timeout 5s dolt push origin main
+    export PATH="$old_path"
+
+    [ "$status" -ne 0 ]
+    [ "$status" -ne 124 ]
+    [[ "$output" =~ "git authentication required but interactive prompting is disabled" ]] || false
+    [[ "$output" =~ "terminal prompts disabled" ]] || false
+}
+
+install_fake_git_auth_failure() {
+    mkdir -p "$BATS_TMPDIR/fakebin"
+    cat > "$BATS_TMPDIR/fakebin/git" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This fake git binary exists to simulate an auth-required remote where interactive
+# prompting is disabled. It implements only the small subset of commands Dolt's
+# git-remote-backed plumbing uses for setup, and then fails auth on remote access.
+
+git_dir=""
+if [[ "${1:-}" == "--git-dir" ]]; then
+  git_dir="${2:-}"
+  shift 2
+fi
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  init)
+    # git init --bare <dir>
+    if [[ "${1:-}" == "--bare" ]]; then
+      mkdir -p "${2:-}"
+      exit 0
+    fi
+    ;;
+  remote)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      get-url)
+        # git remote get-url -- <name>
+        shift || true # consume --
+        name="${1:-}"
+        f="${git_dir}/remote_${name}_url"
+        if [[ -f "$f" ]]; then
+          cat "$f"
+          exit 0
+        fi
+        echo "fatal: No such remote '$name'" >&2
+        exit 2
+        ;;
+      add|set-url)
+        # git remote add/set-url -- <name> <url>
+        shift || true # consume --
+        name="${1:-}"; url="${2:-}"
+        mkdir -p "$git_dir"
+        printf "%s" "$url" > "${git_dir}/remote_${name}_url"
+        exit 0
+        ;;
+    esac
+    ;;
+  ls-remote)
+    # Simulate an auth-required scenario where prompting is disabled.
+    echo "fatal: could not read Username for 'https://example.com/org/repo.git': terminal prompts disabled" >&2
+    exit 128
+    ;;
+esac
+
+echo "fatal: could not read Username for 'https://example.com/org/repo.git': terminal prompts disabled" >&2
+exit 128
+EOF
+    chmod +x "$BATS_TMPDIR/fakebin/git"
+}

@@ -25,6 +25,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 )
 
 const maxCapturedOutputBytes = 64 * 1024
@@ -152,13 +154,14 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 	if errors.As(err, &ee) {
 		exitCode = ee.ExitCode()
 	}
-	return out, &CmdError{
+	cerr := &CmdError{
 		Args:     append([]string(nil), args...),
 		Dir:      cmd.Dir,
 		ExitCode: exitCode,
 		Output:   out,
 		Cause:    err,
 	}
+	return out, gitauth.Normalize(cerr, out)
 }
 
 // Start starts "git <args...>" and returns a ReadCloser for stdout.
@@ -223,13 +226,14 @@ func (c *cmdReadCloser) Close() error {
 	if errors.As(err, &ee) {
 		exitCode = ee.ExitCode()
 	}
-	return &CmdError{
+	cerr := &CmdError{
 		Args:     c.args,
 		Dir:      c.dir,
 		ExitCode: exitCode,
 		Output:   c.stderr.Bytes(),
 		Cause:    err,
 	}
+	return gitauth.Normalize(cerr, cerr.Output)
 }
 
 func (r *Runner) env(opts RunOptions) []string {

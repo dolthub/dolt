@@ -283,6 +283,11 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 
 // StartServer starts the sql server with the controller provided and blocks until the server is stopped.
 func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, cwd filesys.Filesys, controller *svcs.Controller) error {
+	// sql-server is a long-running daemon and must never block on interactive git credential prompts.
+	// If credentials are unavailable, git operations should fail fast with an error instead of prompting
+	// on stdin (which may not be a terminal, and can hang the server).
+	disableInteractiveGitPrompts()
+
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -379,6 +384,22 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	}
 
 	return nil
+}
+
+func disableInteractiveGitPrompts() {
+	// For HTTPS remotes, this disables username/password prompting.
+	if os.Getenv("GIT_TERMINAL_PROMPT") == "" {
+		_ = os.Setenv("GIT_TERMINAL_PROMPT", "0")
+	}
+	// Git Credential Manager (when installed) can otherwise attempt interactive flows.
+	if os.Getenv("GCM_INTERACTIVE") == "" {
+		_ = os.Setenv("GCM_INTERACTIVE", "Never")
+	}
+	// For SSH remotes, prevent passphrase/password prompts by default. Respect any user-provided
+	// GIT_SSH_COMMAND so server operators can supply their own non-interactive SSH config.
+	if os.Getenv("GIT_SSH_COMMAND") == "" {
+		_ = os.Setenv("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+	}
 }
 
 // GetDataDirPreStart returns the data dir to use for the process. This is called early in the bootstrapping of the process
