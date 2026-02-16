@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	// "os" -- uncomment when enabling debugStderr logging above
 	"sort"
 	"strconv"
 	"strings"
@@ -294,6 +295,24 @@ type GitBlobstore struct {
 
 var _ Blobstore = (*GitBlobstore)(nil)
 
+// debugStderr is the real stderr file descriptor, captured at init time
+// before dolt's cli.InitIO() redirects os.Stderr to a temp file.
+// var debugStderr *os.File
+//
+// func init() {
+// 	debugStderr = os.NewFile(2, "/dev/stderr")
+// }
+//
+// func (gbs *GitBlobstore) debugf(format string, args ...any) {
+// 	ts := time.Now().UTC().Format(time.RFC3339Nano)
+// 	prefix := fmt.Sprintf("gitblobstore[%s] %s ", gbs.localRef, ts)
+// 	_, _ = fmt.Fprintf(debugStderr, prefix+format+"\n", args...)
+// }
+
+func (gbs *GitBlobstore) debugf(format string, args ...any) {
+	// no-op; uncomment the block above to enable debug logging.
+}
+
 type cachedGitObject struct {
 	oid git.OID
 	typ git.ObjectType
@@ -357,6 +376,10 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 	remoteTrackingRef := RemoteTrackingRef(remoteName, remoteRef)
 	localRef := OwnedLocalRef(remoteName, remoteRef, uuid.NewString())
 
+	// Debug: uncomment to prove this code is running in the server.
+	// _, _ = fmt.Fprintf(debugStderr, "gitblobstore: NewGitBlobstoreWithOptions gitDir=%q remoteRef=%q remoteName=%q trackingRef=%q localRef=%q\n",
+	// 	gitDir, remoteRef, remoteName, remoteTrackingRef, localRef)
+
 	return &GitBlobstore{
 		gitDir:            gitDir,
 		remoteRef:         remoteRef,
@@ -412,15 +435,11 @@ func (gbs *GitBlobstore) sortCacheChildrenLocked(dirs map[string]struct{}) {
 	}
 }
 
+// mergeCacheFromHead additively merges the tree entries from the given head
+// commit into the cache. Existing entries are never overwritten — the cache is
+// append-only — except for the manifest, which must always reflect the latest
+// remote state.
 func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) error {
-	return gbs.mergeCacheFromHeadWithOverwrite(ctx, head, false)
-}
-
-func (gbs *GitBlobstore) mergeCacheFromHeadOverwriteAll(ctx context.Context, head git.OID) error {
-	return gbs.mergeCacheFromHeadWithOverwrite(ctx, head, true)
-}
-
-func (gbs *GitBlobstore) mergeCacheFromHeadWithOverwrite(ctx context.Context, head git.OID, overwriteAll bool) error {
 	if head == "" {
 		return fmt.Errorf("gitblobstore: cannot merge cache for empty head")
 	}
@@ -460,11 +479,12 @@ func (gbs *GitBlobstore) mergeCacheFromHeadWithOverwrite(ctx context.Context, he
 			continue
 		}
 
-		isManifest := e.Name == gitblobstoreManifestKey
-		overwrite := overwriteAll || isManifest
+		// The manifest is the only entry that changes content at the same
+		// path, so it must always be overwritten to reflect the latest state.
+		overwrite := e.Name == gitblobstoreManifestKey
 		gbs.mergeCacheObjectLocked(e.Name, e.OID, e.Type, overwrite)
 
-		// Merge parent -> child membership (ensure presence; overwrite on demand).
+		// Merge parent -> child membership (ensure presence; overwrite manifest only).
 		parent, base := splitGitPathParentBase(e.Name)
 		if base == "" {
 			continue
@@ -520,32 +540,45 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	gbs.mu.Lock()
 	defer gbs.mu.Unlock()
 
+	gbs.debugf("syncForRead start gitDir=%q remoteName=%q remoteRef=%q trackingRef=%q", gbs.gitDir, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef)
+
 	// 1) Fetch remote ref into our remote-tracking ref.
 	if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
 		// An absent remote ref is treated as an empty store. This is required for NBS open
 		// (manifest ParseIfExists) against a freshly-initialized remote.
 		var rnf *git.RefNotFoundError
 		if errors.As(err, &rnf) && rnf.Ref == gbs.remoteRef {
+			gbs.debugf("syncForRead fetch remoteRef missing (treat empty store)")
 			return nil
 		}
+		gbs.debugf("syncForRead fetch error: %v", err)
 		return err
 	}
 
 	remoteHead, okRemote, err := gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
 	if err != nil {
+		gbs.debugf("syncForRead resolve trackingRef error: %v", err)
 		return err
 	}
 	if !okRemote {
+		gbs.debugf("syncForRead trackingRef missing after fetch (unexpected)")
 		return &git.RefNotFoundError{Ref: gbs.remoteTrackingRef}
 	}
+	gbs.debugf("syncForRead fetched remoteHead=%s", remoteHead)
 
 	// 2) Force-set owned local ref to remote head (no merge; remote is source-of-truth).
 	if err := gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync read"); err != nil {
+		gbs.debugf("syncForRead update localRef error: %v", err)
 		return err
 	}
 
 	// 3) Merge cache to reflect fetched contents.
-	return gbs.mergeCacheFromHead(ctx, remoteHead)
+	if err := gbs.mergeCacheFromHead(ctx, remoteHead); err != nil {
+		gbs.debugf("syncForRead mergeCache error: %v", err)
+		return err
+	}
+	gbs.debugf("syncForRead done cacheHead=%s", gbs.cacheHead)
+	return nil
 }
 
 type gitblobstoreFetchRefError struct {
@@ -556,6 +589,7 @@ func (e *gitblobstoreFetchRefError) Error() string { return e.err.Error() }
 func (e *gitblobstoreFetchRefError) Unwrap() error { return e.err }
 
 func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remoteHead git.OID, ok bool, err error) {
+	gbs.debugf("syncForWrite start remoteName=%q remoteRef=%q trackingRef=%q", gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef)
 	if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
 		// If the remote ref is missing, treat this as an empty store and bootstrap on write.
 		// Note: there is no "empty ref" in Git; this means the ref is unborn (no commits yet).
@@ -565,29 +599,37 @@ func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remote
 		// - push with an empty expected dst OID, which creates gbs.remoteRef on the remote.
 		var rnf *git.RefNotFoundError
 		if errors.As(err, &rnf) && rnf.Ref == gbs.remoteRef {
+			gbs.debugf("syncForWrite fetch remoteRef missing (bootstrap empty store)")
 			return "", false, nil
 		}
+		gbs.debugf("syncForWrite fetch error: %v", err)
 		return "", false, &gitblobstoreFetchRefError{err: err}
 	}
 
 	remoteHead, ok, err = gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
 	if err != nil {
+		gbs.debugf("syncForWrite resolve trackingRef error: %v", err)
 		return "", false, err
 	}
 	if !ok {
+		gbs.debugf("syncForWrite trackingRef missing after fetch (unexpected)")
 		return "", false, &git.RefNotFoundError{Ref: gbs.remoteTrackingRef}
 	}
+	gbs.debugf("syncForWrite fetched remoteHead=%s", remoteHead)
 
 	// Force-set owned local ref to remote head (remote is source-of-truth).
 	if err := gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync write"); err != nil {
+		gbs.debugf("syncForWrite update localRef error: %v", err)
 		return "", false, err
 	}
 
 	// Merge cache to reflect fetched contents.
 	if err := gbs.mergeCacheFromHead(ctx, remoteHead); err != nil {
+		gbs.debugf("syncForWrite mergeCache error: %v", err)
 		return "", false, err
 	}
 
+	gbs.debugf("syncForWrite done cacheHead=%s", gbs.cacheHead)
 	return remoteHead, true, nil
 }
 
@@ -598,6 +640,7 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 	gbs.mu.Lock()
 	defer gbs.mu.Unlock()
 
+	gbs.debugf("remoteManagedWrite start key=%q msg=%q", key, msg)
 	policy := gbs.casRetryPolicy(ctx)
 
 	var ver string
@@ -614,29 +657,46 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		// Apply this operation's changes on top of the remote head (or empty store).
 		newCommit, err := build(remoteHead, okRemote)
 		if err != nil {
+			gbs.debugf("remoteManagedWrite build error: %v", err)
 			return backoff.Permanent(err)
 		}
+		gbs.debugf("remoteManagedWrite built newCommit=%s (remoteHead=%s okRemote=%v)", newCommit, remoteHead, okRemote)
 		if err := gbs.api.UpdateRef(ctx, gbs.localRef, newCommit, msg); err != nil {
+			gbs.debugf("remoteManagedWrite update localRef error: %v", err)
 			return backoff.Permanent(err)
 		}
 
 		// Push local ref to remote with lease.
 		if err := gbs.api.PushRefWithLease(ctx, gbs.remoteName, gbs.localRef, gbs.remoteRef, remoteHead); err != nil {
+			gbs.debugf("remoteManagedWrite push-with-lease error (expectedHead=%s): %v", remoteHead, err)
 			return err
 		}
+		gbs.debugf("remoteManagedWrite push-with-lease ok (newHead=%s)", newCommit)
 
-		// Merge cache to reflect the new head after a successful push.
-		// When we successfully push a new head, it is safe (and required for correctness)
-		// to overwrite cache entries to reflect the new head's tree.
-		if err := gbs.mergeCacheFromHeadOverwriteAll(ctx, newCommit); err != nil {
+		// Merge cache additively to reflect the new head after a successful push.
+		if err := gbs.mergeCacheFromHead(ctx, newCommit); err != nil {
+			gbs.debugf("remoteManagedWrite mergeCache error: %v", err)
 			return backoff.Permanent(err)
 		}
 
-		obj, ok := gbs.cacheGetObject(key)
-		if !ok {
-			return backoff.Permanent(NotFound{Key: key})
+		// Force-update the cache entry for the key we just wrote, since the
+		// additive merge won't overwrite a stale entry from a previous commit.
+		keyOID, keyType, err := gbs.api.ResolvePathObject(ctx, newCommit, key)
+		if err != nil {
+			gbs.debugf("remoteManagedWrite resolve written key error: %v", err)
+			return backoff.Permanent(err)
 		}
-		ver = obj.oid.String()
+		gbs.cacheMu.Lock()
+		gbs.mergeCacheObjectLocked(key, keyOID, keyType, true)
+		parent, base := splitGitPathParentBase(key)
+		if base != "" {
+			child := git.TreeEntry{Mode: "100644", Type: keyType, OID: keyOID, Name: base}
+			gbs.mergeCacheChildLocked(parent, child, true)
+		}
+		gbs.cacheMu.Unlock()
+
+		ver = keyOID.String()
+		gbs.debugf("remoteManagedWrite done key=%q ver=%q", key, ver)
 		return nil
 	}
 
@@ -644,6 +704,7 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
+		gbs.debugf("remoteManagedWrite retry failed: %v", err)
 		return "", err
 	}
 	return ver, nil

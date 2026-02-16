@@ -210,3 +210,95 @@ func TestGitRemoteFactory_GitFile_RemoteWithNoBranchesFails(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrGitRemoteHasNoBranches)
 }
+
+func TestEnsureGitRemoteURL_IdempotentRemoteAlreadyExists(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test uses a bash fake git")
+	}
+
+	ctx := context.Background()
+	tmp := t.TempDir()
+	gitDir := filepath.Join(tmp, "repo.git")
+	require.NoError(t, os.MkdirAll(gitDir, 0o755))
+
+	binDir := filepath.Join(tmp, "bin")
+	require.NoError(t, os.MkdirAll(binDir, 0o755))
+
+	logPath := filepath.Join(tmp, "git.log")
+	fakeGitPath := filepath.Join(binDir, "git")
+	require.NoError(t, os.WriteFile(fakeGitPath, []byte(`#!/usr/bin/env bash
+set -euo pipefail
+
+log="${GIT_FAKE_LOG}"
+echo "$@" >> "$log"
+
+args=("$@")
+
+gitdir=""
+for ((i=0;i<${#args[@]};i++)); do
+  if [[ "${args[$i]}" == "--git-dir" ]]; then
+    gitdir="${args[$((i+1))]}"
+    break
+  fi
+done
+if [[ -z "$gitdir" ]]; then
+  echo "missing --git-dir" 1>&2
+  exit 2
+fi
+
+start=0
+for ((i=0;i<${#args[@]};i++)); do
+  if [[ "${args[$i]}" == "--git-dir" ]]; then
+    start=$((i+2))
+    break
+  fi
+done
+cmd=("${args[@]:$start}")
+
+if [[ "${#cmd[@]}" -ge 4 && "${cmd[0]}" == "remote" && "${cmd[1]}" == "add" ]]; then
+  j=2
+  if [[ "${cmd[2]}" == "--" ]]; then j=3; fi
+  name="${cmd[$j]}"
+  url="${cmd[$((j+1))]}"
+  f="${gitdir}/remote_${name}"
+  if [[ -e "$f" ]]; then
+    echo "error: remote ${name} already exists." 1>&2
+    exit 3
+  fi
+  echo -n "$url" > "$f"
+  exit 0
+elif [[ "${#cmd[@]}" -ge 4 && "${cmd[0]}" == "remote" && "${cmd[1]}" == "set-url" ]]; then
+  j=2
+  if [[ "${cmd[2]}" == "--" ]]; then j=3; fi
+  name="${cmd[$j]}"
+  url="${cmd[$((j+1))]}"
+  f="${gitdir}/remote_${name}"
+  echo -n "$url" > "$f"
+  exit 0
+fi
+
+echo "unsupported fake git invocation: ${cmd[*]}" 1>&2
+exit 2
+`), 0o755))
+
+	oldPath := os.Getenv("PATH")
+	t.Cleanup(func() { _ = os.Setenv("PATH", oldPath) })
+	require.NoError(t, os.Setenv("PATH", binDir+string(os.PathListSeparator)+oldPath))
+	require.NoError(t, os.Setenv("GIT_FAKE_LOG", logPath))
+
+	remoteName := "origin"
+	remoteURL := "https://example.com/repo.git"
+
+	require.NoError(t, ensureGitRemoteURL(ctx, gitDir, remoteName, remoteURL))
+	require.NoError(t, ensureGitRemoteURL(ctx, gitDir, remoteName, remoteURL))
+
+	out, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	log := string(out)
+	require.Contains(t, log, "remote add -- "+remoteName+" "+remoteURL)
+	require.Contains(t, log, "remote set-url -- "+remoteName+" "+remoteURL)
+
+	gotURL, err := os.ReadFile(filepath.Join(gitDir, "remote_"+remoteName))
+	require.NoError(t, err)
+	require.Equal(t, remoteURL, string(gotURL))
+}

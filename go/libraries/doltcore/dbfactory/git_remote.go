@@ -26,6 +26,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/fslock"
+
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -109,11 +111,23 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	remoteName := resolveGitRemoteName(params)
+
+	// Serialize cache repo setup across goroutines and processes.
+	hashDir := filepath.Dir(cacheRepo)
+	if err := os.MkdirAll(hashDir, 0o755); err != nil {
+		return nil, nil, nil, err
+	}
+	initLock := fslock.New(filepath.Join(hashDir, "init.lock"))
+	if err := initLock.Lock(); err != nil {
+		return nil, nil, nil, err
+	}
+	defer initLock.Unlock()
+
 	if err := ensureBareRepo(ctx, cacheRepo); err != nil {
 		return nil, nil, nil, err
 	}
-
-	remoteName := resolveGitRemoteName(params)
 
 	// Ensure the configured git remote exists and points to the underlying git remote URL.
 	if err := ensureGitRemoteURL(ctx, cacheRepo, remoteName, remoteURL.String()); err != nil {
@@ -238,9 +252,6 @@ func ensureBareRepo(ctx context.Context, gitDir string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(gitDir), 0o755); err != nil {
-		return err
-	}
 	return runGitInitBare(ctx, gitDir)
 }
 
@@ -251,25 +262,45 @@ func ensureGitRemoteURL(ctx context.Context, gitDir string, remoteName string, r
 	if strings.TrimSpace(remoteURL) == "" {
 		return fmt.Errorf("empty remote url")
 	}
+
+	// Prefer `remote add` as the first attempt for concurrency safety.
 	// Insert `--` so remoteName can't be interpreted as a flag.
-	got, err := runGitInDir(ctx, gitDir, "remote", "get-url", "--", remoteName)
-	if err != nil {
-		// Remote likely doesn't exist; attempt to add.
-		return runGitInDirNoOutput(ctx, gitDir, "remote", "add", "--", remoteName, remoteURL)
-	}
-	got = strings.TrimSpace(got)
-	if got == remoteURL {
+	err := runGitInDirNoOutput(ctx, gitDir, "remote", "add", "--", remoteName, remoteURL)
+	if err == nil {
 		return nil
 	}
-	return runGitInDirNoOutput(ctx, gitDir, "remote", "set-url", "--", remoteName, remoteURL)
+
+	// If another concurrent call added the remote first, treat that as success by setting the URL.
+	if isGitRemoteAlreadyExistsError(err, remoteName) {
+		return runGitInDirNoOutput(ctx, gitDir, "remote", "set-url", "--", remoteName, remoteURL)
+	}
+	return err
+}
+
+func isGitRemoteAlreadyExistsError(err error, remoteName string) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	// Examples from git:
+	// - "error: remote origin already exists."
+	// - "fatal: remote origin already exists."
+	return strings.Contains(s, "remote "+strings.ToLower(remoteName)+" already exists")
 }
 
 func runGitInitBare(ctx context.Context, dir string) error {
+	if strings.TrimSpace(dir) == "" {
+		return fmt.Errorf("empty dir")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
 	_, err := exec.LookPath("git")
 	if err != nil {
 		return fmt.Errorf("git not found on PATH: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, "git", "init", "--bare", dir) //nolint:gosec // controlled args
+	// Use `--git-dir` to make init idempotent if the directory already exists.
+	cmd := exec.CommandContext(ctx, "git", "--git-dir", dir, "init", "--bare") //nolint:gosec // controlled args
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
