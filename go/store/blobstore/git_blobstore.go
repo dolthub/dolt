@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-
 	"sort"
 	"strconv"
 	"strings"
@@ -544,10 +543,7 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	}
 
 	// 3) Merge cache to reflect fetched contents.
-	if err := gbs.mergeCacheFromHead(ctx, remoteHead); err != nil {
-		return err
-	}
-	return nil
+	return gbs.mergeCacheFromHead(ctx, remoteHead)
 }
 
 type gitblobstoreFetchRefError struct {
