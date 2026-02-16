@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
-	"sync"
 	"testing"
 	"time"
 
@@ -320,67 +319,6 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 		},
 		elems: elems,
 	}
-}
-
-func (suite *mapTestSuite) createStreamingMap(vs *ValueStore) Map {
-	kvChan := make(chan Value)
-	streamingMap := NewStreamingMap(context.Background(), vs, kvChan)
-	for _, entry := range suite.elems.entries.entries {
-		kvChan <- entry.key
-		kvChan <- entry.value
-	}
-	close(kvChan)
-	m, err := streamingMap.Wait()
-	suite.NoError(err)
-	return m
-}
-
-func (suite *mapTestSuite) TestStreamingMap() {
-	vs := newTestValueStore()
-	defer vs.Close()
-	m := suite.createStreamingMap(vs)
-	suite.True(suite.validate(m), "map not valid")
-}
-
-func (suite *mapTestSuite) TestStreamingMapOrder() {
-	vs := newTestValueStore()
-	defer vs.Close()
-
-	entries := mapEntrySlice{make([]mapEntry, len(suite.elems.entries.entries))}
-	copy(entries.entries, suite.elems.entries.entries)
-	entries.entries[0], entries.entries[1] = entries.entries[1], entries.entries[0]
-
-	kvChan := make(chan Value, len(entries.entries)*2)
-	for _, e := range entries.entries {
-		kvChan <- e.key
-		kvChan <- e.value
-	}
-	close(kvChan)
-
-	sm := NewStreamingMap(context.Background(), vs, kvChan)
-	_, err := sm.Wait()
-
-	suite.Assert().EqualError(err, ErrKeysNotOrdered.Error())
-}
-
-func (suite *mapTestSuite) TestStreamingMap2() {
-	wg := sync.WaitGroup{}
-	vs := newTestValueStore()
-	defer vs.Close()
-
-	wg.Add(2)
-	var m1, m2 Map
-	go func() {
-		m1 = suite.createStreamingMap(vs)
-		wg.Done()
-	}()
-	go func() {
-		m2 = suite.createStreamingMap(vs)
-		wg.Done()
-	}()
-	wg.Wait()
-	suite.True(suite.validate(m1), "map 'm1' not valid")
-	suite.True(suite.validate(m2), "map 'm2' not valid")
 }
 
 func TestMapSuite4K(t *testing.T) {

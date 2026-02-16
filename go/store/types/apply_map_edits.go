@@ -99,28 +99,15 @@ type AppliedEditStats struct {
 	NonExistentDeletes int64
 }
 
-// Add adds two AppliedEditStats structures member by member.
-func (stats AppliedEditStats) Add(other AppliedEditStats) AppliedEditStats {
-	return AppliedEditStats{
-		Additions:          stats.Additions + other.Additions,
-		Modifications:      stats.Modifications + other.Modifications,
-		SameVal:            stats.SameVal + other.SameVal,
-		Deletions:          stats.Deletions + other.Deletions,
-		NonExistentDeletes: stats.NonExistentDeletes + other.NonExistentDeletes,
-	}
-}
-
 // ApplyEdits applies all the edits to a given Map and returns the resulting map, and some statistics about the edits
 // that were applied.
-func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEditStats, error) {
+func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, error) {
 	return ApplyNEdits(ctx, edits, m, -1)
 }
 
-func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64) (Map, AppliedEditStats, error) {
-	var stats AppliedEditStats
-
+func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64) (Map, error) {
 	if edits.ReachedEOF() {
-		return m, stats, nil // no edits
+		return m, nil // no edits
 	}
 
 	var seq sequence = m.orderedSequence
@@ -168,12 +155,10 @@ func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64)
 					}
 
 					if existingValue == nil && kv.value == nil {
-						stats.NonExistentDeletes++
 						continue // already non-present
 					}
 
 					if existingValue != nil && kv.value != nil && existingValue.Equals(kv.value) {
-						stats.SameVal++
 						continue // same value
 					}
 
@@ -193,15 +178,11 @@ func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64)
 					}
 
 					if existingValue != nil {
-						stats.Modifications++
 						err := ch.Skip(ctx)
 
 						if ae.SetIfError(err) {
 							continue
 						}
-
-					} else {
-						stats.Additions++
 					}
 
 					if kv.value != nil {
@@ -219,20 +200,20 @@ func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64)
 	}
 
 	if ae.IsSet() {
-		return EmptyMap, AppliedEditStats{}, ae.Get()
+		return EmptyMap, ae.Get()
 	}
 
 	if ch == nil {
-		return m, stats, nil // no edits required application
+		return m, nil // no edits required application
 	}
 
 	seq, err := ch.Done(ctx)
 
 	if err != nil {
-		return EmptyMap, AppliedEditStats{}, err
+		return EmptyMap, err
 	}
 
-	return newMap(seq.(orderedSequence)), stats, nil
+	return newMap(seq.(orderedSequence)), nil
 }
 
 // prepWorker will wait for work to be read from a channel, then iterate over all of the edits finding the appropriate

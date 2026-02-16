@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -174,7 +173,6 @@ func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
 }
 
 type rangePartition struct {
-	nomsRange   *noms.ReadRange
 	key         []byte
 	prollyRange prolly.Range
 	isReverse   bool

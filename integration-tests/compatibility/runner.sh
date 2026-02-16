@@ -65,7 +65,7 @@ function test_backward_compatibility() {
   PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
   echo "Run the bats tests with current Dolt version hitting repositories from older Dolt version $ver"
-  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="`pwd`"/repos/"$ver" DOLT_VERSION="$ver" bats ./test_files/bats
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats ./test_files/bats
 }
 
 function list_forward_compatible_versions() {
@@ -146,7 +146,7 @@ _main() {
 
   # sanity check: run tests against current version
   echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
-  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
+  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats ./test_files/bats
 }
 
 _main

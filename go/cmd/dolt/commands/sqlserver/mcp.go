@@ -156,6 +156,9 @@ func mcpRun(cfg *Config, lgr *logrus.Logger, state *svcs.ServiceState, cancelPtr
 			logger,
 			dbConf,
 			*cfg.MCP.Port,
+			nil, // jwkClaimsMap
+			"",  // jwkUrl
+			nil, // tlsConfig
 			toolsets.WithToolSet(&toolsets.PrimitiveToolSetV1{}),
 		)
 		if err != nil {

@@ -17,10 +17,13 @@ package prolly
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/zeebo/xxh3"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -47,6 +50,17 @@ const (
 
 const (
 	artifactMapPendingBufferSize = 650_000
+
+	// violationInfoHashSize is the byte length of the violation-info hash suffix in artifact keys.
+	// We use [hash.ByteLen] (20) so the fourth key field matches the commit-hash field size and the
+	// key descriptor stays uniform. The hash is derived from the violation info via xxh3 so
+	// multiple violations of the same type for the same row get distinct keys.
+	violationInfoHashSize = hash.ByteLen
+
+	// violationInfoHashSeed is used for the second xxh3 call when building the 20-byte suffix.
+	// It is the 64-bit golden-ratio constant (2^64/φ) so the extra 4 bytes come from a different
+	// hash than the first 16, improving distribution across the full key suffix.
+	violationInfoHashSeed = uint64(0x9e3779b97f4a7c15)
 )
 
 type ArtifactMap struct {
@@ -339,22 +353,29 @@ type ArtifactsEditor struct {
 	srcKeyDesc *val.TupleDesc
 }
 
-// BuildArtifactKey builds a val.Tuple to be used to look up a value in this ArtifactsEditor. The key is composed
-// of |srcKey|, the primary key fields from the original table, followed by the hash of the source root, |srcRootish|,
-// and then the artifact type, |artType|.
-func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType) (val.Tuple, error) {
+// BuildArtifactKey builds the artifact map key from |srcKey|, |srcRootish|, |artType|, and an optional
+// |violationInfoHash|. For foreign key, unique index, check constraint, and not null violations pass
+// [ConstraintViolationInfoHash] with |meta.VInfo| so multiple violations of the same type for the same row get distinct
+// keys. For conflicts pass nil (zeros). Old keys without the violation-info hash suffix are still valid.
+func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, violationInfoHash []byte) (val.Tuple, error) {
 	for i := 0; i < srcKey.Count(); i++ {
 		wr.artKB.PutRaw(i, srcKey.GetField(i))
 	}
 	wr.artKB.PutCommitAddr(srcKey.Count(), srcRootish)
 	wr.artKB.PutUint8(srcKey.Count()+1, uint8(artType))
+	if len(violationInfoHash) >= violationInfoHashSize {
+		wr.artKB.PutByteString(srcKey.Count()+2, violationInfoHash[:violationInfoHashSize])
+	} else {
+		wr.artKB.PutByteString(srcKey.Count()+2, make([]byte, violationInfoHashSize))
+	}
 	return wr.artKB.Build(wr.pool)
 }
 
-// Add adds an artifact entry to this editor. The key for the entry includes all the primary key fields from the
-// underlying table (|srcKey|), the hash of the source root (|srcRootish|), and the artifact type (|artType|).
-func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta []byte) error {
-	key, err := wr.BuildArtifactKey(ctx, srcKey, srcRootish, artType)
+// Add adds an artifact entry. The key includes |srcKey|, |srcRootish|, |artType|, and |violationInfoHash|.
+// For foreign key, unique index, check constraint, and not null violations use [ConstraintViolationInfoHash] with
+// |meta.VInfo|; for conflicts pass nil.
+func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta []byte, violationInfoHash []byte) error {
+	key, err := wr.BuildArtifactKey(ctx, srcKey, srcRootish, artType, violationInfoHash)
 	if err != nil {
 		return err
 	}
@@ -368,11 +389,10 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish
 	return wr.mut.Put(ctx, key, value)
 }
 
-// ReplaceConstraintViolation replaces constraint violations that match the
-// given one but have a different commit hash. If no existing violation exists,
-// the given will be inserted. Returns true if a violation was replaced. If an
-// existing violation exists but has a different |meta.VInfo| value then
-// ErrMergeArtifactCollision is a returned.
+// ReplaceConstraintViolation replaces constraint violations that match the given one but have a different
+// commit hash. If no existing violation exists, the given will be inserted. If an existing violation
+// has the same |meta.Value| but a different |meta.VInfo|, a new artifact is added (distinct key via
+// violation-info hash) instead of replacing. Same value and same |meta.VInfo| causes replace.
 func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
 	itr, err := wr.mut.IterRange(ctx, PrefixRange(ctx, srcKey, wr.srcKeyDesc))
 	if err != nil {
@@ -391,7 +411,7 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 	var currMeta ConstraintViolationMeta
 	for art, err = aItr.Next(ctx); err == nil; art, err = aItr.Next(ctx) {
 		// prefix scanning sometimes returns keys not in the range
-		if bytes.Compare(art.SourceKey, srcKey) != 0 {
+		if !bytes.Equal(art.SourceKey, srcKey) {
 			continue
 		}
 		if art.ArtType != artType {
@@ -403,11 +423,13 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 			return err
 		}
 
-		if bytes.Compare(currMeta.Value, meta.Value) == 0 {
-			if bytes.Compare(currMeta.VInfo, meta.VInfo) != 0 {
-				return artifactCollisionErr(ctx, srcKey, wr.srcKeyDesc, currMeta.VInfo, meta.VInfo)
+		if bytes.Equal(currMeta.Value, meta.Value) {
+			if !bytes.Equal(currMeta.VInfo, meta.VInfo) {
+				// Different violation (e.g. different unique index) for the same row; we add another
+				// artifact with a distinct key via the violation-info hash, so do not treat as collision.
+				continue
 			}
-			// Key and Value is the same, so delete this
+			// Same violation identity (same value and violation info); replace by deleting and re-adding below.
 			err = wr.Delete(ctx, art.ArtKey)
 			if err != nil {
 				return err
@@ -422,7 +444,8 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 	if err != nil {
 		return err
 	}
-	err = wr.Add(ctx, srcKey, srcRootish, artType, d)
+	violationInfoHash := ConstraintViolationInfoHash(meta.VInfo)
+	err = wr.Add(ctx, srcKey, srcRootish, artType, d, violationInfoHash)
 	if err != nil {
 		return err
 	}
@@ -430,9 +453,52 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 	return nil
 }
 
-func artifactCollisionErr(ctx context.Context, key val.Tuple, desc *val.TupleDesc, old, new []byte) error {
-	return fmt.Errorf("error storing constraint violation for primary key (%s): another violation already exists\n"+
-		"new violation: %s old violation: (%s)", desc.Format(ctx, key), string(old), string(new))
+// ConstraintViolationInfoHash returns violationInfoHashSize bytes derived from |violationInfo| for use as the key
+// suffix so multiple violations of the same type for the same row get distinct artifact keys.
+func ConstraintViolationInfoHash(violationInfo []byte) []byte {
+	out := make([]byte, violationInfoHashSize)
+	h128 := xxh3.Hash128(violationInfo).Bytes()
+	copy(out, h128[:])
+	h64 := xxh3.HashSeed(violationInfo, violationInfoHashSeed)
+	var tmp [8]byte
+	binary.BigEndian.PutUint64(tmp[:], h64)
+	copy(out[16:], tmp[4:8])
+	return out
+}
+
+// DeleteConstraintViolationsForRow deletes every constraint-violation artifact for the row |srcKey| with type
+// |artType|. It returns the number of artifacts deleted. Used when resolving all violations for a row.
+func (wr *ArtifactsEditor) DeleteConstraintViolationsForRow(ctx context.Context, srcKey val.Tuple, artType ArtifactType) (int, error) {
+	itr, err := wr.mut.IterRange(ctx, PrefixRange(ctx, srcKey, wr.srcKeyDesc))
+	if err != nil {
+		return 0, err
+	}
+	aItr := artifactIterImpl{
+		itr:    itr,
+		artKD:  wr.mut.keyDesc,
+		artVD:  wr.mut.valDesc,
+		pool:   wr.pool,
+		tb:     val.NewTupleBuilder(wr.srcKeyDesc, wr.NodeStore()),
+		numPks: wr.srcKeyDesc.Count(),
+	}
+	var n int
+	for {
+		art, err := aItr.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return n, err
+		}
+		if art.ArtType != artType {
+			continue
+		}
+		if err := wr.mut.Delete(ctx, art.ArtKey); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 func (wr *ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
@@ -615,8 +681,8 @@ type Artifact struct {
 }
 
 func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc) (kd, vd *val.TupleDesc) {
-	// artifact key consists of keys of source schema, followed by target branch
-	// commit hash, and artifact type.
+	// Artifact key is: source PK, commit hash, artifact type, then a fixed-size violation-info hash so multiple
+	// violations of the same type for the same row can coexist.
 	keyTypes := srcKd.Types
 
 	// source branch commit hash
@@ -625,10 +691,12 @@ func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc) (kd, vd *val.Tupl
 	// artifact type
 	keyTypes = append(keyTypes, val.Type{Enc: val.Uint8Enc, Nullable: false})
 
+	// violation-info hash: violationInfoHashSize bytes derived from violation info (for distinct keys per row)
+	keyTypes = append(keyTypes, val.Type{Enc: val.ByteStringEnc, Nullable: false})
+
 	// json blob data
 	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}
 
-	// Add empty handlers for the new types
 	handlers := make([]val.TupleTypeHandler, len(keyTypes))
 	copy(handlers, srcKd.Handlers)
 

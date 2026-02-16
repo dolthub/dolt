@@ -211,3 +211,39 @@ EOF
     run dolt merge check_merge
     [ "$status" -eq 0 ]
 }
+
+@test "constraint violation readable and resolvable by current build" {
+    [[ "$DOLT_VERSION" =~ 0\.50 ]] && skip "constraint violation test not run for Dolt version 0.50"
+    repo="$BATS_TEST_TMPDIR/cv_test_repo_$$"
+    mkdir -p "$repo" && cd "$repo"
+    old_dolt init
+    old_dolt sql <<SQL
+CREATE TABLE cv_test (pk INT PRIMARY KEY, u INT UNIQUE);
+INSERT INTO cv_test VALUES (3, 20);
+SQL
+    old_dolt add .
+    old_dolt commit -m "cv_test base"
+    old_dolt checkout -b cv_branch
+    old_dolt sql -q "INSERT INTO cv_test VALUES (2, 10);" -r csv
+    old_dolt add .
+    old_dolt commit -m "cv_branch: add row (2,10)"
+    old_dolt checkout main
+    old_dolt sql -q "INSERT INTO cv_test VALUES (1, 10);" -r csv
+    old_dolt add .
+    old_dolt commit -m "main: add row (1,10)"
+    run old_dolt merge --no-ff cv_branch
+
+    cd "$repo"
+    run dolt sql -q "SELECT from_root_ish, violation_type, pk, u, violation_info FROM dolt_constraint_violations_cv_test ORDER BY pk;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${#lines[@]}" -eq 3 ]] || false
+    [[ "${lines[0]}" == "from_root_ish,violation_type,pk,u,violation_info" ]] || false
+    [[ "${lines[1]}" =~ ,unique\ index,1,10, ]] || false
+    [[ "${lines[2]}" =~ ,unique\ index,2,10, ]] || false
+    from_root_ish="${lines[1]%%,*}"
+    [ -n "$from_root_ish" ] || false
+    [[ "${lines[2]}" == "$from_root_ish"* ]] || false
+
+    run dolt sql -q "DELETE FROM dolt_constraint_violations_cv_test;" -r csv
+    [ "$status" -eq 0 ]
+}

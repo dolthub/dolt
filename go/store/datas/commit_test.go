@@ -47,13 +47,6 @@ func mustHead(ds Dataset) types.Value {
 	return s
 }
 
-func mustHeight(ds Dataset) uint64 {
-	h, ok, err := ds.MaybeHeight()
-	d.PanicIfError(err)
-	d.PanicIfFalse(ok)
-	return h
-}
-
 func mustHeadValue(ds Dataset) types.Value {
 	val, ok, err := ds.MaybeHeadValue()
 	if err != nil {
@@ -70,11 +63,6 @@ func mustString(str string, err error) string {
 	return str
 }
 
-func mustStruct(st types.Struct, err error) types.Struct {
-	d.PanicIfError(err)
-	return st
-}
-
 func mustSet(s types.Set, err error) types.Set {
 	d.PanicIfError(err)
 	return s
@@ -83,11 +71,6 @@ func mustSet(s types.Set, err error) types.Set {
 func mustList(l types.List, err error) types.List {
 	d.PanicIfError(err)
 	return l
-}
-
-func mustMap(m types.Map, err error) types.Map {
-	d.PanicIfError(err)
-	return m
 }
 
 func mustParentsClosure(t *testing.T, exists bool) func(types.Ref, bool, error) types.Ref {
@@ -110,11 +93,6 @@ func mustRef(ref types.Ref, err error) types.Ref {
 }
 
 func mustValue(val types.Value, err error) types.Value {
-	d.PanicIfError(err)
-	return val
-}
-
-func mustTuple(val types.Tuple, err error) types.Tuple {
 	d.PanicIfError(err)
 	return val
 }
@@ -277,20 +255,6 @@ func mustCommitToTargetHashes(vrw types.ValueReadWriter, commits ...types.Value)
 		ret[i] = r.TargetHash()
 	}
 	return ret
-}
-
-// Convert list of Struct's to List<Ref>
-func toRefList(vrw types.ValueReadWriter, commits ...types.Struct) (types.List, error) {
-	l, err := types.NewList(context.Background(), vrw)
-	if err != nil {
-		return types.EmptyList, err
-	}
-
-	le := l.Edit()
-	for _, p := range commits {
-		le = le.Append(mustRef(types.NewRef(p, vrw.Format())))
-	}
-	return le.List(context.Background())
 }
 
 func commonAncWithSetClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader, ns1, ns2 tree.NodeStore) (a hash.Hash, ok bool, err error) {

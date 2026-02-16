@@ -115,19 +115,3 @@ func TestRoundTripIndexLookupsMeta(t *testing.T) {
 	// do a bunch of iters
 	// use processIndexRecords2 to read back, make sure roots/checksums are consistent, counts, etc
 }
-
-func makeLookups(cnt int) (lookups []lookup) {
-	lookups = make([]lookup, cnt)
-	buf := make([]byte, cnt*hash.ByteLen)
-	rand.Read(buf)
-	var off uint64
-	for i := range lookups {
-		copy(lookups[i].a[:], buf)
-		buf = buf[hash.ByteLen:]
-		lookups[i].r.Offset = off
-		l := rand.Uint32() % 1024
-		lookups[i].r.Length = l
-		off += uint64(l)
-	}
-	return
-}
