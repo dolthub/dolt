@@ -28,12 +28,16 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var result []byte
 
 func main() {
+	// This is a long-running daemon and must never block on interactive git credential prompts.
+	gitauth.DisableInteractivePrompts()
+
 	readOnlyParam := flag.Bool("read-only", false, "run a read-only server which does not allow writes")
 	repoModeParam := flag.Bool("repo-mode", false, "act as a remote for an existing dolt directory, instead of stand alone")
 	dirParam := flag.String("dir", "", "root directory that this command will run in; default cwd")
