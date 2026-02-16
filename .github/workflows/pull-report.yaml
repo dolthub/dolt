@@ -48,7 +48,7 @@ jobs:
             // Consider also deleting stale sql-correctness comments
             // Both correctness and performance are posted/deleted here, they may delete each other
             var commentMarker = '';
-            if (JOB_TYPE == "performance-benchmarking") {
+            if (JOB_TYPE === "performance-benchmarking") {
               commentMarker = '<!-- go-run-output -->';
             
               // List comments on the PR
