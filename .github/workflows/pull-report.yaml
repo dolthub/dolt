@@ -41,9 +41,34 @@ jobs:
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
-            const { ACTOR, FORMAT, ISSUE_NUMBER, GITHUB_WORKSPACE } = process.env;
-            const issue_number = parseInt(ISSUE_NUMBER, 10);
+            const { ACTOR, FORMAT, ISSUE_NUMBER, JOB_TYPE, GITHUB_WORKSPACE } = process.env;
             const { owner, repo } = context.repo;
+            const issue_number = parseInt(ISSUE_NUMBER, 10);
+            
+            // Consider also deleting stale sql-correctness comments
+            // Both correctness and performance are posted/deleted here, they may delete each other
+            var commentMarker = '';
+            if (JOB_TYPE === "performance-benchmarking") {
+              commentMarker = '<!-- go-run-output -->';
+            
+              // List comments on the PR
+              const { data: comments } = await github.rest.issues.listComments({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              })
+            
+              // Delete existing comments
+              const filteredComments = comments.filter(comment => comment.body.includes(commentMarker))
+              for (const comment of filteredComments) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: comment.id
+                })
+              })
+            }
+
             fs = require('fs');
             fs.readFile(`${GITHUB_WORKSPACE}/results.log`, 'utf8', function (err,data) {
               if (err) {
@@ -53,7 +78,7 @@ jobs:
                 issue_number,
                 owner,
                 repo,
-                body: `@${ACTOR} ${FORMAT}\n ${data}`
+                body: `${commentMarker}\n@${ACTOR} ${FORMAT}\n ${data}`
               });
             });
         env:
