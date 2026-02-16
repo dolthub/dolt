@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
@@ -284,11 +283,6 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 
 // StartServer starts the sql server with the controller provided and blocks until the server is stopped.
 func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, cwd filesys.Filesys, controller *svcs.Controller) error {
-	// sql-server is a long-running daemon and must never block on interactive git credential prompts.
-	// If credentials are unavailable, git operations should fail fast with an error instead of prompting
-	// on stdin (which may not be a terminal, and can hang the server).
-	gitauth.DisableInteractivePrompts()
-
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

@@ -26,7 +26,6 @@ func (e *NonInteractiveAuthError) Error() string {
 		b.WriteString(strings.TrimRight(e.Output, "\n"))
 	}
 	if e.Cause != nil {
-		b.WriteString("\n")
 		b.WriteString("\nOriginal error: ")
 		b.WriteString(e.Cause.Error())
 	}
@@ -66,17 +65,18 @@ func NormalizeError(err error, output []byte) error {
 
 func looksLikeAuthPromptOrFailure(s string) bool {
 	// Keep these as simple substring matches; callers can extend as we observe new cases.
+	s = strings.ToLower(s)
 	patterns := []string{
 		"terminal prompts disabled",
 		"could not read Username",
 		"could not read Password",
 		"Authentication failed",
 		"Enter passphrase for key",
-		"Permission denied (publickey).",
+		"Permission denied (publickey)",
 		"fatal: could not read from remote repository",
 	}
 	for _, p := range patterns {
-		if strings.Contains(s, p) {
+		if strings.Contains(s, strings.ToLower(p)) {
 			return true
 		}
 	}
