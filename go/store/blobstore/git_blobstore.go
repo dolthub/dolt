@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+
 	// "os" -- uncomment when enabling debugStderr logging above
 	"sort"
 	"strconv"
@@ -373,8 +374,9 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		remoteName = "origin"
 	}
 	remoteRef := ref
-	remoteTrackingRef := RemoteTrackingRef(remoteName, remoteRef)
-	localRef := OwnedLocalRef(remoteName, remoteRef, uuid.NewString())
+	instanceID := uuid.NewString()
+	remoteTrackingRef := RemoteTrackingRef(remoteName, remoteRef, instanceID)
+	localRef := OwnedLocalRef(remoteName, remoteRef, instanceID)
 
 	// Debug: uncomment to prove this code is running in the server.
 	// _, _ = fmt.Fprintf(debugStderr, "gitblobstore: NewGitBlobstoreWithOptions gitDir=%q remoteRef=%q remoteName=%q trackingRef=%q localRef=%q\n",

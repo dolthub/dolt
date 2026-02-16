@@ -159,7 +159,7 @@ func TestGitBlobstore_RemoteManaged_ExistsFetchesAndAligns(t *testing.T) {
 	require.True(t, ok)
 
 	require.Equal(t, DoltDataRef, bs.remoteRef)
-	require.Equal(t, RemoteTrackingRef("origin", DoltDataRef), bs.remoteTrackingRef)
+	require.True(t, strings.HasPrefix(bs.remoteTrackingRef, "refs/dolt/remotes/origin/dolt/data/"))
 	require.NotEqual(t, bs.remoteRef, bs.localRef)
 	require.NotEqual(t, bs.remoteTrackingRef, bs.localRef)
 	require.True(t, strings.HasPrefix(bs.localRef, "refs/dolt/blobstore/origin/dolt/data/"))
@@ -188,7 +188,7 @@ func TestGitBlobstore_RemoteAndLocalRefNaming_ConfigurableRemoteRef(t *testing.T
 	require.NoError(t, err)
 
 	require.Equal(t, remoteRef, bs.remoteRef)
-	require.Equal(t, RemoteTrackingRef("origin", remoteRef), bs.remoteTrackingRef)
+	require.True(t, strings.HasPrefix(bs.remoteTrackingRef, "refs/dolt/remotes/origin/heads/alt/"))
 	require.NotEmpty(t, bs.localRef)
 	require.NotEqual(t, bs.remoteRef, bs.localRef)
 	require.NotEqual(t, bs.remoteTrackingRef, bs.localRef)

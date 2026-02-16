@@ -69,4 +69,3 @@ func main() {
 
 	fmt.Println("successfully pushed to remote")
 }
-

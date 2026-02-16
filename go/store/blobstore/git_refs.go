@@ -26,10 +26,11 @@ func trimRefsPrefix(ref string) string {
 	return strings.TrimPrefix(ref, "refs/")
 }
 
-// RemoteTrackingRef returns the remote-tracking ref for a named remote and remote ref.
-// This ref represents the remote's |remoteRef| as of the last fetch.
-func RemoteTrackingRef(remoteName, remoteRef string) string {
-	return fmt.Sprintf("refs/dolt/remotes/%s/%s", remoteName, trimRefsPrefix(remoteRef))
+// RemoteTrackingRef returns a UUID-owned remote-tracking ref for a GitBlobstore instance.
+// Each instance gets its own tracking ref to avoid concurrent git-fetch races
+// when multiple blobstore instances share the same cache repo.
+func RemoteTrackingRef(remoteName, remoteRef, uuid string) string {
+	return fmt.Sprintf("refs/dolt/remotes/%s/%s/%s", remoteName, trimRefsPrefix(remoteRef), uuid)
 }
 
 // OwnedLocalRef returns a UUID-owned local ref for a GitBlobstore instance.
