@@ -17,7 +17,6 @@ package index
 import (
 	"context"
 	"io"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
