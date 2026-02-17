@@ -727,19 +727,19 @@ var BranchControlTests = []BranchControlTest{
 			{ // Must have permission on the new name as well
 				User:        "a",
 				Host:        "localhost",
-				Query:       "UPDATE dolt_branch_control SET branch = 'other1' WHERE branch = 'prefix1%';",
+				Query:       "UPDATE dolt_branch_control SET branch = 'other1' WHERE user = 'b' AND branch = 'prefix1%';",
 				ExpectedErr: branch_control.ErrUpdatingToRow,
 			},
 			{
 				User:        "b",
 				Host:        "localhost",
-				Query:       "UPDATE dolt_branch_control SET permissions = 'admin' WHERE branch = 'prefix1%';",
+				Query:       "UPDATE dolt_branch_control SET permissions = 'admin' WHERE user = 'b' AND branch = 'prefix1%';",
 				ExpectedErr: branch_control.ErrUpdatingRow,
 			},
 			{
 				User:  "a",
 				Host:  "localhost",
-				Query: "UPDATE dolt_branch_control SET permissions = 'admin' WHERE branch = 'prefix1%';",
+				Query: "UPDATE dolt_branch_control SET permissions = 'admin' WHERE user = 'b' AND branch = 'prefix1%';",
 				Expected: []sql.Row{
 					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
 				},
@@ -1467,6 +1467,71 @@ var BranchControlTests = []BranchControlTest{
 				Host:        "localhost",
 				Query:       "INSERT INTO test VALUES (6);",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
+	{
+		Name: "Allow restrictions and supersets",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'main', '%', '%', 'write');",
+			"CREATE USER testuser@localhost;",
+			"CREATE USER testuser2@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser2@localhost;",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{ // This is a strict subset and should be blocked
+				User:        "root",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', '%', 'write');",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{ // This is a restriction
+				User:  "root",
+				Host:  "localhost",
+				Query: "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', '%', 'read');",
+				Expected: []sql.Row{
+					{types.NewOkResult(1)},
+				},
+			},
+			{ // This is a superset
+				User:  "root",
+				Host:  "localhost",
+				Query: "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser2', '%', 'admin');",
+				Expected: []sql.Row{
+					{types.NewOkResult(1)},
+				},
+			},
+			{
+				User:  "root",
+				Host:  "localhost",
+				Query: "DELETE FROM dolt_branch_control WHERE user = 'testuser';",
+				Expected: []sql.Row{
+					{types.NewOkResult(1)},
+				},
+			},
+			{ // Set to a restriction using UPDATE
+				User:  "root",
+				Host:  "localhost",
+				Query: `UPDATE dolt_branch_control SET user = 'testuser', permissions = 'read' WHERE user = 'testuser2';`,
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
+				},
+			},
+			{ // Set to a superset using UPDATE
+				User:  "root",
+				Host:  "localhost",
+				Query: "UPDATE dolt_branch_control SET user = 'testuser2', permissions = 'admin' WHERE user = 'testuser';",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
+				},
+			},
+			{ // Ensure that we still block strict subsets
+				User:        "root",
+				Host:        "localhost",
+				Query:       "UPDATE dolt_branch_control SET permissions = 'write' WHERE user = 'testuser2';",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
 			},
 		},
 	},

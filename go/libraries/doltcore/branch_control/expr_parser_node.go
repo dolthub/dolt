@@ -146,9 +146,10 @@ func (mn *MatchNode) Match(database, branch, user, host string) []MatchResult {
 	return results
 }
 
-// ExactMatch will return whether the expressions already exist in the exact form given. This differs from match, as
-// this is not checking for subset matches. Assumes that the given expressions have already been folded.
-func (mn *MatchNode) ExactMatch(databaseExpr, branchExpr, userExpr, hostExpr string) bool {
+// ExactMatch will return whether the expressions already exist in the exact form given by returning the *MatchNode.
+// This differs from match, as this is not checking for subset matches. Assumes that the given expressions have already
+// been folded.
+func (mn *MatchNode) ExactMatch(databaseExpr, branchExpr, userExpr, hostExpr string) *MatchNode {
 	root := mn
 	allSortOrders := mn.parseExpression(databaseExpr, branchExpr, userExpr, hostExpr)
 	defer func() {
@@ -167,7 +168,7 @@ ParentLoop:
 			} else if len(remainingRootSortOrders) > 1 && i == allSortOrdersMaxIndex {
 				// We have more sort orders on the root, but no more in our expressions, so this is a partial match and
 				// not an exact match
-				return false
+				return nil
 			} else if len(remainingRootSortOrders) == 1 && i < allSortOrdersMaxIndex {
 				// We've run out of sort orders on the root, but still have more from children, so check if there's a
 				// matching child
@@ -178,18 +179,18 @@ ParentLoop:
 					continue ParentLoop
 				}
 				// None of the children matched, so this does not have an exact match
-				return false
+				return nil
 			} else {
 				// We have no more sort orders on either side so this is an exact match
-				return true
+				return root
 			}
 		} else {
 			// The sort orders do not match, so this does not have an exact match
-			return false
+			return nil
 		}
 	}
 	// Shouldn't be possible to get here, so we can assume that this isn't an exact match as well
-	return false
+	return nil
 }
 
 // processMatch handles the behavior of how to process a sort order against a node. Returns a new slice with any newly
