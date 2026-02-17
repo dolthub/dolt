@@ -239,6 +239,9 @@ func (c *cmdReadCloser) Close() error {
 func (r *Runner) env(opts RunOptions) []string {
 	env := append([]string(nil), os.Environ()...)
 	env = append(env, "GIT_DIR="+r.gitDir)
+	// Force English output so error-message parsing (e.g. isRemoteRefNotFoundErr)
+	// works regardless of the user's locale.
+	env = append(env, "LC_ALL=C")
 	if opts.IndexFile != "" {
 		env = append(env, "GIT_INDEX_FILE="+opts.IndexFile)
 	}

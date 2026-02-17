@@ -292,6 +292,18 @@ func isGitRemoteAlreadyExistsError(err error, remoteName string) bool {
 	return strings.Contains(s, "remote "+strings.ToLower(remoteName)+" already exists")
 }
 
+// gitCmd builds an exec.Cmd for a git invocation with LC_ALL=C so that
+// error-message parsing works regardless of the user's locale.
+func gitCmd(ctx context.Context, args ...string) (*exec.Cmd, error) {
+	p, err := exec.LookPath("git")
+	if err != nil {
+		return nil, fmt.Errorf("git not found on PATH: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, p, args...) //nolint:gosec // controlled args
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	return cmd, nil
+}
+
 func runGitInitBare(ctx context.Context, dir string) error {
 	if strings.TrimSpace(dir) == "" {
 		return fmt.Errorf("empty dir")
@@ -299,13 +311,11 @@ func runGitInitBare(ctx context.Context, dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	_, err := exec.LookPath("git")
-	if err != nil {
-		return fmt.Errorf("git not found on PATH: %w", err)
-	}
 	// Use `--git-dir` to make init idempotent if the directory already exists.
-	cmd := exec.CommandContext(ctx, "git", "--git-dir", dir, "init", "--bare") //nolint:gosec // controlled args
-	cmd.Env = os.Environ()
+	cmd, err := gitCmd(ctx, "--git-dir", dir, "init", "--bare")
+	if err != nil {
+		return err
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		base := fmt.Errorf("git init --bare failed: %w\noutput:\n%s", err, strings.TrimSpace(string(out)))
@@ -315,13 +325,11 @@ func runGitInitBare(ctx context.Context, dir string) error {
 }
 
 func runGitInDir(ctx context.Context, gitDir string, args ...string) (string, error) {
-	_, err := exec.LookPath("git")
-	if err != nil {
-		return "", fmt.Errorf("git not found on PATH: %w", err)
-	}
 	all := append([]string{"--git-dir", gitDir}, args...)
-	cmd := exec.CommandContext(ctx, "git", all...) //nolint:gosec // controlled args
-	cmd.Env = os.Environ()
+	cmd, err := gitCmd(ctx, all...)
+	if err != nil {
+		return "", err
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		base := fmt.Errorf("git %s failed: %w\noutput:\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
