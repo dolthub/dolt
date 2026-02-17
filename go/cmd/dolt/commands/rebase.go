@@ -111,6 +111,14 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	rows, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, query)
 	if err != nil {
+		if isRebaseConflictError(err) {
+			if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
+				// The checkout of the dolt_rebase_<> branch failed, we might want to `--abort`, but chances
+				// are that won't work either. We are gonna be in a weird state no matter what, so just print the error and exit.
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
+			}
+		}
+
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
