@@ -210,3 +210,30 @@ func TestGitRemoteFactory_GitFile_RemoteWithNoBranchesFails(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrGitRemoteHasNoBranches)
 }
+
+func TestEnsureGitRemoteURL_IdempotentRemoteAlreadyExists(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	gitDir := filepath.Join(shortTempDir(t), "repo.git")
+
+	// Create a real bare git repo.
+	out, err := exec.CommandContext(ctx, "git", "init", "--bare", gitDir).CombinedOutput()
+	require.NoError(t, err, "git init --bare failed: %s", string(out))
+
+	remoteName := "origin"
+	remoteURL := "https://example.com/repo.git"
+
+	// First call: adds the remote.
+	require.NoError(t, ensureGitRemoteURL(ctx, gitDir, remoteName, remoteURL))
+
+	// Second call: remote already exists, falls back to set-url.
+	require.NoError(t, ensureGitRemoteURL(ctx, gitDir, remoteName, remoteURL))
+
+	// Verify the remote URL is correct.
+	got, err := exec.CommandContext(ctx, "git", "--git-dir", gitDir, "remote", "get-url", remoteName).CombinedOutput()
+	require.NoError(t, err, "git remote get-url failed: %s", string(got))
+	require.Equal(t, remoteURL, strings.TrimSpace(string(got)))
+}

@@ -121,6 +121,15 @@ func updateBSWithChecker(ctx context.Context, behavior dherrors.FatalBehavior, b
 			if !blobstore.IsCheckAndPutError(err) {
 				return manifestContents{}, err
 			}
+			// CheckAndPut failed due to concurrent modification. Re-read
+			// the manifest so we return current contents rather than the
+			// stale (possibly empty) contents from before the race. Without
+			// this, an empty manifestContents can be cached and poison
+			// subsequent Fetch() calls (nbfVers="").
+			_, contents, err = manifestVersionAndContents(ctx, bs)
+			if err != nil && !blobstore.IsNotFoundError(err) {
+				return manifestContents{}, err
+			}
 		} else {
 			return newContents, nil
 		}

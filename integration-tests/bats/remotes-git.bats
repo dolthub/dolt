@@ -557,9 +557,9 @@ shift || true
 
 case "$cmd" in
   init)
-    # git init --bare <dir>
+    # git --git-dir <dir> init --bare
     if [[ "${1:-}" == "--bare" ]]; then
-      mkdir -p "${2:-}"
+      mkdir -p "$git_dir"
       exit 0
     fi
     ;;

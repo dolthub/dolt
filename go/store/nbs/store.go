@@ -411,6 +411,13 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 			contents = manifestContents{nbfVers: nbs.upstream.nbfVers}
 		}
 
+		// The global manifest cache can return stale empty contents
+		// (from a concurrent writer's failed read) with exists=true
+		// but empty nbfVers. Ensure nbfVers is always populated.
+		if contents.nbfVers == "" {
+			contents.nbfVers = nbs.upstream.nbfVers
+		}
+
 		if gcGen != nil && *gcGen != contents.gcGen {
 			return manifestContents{}, true, nil
 		}
@@ -447,6 +454,22 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		}
 
 		if !hasWork {
+			// Even though our specs are already in the manifest, our
+			// in-memory table set may not include them (e.g. if the NBS
+			// was initialized before the manifest was populated by a
+			// concurrent writer). Rebase to bring tables in sync.
+			if contents.lock != nbs.upstream.lock {
+				newTables, rebErr := nbs.tables.rebase(ctx, contents.specs, sources, nbs.stats)
+				if rebErr != nil {
+					return manifestContents{}, false, rebErr
+				}
+				nbs.upstream = contents
+				oldTables := nbs.tables
+				nbs.tables = newTables
+				if rebErr = oldTables.close(); rebErr != nil {
+					return manifestContents{}, false, rebErr
+				}
+			}
 			return contents, false, nil
 		}
 

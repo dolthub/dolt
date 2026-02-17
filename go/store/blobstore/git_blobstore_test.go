@@ -159,7 +159,7 @@ func TestGitBlobstore_RemoteManaged_ExistsFetchesAndAligns(t *testing.T) {
 	require.True(t, ok)
 
 	require.Equal(t, DoltDataRef, bs.remoteRef)
-	require.Equal(t, RemoteTrackingRef("origin", DoltDataRef), bs.remoteTrackingRef)
+	require.True(t, strings.HasPrefix(bs.remoteTrackingRef, "refs/dolt/remotes/origin/dolt/data/"))
 	require.NotEqual(t, bs.remoteRef, bs.localRef)
 	require.NotEqual(t, bs.remoteTrackingRef, bs.localRef)
 	require.True(t, strings.HasPrefix(bs.localRef, "refs/dolt/blobstore/origin/dolt/data/"))
@@ -188,11 +188,65 @@ func TestGitBlobstore_RemoteAndLocalRefNaming_ConfigurableRemoteRef(t *testing.T
 	require.NoError(t, err)
 
 	require.Equal(t, remoteRef, bs.remoteRef)
-	require.Equal(t, RemoteTrackingRef("origin", remoteRef), bs.remoteTrackingRef)
+	require.True(t, strings.HasPrefix(bs.remoteTrackingRef, "refs/dolt/remotes/origin/heads/alt/"))
 	require.NotEmpty(t, bs.localRef)
 	require.NotEqual(t, bs.remoteRef, bs.localRef)
 	require.NotEqual(t, bs.remoteTrackingRef, bs.localRef)
 	require.True(t, strings.HasPrefix(bs.localRef, "refs/dolt/blobstore/origin/heads/alt/"))
+}
+
+func TestGitBlobstore_TwoInstances_IndependentTrackingRefs(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"manifest": []byte("v1\n"),
+	}, "seed")
+	require.NoError(t, err)
+
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+
+	opts := GitBlobstoreOptions{RemoteName: "origin"}
+	bs1, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, opts)
+	require.NoError(t, err)
+	bs2, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, opts)
+	require.NoError(t, err)
+
+	// The two instances must have distinct tracking and local refs.
+	require.NotEqual(t, bs1.remoteTrackingRef, bs2.remoteTrackingRef)
+	require.NotEqual(t, bs1.localRef, bs2.localRef)
+
+	// Both instances can fetch independently without interfering.
+	ok1, err := bs1.Exists(ctx, "manifest")
+	require.NoError(t, err)
+	require.True(t, ok1)
+
+	ok2, err := bs2.Exists(ctx, "manifest")
+	require.NoError(t, err)
+	require.True(t, ok2)
+
+	// Verify each instance wrote to its own tracking ref.
+	localAPI := git.NewGitAPIImpl(localRunner)
+	head1, err := localAPI.ResolveRefCommit(ctx, bs1.remoteTrackingRef)
+	require.NoError(t, err)
+	head2, err := localAPI.ResolveRefCommit(ctx, bs2.remoteTrackingRef)
+	require.NoError(t, err)
+	require.Equal(t, head1, head2, "both should track the same remote commit")
+
+	// Verify local refs are also distinct and valid.
+	local1, err := localAPI.ResolveRefCommit(ctx, bs1.localRef)
+	require.NoError(t, err)
+	local2, err := localAPI.ResolveRefCommit(ctx, bs2.localRef)
+	require.NoError(t, err)
+	require.Equal(t, local1, local2, "both should point at the same commit")
 }
 
 func TestGitBlobstore_CleanupOwnedLocalRef_DeletesRef(t *testing.T) {
