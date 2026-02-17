@@ -110,8 +110,6 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	time.Sleep(5 * time.Nanosecond)
-
 	r := make(sql.Row, len(p.projections))
 	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
 		return p.rowFromTuples(ctx, key, value, r)
