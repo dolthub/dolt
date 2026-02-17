@@ -54,7 +54,7 @@ jobs:
         id: set_benchmark_mini
         run: |
           echo "benchmark=true" >> $GITHUB_OUTPUT
-          echo "sysbench-test-time=10" >> $GITHUB_OUTPUT
+          echo "sysbench-test-time=20" >> $GITHUB_OUTPUT
 
   performance:
     runs-on: ubuntu-22.04
