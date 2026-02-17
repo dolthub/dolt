@@ -34,7 +34,6 @@ jobs:
               init_big_repo: "true",
               actor: context.actor,
               sysbench_test_time: "10",
-              withTpcc: false,
               template_script: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh",
             };
 
