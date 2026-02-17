@@ -240,9 +240,8 @@ func (r *Runner) env(opts RunOptions) []string {
 	env := append([]string(nil), os.Environ()...)
 	env = append(env, "GIT_DIR="+r.gitDir)
 	// Force English output so error-message parsing (e.g. isRemoteRefNotFoundErr)
-	// works regardless of the user's locale. C.UTF-8 keeps UTF-8 encoding support
-	// for paths and commit messages while switching messages to English.
-	env = append(env, "LC_ALL=C.UTF-8")
+	// works regardless of the user's locale.
+	env = append(env, "LC_ALL=C")
 	if opts.IndexFile != "" {
 		env = append(env, "GIT_INDEX_FILE="+opts.IndexFile)
 	}
