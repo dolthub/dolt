@@ -2,7 +2,7 @@
 
 set -e
 
-if [ "$#" -lt 10 ]; then
+if [ "$#" -lt 11 ]; then
     echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat> <sysbenchTestTime> <withTpcc>"
     exit 1
 fi
