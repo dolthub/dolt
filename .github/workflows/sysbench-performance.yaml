@@ -33,7 +33,7 @@ jobs:
               issue_number: String(context.issue.number),
               init_big_repo: "true",
               actor: context.actor,
-              sysbench_test_time: "10",
+              sysbench_test_time: "20",
               template_script: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh",
             };
 
