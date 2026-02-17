@@ -39,10 +39,10 @@ jobs:
       - name: Post results to PR
         uses: actions/github-script@v7
         env:
-          JOB_TYPE: ${{ github.event.client_payload.job_type }}
           ACTOR: ${{ github.event.client_payload.actor }}
-          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           FORMAT: ${{ github.event.client_payload.noms_bin_format }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          JOB_TYPE: ${{ github.event.client_payload.job_type }}
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
