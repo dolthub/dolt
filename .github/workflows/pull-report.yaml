@@ -38,6 +38,11 @@ jobs:
           BUCKET: ${{ github.event.client_payload.bucket }}
       - name: Post results to PR
         uses: actions/github-script@v7
+        env:
+          JOB_TYPE: ${{ github.event.client_payload.job_type }}
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          FORMAT: ${{ github.event.client_payload.noms_bin_format }}
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -48,7 +53,7 @@ jobs:
             // Consider also deleting stale sql-correctness comments
             // Both correctness and performance are posted/deleted here, they may delete each other
             var commentMarker = '';
-            if ("${JOB_TYPE}" === "performance-benchmarking") {
+            if (JOB_TYPE == "performance-benchmarking") {
               commentMarker = '<!-- go-run-output -->';
             
               // List comments on the PR
@@ -81,10 +86,6 @@ jobs:
                 body: `${commentMarker}\n@${ACTOR} ${FORMAT}\n ${data}`
               });
             });
-        env:
-          ACTOR: ${{ github.event.client_payload.actor }}
-          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
-          FORMAT: ${{ github.event.client_payload.noms_bin_format }}
       - name: Remove Passing Labels if regression detected
         if: ${{ github.event.client_payload.correctness_info.is_regression == true && github.event.client_payload.job_type == 'sql-correctness' }}
         uses: actions/github-script@v7
