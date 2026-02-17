@@ -92,7 +92,7 @@ func (fact GitRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFo
 	}
 }
 
-func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (_ datas.Database, _ types.ValueReadWriter, _ tree.NodeStore, err error) {
+func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
 	if err != nil {
 		return nil, nil, nil, err
@@ -124,7 +124,9 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 	defer func() {
-		err = errors.Join(err, initLock.Unlock())
+		if unlockErr := initLock.Unlock(); unlockErr != nil {
+			panic(fmt.Sprintf("failed to unlock %s: %v", filepath.Join(hashDir, "init.lock"), unlockErr))
+		}
 	}()
 
 	if err := ensureBareRepo(ctx, cacheRepo); err != nil {
