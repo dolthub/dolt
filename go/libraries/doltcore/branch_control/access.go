@@ -72,11 +72,21 @@ func newAccess() *Access {
 // This will match subsets against their superset as well. Requires external synchronization handling, therefore
 // manually manage the RWMutex.
 func (tbl *Access) Match(database string, branch string, user string, host string) (bool, Permissions) {
+	return tbl.MatchIgnoringRow(database, branch, user, host, -1)
+}
+
+// MatchIgnoringRow returns whether any entries match the given database, branch, user, and host, along with their
+// permissions. This will match subsets against their superset as well. If `rowToIgnore` is >= 0, then that row is
+// ignored from the match results. Requires external synchronization handling, therefore manually manage the RWMutex.
+func (tbl *Access) MatchIgnoringRow(database string, branch string, user string, host string, rowToIgnore int64) (bool, Permissions) {
 	results := tbl.Root.Match(database, branch, user, host)
 	// We use the result(s) with the longest length
 	length := uint32(0)
 	perms := Permissions_None
 	for _, result := range results {
+		if int64(result.RowIndex) == rowToIgnore {
+			continue
+		}
 		if result.Length > length {
 			perms = result.Permissions
 			length = result.Length
@@ -87,9 +97,9 @@ func (tbl *Access) Match(database string, branch string, user string, host strin
 	return len(results) > 0, perms
 }
 
-// ExactMatch returns whether any entries exactly match the given database, branch, user, and host. Requires external
-// synchronization handling, therefore manually manage the RWMutex.
-func (tbl *Access) ExactMatch(database string, branch string, user string, host string) bool {
+// ExactMatch returns whether any entries exactly match the given database, branch, user, and host. Returns nil if an
+// exact match is not found. Requires external synchronization handling, therefore manually manage the RWMutex.
+func (tbl *Access) ExactMatch(database string, branch string, user string, host string) *MatchNode {
 	return tbl.Root.ExactMatch(database, branch, user, host)
 }
 
