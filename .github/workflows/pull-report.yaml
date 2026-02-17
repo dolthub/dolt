@@ -48,7 +48,7 @@ jobs:
             // Consider also deleting stale sql-correctness comments
             // Both correctness and performance are posted/deleted here, they may delete each other
             var commentMarker = '';
-            if ("${JOB_TYPE}" === "performance-benchmarking") {
+            if (JOB_TYPE == "performance-benchmarking") {
               commentMarker = '<!-- go-run-output -->';
             
               // List comments on the PR
@@ -83,8 +83,9 @@ jobs:
             });
         env:
           ACTOR: ${{ github.event.client_payload.actor }}
-          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           FORMAT: ${{ github.event.client_payload.noms_bin_format }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          JOB_TYPE: ${{ github.event.client_payload.job_type }}
       - name: Remove Passing Labels if regression detected
         if: ${{ github.event.client_payload.correctness_info.is_regression == true && github.event.client_payload.job_type == 'sql-correctness' }}
         uses: actions/github-script@v7
