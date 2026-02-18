@@ -237,8 +237,8 @@ func TestStatScripts(t *testing.T) {
 		{
 			name: "vector index",
 			setup: []string{
-				"create table xy (x int primary key, y json, vector key(y))",
-				"insert into xy values (0, '0'), (1, '1'), (2, '2'), (3, NULL), (4, NULL)",
+				"create table xy (x int primary key, y json not null, vector key(y))",
+				"insert into xy values (0, '0'), (1, '1'), (2, '2'), (3, '3'), (4, '4')",
 			},
 			assertions: []assertion{
 				{
