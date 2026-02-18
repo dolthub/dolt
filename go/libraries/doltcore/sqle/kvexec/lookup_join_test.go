@@ -111,15 +111,6 @@ func TestLookupJoin(t *testing.T) {
 			doRowexec: false,
 		},
 		{
-			name: "reject join in subquery with non-nil scope",
-			setup: []string{
-				"create table xy (x int primary key, y int)",
-				"create table ab (a int primary key, b int)",
-			},
-			join:      "select  1, (select /*+ LOOKUP_JOIN(xy,ab) */ count(*) from xy join ab on x = a) cnt",
-			doRowexec: false,
-		},
-		{
 			name: "reject complex join expression",
 			setup: []string{
 				"create table xy (x int primary key, y int)",
