@@ -28,7 +28,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"insert into t values (1, \"one\");",
 			"call dolt_commit('-am', 'adding row 1');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -54,7 +54,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"insert into t values (1, \"one\");",
 			"call dolt_commit('-am', 'adding row 1');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -76,7 +76,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"insert into t values (1, \"one\");",
 			"call dolt_commit('-am', 'adding row 1');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 			"INSERT INTO t VALUES (100, 'onehundy');",
 		},
@@ -103,7 +103,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (pk, v);",
 			"call dolt_commit('-am', 'adding row 1');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -121,10 +121,10 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"insert into t values (1, \"one\");",
 			"call dolt_commit('-am', 'adding row 1');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"insert into t values (2, \"two\");",
 			"call dolt_commit('-am', 'adding row 2');",
-			"set @commit2 = hashof('HEAD');",
+			"set @commit2 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -150,7 +150,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				// Assert that our new commit only has one parent (i.e. not a merge commit)
-				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = hashof('HEAD');",
+				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = dolt_hashof('HEAD');",
 				Expected: []sql.Row{{1}},
 			},
 		},
@@ -188,7 +188,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10));",
 			"INSERT INTO table_a VALUES (11, 'aa'), (22, 'ab');",
 			"call dolt_commit('-Am', 'create table table_a');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -202,7 +202,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				// Assert that our new commit only has one parent (i.e. not a merge commit)
-				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = hashof('HEAD');",
+				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = dolt_hashof('HEAD');",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -224,7 +224,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"drop table dropme;",
 			"call dolt_commit('-Am', 'drop table dropme');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -250,7 +250,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"ALTER TABLE test ADD COLUMN v VARCHAR(100);",
 			"call dolt_commit('-am', 'add column v to test on branch1');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -272,7 +272,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"ALTER TABLE test DROP COLUMN v;",
 			"call dolt_commit('-am', 'drop column v from test on branch1');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -294,7 +294,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"ALTER TABLE test RENAME COLUMN v1 to v2;",
 			"call dolt_commit('-am', 'rename column v1 to v2 in test on branch1');",
-			"set @commit1 = hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -324,7 +324,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_cherry_pick(hashof('branch1'));",
+				Query:    "call dolt_cherry_pick(dolt_hashof('branch1'));",
 				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
@@ -368,7 +368,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_cherry_pick(hashof('branch1'));",
+				Query:    "call dolt_cherry_pick(dolt_hashof('branch1'));",
 				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
@@ -411,7 +411,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_cherry_pick(hashof('branch1'));",
+				Query:    "call dolt_cherry_pick(dolt_hashof('branch1'));",
 				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
@@ -450,7 +450,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				// Assert that our new commit only has one parent (i.e. not a merge commit)
-				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = hashof('HEAD');",
+				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = dolt_hashof('HEAD');",
 				Expected: []sql.Row{{1}},
 			},
 		},
@@ -519,7 +519,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				// Assert that our new commit only has one parent (i.e. not a merge commit)
-				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = hashof('HEAD');",
+				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = dolt_hashof('HEAD');",
 				Expected: []sql.Row{{1}},
 			},
 		},
@@ -547,7 +547,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_cherry_pick(hashof('branch1'));",
+				Query:    "call dolt_cherry_pick(dolt_hashof('branch1'));",
 				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
@@ -599,6 +599,169 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Query:    "select * from generated_bar;",
 				Expected: []sql.Row{{1}},
 			},*/
+		},
+	},
+	{
+		Name: "cherry-pick --continue: successful conflict resolution workflow",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, 'branch1_value');",
+			"call dolt_commit('-am', 'add row from branch1', '--author', 'Test User <test@example.com>', '--date', '2022-01-01T12:00:00');",
+			"set @commit1 = dolt_dolt_hashof('HEAD');",
+			"call dolt_checkout('main');",
+			"insert into t values (1, 'main_value');",
+			"call dolt_commit('-am', 'add row from main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{"", 1, 0, 0}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(1)}},
+			},
+			{
+				Query: "select our_pk, our_v, their_pk, their_v from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{1, "main_value", 1, "branch1_value"},
+				},
+			},
+			{
+				Query:          "call dolt_cherry_pick('--continue');",
+				ExpectedErrStr: "error: cannot continue cherry-pick with unresolved conflicts",
+			},
+			{
+				Query:            "delete from dolt_conflicts_t",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "update t set v = 'resolved_value' where pk = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "call dolt_add('t');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_cherry_pick('--continue');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "resolved_value"}},
+			},
+			{
+				Query:    "select commiter, message, date from dolt_log limit 1;",
+				Expected: []sql.Row{{"Test User <test@example.com>", "add row from branch1", "2022-01-01T12:00:00Z"}},
+			},
+		},
+	},
+	{
+		Name: "cherry-pick --continue not in a cherry-pick state",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, 'one');",
+			"call dolt_commit('-am', 'add row from branch1');",
+			"set @commit1 = dolt_hashof('HEAD');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_cherry_pick('--continue');",
+				ExpectedErrStr: "error: There is no cherry-pick merge to continue",
+			},
+		},
+	},
+	{
+		Name: "cherry-pick --continue: multiple table conflicts",
+		SetUpScript: []string{
+			"create table t1 (pk int primary key, v varchar(100));",
+			"create table t2 (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create tables');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t1 values (1, 'branch1_t1');",
+			"insert into t2 values (1, 'branch1_t2');",
+			"call dolt_commit('-am', 'add rows from branch1', '--author', 'Branch User <branch@example.com>', '--date', '2022-02-01T10:30:00');",
+			"set @commit1 = dolt_hashof('HEAD');",
+			"call dolt_checkout('main');",
+			"insert into t1 values (1, 'main_t1');",
+			"insert into t2 values (1, 'main_t2');",
+			"call dolt_commit('-am', 'add rows from main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{"", 2, 0, 0}},
+			},
+			{
+				Query:    "select table_name from dolt_conflicts order by table_name;",
+				Expected: []sql.Row{{"t1"}, {"t2"}},
+			},
+			{
+				Query:    "update t1 set v = 'resolved_t1' where pk = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "update t2 set v = 'resolved_t2' where pk = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "call dolt_add('t1', 't2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_cherry_pick('--continue');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select * from t1;",
+				Expected: []sql.Row{{1, "resolved_t1"}},
+			},
+			{
+				Query:    "select * from t2;",
+				Expected: []sql.Row{{1, "resolved_t2"}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select commiter, message, date from dolt_log limit 1;",
+				Expected: []sql.Row{{"Branch User <branch@example.com>", "add rows from branch1", "2022-02-01T10:30:00Z"}},
+			},
+		},
+	},
+	{
+		Name: "cherry-pick --continue: mutually exclusive with --abort",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, 'branch1_value');",
+			"call dolt_commit('-am', 'add row from branch1');",
+			"set @commit1 = dolt_hashof('HEAD');",
+			"call dolt_checkout('main');",
+			"insert into t values (1, 'main_value');",
+			"call dolt_commit('-am', 'add row from main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{"", 1, 0, 0}},
+			},
+			{
+				Query:          "call dolt_cherry_pick('--continue', '--abort');",
+				ExpectedErrStr: "error: --continue and --abort are mutually exclusive",
+			},
+			{
+				Query:          "call dolt_cherry_pick('--abort', '--continue');",
+				ExpectedErrStr: "error: --continue and --abort are mutually exclusive",
+			},
 		},
 	},
 }
