@@ -138,7 +138,7 @@ func Sign(ctx context.Context, keyId string, message []byte) ([]byte, error) {
 	return outBuf.Bytes(), nil
 }
 
-// Verify verifies a signature
+// Verify verifies a signature and returns the GPG output (signer info, etc).
 func Verify(ctx context.Context, signature []byte) ([]byte, error) {
 	args := []string{"--verify"}
 	_, errBuf, err := execGpgAndReadOutput(ctx, signature, args)

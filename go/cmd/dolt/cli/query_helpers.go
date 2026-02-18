@@ -71,6 +71,18 @@ func SetSystemVar(queryist Queryist, sqlCtx *sql.Context, newVal bool) (func() e
 	return update, err
 }
 
+// HasSystemVariable checks if a system variable exists on the server. Returns true if the variable exists, false if it
+// doesn't, and an error if the query fails.
+func HasSystemVariable(queryist Queryist, sqlCtx *sql.Context, varName string) (bool, error) {
+	query := fmt.Sprintf("SHOW VARIABLES WHERE VARIABLE_NAME='%s'", varName)
+	rows, err := GetRowsForSql(queryist, sqlCtx, query)
+	if err != nil {
+		return false, err
+	}
+
+	return len(rows) > 0, nil
+}
+
 func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
 	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {

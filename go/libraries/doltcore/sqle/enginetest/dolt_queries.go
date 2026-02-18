@@ -2410,8 +2410,8 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select de, fr, commit_hash=@commit1, commit_hash=@commit2, commit_hash=@commit3, commit_hash=@commit4" +
-					" from dolt_history_T1 where n=2 order by commit_date",
+				Query: "select de, fr, h.commit_hash=@commit1, h.commit_hash=@commit2, h.commit_hash=@commit3, h.commit_hash=@commit4" +
+					" from dolt_history_T1 h join dolt_log l on h.commit_hash = l.commit_hash where n=2 order by l.author_date",
 				Expected: []sql.Row{
 					{"Zwei", nil, true, false, false, false},
 					{"Zwei", nil, false, true, false, false},
@@ -5074,8 +5074,8 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t"}},
 			},
 			{
-				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('new-branch') limit 1;",
-				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t again"}},
+				Query:    "SELECT commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('new-branch') limit 1;",
+				Expected: []sql.Row{{true, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t again"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit1, committer, email, message from dolt_log(@Commit1) limit 1;",
@@ -5115,39 +5115,39 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		*/
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('^main', 'new-branch');",
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('^main', 'new-branch');",
 				Expected: []sql.Row{
-					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
-				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('main..new-branch');",
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('main..new-branch');",
 				Expected: []sql.Row{
-					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
-				Query: "SELECT commit_hash = @Commit5, commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('main...new-branch');",
+				Query: "SELECT commit_hash = @Commit5, commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('main...new-branch');",
 				Expected: []sql.Row{
-					{true, false, false, "root", "root@localhost", "inserting into t 5"},
-					{false, true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, false, "root", "root@localhost", "root", "root@localhost", "inserting into t 5"},
+					{false, true, false, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, false, true, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
-				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '--not', 'main');",
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('new-branch', '--not', 'main');",
 				Expected: []sql.Row{
-					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
-				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '^main');",
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('new-branch', '^main');",
 				Expected: []sql.Row{
-					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
@@ -5167,12 +5167,12 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
-				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('^main', @Commit3);",
-				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
+				Query:    "SELECT commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('^main', @Commit3);",
+				Expected: []sql.Row{{true, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 3"}},
 			},
 			{
-				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log(@Commit3, '--not', @Commit2);",
-				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
+				Query:    "SELECT commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log(@Commit3, '--not', @Commit2);",
+				Expected: []sql.Row{{true, "root", "root@localhost", "John Doe", "johndoe@example.com", "inserting into t 3"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^new-branch', @Commit5);",
@@ -5478,6 +5478,9 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 					{"date", "datetime(3)", "NO", "", nil, ""},
 					{"message", "text", "NO", "", nil, ""},
 					{"commit_order", "bigint unsigned", "NO", "", nil, ""},
+					{"author", "text", "NO", "", nil, ""},
+					{"author_email", "text", "NO", "", nil, ""},
+					{"author_date", "datetime", "NO", "", nil, ""},
 				},
 			},
 			{

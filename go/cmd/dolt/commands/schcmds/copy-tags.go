@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -276,22 +275,14 @@ func doltCommitUpdatedTags(ctx *sql.Context, tableResolver doltdb.TableResolver,
 	workingSet = workingSet.WithWorkingRoot(workingRoot)
 	workingSet = workingSet.WithStagedRoot(workingRoot)
 
-	email, err := dEnv.Config.GetString(config.UserEmailKey)
-	if err != nil {
-		return err
-	}
-
-	name, err := dEnv.Config.GetString(config.UserNameKey)
-	if err != nil {
-		return err
-	}
-
 	doltDB := dEnv.DoltDB(ctx)
-	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, workingSet, nil, doltDB, actions.CommitStagedProps{
-		Name:    name,
-		Email:   email,
-		Message: "Syncing column tags from " + fromBranchName + " branch",
-	})
+	dSess := dsess.DSessFromSess(ctx.Session)
+	commitStagedProps, err := dSess.NewCommitStagedProps(ctx, "Syncing column tags from "+fromBranchName+" branch", dsess.FallbackToDoltConfig)
+	if err != nil {
+		return err
+	}
+
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, workingSet, nil, doltDB, commitStagedProps)
 	if err != nil {
 		return err
 	}
@@ -306,8 +297,8 @@ func doltCommitUpdatedTags(ctx *sql.Context, tableResolver doltdb.TableResolver,
 	}
 
 	_, err = doltDB.CommitWithWorkingSet(ctx, headRef, workingSet.Ref(), pendingCommit, workingSet, prevHash, &datas.WorkingSetMeta{
-		Name:  name,
-		Email: email,
+		Name:  commitStagedProps.Name,
+		Email: commitStagedProps.Email,
 	}, nil)
 	return err
 }

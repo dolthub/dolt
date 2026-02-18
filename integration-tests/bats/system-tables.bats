@@ -1232,3 +1232,46 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt_status_ignored" ]] || false
 }
+
+assert_committer_only() {
+  local output="$1"
+  [[ ! "$output" =~ ,author, ]] || false
+  [[ ! "$output" =~ ,author_email, ]] || false
+  [[ ! "$output" =~ ,author_date ]] || false
+  [[ "$output" =~ ,committer, ]] || false
+  [[ "$output" =~ ,email, ]] || false
+}
+
+assert_dolt_log() {
+  local output="$1"
+  [[ "$output" =~ ,author, ]] || false
+  [[ "$output" =~ ,author_email, ]] || false
+  [[ "$output" =~ ,author_date ]] || false
+  [[ "$output" =~ ,committer, ]] || false
+  [[ "$output" =~ ,email, ]] || false
+}
+
+@test "system-tables: dolt_log_committer_only session variable controls author columns" {
+  dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+  dolt add test
+  dolt commit -m "Initial commit"
+
+  dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
+  dolt sql -q "CALL DOLT_ADD('test2')"
+  dolt sql -q "CALL DOLT_COMMIT('--author', 'Test Author <author@test.com>', '-m', 'Commit with different author and committer')"
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
+  [ "$status" -eq 0 ]
+  assert_committer_only "$output"
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
+  [ "$status" -eq 0 ]
+  assert_dolt_log "$output"
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
+  assert_committer_only "$output"
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
+  [ $status -eq 0 ]
+  assert_dolt_log "$output"
+}

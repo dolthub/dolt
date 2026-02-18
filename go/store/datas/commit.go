@@ -179,6 +179,18 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 		sigoff = builder.CreateString(opts.Meta.Signature)
 	}
 
+	// Author and committer data is normalized in commit meta constructor, i.e. author name and email is used for
+	// committer if not provided. Optional build prevents incompatible hash values with older versions.
+	var committerNameOff flatbuffers.UOffsetT
+	if opts.Meta.CommitterName != opts.Meta.Name {
+		committerNameOff = builder.CreateString(opts.Meta.CommitterName)
+	}
+
+	var committerEmailOff flatbuffers.UOffsetT
+	if opts.Meta.CommitterEmail != opts.Meta.Email {
+		committerEmailOff = builder.CreateString(opts.Meta.CommitterEmail)
+	}
+
 	serial.CommitStart(builder)
 	serial.CommitAddRoot(builder, vaddroff)
 	serial.CommitAddHeight(builder, maxheight+1)
@@ -187,9 +199,11 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddName(builder, nameoff)
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
-	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
-	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
+	serial.CommitAddTimestampMillis(builder, *opts.Meta.Timestamp)
+	serial.CommitAddUserTimestampMillis(builder, *opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
+	serial.CommitAddCommitterName(builder, committerNameOff)
+	serial.CommitAddCommitterEmail(builder, committerEmailOff)
 
 	bytes := serial.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
 	return bytes, maxheight + 1
@@ -204,6 +218,33 @@ var commitValueTupleDesc = val.NewTupleDescriptor()
 func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
+		// Noms testing relies on deterministic values when [datas.CommitMeta] is not provided.
+		committerDate := uint64(0)
+		opts.Meta.Timestamp = &committerDate
+	}
+
+	if opts.Meta.Timestamp == nil {
+		committerTimestamp := uint64(CommitterDate().UnixMilli())
+		opts.Meta.Timestamp = &committerTimestamp
+	}
+
+	if opts.Meta.UserTimestamp == nil {
+		authorTimestamp := int64(*opts.Meta.Timestamp)
+		opts.Meta.UserTimestamp = &authorTimestamp
+	}
+
+	if opts.Signing != nil && opts.Signing.Key != "" && opts.Signing.SignFunc != nil {
+		payload := SignaturePayloadV2(
+			opts.Signing.DBName,
+			opts.Meta,
+			opts.Signing.HeadHash.String(),
+			opts.Signing.StagedHash.String(),
+		)
+		sig, err := opts.Signing.SignFunc(ctx, opts.Signing.Key, []byte(payload))
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign commit: %w", err)
+		}
+		opts.Meta.Signature = string(sig)
 	}
 
 	if vrw.Format().UsesFlatbuffers() {
@@ -228,6 +269,7 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 		if err != nil {
 			return nil, err
 		}
+
 		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights, parentClosureAddr)
 		v := types.SerialMessage(bs)
 		addr, err := v.Hash(vrw.Format())
@@ -574,18 +616,29 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		if serial.GetFileID(data) != serial.CommitFileID {
 			return nil, errors.New("GetCommitMeta: provided value is not a commit.")
 		}
-		var cmsg serial.Commit
-		err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
+		var serializedCommit serial.Commit
+		err := serial.InitCommitRoot(&serializedCommit, data, serial.MessagePrefixSz)
 		if err != nil {
 			return nil, err
 		}
 		ret := &CommitMeta{}
-		ret.Name = string(cmsg.Name())
-		ret.Email = string(cmsg.Email())
-		ret.Description = string(cmsg.Description())
-		ret.Timestamp = cmsg.TimestampMillis()
-		ret.UserTimestamp = cmsg.UserTimestampMillis()
-		ret.Signature = string(cmsg.Signature())
+		ret.Name = string(serializedCommit.Name())
+		ret.Email = string(serializedCommit.Email())
+		ret.Description = string(serializedCommit.Description())
+		committerDate := serializedCommit.TimestampMillis()
+		ret.Timestamp = &committerDate
+		authorDate := serializedCommit.UserTimestampMillis()
+		ret.UserTimestamp = &authorDate
+		ret.Signature = string(serializedCommit.Signature())
+		ret.CommitterName = ret.Name
+		if commiterNameBytes := serializedCommit.CommitterName(); commiterNameBytes != nil {
+			ret.CommitterName = string(commiterNameBytes)
+		}
+		ret.CommitterEmail = ret.Email
+		if committerEmailBytes := serializedCommit.CommitterEmail(); committerEmailBytes != nil {
+			ret.CommitterEmail = string(committerEmailBytes)
+		}
+
 		return ret, nil
 	}
 	c, ok := cv.(types.Struct)

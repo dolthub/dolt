@@ -63,7 +63,19 @@ var MinRowsPerPartition uint64 = 1024
 
 func init() {
 	isTest := false
+	// Check if binary name indicates we're running tests
+	if len(os.Args) > 0 {
+		binName := strings.ToLower(os.Args[0])
+		if strings.Contains(binName, "test") || strings.HasSuffix(binName, ".test") {
+			isTest = true
+		}
+	}
+
 	for _, arg := range os.Args {
+		if isTest {
+			break
+		}
+
 		lwr := strings.ToLower(arg)
 		if lwr == "-test.v" ||
 			lwr == "-test.run" ||
@@ -71,7 +83,6 @@ func init() {
 			strings.HasPrefix(lwr, "-test.timeout") ||
 			strings.HasPrefix(lwr, "-test.count") {
 			isTest = true
-			break
 		}
 	}
 
