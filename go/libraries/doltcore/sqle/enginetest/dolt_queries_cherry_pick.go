@@ -17,6 +17,8 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 var DoltCherryPickTests = []queries.ScriptTest{
@@ -609,12 +611,16 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1');",
 			"insert into t values (1, 'branch1_value');",
 			"call dolt_commit('-am', 'add row from branch1', '--author', 'Test User <test@example.com>', '--date', '2022-01-01T12:00:00');",
-			"set @commit1 = dolt_dolt_hashof('HEAD');",
+			"set @commit1 = dolt_hashof('HEAD');",
 			"call dolt_checkout('main');",
 			"insert into t values (1, 'main_value');",
 			"call dolt_commit('-am', 'add row from main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "set @@dolt_allow_commit_conflicts = 1;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
 				Expected: []sql.Row{{"", 1, 0, 0}},
@@ -654,7 +660,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "resolved_value"}},
 			},
 			{
-				Query:    "select commiter, message, date from dolt_log limit 1;",
+				Query:    "select committer, message, date from dolt_log limit 1;",
 				Expected: []sql.Row{{"Test User <test@example.com>", "add row from branch1", "2022-01-01T12:00:00Z"}},
 			},
 		},
@@ -695,6 +701,10 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "set @@dolt_allow_commit_conflicts = 1;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
+			{
 				Query:    "call dolt_cherry_pick(@commit1);",
 				Expected: []sql.Row{{"", 2, 0, 0}},
 			},
@@ -731,7 +741,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select commiter, message, date from dolt_log limit 1;",
+				Query:    "select committer, message, date from dolt_log limit 1;",
 				Expected: []sql.Row{{"Branch User <branch@example.com>", "add rows from branch1", "2022-02-01T10:30:00Z"}},
 			},
 		},
@@ -750,6 +760,10 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_commit('-am', 'add row from main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "set @@dolt_allow_commit_conflicts = 1;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
 				Expected: []sql.Row{{"", 1, 0, 0}},
