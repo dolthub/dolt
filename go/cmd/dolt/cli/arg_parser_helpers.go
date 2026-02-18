@@ -193,6 +193,7 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 func CreateCherryPickArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("cherrypick", 1)
 	ap.SupportsFlag(AbortParam, "", "Abort the current conflict resolution process, and revert all changes from the in-process cherry-pick operation.")
+	ap.SupportsFlag(ContinueFlag, "", "Continue the current cherry-pick operation after conflicts have been resolved.")
 	ap.SupportsFlag(AllowEmptyFlag, "", "Allow empty commits to be cherry-picked. "+
 		"Note that use of this option only keeps commits that were initially empty. "+
 		"Commits which become empty, due to a previous commit, will cause cherry-pick to fail.")

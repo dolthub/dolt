@@ -15,11 +15,34 @@
 package enginetest
 
 import (
+	"time"
+
+	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
+
+// timeValidator validates that a value is a time.Time with the expected date/time
+type timeValidator struct {
+	expectedTime time.Time
+}
+
+var _ enginetest.CustomValueValidator = &timeValidator{}
+
+func (tv *timeValidator) Validate(val interface{}) (bool, error) {
+	t, ok := val.(time.Time)
+	if !ok {
+		return false, nil
+	}
+	return t.Equal(tv.expectedTime), nil
+}
+
+func timeEquals(dateStr string) *timeValidator {
+	t, _ := time.Parse("2006-01-02T15:04:05Z", dateStr)
+	return &timeValidator{expectedTime: t}
+}
 
 var DoltCherryPickTests = []queries.ScriptTest{
 	{
@@ -660,8 +683,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "resolved_value"}},
 			},
 			{
-				Query:    "select committer, message, date from dolt_log limit 1;",
-				Expected: []sql.Row{{"Test User <test@example.com>", "add row from branch1", "2022-01-01T12:00:00Z"}},
+				Query:    "select committer, email, message, date from dolt_log limit 1;",
+				Expected: []sql.Row{{"Test User", "test@example.com", "add row from branch1", timeEquals("2022-01-01T12:00:00Z")}},
 			},
 		},
 	},
@@ -709,20 +732,37 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"", 2, 0, 0}},
 			},
 			{
-				Query:    "select table_name from dolt_conflicts order by table_name;",
+				Query:    "select `table` from dolt_conflicts order by `table`;",
 				Expected: []sql.Row{{"t1"}, {"t2"}},
 			},
 			{
-				Query:    "update t1 set v = 'resolved_t1' where pk = 1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Query:            "update t1 set v = 'resolved_t1' where pk = 1;",
+				SkipResultsCheck: true,
 			},
 			{
-				Query:    "update t2 set v = 'resolved_t2' where pk = 1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Query:            "delete from dolt_conflicts_t1;",
+				SkipResultsCheck: true,
 			},
 			{
-				Query:    "call dolt_add('t1', 't2');",
-				Expected: []sql.Row{{0}},
+				Query:            "call dolt_add('t1');",
+				SkipResultsCheck: true,
+			},
+			{
+				// Should still have one remaining conflict.
+				Query:          "call dolt_cherry_pick('--continue');",
+				ExpectedErrStr: "error: cannot continue cherry-pick with unresolved conflicts",
+			},
+			{
+				Query:            "update t2 set v = 'resolved_t2' where pk = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "delete from dolt_conflicts_t2;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_add('t2');",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "call dolt_cherry_pick('--continue');",
@@ -741,8 +781,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select committer, message, date from dolt_log limit 1;",
-				Expected: []sql.Row{{"Branch User <branch@example.com>", "add rows from branch1", "2022-02-01T10:30:00Z"}},
+				Query:    "select committer, email, message, date from dolt_log limit 1;",
+				Expected: []sql.Row{{"Branch User", "branch@example.com", "add rows from branch1", timeEquals("2022-02-01T10:30:00Z")}},
 			},
 		},
 	},

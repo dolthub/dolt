@@ -231,6 +231,98 @@ func AbortCherryPick(ctx *sql.Context, dbName string) error {
 	return doltSession.SetWorkingSet(ctx, dbName, newWs)
 }
 
+// ContinueCherryPick continues a cherry-pick merge that was paused due to conflicts.
+// It checks that conflicts have been resolved and creates the final commit with the
+// original commit's metadata.
+func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int, error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+
+	ws, err := doltSession.WorkingSet(ctx, dbName)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("fatal: unable to load working set: %w", err)
+	}
+
+	if !ws.MergeActive() {
+		return "", 0, 0, 0, fmt.Errorf("error: There is no cherry-pick merge to continue")
+	}
+	mergeState := ws.MergeState()
+
+	// Check if there are any unresolved conflicts
+	hasConflicts, err := doltdb.HasConflicts(ctx, ws.WorkingRoot())
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: unable to check for conflicts: %w", err)
+	}
+	if hasConflicts {
+		return "", 0, 0, 0, fmt.Errorf("error: cannot continue cherry-pick with unresolved conflicts")
+	}
+
+	// Check if there are unstaged changes (working != staged)
+	stagedRoot := ws.StagedRoot()
+	workingRoot := ws.WorkingRoot()
+
+	isClean, err := rootsEqual(stagedRoot, workingRoot)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: unable to compare staged and working roots: %w", err)
+	}
+	if !isClean {
+		return "", 0, 0, 0, fmt.Errorf("error: cannot continue cherry-pick with unstaged changes")
+	}
+
+	// Get the original commit metadata from the merge state
+	cherryCommit := mergeState.Commit()
+	if cherryCommit == nil {
+		return "", 0, 0, 0, fmt.Errorf("error: unable to get original commit from merge state")
+	}
+
+	cherryCommitMeta, err := cherryCommit.GetCommitMeta(ctx)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: unable to get commit metadata: %w", err)
+	}
+
+	// Create the commit with the original commit's metadata
+	commitProps := actions.CommitStagedProps{
+		Message:    cherryCommitMeta.Description,
+		Date:       cherryCommitMeta.Time(),
+		AllowEmpty: false,
+		Name:       cherryCommitMeta.Name,
+		Email:      cherryCommitMeta.Email,
+	}
+
+	// Get the roots from the working set for creating the commit
+	roots, ok := doltSession.GetRoots(ctx, dbName)
+	if !ok {
+		return "", 0, 0, 0, fmt.Errorf("fatal: unable to load roots for %s", dbName)
+	}
+
+	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: failed to create pending commit: %w", err)
+	}
+	if pendingCommit == nil {
+		return "", 0, 0, 0, fmt.Errorf("error: no changes to commit")
+	}
+
+	// Clear the merge state from the working set before committing
+	// This ensures DoltCommit sees a clean working set
+	clearedWs := ws.ClearMerge()
+	err = doltSession.SetWorkingSet(ctx, dbName, clearedWs)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: failed to clear merge state: %w", err)
+	}
+
+	commit, err := doltSession.DoltCommit(ctx, dbName, doltSession.GetTransaction(), pendingCommit)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: failed to execute commit: %w", err)
+	}
+
+	commitHash, err := commit.HashOf()
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: failed to get commit hash: %w", err)
+	}
+
+	return commitHash.String(), 0, 0, 0, nil
+}
+
 // cherryPick checks that the current working set is clean, verifies the cherry-pick commit is not a merge commit
 // or a commit without parent commit, performs merge and returns the new working set root value and
 // the commit message of cherry-picked commit as the commit message of the new commit created during this command.
