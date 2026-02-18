@@ -134,8 +134,8 @@ var RevertScripts = []queries.ScriptTest{
 				ExpectedErrStr: "table not found: dont_track",
 			},
 			{
-				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"dont_track", byte(0), "new table"}},
+				Query:    "select * from dolt_status_ignored",
+				Expected: []sql.Row{{"dont_track", byte(0), "new table", true}},
 			},
 		},
 	},
