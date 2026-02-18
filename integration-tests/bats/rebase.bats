@@ -401,6 +401,59 @@ message"
     ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
 }
 
+@test "rebase: rebase with data conflict non-interactive" {
+  dolt checkout b1
+  dolt sql -q "INSERT INTO t1 VALUES (1,23);"
+  dolt commit -am "b1 commit 2"
+
+  run dolt rebase main
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+  [[ "$output" =~ "b1 commit 2" ]] || false
+
+
+  # Assert that we are on the rebase working branch (not the branch being rebased)
+  run dolt sql -q "select active_branch();"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+  # Verify conflicts tables look right.
+  run dolt sql -r csv -q "select * from dolt_conflicts;"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "t1,1" ]] || false
+  [ "${#lines[@]}" -eq 2 ]
+
+  run dolt sql -r csv -q "select our_c,their_c from dolt_conflicts_t1"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "1,23" ]] || false
+  [ "${#lines[@]}" -eq 2 ]
+
+  # We'll put in a new value and delete the conflict to move forward.
+  dolt sql -q "delete from dolt_conflicts_t1;"
+  dolt sql -q "update t1 set c = 42 where pk = 1;"
+  dolt add t1
+
+  run dolt rebase --continue
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+  run dolt sql -q "select c from t1 where pk = 1;"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "42" ]] || false
+
+  # Assert that we are on the original branch and the rebase branch is gone
+  run dolt sql -q "select active_branch();"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "b1" ]] || false
+
+  run dolt branch -a
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 2 ]
+  [[ "$output" =~ "b1" ]] || false
+  [[ "$output" =~ "main" ]] || false
+}
+
+
 @test "rebase: rebase with multiple data conflicts" {
     setupCustomEditorScript
     dolt sql -q "INSERT INTO t1 VALUES (2,200);"
