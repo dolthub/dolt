@@ -104,6 +104,7 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	commands.ConfigCmd{},
 	ci.Commands,
 	commands.DebugCmd{},
+	commands.TransferCmd{},
 }
 
 // commands that do not need write access for the current directory
@@ -119,6 +120,13 @@ var commandsWithoutCurrentDirWrites = []cli.Command{
 // on terms that make sense for their purpose.
 var commandsSkippingDBLoad = []cli.Command{
 	commands.FsckCmd{},
+}
+
+// commands that use stdio directly and must not have it redirected to a temp file.
+// These commands communicate over stdin/stdout (e.g., gRPC multiplexing) and would
+// break if dolt's normal IO redirection is applied.
+var commandsSkippingIORedirect = []cli.Command{
+	commands.TransferCmd{},
 }
 
 func initCliContext(commandName string) bool {
@@ -150,6 +158,15 @@ func needsWriteAccess(commandName string) bool {
 
 func needsDBLoad(commandName string) bool {
 	for _, command := range commandsSkippingDBLoad {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
+func needsIORedirect(commandName string) bool {
+	for _, command := range commandsSkippingIORedirect {
 		if command.Name() == commandName {
 			return false
 		}
@@ -417,8 +434,17 @@ func runMain() int {
 
 	seedGlobalRand()
 
-	restoreIO := cli.InitIO()
-	defer restoreIO()
+	// Peek at the subcommand name to determine if IO redirect is needed.
+	// At this point debug flags have been consumed, so args[0] is the subcommand.
+	subCmd := ""
+	if len(args) > 0 {
+		subCmd = args[0]
+	}
+
+	if needsIORedirect(subCmd) {
+		restoreIO := cli.InitIO()
+		defer restoreIO()
+	}
 
 	warnIfMaxFilesTooLow()
 
