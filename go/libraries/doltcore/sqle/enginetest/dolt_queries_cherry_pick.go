@@ -659,8 +659,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:          "call dolt_cherry_pick('--continue');",
-				ExpectedErrStr: "error: cannot continue cherry-pick with unresolved conflicts",
+				Query:    "call dolt_cherry_pick('--continue');",
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:            "delete from dolt_conflicts_t",
@@ -748,9 +748,9 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				// Should still have one remaining conflict.
-				Query:          "call dolt_cherry_pick('--continue');",
-				ExpectedErrStr: "error: cannot continue cherry-pick with unresolved conflicts",
+				// Should still have one remaining conflict in t2.
+				Query:    "call dolt_cherry_pick('--continue');",
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:            "update t2 set v = 'resolved_t2' where pk = 1;",

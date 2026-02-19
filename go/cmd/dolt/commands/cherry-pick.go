@@ -256,7 +256,31 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	if len(rows) != 1 {
 		return fmt.Errorf("error: unexpected number of rows returned from dolt_cherry_pick: %d", len(rows))
 	}
+	if len(rows[0]) != 4 {
+		return fmt.Errorf("error: unexpected number of columns returned from dolt_cherry_pick: %d", len(rows[0]))
+	}
+
 	row := rows[0]
+
+	// We expect to get an error if there were problems, but we also could get any of the conflicts and
+	// vacation counts being greater than 0 if there were problems. If we got here without an error,
+	// but we have conflicts or violations, we should report and stop.
+	dataConflicts, err := getInt64ColAsInt64(row[1])
+	if err != nil {
+		return fmt.Errorf("Unable to parse data_conflicts column: %w", err)
+	}
+	schemaConflicts, err := getInt64ColAsInt64(row[2])
+	if err != nil {
+		return fmt.Errorf("Unable to parse schema_conflicts column: %w", err)
+	}
+	constraintViolations, err := getInt64ColAsInt64(row[3])
+	if err != nil {
+		return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
+	}
+	if dataConflicts > 0 || schemaConflicts > 0 || constraintViolations > 0 {
+		return ErrCherryPickConflictsOrViolations.New()
+	}
+
 	commitHash := fmt.Sprintf("%v", row[0])
 
 	commit, err := getCommitInfo(sqlCtx, queryist, commitHash)

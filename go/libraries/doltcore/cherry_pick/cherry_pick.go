@@ -247,18 +247,31 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 	}
 	mergeState := ws.MergeState()
 
-	// Check if there are any unresolved conflicts
-	hasConflicts, err := doltdb.HasConflicts(ctx, ws.WorkingRoot())
+	// Count conflicts and violations similar to the first pass
+	workingRoot := ws.WorkingRoot()
+	stagedRoot := ws.StagedRoot()
+
+	// Count data conflicts
+	conflictTables, err := doltdb.TablesWithDataConflicts(ctx, workingRoot)
 	if err != nil {
 		return "", 0, 0, 0, fmt.Errorf("error: unable to check for conflicts: %w", err)
 	}
-	if hasConflicts {
-		return "", 0, 0, 0, fmt.Errorf("error: cannot continue cherry-pick with unresolved conflicts")
-	}
+	dataConflictCount := len(conflictTables)
 
-	// Check if there are unstaged changes (working != staged)
-	stagedRoot := ws.StagedRoot()
-	workingRoot := ws.WorkingRoot()
+	// Count schema conflicts from merge state
+	schemaConflictCount := len(mergeState.TablesWithSchemaConflicts())
+
+	// Count constraint violations
+	violationTables, err := doltdb.TablesWithConstraintViolations(ctx, workingRoot)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: unable to check for constraint violations: %w", err)
+	}
+	constraintViolationCount := len(violationTables)
+
+	// If there are any conflicts or violations, return the counts with an error
+	if dataConflictCount > 0 || schemaConflictCount > 0 || constraintViolationCount > 0 {
+		return "", dataConflictCount, schemaConflictCount, constraintViolationCount, nil
+	}
 
 	// This is a little strict. Technically, you could use the dolt_workspace table to stage something
 	// and result in different roots, but this seems like the right thing to do after a merge conflict resolution step.

@@ -728,6 +728,6 @@ teardown() {
     # Try to continue without resolving conflicts
     run dolt cherry-pick --continue
     [ $status -eq 1 ]
-    [[ $output =~ "cannot continue cherry-pick with unresolved conflicts" ]] || false
+    [[ $output =~ "Unable to apply commit cleanly due to conflicts" ]] || false
     
 }
