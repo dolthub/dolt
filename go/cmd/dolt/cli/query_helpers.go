@@ -72,17 +72,17 @@ func SetSystemVar(queryist Queryist, sqlCtx *sql.Context, newVal bool) (func() e
 	return update, err
 }
 
-// GetSystemVariableValues returns a map of lower-case variable names to values for all variables that exist on the
-// connected server. Variables missing from the result map are not supported by that server version.
-func GetSystemVariableValues(queryist Queryist, sqlCtx *sql.Context, variableNames ...string) (values map[string]string, err error) {
-	values = make(map[string]string, len(variableNames))
+// GetSystemVariableValues returns a map of lower-case variable names to values for all system variables that exist on
+// the connected server. Any missing system variables from the result map are not supported by that server version.
+func GetSystemVariableValues(sqlCtx *sql.Context, queryist Queryist, systemVariables ...string) (values map[string]string, err error) {
+	values = make(map[string]string, len(systemVariables))
 	var queryBuilder strings.Builder
 	queryBuilder.WriteString("SHOW VARIABLES WHERE VARIABLE_NAME IN (")
-	for i, variableName := range variableNames {
+	for i, variableName := range systemVariables {
 		queryBuilder.WriteRune('\'')
 		queryBuilder.WriteString(variableName)
 		queryBuilder.WriteRune('\'')
-		if i != len(variableNames)-1 {
+		if i != len(systemVariables)-1 {
 			queryBuilder.WriteRune(',')
 		}
 	}
@@ -121,6 +121,7 @@ func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.
 	return rows, nil
 }
 
+// GetStringColumnValue returns column values from [sql.Row] as a string.
 func GetStringColumnValue(value any) (str string, err error) {
 	if value == nil {
 		return "", nil
@@ -136,4 +137,35 @@ func GetStringColumnValue(value any) (str string, err error) {
 	default:
 		return "", fmt.Errorf("unexpected type %T, expected string-like column value", value)
 	}
+}
+
+// GetBoolColumnValue returns the value of the input as a bool. This is required because depending on if we go over the
+// wire or not we may get a string or a bool when we expect a bool.
+func GetBoolColumnValue(col interface{}) (bool, error) {
+	switch v := col.(type) {
+	case bool:
+		return col.(bool), nil
+	case string:
+		return strings.EqualFold(col.(string), "true") || strings.EqualFold(col.(string), "1"), nil
+	default:
+		return false, fmt.Errorf("unexpected type %T, was expecting bool or string", v)
+	}
+}
+
+// WithQueryWarningsLocked runs queries with a preserved warning buffer. Internal shell queries run on the same SQL
+// session as user queries. Without warning locks, these housekeeping queries can clear or overwrite warnings that users
+// expect.
+func WithQueryWarningsLocked(sqlCtx *sql.Context, queryist Queryist, fn func() error) error {
+	_, _, _, err := queryist.Query(sqlCtx, "set lock_warnings = 1")
+	if err != nil {
+		return err
+	}
+
+	runErr := fn()
+
+	_, _, _, err = queryist.Query(sqlCtx, "set lock_warnings = 0")
+	if err != nil {
+		return err
+	}
+	return runErr
 }

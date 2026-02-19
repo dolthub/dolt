@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli/prompt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -149,13 +150,23 @@ Found a bug? Want additional features? Please let us know! https://github.com/do
 }
 
 func generateHelpPrompt(sqlCtx *sql.Context, qryist cli.Queryist) string {
-	db, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
-	dirty := false
-	if branch != "" {
-		dirty, _ = isDirty(sqlCtx, qryist)
+	resolver := prompt.NewPartsResolver()
+	var parts prompt.Parts
+	var resolved bool
+
+	err := cli.WithQueryWarningsLocked(sqlCtx, qryist, func() error {
+		var err error
+		parts, resolved, err = resolver.Resolve(sqlCtx, qryist)
+		return err
+	})
+	if err != nil {
+		cli.PrintErrln(err.Error())
 	}
-	prompt, _ := formattedPrompts(db, branch, dirty)
-	return prompt
+	if !resolved {
+		return "> "
+	}
+	promptStr, _ := formattedPrompts(parts.BaseDatabase, parts.ActiveRevision, parts.Dirty)
+	return promptStr
 }
 
 func (s SlashHelp) ArgParser() *argparser.ArgParser {
