@@ -818,4 +818,151 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "cherry-pick: constraint violations only (no merge state)",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			// On branch1, insert a value that will violate constraint"
+			"insert into t values (1, 'forbidden');",
+			"call dolt_commit('-am', 'add forbidden value');",
+			"set @commit1 = dolt_hashof('HEAD');",
+			"call dolt_checkout('main');",
+			// Add constraint on main after the branch
+			"alter table t add CONSTRAINT chk_not_forbidden CHECK (v != 'forbidden');",
+			"call dolt_commit('-am', 'add check constraint');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "set @@dolt_allow_commit_conflicts = 1;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
+			{
+				Query:    "set @@dolt_force_transaction_commit = 1;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
+			{
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{"", 0, 0, 1}}, // 1 constraint violation
+			},
+			{
+				Query:    "select violation_type, pk, v from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{"check constraint", 1, "forbidden"}},
+			},
+			{
+				// Try to continue with constraint violations still present
+				Query:    "call dolt_cherry_pick('--continue');",
+				Expected: []sql.Row{{"", 0, 0, 1}},  // Still has constraint violation
+			},
+			{
+				// Fix the violation
+				Query:    "update t set v = 'allowed' where pk = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "delete from dolt_constraint_violations_t;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "call dolt_add('t');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Now continue should succeed and preserve original commit metadata
+				Query:    "call dolt_cherry_pick('--continue');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "allowed"}},
+			},
+		},
+	},
+	{
+		Name: "cherry-pick --continue: with both conflicts and constraint violations",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"insert into t values (1, 'initial');",
+			"call dolt_commit('-Am', 'create table t and row');",
+			"call dolt_checkout('-b', 'branch1');",
+			"-- On branch1, modify existing row and add new row with value that will violate constraint",
+			"update t set v = 'branch1_value' where pk = 1;",
+			"insert into t values (2, 'forbidden');",
+			"call dolt_commit('-am', 'modify row 1 and add row 2 with forbidden value');",
+			"set @commit1 = dolt_hashof('HEAD');",
+			"call dolt_checkout('main');",
+			"-- On main, change row 1 to create conflict and add constraint",
+			"update t set v = 'main_value' where pk = 1;",
+			"alter table t add CONSTRAINT chk_not_forbidden CHECK (v != 'forbidden');",
+			"call dolt_commit('-am', 'main changes and add constraint');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "set @@dolt_allow_commit_conflicts = 1;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
+			{
+				Query:    "set @@dolt_force_transaction_commit = 1;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
+			{
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{"", 1, 0, 1}}, // 1 data conflict, 1 constraint violation
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(1)}},
+			},
+			{
+				Query:    "select violation_type, pk, v from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{"check constraint", 2, "forbidden"}},
+			},
+			{
+				// Try to continue with both conflicts and violations
+				Query:    "call dolt_cherry_pick('--continue');",
+				Expected: []sql.Row{{"", 1, 0, 1}}, // Still has both issues
+			},
+			{
+				// Resolve the conflict
+				Query:            "update t set v = 'resolved_value' where pk = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "delete from dolt_conflicts_t;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_add('t');",
+				SkipResultsCheck: true,
+			},
+			{
+				// Try again - still has constraint violation
+				Query:    "call dolt_cherry_pick('--continue');",
+				Expected: []sql.Row{{"", 0, 0, 1}}, // Only constraint violation remains
+			},
+			{
+				// Fix the constraint violation
+				Query:            "delete from t where pk = 2;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "delete from dolt_constraint_violations_t;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_add('t');",
+				SkipResultsCheck: true,
+			},
+			{
+				// Now continue should succeed
+				Query:    "call dolt_cherry_pick('--continue');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "resolved_value"}},
+			},
+		},
+	},
 }

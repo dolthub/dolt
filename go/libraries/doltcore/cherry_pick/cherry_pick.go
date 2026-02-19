@@ -474,19 +474,32 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 
 	// If any of the merge stats show a data or schema conflict or a constraint
 	// violation, record that a merge is in progress.
+	hasArtifacts := false
 	for _, stats := range result.Stats {
 		if stats.HasArtifacts() {
-			ws, err := dSess.WorkingSet(ctx, dbName)
-			if err != nil {
-				return nil, "", nil, err
-			}
-			newWorkingSet := ws.StartCherryPick(cherryCommit, cherryStr)
-			err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
-			if err != nil {
-				return nil, "", nil, err
-			}
-
+			hasArtifacts = true
 			break
+		}
+	}
+	
+	// Also check if there are any constraint violations in the result root
+	// This handles the case where violations weren't tracked in stats
+	if !hasArtifacts && result.Root != nil {
+		violationTables, err := doltdb.TablesWithConstraintViolations(ctx, result.Root)
+		if err == nil && len(violationTables) > 0 {
+			hasArtifacts = true
+		}
+	}
+	
+	if hasArtifacts {
+		ws, err := dSess.WorkingSet(ctx, dbName)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		newWorkingSet := ws.StartCherryPick(cherryCommit, cherryStr)
+		err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
+		if err != nil {
+			return nil, "", nil, err
 		}
 	}
 
