@@ -7225,7 +7225,6 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 	},
 }
 
-
 var DoltCommitTests = []queries.ScriptTest{
 	{
 		Name: "CALL DOLT_COMMIT('-ALL') adds all tables (including new ones) to the commit.",
