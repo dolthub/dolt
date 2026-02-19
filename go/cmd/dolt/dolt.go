@@ -435,10 +435,19 @@ func runMain() int {
 	seedGlobalRand()
 
 	// Peek at the subcommand name to determine if IO redirect is needed.
-	// At this point debug flags have been consumed, so args[0] is the subcommand.
+	// At this point debug flags have been consumed, but global args like
+	// --data-dir may precede the subcommand. Scan for the first non-flag arg.
 	subCmd := ""
-	if len(args) > 0 {
-		subCmd = args[0]
+	for i := 0; i < len(args); i++ {
+		if strings.HasPrefix(args[i], "-") {
+			// Skip the flag's value if it's a --key value style flag
+			if i+1 < len(args) && !strings.Contains(args[i], "=") {
+				i++
+			}
+			continue
+		}
+		subCmd = args[i]
+		break
 	}
 
 	if needsIORedirect(subCmd) {
