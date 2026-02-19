@@ -128,7 +128,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	commit, err := getCommitInfo(queryist.Queryist, queryist.Context, "HEAD")
+	commit, err := getCommitInfo(queryist.Context, queryist.Queryist, "HEAD")
 	if err != nil {
 		cli.Printf("Revert completed, but failure to get commit details occurred: %s\n", err.Error())
 		return 1

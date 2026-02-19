@@ -182,7 +182,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			if remoteHash != "" && headHash != "" {
 				cli.Println("Updating", headHash+".."+remoteHash)
 			}
-			commit, err := getCommitInfo(queryist.Queryist, queryist.Context, "HEAD")
+			commit, err := getCommitInfo(queryist.Context, queryist.Queryist, "HEAD")
 			if err != nil {
 				cli.Println("pull finished, but failed to get commit info")
 				cli.Println(err.Error())

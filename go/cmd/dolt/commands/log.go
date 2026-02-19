@@ -302,7 +302,7 @@ func logCommits(apr *argparser.ArgParseResults, commitHashes []sql.Row, queryist
 	var commitsInfo []CommitInfo
 	for _, hash := range commitHashes {
 		cmHash := hash[0].(string)
-		commit, err := getCommitInfoWithOptions(queryist, sqlCtx, cmHash, opts)
+		commit, err := getCommitInfoWithOptions(sqlCtx, queryist, cmHash, opts)
 		if commit == nil {
 			return fmt.Errorf("no commits found for ref %s", cmHash)
 		}

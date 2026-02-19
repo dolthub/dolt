@@ -212,7 +212,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 
 	if succeeded {
 		// on success, print the commit info
-		commit, err := getCommitInfo(queryist, sqlCtx, commitHash)
+		commit, err := getCommitInfo(sqlCtx, queryist, commitHash)
 		if commit == nil || err != nil {
 			return fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitHash, err)
 		}
@@ -256,22 +256,10 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	if len(rows) != 1 {
 		return fmt.Errorf("error: unexpected number of rows returned from dolt_cherry_pick: %d", len(rows))
 	}
+	row := rows[0]
+	commitHash := fmt.Sprintf("%v", row[0])
 
-	// Get the commit hash from the result
-	commitHash := ""
-	for _, row := range rows {
-		var ok bool
-		commitHash, ok, err = sql.Unwrap[string](sqlCtx, row[0])
-		if err != nil {
-			return fmt.Errorf("Unable to parse commitHash column: %w", err)
-		}
-		if !ok {
-			return fmt.Errorf("Unexpected type for commitHash column, expected string, found %T", row[0])
-		}
-	}
-
-	// Print the commit info on successful continue
-	commit, err := getCommitInfo(queryist, sqlCtx, commitHash)
+	commit, err := getCommitInfo(sqlCtx, queryist, commitHash)
 	if commit == nil || err != nil {
 		return fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitHash, err)
 	}
