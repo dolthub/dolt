@@ -96,6 +96,12 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return 1
 	}
 
+	// Check for mutually exclusive flags
+	if apr.Contains(cli.AbortParam) && apr.Contains(cli.ContinueFlag) {
+		err = fmt.Errorf("error: --continue and --abort are mutually exclusive")
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	if apr.Contains(cli.AbortParam) {
 		err = cherryPickAbort(queryist.Context, queryist.Queryist)
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
