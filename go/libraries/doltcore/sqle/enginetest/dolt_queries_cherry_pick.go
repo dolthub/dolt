@@ -853,7 +853,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				// Try to continue with constraint violations still present
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{"", 0, 0, 1}},  // Still has constraint violation
+				Expected: []sql.Row{{"", 0, 0, 1}}, // Still has constraint violation
 			},
 			{
 				// Fix the violation

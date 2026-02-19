@@ -481,7 +481,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 			break
 		}
 	}
-	
+
 	// Also check if there are any constraint violations in the result root
 	// This handles the case where violations weren't tracked in stats
 	if !hasArtifacts && result.Root != nil {
@@ -490,7 +490,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 			hasArtifacts = true
 		}
 	}
-	
+
 	if hasArtifacts {
 		ws, err := dSess.WorkingSet(ctx, dbName)
 		if err != nil {
