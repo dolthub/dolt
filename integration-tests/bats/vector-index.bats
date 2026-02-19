@@ -7,12 +7,12 @@ setup() {
     dolt sql <<SQL
 CREATE TABLE onepk (
   pk1 BIGINT PRIMARY KEY,
-  v1 JSON
+  v1 JSON NOT NULL
 );
 CREATE TABLE twopk (
   pk1 BIGINT,
   pk2 BIGINT,
-  v1 JSON,
+  v1 JSON NOT NULL,
   PRIMARY KEY(pk1, pk2)
 );
 SQL
@@ -26,7 +26,7 @@ teardown() {
 
 @test "vector-index: rebuild smoke test" {
     skip_if_remote
-    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, col1 JSON);"
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, col1 JSON NOT NULL);"
     dolt sql -q "INSERT INTO t VALUES (1, '[0]');"
     dolt sql -q "CREATE VECTOR INDEX t_idx on t(col1);"
     dolt index cat t t_idx -r csv
@@ -50,7 +50,7 @@ teardown() {
     dolt sql <<SQL
 CREATE TABLE test(
   pk BIGINT PRIMARY KEY,
-  v1 JSON,
+  v1 JSON NOT NULL,
   VECTOR INDEX (v1)
 );
 SQL
@@ -67,7 +67,7 @@ SQL
     dolt sql <<SQL
 CREATE TABLE test(
   pk BIGINT PRIMARY KEY,
-  v1 JSON,
+  v1 JSON NOT NULL,
   UNIQUE VECTOR INDEX (v1)
 );
 SQL
@@ -83,7 +83,7 @@ SQL
     dolt sql <<SQL
 CREATE TABLE test(
   pk BIGINT PRIMARY KEY,
-  v1 JSON,
+  v1 JSON NOT NULL,
   VECTOR INDEX idx_v1 (v1) COMMENT 'hello there'
 );
 SQL
