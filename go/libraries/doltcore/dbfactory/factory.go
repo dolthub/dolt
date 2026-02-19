@@ -51,6 +51,9 @@ const (
 	// HTTPScheme
 	HTTPScheme = "http"
 
+	// SSHScheme
+	SSHScheme = "ssh"
+
 	// LocalFS Blobstore Scheme
 	LocalBSScheme = "localbs"
 
@@ -92,6 +95,7 @@ var DBFactories = map[string]DBFactory{
 	GitHTTPScheme:  GitRemoteFactory{},
 	GitHTTPSScheme: GitRemoteFactory{},
 	GitSSHScheme:   GitRemoteFactory{},
+	SSHScheme:      SSHRemoteFactory{},
 }
 
 // CreateDB creates a database based on the supplied urlStr, and creation params.  The DBFactory used for creation is
