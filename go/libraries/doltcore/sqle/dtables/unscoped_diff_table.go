@@ -255,7 +255,8 @@ func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 		if changeSet == "WORKING" && tableDelta.IsAdd() {
 			tblName := doltdb.TableName{Name: tableDelta.CurName()}
 			result, err := d.ignorePatterns.IsTableNameIgnored(tblName)
-			if err != nil {
+			// If a table name has conflicting ignore rules, don't ignore it.
+			if err != nil && doltdb.AsDoltIgnoreInConflict(err) == nil {
 				return nil, err
 			}
 			if result == doltdb.Ignore {
