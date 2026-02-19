@@ -260,6 +260,8 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 	stagedRoot := ws.StagedRoot()
 	workingRoot := ws.WorkingRoot()
 
+	// This is a little strict. Technically, you could use the dolt_workspace table to stage something
+	// and result in different roots, but this seems like the right thing to do after a merge conflict resolution step.
 	isClean, err := rootsEqual(stagedRoot, workingRoot)
 	if err != nil {
 		return "", 0, 0, 0, fmt.Errorf("error: unable to compare staged and working roots: %w", err)
@@ -268,7 +270,6 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 		return "", 0, 0, 0, fmt.Errorf("error: cannot continue cherry-pick with unstaged changes")
 	}
 
-	// Get the original commit metadata from the merge state
 	cherryCommit := mergeState.Commit()
 	if cherryCommit == nil {
 		return "", 0, 0, 0, fmt.Errorf("error: unable to get original commit from merge state")
@@ -283,12 +284,11 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 	commitProps := actions.CommitStagedProps{
 		Message:    cherryCommitMeta.Description,
 		Date:       cherryCommitMeta.Time(),
-		AllowEmpty: false,
+		AllowEmpty: false, // in a conflict workflow, never will be 'true'
 		Name:       cherryCommitMeta.Name,
 		Email:      cherryCommitMeta.Email,
 	}
 
-	// Get the roots from the working set for creating the commit
 	roots, ok := doltSession.GetRoots(ctx, dbName)
 	if !ok {
 		return "", 0, 0, 0, fmt.Errorf("fatal: unable to load roots for %s", dbName)
@@ -302,8 +302,6 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 		return "", 0, 0, 0, fmt.Errorf("error: no changes to commit")
 	}
 
-	// Clear the merge state from the working set before committing
-	// This ensures DoltCommit sees a clean working set
 	clearedWs := ws.ClearMerge()
 	err = doltSession.SetWorkingSet(ctx, dbName, clearedWs)
 	if err != nil {
