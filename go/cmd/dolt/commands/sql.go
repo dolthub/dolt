@@ -40,6 +40,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli/prompt"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -705,7 +706,10 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 
-	db, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
+	db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
+	if !ok {
+		return fmt.Errorf("Warning: unable to determine database branch from session")
+	}
 	dirty := false
 	if branch != "" {
 		dirty, _ = isDirty(sqlCtx, qryist)
@@ -957,12 +961,19 @@ func preprocessQuery(query, lastQuery string, cliCtx cli.CliContext) (CommandTyp
 // postCommandUpdate is a helper function that is run after the shell has completed a command. It updates the the database
 // if needed, and generates new prompts for the shell (based on the branch and if the workspace is dirty).
 func postCommandUpdate(sqlCtx *sql.Context, qryist cli.Queryist) (string, string) {
-	db, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
-	dirty := false
-	if branch != "" {
-		dirty, _ = isDirty(sqlCtx, qryist)
+	db, revision, ok := getDBBranchFromSession(sqlCtx, qryist)
+	if !ok {
+		cli.PrintErrln(color.YellowString("Failed to resolve database revision."))
 	}
-	return formattedPrompts(db, branch, dirty)
+	dirty := false
+	if revision != "" {
+		var err error
+		dirty, err = isDirty(sqlCtx, qryist)
+		if err != nil {
+			cli.PrintErrln(err.Error())
+		}
+	}
+	return formattedPrompts(db, revision, dirty)
 }
 
 // formattedPrompts returns the prompt and multiline prompt for the current session. If the db is empty, the prompt will
@@ -994,7 +1005,7 @@ func formattedPrompts(db, branch string, dirty bool) (string, string) {
 	return fmt.Sprintf("%s/%s%s> ", cyanDb, yellowBr, dirtyStr), multi
 }
 
-// getDBBranchFromSession returns the current database name and current branch  for the session, handling all the errors
+// getDBBranchFromSession returns the current database name and current branch for the session, handling all the errors
 // along the way by printing red error messages to the CLI. If there was an issue getting the db name, the ok return
 // value will be false and the strings will be empty.
 func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, branch string, ok bool) {
@@ -1004,41 +1015,28 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 		return "", "", false
 	}
 	defer qryist.Query(sqlCtx, "set lock_warnings = 0")
+	if sqlCtx.Session.GetCurrentDatabase() == "" {
+		return "", "", true
+	}
 
-	_, resp, _, err := qryist.Query(sqlCtx, "select database() as db, active_branch() as branch")
+	resolver := prompt.NewResolver()
+	promptContext, resolved, err := resolver.Resolve(sqlCtx, qryist)
 	if err != nil {
-		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
-		return db, branch, false
+		cli.Println(color.RedString("Failed to resolve shell prompt: " + err.Error()))
+		return "", "", false
 	}
-	// Expect single row result, with two columns: db name, branch name.
-	row, err := resp.Next(sqlCtx)
-	if err != nil {
-		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
-		return db, branch, false
-	}
-	if len(row) != 2 {
-		cli.Println(color.RedString("Runtime error. Invalid column count."))
-		return db, branch, false
+	if !resolved {
+		return "", "", true
 	}
 
-	if row[1] == nil {
-		branch = ""
-	} else {
-		branch = row[1].(string)
-	}
-	if row[0] == nil {
-		db = ""
-	} else {
-		fullName := row[0].(string)
-		db, _ = doltdb.SplitRevisionDbName(fullName)
-	}
-
-	return db, branch, true
+	return promptContext.BaseDatabase, promptContext.ActiveRevision, true
 }
 
 // isDirty returns true if the workspace is dirty, false otherwise. This function _assumes_ you are on a database
 // with a branch. If you are not, you will get an error.
 func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
+	const promptDirtyStatusErrPrefix = "Failed to determine shell prompt '*' (dirty) status"
+
 	_, _, _, err := qryist.Query(sqlCtx, "set lock_warnings = 1")
 	if err != nil {
 		return false, err
@@ -1048,18 +1046,15 @@ func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
 	_, resp, _, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_status")
 
 	if err != nil {
-		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
-		return false, err
+		return false, fmt.Errorf("%s: %w", promptDirtyStatusErrPrefix, err)
 	}
 	// Expect single row result, with one boolean column.
 	row, err := resp.Next(sqlCtx)
 	if err != nil {
-		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
-		return false, err
+		return false, fmt.Errorf("%s: %w", promptDirtyStatusErrPrefix, err)
 	}
 	if len(row) != 1 {
-		cli.Println(color.RedString("Runtime error. Invalid column count."))
-		return false, fmt.Errorf("invalid column count")
+		return false, fmt.Errorf("%s: invalid column count", promptDirtyStatusErrPrefix)
 	}
 
 	return getStrBoolColAsBool(row[0])

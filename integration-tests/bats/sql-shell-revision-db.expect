@@ -6,7 +6,11 @@ set env(NO_COLOR) 1
 
 spawn dolt sql
 
-expect_with_defaults {>} { send "create schema mydb;\r" }
+expect_with_defaults {>} { send "create database `mydb@branch1`;\r" }
+
+expect_with_defaults {>} { send "use `mydb@branch1`;\r" }
+
+expect_with_defaults_after {Database Changed} {mydb@branch1/main\*?>} { send "create schema `mydb`;\r" }
 
 expect_with_defaults {>} { send "use mydb;\r" }
 
@@ -30,13 +34,15 @@ expect_with_defaults {>} { send "create table t1(i int);\r" }
 
 expect_with_defaults {>} { send "call dolt_commit('-Am', 'create table t1');\r" }
 
-expect_with_defaults {>} { send "execute use_stmt;\r" }
+expect_with_defaults {>} { send "show tables;\r" }
 
-expect_with_defaults_after {Empty set} {mydb\*?>} { send "show tables;\r" }
+expect_with_defaults_after {t1} {>} { send "execute use_stmt;\r" }
 
-expect_with_defaults {>} { send "create database `mydb@branch1`;\r" }
+expect_with_defaults_after {Empty set} {mydb/[0-9a-v]{32}\*?>} { send "show tables;\r" }
 
-expect_with_defaults_after {database exists} {mydb\*?>} { send "exit;\r" }
+expect_with_defaults_after {Empty set} {mydb/[0-9a-v]{32}\*?>} { send "create database `mydb@branch1`;\r" }
+
+expect_with_defaults_after {database exists} {mydb/[0-9a-v]{32}\*?>} { send "exit;\r" }
 
 expect eof
 exit 0

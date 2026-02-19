@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -71,6 +72,42 @@ func SetSystemVar(queryist Queryist, sqlCtx *sql.Context, newVal bool) (func() e
 	return update, err
 }
 
+// GetSystemVariableValues returns a map of lower-case variable names to values for all variables that exist on the
+// connected server. Variables missing from the result map are not supported by that server version.
+func GetSystemVariableValues(queryist Queryist, sqlCtx *sql.Context, variableNames ...string) (values map[string]string, err error) {
+	values = make(map[string]string, len(variableNames))
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString("SHOW VARIABLES WHERE VARIABLE_NAME IN (")
+	for i, variableName := range variableNames {
+		queryBuilder.WriteRune('\'')
+		queryBuilder.WriteString(variableName)
+		queryBuilder.WriteRune('\'')
+		if i != len(variableNames)-1 {
+			queryBuilder.WriteRune(',')
+		}
+	}
+	queryBuilder.WriteRune(')')
+
+	rows, err := GetRowsForSql(queryist, sqlCtx, queryBuilder.String())
+	if err != nil {
+		return nil, err
+	}
+
+	for _, row := range rows {
+		name, err := GetStringColumnValue(row[0])
+		if err != nil {
+			continue
+		}
+		value, err := GetStringColumnValue(row[1])
+		if err != nil {
+			continue
+		}
+
+		values[strings.ToLower(name)] = value
+	}
+	return values, nil
+}
+
 func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
 	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {
@@ -82,4 +119,21 @@ func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.
 	}
 
 	return rows, nil
+}
+
+func GetStringColumnValue(value any) (str string, err error) {
+	if value == nil {
+		return "", nil
+	}
+
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case []byte:
+		return string(v), nil
+	case fmt.Stringer:
+		return v.String(), nil
+	default:
+		return "", fmt.Errorf("unexpected type %T, expected string-like column value", value)
+	}
 }
