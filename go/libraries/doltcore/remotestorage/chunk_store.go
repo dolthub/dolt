@@ -68,7 +68,7 @@ var defaultTransport = &http.Transport{
 }
 
 var globalHttpFetcher HTTPFetcher = &http.Client{
-	Transport: defaultTransport,
+	Transport: globalInterceptor,
 }
 
 var _ chunks.TableFileStore = (*DoltChunkStore)(nil)
