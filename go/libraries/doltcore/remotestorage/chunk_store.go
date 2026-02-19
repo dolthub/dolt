@@ -135,7 +135,13 @@ type DoltChunkStore struct {
 	wsValidate  bool
 }
 
-func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, wsval bool, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
+func NewDoltChunkStoreFromPath(
+	ctx context.Context,
+	nbf *types.NomsBinFormat,
+	path, host string,
+	wsval bool,
+	csClient remotesapi.ChunkStoreServiceClient,
+) (*DoltChunkStore, error) {
 	var repoId *remotesapi.RepoId
 
 	path = strings.Trim(path, "/")
