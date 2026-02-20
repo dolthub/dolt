@@ -274,7 +274,8 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 	}
 
 	// This is a little strict. Technically, you could use the dolt_workspace table to stage something
-	// and result in different roots, but this seems like the right thing to do after a merge conflict resolution step.
+	// and result in different roots.
+	// TODO: test with ignored and local tables - because this strictness will probably cause issues.
 	isClean, err := rootsEqual(stagedRoot, workingRoot)
 	if err != nil {
 		return "", 0, 0, 0, fmt.Errorf("error: unable to compare staged and working roots: %w", err)
