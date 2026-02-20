@@ -77,7 +77,7 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
-	cmd.Stderr = io.Discard
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to start transfer subprocess: %w", err)
@@ -161,21 +161,10 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 }
 
 // buildTransferCommand constructs the exec.Cmd for the transfer subprocess.
-// For localhost without DOLT_SSH, it runs dolt transfer directly.
-// For remote hosts, it runs ssh [user@]host "dolt --data-dir <path> transfer".
+// It runs ssh [user@]host "dolt --data-dir <path> transfer", using DOLT_SSH
+// as the SSH binary if set, otherwise defaulting to "ssh".
 func buildTransferCommand(host, path, user string) (*exec.Cmd, error) {
 	sshCommand := os.Getenv("DOLT_SSH")
-
-	if host == "localhost" && sshCommand == "" {
-		// Local testing mode: run dolt transfer directly.
-		doltPath, err := os.Executable()
-		if err != nil {
-			doltPath = "dolt"
-		}
-		return exec.Command(doltPath, "--data-dir", path, "transfer"), nil
-	}
-
-	// Real SSH mode.
 	if sshCommand == "" {
 		sshCommand = "ssh"
 	}
