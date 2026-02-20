@@ -926,6 +926,9 @@ func (gbs *GitBlobstore) planPutWrites(ctx context.Context, key string, totalSiz
 	if err != nil {
 		return putPlan{}, err
 	}
+	if len(partOIDs) == 0 {
+		return putPlan{}, fmt.Errorf("gitblobstore: chunked write for key %q produced no parts", key)
+	}
 
 	writes := make([]treeWrite, 0, len(partOIDs))
 	for i, p := range partOIDs {
