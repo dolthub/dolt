@@ -1348,6 +1348,9 @@ func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
 }
 
 func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, visit func(r ref.DoltRef, addr hash.Hash) error) error {
+	if ddb == nil || ddb.db.Database == nil {
+		return nil
+	}
 	dss, err := ddb.db.Datasets(ctx)
 	if err != nil {
 		return err
@@ -1357,6 +1360,9 @@ func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.Re
 }
 
 func (ddb *DoltDB) VisitRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, nomsRoot hash.Hash, visit func(r ref.DoltRef, addr hash.Hash) error) error {
+	if ddb == nil || ddb.db.Database == nil {
+		return nil
+	}
 	dss, err := ddb.db.DatasetsByRootHash(ctx, nomsRoot)
 	if err != nil {
 		return err
@@ -1424,6 +1430,9 @@ func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) 
 }
 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
+	if ddb == nil || ddb.db.Database == nil {
+		return []ref.DoltRef{}, nil
+	}
 	var refs []ref.DoltRef
 	err := ddb.VisitRefsOfType(ctx, refTypeFilter, func(r ref.DoltRef, _ hash.Hash) error {
 		refs = append(refs, r)
@@ -2038,6 +2047,9 @@ func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error
 // the correct behavior for a long-lived process working with a
 // local, non-read-only database.
 func (ddb *DoltDB) SetCrashOnFatalError() {
+	if ddb == nil || ddb.db.Database == nil {
+		return
+	}
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 	if nbs, ok := cs.(interface {
 		SetFatalBehavior(dherrors.FatalBehavior)
@@ -2133,11 +2145,17 @@ func (ddb *DoltDB) DatasetsByRootHash(ctx context.Context, hashof hash.Hash) (da
 }
 
 func (ddb *DoltDB) PrependCommitHooks(ctx context.Context, hooks ...CommitHook) *DoltDB {
+	if ddb == nil || ddb.db.Database == nil {
+		return ddb
+	}
 	ddb.db = ddb.db.SetCommitHooks(ctx, append(hooks, ddb.db.PostCommitHooks()...))
 	return ddb
 }
 
 func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) error {
+	if ddb == nil || ddb.db.Database == nil {
+		return nil
+	}
 	ds, err := ddb.db.GetDataset(ctx, datasetId)
 	if err != nil {
 		return err
