@@ -102,7 +102,7 @@ func (sqlBaseRevisionResolver) Resolve(sqlCtx *sql.Context, queryist cli.Queryis
 		}
 	}
 
-	parts.Dirty, parts.IsBranch, err = resolveDirty(sqlCtx, queryist)
+	parts.Dirty, parts.IsBranch, err = resolveDirty(sqlCtx, queryist, parts)
 	if err != nil {
 		return parts, false, err
 	}
@@ -139,17 +139,21 @@ func (sqlDBActiveBranchResolver) Resolve(sqlCtx *sql.Context, queryist cli.Query
 		}
 	}
 
-	parts.Dirty, parts.IsBranch, err = resolveDirty(sqlCtx, queryist)
+	parts.Dirty, parts.IsBranch, err = resolveDirty(sqlCtx, queryist, parts)
 	if err != nil {
 		return parts, false, err
 	}
 	return parts, true, nil
 }
 
-// resolveDirty resolves the dirty state of the current branch, and whether is the revision type is a branch.
-func resolveDirty(sqlCtx *sql.Context, queryist cli.Queryist) (dirty bool, isBranch bool, err error) {
+// resolveDirty resolves the dirty state of the current branch and whether the revision type is a branch.
+func resolveDirty(sqlCtx *sql.Context, queryist cli.Queryist, parts Parts) (dirty bool, isBranch bool, err error) {
+	if doltdb.IsValidCommitHash(parts.ActiveRevision) {
+		return false, false, nil
+	}
+
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, "select count(table_name) > 0 as dirty from dolt_status")
-	if errors.Is(err, doltdb.ErrOperationNotSupportedInDetachedHead) {
+	if errors.Is(err, doltdb.ErrOperationNotSupportedInDetachedHead) || sql.ErrTableNotFound.Is(err) {
 		return false, false, nil
 	} else if err != nil {
 		return false, false, err

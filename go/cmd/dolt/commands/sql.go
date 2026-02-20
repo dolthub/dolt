@@ -970,7 +970,8 @@ func postCommandUpdate(sqlCtx *sql.Context, qryist cli.Queryist) (string, string
 		sqlCtx.SetCurrentDatabase(parts.BaseDatabase)
 	} else {
 		cli.PrintErrln(color.YellowString("Failed to set new current database for the post command update"))
-		return formattedPrompts("", "", false)
+		baseDatabase, activeRevision := doltdb.SplitRevisionDbName(sqlCtx.GetCurrentDatabase())
+		return formattedPrompts(baseDatabase, activeRevision, false)
 	}
 
 	return formattedPrompts(parts.BaseDatabase, parts.ActiveRevision, parts.Dirty)
