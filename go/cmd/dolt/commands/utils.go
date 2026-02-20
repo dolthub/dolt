@@ -701,11 +701,11 @@ type commitInfoOptions struct {
 }
 
 // getCommitInfo returns the commit info for the given ref.
-func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*CommitInfo, error) {
-	return getCommitInfoWithOptions(queryist, sqlCtx, ref, commitInfoOptions{})
+func getCommitInfo(sqlCtx *sql.Context, queryist cli.Queryist, ref string) (*CommitInfo, error) {
+	return getCommitInfoWithOptions(sqlCtx, queryist, ref, commitInfoOptions{})
 }
 
-func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions) (*CommitInfo, error) {
+func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)

@@ -662,3 +662,72 @@ teardown() {
     [[ "$output" =~ "Integration Manager,integration@company.com" ]] || false
     [[ "$output" =~ "Merge integration_branch" ]] || false
 }
+@test "cherry-pick: --continue after resolving conflicts" {
+    dolt branch continue_test
+    dolt --branch continue_test sql -q "INSERT INTO test VALUES (100, 'branch1')"
+    dolt --branch continue_test add .
+    dolt --branch continue_test commit --author="Feature Dev <feature@example.com>" --date="2022-01-01T12:00:00" -m "Add row from branch1"
+    COMMIT1=$(get_head_commit continue_test)
+    
+    dolt sql -q "INSERT INTO test VALUES (100, 'main')"
+    dolt add .
+    dolt commit -am "Add row from main"
+    
+    run dolt cherry-pick $COMMIT1
+    [ $status -eq 1 ]
+    [[ $output =~ "Unable to apply commit cleanly due to conflicts" ]] || false
+
+    # Resolve the conflict (need to disable autocommit for conflict resolution)
+    dolt sql -q "SET autocommit = 0; UPDATE test SET v = 'resolved' WHERE pk = 100; DELETE FROM dolt_conflicts_test; COMMIT;"
+    dolt add test
+
+    run dolt cherry-pick --continue --abort
+    [ $status -eq 1 ]
+    [[ $output =~ "--continue and --abort are mutually exclusive" ]] || false
+
+    run dolt cherry-pick --continue
+    [ $status -eq 0 ]
+    
+    # Verify the commit was created with original metadata
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ $output =~ "Feature Dev" ]] || false
+    [[ $output =~ "feature@example.com" ]] || false
+    [[ $output =~ "Add row from branch1" ]] || false
+    
+    # Verify the resolved data is present
+    run dolt sql -q "SELECT * FROM test WHERE pk = 100" -r csv
+    [ $status -eq 0 ]
+    [[ $output =~ "100,resolved" ]] || false
+}
+
+@test "cherry-pick: --continue with no active cherry-pick" {
+    run dolt cherry-pick --continue
+    [ $status -eq 1 ]
+    [[ $output =~ "There is no cherry-pick merge to continue" ]] || false
+}
+
+@test "cherry-pick: --continue with unresolved conflicts" {
+    # Create a branch with a conflicting change
+    dolt branch continue_test2
+    dolt --branch continue_test2 sql -q "INSERT INTO test VALUES (100, 'branch1')"
+    dolt --branch continue_test2 add .
+    dolt --branch continue_test2 commit -am "Add row from branch1"
+    COMMIT1=$(get_head_commit continue_test2)
+    
+    # Create a conflicting change on main
+    dolt sql -q "INSERT INTO test VALUES (100, 'main')"
+    dolt add .
+    dolt commit -am "Add row from main"
+    
+    # Cherry-pick should create a conflict
+    run dolt cherry-pick $COMMIT1
+    [ $status -eq 1 ]
+    [[ $output =~ "Unable to apply commit cleanly due to conflicts" ]] || false
+    
+    # Try to continue without resolving conflicts
+    run dolt cherry-pick --continue
+    [ $status -eq 1 ]
+    [[ $output =~ "Unable to apply commit cleanly due to conflicts" ]] || false
+    
+}

@@ -319,7 +319,7 @@ func getCommitSpecPretty(queryist cli.Queryist, sqlCtx *sql.Context, commitRef s
 		commitRef = strings.TrimPrefix(commitRef, "#")
 	}
 
-	commit, err = getCommitInfo(queryist, sqlCtx, commitRef)
+	commit, err = getCommitInfo(sqlCtx, queryist, commitRef)
 	if err != nil {
 		return commit, fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitRef, err)
 	}

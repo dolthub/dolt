@@ -391,7 +391,7 @@ func printMergeStats(fastForward bool,
 	}
 
 	if !apr.Contains(cli.NoCommitFlag) && !apr.Contains(cli.NoFFParam) && !fastForward && noConflicts {
-		commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
+		commit, err := getCommitInfo(sqlCtx, queryist, "HEAD")
 		if err != nil {
 			cli.Println("merge finished, but failed to get commit info")
 			cli.Println(err.Error())

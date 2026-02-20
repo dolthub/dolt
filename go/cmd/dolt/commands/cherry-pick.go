@@ -47,7 +47,7 @@ If any data conflicts, schema conflicts, or constraint violations are detected d
 
 var ErrCherryPickConflictsOrViolations = errors.NewKind("error: Unable to apply commit cleanly due to conflicts " +
 	"or constraint violations. Please resolve the conflicts and/or constraint violations, then use `dolt add` " +
-	"to add the tables to the staged set, and `dolt commit` to commit the changes and finish cherry-picking. \n" +
+	"to add the tables to the staged set, and `dolt cherry-pick --continue` to complete the cherry-pick. \n" +
 	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.\n" +
 	"For more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts")
 
@@ -96,8 +96,19 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return 1
 	}
 
+	// Check for mutually exclusive flags
+	if apr.Contains(cli.AbortParam) && apr.Contains(cli.ContinueFlag) {
+		err = fmt.Errorf("error: --continue and --abort are mutually exclusive")
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	if apr.Contains(cli.AbortParam) {
-		err = cherryPickAbort(queryist.Queryist, queryist.Context)
+		err = cherryPickAbort(queryist.Context, queryist.Queryist)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	if apr.Contains(cli.ContinueFlag) {
+		err = cherryPickContinue(queryist.Context, queryist.Queryist)
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
@@ -117,11 +128,11 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(errhand.BuildDError("cherry-picking multiple commits is not supported yet").SetPrintUsage().Build(), usage)
 	}
 
-	err = cherryPick(queryist.Queryist, queryist.Context, apr, args)
+	err = cherryPick(queryist.Context, queryist.Queryist, apr, args)
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 
-func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults, args []string) error {
+func cherryPick(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgParseResults, args []string) error {
 	cherryStr := apr.Arg(0)
 	if len(cherryStr) == 0 {
 		return fmt.Errorf("error: cannot cherry-pick empty string")
@@ -201,7 +212,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 
 	if succeeded {
 		// on success, print the commit info
-		commit, err := getCommitInfo(queryist, sqlCtx, commitHash)
+		commit, err := getCommitInfo(sqlCtx, queryist, commitHash)
 		if commit == nil || err != nil {
 			return fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitHash, err)
 		}
@@ -220,7 +231,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 	}
 }
 
-func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
+func cherryPickAbort(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	query := "call dolt_cherry_pick('--abort')"
 	_, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
@@ -232,6 +243,58 @@ func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
+	query := "call dolt_cherry_pick('--continue')"
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
+	if err != nil {
+		return err
+	}
+
+	if len(rows) != 1 {
+		return fmt.Errorf("error: unexpected number of rows returned from dolt_cherry_pick: %d", len(rows))
+	}
+	if len(rows[0]) != 4 {
+		return fmt.Errorf("error: unexpected number of columns returned from dolt_cherry_pick: %d", len(rows[0]))
+	}
+
+	row := rows[0]
+
+	// We expect to get an error if there were problems, but we also could get any of the conflicts and
+	// vacation counts being greater than 0 if there were problems. If we got here without an error,
+	// but we have conflicts or violations, we should report and stop.
+	dataConflicts, err := getInt64ColAsInt64(row[1])
+	if err != nil {
+		return fmt.Errorf("Unable to parse data_conflicts column: %w", err)
+	}
+	schemaConflicts, err := getInt64ColAsInt64(row[2])
+	if err != nil {
+		return fmt.Errorf("Unable to parse schema_conflicts column: %w", err)
+	}
+	constraintViolations, err := getInt64ColAsInt64(row[3])
+	if err != nil {
+		return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
+	}
+	if dataConflicts > 0 || schemaConflicts > 0 || constraintViolations > 0 {
+		return ErrCherryPickConflictsOrViolations.New()
+	}
+
+	commitHash := fmt.Sprintf("%v", row[0])
+
+	commit, err := getCommitInfo(sqlCtx, queryist, commitHash)
+	if commit == nil || err != nil {
+		return fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitHash, err)
+	}
+
+	cli.ExecuteWithStdioRestored(func() {
+		pager := outputpager.Start()
+		defer pager.Stop()
+
+		PrintCommitInfo(pager, 0, false, false, "auto", commit)
+	})
+
 	return nil
 }
 
