@@ -1348,6 +1348,9 @@ func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
 }
 
 func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, visit func(r ref.DoltRef, addr hash.Hash) error) error {
+	if ddb == nil || ddb.db.Database == nil {
+		return nil
+	}
 	dss, err := ddb.db.Datasets(ctx)
 	if err != nil {
 		return err
@@ -1357,6 +1360,9 @@ func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.Re
 }
 
 func (ddb *DoltDB) VisitRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, nomsRoot hash.Hash, visit func(r ref.DoltRef, addr hash.Hash) error) error {
+	if ddb == nil || ddb.db.Database == nil {
+		return nil
+	}
 	dss, err := ddb.db.DatasetsByRootHash(ctx, nomsRoot)
 	if err != nil {
 		return err
@@ -1424,6 +1430,9 @@ func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) 
 }
 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
+	if ddb == nil || ddb.db.Database == nil {
+		return []ref.DoltRef{}, nil
+	}
 	var refs []ref.DoltRef
 	err := ddb.VisitRefsOfType(ctx, refTypeFilter, func(r ref.DoltRef, _ hash.Hash) error {
 		refs = append(refs, r)
