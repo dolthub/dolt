@@ -427,13 +427,12 @@ func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Databas
 		ctx.GetLogger().Warn(err)
 	}
 
-	potentialConflictDB, conflictDBOk := p.databases[strings.ToLower(ctx.GetCurrentDatabase())]
-	_, baseDBOk := p.databases[strings.ToLower(baseName)]
+	rdb, ok, err := p.databaseForRevision(ctx, normalized, ctx.GetCurrentDatabase())
 	skipConflictDBName := ""
-	if conflictDBOk && baseDBOk && usesDelimiterAlias {
-		_, ok, err := p.databaseForRevision(ctx, normalized, ctx.GetCurrentDatabase())
-		if err == nil && ok {
-			skipConflictDBName = potentialConflictDB.AliasedName()
+	if usesDelimiterAlias && baseName != ctx.GetCurrentDatabase() {
+		conflictDB, conflictDBOk := p.databases[ctx.GetCurrentDatabase()]
+		if conflictDBOk && ok && err == nil {
+			skipConflictDBName = conflictDB.AliasedName()
 		}
 	}
 
@@ -449,9 +448,7 @@ func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Databas
 			revisionDbs, err := p.allRevisionDbs(ctx, db, normalized)
 			if err != nil {
 				// TODO: this interface is wrong, needs to return errors
-				if !sql.ErrDatabaseNotFound.Is(err) {
-					ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
-				}
+				ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
 				continue
 			}
 			all = append(all, revisionDbs...)
@@ -462,9 +459,7 @@ func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Databas
 	// If there's a revision database in use, include it in the list (but don't double-count). When showBranches is off
 	// we still include the current revision db if one is in use, so the active database is always visible in SHOW
 	// DATABASES.
-	usingNormalDB := usesDelimiterAlias && conflictDBOk && !baseDBOk
-	if currentRevision != "" && !showBranches && !usingNormalDB {
-		rdb, ok, err := p.databaseForRevision(ctx, normalized, ctx.GetCurrentDatabase())
+	if currentRevision != "" && !showBranches {
 		if err != nil {
 			// TODO: this interface is wrong, needs to return errors
 			if !sql.ErrDatabaseNotFound.Is(err) {
@@ -513,14 +508,12 @@ func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlData
 	for _, branch := range branches {
 		revisionQualifiedName := fmt.Sprintf("%s/%s", db.Name(), branch.GetPath())
 		requestedName := revisionQualifiedName
-		var revDb dsess.SqlDatabase
-		var ok bool
 		// If the current DB matches, it means we're either using `@` or `/` delimited revision database name. So, we
 		// replace the revisionQualifiedName with the [ctx.GetCurrentDatabase] result to maintain the exact delimiter.
 		if revisionQualifiedName == currDb {
 			requestedName = ctx.GetCurrentDatabase()
 		}
-		revDb, ok, err = p.databaseForRevision(ctx, revisionQualifiedName, requestedName)
+		revDb, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, requestedName)
 		if err != nil {
 			return nil, err
 		}
@@ -873,6 +866,8 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
 	_, revision := doltdb.SplitRevisionDbName(name)
 	normalized, usesDelimiterAlias := doltdb.NormalizeRevisionDelimiter(name)
+	// To maintain parity with CreateDatabase we do the same call as GMS with HasDatabase, if a revision exists using
+	// the `@` delimiter an error will occur. Otherwise, no error.
 	if revision != "" || (usesDelimiterAlias && p.HasDatabase(ctx, normalized)) {
 		return fmt.Errorf("unable to drop revision database: %s", name)
 	}
@@ -1071,7 +1066,7 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 }
 
 func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQualifiedName string, requestedName string) (dsess.SqlDatabase, bool, error) {
-	if !strings.ContainsAny(revisionQualifiedName, doltdb.DbRevisionDelimiterAlias+doltdb.DbRevisionDelimiter) {
+	if !strings.Contains(revisionQualifiedName, doltdb.DbRevisionDelimiter) {
 		return nil, false, nil
 	}
 	baseName, rev := doltdb.SplitRevisionDbName(revisionQualifiedName)
@@ -1088,8 +1083,8 @@ func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQua
 		return nil, false, err
 	}
 
-	// Cached revision db only when the revision resolves in current refs. Branch and tag changes can stale session
-	// cache entries, so validate the revision type before returning a cached db.
+	// Use cached revision db only when the rev resolved in current refs. Branch and tag changes can stale session cache
+	// entries, so validate the revision type before returning a cached db.
 	dbCache := dsess.DSessFromSess(ctx.Session).DatabaseCache(ctx)
 	db, ok := dbCache.GetCachedRevisionDb(revisionQualifiedName, requestedName)
 	if ok && dbType != dsess.RevisionTypeNone {
@@ -1469,7 +1464,7 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 	p.mu.RUnlock()
 
 	var err error
-	if !rawDBOk && usesDelimiterAlias {
+	if usesDelimiterAlias && !rawDBOk {
 		rawDB, err = p.databaseForClone(ctx, strings.ToLower(name))
 		// Ignore error, revision needs to be evaluated first.
 		rawDBOk = rawDB != nil && err == nil

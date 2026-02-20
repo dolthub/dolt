@@ -42,7 +42,11 @@ expect_with_defaults_after {Empty set} {mydb/[0-9a-v]{32}\*?>} { send "show tabl
 
 expect_with_defaults_after {Empty set} {mydb/[0-9a-v]{32}\*?>} { send "create database `mydb@branch1`;\r" }
 
-expect_with_defaults_after {database exists} {mydb/[0-9a-v]{32}\*?>} { send "exit;\r" }
+expect_with_defaults_after {database exists} {>} { send "use `mydb`;\r" }
+
+expect_with_defaults {>} { send "call dolt_checkout('branch1');\r" }
+
+expect_with_defaults_after {Switched to branch 'branch1'} {>} { send "exit;\r" }
 
 expect eof
 exit 0

@@ -72,42 +72,6 @@ func SetSystemVar(queryist Queryist, sqlCtx *sql.Context, newVal bool) (func() e
 	return update, err
 }
 
-// GetSystemVariableValues returns a map of lower-case variable names to values for all system variables that exist on
-// the connected server. Any missing system variables from the result map are not supported by that server version.
-func GetSystemVariableValues(sqlCtx *sql.Context, queryist Queryist, systemVariables ...string) (values map[string]string, err error) {
-	values = make(map[string]string, len(systemVariables))
-	var queryBuilder strings.Builder
-	queryBuilder.WriteString("SHOW VARIABLES WHERE VARIABLE_NAME IN (")
-	for i, variableName := range systemVariables {
-		queryBuilder.WriteRune('\'')
-		queryBuilder.WriteString(variableName)
-		queryBuilder.WriteRune('\'')
-		if i != len(systemVariables)-1 {
-			queryBuilder.WriteRune(',')
-		}
-	}
-	queryBuilder.WriteRune(')')
-
-	rows, err := GetRowsForSql(queryist, sqlCtx, queryBuilder.String())
-	if err != nil {
-		return nil, err
-	}
-
-	for _, row := range rows {
-		name, err := GetStringColumnValue(row[0])
-		if err != nil {
-			continue
-		}
-		value, err := GetStringColumnValue(row[1])
-		if err != nil {
-			continue
-		}
-
-		values[strings.ToLower(name)] = value
-	}
-	return values, nil
-}
-
 func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
 	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {

@@ -57,8 +57,6 @@ const (
 	DoltLogLevel                         = "dolt_log_level"
 	ShowSystemTables                     = "dolt_show_system_tables"
 	AllowCICreation                      = "dolt_allow_ci_creation"
-	DoltBaseDatabase                     = "dolt_base_database"
-	DoltActiveRevision                   = "dolt_active_revision"
 
 	DoltClusterRoleVariable         = "dolt_cluster_role"
 	DoltClusterRoleEpochVariable    = "dolt_cluster_role_epoch"

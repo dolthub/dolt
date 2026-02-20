@@ -178,6 +178,16 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	dbName = strings.ToLower(dbName)
 	baseName, rev := doltdb.SplitRevisionDbName(dbName)
 
+	// usesDelimiterAlias once normalized goes to false, so any `@` character will not be treated as a delimiter. Since
+	// it has two meanings, either a revision or normal DB, we process twice.
+	normalized, usesDelimiterAlias := doltdb.NormalizeRevisionDelimiter(dbName)
+	if usesDelimiterAlias {
+		state, ok, err := d.lookupDbState(ctx, normalized)
+		if err == nil && ok {
+			return state, ok, err
+		}
+	}
+
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[baseName]
 	d.mu.Unlock()
@@ -194,15 +204,6 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 				return nil, false, dbState.Err
 			}
 			return branchState, ok, nil
-		}
-	}
-
-	// usesDelimiterAlias once normalized goes to false, so any `@` character will not be treated as a delimiter.
-	normalized, usesDelimiterAlias := doltdb.NormalizeRevisionDelimiter(dbName)
-	if usesDelimiterAlias {
-		state, ok, err := d.lookupDbState(ctx, normalized)
-		if err == nil && ok {
-			return state, ok, err
 		}
 	}
 
@@ -1304,36 +1305,6 @@ func (d *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value int
 	}
 
 	return d.Session.SetSessionVariable(ctx, key, value)
-}
-
-// UseDatabase updates session state for the selected database and publishes prompt context variables so clients can
-// render an unambiguous base database and active revision over the SQL wire protocol.
-func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
-	if err := d.Session.UseDatabase(ctx, db); err != nil {
-		return err
-	}
-
-	baseDatabase := db.Name()
-	if aliased, ok := db.(sql.AliasedDatabase); ok {
-		baseDatabase = aliased.AliasedName()
-	}
-
-	activeRevision := ""
-	if sqlDB, ok := db.(SqlDatabase); ok {
-		activeRevision = sqlDB.Revision()
-	}
-
-	return d.setPromptContextVars(ctx, baseDatabase, activeRevision)
-}
-
-func (d *DoltSession) setPromptContextVars(ctx *sql.Context, baseDatabase, activeRevision string) error {
-	if err := d.Session.SetSessionVariable(ctx, DoltBaseDatabase, baseDatabase); err != nil {
-		return err
-	}
-	if err := d.Session.SetSessionVariable(ctx, DoltActiveRevision, activeRevision); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (d *DoltSession) setHeadRefSessionVar(ctx *sql.Context, db, value string) error {

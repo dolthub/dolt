@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // Parts contains shell prompt components to render in the final prompt.
@@ -37,13 +36,12 @@ type Resolver interface {
 	Resolve(sqlCtx *sql.Context, queryist cli.Queryist) (parts Parts, resolved bool, err error)
 }
 
-// doltSystemVariablesResolver can resolve [prompt.Parts] using [dsess] system variables. This supports revision
-// qualified names can have two meanings (i.e., a normal database that uses the [doltdb.DbRevisionDelimiterAlias] in
-// their names versus a revision qualified one).
-type doltSystemVariablesResolver struct{}
+// sqlBaseRevisionResolver can resolve [prompt.Parts] using Dolt specific SQL functions that return canonical base
+// database and revision, even when the [doltdb.DbRevisionDelimiterAlias] is in use.
+type sqlBaseRevisionResolver struct{}
 
 // sqlDBActiveBranchResolver can resolve [prompt.Parts] using the SQL-specific functions. It is a fallback for older
-// servers, and is the method older shells use in general. The resolver does not support
+// servers, and is the method older shells use in general. This resolver does not support
 // [doltdb.DbRevisionDelimiterAlias] as a revision delimiter.
 type sqlDBActiveBranchResolver struct{}
 
@@ -56,7 +54,7 @@ type chainedResolver struct {
 func NewPartsResolver() Resolver {
 	return chainedResolver{
 		resolvers: []Resolver{
-			doltSystemVariablesResolver{},
+			sqlBaseRevisionResolver{},
 			sqlDBActiveBranchResolver{},
 		},
 	}
@@ -77,28 +75,37 @@ func (cr chainedResolver) Resolve(sqlCtx *sql.Context, queryist cli.Queryist) (p
 	return Parts{}, false, nil
 }
 
-// Resolve resolves [prompt.Parts] by reading [dsess.DoltBaseDatabase] and [dsess.DoltActiveRevision] which certify the
-// correct base (or repository) database when the [doltdb.DbRevisionDelimiterAlias] is in use in a revision qualified
-// database name or normal database.
-func (doltSystemVariablesResolver) Resolve(sqlCtx *sql.Context, queryist cli.Queryist) (parts Parts, resolved bool, err error) {
+// Resolve resolves [prompt.Parts] through SQL functions `base_database()` and `active_revision()`.
+func (sqlBaseRevisionResolver) Resolve(sqlCtx *sql.Context, queryist cli.Queryist) (parts Parts, resolved bool, err error) {
 	parts = Parts{}
-	variableValues, err := cli.GetSystemVariableValues(sqlCtx, queryist, dsess.DoltBaseDatabase, dsess.DoltActiveRevision)
-	if err != nil {
+
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, "select base_database() as base_database, active_revision() as active_revision")
+	if sql.ErrFunctionNotFound.Is(err) {
+		// Running on an older version.
+		return parts, false, nil
+	} else if err != nil {
 		return parts, false, err
 	}
 
-	var hasBase, hasRevision bool
-	parts.BaseDatabase, hasBase = variableValues[dsess.DoltBaseDatabase]
-	parts.ActiveRevision, hasRevision = variableValues[dsess.DoltActiveRevision]
-	if !hasBase || !hasRevision {
-		return parts, false, nil
+	if len(rows) > 0 {
+		if len(rows[0]) > 0 {
+			parts.BaseDatabase, err = cli.GetStringColumnValue(rows[0][0])
+			if err != nil {
+				return parts, false, err
+			}
+		}
+		if len(rows[0]) > 1 {
+			parts.ActiveRevision, err = cli.GetStringColumnValue(rows[0][1])
+			if err != nil {
+				return parts, false, err
+			}
+		}
 	}
 
 	parts.Dirty, parts.IsBranch, err = resolveDirty(sqlCtx, queryist)
 	if err != nil {
 		return parts, false, err
 	}
-
 	return parts, true, nil
 }
 
@@ -120,12 +127,12 @@ func (sqlDBActiveBranchResolver) Resolve(sqlCtx *sql.Context, queryist cli.Query
 	}
 
 	if parts.ActiveRevision == "" {
-		rows, err := cli.GetRowsForSql(queryist, sqlCtx, "select active_branch() as branch")
+		activeBranchRows, err := cli.GetRowsForSql(queryist, sqlCtx, "select active_branch() as branch")
 		if err != nil {
 			return parts, false, err
 		}
-		if len(rows) > 0 && len(rows[0]) > 0 {
-			parts.ActiveRevision, err = cli.GetStringColumnValue(rows[0][0])
+		if len(activeBranchRows) > 0 && len(activeBranchRows[0]) > 0 {
+			parts.ActiveRevision, err = cli.GetStringColumnValue(activeBranchRows[0][0])
 			if err != nil {
 				return parts, false, err
 			}
@@ -139,16 +146,15 @@ func (sqlDBActiveBranchResolver) Resolve(sqlCtx *sql.Context, queryist cli.Query
 	return parts, true, nil
 }
 
-// resolveDirty resolves the dirty state of the current branch. The isBranch bool is returned to differentiate other
-// revision types.
+// resolveDirty resolves the dirty state of the current branch, and whether is the revision type is a branch.
 func resolveDirty(sqlCtx *sql.Context, queryist cli.Queryist) (dirty bool, isBranch bool, err error) {
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, "select count(table_name) > 0 as dirty from dolt_status")
 	if errors.Is(err, doltdb.ErrOperationNotSupportedInDetachedHead) {
 		return false, false, nil
-	}
-	if err != nil {
+	} else if err != nil {
 		return false, false, err
 	}
+
 	if len(rows) == 0 || len(rows[0]) == 0 {
 		return false, false, nil
 	}

@@ -292,20 +292,6 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Type:    types.NewSystemBoolType(dsess.AllowCICreation),
 		Default: int8(0),
 	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltBaseDatabase,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Type:    types.NewSystemStringType(dsess.DoltBaseDatabase),
-		Default: "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltActiveRevision,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Type:    types.NewSystemStringType(dsess.DoltActiveRevision),
-		Default: "",
-	},
 }
 
 func AddDoltSystemVariables() {
@@ -567,20 +553,6 @@ func AddDoltSystemVariables() {
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
 			Type:    types.NewSystemBoolType(dsess.AllowCICreation),
 			Default: int8(0),
-		},
-		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltBaseDatabase,
-			Dynamic: true,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-			Type:    types.NewSystemStringType(dsess.DoltBaseDatabase),
-			Default: "",
-		},
-		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltActiveRevision,
-			Dynamic: true,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-			Type:    types.NewSystemStringType(dsess.DoltActiveRevision),
-			Default: "",
 		},
 	})
 	sql.SystemVariables.AddSystemVariables(DoltSystemVariables)

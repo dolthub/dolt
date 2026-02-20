@@ -964,7 +964,7 @@ func postCommandUpdate(sqlCtx *sql.Context, qryist cli.Queryist) (string, string
 	if err != nil {
 		cli.PrintErrln(err.Error())
 	}
-	if resolved && parts.BaseDatabase != "" && parts.ActiveRevision != "" {
+	if resolved && parts.ActiveRevision != "" {
 		sqlCtx.SetCurrentDatabase(parts.BaseDatabase + doltdb.DbRevisionDelimiter + parts.ActiveRevision)
 	} else if resolved {
 		sqlCtx.SetCurrentDatabase(parts.BaseDatabase)

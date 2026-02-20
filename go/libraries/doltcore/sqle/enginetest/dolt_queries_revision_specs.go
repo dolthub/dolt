@@ -672,6 +672,37 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "database revision specs: base_database and active_revision",
+		SetUpScript: []string{
+			"create table t1(pk int primary key);",
+			"call dolt_add('.');",
+			"call dolt_commit('-am', 'init');",
+			"call dolt_branch('branch1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select base_database(), active_revision();",
+				Expected: []sql.Row{{"mydb", "main"}},
+			},
+			{
+				Query:    "call dolt_checkout('branch1');",
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+			},
+			{
+				Query:    "select base_database(), active_revision();",
+				Expected: []sql.Row{{"mydb", "branch1"}},
+			},
+			{
+				Query:    "use `mydb@branch1`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select base_database(), active_revision();",
+				Expected: []sql.Row{{"mydb", "branch1"}},
+			},
+		},
+	},
+	{
 		Name: "database revision specs: commit id with revision delimiter alias '@'",
 		SetUpScript: []string{
 			"create table t01 (pk int primary key, c1 int);",
