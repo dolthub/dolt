@@ -320,7 +320,11 @@ func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string,
 	// Forced refspec to keep tracking refs in sync with remote truth.
 	srcRef = strings.TrimPrefix(srcRef, "+")
 	refspec := "+" + srcRef + ":" + dstRef
-	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", remote, refspec)
+	// --refmap="" prevents git from also applying the remote's configured
+	// fetch refspecs. Without this, stale tracking refs from default refspecs
+	// can cause directory/file conflicts that make git exit 1 even when our
+	// specific refspec succeeds.
+	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", "--refmap=", remote, refspec)
 	if err != nil && isRemoteRefNotFoundErr(err) {
 		return &RefNotFoundError{Ref: srcRef}
 	}

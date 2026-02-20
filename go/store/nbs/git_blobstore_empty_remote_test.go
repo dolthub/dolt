@@ -147,6 +147,10 @@ func TestNBS_NewGitStore_DefaultsMaxPartSizeTo50MB(t *testing.T) {
 	_, err = gbs.Put(ctx, "k", int64(50*1024*1024+1), bytes.NewReader([]byte("hi")))
 	require.NoError(t, err)
 
+	// Non-manifest Put is deferred; flush via CheckAndPut("manifest").
+	_, err = gbs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
+	require.NoError(t, err)
+
 	// On the remote, key "k" should be represented as a tree containing part "0001".
 	cmd = exec.CommandContext(ctx, "git", "--git-dir", remoteRepo.GitDir, "rev-parse", "--verify", "--quiet", blobstore.DoltDataRef+"^{commit}")
 	headBytes, err := cmd.CombinedOutput()
