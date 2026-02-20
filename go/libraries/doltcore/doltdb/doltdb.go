@@ -2038,6 +2038,9 @@ func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error
 // the correct behavior for a long-lived process working with a
 // local, non-read-only database.
 func (ddb *DoltDB) SetCrashOnFatalError() {
+	if ddb == nil || ddb.db.Database == nil {
+		return
+	}
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 	if nbs, ok := cs.(interface {
 		SetFatalBehavior(dherrors.FatalBehavior)
