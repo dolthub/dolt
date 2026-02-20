@@ -609,8 +609,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				// An ignored table should still be present (and unstaged) after aborting the merge.
-				Query:    "select * from dolt_status;",
-				Expected: []sql.Row{{"generated_foo", byte(0), "new table"}},
+				Query:    "select * from dolt_status_ignored;",
+				Expected: []sql.Row{{"generated_foo", byte(0), "new table", true}},
 			},
 			{
 				// Changes made to the table during the merge should not be reverted.

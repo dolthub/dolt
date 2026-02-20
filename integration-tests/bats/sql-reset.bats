@@ -19,6 +19,10 @@ teardown() {
     teardown_common
 }
 
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 13-44
+}
+
 @test "sql-reset: DOLT_RESET --hard works on unstaged and staged table changes" {
     dolt sql -q "INSERT INTO test VALUES (1)"
 
@@ -218,7 +222,7 @@ SQL
 INSERT INTO test VALUES (1);
 call dolt_reset('--hard');
 SQL
-  
+
     run dolt sql -q "SELECT count(*)=0 FROM dolt_status"
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
@@ -278,10 +282,6 @@ SQL
     [[ "$output" = "$working_hash" ]] || false
 }
 
-get_head_commit() {
-    dolt log -n 1 | grep -m 1 commit | cut -c 13-44
-}
-
 @test "sql-reset: reset handles ignored tables" {
     dolt sql << SQL
 CREATE TABLE test2 (
@@ -299,10 +299,9 @@ SQL
     run dolt sql -q "call dolt_reset('--hard')"
     [ "$status" -eq 0 ]
 
-    run dolt sql -r csv -q "select * from dolt_status"
+    run dolt sql -r csv -q "select * from dolt_status_ignored"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_ignore,0,new table" ]] || false
-    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "test2,0,new table,true" ]] || false
 
     run dolt sql -q "select * from test2"
     [ "$status" -eq 0 ]

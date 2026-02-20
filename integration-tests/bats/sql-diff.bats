@@ -948,3 +948,21 @@ SQL
     [[ "$output" =~ "multiple values provided for \`skinny" ]] || false
     [ "$status" -eq 1 ]
 }
+
+@test "sql-diff: ignored tables in working set are skipped" {
+  dolt sql <<SQL
+INSERT INTO dolt_ignore VALUES ("ignore_*", true);
+CREATE TABLE ignore_table (pk int primary key);
+SQL
+  dolt add .
+  dolt commit -m "create ignored table"
+  dolt sql -q "CREATE TABLE test_table (pk int primary key)"
+
+  run dolt sql -q "SELECT table_name, message FROM dolt_diff"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "test_table  | NULL" ]] || false
+  [[ "$output" =~ "dolt_ignore | create ignored table" ]] || false
+  ! [[ "$output" =~ "ignore_table" ]] || false
+
+}

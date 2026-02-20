@@ -46,8 +46,7 @@ type printData struct {
 
 	stagedTables,
 	unstagedTables,
-	untrackedTables,
-	filteredUntrackedTables map[string]string
+	untrackedTables map[string]string
 
 	constraintViolationTables,
 	dataConflictTables,
@@ -178,7 +177,15 @@ func createPrintData(queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTabl
 		return nil, err
 	}
 
-	statusRows, err := cli.GetRowsForSql(queryist, sqlCtx, "select table_name,staged,status from dolt_status;")
+	var statusRows []sql.Row
+	var sqlQuery string
+	if showIgnoredTables {
+		sqlQuery = "select table_name,staged,status,ignored from dolt_status_ignored;"
+	} else {
+		sqlQuery = "select table_name,staged,status,ignored from dolt_status_ignored where ignored = false;"
+	}
+	statusRows, err = cli.GetRowsForSql(queryist, sqlCtx, sqlQuery)
+
 	if err != nil {
 		return nil, err
 	}
@@ -197,28 +204,30 @@ func createPrintData(queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTabl
 			tableName := row[0].(string)
 			staged := row[1]
 			status := row[2].(string)
+			ignored, err := GetTinyIntColAsBool(row[3])
+			if err != nil {
+				return nil, err
+			}
 
 			isStaged, err := GetTinyIntColAsBool(staged)
 			if err != nil {
 				return nil, err
 			}
 
-			shouldIgnoreTable := false
-			if !isStaged {
-				// determine if the table should be ignored
-				ignored, err := ignorePatterns.IsTableNameIgnored(doltdb.TableName{Name: tableName})
+			shouldIgnoreTable := ignored || doltdb.IsFullTextTable(tableName)
+
+			if showIgnoredTables && shouldIgnoreTable {
+				ignoredTables.Ignore = append(ignoredTables.Ignore, doltdb.TableName{Name: tableName})
+			}
+
+			if !isStaged && !shouldIgnoreTable {
+				// Check for ignore conflicts even when not showing ignored tables
+				_, err := ignorePatterns.IsTableNameIgnored(doltdb.TableName{Name: tableName})
 				if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
 					ignoredTables.Conflicts = append(ignoredTables.Conflicts, *conflict)
 				} else if err != nil {
 					return nil, err
-				} else if ignored == doltdb.DontIgnore {
-					ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, doltdb.TableName{Name: tableName})
-				} else if ignored == doltdb.Ignore {
-					ignoredTables.Ignore = append(ignoredTables.Ignore, doltdb.TableName{Name: tableName})
-				} else {
-					return nil, fmt.Errorf("unrecognized ignore result value: %v", ignored)
 				}
-				shouldIgnoreTable = ignored == doltdb.Ignore
 			}
 			shouldIgnoreTable = shouldIgnoreTable || doltdb.IsFullTextTable(tableName)
 
@@ -269,25 +278,6 @@ func createPrintData(queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTabl
 		}
 	}
 
-	// filter out ignored tables from untracked tables
-	filteredUntrackedTables := map[string]string{}
-	for tableName, status := range untrackedTables {
-		ignored, err := ignorePatterns.IsTableNameIgnored(doltdb.TableName{Name: tableName})
-
-		if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
-			continue
-		} else if err != nil {
-			return nil, err
-		} else if ignored == doltdb.DontIgnore {
-			// no-op
-		} else if ignored == doltdb.Ignore {
-			continue
-		} else {
-			return nil, fmt.Errorf("unrecognized ignore result value: %v", ignored)
-		}
-		filteredUntrackedTables[tableName] = status
-	}
-
 	pd := printData{
 		branchName:                branchName,
 		remoteName:                remoteName,
@@ -300,7 +290,6 @@ func createPrintData(queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTabl
 		stagedTables:              stagedTables,
 		unstagedTables:            unstagedTables,
 		untrackedTables:           untrackedTables,
-		filteredUntrackedTables:   filteredUntrackedTables,
 		ignoredTables:             ignoredTables,
 		constraintViolationTables: constraintViolationTables,
 		schemaConflictTables:      schemaConflictTables,
@@ -612,7 +601,7 @@ and have %v and %v different commits each, respectively.
 		}
 		cli.Println(untrackedHeader)
 		cli.Println(untrackedHeaderHelp)
-		for tableName, status := range data.filteredUntrackedTables {
+		for tableName, status := range data.untrackedTables {
 			text := fmt.Sprintf(statusFmt, status+":", tableName)
 			redText := color.RedString(text)
 			cli.Println(redText)
