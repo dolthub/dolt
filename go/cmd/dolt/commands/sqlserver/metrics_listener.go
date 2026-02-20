@@ -61,6 +61,10 @@ type metricsListener struct {
 	diskUsage prometheus.Gauge
 	memUsage  prometheus.Gauge
 
+	logPollCpuFailures      bool
+	logPollMemFailures      bool
+	logGetDiskUsageFailures bool
+
 	mountPoint string
 
 	// used in updating cluster metrics
@@ -160,6 +164,10 @@ func newMetricsListener(labels prometheus.Labels, versionStr, storagePath string
 		mu:             &sync.Mutex{},
 		clusterSeenDbs: make(map[string]struct{}),
 		mountPoint:     mountPoint,
+
+		logPollCpuFailures:      true,
+		logPollMemFailures:      true,
+		logGetDiskUsageFailures: true,
 	}
 
 	u32Version, err := version.Encode(versionStr)
@@ -248,7 +256,10 @@ func (ml *metricsListener) pollSysMetrics() {
 	percentages, err := cpu.Percent(0, false)
 
 	if err != nil {
-		logrus.Info(fmt.Sprintf("Error getting CPU usage: %v", err))
+		if ml.logGetDiskUsageFailures {
+			logrus.Info(fmt.Sprintf("Cant get CPU usage: %v", err))
+			ml.logPollCpuFailures = false
+		}
 	} else if len(percentages) == 1 {
 		ml.cpuUsage.Set(percentages[0])
 	} else {
@@ -258,7 +269,10 @@ func (ml *metricsListener) pollSysMetrics() {
 	memStats, err := mem.VirtualMemory()
 
 	if err != nil {
-		logrus.Infof("Error getting memory usage: %v", err)
+		if ml.logPollMemFailures {
+			logrus.Infof("Cant get memory usage: %v", err)
+			ml.logPollMemFailures = false
+		}
 	} else {
 		ml.memUsage.Set(memStats.UsedPercent)
 	}
@@ -266,7 +280,10 @@ func (ml *metricsListener) pollSysMetrics() {
 	diskUsage, err := disk.Usage(ml.mountPoint)
 
 	if err != nil {
-		logrus.Infof("Error getting disk usage for mount point '%s': %v", ml.mountPoint, err)
+		if ml.logGetDiskUsageFailures {
+			logrus.Infof("Cant get disk usage for mount point '%s': %v", ml.mountPoint, err)
+			ml.logGetDiskUsageFailures = false
+		}
 	} else {
 		ml.diskUsage.Set(diskUsage.UsedPercent)
 	}
