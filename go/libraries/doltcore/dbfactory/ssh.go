@@ -16,6 +16,7 @@ package dbfactory
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -77,7 +78,9 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
-	cmd.Stderr = os.Stderr
+	// Capture stderr so we can include remote errors in failure messages.
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 
 	if err := cmd.Start(); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to start transfer subprocess: %w", err)
@@ -88,9 +91,14 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	go func() { processDone <- cmd.Wait() }()
 
 	// Brief pause to detect immediate failures (e.g., bad path, missing dolt).
-	time.Sleep(100 * time.Millisecond)
+	// SSH connection + shell startup can take over 100ms, so we use 500ms.
+	time.Sleep(500 * time.Millisecond)
 	select {
 	case err := <-processDone:
+		errMsg := strings.TrimSpace(stderrBuf.String())
+		if errMsg != "" {
+			return nil, nil, nil, fmt.Errorf("ssh remote error: %s", errMsg)
+		}
 		return nil, nil, nil, fmt.Errorf("transfer subprocess exited immediately: %w", err)
 	default:
 	}
