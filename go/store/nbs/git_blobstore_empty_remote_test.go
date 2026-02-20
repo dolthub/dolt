@@ -148,7 +148,7 @@ func TestNBS_NewGitStore_DefaultsMaxPartSizeTo50MB(t *testing.T) {
 	require.NoError(t, err)
 
 	// Non-manifest Put is deferred; flush via CheckAndPut("manifest").
-	_, err = gbs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("m1\n")))
+	_, err = gbs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
 	require.NoError(t, err)
 
 	// On the remote, key "k" should be represented as a tree containing part "0001".

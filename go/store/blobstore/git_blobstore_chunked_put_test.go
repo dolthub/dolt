@@ -58,7 +58,7 @@ func TestGitBlobstore_Put_ChunkedWritesTreeParts(t *testing.T) {
 	require.Equal(t, want, got)
 
 	// Flush deferred writes via CheckAndPut("manifest").
-	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("m1\n")))
+	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
 	require.NoError(t, err)
 
 	runner, err := git.NewRunner(remoteRepo.GitDir)
@@ -130,7 +130,7 @@ func TestGitBlobstore_Put_IdempotentDoesNotChangeExistingRepresentation(t *testi
 	require.Equal(t, []byte("abcdefghij"), got)
 
 	// Flush deferred writes and verify remote state.
-	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("m1\n")))
+	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
 	require.NoError(t, err)
 
 	head, ok, err := api.TryResolveRefCommit(ctx, DoltDataRef)
