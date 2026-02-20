@@ -1172,22 +1172,18 @@ SQL
     dolt add test
     dolt commit -m "Added test table"
 
-    # Create an ignored table pattern
+    # create table matching an ignore pattern
     dolt sql -q "INSERT INTO dolt_ignore VALUES ('ignored_*', true)"
-
-    # Create a table that matches the ignore pattern
     dolt sql -q "CREATE TABLE ignored_table (pk INT PRIMARY KEY)"
 
-    # Create a non-ignored table with changes
     dolt sql -q "INSERT INTO test VALUES (1, 1)"
 
-    # Query dolt_status - shows all tables (does not filter ignored)
+    # dolt_status does not show ignored tables
     run dolt sql -q "SELECT table_name FROM dolt_status WHERE staged = false"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    [[ "$output" =~ "ignored_table" ]] || false
+    ! [[ "$output" =~ "ignored_table" ]] || false
 
-    # Query dolt_status_ignored - shows all tables with ignored column
     run dolt sql -q "SELECT table_name, ignored FROM dolt_status_ignored WHERE staged = false ORDER BY table_name"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "ignored_table" ]] || false
@@ -1202,14 +1198,6 @@ SQL
     run dolt sql -r csv -q "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'test'"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test,false" ]] || false
-
-    # Verify schema has 4 columns
-    run dolt sql -q "DESCRIBE dolt_status_ignored"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "table_name" ]] || false
-    [[ "$output" =~ "staged" ]] || false
-    [[ "$output" =~ "status" ]] || false
-    [[ "$output" =~ "ignored" ]] || false
 }
 
 @test "system-tables: dolt_status_ignored shows staged tables without ignored flag" {

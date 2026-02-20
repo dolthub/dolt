@@ -202,10 +202,19 @@ func (dt *UnscopedDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter,
 		return nil, err
 	}
 
+	// Get ignore patterns to filter out ignored unstaged new tables
+	schemas := []string{doltdb.DefaultSchemaName}
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
+	if err != nil {
+		return nil, err
+	}
+	patterns := ignorePatternMap[doltdb.DefaultSchemaName]
+
 	var ri sql.RowIter
 	ri = &doltDiffWorkingSetRowItr{
 		stagedTableDeltas:   staged,
 		unstagedTableDeltas: unstaged,
+		ignorePatterns:      patterns,
 	}
 
 	for _, filter := range dt.partitionFilters {
@@ -222,40 +231,57 @@ type doltDiffWorkingSetRowItr struct {
 	unstagedTableDeltas []diff.TableDelta
 	stagedIndex         int
 	unstagedIndex       int
+	ignorePatterns      doltdb.IgnorePatterns
 }
 
 func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
-	var changeSet string
-	var tableDelta diff.TableDelta
-	if d.stagedIndex < len(d.stagedTableDeltas) {
-		changeSet = "STAGED"
-		tableDelta = d.stagedTableDeltas[d.stagedIndex]
-		d.stagedIndex++
-	} else if d.unstagedIndex < len(d.unstagedTableDeltas) {
-		changeSet = "WORKING"
-		tableDelta = d.unstagedTableDeltas[d.unstagedIndex]
-		d.unstagedIndex++
-	} else {
-		return nil, io.EOF
+	for {
+		var changeSet string
+		var tableDelta diff.TableDelta
+		if d.stagedIndex < len(d.stagedTableDeltas) {
+			changeSet = "STAGED"
+			tableDelta = d.stagedTableDeltas[d.stagedIndex]
+			d.stagedIndex++
+		} else if d.unstagedIndex < len(d.unstagedTableDeltas) {
+			changeSet = "WORKING"
+			tableDelta = d.unstagedTableDeltas[d.unstagedIndex]
+			d.unstagedIndex++
+		} else {
+			return nil, io.EOF
+		}
+
+		// Skip ignored unstaged new tables (same as Git behavior:
+		// only untracked/new tables can be ignored).
+		if changeSet == "WORKING" && tableDelta.IsAdd() {
+			tblName := doltdb.TableName{Name: tableDelta.CurName()}
+			result, err := d.ignorePatterns.IsTableNameIgnored(tblName)
+			// If a table name has conflicting ignore rules, don't ignore it.
+			if err != nil && doltdb.AsDoltIgnoreInConflict(err) == nil {
+				return nil, err
+			}
+			if result == doltdb.Ignore {
+				continue
+			}
+		}
+
+		change, err := tableDelta.GetSummary(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		sqlRow := sql.NewRow(
+			changeSet,
+			change.TableName.String(),
+			nil, // committer
+			nil, // email
+			nil, // date
+			nil, // message
+			change.DataChange,
+			change.SchemaChange,
+		)
+
+		return sqlRow, nil
 	}
-
-	change, err := tableDelta.GetSummary(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sqlRow := sql.NewRow(
-		changeSet,
-		change.TableName.String(),
-		nil, // committer
-		nil, // email
-		nil, // date
-		nil, // message
-		change.DataChange,
-		change.SchemaChange,
-	)
-
-	return sqlRow, nil
 }
 
 func (d *doltDiffWorkingSetRowItr) Close(c *sql.Context) error {

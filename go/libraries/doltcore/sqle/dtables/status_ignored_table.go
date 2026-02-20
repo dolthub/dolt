@@ -147,7 +147,8 @@ func newStatusIgnoredItr(ctx *sql.Context, st *StatusIgnoredTable) (*StatusIgnor
 		if row.isStaged == byte(0) && row.status == newTableStatus && unstagedTableNames[row.tableName] {
 			tblNameObj := doltdb.TableName{Name: row.tableName}
 			result, err := ignorePatterns.IsTableNameIgnored(tblNameObj)
-			if err != nil {
+			// If a table name has conflicting ignore rules, don't ignore it.
+			if err != nil && doltdb.AsDoltIgnoreInConflict(err) == nil {
 				return nil, err
 			}
 			if result == doltdb.Ignore {
