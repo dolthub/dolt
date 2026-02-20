@@ -2145,11 +2145,17 @@ func (ddb *DoltDB) DatasetsByRootHash(ctx context.Context, hashof hash.Hash) (da
 }
 
 func (ddb *DoltDB) PrependCommitHooks(ctx context.Context, hooks ...CommitHook) *DoltDB {
+	if ddb == nil || ddb.db.Database == nil {
+		return ddb
+	}
 	ddb.db = ddb.db.SetCommitHooks(ctx, append(hooks, ddb.db.PostCommitHooks()...))
 	return ddb
 }
 
 func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) error {
+	if ddb == nil || ddb.db.Database == nil {
+		return nil
+	}
 	ds, err := ddb.db.GetDataset(ctx, datasetId)
 	if err != nil {
 		return err
