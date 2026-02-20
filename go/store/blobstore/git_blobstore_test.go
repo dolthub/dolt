@@ -311,6 +311,10 @@ func TestGitBlobstore_RemoteManaged_PutPushesToRemote(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
 
+	// Non-manifest Put is deferred; flush via CheckAndPut("manifest").
+	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("m1\n")))
+	require.NoError(t, err)
+
 	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
 	remoteAPI := git.NewGitAPIImpl(remoteRunner)
@@ -343,6 +347,10 @@ func TestGitBlobstore_RemoteManaged_PutBootstrapsEmptyRemote(t *testing.T) {
 	ver, err := bs.Put(ctx, "k", int64(len(want)), bytes.NewReader(want))
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
+
+	// Non-manifest Put is deferred; flush via CheckAndPut("manifest").
+	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("m1\n")))
+	require.NoError(t, err)
 
 	// Remote should now have refs/dolt/data and contain the key.
 	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
@@ -420,9 +428,13 @@ func TestGitBlobstore_RemoteManaged_PutRetriesOnLeaseFailure(t *testing.T) {
 		},
 	}
 
+	// Put is deferred (no push). The retry happens during CheckAndPut flush.
 	ver, err := PutBytes(ctx, bs, "k", []byte("after retry\n"))
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
+
+	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("m1\n")))
+	require.NoError(t, err)
 
 	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
 	require.NoError(t, err)
@@ -607,6 +619,10 @@ func TestGitBlobstore_RemoteManaged_PutOverwritesDivergedLocalRef_NoMergeCommit(
 	require.NoError(t, err)
 
 	_, err = PutBytes(ctx, bs, "k", []byte("from local\n"))
+	require.NoError(t, err)
+
+	// Non-manifest Put is deferred; flush via CheckAndPut("manifest").
+	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("m1\n")))
 	require.NoError(t, err)
 
 	remoteHeadAfter, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
@@ -813,23 +829,28 @@ func TestGitBlobstore_Concatenate_ChunkedResult(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
 
-	// Verify the resulting key is stored as a chunked tree (not a single blob).
-	head, ok, err := bs.api.TryResolveRefCommit(ctx, bs.localRef)
+	// Non-manifest writes are deferred; flush via CheckAndPut("manifest").
+	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("m1\n")))
+	require.NoError(t, err)
+
+	// Verify the resulting key is stored as a chunked tree on the remote.
+	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
+	require.NoError(t, err)
+	remoteAPI := git.NewGitAPIImpl(remoteRunner)
+	head, ok, err := remoteAPI.TryResolveRefCommit(ctx, DoltDataRef)
 	require.NoError(t, err)
 	require.True(t, ok)
-	oid, typ, err := bs.api.ResolvePathObject(ctx, head, "c")
+	_, typ, err := remoteAPI.ResolvePathObject(ctx, head, "c")
 	require.NoError(t, err)
 	require.Equal(t, git.ObjectTypeTree, typ)
-	require.Equal(t, oid.String(), ver)
 
-	parts, err := bs.api.ListTree(ctx, head, "c")
+	parts, err := remoteAPI.ListTree(ctx, head, "c")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(parts), 2)
 	require.Equal(t, "0001", parts[0].Name)
 
-	got, ver2, err := GetBytes(ctx, bs, "c", AllRange)
+	got, _, err := GetBytes(ctx, bs, "c", AllRange)
 	require.NoError(t, err)
-	require.Equal(t, ver, ver2)
 	require.Equal(t, want, got)
 }
 
