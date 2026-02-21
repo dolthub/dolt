@@ -44,7 +44,7 @@ var _ Serializer = BlobSerializer{}
 
 func (s BlobSerializer) Serialize(keys, values [][]byte, subtrees []uint64, level int) serial.Message {
 	bufSz := estimateBlobSize(values, subtrees)
-	b := getFlatbufferBuilder(s.pool, bufSz)
+	b := getFlatbufferBuilder(bufSz)
 
 	if level == 0 {
 		assertTrue(len(values) == 1, "num values != 1 when serialize Blob")
