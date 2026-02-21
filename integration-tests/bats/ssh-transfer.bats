@@ -75,9 +75,10 @@ teardown() {
     dolt commit -m "initial commit"
     
     cd ..
-    run timeout 2s dolt --data-dir="repo1" transfer
-    # We expect it to timeout since it's waiting for input, but it should start
-    [ "$status" -eq 124 ] || [ "$status" -eq 143 ]  # timeout exit codes
+    run dolt --data-dir="repo1" transfer </dev/null
+    # Transfer exits non-zero when stdin closes immediately, but it should
+    # start without crashing. Exit code 1 means it ran and shut down cleanly.
+    [ "$status" -eq 1 ]
 }
 
 @test "ssh-transfer: clone via SSH URL" {

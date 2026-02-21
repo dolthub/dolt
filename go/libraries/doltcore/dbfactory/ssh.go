@@ -99,6 +99,9 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	select {
 	case err := <-processDone:
 		errMsg := strings.TrimSpace(stderrBuf.String())
+		if strings.Contains(errMsg, "no such file or directory") || strings.Contains(errMsg, "failed to load database") {
+			return nil, nil, nil, fmt.Errorf("repository not found at %s", path)
+		}
 		if errMsg != "" {
 			return nil, nil, nil, fmt.Errorf("ssh remote error: %s", errMsg)
 		}
