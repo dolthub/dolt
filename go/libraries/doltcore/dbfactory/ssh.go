@@ -169,12 +169,18 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 }
 
 // buildTransferCommand constructs the exec.Cmd for the transfer subprocess.
-// It runs ssh [user@]host "dolt --data-dir <path> transfer", using DOLT_SSH
-// as the SSH binary if set, otherwise defaulting to "ssh".
+// It runs ssh [user@]host "<dolt> --data-dir <path> transfer", using DOLT_SSH
+// as the SSH binary if set (default "ssh"), and DOLT_SSH_EXEC_PATH as the
+// remote dolt binary path if set (default "dolt").
 func buildTransferCommand(host, path, user string) (*exec.Cmd, error) {
 	sshCommand := os.Getenv("DOLT_SSH")
 	if sshCommand == "" {
 		sshCommand = "ssh"
+	}
+
+	remoteDolt := os.Getenv("DOLT_SSH_EXEC_PATH")
+	if remoteDolt == "" {
+		remoteDolt = "dolt"
 	}
 
 	sshTarget := host
@@ -182,7 +188,7 @@ func buildTransferCommand(host, path, user string) (*exec.Cmd, error) {
 		sshTarget = user + "@" + host
 	}
 
-	remoteCmd := fmt.Sprintf("dolt --data-dir %s transfer", path)
+	remoteCmd := fmt.Sprintf("%s --data-dir %s transfer", remoteDolt, path)
 	sshArgs := strings.Fields(sshCommand)
 	if len(sshArgs) == 0 {
 		return nil, fmt.Errorf("invalid DOLT_SSH command: empty")
