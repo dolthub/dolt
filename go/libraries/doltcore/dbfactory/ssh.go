@@ -55,6 +55,9 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	path := urlObj.Path
 	user := ""
 
+	// Strip trailing /.dolt if provided.
+	path = strings.TrimSuffix(path, "/.dolt")
+
 	if urlObj.User != nil {
 		user = urlObj.User.Username()
 	}
