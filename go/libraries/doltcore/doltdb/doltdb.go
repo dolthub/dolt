@@ -2401,7 +2401,8 @@ func (ddb *DoltDB) PurgeCaches() {
 }
 
 const (
-	DbRevisionDelimiter = "/"
+	DbRevisionDelimiter      = "/"
+	DbRevisionDelimiterAlias = "@"
 )
 
 // RevisionDbName returns the name of the revision db for the base name and revision string given
@@ -2409,12 +2410,28 @@ func RevisionDbName(baseName string, rev string) string {
 	return baseName + DbRevisionDelimiter + rev
 }
 
+// SplitRevisionDbName returns the base database name and revision from a traditional revision-qualified name. Splits on
+// the first "/".
 func SplitRevisionDbName(dbName string) (string, string) {
-	var baseName, rev string
-	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
-	baseName = parts[0]
-	if len(parts) > 1 {
-		rev = parts[1]
+	if idx := strings.Index(dbName, DbRevisionDelimiter); idx >= 0 {
+		return dbName[:idx], dbName[idx+1:]
 	}
-	return baseName, rev
+	return dbName, ""
+}
+
+// NormalizeRevisionDelimiter rewrites "base@revision" names to "base/revision". Names that already contain "/" are
+// returned unchanged so bases that include "@" keep their existing interpretation.
+func NormalizeRevisionDelimiter(dbName string) (rewrite string, usesDelimiterAlias bool) {
+	if strings.Contains(dbName, DbRevisionDelimiter) {
+		return dbName, false
+	}
+
+	lastAliasIndex := strings.LastIndex(dbName, DbRevisionDelimiterAlias)
+	if lastAliasIndex < 0 {
+		return dbName, false
+	}
+
+	base := dbName[:lastAliasIndex]
+	revision := dbName[lastAliasIndex+1:]
+	return RevisionDbName(base, revision), true
 }

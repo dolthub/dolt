@@ -26,6 +26,7 @@ CLAUDE.md
 .gitattributes
 
 .de/
+.cursor
 AGENTS.md
 .claude/
 .cursorrules

@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -82,4 +83,53 @@ func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.
 	}
 
 	return rows, nil
+}
+
+// GetStringColumnValue returns column values from [sql.Row] as a string.
+func GetStringColumnValue(value any) (str string, err error) {
+	if value == nil {
+		return "", nil
+	}
+
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case []byte:
+		return string(v), nil
+	case fmt.Stringer:
+		return v.String(), nil
+	default:
+		return "", fmt.Errorf("unexpected type %T, expected string-like column value", value)
+	}
+}
+
+// GetBoolColumnValue returns the value of the input as a bool. This is required because depending on if we go over the
+// wire or not we may get a string or a bool when we expect a bool.
+func GetBoolColumnValue(col interface{}) (bool, error) {
+	switch v := col.(type) {
+	case bool:
+		return col.(bool), nil
+	case string:
+		return strings.EqualFold(col.(string), "true") || strings.EqualFold(col.(string), "1"), nil
+	default:
+		return false, fmt.Errorf("unexpected type %T, was expecting bool or string", v)
+	}
+}
+
+// WithQueryWarningsLocked runs queries with a preserved warning buffer. Internal shell queries run on the same SQL
+// session as user queries. Without warning locks, these housekeeping queries can clear or overwrite warnings that users
+// expect.
+func WithQueryWarningsLocked(sqlCtx *sql.Context, queryist Queryist, fn func() error) error {
+	_, _, _, err := queryist.Query(sqlCtx, "set lock_warnings = 1")
+	if err != nil {
+		return err
+	}
+
+	runErr := fn()
+
+	_, _, _, err = queryist.Query(sqlCtx, "set lock_warnings = 0")
+	if err != nil {
+		return err
+	}
+	return runErr
 }

@@ -438,19 +438,6 @@ func getInt32ColAsInt32(col interface{}) (int32, error) {
 	}
 }
 
-// getStrBoolColAsBool returns the value of the input as a bool. This is required because depending on if we
-// go over the wire or not we may get a string or a bool when we expect a bool.
-func getStrBoolColAsBool(col interface{}) (bool, error) {
-	switch v := col.(type) {
-	case bool:
-		return col.(bool), nil
-	case string:
-		return strings.EqualFold(col.(string), "true") || strings.EqualFold(col.(string), "1"), nil
-	default:
-		return false, fmt.Errorf("unexpected type %T, was expecting bool or string", v)
-	}
-}
-
 func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string, error) {
 	query := "SELECT active_branch()"
 	rows, err := cli.GetRowsForSql(queryEngine, sqlCtx, query)
