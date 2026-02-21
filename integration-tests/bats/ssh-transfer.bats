@@ -187,12 +187,18 @@ teardown() {
     
     run dolt push origin main
     [ "$status" -eq 0 ]
-    
-    cd "../repo_push_source"
+
+    # Verify by cloning the source again -- push updates the branch ref
+    # but not the working set, so dolt sql on the source would be stale.
+    cd ..
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_push_source" repo_push_verify
+    [ "$status" -eq 0 ]
+
+    cd repo_push_verify
     run dolt sql -q "SELECT COUNT(*) FROM data;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2" ]]
-    
+
     run dolt sql -q "SELECT val FROM data WHERE id = 2;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "from_clone" ]]
