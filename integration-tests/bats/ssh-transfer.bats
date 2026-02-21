@@ -282,3 +282,73 @@ EOF
     [ -f "$BATS_TMPDIR/ssh_calls.log" ]
     grep -q "CUSTOM_SSH_CALLED" "$BATS_TMPDIR/ssh_calls.log"
 }
+
+@test "ssh-transfer: DOLT_SSH_EXEC_PATH overrides remote dolt path" {
+    mkdir "repo_exec_path"
+    cd "repo_exec_path"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO test VALUES (1), (2);"
+    dolt add .
+    dolt commit -m "test"
+
+    # Create a mock SSH that logs the remote command it receives
+    cat > "$BATS_TMPDIR/mock_ssh_exec" <<'MOCK'
+#!/bin/bash
+COMMAND=""
+HOST=""
+SKIP_NEXT=false
+
+for arg in "$@"; do
+    if [[ "$SKIP_NEXT" == "true" ]]; then
+        SKIP_NEXT=false
+        continue
+    fi
+    case "$arg" in
+        -*)
+            if [[ "$arg" == "-o" ]] || [[ "$arg" == "-i" ]]; then
+                SKIP_NEXT=true
+            fi
+            ;;
+        *@*)
+            HOST="${arg#*@}"
+            ;;
+        *)
+            if [[ -z "$HOST" ]] && [[ -z "$COMMAND" ]]; then
+                HOST="$arg"
+            else
+                if [[ -z "$COMMAND" ]]; then
+                    COMMAND="$arg"
+                else
+                    COMMAND="$COMMAND $arg"
+                fi
+            fi
+            ;;
+    esac
+done
+
+# Log the remote command for verification
+echo "$COMMAND" >> "$BATS_TMPDIR/exec_path.log"
+# Execute locally, replacing the custom path with the real dolt
+COMMAND=$(echo "$COMMAND" | sed "s|/custom/path/to/dolt|$(which dolt)|")
+exec $COMMAND
+MOCK
+    chmod +x "$BATS_TMPDIR/mock_ssh_exec"
+
+    export DOLT_SSH="$BATS_TMPDIR/mock_ssh_exec"
+    export DOLT_SSH_EXEC_PATH="/custom/path/to/dolt"
+
+    cd ..
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_exec_path" repo_exec_clone
+    [ "$status" -eq 0 ]
+
+    # Verify the custom exec path was used in the remote command
+    [ -f "$BATS_TMPDIR/exec_path.log" ]
+    grep -q "/custom/path/to/dolt --data-dir" "$BATS_TMPDIR/exec_path.log"
+
+    # Verify data is correct
+    cd repo_exec_clone
+    run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]]
+}
