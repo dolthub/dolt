@@ -47,15 +47,14 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}
-      - name: Check generated flatbuffers
-        working-directory: ./go/serial
+      - name: Check generated protobufs and flatbuffers
+        working-directory: ./proto
         run: |
-          (cd ../../proto/third_party/flatbuffers && bazel build //:flatc)
-          ./generate.sh
+          bazel run //:update
           changes=$(git status --porcelain)
           diff=$(git diff)
           if [ ! -z "$changes" ]; then
-             echo "ERROR: Generated flatbuffer structs are different from the checked in version."
+             echo "ERROR: Generated protobuf structs and/or flatbuffer messages are different from the checked in version."
              echo "$changes"
              echo "$diff"
              exit 1
@@ -156,22 +155,3 @@ jobs:
           add: "."
           cwd: "."
           pull: "--ff"
-      - name: Check generated protobufs
-        working-directory: ./proto
-        env:
-          USE_BAZEL_VERSION: 7.4.0
-        run: |
-          (cd third_party/protobuf && bazel build //:protoc)
-          (cd third_party/protobuf-go && go build -o ._protoc-gen-go ./cmd/protoc-gen-go)
-          (cd third_party/grpc-go/cmd/protoc-gen-go-grpc && go build -o ._protoc-gen-go-grpc .)
-          make clean all
-          find ../go/gen/proto -name '*.pb.go' -exec gofmt -s -w {} +
-          find ../go/gen/proto -name '*.pb.go' -exec goimports -w {} +
-          changes=$(git status --porcelain)
-          diff=$(git diff)
-          if [ ! -z "$changes" ]; then
-             echo "ERROR: Generated protobuf structs are different from the checked in version."
-             echo "$changes"
-             echo "$diff"
-             exit 1
-          fi

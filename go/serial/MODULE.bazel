@@ -1,0 +1,14 @@
+module(name = "com_github_dolthub_dolt_go_serial")
+
+bazel_dep(name = "rules_pkg", version = "1.2.0")
+bazel_dep(name = "rules_cc", version = "0.2.16")
+bazel_dep(name = "platforms", version = "1.0.0")
+
+git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
+    name = "com_github_dolthub_flatbuffers",
+    commit = "4df20763d862cac7ec092cdee53e4afde63399d9",
+    remote = "https://github.com/dolthub/flatbuffers.git",
+)
+

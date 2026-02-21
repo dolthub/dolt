@@ -1,0 +1,16 @@
+load("@rules_go//proto:def.bzl", "go_proto_library")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+
+package(default_visibility = ["//visibility:public"])
+
+proto_library(
+    name = "replicationapi_proto",
+    srcs = glob(["*.proto"]),
+)
+
+go_proto_library(
+    name = "replicationapi_go_proto",
+    compilers = ["@rules_go//proto:go_grpc"],
+    importpath = "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1",
+    proto = ":replicationapi_proto",
+)
