@@ -447,9 +447,12 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query: "use `mydb@branch1@branch2`;",
-				// The `@` delimiter is interpreted at the first index found, so the above is not supported.
-				ExpectedErr: sql.ErrDatabaseNotFound,
+				Query:    "use `mydb@branch1@branch2`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{{"mydb@branch1@branch2"}},
 			},
 			{
 				Query:    "use `mydb@branch1`;",

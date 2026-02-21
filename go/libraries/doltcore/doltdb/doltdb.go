@@ -2410,10 +2410,12 @@ func NormalizeRevisionDelimiter(dbName string) (rewrite string, usesDelimiterAli
 		return dbName, false
 	}
 
-	base, revision, found := strings.Cut(dbName, DbRevisionDelimiterAlias)
-	if !found {
-		return dbName, found
+	lastAliasIndex := strings.LastIndex(dbName, DbRevisionDelimiterAlias)
+	if lastAliasIndex < 0 {
+		return dbName, false
 	}
 
+	base := dbName[:lastAliasIndex]
+	revision := dbName[lastAliasIndex+1:]
 	return RevisionDbName(base, revision), true
 }
