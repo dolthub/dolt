@@ -100,6 +100,26 @@ teardown() {
     [[ "$output" =~ "2" ]]
 }
 
+@test "ssh-transfer: clone with .dolt suffix in URL path" {
+    mkdir "repo_dotsuffix"
+    cd "repo_dotsuffix"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO test VALUES (1), (2), (3);"
+    dolt add .
+    dolt commit -m "test data"
+
+    cd ..
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_dotsuffix/.dolt" repo_dotsuffix_clone
+    [ "$status" -eq 0 ]
+    [ -d repo_dotsuffix_clone ]
+
+    cd repo_dotsuffix_clone
+    run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]]
+}
+
 @test "ssh-transfer: clone with user@host format" {
     mkdir "repo_usertest"
     cd "repo_usertest"
