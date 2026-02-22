@@ -144,6 +144,26 @@ func CheckoutWouldOverwriteTables(err error) []string {
 	return cwo.tables
 }
 
+type ErrCheckoutWouldOverwriteIgnoredTables struct {
+	Tables []string
+}
+
+func (e ErrCheckoutWouldOverwriteIgnoredTables) Error() string {
+	var buffer bytes.Buffer
+	buffer.WriteString("error: The following ignored tables would be overwritten by checkout:\n")
+	for _, tbl := range e.Tables {
+		buffer.WriteString("\t" + tbl + "\n")
+	}
+	buffer.WriteString("Please commit your changes or delete them before you switch branches.\n")
+	buffer.WriteString("Use --overwrite-ignore to force.")
+	return buffer.String()
+}
+
+func IsCheckoutWouldOverwriteIgnoredTables(err error) bool {
+	_, ok := err.(ErrCheckoutWouldOverwriteIgnoredTables)
+	return ok
+}
+
 type NothingStaged struct {
 	NotStagedTbls []diff.TableDelta
 }

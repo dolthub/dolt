@@ -29,7 +29,7 @@ import (
 
 // MoveWorkingSetToBranch moves the working set from the currently checked out branch onto the branch specified
 // by `brName`. This is a POTENTIALLY DESTRUCTIVE ACTION used during command line checkout
-func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBranch bool) error {
+func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBranch bool, overwriteIgnore bool) error {
 	branchRef := ref.NewBranchRef(brName)
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbName := dSess.GetCurrentDatabase()
@@ -118,11 +118,21 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
 	// checkoutWouldStompWorkingSetChanges
 	if hasChanges {
-		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force)
+		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force, overwriteIgnore)
 		if err != nil {
 			return err
 		}
 	} else {
+		if !overwriteIgnore {
+			overwritten, err := actions.FindOverwrittenIgnoredTables(ctx, initialRoots, branchHead)
+			if err != nil {
+				return err
+			}
+			if len(overwritten) > 0 {
+				return actions.ErrCheckoutWouldOverwriteIgnoredTables{Tables: overwritten}
+			}
+		}
+
 		wsRef, err := ref.WorkingSetRefForHead(branchRef)
 		if err != nil {
 			return err
@@ -155,12 +165,13 @@ func transferWorkingChanges(
 	branchHead doltdb.RootValue,
 	branchRef ref.BranchRef,
 	force bool,
+	overwriteIgnore bool,
 ) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	// Compute the new roots before switching the working set.
 	// This way, we don't leave the branch in a bad state in the event of an error.
-	newRoots, err := actions.RootsForBranch(ctx, initialRoots, branchHead, force)
+	newRoots, err := actions.RootsForBranch(ctx, initialRoots, branchHead, force, overwriteIgnore)
 	if err != nil {
 		return err
 	}

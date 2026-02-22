@@ -1200,3 +1200,105 @@ SQL
     [[ "$output" =~ "* main" ]] || false
 }
 
+@test "checkout: --no-overwrite-ignore aborts when ignored table would be overwritten" {
+    # Setup: create a table and an ignore pattern on main
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "add ignored table and ignore pattern on main"
+
+    # Create a branch 'other' and modify the ignored table there
+    dolt checkout -b other
+    dolt sql -q "INSERT INTO ignored_tbl VALUES (2, 200)"
+    dolt add -A --force
+    dolt commit -m "modify ignored table on other branch" --force
+
+    # Go back to main
+    dolt checkout main
+
+    # Checkout with --no-overwrite-ignore should abort
+    run dolt checkout --no-overwrite-ignore other
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ignored tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "ignored_tbl" ]] || false
+
+    # Verify we're still on main
+    run dolt branch
+    [[ "$output" =~ "* main" ]] || false
+}
+
+@test "checkout: --overwrite-ignore allows checkout when ignored table would be overwritten" {
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "add ignored table and ignore pattern on main"
+
+    dolt checkout -b other
+    dolt sql -q "INSERT INTO ignored_tbl VALUES (2, 200)"
+    dolt add -A --force
+    dolt commit -m "modify ignored table on other branch" --force
+
+    dolt checkout main
+
+    # Explicit --overwrite-ignore should succeed
+    run dolt checkout --overwrite-ignore other
+    [ "$status" -eq 0 ]
+}
+
+@test "checkout: default behavior overwrites ignored tables (no flag)" {
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "add ignored table and ignore pattern on main"
+
+    dolt checkout -b other
+    dolt sql -q "INSERT INTO ignored_tbl VALUES (2, 200)"
+    dolt add -A --force
+    dolt commit -m "modify ignored table on other branch" --force
+
+    dolt checkout main
+
+    # Default behavior should overwrite (no error)
+    run dolt checkout other
+    [ "$status" -eq 0 ]
+}
+
+@test "checkout: --overwrite-ignore and --no-overwrite-ignore are mutually exclusive" {
+    dolt branch other
+    run dolt checkout --overwrite-ignore --no-overwrite-ignore other
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "mutually exclusive" ]] || false
+}
+
+@test "checkout: --no-overwrite-ignore allows checkout when ignored table is unchanged" {
+    # Setup: create ignored table on main
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "add ignored table on main"
+
+    # Create branch 'other' WITHOUT modifying the ignored table
+    dolt checkout -b other
+    dolt sql -q "CREATE TABLE normal_tbl (pk int PRIMARY KEY)"
+    dolt add -A
+    dolt commit -m "add normal table on other branch"
+
+    dolt checkout main
+
+    # Since the ignored table is unchanged between branches, checkout should succeed
+    run dolt checkout --no-overwrite-ignore other
+    [ "$status" -eq 0 ]
+}
+
