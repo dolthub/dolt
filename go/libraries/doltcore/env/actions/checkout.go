@@ -379,8 +379,8 @@ func FindOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, branc
 			return nil, err
 		}
 
-		if currentHash != newHash {
-			overwritten = append(overwritten, tbl.Name)
+		if currentHash != newHash && !newHash.IsEmpty() {
+			overwritten = append(overwritten, tbl.String())
 		}
 	}
 

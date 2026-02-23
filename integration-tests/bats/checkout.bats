@@ -1302,3 +1302,22 @@ SQL
     [ "$status" -eq 0 ]
 }
 
+@test "checkout: --no-overwrite-ignore does not warn when ignored table only exists locally" {
+    # Create a branch 'other' FIRST (before the ignored table exists)
+    dolt branch other
+
+    # Now add an ignored table on main
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "add ignored table on main"
+
+    # 'other' has never seen ignored_tbl. Checking out should NOT warn
+    # because nothing on the target branch is overwriting the table.
+    run dolt checkout --no-overwrite-ignore other
+    [ "$status" -eq 0 ]
+}
+
