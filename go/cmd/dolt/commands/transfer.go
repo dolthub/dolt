@@ -156,7 +156,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	remotesapi.RegisterChunkStoreServiceServer(grpcServer, chunkStoreService)
 
 	// Set up HTTP handler for table file transfers.
-	httpHandler := newTransferFileHandler(dbCache, dEnv.FS, logEntry, sealer)
+	httpHandler := newTransferFileHandler(dbCache, dEnv.FS, logEntry)
 	httpServer := &http.Server{Handler: httpHandler}
 
 	// Create SMUX-backed listeners for gRPC and HTTP.
@@ -256,27 +256,18 @@ type transferFileHandler struct {
 	dbCache remotesrv.DBCache
 	fs      filesys.Filesys
 	lgr     *logrus.Entry
-	sealer  remotesrv.Sealer
 }
 
-func newTransferFileHandler(dbCache remotesrv.DBCache, fs filesys.Filesys, lgr *logrus.Entry, sealer remotesrv.Sealer) *transferFileHandler {
+func newTransferFileHandler(dbCache remotesrv.DBCache, fs filesys.Filesys, lgr *logrus.Entry) *transferFileHandler {
 	return &transferFileHandler{
 		dbCache: dbCache,
 		fs:      fs,
 		lgr:     lgr,
-		sealer:  sealer,
 	}
 }
 
 func (fh *transferFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	url, err := fh.sealer.Unseal(r.URL)
-	if err != nil {
-		fh.lgr.WithError(err).Warn("could not unseal URL")
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
-
-	path := strings.TrimLeft(url.Path, "/")
+	path := strings.TrimLeft(r.URL.Path, "/")
 
 	switch r.Method {
 	case http.MethodGet:
