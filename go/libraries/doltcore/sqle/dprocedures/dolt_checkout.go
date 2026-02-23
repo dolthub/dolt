@@ -528,13 +528,15 @@ func checkoutExistingBranch(
 			return err
 		}
 
-		if currentRoots, hasRoots := dSess.GetRoots(ctx, dbName); hasRoots {
-			branchHead, err := actions.BranchHeadRoot(ctx, ddb, branchName)
-			if err != nil {
-				return err
-			}
-			if err := actions.CheckOverwrittenIgnoredTables(ctx, currentRoots, branchHead, overwriteIgnore); err != nil {
-				return err
+		if !overwriteIgnore {
+			if currentRoots, hasRoots := dSess.GetRoots(ctx, dbName); hasRoots {
+				branchHead, err := actions.BranchHeadRoot(ctx, ddb, branchName)
+				if err != nil {
+					return err
+				}
+				if err := actions.CheckOverwrittenIgnoredTables(ctx, currentRoots, branchHead, overwriteIgnore); err != nil {
+					return err
+				}
 			}
 		}
 

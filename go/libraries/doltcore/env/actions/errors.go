@@ -150,7 +150,7 @@ type ErrCheckoutWouldOverwriteIgnoredTables struct {
 
 func (e ErrCheckoutWouldOverwriteIgnoredTables) Error() string {
 	var buffer bytes.Buffer
-	buffer.WriteString("error: The following ignored tables would be overwritten by checkout:\n")
+	buffer.WriteString("The following ignored tables would be overwritten by checkout:\n")
 	for _, tbl := range e.Tables {
 		buffer.WriteString("\t" + tbl + "\n")
 	}
