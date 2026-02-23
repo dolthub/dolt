@@ -480,17 +480,16 @@ func checkoutNewBranch(
 
 	if isMove {
 		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, newBranchName, apr.Contains(cli.ForceFlag), true, overwriteIgnore)
-	} else {
+	}
 
-		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
-		if err != nil {
-			return "", "", err
-		}
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
+	if err != nil {
+		return "", "", err
+	}
 
-		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
-		if err != nil {
-			return "", "", err
-		}
+	err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
+	if err != nil {
+		return "", "", err
 	}
 
 	return newBranchName, remoteAndBranch, nil
