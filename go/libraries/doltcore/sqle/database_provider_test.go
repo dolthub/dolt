@@ -82,7 +82,7 @@ func TestDatabaseProvider(t *testing.T) {
 				require.NoError(t, err)
 				ddbs := sqlDb.(Database).DoltDatabases()
 				require.Len(t, ddbs, 1)
-				hooks := doltdb.HackDatasDatabaseFromDoltDB(ddbs[0]).(interface {
+				hooks := doltdb.ExposeDatabaseFromDoltDB(ddbs[0]).(interface {
 					PostCommitHooks() []doltdb.CommitHook
 				}).PostCommitHooks()
 				assert.Len(t, hooks, 1)
@@ -101,7 +101,7 @@ func TestDatabaseProvider(t *testing.T) {
 				require.NoError(t, err)
 				ddbs := sqlDb.(Database).DoltDatabases()
 				require.Len(t, ddbs, 1)
-				hooks := doltdb.HackDatasDatabaseFromDoltDB(ddbs[0]).(interface {
+				hooks := doltdb.ExposeDatabaseFromDoltDB(ddbs[0]).(interface {
 					PostCommitHooks() []doltdb.CommitHook
 				}).PostCommitHooks()
 				require.Len(t, hooks, 2)
@@ -124,7 +124,7 @@ func TestDatabaseProvider(t *testing.T) {
 				require.NoError(t, err)
 				ddbs := sqlDb.(Database).DoltDatabases()
 				require.Len(t, ddbs, 1)
-				hooks := doltdb.HackDatasDatabaseFromDoltDB(ddbs[0]).(interface {
+				hooks := doltdb.ExposeDatabaseFromDoltDB(ddbs[0]).(interface {
 					PostCommitHooks() []doltdb.CommitHook
 				}).PostCommitHooks()
 				require.Len(t, hooks, 2)

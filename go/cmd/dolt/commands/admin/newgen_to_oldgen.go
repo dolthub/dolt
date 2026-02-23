@@ -63,7 +63,7 @@ func (cmd NewGenToOldGenCmd) Hidden() bool {
 }
 
 func (cmd NewGenToOldGenCmd) Exec(ctx context.Context, _ string, _ []string, dEnv *env.DoltEnv, _ cli.CliContext) int {
-	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB(ctx))
+	db := doltdb.ExposeDatabaseFromDoltDB(dEnv.DoltDB(ctx))
 	cs := datas.ChunkStoreFromDatabase(db)
 	if _, ok := cs.(*nbs.GenerationalNBS); !ok {
 		cli.PrintErrln("compare-and-swap-storage command requires a GenerationalNBS")
