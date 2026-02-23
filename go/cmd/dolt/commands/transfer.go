@@ -128,7 +128,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	defer session.Close()
 
 	// Set up gRPC chunk store service backed by this database.
-	db := doltdb.HackDatasDatabaseFromDoltDB(ddb)
+	db := doltdb.ExposeDatabaseFromDoltDB(ddb)
 	cs := datas.ChunkStoreFromDatabase(db)
 	dbCache := &singletonDBCache{cs: cs.(remotesrv.RemoteSrvStore)}
 

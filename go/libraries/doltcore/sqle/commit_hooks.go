@@ -72,7 +72,7 @@ func pushDataset(ctx context.Context, destDB, srcDB *doltdb.DoltDB, ds datas.Dat
 	addr, ok := ds.MaybeHeadAddr()
 	if !ok {
 		// TODO: fix up hack usage.
-		_, err := doltdb.HackDatasDatabaseFromDoltDB(destDB).Delete(ctx, ds, "")
+		_, err := doltdb.ExposeDatabaseFromDoltDB(destDB).Delete(ctx, ds, "")
 		return err
 	}
 

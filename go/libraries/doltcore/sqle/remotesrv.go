@@ -61,7 +61,7 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 	if !ok {
 		return nil, remotesrv.ErrUnimplemented
 	}
-	datasdb := doltdb.HackDatasDatabaseFromDoltDB(sdb.DbData().Ddb)
+	datasdb := doltdb.ExposeDatabaseFromDoltDB(sdb.DbData().Ddb)
 	cs := datas.ChunkStoreFromDatabase(datasdb)
 	rss, ok := cs.(remotesrv.RemoteSrvStore)
 	if !ok {
