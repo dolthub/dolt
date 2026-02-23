@@ -154,7 +154,7 @@ func (e ErrCheckoutWouldOverwriteIgnoredTables) Error() string {
 	for _, tbl := range e.Tables {
 		buffer.WriteString("\t" + tbl + "\n")
 	}
-	buffer.WriteString("Please commit your changes or delete them before you switch branches.\n")
+	buffer.WriteString("Please move or remove them before you switch branches.\n")
 	buffer.WriteString("Use --overwrite-ignore to force.")
 	return buffer.String()
 }

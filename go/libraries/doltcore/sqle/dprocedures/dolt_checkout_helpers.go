@@ -123,14 +123,8 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 			return err
 		}
 	} else {
-		if !overwriteIgnore {
-			overwritten, err := actions.FindOverwrittenIgnoredTables(ctx, initialRoots, branchHead)
-			if err != nil {
-				return err
-			}
-			if len(overwritten) > 0 {
-				return actions.ErrCheckoutWouldOverwriteIgnoredTables{Tables: overwritten}
-			}
+		if err := actions.CheckOverwrittenIgnoredTables(ctx, initialRoots, branchHead, overwriteIgnore); err != nil {
+			return err
 		}
 
 		wsRef, err := ref.WorkingSetRefForHead(branchRef)

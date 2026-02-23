@@ -143,16 +143,8 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		return doltdb.Roots{}, ErrCheckoutWouldOverwrite{conflicts.AsStringSlice()}
 	}
 
-	// If --no-overwrite-ignore is set, check if any ignored tables in the
-	// working set would be overwritten by switching to the new branch.
-	if !overwriteIgnore {
-		overwrittenIgnored, err := FindOverwrittenIgnoredTables(ctx, roots, branchRoot)
-		if err != nil {
-			return doltdb.Roots{}, err
-		}
-		if len(overwrittenIgnored) > 0 {
-			return doltdb.Roots{}, ErrCheckoutWouldOverwriteIgnoredTables{Tables: overwrittenIgnored}
-		}
+	if err := CheckOverwrittenIgnoredTables(ctx, roots, branchRoot, overwriteIgnore); err != nil {
+		return doltdb.Roots{}, err
 	}
 
 	workingForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Working, force)
@@ -379,12 +371,33 @@ func FindOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, branc
 			return nil, err
 		}
 
+		// Only flag an overwrite when the target branch has the table
+		// with different content. Per Git's docs, --no-overwrite-ignore
+		// aborts "when the new branch contains ignored files," so if
+		// the target branch does not have the table (empty hash) there
+		// is nothing to overwrite the local copy.
 		if currentHash != newHash && !newHash.IsEmpty() {
 			overwritten = append(overwritten, tbl.String())
 		}
 	}
 
 	return overwritten, nil
+}
+
+// CheckOverwrittenIgnoredTables returns an error if |overwriteIgnore| is false and any ignored
+// tables in |roots.Working| would be overwritten by checking out |branchRoot|.
+func CheckOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue, overwriteIgnore bool) error {
+	if overwriteIgnore {
+		return nil
+	}
+	overwritten, err := FindOverwrittenIgnoredTables(ctx, roots, branchRoot)
+	if err != nil {
+		return err
+	}
+	if len(overwritten) > 0 {
+		return ErrCheckoutWouldOverwriteIgnoredTables{Tables: overwritten}
+	}
+	return nil
 }
 
 // moveForeignKeys returns the foreign key collection that should be used for the new working set.
