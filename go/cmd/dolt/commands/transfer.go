@@ -287,51 +287,16 @@ func (fh *transferFileHandler) handleGet(w http.ResponseWriter, r *http.Request,
 	}
 	defer reader.Close()
 
-	rangeHeader := r.Header.Get("Range")
-	if rangeHeader != "" {
-		fh.handleRangeGet(w, reader, path, rangeHeader)
-		return
-	}
-
-	// Full file response.
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		fh.lgr.WithError(err).Error("failed to read file")
+	// The underlying reader is an *os.File which implements io.ReadSeeker.
+	// http.ServeContent handles full and range requests with streaming.
+	rs, ok := reader.(io.ReadSeeker)
+	if !ok {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	w.Write(data)
-}
-
-func (fh *transferFileHandler) handleRangeGet(w http.ResponseWriter, reader io.ReadCloser, path string, rangeHeader string) {
-	var start, end int64
-	if _, err := fmt.Sscanf(rangeHeader, "bytes=%d-%d", &start, &end); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		fh.lgr.WithError(err).Error("failed to read file")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	fileSize := int64(len(data))
-	if start < 0 || start >= fileSize || end >= fileSize || start > end {
-		http.Error(w, "Requested Range Not Satisfiable", http.StatusRequestedRangeNotSatisfiable)
-		return
-	}
-
-	rangeData := data[start : end+1]
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", strconv.Itoa(len(rangeData)))
-	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
-	w.WriteHeader(http.StatusPartialContent)
-	w.Write(rangeData)
+	http.ServeContent(w, r, "", time.Time{}, rs)
 }
 
 func (fh *transferFileHandler) handleUpload(w http.ResponseWriter, r *http.Request, path string) {
