@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 # Tests for SSH transfer operations (clone, pull, push via SSH URLs)
 # Uses mock SSH to avoid requiring an SSH server
@@ -63,7 +64,8 @@ EOF
 }
 
 teardown() {
-    unset DOLT_SSH
+  unset DOLT_SSH
+  stop_sql_server
 }
 
 @test "ssh-transfer: transfer command works with --data-dir" {
@@ -391,4 +393,48 @@ MOCK
     # Verify the transfer command's startup log appeared.
     [ -f "$BATS_TMPDIR/transfer_stderr.log" ]
     grep -q "transfer: serving repository" "$BATS_TMPDIR/transfer_stderr.log"
+}
+
+@test "ssh-transfer: clone succeeds while sql-server is running" {
+    mkdir "repo_locked_read"
+    cd "repo_locked_read"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY, val TEXT);"
+    dolt sql -q "INSERT INTO test VALUES (1, 'one'), (2, 'two'), (3, 'three');"
+    dolt add .
+    dolt commit -m "initial data"
+
+    start_sql_server "repo_locked_read"
+
+    cd "$BATS_TEST_TMPDIR"
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_locked_read" repo_locked_read_clone
+}
+
+@test "ssh-transfer: push fails while sql-server is running" {
+    mkdir "repo_locked_push"
+    cd "repo_locked_push"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY, val TEXT);"
+    dolt sql -q "INSERT INTO test VALUES (1, 'original');"
+    dolt add .
+    dolt commit -m "initial"
+
+    cd "$BATS_TEST_TMPDIR"
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_locked_push" repo_locked_push_clone
+    [ "$status" -eq 0 ]
+
+    # Start sql-server on the source repo to hold the manifest lock
+    cd "repo_locked_push"
+    start_sql_server "repo_locked_push"
+
+    # Make a change in the clone and try to push
+    cd "$BATS_TEST_TMPDIR/repo_locked_push_clone"
+    dolt sql -q "INSERT INTO test VALUES (2, 'from_clone');"
+    dolt add .
+    dolt commit -m "add from clone"
+
+    run dolt push origin main
+    # Push must fail when sql-server holds the lock.
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "failed to acquire manifest lock" ]] || false
 }
