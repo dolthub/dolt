@@ -105,8 +105,9 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	// Ignore SIGPIPE to prevent broken pipe crashes during SSH disconnect.
 	signal.Ignore(syscall.SIGPIPE)
 
-	// Load the database from the data directory set via --data-dir.
 	ddb := dEnv.DoltDB(ctx)
+
+	// Database should already be loaded by the caller. Being very safe since there are some late binding checks.
 	if ddb == nil || dEnv.DBLoadError != nil {
 		if dEnv.DBLoadError != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("failed to load database").AddCause(dEnv.DBLoadError).Build(), usage)
@@ -202,11 +203,9 @@ type singletonDBCache struct {
 	cs remotesrv.RemoteSrvStore
 }
 
-func (s *singletonDBCache) Get(_ context.Context, _, _ string) (remotesrv.RemoteSrvStore, error) {
-	return s.cs, nil
+func (sdbc *singletonDBCache) Get(_ context.Context, _, _ string) (remotesrv.RemoteSrvStore, error) {
+	return sdbc.cs, nil
 }
-
-// --- stdioConn: net.Conn over stdin/stdout ---
 
 // stdioConn wraps an io.Reader and io.Writer as a net.Conn for use with SMUX.
 type stdioConn struct {
@@ -220,7 +219,11 @@ func newStdioConn(r io.Reader, w io.Writer) *stdioConn {
 
 func (c *stdioConn) Read(p []byte) (int, error)  { return c.r.Read(p) }
 func (c *stdioConn) Write(p []byte) (int, error) { return c.w.Write(p) }
-func (c *stdioConn) Close() error                { return nil }
+func (c *stdioConn) Close() error {
+	// No-op. Closing the wrapped streams breaks the SSH connection, so we rely on the process terminating to clean up
+	//resources. SMUX will detect EOF and close the session appropriately.
+	return nil
+}
 
 func (c *stdioConn) LocalAddr() net.Addr                { return stdioAddr{} }
 func (c *stdioConn) RemoteAddr() net.Addr               { return stdioAddr{} }
@@ -228,12 +231,11 @@ func (c *stdioConn) SetDeadline(_ time.Time) error      { return nil }
 func (c *stdioConn) SetReadDeadline(_ time.Time) error  { return nil }
 func (c *stdioConn) SetWriteDeadline(_ time.Time) error { return nil }
 
+// stdioAddr is a net.Addr implementation for the stdioConn, returning fixed values since there is no real network address.
 type stdioAddr struct{}
 
 func (stdioAddr) Network() string { return "stdio" }
 func (stdioAddr) String() string  { return "stdio" }
-
-// --- smuxListener: net.Listener over SMUX session ---
 
 // smuxListener implements net.Listener by accepting SMUX streams from a session.
 type smuxListener struct {
@@ -247,10 +249,7 @@ func (l *smuxListener) Accept() (net.Conn, error) {
 func (l *smuxListener) Close() error   { return nil }
 func (l *smuxListener) Addr() net.Addr { return stdioAddr{} }
 
-// --- transferFileHandler: HTTP handler for table file serving ---
-
 // transferFileHandler serves table files over HTTP through the SMUX transport.
-// It handles GET requests for downloading table files and POST/PUT for uploads.
 type transferFileHandler struct {
 	dbCache remotesrv.DBCache
 	fs      filesys.Filesys
