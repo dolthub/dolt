@@ -52,8 +52,9 @@ done
 
 # Log and execute the command locally with proper stdio
 echo "Mock SSH executing: $COMMAND" >> "$BATS_TMPDIR/mock_ssh.log"
-# Use exec to replace the shell process and preserve stdio connections
-exec $COMMAND
+# Use exec to replace the shell process and preserve stdio connections.
+# Tee stderr to a log file so tests can verify server-side log output.
+exec $COMMAND 2> >(tee -a "$BATS_TMPDIR/transfer_stderr.log" >&2)
 EOF
     chmod +x "$BATS_TMPDIR/mock_ssh"
     
@@ -378,4 +379,22 @@ MOCK
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2" ]]
+}
+
+@test "ssh-transfer: server-side logs are visible on stderr" {
+    mkdir "repo_stderr"
+    cd "repo_stderr"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add .
+    dolt commit -m "test"
+
+    cd ..
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_stderr" repo_stderr_clone
+
+    # The mock SSH tees remote stderr to transfer_stderr.log.
+    # Verify the transfer command's startup log appeared.
+    [ -f "$BATS_TMPDIR/transfer_stderr.log" ]
+    grep -q "transfer: serving repository" "$BATS_TMPDIR/transfer_stderr.log"
 }

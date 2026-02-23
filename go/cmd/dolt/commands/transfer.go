@@ -133,8 +133,10 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	dbCache := &singletonDBCache{cs: cs.(remotesrv.RemoteSrvStore)}
 
 	logger := logrus.New()
-	logger.SetOutput(io.Discard)
+	logger.SetOutput(os.Stderr)
 	logEntry := logrus.NewEntry(logger)
+
+	logEntry.Info("transfer: serving repository")
 
 	sealer := &identitySealer{}
 	chunkStoreService := remotesrv.NewHttpFSBackedChunkStore(
