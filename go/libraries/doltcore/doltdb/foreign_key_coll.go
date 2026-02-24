@@ -181,38 +181,51 @@ func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
 
 // HashOf returns the Noms hash of a ForeignKey.
 func (fk ForeignKey) HashOf() (hash.Hash, error) {
-	var fields []interface{}
-	fields = append(fields, fk.Name, fk.TableName, fk.TableIndex)
-	for _, t := range fk.TableColumns {
-		fields = append(fields, t)
+	// TODO: use unsafe methods for string writes?
+	var bb bytes.Buffer
+	var err error
+	_, err = bb.WriteString(fk.Name)
+	if err != nil {
+		return hash.Hash{}, err
 	}
-	fields = append(fields, fk.ReferencedTableName, fk.ReferencedTableIndex)
-	for _, t := range fk.ReferencedTableColumns {
-		fields = append(fields, t)
+	_, err = bb.WriteString(fk.TableName.String())
+	if err != nil {
+		return hash.Hash{}, err
 	}
-	fields = append(fields, []byte{byte(fk.OnUpdate), byte(fk.OnDelete)})
+	_, err = bb.WriteString(fk.TableIndex)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	for _, col := range fk.TableColumns {
+		err = binary.Write(&bb, binary.LittleEndian, col)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+	}
+	_, err = bb.WriteString(fk.ReferencedTableName.String())
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	_, err = bb.WriteString(fk.ReferencedTableIndex)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	err = bb.WriteByte(byte(fk.OnUpdate))
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	err = bb.WriteByte(byte(fk.OnUpdate))
+	if err != nil {
+		return hash.Hash{}, err
+	}
 	for _, col := range fk.UnresolvedFKDetails.TableColumns {
-		fields = append(fields, col)
+		_, err = bb.WriteString(col)
+		if err != nil {
+			return hash.Hash{}, err
+		}
 	}
 	for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-		fields = append(fields, col)
-	}
-
-	var bb bytes.Buffer
-	for _, field := range fields {
-		var err error
-		switch t := field.(type) {
-		case string:
-			_, err = bb.Write([]byte(t))
-		case []byte:
-			_, err = bb.Write(t)
-		case uint64:
-			err = binary.Write(&bb, binary.LittleEndian, t)
-		case TableName:
-			_, err = bb.Write([]byte(t.String()))
-		default:
-			return hash.Hash{}, fmt.Errorf("unsupported type %T", t)
-		}
+		_, err = bb.WriteString(col)
 		if err != nil {
 			return hash.Hash{}, err
 		}
