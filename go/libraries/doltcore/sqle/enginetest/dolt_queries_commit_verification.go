@@ -210,11 +210,17 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL dolt_cherry_pick(@commit_1_hash)",
-				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
+				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0), int64(0)}},
 			},
 			{
-				Query:          "CALL dolt_cherry_pick(@commit_2_hash)",
-				ExpectedErrStr: "commit verification failed: test_user_count_update (Assertion failed: expected_single_value equal to 2, got 3)",
+				// Verification fails; workspace is left dirty with verification_failures=1
+				Query:    "CALL dolt_cherry_pick(@commit_2_hash)",
+				Expected: []sql.Row{{"", int64(0), int64(0), int64(0), int64(1)}},
+			},
+			{
+				// Abort restores clean state
+				Query:            "CALL dolt_cherry_pick('--abort')",
+				SkipResultsCheck: true,
 			},
 			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
 				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
@@ -223,7 +229,7 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "cherry-pick with test verification enabled - tests fail, aborted",
+		Name: "cherry-pick with test verification enabled - tests fail, leaves dirty state",
 		SetUpScript: []string{
 			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
@@ -240,18 +246,86 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "CALL dolt_cherry_pick(@commit_hash)",
-				ExpectedErrStr: "commit verification failed: test_users_count (Assertion failed: expected_single_value equal to 1, got 2)",
+				// Verification fails; returns verification_failures=1 with no SQL error so dirty state is preserved
+				Query:    "CALL dolt_cherry_pick(@commit_hash)",
+				Expected: []sql.Row{{"", int64(0), int64(0), int64(0), int64(1)}},
 			},
 			{
+				// users table should be staged (cherry-pick changes are preserved by the committed transaction)
+				Query:    "SELECT staged FROM dolt_status WHERE table_name = 'users'",
+				Expected: []sql.Row{{uint64(1)}},
+			},
+			{
+				// --continue without fixing still returns verification_failures=1, dirty state preserved
+				Query:    "CALL dolt_cherry_pick('--continue')",
+				Expected: []sql.Row{{"", int64(0), int64(0), int64(0), int64(1)}},
+			},
+			{
+				// Abort restores clean state
+				Query:            "CALL dolt_cherry_pick('--abort')",
+				SkipResultsCheck: true,
+			},
+			{
+				// After abort, workspace is clean
+				Query:    "SELECT COUNT(*) FROM dolt_status",
+				Expected: []sql.Row{{int64(0)}},
+			},
+			{
+				// Now cherry-pick succeeds with --skip-verification
 				Query:    "CALL dolt_cherry_pick('--skip-verification', @commit_hash)",
-				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
+				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0), int64(0)}},
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
+		},
+	},
+	{
+		Name: "cherry-pick with test verification enabled - fix data and --continue succeeds",
+		SetUpScript: []string{
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
+			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
+			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
+			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
+				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1')",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'Initial commit')",
+			"CALL dolt_checkout('-b', 'feature')",
+			"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
+			"CALL dolt_add('.')",
+			"call dolt_commit_hash_out(@commit_hash,'--skip-verification', '-m', 'Add Bob but dont update test')",
+			"CALL dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Verification fails; workspace is left dirty with verification_failures=1
+				Query:    "CALL dolt_cherry_pick(@commit_hash)",
+				Expected: []sql.Row{{"", int64(0), int64(0), int64(0), int64(1)}},
 			},
 			{
-				Query: "select * from dolt_test_run('*')",
-				Expected: []sql.Row{
-					{"test_users_count", "unit", "SELECT COUNT(*) FROM users", "FAIL", "Assertion failed: expected_single_value equal to 1, got 2"},
-				},
+				// Fix the test to match the new row count and stage
+				Query:            "UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_users_count'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "CALL dolt_add('.')",
+				SkipResultsCheck: true,
+			},
+			{
+				// --continue now passes verification and creates the commit
+				Query:    "CALL dolt_cherry_pick('--continue')",
+				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0), int64(0)}},
+			},
+			{
+				// Workspace is clean after successful --continue
+				Query:    "SELECT COUNT(*) FROM dolt_status",
+				Expected: []sql.Row{{int64(0)}},
+			},
+			{
+				// Both users are present
+				Query:    "SELECT COUNT(*) FROM users",
+				Expected: []sql.Row{{int64(2)}},
 			},
 			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
 				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
@@ -470,7 +544,7 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "merge with test verification enabled - tests fail, merge aborted",
+		Name: "merge with test verification enabled - tests fail, leaves dirty state",
 		SetUpScript: []string{
 			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
@@ -490,8 +564,81 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "CALL dolt_merge('feature')",
-				ExpectedErrStr: "commit verification failed: test_will_fail (Assertion failed: expected_single_value equal to 999, got 3)",
+				// Verification fails; returns verification failure in message field with no SQL error
+				// so dirty merge state is preserved (transaction commits).
+				Query:    "CALL dolt_merge('feature')",
+				Expected: []sql.Row{{"", int64(0), int64(0), "commit verification failed: test_will_fail (Assertion failed: expected_single_value equal to 999, got 3)"}},
+			},
+			{
+				// users table is staged (merged content with Bob added is preserved)
+				Query:    "SELECT staged FROM dolt_status WHERE table_name = 'users'",
+				Expected: []sql.Row{{uint64(1)}},
+			},
+			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
+				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
+				SkipResultsCheck: true,
+			},
+		},
+	},
+	{
+		Name: "merge with test verification enabled - fix data and dolt_commit succeeds",
+		SetUpScript: []string{
+			"SET GLOBAL dolt_commit_verification_groups = '*'",
+			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
+			"INSERT INTO users VALUES (1, 'Alice', 'alice@example.com')",
+			"INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES " +
+				"('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1')",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'Initial commit')",
+			"CALL dolt_checkout('-b', 'feature')",
+			"INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('--skip-verification', '-m', 'Add Bob but dont update test')",
+			"CALL dolt_checkout('main')",
+			"INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com')",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('--skip-verification', '-m', 'Add Charlie to force non-FF merge')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Verification fails; returns verification failure in message field with no SQL error
+				// so dirty merge state is preserved (transaction commits).
+				Query:    "CALL dolt_merge('feature')",
+				Expected: []sql.Row{{"", int64(0), int64(0), "commit verification failed: test_users_count (Assertion failed: expected_single_value equal to 1, got 3)"}},
+			},
+			{
+				// dolt_commit without fixing still fails with verification error; dirty state still preserved
+				Query:          "CALL dolt_commit('-m', 'Complete merge without fixing')",
+				ExpectedErrStr: "commit verification failed: test_users_count (Assertion failed: expected_single_value equal to 1, got 3)",
+			},
+			{
+				// users table is still staged (dirty state was not lost by the failed dolt_commit)
+				Query:    "SELECT staged FROM dolt_status WHERE table_name = 'users'",
+				Expected: []sql.Row{{uint64(1)}},
+			},
+			{
+				// Fix the test expectation to match the merged user count
+				Query:            "UPDATE dolt_tests SET assertion_value = '3' WHERE test_name = 'test_users_count'",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "CALL dolt_add('.')",
+				SkipResultsCheck: true,
+			},
+			{
+				// Now dolt_commit succeeds and creates a merge commit
+				Query:    "CALL dolt_commit('-m', 'Complete merge after fixing test')",
+				Expected: []sql.Row{{commitHash}},
+			},
+			{
+				// Workspace is clean after successful merge commit
+				Query:    "SELECT COUNT(*) FROM dolt_status",
+				Expected: []sql.Row{{int64(0)}},
+			},
+			{
+				// All three users are present after merge
+				Query:    "SELECT COUNT(*) FROM users",
+				Expected: []sql.Row{{int64(3)}},
 			},
 			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
 				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
