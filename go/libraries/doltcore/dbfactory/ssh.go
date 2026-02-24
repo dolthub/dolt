@@ -51,7 +51,8 @@ func (SSHRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 // (either SSH or dolt transfer directly for localhost) and multiplexes gRPC
 // and HTTP over the subprocess's stdin/stdout using SMUX.
 func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	host := urlObj.Host
+	host := urlObj.Hostname()
+	port := urlObj.Port()
 	path := urlObj.Path
 	user := ""
 
@@ -66,7 +67,7 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		host = host[atIdx+1:]
 	}
 
-	cmd, err := buildTransferCommand(host, path, user)
+	cmd, err := buildTransferCommand(host, port, path, user)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -175,10 +176,10 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 }
 
 // buildTransferCommand constructs the exec.Cmd for the transfer subprocess.
-// It runs ssh [user@]host "<dolt> --data-dir <path> transfer", using DOLT_SSH
-// as the SSH binary if set (default "ssh"), and DOLT_SSH_EXEC_PATH as the
-// remote dolt binary path if set (default "dolt").
-func buildTransferCommand(host, path, user string) (*exec.Cmd, error) {
+// It runs ssh [-p port] [user@]host "<dolt> --data-dir <path> transfer",
+// using DOLT_SSH as the SSH binary if set (default "ssh"), and
+// DOLT_SSH_EXEC_PATH as the remote dolt binary path if set (default "dolt").
+func buildTransferCommand(host, port, path, user string) (*exec.Cmd, error) {
 	sshCommand := os.Getenv("DOLT_SSH")
 	if sshCommand == "" {
 		sshCommand = "ssh"
@@ -200,7 +201,10 @@ func buildTransferCommand(host, path, user string) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("invalid DOLT_SSH command: empty")
 	}
 
-	args := append(sshArgs[1:], sshTarget, remoteCmd)
+	args := append(sshArgs[1:], "-p", port, sshTarget, remoteCmd)
+	if port == "" {
+		args = append(sshArgs[1:], sshTarget, remoteCmd)
+	}
 	return exec.Command(sshArgs[0], args...), nil
 }
 

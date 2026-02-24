@@ -27,7 +27,7 @@ for arg in "$@"; do
     case "$arg" in
         -*)
             # Skip SSH options
-            if [[ "$arg" == "-o" ]] || [[ "$arg" == "-i" ]]; then
+            if [[ "$arg" == "-o" ]] || [[ "$arg" == "-i" ]] || [[ "$arg" == "-p" ]]; then
                 SKIP_NEXT=true
             fi
             ;;
@@ -139,6 +139,38 @@ teardown() {
     [ -d repo_clone_user ]
     
     cd repo_clone_user
+    run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]]
+}
+
+@test "ssh-transfer: clone with custom port in URL" {
+    mkdir "repo_porttest"
+    cd "repo_porttest"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO test VALUES (1), (2), (3);"
+    dolt add .
+    dolt commit -m "test data"
+
+    # Use a mock SSH that logs the -p flag for verification
+    cat > "$BATS_TMPDIR/mock_ssh_port" <<'PORTEOF'
+#!/bin/bash
+echo "$@" >> "$BATS_TMPDIR/ssh_port_args.log"
+exec "$BATS_TMPDIR/mock_ssh" "$@"
+PORTEOF
+    chmod +x "$BATS_TMPDIR/mock_ssh_port"
+    export DOLT_SSH="$BATS_TMPDIR/mock_ssh_port"
+
+    cd ..
+    run dolt clone "ssh://localhost:9999$BATS_TEST_TMPDIR/repo_porttest" repo_port_clone
+    [ "$status" -eq 0 ]
+    [ -d repo_port_clone ]
+
+    # Verify -p 9999 was passed to SSH
+    grep -q "\-p 9999" "$BATS_TMPDIR/ssh_port_args.log"
+
+    cd repo_port_clone
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]]
@@ -330,7 +362,7 @@ for arg in "$@"; do
     fi
     case "$arg" in
         -*)
-            if [[ "$arg" == "-o" ]] || [[ "$arg" == "-i" ]]; then
+            if [[ "$arg" == "-o" ]] || [[ "$arg" == "-i" ]] || [[ "$arg" == "-p" ]]; then
                 SKIP_NEXT=true
             fi
             ;;
