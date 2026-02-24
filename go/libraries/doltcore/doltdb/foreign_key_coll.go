@@ -69,7 +69,7 @@ type UnresolvedFKDetails struct {
 
 // EqualDefs returns whether two foreign keys have the same definition over the same column sets.
 // It does not compare table names or foreign key names.
-func (fk ForeignKey) EqualDefs(other ForeignKey) bool {
+func (fk *ForeignKey) EqualDefs(other ForeignKey) bool {
 	if len(fk.TableColumns) != len(other.TableColumns) || len(fk.ReferencedTableColumns) != len(other.ReferencedTableColumns) {
 		return false
 	}
@@ -95,7 +95,7 @@ func (fk ForeignKey) EqualDefs(other ForeignKey) bool {
 // column names to column tags, which is why |fkSchemasByName| and |otherSchemasByName| are passed in. Each of these
 // is a map of table schemas for |fk| and |other|, where the child table and every parent table referenced in the
 // foreign key is present in the map.
-func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByName map[TableName]schema.Schema) bool {
+func (fk *ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByName map[TableName]schema.Schema) bool {
 	// If both FKs are resolved or unresolved, we can just deeply compare them
 	if fk.IsResolved() == other.IsResolved() {
 		return fk.DeepEquals(other)
@@ -118,9 +118,9 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 	var resolvedFK, unresolvedFK ForeignKey
 	var resolvedSchemasByName map[TableName]schema.Schema
 	if fk.IsResolved() {
-		resolvedFK, unresolvedFK, resolvedSchemasByName = fk, other, fkSchemasByName
+		resolvedFK, unresolvedFK, resolvedSchemasByName = *fk, other, fkSchemasByName
 	} else {
-		resolvedFK, unresolvedFK, resolvedSchemasByName = other, fk, otherSchemasByName
+		resolvedFK, unresolvedFK, resolvedSchemasByName = other, *fk, otherSchemasByName
 	}
 
 	// Check the columns on the child table
@@ -168,7 +168,7 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 // table names. Note that if one foreign key is resolved and the other is NOT resolved,
 // then this function will not calculate equality correctly. When comparing a resolved
 // FK with an unresolved FK, the ForeignKey.Equals() function should be used instead.
-func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
+func (fk *ForeignKey) DeepEquals(other ForeignKey) bool {
 	if !fk.EqualDefs(other) {
 		return false
 	}
@@ -180,7 +180,7 @@ func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
 }
 
 // HashOf returns the Noms hash of a ForeignKey.
-func (fk ForeignKey) HashOf() (hash.Hash, error) {
+func (fk *ForeignKey) HashOf() (hash.Hash, error) {
 	// TODO: use a pool of byte buffers?
 	// TODO: the order of these shouldn't matter, but maintain it for now
 	// TODO: unsafe strings
@@ -228,17 +228,17 @@ func CombinedHash(fks []ForeignKey) (hash.Hash, error) {
 }
 
 // IsSelfReferential returns whether the table declaring the foreign key is also referenced by the foreign key.
-func (fk ForeignKey) IsSelfReferential() bool {
+func (fk *ForeignKey) IsSelfReferential() bool {
 	return fk.TableName.EqualFold(fk.ReferencedTableName)
 }
 
 // IsResolved returns whether the foreign key has been resolved.
-func (fk ForeignKey) IsResolved() bool {
+func (fk *ForeignKey) IsResolved() bool {
 	return len(fk.TableColumns) > 0 && len(fk.ReferencedTableColumns) > 0
 }
 
 // ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
-func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
+func (fk *ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 	// An unresolved foreign key will be validated later, so we don't return an error here.
 	if !fk.IsResolved() {
 		return nil
@@ -260,7 +260,7 @@ func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 }
 
 // ValidateTableSchema verifies that the given schema matches the expectation of the declaring table.
-func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
+func (fk *ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 	// An unresolved foreign key will be validated later, so we don't return an error here.
 	if !fk.IsResolved() {
 		return nil
