@@ -163,25 +163,26 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	httpServer := &http.Server{Handler: httpHandler}
 
 	// Create SMUX-backed listeners for gRPC and HTTP.
-	grpcListener := &smuxListener{session: session}
-	httpListener := &smuxListener{session: session}
+	listener := &smuxListener{session: session}
 
 	// Start both servers.
 	errCh := make(chan error, 2)
 	go func() {
-		if err := grpcServer.Serve(grpcListener); err != nil {
+		if err := grpcServer.Serve(listener); err != nil {
 			errCh <- fmt.Errorf("gRPC server error: %w", err)
 		}
 	}()
 	go func() {
-		if err := httpServer.Serve(httpListener); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			errCh <- fmt.Errorf("HTTP server error: %w", err)
 		}
 	}()
 
 	// Wait for session close, server error, or context cancellation.
 	select {
-	case <-errCh:
+	case err := <-errCh:
+		// We get away with printing directly to stderr here since transfer command is special-cased to leave IO streams alone.
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	case <-session.CloseChan():
 		return 0
