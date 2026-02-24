@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -118,8 +119,8 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		stdin: stdin,
 	}
 	smuxConfig := smux.DefaultConfig()
-	smuxConfig.MaxReceiveBuffer = 128 * 1024 * 1024
-	smuxConfig.MaxStreamBuffer = 128 * 1024 * 1024
+	smuxConfig.MaxReceiveBuffer = remotesrv.MaxGRPCMessageSize
+	smuxConfig.MaxStreamBuffer = remotesrv.MaxGRPCMessageSize
 
 	session, err := smux.Client(pConn, smuxConfig)
 	if err != nil {
