@@ -51,6 +51,12 @@ var ErrCherryPickConflictsOrViolations = errors.NewKind("error: Unable to apply 
 	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.\n" +
 	"For more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts")
 
+var ErrCherryPickVerificationFailed = errors.NewKind("error: Commit verification failed. Your changes are staged " +
+	"in the working set. Fix the failing tests, use `dolt add` to stage your changes, then " +
+	"`dolt cherry-pick --continue` to complete the cherry-pick.\n" +
+	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.\n" +
+	"Run `dolt test run '*'` to see which tests are failing.")
+
 type CherryPickCmd struct{}
 
 // Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command.
@@ -181,6 +187,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 	}
 
 	succeeded := false
+	verificationFailed := false
 	commitHash := ""
 	for _, row := range rows {
 		var ok bool
@@ -203,9 +210,17 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 		if err != nil {
 			return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
 		}
+		verificationFailures, err := getInt64ColAsInt64(row[4])
+		if err != nil {
+			return fmt.Errorf("Unable to parse verification_failures column: %w", err)
+		}
+
+		if verificationFailures > 0 {
+			verificationFailed = true
+		}
 
 		// if we have a hash and all 0s, then the cherry-pick succeeded
-		if len(commitHash) > 0 && dataConflicts == 0 && schemaConflicts == 0 && constraintViolations == 0 {
+		if len(commitHash) > 0 && dataConflicts == 0 && schemaConflicts == 0 && constraintViolations == 0 && verificationFailures == 0 {
 			succeeded = true
 		}
 	}
@@ -225,6 +240,8 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 		})
 
 		return nil
+	} else if verificationFailed {
+		return ErrCherryPickVerificationFailed.New()
 	} else {
 		// this failure could only have been caused by constraint violations or conflicts during cherry-pick
 		return ErrCherryPickConflictsOrViolations.New()
@@ -256,15 +273,15 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	if len(rows) != 1 {
 		return fmt.Errorf("error: unexpected number of rows returned from dolt_cherry_pick: %d", len(rows))
 	}
-	if len(rows[0]) != 4 {
+	if len(rows[0]) != 5 {
 		return fmt.Errorf("error: unexpected number of columns returned from dolt_cherry_pick: %d", len(rows[0]))
 	}
 
 	row := rows[0]
 
 	// We expect to get an error if there were problems, but we also could get any of the conflicts and
-	// vacation counts being greater than 0 if there were problems. If we got here without an error,
-	// but we have conflicts or violations, we should report and stop.
+	// violation counts being greater than 0 if there were problems. If we got here without an error,
+	// but we have conflicts, violations, or verification failures, we should report and stop.
 	dataConflicts, err := getInt64ColAsInt64(row[1])
 	if err != nil {
 		return fmt.Errorf("Unable to parse data_conflicts column: %w", err)
@@ -277,8 +294,15 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	if err != nil {
 		return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
 	}
+	verificationFailures, err := getInt64ColAsInt64(row[4])
+	if err != nil {
+		return fmt.Errorf("Unable to parse verification_failures column: %w", err)
+	}
 	if dataConflicts > 0 || schemaConflicts > 0 || constraintViolations > 0 {
 		return ErrCherryPickConflictsOrViolations.New()
+	}
+	if verificationFailures > 0 {
+		return ErrCherryPickVerificationFailed.New()
 	}
 
 	commitHash := fmt.Sprintf("%v", row[0])
