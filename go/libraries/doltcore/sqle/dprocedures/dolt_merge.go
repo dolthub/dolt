@@ -245,6 +245,10 @@ func performMerge(
 				}
 				ctx.Warn(DoltMergeWarningCode, "%s", err.Error())
 				return ws, "", hasConflictsOrViolations, threeWayMerge, "", err
+			} else if actions.ErrCommitVerificationFailed.Is(err) {
+				// Verification failed: working set already has dirty merge state in the session.
+				// Return without a SQL error so the transaction commits and preserves dirty state.
+				return ws, "", noConflictsOrViolations, threeWayMerge, err.Error(), nil
 			} else if err != nil {
 				return ws, "", noConflictsOrViolations, threeWayMerge, "", err
 			}
@@ -314,6 +318,12 @@ func performMerge(
 		}
 		commit, _, err = doDoltCommit(ctx, args)
 		if err != nil {
+			if actions.ErrCommitVerificationFailed.Is(err) {
+				// Verification failed: the working set already has the dirty merge state set in the session
+				// (SetWorkingSet was called before doDoltCommit). Return without a SQL error so the
+				// transaction commits and preserves the dirty state for the user to fix and retry.
+				return ws, "", noConflictsOrViolations, threeWayMerge, err.Error(), nil
+			}
 			return ws, commit, noConflictsOrViolations, threeWayMerge, "", err
 		}
 	}
@@ -448,13 +458,26 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
+	// Run commit verification before creating the pending commit. On failure we return the ws (which already
+	// has the dirty merge state set in the session) along with the verification error. The caller
+	// (performMerge) converts this to a non-error result row so the SQL transaction commits normally and
+	// preserves the dirty merge state for the user to fix and retry with CALL dolt_commit().
+	if !skipVerification {
+		testGroups := actions.GetCommitRunTestGroups()
+		if len(testGroups) > 0 {
+			if verifyErr := actions.RunCommitVerification(ctx, testGroups); verifyErr != nil {
+				return ws, nil, verifyErr
+			}
+		}
+	}
+
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             spec.Date,
 		Force:            spec.Force,
 		Name:             spec.Name,
 		Email:            spec.Email,
-		SkipVerification: skipVerification,
+		SkipVerification: true, // Verification already ran above (or was skipped via skipVerification flag)
 	})
 	if err != nil {
 		return nil, nil, err
