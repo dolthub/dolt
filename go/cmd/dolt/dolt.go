@@ -122,7 +122,7 @@ var commandsSkippingDBLoad = []cli.Command{
 	commands.FsckCmd{},
 }
 
-// commands that use stdio directly and must not have it redirected to a temp file.
+// commands that use stdio directly and must not have it redirected.
 // These commands communicate over stdin/stdout (e.g., gRPC multiplexing) and would
 // break if dolt's normal IO redirection is applied.
 var commandsSkippingIORedirect = []cli.Command{
@@ -434,39 +434,23 @@ func runMain() int {
 
 	seedGlobalRand()
 
-	// Peek at the subcommand name to determine if IO redirect is needed.
-	// At this point debug flags have been consumed, but global args like
-	// --data-dir may precede the subcommand. Scan for the first non-flag arg.
-	subCmd := ""
-	for i := 0; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-") {
-			// Skip the flag's value if it's a --key value style flag
-			if i+1 < len(args) && !strings.Contains(args[i], "=") {
-				i++
-			}
-			continue
-		}
-		subCmd = args[i]
-		break
+	ctx := context.Background()
+	cfg, terminate, status := createBootstrapConfig(ctx, args)
+	if terminate {
+		return status
 	}
+	args = nil
 
-	if needsIORedirect(subCmd) {
+	if needsIORedirect(cfg.subCommand) {
 		restoreIO := cli.InitIO()
 		defer restoreIO()
 	}
 
 	warnIfMaxFilesTooLow()
 
-	ctx := context.Background()
 	if ok, exit := interceptSendMetrics(ctx, args); ok {
 		return exit
 	}
-
-	cfg, terminate, status := createBootstrapConfig(ctx, args)
-	if terminate {
-		return status
-	}
-	args = nil
 
 	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment.
 	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
