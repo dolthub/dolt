@@ -363,7 +363,7 @@ func (fh *transferFileHandler) handleUpload(w http.ResponseWriter, r *http.Reque
 	})
 	if err != nil {
 		fh.lgr.WithError(err).Error("failed to write table file")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
