@@ -408,6 +408,14 @@ MOCK
 
     cd "$BATS_TEST_TMPDIR"
     run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_locked_read" repo_locked_read_clone
+    [ "$status" -eq 0 ]
+
+    cd "repo_locked_read_clone"
+    run dolt sql -r csv  -q "SELECT * FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,one" ]]
+    [[ "$output" =~ "2,two" ]]
+    [[ "$output" =~ "3,three" ]]
 }
 
 @test "ssh-transfer: push fails while sql-server is running" {
@@ -436,5 +444,6 @@ MOCK
     run dolt push origin main
     # Push must fail when sql-server holds the lock.
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "failed to acquire manifest lock" ]] || false
+    # The transfer command logs the real error to stderr; verify it.
+    grep -q "database is read only" "$BATS_TMPDIR/transfer_stderr.log"
 }
