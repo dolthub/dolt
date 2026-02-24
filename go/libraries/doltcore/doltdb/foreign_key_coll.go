@@ -181,57 +181,31 @@ func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
 
 // HashOf returns the Noms hash of a ForeignKey.
 func (fk ForeignKey) HashOf() (hash.Hash, error) {
-	// TODO: use unsafe methods for string writes?
-	var bb bytes.Buffer
+	// TODO: use a pool of byte buffers?
+	// TODO: the order of these shouldn't matter, but maintain it for now
+	// TODO: unsafe strings
+	var bb []byte
 	var err error
-	_, err = bb.WriteString(fk.Name)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	_, err = bb.WriteString(fk.TableName.String())
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	_, err = bb.WriteString(fk.TableIndex)
-	if err != nil {
-		return hash.Hash{}, err
-	}
+	bb = append(bb, fk.Name...)
+	bb = append(bb, fk.TableName.String()...)
+	bb = append(bb, fk.TableIndex...)
 	for _, col := range fk.TableColumns {
-		err = binary.Write(&bb, binary.LittleEndian, col)
+		bb, err = binary.Append(bb, binary.LittleEndian, col)
 		if err != nil {
 			return hash.Hash{}, err
 		}
 	}
-	_, err = bb.WriteString(fk.ReferencedTableName.String())
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	_, err = bb.WriteString(fk.ReferencedTableIndex)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	err = bb.WriteByte(byte(fk.OnUpdate))
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	err = bb.WriteByte(byte(fk.OnUpdate))
-	if err != nil {
-		return hash.Hash{}, err
-	}
+	bb = append(bb, fk.ReferencedTableName.String()...)
+	bb = append(bb, fk.ReferencedTableIndex...)
+	bb = append(bb, byte(fk.OnUpdate))
+	bb = append(bb, byte(fk.OnDelete))
 	for _, col := range fk.UnresolvedFKDetails.TableColumns {
-		_, err = bb.WriteString(col)
-		if err != nil {
-			return hash.Hash{}, err
-		}
+		bb = append(bb, col...)
 	}
 	for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-		_, err = bb.WriteString(col)
-		if err != nil {
-			return hash.Hash{}, err
-		}
+		bb = append(bb, col...)
 	}
-
-	return hash.Of(bb.Bytes()), nil
+	return hash.Of(bb), nil
 }
 
 // CombinedHash returns a combined hash value for all foreign keys in the slice provided.
