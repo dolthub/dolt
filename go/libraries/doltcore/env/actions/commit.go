@@ -22,11 +22,17 @@ import (
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/datas"
 )
+
+// ErrCommitVerificationFailed is returned when commit verification tests fail during a commit,
+// cherry-pick, merge, or rebase operation. The workspace is left dirty so the user can fix the
+// failing tests and retry the operation using --continue (cherry-pick/rebase) or CALL dolt_commit() (merge).
+var ErrCommitVerificationFailed = goerrors.NewKind("commit verification failed: %s")
 
 type CommitStagedProps struct {
 	Message          string
@@ -149,7 +155,7 @@ func GetCommitStaged(
 	if !props.SkipVerification {
 		testGroups := GetCommitRunTestGroups()
 		if len(testGroups) > 0 {
-			err := runCommitVerification(ctx, testGroups)
+			err := RunCommitVerification(ctx, testGroups)
 			if err != nil {
 				return nil, err
 			}
@@ -164,7 +170,10 @@ func GetCommitStaged(
 	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
 }
 
-func runCommitVerification(ctx *sql.Context, testGroups []string) error {
+// RunCommitVerification runs the commit verification tests for the given test groups.
+// If any tests fail, it returns ErrCommitVerificationFailed wrapping the failure details.
+// Callers can use errors.Is(err, ErrCommitVerificationFailed) to detect this case.
+func RunCommitVerification(ctx *sql.Context, testGroups []string) error {
 	type sessionInterface interface {
 		sql.Session
 		GenericProvider() sql.MutableDatabaseProvider
@@ -216,7 +225,7 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, engine *gms.Engine, testGrou
 	}
 
 	if len(allFailures) > 0 {
-		return fmt.Errorf("commit verification failed: %s", strings.Join(allFailures, ", "))
+		return ErrCommitVerificationFailed.New(strings.Join(allFailures, ", "))
 	}
 
 	return nil
