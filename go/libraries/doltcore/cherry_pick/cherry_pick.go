@@ -112,6 +112,26 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", mergeResult, nil
 	}
 
+	// Run commit verification before attempting to create the commit. If verification
+	// fails, we leave the workspace dirty (staged changes already applied above) and
+	// set the merge state so the user can fix the data and --continue.
+	if !options.SkipVerification {
+		testGroups := actions.GetCommitRunTestGroups()
+		if len(testGroups) > 0 {
+			if verifyErr := actions.RunCommitVerification(ctx, testGroups); verifyErr != nil {
+				ws, wsErr := doltSession.WorkingSet(ctx, dbName)
+				if wsErr != nil {
+					return "", nil, wsErr
+				}
+				newWs := ws.StartCherryPick(originalCommit, commit)
+				if wsErr = doltSession.SetWorkingSet(ctx, dbName, newWs); wsErr != nil {
+					return "", nil, wsErr
+				}
+				return "", nil, verifyErr
+			}
+		}
+	}
+
 	commitProps, err := CreateCommitStagedPropsFromCherryPickOptions(ctx, options, originalCommit)
 	if err != nil {
 		return "", nil, err
@@ -128,6 +148,9 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 	if !ok {
 		return "", nil, fmt.Errorf("failed to get roots for current session")
 	}
+
+	// Verification already ran above; skip it inside NewPendingCommit to avoid running twice.
+	commitProps.SkipVerification = true
 
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, *commitProps)
 	if err != nil {
