@@ -118,8 +118,8 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	// Create SMUX session (server mode) over stdin/stdout.
 	conn := newStdioConn(os.Stdin, os.Stdout)
 	smuxConfig := smux.DefaultConfig()
-	smuxConfig.MaxReceiveBuffer = 128 * 1024 * 1024
-	smuxConfig.MaxStreamBuffer = 128 * 1024 * 1024
+	smuxConfig.MaxReceiveBuffer = remotesrv.MaxGRPCMessageSize
+	smuxConfig.MaxStreamBuffer = remotesrv.MaxGRPCMessageSize
 
 	session, err := smux.Server(conn, smuxConfig)
 	if err != nil {
@@ -130,13 +130,16 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	// Set up gRPC chunk store service backed by this database.
 	db := doltdb.ExposeDatabaseFromDoltDB(ddb)
 	cs := datas.ChunkStoreFromDatabase(db)
+
+	// GenerationalChunkStore implements RemoteSrvStore, so this is going to work for any "normal" Dole db.
+	if _, ok := cs.(remotesrv.RemoteSrvStore); !ok {
+		return HandleVErrAndExitCode(errhand.BuildDError("chunk store does not implement RemoteSrvStore").Build(), usage)
+	}
 	dbCache := &singletonDBCache{cs: cs.(remotesrv.RemoteSrvStore)}
 
 	logger := logrus.New()
 	logger.SetOutput(os.Stderr)
 	logEntry := logrus.NewEntry(logger)
-
-	logEntry.Info("transfer: serving repository")
 
 	sealer := &identitySealer{}
 	chunkStoreService := remotesrv.NewHttpFSBackedChunkStore(
@@ -150,8 +153,8 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	)
 
 	grpcServer := grpc.NewServer(
-		grpc.MaxRecvMsgSize(128*1024*1024),
-		grpc.MaxSendMsgSize(128*1024*1024),
+		grpc.MaxRecvMsgSize(remotesrv.MaxGRPCMessageSize),
+		grpc.MaxSendMsgSize(remotesrv.MaxGRPCMessageSize),
 	)
 	remotesapi.RegisterChunkStoreServiceServer(grpcServer, chunkStoreService)
 
