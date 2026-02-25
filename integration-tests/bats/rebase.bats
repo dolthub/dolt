@@ -769,3 +769,76 @@ message"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "unknown action in rebase plan: invalid" ]] || false
 }
+
+# Commit verification tests
+
+@test "rebase: verification failure halts with dirty state preserved" {
+    # Add a dolt_tests verification test on main (t1 currently has 1 row)
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM t1', 'expected_single_value', '==', '1');"
+    dolt add .
+    dolt commit -m "Add verification test"
+
+    # On b1, add a commit that inserts another row into t1 without updating the test
+    # After rebasing onto main, t1 will have 2 rows, causing the test to fail
+    dolt checkout b1
+    dolt sql -q "INSERT INTO t1 VALUES (2, 2);"
+    dolt add .
+    dolt commit --skip-verification -m "Add row to t1 without updating test"
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*';"
+
+    # Rebase b1 onto main - should halt at the failing commit
+    run dolt rebase main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "commit verification failed" ]] || false
+
+    # Dirty state is preserved: t1 should be staged
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    # --abort restores clean state
+    run dolt rebase --abort
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "rebase in progress" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '';"
+}
+
+@test "rebase: fix data then --continue succeeds" {
+    # Add a dolt_tests verification test on main (t1 currently has 1 row)
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM t1', 'expected_single_value', '==', '1');"
+    dolt add .
+    dolt commit -m "Add verification test"
+
+    # On b1, add a commit that inserts another row into t1 without updating the test
+    dolt checkout b1
+    dolt sql -q "INSERT INTO t1 VALUES (2, 2);"
+    dolt add .
+    dolt commit --skip-verification -m "Add row to t1 without updating test"
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*';"
+
+    # Rebase b1 onto main - should halt at the failing commit
+    run dolt rebase main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "commit verification failed" ]] || false
+
+    # Fix the test expectation and stage it
+    dolt sql -q "UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_count';"
+    dolt add .
+
+    # --continue should now succeed
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "rebase in progress" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '';"
+}

@@ -731,3 +731,87 @@ teardown() {
     [[ $output =~ "Unable to apply commit cleanly due to conflicts" ]] || false
     
 }
+# Commit verification tests
+
+@test "cherry-pick: verification failure halts with dirty state preserved" {
+    dolt sql <<SQL
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100));
+INSERT INTO users VALUES (1, 'Alice');
+INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value)
+  VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');
+SQL
+    dolt add .
+    dolt commit -m "Initial commit"
+    dolt checkout -b feature
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob')"
+    dolt add .
+    CHERRY_HASH=$(dolt commit --skip-verification -m "Add Bob without updating test" --author "Feature Dev <feature@example.com>" | grep -o '[0-9a-v]\{32\}')
+    dolt checkout main
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
+
+    # Cherry-pick should return verification_failures=1 with no CLI error
+    run dolt cherry-pick $CHERRY_HASH
+    [ $status -eq 1 ]
+    [[ $output =~ "Commit verification failed" ]] || false
+    [[ $output =~ "dolt cherry-pick --continue" ]] || false
+
+    # Dirty state is preserved: users table should be staged
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "users" ]] || false
+
+    # --continue without fixing still fails
+    run dolt cherry-pick --continue
+    [ $status -eq 1 ]
+    [[ $output =~ "Commit verification failed" ]] || false
+
+    # --abort restores clean state
+    run dolt cherry-pick --abort
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    ! [[ $output =~ "users" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = ''"
+}
+
+@test "cherry-pick: fix data then --continue succeeds" {
+    dolt sql <<SQL
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100));
+INSERT INTO users VALUES (1, 'Alice');
+INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value)
+  VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');
+SQL
+    dolt add .
+    dolt commit -m "Initial commit"
+    dolt checkout -b feature
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob')"
+    dolt add .
+    CHERRY_HASH=$(dolt commit --skip-verification -m "Add Bob without updating test" | grep -o '[0-9a-v]\{32\}')
+    dolt checkout main
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
+
+    run dolt cherry-pick $CHERRY_HASH
+    [ $status -eq 1 ]
+    [[ $output =~ "Commit verification failed" ]] || false
+
+    # Fix the test expectation and stage it
+    dolt sql -q "UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_count'"
+    dolt add .
+
+    # --continue should now succeed
+    run dolt cherry-pick --continue
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "nothing to commit" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM users" -r csv
+    [[ $output =~ "2" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = ''"
+}

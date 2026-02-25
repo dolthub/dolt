@@ -1411,3 +1411,80 @@ SQL
     run dolt merge b1
     log_status_eq 0
 }
+
+# Commit verification tests
+
+@test "merge: verification failure halts with dirty state preserved" {
+    dolt sql <<SQL
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100));
+INSERT INTO users VALUES (1, 'Alice');
+INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value)
+  VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');
+SQL
+    dolt add .
+    dolt commit -m "Initial commit"
+    dolt checkout -b feature
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob')"
+    dolt add .
+    dolt commit --skip-verification -m "Add Bob without updating test"
+    dolt checkout main
+    dolt sql -q "INSERT INTO users VALUES (3, 'Charlie')"
+    dolt add .
+    dolt commit --skip-verification -m "Add Charlie to force non-FF merge"
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
+
+    # Merge should not error at the CLI level but should report verification failure
+    run dolt merge feature
+    [ $status -eq 1 ]
+    [[ $output =~ "commit verification failed" ]] || false
+
+    # Dirty state is preserved: users table should be staged
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "users" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = ''"
+}
+
+@test "merge: fix data then dolt commit succeeds" {
+    dolt sql <<SQL
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100));
+INSERT INTO users VALUES (1, 'Alice');
+INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value)
+  VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');
+SQL
+    dolt add .
+    dolt commit -m "Initial commit"
+    dolt checkout -b feature
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob')"
+    dolt add .
+    dolt commit --skip-verification -m "Add Bob without updating test"
+    dolt checkout main
+    dolt sql -q "INSERT INTO users VALUES (3, 'Charlie')"
+    dolt add .
+    dolt commit --skip-verification -m "Add Charlie to force non-FF merge"
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
+
+    run dolt merge feature
+    [ $status -eq 1 ]
+    [[ $output =~ "commit verification failed" ]] || false
+
+    # Fix the test expectation and stage it
+    dolt sql -q "UPDATE dolt_tests SET assertion_value = '3' WHERE test_name = 'test_count'"
+    dolt add .
+
+    # dolt commit should now succeed and create the merge commit
+    run dolt commit -m "Complete merge after fixing test"
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "nothing to commit" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM users" -r csv
+    [[ $output =~ "3" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = ''"
+}
