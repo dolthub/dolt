@@ -165,6 +165,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
+	if msg := getMergeMessage(mergeResultRow); strings.HasPrefix(msg, "commit verification failed:") {
+		cli.Println(msg)
+		return 1
+	}
+
 	if !apr.Contains(cli.AbortParam) {
 		//todo: refs with the `remotes/` prefix will fail to get a hash
 		headHash, headHashErr := getHashOf(queryist.Queryist, queryist.Context, "HEAD")
@@ -750,4 +755,18 @@ func everythingUpToDate(row sql.Row) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// getMergeMessage extracts the message column from a merge result row.
+func getMergeMessage(row sql.Row) string {
+	if len(row) == 3 {
+		if msg, ok := row[2].(string); ok {
+			return msg
+		}
+	} else if len(row) == 4 {
+		if msg, ok := row[3].(string); ok {
+			return msg
+		}
+	}
+	return ""
 }

@@ -1007,7 +1007,9 @@ func handleRebaseCherryPick(
 			return newRebaseError(txErr)
 		}
 		// Return the verification failure error directly so the user sees the standard
-		// "commit verification failed: ..." message format.
+		// "commit verification failed: ..." message format, and so the engine tests can
+		// match against it exactly. The CLI detects this via isRebaseConflictError which
+		// checks for the "commit verification failed:" prefix.
 		return newRebaseError(mergeResult.VerificationFailureErr)
 	}
 

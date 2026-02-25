@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -429,7 +430,8 @@ func syncCliBranchToSqlSessionBranch(ctx *sql.Context, dEnv *env.DoltEnv) error 
 }
 
 // isRebaseConflictError checks if the given error represents a rebase pause condition
-// (data conflicts) that should not abort the rebase but instead allow the user to resolve/continue.
+// (data conflicts or verification failure) that should not abort the rebase but instead
+// allow the user to resolve/continue.
 func isRebaseConflictError(err error) bool {
 	if err == nil {
 		return false
@@ -439,8 +441,16 @@ func isRebaseConflictError(err error) bool {
 	if dprocedures.ErrRebaseDataConflict.Is(err) {
 		return true
 	}
+	if dprocedures.ErrRebaseVerificationFailed.Is(err) {
+		return true
+	}
+	if actions.ErrCommitVerificationFailed.Is(err) {
+		return true
+	}
 
 	// For over-the-wire errors that lose their type, match against error message patterns
 	errMsg := err.Error()
-	return strings.HasPrefix(errMsg, dprocedures.RebaseDataConflictPrefix)
+	return strings.HasPrefix(errMsg, dprocedures.RebaseDataConflictPrefix) ||
+		strings.HasPrefix(errMsg, dprocedures.RebaseVerificationFailedPrefix) ||
+		strings.HasPrefix(errMsg, "commit verification failed:")
 }
