@@ -120,41 +120,6 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", mergeResult, nil
 	}
 
-	// Run commit verification before attempting to create the commit. If verification
-	// fails, we leave the workspace dirty (staged changes already applied above) and
-	// set the merge state so the user can fix the data and --continue.
-	//
-	// IMPORTANT: We must NOT return an error here. Returning an error causes the SQL
-	// transaction to roll back, which would undo all working set changes (SetWorkingRoot,
-	// stageCherryPickedTables, SetWorkingSet). Instead, we set VerificationFailureErr on
-	// the result so the caller can communicate the failure without rolling back state.
-	//
-	// We use preApplyWs (captured before SetWorkingRoot) as the base for StartCherryPick
-	// so that preMergeWorking is correctly set to the pre-cherry-pick working root. This
-	// ensures --abort restores the correct state.
-	if !options.SkipVerification {
-		testGroups := actions.GetCommitRunTestGroups()
-		if len(testGroups) > 0 {
-			if verifyErr := actions.RunCommitVerification(ctx, testGroups); verifyErr != nil {
-				currentRoots, ok := doltSession.GetRoots(ctx, dbName)
-				if !ok {
-					return "", nil, fmt.Errorf("failed to get roots after staging")
-				}
-				// Build the new working set: start from the pre-apply WS (so preMergeWorking
-				// = original working root for correct abort behavior), then apply the current
-				// working and staged roots.
-				newWs := preApplyWs.StartCherryPick(originalCommit, commit).
-					WithWorkingRoot(currentRoots.Working).
-					WithStagedRoot(currentRoots.Staged)
-				if wsErr := doltSession.SetWorkingSet(ctx, dbName, newWs); wsErr != nil {
-					return "", nil, wsErr
-				}
-				mergeResult.VerificationFailureErr = verifyErr
-				return "", mergeResult, nil
-			}
-		}
-	}
-
 	commitProps, err := CreateCommitStagedPropsFromCherryPickOptions(ctx, options, originalCommit)
 	if err != nil {
 		return "", nil, err
@@ -172,11 +137,25 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", nil, fmt.Errorf("failed to get roots for current session")
 	}
 
-	// Verification already ran above; skip it inside NewPendingCommit to avoid running twice.
-	commitProps.SkipVerification = true
-
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, *commitProps)
 	if err != nil {
+		// If verification failed, set merge state and return via the result (not as a Go error).
+		// Returning a Go error would roll back the transaction, undoing all working set changes.
+		// Returning nil error instead lets CommitTransaction persist the staged changes and merge
+		// state, so the user can fix the failing tests and --continue.
+		if actions.ErrCommitVerificationFailed.Is(err) {
+			// Build the new working set: start from the pre-apply WS (so preMergeWorking
+			// = original working root for correct abort behavior), then apply the current
+			// working and staged roots.
+			newWs := preApplyWs.StartCherryPick(originalCommit, commit).
+				WithWorkingRoot(roots.Working).
+				WithStagedRoot(roots.Staged)
+			if wsErr := doltSession.SetWorkingSet(ctx, dbName, newWs); wsErr != nil {
+				return "", nil, wsErr
+			}
+			mergeResult.VerificationFailureErr = err
+			return "", mergeResult, nil
+		}
 		return "", nil, err
 	}
 	if pendingCommit == nil {
