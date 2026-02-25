@@ -479,3 +479,142 @@ MOCK
     # The transfer command logs the real error to stderr; verify it.
     grep -q "database is read only" "$BATS_TMPDIR/transfer_stderr.log"
 }
+
+@test "ssh-transfer: sql dolt_clone() via SSH URL" {
+    mkdir "repo_sql_clone_src"
+    cd "repo_sql_clone_src"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY, val TEXT);"
+    dolt sql -q "INSERT INTO test VALUES (1, 'a'), (2, 'b'), (3, 'c');"
+    dolt add .
+    dolt commit -m "initial"
+
+    # Start sql-server in a fresh directory (no pre-existing databases)
+    cd "$BATS_TEST_TMPDIR"
+    mkdir "sql_clone_server"
+    cd "sql_clone_server"
+    start_sql_server
+
+    dolt sql -q "CALL dolt_clone('ssh://localhost$BATS_TEST_TMPDIR/repo_sql_clone_src', 'sql_cloned');"
+
+    # Verify cloned data
+    run dolt --use-db sql_cloned sql -r csv -q "SELECT COUNT(*) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]]
+}
+
+@test "ssh-transfer: sql dolt_push() to SSH remote" {
+    mkdir "repo_sql_push_src"
+    cd "repo_sql_push_src"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add .
+    dolt commit -m "initial"
+
+    cd "$BATS_TEST_TMPDIR"
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_sql_push_src" repo_sql_push_clone
+
+    cd "repo_sql_push_clone"
+    start_sql_server repo_sql_push_clone
+
+    dolt sql -q "INSERT INTO test VALUES (10);"
+    dolt sql -q "CALL dolt_commit('-a','-m', 'sql push 123');"
+    dolt sql -q "CALL dolt_push('origin', 'main');"
+    stop_sql_server 1
+
+    cd "$BATS_TEST_TMPDIR/repo_sql_push_src"
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "sql push 123" ]]
+}
+
+@test "ssh-transfer: sql dolt_pull() from SSH remote" {
+    mkdir "repo_sql_pull_src"
+    cd "repo_sql_pull_src"
+    dolt init
+    dolt sql -q "CREATE TABLE items (id INT PRIMARY KEY, name TEXT);"
+    dolt sql -q "INSERT INTO items VALUES (1, 'original');"
+    dolt add .
+    dolt commit -m "initial"
+
+    cd "$BATS_TEST_TMPDIR"
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_sql_pull_src" repo_sql_pull_clone
+
+    # Add new data to source
+    cd "repo_sql_pull_src"
+    dolt sql -q "INSERT INTO items VALUES (99, 'new_item');"
+    dolt add .
+    dolt commit -m "add new item"
+
+    cd "$BATS_TEST_TMPDIR/repo_sql_pull_clone"
+    start_sql_server repo_sql_pull_clone
+    dolt sql -q "CALL dolt_pull('origin');"
+
+    run dolt sql -r csv -q "SELECT * FROM items WHERE id=99;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new_item" ]]
+}
+
+@test "ssh-transfer: sql dolt_remote(add) with SSH URL then push" {
+    mkdir "repo_sql_remote_src"
+    cd "repo_sql_remote_src"
+    dolt init
+    dolt sql -q "CREATE TABLE data (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO data VALUES (1), (2), (3);"
+    dolt add .
+    dolt commit -m "initial data"
+
+    cd "$BATS_TEST_TMPDIR"
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_sql_remote_src" repo_sql_remote_target
+
+    # Create a second clone as the local working copy
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_sql_remote_src" repo_sql_remote_local
+    cd "repo_sql_remote_local"
+
+    start_sql_server repo_sql_remote_local
+    dolt sql -q "CALL dolt_remote('add', 'target', 'ssh://localhost$BATS_TEST_TMPDIR/repo_sql_remote_target');"
+    dolt sql -q "INSERT INTO data VALUES (10);"
+    dolt sql -q "CALL dolt_commit('-a', '-m', 'push to target');"
+    dolt sql -q "CALL dolt_push('target', 'main');"
+
+    cd "$BATS_TEST_TMPDIR/repo_sql_remote_target"
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "push to target" ]]
+}
+
+@test "ssh-transfer: sql dolt_clone() fails for non-existent SSH repo" {
+    mkdir "sql_err_server"
+    cd "sql_err_server"
+    start_sql_server
+
+    # Attempt clone of non-existent path
+    run dolt sql -q "CALL dolt_clone('ssh://localhost/nonexistent/repo_does_not_exist');"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "repository not found" ]] || false
+}
+
+@test "ssh-transfer: sql dolt_push() fails while sql-server locks target" {
+    mkdir "repo_sql_lockpush_src"
+    cd "repo_sql_lockpush_src"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add .
+    dolt commit -m "initial"
+
+    cd "$BATS_TEST_TMPDIR"
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_sql_lockpush_src" repo_sql_lockpush_clone
+
+    # Lock source with sql-server
+    cd "repo_sql_lockpush_src"
+    start_sql_server repo_sql_lockpush_src
+
+    cd "$BATS_TEST_TMPDIR/repo_sql_lockpush_clone"
+    dolt sql -q "INSERT INTO test VALUES (99);"
+    dolt sql -q "CALL dolt_commit('-a', '-m', 'should fail');"
+    run dolt sql -q "CALL dolt_push('origin', 'main');"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "database is read only" ]] || false
+}
