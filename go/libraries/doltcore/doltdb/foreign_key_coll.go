@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -179,12 +180,20 @@ func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
 		fk.ReferencedTableIndex == other.ReferencedTableIndex
 }
 
+var fkBufPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 0, 1024)
+	},
+}
+
 // HashOf returns the Noms hash of a ForeignKey.
 func (fk ForeignKey) HashOf() (hash.Hash, error) {
-	// TODO: use a pool of byte buffers?
-	// TODO: the order of these shouldn't matter, but maintain it for now
-	// TODO: unsafe strings
-	var bb []byte
+	bb := fkBufPool.Get().([]byte)
+	defer func() {
+		bb = bb[:0]
+		fkBufPool.Put(bb)
+	}()
+
 	var err error
 	bb = append(bb, fk.Name...)
 	bb = append(bb, fk.TableName.String()...)
