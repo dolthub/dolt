@@ -84,15 +84,13 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	}
 
 	// Read stderr via a pipe so we control when it is fully consumed.
-	// stderrDone is closed once all stderr has been read, giving
-	// downstream error handlers a concrete event to wait on instead of
-	// a racy sleep.
+	// stderrDone channel is closed once all stderr has been read, sending signal that the subcommand has terminated.
+	stderrDone := make(chan struct{})
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 	var stderrBuf bytes.Buffer
-	stderrDone := make(chan struct{})
 	go func() {
 		io.Copy(io.MultiWriter(os.Stderr, &stderrBuf), stderrPipe)
 		close(stderrDone)
@@ -106,10 +104,8 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	// Create SMUX client session over the subprocess pipes.
 	pConn := &pipeConn{
-		r:     stdout,
-		w:     stdin,
-		cmd:   cmd,
-		stdin: stdin,
+		r: stdout,
+		w: stdin,
 	}
 	smuxConfig := smux.DefaultConfig()
 	smuxConfig.MaxReceiveBuffer = remotesrv.MaxGRPCMessageSize
@@ -356,10 +352,8 @@ func (s *streamBodyCloser) Close() error {
 
 // pipeConn implements net.Conn over a subprocess's stdin/stdout pipes.
 type pipeConn struct {
-	r     io.ReadCloser
-	w     io.WriteCloser
-	cmd   *exec.Cmd      // prevents GC of subprocess
-	stdin io.WriteCloser // prevents GC of stdin pipe
+	r io.ReadCloser
+	w io.WriteCloser
 }
 
 func (c *pipeConn) Read(p []byte) (int, error)         { return c.r.Read(p) }
