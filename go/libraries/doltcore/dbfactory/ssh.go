@@ -83,33 +83,26 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
-	// Capture stderr so we can include remote errors in failure messages.
+	// Read stderr via a pipe so we control when it is fully consumed.
+	// stderrDone is closed once all stderr has been read, giving
+	// downstream error handlers a concrete event to wait on instead of
+	// a racy sleep.
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
 	var stderrBuf bytes.Buffer
-	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
+	stderrDone := make(chan struct{})
+	go func() {
+		io.Copy(io.MultiWriter(os.Stderr, &stderrBuf), stderrPipe)
+		close(stderrDone)
+	}()
 
 	if err := cmd.Start(); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to start transfer subprocess: %w", err)
 	}
 
-	// Check for early exit (non-blocking).
-	processDone := make(chan error, 1)
-	go func() { processDone <- cmd.Wait() }()
-
-	// Brief pause to detect immediate failures (e.g., bad path, missing dolt).
-	// SSH connection + shell startup can take over 100ms, so we use 500ms.
-	time.Sleep(500 * time.Millisecond)
-	select {
-	case err := <-processDone:
-		errMsg := strings.TrimSpace(stderrBuf.String())
-		if strings.Contains(errMsg, "no such file or directory") || strings.Contains(errMsg, "failed to load database") {
-			return nil, nil, nil, fmt.Errorf("repository not found at %s", path)
-		}
-		if errMsg != "" {
-			return nil, nil, nil, fmt.Errorf("ssh remote error: %s", errMsg)
-		}
-		return nil, nil, nil, fmt.Errorf("transfer subprocess exited immediately: %w", err)
-	default:
-	}
+	procCtx, procCancel := context.WithCancelCause(ctx)
 
 	// Create SMUX client session over the subprocess pipes.
 	pConn := &pipeConn{
@@ -125,8 +118,22 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	session, err := smux.Client(pConn, smuxConfig)
 	if err != nil {
 		cmd.Process.Kill()
-		return nil, nil, nil, fmt.Errorf("failed to create SMUX client session: %w", err)
+		procCancel(err)
+		return nil, nil, nil, sshRemoteError(stderrDone, &stderrBuf, path, "failed to create SMUX client session", err)
 	}
+
+	// Monitor the SMUX session in a background goroutine. When the remote
+	// subprocess exits (bad path, missing dolt, SSH failure, etc.), the pipe
+	// gets EOF and SMUX closes the session. This cancels our context so that
+	// gRPC calls unblock immediately instead of hanging forever.
+	//
+	// AcceptStream forces SMUX to actively read the connection. Without it,
+	// SMUX only discovers EOF on the next read/write attempt -- which never
+	// comes while gRPC is stuck in the WaitForReady picker loop.
+	go func() {
+		session.AcceptStream()
+		procCancel(fmt.Errorf("remote process exited"))
+	}()
 
 	// Register custom HTTP transport for the transfer host so table file
 	// requests are routed through the SMUX session.
@@ -146,26 +153,33 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	if err != nil {
 		session.Close()
 		cmd.Process.Kill()
-		return nil, nil, nil, fmt.Errorf("failed to create gRPC client: %w", err)
+		procCancel(err)
+		return nil, nil, nil, sshRemoteError(stderrDone, &stderrBuf, path, "failed to create gRPC client", err)
 	}
 
 	// Create chunk store backed by the remote gRPC service.
 	client := remotesapi.NewChunkStoreServiceClient(grpcConn)
-	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, nbf, urlObj.Path, path, false, client)
+	cs, err := remotestorage.NewDoltChunkStoreFromPath(procCtx, nbf, urlObj.Path, path, false, client)
 	if err != nil {
+		procCancel(err)
+		remotestorage.UnregisterCustomTransport("transfer.local")
 		grpcConn.Close()
 		session.Close()
-		cmd.Process.Kill()
-		return nil, nil, nil, fmt.Errorf("failed to create chunk store: %w", err)
+		stdin.Close()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		return nil, nil, nil, sshRemoteError(stderrDone, &stderrBuf, path, "failed to create chunk store", err)
 	}
 
 	// Wrap the chunk store with cleanup so resources are released when the
 	// database is closed.
 	conn := &sshConnection{
-		cmd:      cmd,
-		session:  session,
-		grpcConn: grpcConn,
-		stdin:    stdin,
+		cmd:        cmd,
+		session:    session,
+		grpcConn:   grpcConn,
+		stdin:      stdin,
+		procCancel: procCancel,
 	}
 	wrappedCS := &sshChunkStore{DoltChunkStore: cs, conn: conn}
 
@@ -174,6 +188,38 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	db := datas.NewTypesDatabase(vrw, ns)
 
 	return db, vrw, ns, nil
+}
+
+// sshRemoteError builds an error message for SSH remote failures. It waits
+// for the remote's stderr to be fully read (signaled by stderrDone) and
+// uses it to produce a more informative message than the raw gRPC/SMUX error.
+func sshRemoteError(stderrDone <-chan struct{}, stderrBuf *bytes.Buffer, path, msg string, err error) error {
+	<-stderrDone
+	errMsg := filterSSHNoise(stderrBuf.String())
+	if errMsg != "" {
+		if strings.Contains(errMsg, "no such file or directory") || strings.Contains(errMsg, "failed to load database") {
+			return fmt.Errorf("repository not found at %s", path)
+		}
+		return fmt.Errorf("%s: remote: %s", msg, errMsg)
+	}
+	return fmt.Errorf("%s: %w", msg, err)
+}
+
+// filterSSHNoise removes common SSH informational messages from stderr output
+// so they are not mistaken for real errors.
+func filterSSHNoise(s string) string {
+	var lines []string
+	for _, line := range strings.Split(s, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "Warning: Permanently added") {
+			continue
+		}
+		lines = append(lines, trimmed)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // buildTransferCommand constructs the exec.Cmd for the transfer subprocess.
@@ -214,10 +260,11 @@ func buildTransferCommand(host, port, path, user string) (*exec.Cmd, error) {
 // sshConnection holds all resources for an SSH transfer connection and
 // implements coordinated cleanup.
 type sshConnection struct {
-	cmd      *exec.Cmd
-	session  *smux.Session
-	grpcConn *grpc.ClientConn
-	stdin    io.WriteCloser
+	cmd        *exec.Cmd
+	session    *smux.Session
+	grpcConn   *grpc.ClientConn
+	stdin      io.WriteCloser
+	procCancel context.CancelCauseFunc
 }
 
 // Close releases all resources: unregisters the custom transport, closes
@@ -225,6 +272,9 @@ type sshConnection struct {
 func (c *sshConnection) Close() error {
 	remotestorage.UnregisterCustomTransport("transfer.local")
 
+	if c.procCancel != nil {
+		c.procCancel(fmt.Errorf("connection closed"))
+	}
 	if c.session != nil {
 		c.session.Close()
 	}
@@ -308,8 +358,8 @@ func (s *streamBodyCloser) Close() error {
 type pipeConn struct {
 	r     io.ReadCloser
 	w     io.WriteCloser
-	cmd   *exec.Cmd       // prevents GC of subprocess
-	stdin io.WriteCloser  // prevents GC of stdin pipe
+	cmd   *exec.Cmd      // prevents GC of subprocess
+	stdin io.WriteCloser // prevents GC of stdin pipe
 }
 
 func (c *pipeConn) Read(p []byte) (int, error)         { return c.r.Read(p) }
