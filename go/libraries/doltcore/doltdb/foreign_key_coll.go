@@ -197,6 +197,12 @@ func (fk *ForeignKey) HashOf() (hash.Hash, error) {
 	}
 	bb = append(bb, fk.ReferencedTableName.String()...)
 	bb = append(bb, fk.ReferencedTableIndex...)
+	for _, col := range fk.ReferencedTableColumns {
+		bb, err = binary.Append(bb, binary.LittleEndian, col)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+	}
 	bb = append(bb, byte(fk.OnUpdate))
 	bb = append(bb, byte(fk.OnDelete))
 	for _, col := range fk.UnresolvedFKDetails.TableColumns {
