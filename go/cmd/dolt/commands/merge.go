@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -165,7 +166,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
-	if msg := getMergeMessage(mergeResultRow); strings.HasPrefix(msg, "commit verification failed:") {
+	if msg := getMergeMessage(mergeResultRow); strings.HasPrefix(msg, actions.CommitVerificationFailedPrefix) {
 		cli.Println(msg)
 		return 1
 	}

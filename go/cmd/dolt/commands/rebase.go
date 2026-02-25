@@ -452,5 +452,5 @@ func isRebaseConflictError(err error) bool {
 	errMsg := err.Error()
 	return strings.HasPrefix(errMsg, dprocedures.RebaseDataConflictPrefix) ||
 		strings.HasPrefix(errMsg, dprocedures.RebaseVerificationFailedPrefix) ||
-		strings.HasPrefix(errMsg, "commit verification failed:")
+		strings.HasPrefix(errMsg, actions.CommitVerificationFailedPrefix)
 }

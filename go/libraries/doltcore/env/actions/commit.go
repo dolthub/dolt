@@ -29,10 +29,14 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
+// CommitVerificationFailedPrefix is the prefix of the error message returned when commit
+// verification tests fail. It is used both to generate the error and to detect it in CLI output.
+const CommitVerificationFailedPrefix = "commit verification failed:"
+
 // ErrCommitVerificationFailed is returned when commit verification tests fail during a commit,
 // cherry-pick, merge, or rebase operation. The workspace is left dirty so the user can fix the
 // failing tests and retry the operation using --continue (cherry-pick/rebase) or CALL dolt_commit() (merge).
-var ErrCommitVerificationFailed = goerrors.NewKind("commit verification failed: %s")
+var ErrCommitVerificationFailed = goerrors.NewKind(CommitVerificationFailedPrefix + " %s")
 
 type CommitStagedProps struct {
 	Message          string
