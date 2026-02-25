@@ -107,32 +107,33 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "commit_verification: merge with tests enabled - tests fail, merge aborted" {
+@test "commit_verification: merge with tests enabled - tests fail, can abort and retry with --skip-verification" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
-    
-    dolt sql <<SQL
-INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
-('test_will_fail', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999');
-SQL
+
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_will_fail', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999');"
     dolt add .
     dolt commit --skip-verification -m "Initial commit with failing test"
-    
+
     dolt checkout -b feature
     dolt sql -q "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')"
     dolt add .
     dolt commit --skip-verification -m "Add Bob"
-    
+
     # Add Charlie to main to force non-fast-forward merge
     dolt checkout main
     dolt sql -q "INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com')"
     dolt add .
     dolt commit --skip-verification -m "Add Charlie"
-    
+
     run dolt merge feature
     [ "$status" -ne 0 ]
     [[ "$output" =~ "commit verification failed" ]] || false
     [[ "$output" =~ "test_will_fail" ]] || false
     [[ "$output" =~ "expected_single_value equal to 999, got 3" ]] || false
+
+    # Merge state is preserved; abort before retrying with --skip-verification
+    run dolt merge --abort
+    [ "$status" -eq 0 ]
 
     run dolt merge --skip-verification feature
     [ "$status" -eq 0 ]
@@ -160,29 +161,31 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "commit_verification: cherry-pick with tests enabled - tests fail, aborted" {
+@test "commit_verification: cherry-pick with tests enabled - tests fail, can abort and retry with --skip-verification" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
-    
+
     dolt sql <<SQL
-INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
+INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES
 ('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');
 SQL
     dolt add .
     dolt commit -m "Initial commit"
-    
+
     dolt checkout -b feature
     dolt sql -q "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')"
     dolt add .
     dolt commit --skip-verification -m "Add Bob but don't update test"
     commit_hash=$(getHeadHash)
-    
+
     dolt checkout main
     run dolt cherry-pick $commit_hash
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "commit verification failed" ]] || false
-    [[ "$output" =~ "test_users_count" ]] || false
-    [[ "$output" =~ "expected_single_value equal to 1, got 2" ]] || false
+    [[ "$output" =~ "Commit verification failed" ]] || false
+    [[ "$output" =~ "dolt cherry-pick --continue" ]] || false
 
+    # Cherry-pick state is preserved; abort before retrying with --skip-verification
+    run dolt cherry-pick --abort
+    [ "$status" -eq 0 ]
     run dolt cherry-pick --skip-verification $commit_hash
     [ "$status" -eq 0 ]
 }
@@ -216,38 +219,246 @@ SQL
     [[ "$output" =~ "Successfully rebased" ]] || false
 }
 
-@test "commit_verification: rebase with tests enabled - tests fail, aborted" {
-    skip "Rebase restart of workflow on failed verification is currently busted."
-
+@test "commit_verification: rebase with tests enabled - tests fail, can abort and restart with --skip-verification" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
-    
-    dolt sql <<SQL
-INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES 
-('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');
-SQL
+
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_users_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');"
     dolt add .
-    dolt commit -m "Initial commit"
-    
+    dolt commit -m "Add verification test"
+
     dolt checkout -b feature
     dolt sql -q "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')"
     dolt sql -q "UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_users_count'"
     dolt add .
     dolt commit -m "Add Bob and update test"
-    
+
     dolt checkout main
     dolt sql -q "INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com')"
     dolt add .
     dolt commit --skip-verification -m "Add Charlie"
-    
+
     dolt checkout feature
-    
+
     run dolt rebase main
     [ "$status" -ne 0 ]
     [[ "$output" =~ "commit verification failed" ]] || false
     [[ "$output" =~ "test_users_count" ]] || false
-    [[ "$output" =~ "Expected '2' but got '3'" ]] || false
+
+    # Abort the failed rebase and retry with --skip-verification
+    run dolt rebase --abort
+    [ "$status" -eq 0 ]
 
     run dolt rebase --skip-verification main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully rebased" ]] || false
+}
+
+@test "commit_verification: cherry-pick verification failure halts with dirty state preserved" {
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');"
+    dolt add .
+    dolt commit -m "Add verification test"
+
+    dolt checkout -b feature
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')"
+    dolt add .
+    CHERRY_HASH=$(dolt commit --skip-verification -m "Add Bob without updating test" | grep -o '[0-9a-v]\{32\}')
+    dolt checkout main
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*';"
+
+    run dolt cherry-pick $CHERRY_HASH
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Commit verification failed" ]] || false
+    [[ "$output" =~ "dolt cherry-pick --continue" ]] || false
+
+    # Dirty state is preserved: users table should be staged
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "users" ]] || false
+
+    # --continue without fixing still fails
+    run dolt cherry-pick --continue
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Commit verification failed" ]] || false
+
+    # --abort restores clean state
+    run dolt cherry-pick --abort
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "users" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '';"
+}
+
+@test "commit_verification: cherry-pick fix data then --continue succeeds" {
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');"
+    dolt add .
+    dolt commit -m "Add verification test"
+
+    dolt checkout -b feature
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')"
+    dolt add .
+    CHERRY_HASH=$(dolt commit --skip-verification -m "Add Bob without updating test" | grep -o '[0-9a-v]\{32\}')
+    dolt checkout main
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*';"
+
+    run dolt cherry-pick $CHERRY_HASH
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Commit verification failed" ]] || false
+
+    # Fix the test expectation and stage it
+    dolt sql -q "UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_count';"
+    dolt add .
+
+    # --continue should now succeed
+    run dolt cherry-pick --continue
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '';"
+}
+
+@test "commit_verification: merge verification failure halts with dirty state preserved" {
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');"
+    dolt add .
+    dolt commit -m "Add verification test"
+
+    dolt checkout -b feature
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')"
+    dolt add .
+    dolt commit --skip-verification -m "Add Bob without updating test"
+    dolt checkout main
+    dolt sql -q "INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com')"
+    dolt add .
+    dolt commit --skip-verification -m "Add Charlie to force non-FF merge"
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*';"
+
+    run dolt merge feature
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "commit verification failed" ]] || false
+
+    # Dirty state is preserved: users table should be staged
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "users" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '';"
+}
+
+@test "commit_verification: merge fix data then dolt commit succeeds" {
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');"
+    dolt add .
+    dolt commit -m "Add verification test"
+
+    dolt checkout -b feature
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com')"
+    dolt add .
+    dolt commit --skip-verification -m "Add Bob without updating test"
+    dolt checkout main
+    dolt sql -q "INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com')"
+    dolt add .
+    dolt commit --skip-verification -m "Add Charlie to force non-FF merge"
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*';"
+
+    run dolt merge feature
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "commit verification failed" ]] || false
+
+    # Fix the test expectation and stage it
+    dolt sql -q "UPDATE dolt_tests SET assertion_value = '3' WHERE test_name = 'test_count';"
+    dolt add .
+
+    # dolt commit should now succeed and create the merge commit
+    run dolt commit -m "Complete merge after fixing test"
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '';"
+}
+
+@test "commit_verification: rebase verification failure halts with dirty state preserved" {
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');"
+    dolt add .
+    dolt commit -m "Add verification test"
+
+    # Create divergence: main gets Charlie, b1 branch gets Bob without updating test
+    dolt branch b1
+    dolt sql -q "INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com');"
+    dolt add .
+    dolt commit --skip-verification -m "Add Charlie to main"
+
+    dolt checkout b1
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com');"
+    dolt add .
+    dolt commit --skip-verification -m "Add Bob without updating test"
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*';"
+
+    # Rebase b1 onto main: applying Bob's commit on top of Alice+Charlie gives 3 rows, test expects 1
+    run dolt rebase main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "commit verification failed" ]] || false
+
+    # Dirty state is preserved: we are on dolt_rebase_b1 with users staged
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "users" ]] || false
+
+    # --abort restores clean state
+    run dolt rebase --abort
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "rebase in progress" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '';"
+}
+
+@test "commit_verification: rebase fix data then --continue succeeds" {
+    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_count', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '1');"
+    dolt add .
+    dolt commit -m "Add verification test"
+
+    dolt branch b1
+    dolt sql -q "INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com');"
+    dolt add .
+    dolt commit --skip-verification -m "Add Charlie to main"
+
+    dolt checkout b1
+    dolt sql -q "INSERT INTO users VALUES (2, 'Bob', 'bob@example.com');"
+    dolt add .
+    dolt commit --skip-verification -m "Add Bob without updating test"
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*';"
+
+    run dolt rebase main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "commit verification failed" ]] || false
+
+    # Fix the test expectation (3 users after rebase: Alice + Charlie + Bob) and stage
+    dolt sql -q "UPDATE dolt_tests SET assertion_value = '3' WHERE test_name = 'test_count';"
+    dolt add .
+
+    # --continue should now succeed
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "rebase in progress" ]] || false
+
+    dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '';"
 }
