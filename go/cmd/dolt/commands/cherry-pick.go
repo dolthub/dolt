@@ -273,7 +273,10 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	if len(rows) != 1 {
 		return fmt.Errorf("error: unexpected number of rows returned from dolt_cherry_pick: %d", len(rows))
 	}
-	if len(rows[0]) != 5 {
+
+	// No version of dolt_cherry_pick has ever returned less than 4 columns. We don't set an upper bound here to
+	// allow for servers to add more columns in the future without breaking compatibility with older clients.
+	if len(rows[0]) < 4 {
 		return fmt.Errorf("error: unexpected number of columns returned from dolt_cherry_pick: %d", len(rows[0]))
 	}
 
@@ -294,9 +297,15 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	if err != nil {
 		return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
 	}
-	verificationFailures, err := getInt64ColAsInt64(row[4])
-	if err != nil {
-		return fmt.Errorf("Unable to parse verification_failures column: %w", err)
+	verificationFailures := int64(0)
+	if len(row) > 4 {
+		// verification failure column was added to results briefly after the commit_verification feature was added.
+		// Original version returned an error. This really only matters is the dolt version of the cli is different from
+		// the version of the server it connected to.
+		verificationFailures, err = getInt64ColAsInt64(row[4])
+		if err != nil {
+			return fmt.Errorf("Unable to parse verification_failures column: %w", err)
+		}
 	}
 	if dataConflicts > 0 || schemaConflicts > 0 || constraintViolations > 0 {
 		return ErrCherryPickConflictsOrViolations.New()
