@@ -13,7 +13,6 @@ setup_dolt_repo() {
 
     PORT=$( definePORT )
     USER="dolt"
-    # Use an explicit auth method and password value so auth negotiation failures are actionable.
     dolt sql -q "CREATE USER dolt@'%' IDENTIFIED BY ''; GRANT ALL ON *.* TO dolt@'%';"
     dolt sql-server --host 0.0.0.0 --port="$PORT" --loglevel=trace &
     SERVER_PID=$!
