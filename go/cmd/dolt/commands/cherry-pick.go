@@ -55,7 +55,7 @@ var ErrCherryPickVerificationFailed = errors.NewKind("error: Commit verification
 	"in the working set. Fix the failing tests, use `dolt add` to stage your changes, then " +
 	"`dolt cherry-pick --continue` to complete the cherry-pick.\n" +
 	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.\n" +
-	"Run `dolt test run '*'` to see which tests are failing.")
+	"Run `dolt sql -q 'select * from dolt_test_run()` to see which tests are failing.")
 
 type CherryPickCmd struct{}
 
