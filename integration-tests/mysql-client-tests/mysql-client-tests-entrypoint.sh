@@ -2,7 +2,7 @@
 
 status=0
 run_bats() {
-  bats "$1" || status=1
+  bats "$@" --print-output-on-failure || status=1
 }
 
 echo "Updating dolt config for tests:"

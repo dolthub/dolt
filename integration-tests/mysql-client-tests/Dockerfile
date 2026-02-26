@@ -132,6 +132,14 @@ WORKDIR /build/swift/
 RUN swift build -c release --static-swift-stdlib
 RUN mkdir -p /build/bin && cp .build/release/MariaDBTest /build/bin/mariadb-swift-test
 
+FROM debian:bookworm-slim AS mariadb_clients
+RUN apt-get update && apt-get install -y ca-certificates curl tar && rm -rf /var/lib/apt/lists/*
+COPY dolt/integration-tests/mysql-client-tests/mariadb-install.sh /usr/local/mariadb-install.sh
+WORKDIR /usr/local
+RUN chmod +x ./mariadb-install.sh
+RUN ./mariadb-install.sh -o mariadb-10.11.tar.gz -d mariadb-10.11 "10.11.16"
+RUN ./mariadb-install.sh -o mariadb-11.8.tar.gz -d mariadb-11.8 "11.8.3"
+
 FROM php:8.3-bookworm AS runtime
 RUN apt-get update && apt-get install -y \
   libmysqlcppconn-dev \
@@ -155,6 +163,9 @@ COPY --from=node_clients_build /usr/local/bin/node /usr/local/bin/
 COPY --from=ruby_clients_build /usr/local/bin/ruby /usr/local/bin/
 COPY --from=ruby_clients_build /usr/local/lib/ /usr/local/lib/
 COPY --from=ruby_clients_build /usr/local/bundle/ /usr/local/bundle/
+COPY --from=mariadb_clients /usr/local/mariadb-10.11/ /usr/local/mariadb-10.11/
+COPY --from=mariadb_clients /usr/local/mariadb-11.8/ /usr/local/mariadb-11.8/
+RUN ln -vsfn /usr/local/mariadb-10.11 /usr/local/mariadb
 
 RUN docker-php-ext-install mysqli pdo_mysql && \
     R -e "install.packages('DBI', repos='https://cloud.r-project.org/')" && \

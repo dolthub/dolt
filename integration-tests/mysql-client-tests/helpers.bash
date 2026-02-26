@@ -1,8 +1,8 @@
 
 setup_dolt_repo() {
     REPO_NAME="dolt_repo_$$"
-    mkdir $REPO_NAME	
-    cd $REPO_NAME
+    mkdir "$REPO_NAME"
+    cd "$REPO_NAME" || exit
 
     dolt init
 
@@ -13,13 +13,12 @@ setup_dolt_repo() {
 
     PORT=$( definePORT )
     USER="dolt"
-    dolt sql -q "CREATE USER dolt@'%'; GRANT ALL ON *.* TO dolt@'%';"
-    dolt sql-server --host 0.0.0.0 --port=$PORT --loglevel=trace &
+    # Use an explicit auth method and password value so auth negotiation failures are actionable.
+    dolt sql -q "CREATE USER dolt@'%' IDENTIFIED BY ''; GRANT ALL ON *.* TO dolt@'%';"
+    dolt sql-server --host 0.0.0.0 --port="$PORT" --loglevel=trace &
     SERVER_PID=$!
     # Give the server a chance to start
     sleep 1
-
-    export MYSQL_PWD=""
 }
 
 teardown_dolt_repo() {
@@ -28,12 +27,15 @@ teardown_dolt_repo() {
 }
 
 definePORT() {
-  getPORT=""
+  local portInUse
+  local getPORT=""
+  local i
+
   for i in {0..9}
   do
-    let getPORT="($$ + $i) % (65536-1024) + 1024"
-    portinuse=$(lsof -i -P -n | grep LISTEN | grep $attemptedPORT | wc -l)
-      if [ $portinuse -eq 0 ]
+    ((getPORT = ($$ + i) % (65536 - 1024) + 1024))
+    portInUse="$(lsof -i -P -n | grep LISTEN | grep -c "$getPORT")"
+      if [[ "$portInUse" -eq 0 ]] || false
       then
         echo "$getPORT"
         break
