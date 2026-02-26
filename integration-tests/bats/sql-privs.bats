@@ -697,7 +697,7 @@ teardown() {
      # Assert that using the test account results in an authentication error, since only test@10.10.10.10 exists now
      run dolt -u test sql -q "show tables"
      [ $status -ne 0 ]
-     [[ "$output" =~ "No authentication methods available for authentication" ]] || false
+     [[ "$output" =~ "Access denied for user 'test'" ]] || false
 }
 
 @test "sql-privs: creating user identified by password" {

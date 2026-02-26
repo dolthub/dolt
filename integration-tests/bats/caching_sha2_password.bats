@@ -54,7 +54,7 @@ EOF
     # Invalid account
     run mysql -uinvalid --port $PORT --protocol TCP --default-auth=caching_sha2_password -pwrong
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "No authentication methods available for authentication" ]] || false
+    [[ "$output" =~ "Access denied for user 'invalid'" ]] || false
 }
 
 # The mysql command line client is not available in Lambda
