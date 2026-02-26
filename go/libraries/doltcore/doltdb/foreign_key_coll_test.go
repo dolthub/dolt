@@ -16,8 +16,6 @@ package doltdb
 
 import "testing"
 
-// BenchmarkForeignKeyHashOf-14    	 2012511	       578.7 ns/op
-// BenchmarkForeignKeyHashOf-14    	 4511584	       260.0 ns/op
 func BenchmarkForeignKeyHashOf(b *testing.B) {
 	fk := ForeignKey{
 		Name: "name",
