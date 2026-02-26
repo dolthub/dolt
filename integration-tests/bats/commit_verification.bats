@@ -110,7 +110,10 @@ SQL
 @test "commit_verification: merge with tests enabled - tests fail, can abort and retry with --skip-verification" {
     dolt sql -q "SET @@PERSIST.dolt_commit_verification_groups = '*'"
 
-    dolt sql -q "INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES ('test_will_fail', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999');"
+    dolt sql <<SQL
+INSERT INTO dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) VALUES
+('test_will_fail', 'unit', 'SELECT COUNT(*) FROM users', 'expected_single_value', '==', '999');
+SQL
     dolt add .
     dolt commit --skip-verification -m "Initial commit with failing test"
 
@@ -179,9 +182,12 @@ SQL
 
     dolt checkout main
     run dolt cherry-pick $commit_hash
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "Commit verification failed" ]] || false
+    [[ "$output" =~ "commit verification failed" ]] || false
+    [[ "$output" =~ "test_users_count" ]] || false
+    [[ "$output" =~ "expected_single_value equal to 1, got 2" ]] || false
+    [[ "$output" =~ "commit verification failed" ]] || false
     [[ "$output" =~ "dolt cherry-pick --continue" ]] || false
+    [[ "$output" =~ "dolt cherry-pick --abort" ]] || false
 
     # Cherry-pick state is preserved; abort before retrying with --skip-verification
     run dolt cherry-pick --abort
