@@ -192,7 +192,6 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 	}
 
 	succeeded := false
-	verificationFailed := false
 	commitHash := ""
 	for _, row := range rows {
 		var ok bool
@@ -215,17 +214,9 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 		if err != nil {
 			return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
 		}
-		verificationFailures, err := getInt64ColAsInt64(row[4])
-		if err != nil {
-			return fmt.Errorf("Unable to parse verification_failures column: %w", err)
-		}
-
-		if verificationFailures > 0 {
-			verificationFailed = true
-		}
 
 		// if we have a hash and all 0s, then the cherry-pick succeeded
-		if len(commitHash) > 0 && dataConflicts == 0 && schemaConflicts == 0 && constraintViolations == 0 && verificationFailures == 0 {
+		if len(commitHash) > 0 && dataConflicts == 0 && schemaConflicts == 0 && constraintViolations == 0 {
 			succeeded = true
 		}
 	}
@@ -245,8 +236,6 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 		})
 
 		return nil
-	} else if verificationFailed {
-		return ErrCherryPickVerificationFailed.New()
 	} else {
 		// this failure could only have been caused by constraint violations or conflicts during cherry-pick
 		return ErrCherryPickConflictsOrViolations.New()
@@ -293,7 +282,7 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 
 	// We expect to get an error if there were problems, but we also could get any of the conflicts and
 	// violation counts being greater than 0 if there were problems. If we got here without an error,
-	// but we have conflicts, violations, or verification failures, we should report and stop.
+	// but we have conflicts or violations, we should report and stop.
 	dataConflicts, err := getInt64ColAsInt64(row[1])
 	if err != nil {
 		return fmt.Errorf("Unable to parse data_conflicts column: %w", err)
@@ -306,21 +295,8 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	if err != nil {
 		return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
 	}
-	verificationFailures := int64(0)
-	if len(row) > 4 {
-		// verification failure column was added to results briefly after the commit_verification feature was added.
-		// Original version returned an error. This really only matters is the dolt version of the cli is different from
-		// the version of the server it connected to.
-		verificationFailures, err = getInt64ColAsInt64(row[4])
-		if err != nil {
-			return fmt.Errorf("Unable to parse verification_failures column: %w", err)
-		}
-	}
 	if dataConflicts > 0 || schemaConflicts > 0 || constraintViolations > 0 {
 		return ErrCherryPickConflictsOrViolations.New()
-	}
-	if verificationFailures > 0 {
-		return ErrCherryPickVerificationFailed.New()
 	}
 
 	commitHash := fmt.Sprintf("%v", row[0])

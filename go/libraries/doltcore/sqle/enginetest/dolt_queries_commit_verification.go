@@ -210,7 +210,7 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL dolt_cherry_pick(@commit_1_hash)",
-				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0), int64(0)}},
+				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
 			},
 			{
 				// Verification fails; returns specific error, dirty state preserved
@@ -273,7 +273,7 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 			{
 				// Now cherry-pick succeeds with --skip-verification
 				Query:    "CALL dolt_cherry_pick('--skip-verification', @commit_hash)",
-				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0), int64(0)}},
+				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
 			},
 			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
 				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
@@ -315,7 +315,7 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 			{
 				// --continue now passes verification and creates the commit
 				Query:    "CALL dolt_cherry_pick('--continue')",
-				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0), int64(0)}},
+				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
 			},
 			{
 				// Workspace is clean after successful --continue

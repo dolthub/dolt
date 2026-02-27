@@ -159,7 +159,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit2);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM t;",
@@ -167,7 +167,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM t order by pk;",
@@ -198,7 +198,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHERRY_PICK('branch1');",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM keyless;",
@@ -223,7 +223,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				// Assert that our new commit only has one parent (i.e. not a merge commit)
@@ -259,7 +259,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW TABLES;",
@@ -281,7 +281,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -303,7 +303,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -325,7 +325,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -350,7 +350,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(dolt_hashof('branch1'));",
-				Expected: []sql.Row{{"", 1, 0, 0, 0}},
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -364,7 +364,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick('--abort');",
-				Expected: []sql.Row{{"", 0, 0, 0, 0}},
+				Expected: []sql.Row{{"", 0, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -394,7 +394,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(dolt_hashof('branch1'));",
-				Expected: []sql.Row{{"", 1, 0, 0, 0}},
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -408,7 +408,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick('--abort');",
-				Expected: []sql.Row{{"", 0, 0, 0, 0}},
+				Expected: []sql.Row{{"", 0, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -437,7 +437,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(dolt_hashof('branch1'));",
-				Expected: []sql.Row{{"", 1, 0, 0, 0}},
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -508,7 +508,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    `CALL dolt_cherry_pick(@commit2);`,
-				Expected: []sql.Row{{"", 1, 0, 0, 0}},
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:    `SELECT * FROM dolt_conflicts;`,
@@ -573,7 +573,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(dolt_hashof('branch1'));",
-				Expected: []sql.Row{{"", 1, 0, 0, 0}},
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -597,7 +597,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			*/
 			{
 				Query:    "call dolt_cherry_pick('--abort');",
-				Expected: []sql.Row{{"", 0, 0, 0, 0}},
+				Expected: []sql.Row{{"", 0, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -646,7 +646,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{"", 1, 0, 0, 0}},
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -660,7 +660,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{"", 1, 0, 0, 0}},
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:            "delete from dolt_conflicts_t",
@@ -676,7 +676,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "select * from t;",
@@ -729,7 +729,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{"", 2, 0, 0, 0}},
+				Expected: []sql.Row{{"", 2, 0, 0}},
 			},
 			{
 				Query:    "select `table` from dolt_conflicts order by `table`;",
@@ -750,7 +750,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				// Should still have one remaining conflict in t2.
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{"", 1, 0, 0, 0}},
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:            "update t2 set v = 'resolved_t2' where pk = 1;",
@@ -766,7 +766,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "select * from t1;",
@@ -806,7 +806,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{"", 1, 0, 0, 0}},
+				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:          "call dolt_cherry_pick('--continue', '--abort');",
@@ -844,7 +844,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{"", 0, 0, 1, 0}}, // 1 constraint violation
+				Expected: []sql.Row{{"", 0, 0, 1}}, // 1 constraint violation
 			},
 			{
 				Query:    "select violation_type, pk, v from dolt_constraint_violations_t;",
@@ -853,7 +853,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				// Try to continue with constraint violations still present
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{"", 0, 0, 1, 0}}, // Still has constraint violation
+				Expected: []sql.Row{{"", 0, 0, 1}}, // Still has constraint violation
 			},
 			{
 				// Fix the violation
@@ -871,7 +871,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				// Now continue should succeed and preserve original commit metadata
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "select * from t;",
@@ -908,7 +908,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{"", 1, 0, 1, 0}}, // 1 data conflict, 1 constraint violation
+				Expected: []sql.Row{{"", 1, 0, 1}}, // 1 data conflict, 1 constraint violation
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -921,7 +921,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				// Try to continue with both conflicts and violations
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{"", 1, 0, 1, 0}}, // Still has both issues
+				Expected: []sql.Row{{"", 1, 0, 1}}, // Still has both issues
 			},
 			{
 				// Resolve the conflict
@@ -939,7 +939,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				// Try again - still has constraint violation
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{"", 0, 0, 1, 0}}, // Only constraint violation remains
+				Expected: []sql.Row{{"", 0, 0, 1}}, // Only constraint violation remains
 			},
 			{
 				// Fix the constraint violation
@@ -957,7 +957,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				// Now continue should succeed
 				Query:    "call dolt_cherry_pick('--continue');",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "select * from t;",

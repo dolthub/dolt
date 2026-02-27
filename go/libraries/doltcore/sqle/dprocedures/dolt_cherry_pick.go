@@ -51,48 +51,43 @@ var cherryPickSchema = []*sql.Column{
 		Type:     gmstypes.Int64,
 		Nullable: false,
 	},
-	{
-		Name:     "verification_failures",
-		Type:     gmstypes.Int64,
-		Nullable: false,
-	},
 }
 
 // doltCherryPick is the stored procedure version for the CLI command `dolt cherry-pick`.
 func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, verificationFailures, err := doDoltCherryPick(ctx, args)
+	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, args)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(newCommitHash, int64(dataConflicts), int64(schemaConflicts), int64(constraintViolations), int64(verificationFailures)), nil
+	return rowToIter(newCommitHash, int64(dataConflicts), int64(schemaConflicts), int64(constraintViolations)), nil
 }
 
 // doDoltCherryPick attempts to perform a cherry-pick merge based on the arguments specified in |args| and returns
 // the new, created commit hash (if it was successful created), a count of the number of tables with data conflicts,
-// a count of the number of tables with schema conflicts, a count of the number of tables with constraint violations,
-// and a count of the number of commit verification test failures.
-func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, int, error) {
+// a count of the number of tables with schema conflicts, and a count of the number of tables with constraint violations.
+// Verification failures are returned as errors.
+func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
-		return "", 0, 0, 0, 0, fmt.Errorf("error: empty database name")
+		return "", 0, 0, 0, fmt.Errorf("error: empty database name")
 	}
 
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return "", 0, 0, 0, 0, err
+		return "", 0, 0, 0, err
 	}
 
 	apr, err := cli.CreateCherryPickArgParser().Parse(args)
 	if err != nil {
-		return "", 0, 0, 0, 0, err
+		return "", 0, 0, 0, err
 	}
 
 	if apr.Contains(cli.AbortParam) && apr.Contains(cli.ContinueFlag) {
-		return "", 0, 0, 0, 0, fmt.Errorf("error: --continue and --abort are mutually exclusive")
+		return "", 0, 0, 0, fmt.Errorf("error: --continue and --abort are mutually exclusive")
 	}
 
 	if apr.Contains(cli.AbortParam) {
-		return "", 0, 0, 0, 0, cherry_pick.AbortCherryPick(ctx, dbName)
+		return "", 0, 0, 0, cherry_pick.AbortCherryPick(ctx, dbName)
 	}
 
 	if apr.Contains(cli.ContinueFlag) {
@@ -101,14 +96,14 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, i
 
 	// we only support cherry-picking a single commit for now.
 	if apr.NArg() == 0 {
-		return "", 0, 0, 0, 0, ErrEmptyCherryPick
+		return "", 0, 0, 0, ErrEmptyCherryPick
 	} else if apr.NArg() > 1 {
-		return "", 0, 0, 0, 0, fmt.Errorf("cherry-picking multiple commits is not supported yet")
+		return "", 0, 0, 0, fmt.Errorf("cherry-picking multiple commits is not supported yet")
 	}
 
 	cherryStr := apr.Arg(0)
 	if len(cherryStr) == 0 {
-		return "", 0, 0, 0, 0, ErrEmptyCherryPick
+		return "", 0, 0, 0, ErrEmptyCherryPick
 	}
 
 	cherryPickOptions := cherry_pick.NewCherryPickOptions()
@@ -122,7 +117,7 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, i
 
 	commit, mergeResult, err := cherry_pick.CherryPick(ctx, cherryStr, cherryPickOptions)
 	if err != nil {
-		return "", 0, 0, 0, 0, err
+		return "", 0, 0, 0, err
 	}
 
 	if mergeResult != nil {
@@ -132,17 +127,16 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, i
 			// the error message including the failing test name and details.
 			doltSession := dsess.DSessFromSess(ctx.Session)
 			if txErr := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); txErr != nil {
-				return "", 0, 0, 0, 0, txErr
+				return "", 0, 0, 0, txErr
 			}
-			return "", 0, 0, 0, 0, mergeResult.VerificationFailureErr
+			return "", 0, 0, 0, mergeResult.VerificationFailureErr
 		}
 		return "",
 			mergeResult.CountOfTablesWithDataConflicts(),
 			mergeResult.CountOfTablesWithSchemaConflicts(),
 			mergeResult.CountOfTablesWithConstraintViolations(),
-			0,
 			nil
 	}
 
-	return commit, 0, 0, 0, 0, nil
+	return commit, 0, 0, 0, nil
 }
