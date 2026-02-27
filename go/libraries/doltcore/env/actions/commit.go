@@ -55,10 +55,10 @@ const (
 	DoltCommitVerificationGroups = "dolt_commit_verification_groups"
 )
 
-// GetCommitRunTestGroups returns the test groups to run for commit operations
+// getCommitRunTestGroups returns the test groups to run for commit operations
 // Returns empty slice if no tests should be run, ["*"] if all tests should be run,
 // or specific group names if only those groups should be run
-func GetCommitRunTestGroups() []string {
+func getCommitRunTestGroups() []string {
 	_, val, ok := sql.SystemVariables.GetGlobal(DoltCommitVerificationGroups)
 	if !ok {
 		return nil
@@ -157,9 +157,9 @@ func GetCommitStaged(
 	}
 
 	if !props.SkipVerification {
-		testGroups := GetCommitRunTestGroups()
+		testGroups := getCommitRunTestGroups()
 		if len(testGroups) > 0 {
-			err := RunCommitVerification(ctx, testGroups)
+			err := runCommitVerification(ctx, testGroups)
 			if err != nil {
 				return nil, err
 			}
@@ -174,10 +174,10 @@ func GetCommitStaged(
 	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
 }
 
-// RunCommitVerification runs the commit verification tests for the given test groups.
+// runCommitVerification runs the commit verification tests for the given test groups.
 // If any tests fail, it returns ErrCommitVerificationFailed wrapping the failure details.
 // Callers can use errors.Is(err, ErrCommitVerificationFailed) to detect this case.
-func RunCommitVerification(ctx *sql.Context, testGroups []string) error {
+func runCommitVerification(ctx *sql.Context, testGroups []string) error {
 	type sessionInterface interface {
 		sql.Session
 		GenericProvider() sql.MutableDatabaseProvider

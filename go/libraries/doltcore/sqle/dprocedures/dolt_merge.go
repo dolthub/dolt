@@ -458,28 +458,18 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	// Run commit verification before creating the pending commit. On failure we return the ws (which already
-	// has the dirty merge state set in the session) along with the verification error. The caller
-	// (performMerge) converts this to a non-error result row so the SQL transaction commits normally and
-	// preserves the dirty merge state for the user to fix and retry with CALL dolt_commit().
-	if !skipVerification {
-		testGroups := actions.GetCommitRunTestGroups()
-		if len(testGroups) > 0 {
-			if verifyErr := actions.RunCommitVerification(ctx, testGroups); verifyErr != nil {
-				return ws, nil, verifyErr
-			}
-		}
-	}
-
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             spec.Date,
 		Force:            spec.Force,
 		Name:             spec.Name,
 		Email:            spec.Email,
-		SkipVerification: true, // Verification already ran above (or was skipped via skipVerification flag)
+		SkipVerification: skipVerification,
 	})
 	if err != nil {
+		if actions.ErrCommitVerificationFailed.Is(err) {
+			return ws, nil, err
+		}
 		return nil, nil, err
 	}
 
