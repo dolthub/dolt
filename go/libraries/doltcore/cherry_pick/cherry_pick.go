@@ -336,10 +336,11 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)
 	if err != nil {
-		// If verification failed, return verification_failures=1 (no error) so the merge state
-		// stays active and the user can fix the failing tests and --continue again.
+		// If verification failed, return the specific error so the caller can surface the failing
+		// test details. The merge state on disk remains active (it was committed in the previous
+		// cherry-pick call), so the user can fix the failing tests and --continue again.
 		if actions.ErrCommitVerificationFailed.Is(err) {
-			return "", 0, 0, 0, 1, nil
+			return "", 0, 0, 0, 0, err
 		}
 		return "", 0, 0, 0, 0, fmt.Errorf("error: failed to create pending commit: %w", err)
 	}

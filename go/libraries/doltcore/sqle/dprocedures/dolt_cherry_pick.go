@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 var ErrEmptyCherryPick = errors.New("cannot cherry-pick empty string")
@@ -125,15 +126,21 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, i
 	}
 
 	if mergeResult != nil {
-		verificationFailures := 0
 		if mergeResult.VerificationFailureErr != nil {
-			verificationFailures = 1
+			// Commit the transaction to persist the dirty working set and merge state to disk,
+			// then return the specific verification error. The caller (CLI or SQL client) receives
+			// the error message including the failing test name and details.
+			doltSession := dsess.DSessFromSess(ctx.Session)
+			if txErr := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); txErr != nil {
+				return "", 0, 0, 0, 0, txErr
+			}
+			return "", 0, 0, 0, 0, mergeResult.VerificationFailureErr
 		}
 		return "",
 			mergeResult.CountOfTablesWithDataConflicts(),
 			mergeResult.CountOfTablesWithSchemaConflicts(),
 			mergeResult.CountOfTablesWithConstraintViolations(),
-			verificationFailures,
+			0,
 			nil
 	}
 

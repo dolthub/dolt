@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
@@ -172,6 +173,10 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 	}
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
+		if actions.ErrCommitVerificationFailed.Is(err) {
+			cli.PrintErrln(err.Error())
+			return ErrCherryPickVerificationFailed.New()
+		}
 		errorText := err.Error()
 		switch {
 		case strings.Contains("nothing to commit", errorText):
@@ -267,6 +272,10 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	query := "call dolt_cherry_pick('--continue')"
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
+		if actions.ErrCommitVerificationFailed.Is(err) {
+			cli.PrintErrln(err.Error())
+			return ErrCherryPickVerificationFailed.New()
+		}
 		return err
 	}
 
