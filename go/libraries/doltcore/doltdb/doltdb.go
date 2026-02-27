@@ -1241,7 +1241,7 @@ type TagWithHash struct {
 // GetTagsWithHashes returns a list of objects containing Tags with their associated Commit's hashes
 func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error) {
 	var refs []TagWithHash
-	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, _ hash.Hash) error {
+	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, h hash.Hash) error {
 		if tr, ok := r.(ref.TagRef); ok {
 			tag, err := ddb.ResolveTag(ctx, tr)
 			if err != nil {
@@ -1252,6 +1252,38 @@ func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error)
 				return err
 			}
 			refs = append(refs, TagWithHash{tag, h})
+		}
+		return nil
+	})
+	return refs, err
+}
+
+func (ddb *DoltDB) GetTagRefsWithHashes(ctx context.Context) ([]RefWithHash, error) {
+	var refs []RefWithHash
+	resolveTagHash := func(id string) (hash.Hash, error) {
+		ds, err := ddb.db.GetDataset(ctx, id)
+		if err != nil {
+			return hash.Hash{}, errors.New("tag ref not found")
+		}
+		if !ds.HasHead() {
+			return hash.Hash{}, errors.New("tag ref not found")
+		}
+		if !ds.IsTag() {
+			return hash.Hash{}, errors.New("tagRef head is not a tag")
+		}
+		_, addr, err := ds.HeadTag()
+		if err != nil {
+			return hash.Hash{}, err
+		}
+		return addr, nil
+	}
+	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, h hash.Hash) error {
+		if tr, ok := r.(ref.TagRef); ok {
+			addr, err := resolveTagHash(tr.String())
+			if err != nil {
+				return err
+			}
+			refs = append(refs, RefWithHash{tr, addr})
 		}
 		return nil
 	})
