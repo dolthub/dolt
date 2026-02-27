@@ -418,8 +418,7 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "commit verification failed" ]] || false
     [[ "$output" =~ "user_count" ]] || false
-    [[ "$output" =~ "expected_single_value equal to 1, got 3" ]]
-    ## NM4 - looks like we don't print anything about how to continue/abort in the rebase case....
+    [[ "$output" =~ "expected_single_value equal to 1, got 3" ]] || false
 
     # Dirty state is preserved: we are on dolt_rebase_b1 with users staged
     run dolt sql -r csv -q "SELECT * FROM dolt_status"
@@ -454,7 +453,7 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "commit verification failed" ]] || false
     [[ "$output" =~ "user_count" ]] || false
-    [[ "$output" =~ "expected_single_value equal to 1, got 3" ]]
+    [[ "$output" =~ "expected_single_value equal to 1, got 3" ]] || false
 
     # Fix the test expectation (3 users after rebase: Alice + Charlie + Bob) and stage
     dolt sql -q "UPDATE dolt_tests SET assertion_value = '3' WHERE test_name = 'user_count';"
