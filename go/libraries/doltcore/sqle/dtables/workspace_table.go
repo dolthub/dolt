@@ -148,6 +148,10 @@ func (wtm *WorkspaceTableModifier) statementComplete(ctx *sql.Context) error {
 }
 
 func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
+	if wtu.err != nil {
+		return *wtu.err
+	}
+
 	if old == nil || new == nil {
 		return fmt.Errorf("Runtime error: expected non-nil inputs to WorkspaceTableUpdater.Update")
 	}
@@ -210,6 +214,10 @@ func (wtd *WorkspaceTableDeleter) StatementBegin(ctx *sql.Context) {
 }
 
 func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
+	if wtd.err != nil {
+		return *wtd.err
+	}
+
 	if !wtd.modifiable {
 		return errors.New(fmt.Sprintf("%s table is not modifiable due to schema change", wtd.workspaceTableName))
 	}
