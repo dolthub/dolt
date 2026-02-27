@@ -274,8 +274,11 @@ SQL
 
     run dolt cherry-pick $CHERRY_HASH
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Commit verification failed" ]] || false
+    [[ "$output" =~ "commit verification failed" ]] || false
+    [[ "$output" =~ "test_count" ]] || false
+    [[ "$output" =~ "expected_single_value equal to 1, got 2" ]] || false
     [[ "$output" =~ "dolt cherry-pick --continue" ]] || false
+    [[ "$output" =~ "dolt cherry-pick --abort" ]] || false
 
     # Dirty state is preserved: users table should be staged
     run dolt status
@@ -285,7 +288,11 @@ SQL
     # --continue without fixing still fails
     run dolt cherry-pick --continue
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Commit verification failed" ]] || false
+    [[ "$output" =~ "commit verification failed" ]] || false
+    [[ "$output" =~ "test_count" ]] || false
+    [[ "$output" =~ "expected_single_value equal to 1, got 2" ]] || false
+    [[ "$output" =~ "dolt cherry-pick --continue" ]] || false
+    [[ "$output" =~ "dolt cherry-pick --abort" ]] || false
 
     # --abort restores clean state
     run dolt cherry-pick --abort
@@ -313,7 +320,10 @@ SQL
 
     run dolt cherry-pick $CHERRY_HASH
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Commit verification failed" ]] || false
+    [[ "$output" =~ "commit verification failed" ]] || false
+    [[ "$output" =~ "test_count" ]] || false
+    [[ "$output" =~ "expected_single_value equal to 1, got 2" ]] || false
+    [[ "$output" =~ "dolt cherry-pick --abort" ]] || false
 
     # Fix the test expectation and stage it
     dolt sql -q "UPDATE dolt_tests SET assertion_value = '2' WHERE test_name = 'test_count';"
