@@ -246,9 +246,9 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// Verification fails; returns verification_failures=1 with no SQL error so dirty state is preserved
-				Query:    "CALL dolt_cherry_pick(@commit_hash)",
-				Expected: []sql.Row{{"", int64(0), int64(0), int64(0), int64(1)}},
+				// Verification fails; returns specific error, dirty state preserved via explicit CommitTransaction
+				Query:          "CALL dolt_cherry_pick(@commit_hash)",
+				ExpectedErrStr: "commit verification failed: test_users_count (Assertion failed: expected_single_value equal to 1, got 2)",
 			},
 			{
 				// users table should be staged (cherry-pick changes are preserved by the committed transaction)
@@ -256,9 +256,9 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{uint64(1)}},
 			},
 			{
-				// --continue without fixing still returns verification_failures=1, dirty state preserved
-				Query:    "CALL dolt_cherry_pick('--continue')",
-				Expected: []sql.Row{{"", int64(0), int64(0), int64(0), int64(1)}},
+				// --continue without fixing still fails with specific error, dirty state preserved
+				Query:          "CALL dolt_cherry_pick('--continue')",
+				ExpectedErrStr: "commit verification failed: test_users_count (Assertion failed: expected_single_value equal to 1, got 2)",
 			},
 			{
 				// Abort restores clean state
@@ -299,9 +299,9 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// Verification fails; workspace is left dirty with verification_failures=1
-				Query:    "CALL dolt_cherry_pick(@commit_hash)",
-				Expected: []sql.Row{{"", int64(0), int64(0), int64(0), int64(1)}},
+				// Verification fails; returns specific error, dirty state preserved via explicit CommitTransaction
+				Query:          "CALL dolt_cherry_pick(@commit_hash)",
+				ExpectedErrStr: "commit verification failed: test_users_count (Assertion failed: expected_single_value equal to 1, got 2)",
 			},
 			{
 				// Fix the test to match the new row count and stage
