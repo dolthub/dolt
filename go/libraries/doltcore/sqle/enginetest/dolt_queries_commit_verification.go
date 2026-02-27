@@ -213,9 +213,9 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0), int64(0)}},
 			},
 			{
-				// Verification fails; workspace is left dirty with verification_failures=1
-				Query:    "CALL dolt_cherry_pick(@commit_2_hash)",
-				Expected: []sql.Row{{"", int64(0), int64(0), int64(0), int64(1)}},
+				// Verification fails; returns specific error, dirty state preserved
+				Query:          "CALL dolt_cherry_pick(@commit_2_hash)",
+				ExpectedErrStr: "commit verification failed: test_user_count_update (Assertion failed: expected_single_value equal to 2, got 3)",
 			},
 			{
 				// Abort restores clean state
