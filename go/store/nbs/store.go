@@ -678,12 +678,12 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 			other = 0
 		}
 
-		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.cacheOnceDo: elapsed: %s\n", cacheOnceDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.defaultOpts: elapsed: %s\n", defaultOptsDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.NewGitBlobstoreWithOptions: elapsed: %s\n", newGitBlobstoreDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.NewBSStore: elapsed: %s\n", newBSStoreDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.other: elapsed: %s\n", other))
-		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore: elapsed: %s\n", total))
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NewGitStore.cacheOnceDo: elapsed: %s\n", cacheOnceDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NewGitStore.defaultOpts: elapsed: %s\n", defaultOptsDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NewGitStore.NewGitBlobstoreWithOptions: elapsed: %s\n", newGitBlobstoreDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NewGitStore.NewBSStore: elapsed: %s\n", newBSStoreDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NewGitStore.other: elapsed: %s\n", other))
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NewGitStore: elapsed: %s\n", total))
 	}()
 
 	t := time.Now()

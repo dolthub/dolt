@@ -578,13 +578,13 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 			other = 0
 		}
 
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.syncForRead.validateRemoteManaged: elapsed: %s\n", validateDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.syncForRead.muLockWait: elapsed: %s\n", muWaitDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.syncForRead.FetchRef: elapsed: %s\n", fetchDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.syncForRead.TryResolveRefCommit: elapsed: %s\n", resolveDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.syncForRead.mergeCacheFromHead: elapsed: %s\n", mergeDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.syncForRead.other: elapsed: %s\n", other))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.syncForRead: elapsed: %s\n", total))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.validateRemoteManaged: elapsed: %s\n", validateDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.muLockWait: elapsed: %s\n", muWaitDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.FetchRef: elapsed: %s\n", fetchDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.TryResolveRefCommit: elapsed: %s\n", resolveDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.mergeCacheFromHead: elapsed: %s\n", mergeDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.other: elapsed: %s\n", other))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead: elapsed: %s\n", total))
 	}()
 
 	t := time.Now()
@@ -654,12 +654,12 @@ func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remote
 			other = 0
 		}
 
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.fetchAlignAndMergeForWrite.FetchRef: elapsed: %s\n", fetchDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.fetchAlignAndMergeForWrite.TryResolveRefCommit: elapsed: %s\n", resolveDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.fetchAlignAndMergeForWrite.UpdateRef: elapsed: %s\n", updateDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.fetchAlignAndMergeForWrite.mergeCacheFromHead: elapsed: %s\n", mergeDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.fetchAlignAndMergeForWrite.other: elapsed: %s\n", other))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.fetchAlignAndMergeForWrite: elapsed: %s\n", total))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.FetchRef: elapsed: %s\n", fetchDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.TryResolveRefCommit: elapsed: %s\n", resolveDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.UpdateRef: elapsed: %s\n", updateDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.mergeCacheFromHead: elapsed: %s\n", mergeDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.other: elapsed: %s\n", other))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite: elapsed: %s\n", total))
 	}()
 
 	t := time.Now()
@@ -723,11 +723,11 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			other = 0
 		}
 
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.validateRemoteManaged: elapsed: %s\n", validateDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.writeMuLockWait: elapsed: %s\n", muWaitDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.backoffRetry: elapsed: %s\n", retryDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.other: elapsed: %s\n", other))
-		fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite: elapsed: %s\n", total))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.validateRemoteManaged: elapsed: %s\n", validateDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.writeMuLockWait: elapsed: %s\n", muWaitDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.backoffRetry: elapsed: %s\n", retryDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.other: elapsed: %s\n", other))
+		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite: elapsed: %s\n", total))
 	}()
 
 	t := time.Now()
@@ -765,15 +765,15 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 				otherOp = 0
 			}
 
-			fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.op.fetchAlignAndMergeForWrite: elapsed: %s\n", alignDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.op.build: elapsed: %s\n", buildDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.op.UpdateRef(localRef): elapsed: %s\n", updateRefDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.op.PushRefWithLease: elapsed: %s\n", pushDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.op.mergeCacheFromHead: elapsed: %s\n", mergeDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.op.ResolvePathObject(key): elapsed: %s\n", resolveKeyDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.op.cacheUpdate: elapsed: %s\n", cacheDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.op.other: elapsed: %s\n", otherOp))
-			fmt.Fprint(color.Output, fmt.Sprintf("GitBlobstore.remoteManagedWrite.op: elapsed: %s\n", totalOp))
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.fetchAlignAndMergeForWrite: elapsed: %s\n", alignDur))
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.build: elapsed: %s\n", buildDur))
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.UpdateRef(localRef): elapsed: %s\n", updateRefDur))
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.PushRefWithLease: elapsed: %s\n", pushDur))
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.mergeCacheFromHead: elapsed: %s\n", mergeDur))
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.ResolvePathObject(key): elapsed: %s\n", resolveKeyDur))
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.cacheUpdate: elapsed: %s\n", cacheDur))
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.other: elapsed: %s\n", otherOp))
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op: elapsed: %s\n", totalOp))
 		}()
 
 		step := time.Now()
