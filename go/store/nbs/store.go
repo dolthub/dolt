@@ -36,6 +36,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
+	"github.com/fatih/color"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
@@ -389,6 +390,11 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 }
 
 func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates map[hash.Hash]uint32, appendixOption *ManifestAppendixOption, gcGen *hash.Hash, sources chunkSourceSet) (mi ManifestInfo, gcGenDifferent bool, err error) {
+	start := time.Now()
+	defer func() {
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] updateManifestAddFiles: elapsed: %s\n", time.Since(start)))
+	}()
+
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
@@ -404,7 +410,9 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 
 	var updatedContents manifestContents
 	for {
+		tFetch := time.Now()
 		ok, contents, _, ferr := nbs.manifestMgr.Fetch(ctx, nbs.stats)
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] updateManifestAddFiles.manifestMgr.Fetch: elapsed: %s\n", time.Since(tFetch)))
 		if ferr != nil {
 			return manifestContents{}, false, ferr
 		} else if !ok {
@@ -490,7 +498,9 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 
 		contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix, nil)
 
+		tUpdate := time.Now()
 		updatedContents, err = nbs.manifestMgr.Update(ctx, nbs.fatalBehavior, originalLock, contents, nbs.stats, nil)
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] updateManifestAddFiles.manifestMgr.Update: elapsed: %s\n", time.Since(tUpdate)))
 		if err != nil {
 			return manifestContents{}, false, err
 		}
@@ -652,20 +662,53 @@ func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string
 }
 
 // NewGitStore returns an nbs implementation backed by a GitBlobstore.
-func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (ret *NomsBlockStore, err error) {
+	start := time.Now()
+	var (
+		cacheOnceDur       time.Duration
+		defaultOptsDur     time.Duration
+		newGitBlobstoreDur time.Duration
+		newBSStoreDur      time.Duration
+	)
+	defer func() {
+		total := time.Since(start)
+		accounted := cacheOnceDur + defaultOptsDur + newGitBlobstoreDur + newBSStoreDur
+		other := total - accounted
+		if other < 0 {
+			other = 0
+		}
+
+		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.cacheOnceDo: elapsed: %s\n", cacheOnceDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.defaultOpts: elapsed: %s\n", defaultOptsDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.NewGitBlobstoreWithOptions: elapsed: %s\n", newGitBlobstoreDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.NewBSStore: elapsed: %s\n", newBSStoreDur))
+		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore.other: elapsed: %s\n", other))
+		fmt.Fprint(color.Output, fmt.Sprintf("NBS.NewGitStore: elapsed: %s\n", total))
+	}()
+
+	t := time.Now()
 	cacheOnce.Do(makeGlobalCaches)
+	cacheOnceDur = time.Since(t)
 
 	// A Git remote may reject large blobs. To keep git-backed remotes broadly usable by default, enable
 	// chunked-object writes with a conservative max part size unless the caller explicitly overrides it.
+	t = time.Now()
 	if opts.MaxPartSize == 0 {
 		opts.MaxPartSize = defaultGitBlobstoreMaxPartSize
 	}
+	defaultOptsDur = time.Since(t)
 
+	t = time.Now()
 	bs, err := blobstore.NewGitBlobstoreWithOptions(gitDir, ref, opts)
+	newGitBlobstoreDur = time.Since(t)
 	if err != nil {
 		return nil, err
 	}
-	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+
+	t = time.Now()
+	ret, err = NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+	newBSStoreDur = time.Since(t)
+	return ret, err
 }
 
 // NewNoConjoinGitStore returns an nbs implementation backed by a GitBlobstore, but disables conjoin.
@@ -777,6 +820,11 @@ func checkDir(dir string) error {
 }
 
 func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64) (*NomsBlockStore, error) {
+	start := time.Now()
+	defer func() {
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] newNomsBlockStore: elapsed: %s\n", time.Since(start)))
+	}()
+
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
@@ -803,14 +851,18 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
 
+	t := time.Now()
 	exists, contents, _, err := nbs.manifestMgr.Fetch(ctx, nbs.stats)
+	fmt.Fprint(color.Output, fmt.Sprintf("[store.go] newNomsBlockStore.manifestMgr.Fetch: elapsed: %s\n", time.Since(t)))
 
 	if err != nil {
 		return nil, err
 	}
 
 	if exists {
+		t = time.Now()
 		newTables, err := nbs.tables.rebase(ctx, contents.specs, nil, nbs.stats)
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] newNomsBlockStore.tables.rebase: elapsed: %s\n", time.Since(t)))
 
 		if err != nil {
 			return nil, err
@@ -1366,13 +1418,24 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	valctx.ValidateContext(ctx)
+	start := time.Now()
+	defer func() {
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NomsBlockStore.Rebase: elapsed: %s\n", time.Since(start)))
+	}()
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	return nbs.rebase(ctx)
 }
 
 func (nbs *NomsBlockStore) rebase(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NomsBlockStore.rebase (internal): elapsed: %s\n", time.Since(start)))
+	}()
+
+	t := time.Now()
 	exists, contents, _, err := nbs.manifestMgr.Fetch(ctx, nbs.stats)
+	fmt.Fprint(color.Output, fmt.Sprintf("[store.go] rebase.manifestMgr.Fetch: elapsed: %s\n", time.Since(t)))
 	if err != nil {
 		return err
 	}
@@ -1383,7 +1446,9 @@ func (nbs *NomsBlockStore) rebase(ctx context.Context) error {
 			return nil
 		}
 
+		t = time.Now()
 		newTables, err := nbs.tables.rebase(ctx, contents.specs, nil, nbs.stats)
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] rebase.tables.rebase: elapsed: %s\n", time.Since(t)))
 		if err != nil {
 			return err
 		}
@@ -1409,6 +1474,10 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 
 func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (success bool, err error) {
 	valctx.ValidateContext(ctx)
+	start := time.Now()
+	defer func() {
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NomsBlockStore.Commit: elapsed: %s\n", time.Since(start)))
+	}()
 	return nbs.commit(ctx, current, last, nbs.refCheck)
 }
 
@@ -1467,6 +1536,11 @@ var (
 
 // callers must acquire lock |nbs.mu|
 func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last hash.Hash, checker refCheck) error {
+	start := time.Now()
+	defer func() {
+		fmt.Fprint(color.Output, fmt.Sprintf("[store.go] NomsBlockStore.updateManifest: elapsed: %s\n", time.Since(start)))
+	}()
+
 	if nbs.upstream.root != last {
 		return errLastRootMismatch
 	}
@@ -1505,7 +1579,9 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 				return err
 			}
 			if cnt > 0 {
+				tAppend := time.Now()
 				ts, gcb, err := nbs.tables.append(ctx, nbs.fatalBehavior, nbs.memtable, checker, nbs.keeperFunc, nbs.hasCache, nbs.stats)
+				fmt.Fprint(color.Output, fmt.Sprintf("[store.go] updateManifest.tables.append (Persist): elapsed: %s\n", time.Since(tAppend)))
 				if err != nil {
 					nbs.handlePossibleDanglingRefError(err)
 					return err
@@ -1524,7 +1600,9 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		break
 	}
 
+	tConjoin := time.Now()
 	err := nbs.startConjoinIfRequired(ctx)
+	fmt.Fprint(color.Output, fmt.Sprintf("[store.go] updateManifest.startConjoinIfRequired: elapsed: %s\n", time.Since(tConjoin)))
 	if err != nil {
 		return err
 	}
@@ -1566,7 +1644,9 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		appendix: appendixSpecs,
 	}
 
+	tUpdate := time.Now()
 	upstream, err := nbs.manifestMgr.Update(ctx, nbs.fatalBehavior, nbs.upstream.lock, newContents, nbs.stats, nil)
+	fmt.Fprint(color.Output, fmt.Sprintf("[store.go] updateManifest.manifestMgr.Update: elapsed: %s\n", time.Since(tUpdate)))
 	if err != nil {
 		return err
 	}

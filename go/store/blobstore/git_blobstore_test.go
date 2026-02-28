@@ -23,8 +23,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -130,7 +132,7 @@ func TestGitBlobstore_ExistsAndGet_AllRange(t *testing.T) {
 	_ = rc.Close()
 }
 
-func TestGitBlobstore_RemoteManaged_ExistsFetchesAndAligns(t *testing.T) {
+func TestGitBlobstore_RemoteManaged_ExistsFetchesAndTracks(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
@@ -165,9 +167,10 @@ func TestGitBlobstore_RemoteManaged_ExistsFetchesAndAligns(t *testing.T) {
 	require.True(t, strings.HasPrefix(bs.localRef, "refs/dolt/blobstore/origin/dolt/data/"))
 
 	localAPI := git.NewGitAPIImpl(localRunner)
-	gotLocal, err := localAPI.ResolveRefCommit(ctx, bs.localRef)
-	require.NoError(t, err)
-	require.Equal(t, git.OID(remoteCommit), gotLocal)
+	_, err = localAPI.ResolveRefCommit(ctx, bs.localRef)
+	var rnf *git.RefNotFoundError
+	require.ErrorAs(t, err, &rnf)
+	require.Equal(t, bs.localRef, rnf.Ref)
 
 	gotTracking, err := localAPI.ResolveRefCommit(ctx, bs.remoteTrackingRef)
 	require.NoError(t, err)
@@ -241,12 +244,15 @@ func TestGitBlobstore_TwoInstances_IndependentTrackingRefs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, head1, head2, "both should track the same remote commit")
 
-	// Verify local refs are also distinct and valid.
-	local1, err := localAPI.ResolveRefCommit(ctx, bs1.localRef)
-	require.NoError(t, err)
-	local2, err := localAPI.ResolveRefCommit(ctx, bs2.localRef)
-	require.NoError(t, err)
-	require.Equal(t, local1, local2, "both should point at the same commit")
+	// Local refs are distinct but are not created by read sync.
+	_, err = localAPI.ResolveRefCommit(ctx, bs1.localRef)
+	var rnf *git.RefNotFoundError
+	require.ErrorAs(t, err, &rnf)
+	require.Equal(t, bs1.localRef, rnf.Ref)
+	_, err = localAPI.ResolveRefCommit(ctx, bs2.localRef)
+	rnf = nil
+	require.ErrorAs(t, err, &rnf)
+	require.Equal(t, bs2.localRef, rnf.Ref)
 }
 
 func TestGitBlobstore_CleanupOwnedLocalRef_DeletesRef(t *testing.T) {
@@ -301,9 +307,16 @@ func TestGitBlobstore_Close_DeletesOwnedLocalAndTrackingRefs(t *testing.T) {
 	require.True(t, ok)
 
 	localAPI := git.NewGitAPIImpl(localRunner)
-	_, err = localAPI.ResolveRefCommit(ctx, bs.localRef)
-	require.NoError(t, err)
 	_, err = localAPI.ResolveRefCommit(ctx, bs.remoteTrackingRef)
+	require.NoError(t, err)
+
+	// Read sync no longer creates/aligns the local ref. Seed it so we can
+	// validate Close deletes it when present.
+	_, err = localRepo.SetRefToTree(ctx, bs.localRef, map[string][]byte{
+		"manifest": []byte("seed localRef\n"),
+	}, "seed localRef")
+	require.NoError(t, err)
+	_, err = localAPI.ResolveRefCommit(ctx, bs.localRef)
 	require.NoError(t, err)
 
 	require.NoError(t, bs.Close())
@@ -493,6 +506,99 @@ func TestGitBlobstore_RemoteManaged_PutRetriesOnLeaseFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, rc.Close())
 	require.Equal(t, []byte("after retry\n"), got)
+}
+
+func TestGitBlobstore_RemoteManaged_ManifestReadsDoNotBlockDuringPush(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	remoteHead, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"manifest": []byte("seed\n"),
+	}, "seed")
+	require.NoError(t, err)
+	require.NotEmpty(t, remoteHead)
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		RemoteName: "origin",
+		Identity:   testIdentity(),
+	})
+	require.NoError(t, err)
+
+	// Prime the manifest version so our write uses the expected version.
+	_, ver, err := GetBytes(ctx, bs, "manifest", AllRange)
+	require.NoError(t, err)
+	require.NotEmpty(t, ver)
+
+	startedPush := make(chan struct{})
+	releasePush := make(chan struct{})
+
+	// Block the first push while holding the writer lock, then ensure manifest reads
+	// can still proceed (they should not wait on the writer lock anymore).
+	bs.api = &hookPushGitAPI{
+		GitAPI: bs.api,
+		onFirstPush: func(ctx context.Context) {
+			close(startedPush)
+			<-releasePush
+		},
+	}
+
+	writeErr := make(chan error, 1)
+	go func() {
+		_, err := PutBytes(ctx, bs, "k", []byte("from local\n"))
+		if err != nil {
+			writeErr <- err
+			return
+		}
+		_, err = bs.CheckAndPut(ctx, ver, "manifest", int64(len("next\n")), bytes.NewReader([]byte("next\n")))
+		writeErr <- err
+	}()
+
+	select {
+	case <-startedPush:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for push to start")
+	}
+
+	const readers = 25
+	var wg sync.WaitGroup
+	readErrs := make(chan error, readers)
+	for range readers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+			defer cancel()
+			_, _, err := GetBytes(rctx, bs, "manifest", AllRange)
+			readErrs <- err
+		}()
+	}
+	wg.Wait()
+	close(readErrs)
+
+	for err := range readErrs {
+		require.NoError(t, err)
+	}
+
+	close(releasePush)
+	require.NoError(t, <-writeErr)
+
+	// Verify remote contains the key after push completes.
+	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
+	require.NoError(t, err)
+	remoteAPI2 := git.NewGitAPIImpl(remoteRunner)
+	newHead, err := remoteAPI2.ResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	oid, typ, err := remoteAPI2.ResolvePathObject(ctx, newHead, "k")
+	require.NoError(t, err)
+	require.Equal(t, git.ObjectTypeBlob, typ)
+	rrc, err := remoteAPI2.BlobReader(ctx, oid)
+	require.NoError(t, err)
+	got, err := io.ReadAll(rrc)
+	require.NoError(t, err)
+	require.NoError(t, rrc.Close())
+	require.Equal(t, []byte("from local\n"), got)
 }
 
 func TestGitBlobstore_RemoteManaged_CheckAndPut_RemoteHeadTruth(t *testing.T) {

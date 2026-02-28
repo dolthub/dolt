@@ -18,9 +18,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
+	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
@@ -46,6 +48,11 @@ var _ tableFilePersister = &blobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
+	start := time.Now()
+	defer func() {
+		fmt.Fprint(color.Output, fmt.Sprintf("[bs_persister.go] Persist: elapsed: %s\n", time.Since(start)))
+	}()
+
 	address, data, splitOffset, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
@@ -65,6 +72,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 	tailName := name + tableTailExt
 
 	// first write table records and tail (index+footer) as separate blobs
+	t := time.Now()
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		_, err := bsp.bs.Put(ectx, recordsName, int64(len(records)), bytes.NewBuffer(records))
@@ -77,11 +85,15 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 	if err = eg.Wait(); err != nil {
 		return nil, gcBehavior_Continue, err
 	}
+	fmt.Fprint(color.Output, fmt.Sprintf("[bs_persister.go] Persist.Put(records+tail) for %s: elapsed: %s\n", name, time.Since(t)))
 
 	// then concatenate into a final blob
+	t = time.Now()
 	if _, err = bsp.bs.Concatenate(ctx, name, []string{recordsName, tailName}); err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
+	fmt.Fprint(color.Output, fmt.Sprintf("[bs_persister.go] Persist.Concatenate for %s: elapsed: %s\n", name, time.Since(t)))
+
 	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
 	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
 	if err != nil {
@@ -92,6 +104,11 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 
 // ConjoinAll implements tablePersister.
 func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
+	start := time.Now()
+	defer func() {
+		fmt.Fprint(color.Output, fmt.Sprintf("[bs_persister.go] ConjoinAll: elapsed: %s\n", time.Since(start)))
+	}()
+
 	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, stats)
 	if err != nil {
 		return nil, nil, err
@@ -249,6 +266,11 @@ func (bsp *blobstorePersister) Path() string {
 }
 
 func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, splitOffset uint64) error {
+	start := time.Now()
+	defer func() {
+		fmt.Fprint(color.Output, fmt.Sprintf("[bs_persister.go] CopyTableFile(%s, sz=%d, split=%d): elapsed: %s\n", name, fileSz, splitOffset, time.Since(start)))
+	}()
+
 	if splitOffset > 0 {
 		lr := io.LimitReader(r, int64(splitOffset))
 
