@@ -349,19 +349,21 @@ teardown() {
   ! [[ "$output" =~ "charlie" ]] || false
 
   # Verify workspace table shows correct state
-  run dolt sql -q "SELECT staged, pk, name FROM dolt_workspace_new_table ORDER BY pk"
+  run dolt sql -q "SELECT staged, to_pk, to_name FROM dolt_workspace_new_table ORDER BY to_pk"
   [ $status -eq 0 ]
-  # First row should be staged (true/1), others should not be (false/0)
-  [[ "$output" =~ "1" ]] || false  # at least one staged
-  [[ "$output" =~ "0" ]] || false  # at least one not staged
+  # First row should be staged (true), others should not be (false)
+  [[ "$output" =~ "| true   | 1     | alice   |" ]] || false
+  [[ "$output" =~ "| false  | 2     | bob     |" ]] || false
+  [[ "$output" =~ "| false  | 3     | charlie |" ]] || false
 
   # Commit the staged changes
   dolt commit -m "partial staging test"
 
-  # Verify only the first row is in the committed table
-  run dolt sql -q "SELECT * FROM new_table ORDER BY pk"
+  # Verify the table and only the first row were committed
+  run dolt show
   [ $status -eq 0 ]
-  [[ "$output" =~ "alice" ]] || false
+  [[ "$output" =~ "added table" ]] || false
+  [[ "$output" =~ "| + | 1  | alice |" ]] || false
   ! [[ "$output" =~ "bob" ]] || false
   ! [[ "$output" =~ "charlie" ]] || false
 
