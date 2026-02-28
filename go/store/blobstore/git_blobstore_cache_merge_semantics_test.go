@@ -72,6 +72,8 @@ func TestGitBlobstore_CacheMerge_ManifestUpdatesAcrossFetches(t *testing.T) {
 		RemoteName: "origin",
 	})
 	require.NoError(t, err)
+	// Disable syncForRead dedup so the second read sees the remote mutation immediately.
+	bs.syncForReadTTL = 0
 
 	got1, ver1, err := GetBytes(ctx, bs, "manifest", AllRange)
 	require.NoError(t, err)

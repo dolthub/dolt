@@ -310,6 +310,13 @@ type GitBlobstore struct {
 	// cacheChildren maps a directory path to its immediate children entries. The
 	// entries' Name field is the base name (not a full path).
 	cacheChildren map[string][]git.TreeEntry
+	// lastSyncedAt is set after a successful syncForRead or fetchAlignAndMergeForWrite
+	// (via mergeCacheFromHead). Used to skip redundant back-to-back fetches.
+	lastSyncedAt time.Time
+	// syncForReadTTL controls how long a recent sync remains valid. When non-zero,
+	// syncForRead will skip the fetch if the last sync completed within this duration.
+	// Defaults to defaultSyncForReadTTL. Set to 0 to disable dedup (useful in tests).
+	syncForReadTTL time.Duration
 }
 
 var _ Blobstore = (*GitBlobstore)(nil)
@@ -363,6 +370,12 @@ type GitBlobstoreOptions struct {
 }
 
 // NewGitBlobstoreWithOptions creates a GitBlobstore rooted at |gitDir| and |ref|.
+// defaultSyncForReadTTL is the default dedup window for syncForRead. Back-to-back
+// reads within this window reuse the cached state instead of re-fetching from remote.
+// The write path (fetchAlignAndMergeForWrite) always does its own unconditional fetch,
+// so this only affects read-path callers (Get/Exists).
+const defaultSyncForReadTTL = 1 * time.Second
+
 func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*GitBlobstore, error) {
 	r, err := git.NewRunner(gitDir)
 	if err != nil {
@@ -390,6 +403,7 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		maxPartSize:       opts.MaxPartSize,
 		cacheObjects:      make(map[string]cachedGitObject),
 		cacheChildren:     make(map[string][]git.TreeEntry),
+		syncForReadTTL:    defaultSyncForReadTTL,
 	}, nil
 }
 
@@ -497,6 +511,7 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 	gbs.sortCacheChildrenLocked(touchedDirs)
 
 	gbs.cacheHead = head
+	gbs.lastSyncedAt = time.Now()
 	gbs.cacheMu.Unlock()
 	return nil
 }
@@ -593,6 +608,19 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		return err
 	}
 	validateDur = time.Since(t)
+
+	// Dedup guard: skip the fetch if we synced recently. The write path
+	// (fetchAlignAndMergeForWrite) always does its own unconditional fetch,
+	// so this only affects read-path callers (Get/Exists).
+	if ttl := gbs.syncForReadTTL; ttl > 0 {
+		gbs.cacheMu.RLock()
+		sinceLast := time.Since(gbs.lastSyncedAt)
+		gbs.cacheMu.RUnlock()
+		if sinceLast < ttl {
+			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead: SKIPPED (last sync %s ago < %s)\n", sinceLast, ttl))
+			return nil
+		}
+	}
 
 	t = time.Now()
 	// Read sync no longer acquires the writer mutex.
