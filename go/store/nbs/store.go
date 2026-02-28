@@ -706,7 +706,9 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 	}
 
 	t = time.Now()
-	ret, err = NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+	mm := makeManifestManager(blobstoreManifest{bs})
+	p := &singleBlobBSPersister{bs, q, s3BlockSize}
+	ret, err = newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 	newBSStoreDur = time.Since(t)
 	return ret, err
 }
