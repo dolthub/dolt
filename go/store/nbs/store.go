@@ -668,7 +668,7 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 
 	mm := makeManifestManager(blobstoreManifest{bs})
 	p := &singleBlobBSPersister{bs, q, s3BlockSize}
-	return newNomsBlockStoreLazy(nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
 // NewNoConjoinGitStore returns an nbs implementation backed by a GitBlobstore, but disables conjoin.
@@ -687,7 +687,7 @@ func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, 
 
 	mm := makeManifestManager(blobstoreManifest{bs})
 	p := &noConjoinBlobstorePersister{bs, q, s3BlockSize}
-	return newNomsBlockStoreLazy(nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
 }
 
 // NewBSStore returns an nbs implementation backed by a Blobstore
@@ -828,37 +828,6 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 			return nil, err
 		}
 	}
-
-	return nbs, nil
-}
-
-// newNomsBlockStoreLazy creates a NomsBlockStore without reading the manifest
-// during construction. The first Rebase() call will populate the store's
-// upstream state and open table files. This is used for git-backed stores
-// where the DoltDB is cached and Rebase is called before every operation.
-func newNomsBlockStoreLazy(nbfVerStr string, mm manifestManager, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64) (*NomsBlockStore, error) {
-	if memTableSize == 0 {
-		memTableSize = defaultMemTableSize
-	}
-
-	hasCache, err := lru.New2Q[hash.Hash, struct{}](hasCacheSize)
-	if err != nil {
-		return nil, err
-	}
-
-	nbs := &NomsBlockStore{
-		manifestMgr: mm,
-		persister:   p,
-		conjoiner:   c,
-		tables:      newTableSet(p, q),
-		upstream:    manifestContents{nbfVers: nbfVerStr},
-		memtableSz:  memTableSize,
-		hasCache:    hasCache,
-		stats:       NewStats(),
-		logger:      logrus.StandardLogger().WithField("pkg", "store.noms"),
-	}
-	nbs.gcCond = sync.NewCond(&nbs.mu)
-	nbs.conjoinOpCond = sync.NewCond(&nbs.mu)
 
 	return nbs, nil
 }
