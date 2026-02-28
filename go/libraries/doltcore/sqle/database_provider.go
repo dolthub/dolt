@@ -556,21 +556,30 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 	}
 
 	if withCaching {
-		p.mu.RLock()
-		if cached, ok := p.remoteDbs[r.Url]; ok {
+		// Only cache git-backed remote DBs. Other remote types (file://, aws, etc.)
+		// register their underlying NBS in a global singleton cache that is closed
+		// separately by CloseAllLocalDatabases(). Caching those here would cause a
+		// double-close panic on process exit.
+		isGitRemote := strings.HasPrefix(strings.ToLower(r.Url), "git+")
+		if isGitRemote {
+			p.mu.RLock()
+			if cached, ok := p.remoteDbs[r.Url]; ok {
+				p.mu.RUnlock()
+				return cached, nil
+			}
 			p.mu.RUnlock()
-			return cached, nil
 		}
-		p.mu.RUnlock()
 
 		remoteDB, err := r.GetRemoteDB(ctx, format, dialer)
 		if err != nil {
 			return nil, err
 		}
 
-		p.mu.Lock()
-		p.remoteDbs[r.Url] = remoteDB
-		p.mu.Unlock()
+		if isGitRemote {
+			p.mu.Lock()
+			p.remoteDbs[r.Url] = remoteDB
+			p.mu.Unlock()
+		}
 		return remoteDB, nil
 	}
 	return r.GetRemoteDBWithoutCaching(ctx, format, dialer)
