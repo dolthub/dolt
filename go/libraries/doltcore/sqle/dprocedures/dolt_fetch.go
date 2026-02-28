@@ -85,6 +85,11 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
+	err = srcDB.Rebase(ctx)
+	if err != nil {
+		return 1, fmt.Errorf("failed to read latest version of remote db: %w", err)
+	}
+
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
 	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, defaultRefSpec, &remote, mode, runProgFuncs, stopProgFuncs)
