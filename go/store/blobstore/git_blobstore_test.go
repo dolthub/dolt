@@ -489,11 +489,11 @@ func TestGitBlobstore_RemoteManaged_PutRetriesOnLeaseFailure(t *testing.T) {
 	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
 	require.NoError(t, err)
 
-	// Snapshot-only semantics: new remote head should be a non-merge commit with no parent.
+	// The commit should have a single parent (the external writer's commit that caused the retry).
 	if v := externalHead.Load(); v != nil {
 		out, err := remoteRunner.Run(ctx, git.RunOptions{}, "cat-file", "-p", remoteHead.String())
 		require.NoError(t, err)
-		require.NotContains(t, string(out), "\nparent ")
+		require.Contains(t, string(out), "\nparent ")
 	}
 
 	oid, typ, err := remoteAPI.ResolvePathObject(ctx, remoteHead, "k")
@@ -768,10 +768,10 @@ func TestGitBlobstore_RemoteManaged_PutOverwritesDivergedLocalRef_NoMergeCommit(
 	remoteHeadAfter, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
 	require.NoError(t, err)
 
-	// Snapshot-only semantics: new remote head should be a non-merge commit with no parent.
+	// The commit should have a single parent (the remote head we fetched and built on top of).
 	out, err := remoteRunner.Run(ctx, git.RunOptions{}, "cat-file", "-p", remoteHeadAfter.String())
 	require.NoError(t, err)
-	require.NotContains(t, string(out), "\nparent ")
+	require.Contains(t, string(out), "\nparent ")
 
 	// Local-only divergence should not be present on remote.
 	_, _, err = remoteAPI.ResolvePathObject(ctx, remoteHeadAfter, "local")

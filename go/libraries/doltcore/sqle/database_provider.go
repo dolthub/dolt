@@ -71,6 +71,11 @@ type DoltDatabaseProvider struct {
 	droppedDatabaseManager *droppedDatabaseManager
 	overrides              sql.EngineOverrides
 
+	// remoteDbs caches remote DoltDB instances by URL so that repeated push calls
+	// to the same remote reuse the store (and its already-opened table chunk sources)
+	// instead of re-opening every table file from the blobstore each time.
+	remoteDbs map[string]*doltdb.DoltDB
+
 	defaultBranch     string
 	dbFactoryUrl      string
 	DropDatabaseHooks []DropDatabaseHook
@@ -181,6 +186,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		isStandby:              new(bool),
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 		overrides:              overrides,
+		remoteDbs:              make(map[string]*doltdb.DoltDB),
 	}, nil
 }
 
@@ -293,6 +299,17 @@ func (p *DoltDatabaseProvider) Close() {
 				_ = ddb.Close()
 			}
 		}
+	}
+
+	// Close cached remote databases.
+	p.mu.RLock()
+	remoteDbs := make([]*doltdb.DoltDB, 0, len(p.remoteDbs))
+	for _, rdb := range p.remoteDbs {
+		remoteDbs = append(remoteDbs, rdb)
+	}
+	p.mu.RUnlock()
+	for _, rdb := range remoteDbs {
+		_ = rdb.Close()
 	}
 }
 
@@ -539,7 +556,22 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 	}
 
 	if withCaching {
-		return r.GetRemoteDB(ctx, format, dialer)
+		p.mu.RLock()
+		if cached, ok := p.remoteDbs[r.Url]; ok {
+			p.mu.RUnlock()
+			return cached, nil
+		}
+		p.mu.RUnlock()
+
+		remoteDB, err := r.GetRemoteDB(ctx, format, dialer)
+		if err != nil {
+			return nil, err
+		}
+
+		p.mu.Lock()
+		p.remoteDbs[r.Url] = remoteDB
+		p.mu.Unlock()
+		return remoteDB, nil
 	}
 	return r.GetRemoteDBWithoutCaching(ctx, format, dialer)
 }

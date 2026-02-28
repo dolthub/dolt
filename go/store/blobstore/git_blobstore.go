@@ -1267,11 +1267,17 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 		return "", err
 	}
 
-	// Snapshot-only semantics: create commits with no parent so old snapshots become unreachable
-	// once refs advance (enables pruning / avoids cache history growth).
-	commitOID, err := gbs.api.CommitTree(ctx, treeOID, nil, msg, gbs.identity)
+	// Use parent commit when available so git push can compute incremental deltas
+	// instead of enumerating the full tree. Old commits become unreachable once the
+	// ref advances past them, and git gc --prune can reclaim storage.
+	var parentPtr *git.OID
+	if hasParent && parent != "" {
+		p := parent
+		parentPtr = &p
+	}
+	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
 	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
-		commitOID, err = gbs.api.CommitTree(ctx, treeOID, nil, msg, defaultGitBlobstoreIdentity())
+		commitOID, err = gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, defaultGitBlobstoreIdentity())
 	}
 	if err != nil {
 		return "", err
