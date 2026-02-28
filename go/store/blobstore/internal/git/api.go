@@ -120,6 +120,11 @@ type GitAPI interface {
 	//   GIT_DIR=... git fetch <remote> +<srcRef>:<dstRef>
 	FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error
 
+	// RevListCount returns the number of commits reachable from |oid| (inclusive).
+	// Equivalent plumbing:
+	//   GIT_DIR=... git rev-list --count <oid>
+	RevListCount(ctx context.Context, oid OID) (int, error)
+
 	// PushRefWithLease pushes |srcRef| to |dstRef| on |remote|, but only if the remote's |dstRef|
 	// equals |expectedDstOID| (force-with-lease). If |expectedDstOID| is empty, it enforces that
 	// the remote |dstRef| is missing (bootstrap / create-if-missing semantics).

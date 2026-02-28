@@ -287,6 +287,14 @@ func (a *GitAPIImpl) CommitTree(ctx context.Context, tree OID, parent *OID, mess
 	return OID(oid), nil
 }
 
+func (a *GitAPIImpl) RevListCount(ctx context.Context, oid OID) (int, error) {
+	out, err := a.r.Run(ctx, RunOptions{}, "rev-list", "--count", oid.String())
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(out)))
+}
+
 func (a *GitAPIImpl) UpdateRefCAS(ctx context.Context, ref string, newOID OID, oldOID OID, msg string) error {
 	args := []string{"update-ref"}
 	if msg != "" {

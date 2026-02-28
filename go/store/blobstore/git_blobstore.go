@@ -583,6 +583,12 @@ func (gbs *GitBlobstore) Close() error {
 
 const gcInterval = 24 * time.Hour
 
+// maxParentedCommits is the number of consecutive parented commits before
+// we create a parentless commit to sever the history chain. This bounds
+// reachable history so git gc can prune old objects, while still giving
+// git push enough parents for efficient incremental delta computation.
+const maxParentedCommits = 64
+
 // maybeRunGC runs git gc --prune=now if >24h have elapsed since the last GC.
 // Uses a file lock so only one process GCs at a time, and a marker file whose
 // mtime records when GC last completed. All errors are silently ignored — GC
@@ -1312,12 +1318,16 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 	}
 
 	// Use parent commit when available so git push can compute incremental deltas
-	// instead of enumerating the full tree. Old commits become unreachable once the
-	// ref advances past them, and git gc --prune can reclaim storage.
+	// instead of enumerating the full tree. After maxParentedCommits in the
+	// existing chain, create a parentless commit to sever history so git gc can
+	// prune old objects.
 	var parentPtr *git.OID
 	if hasParent && parent != "" {
-		p := parent
-		parentPtr = &p
+		depth, err := gbs.api.RevListCount(ctx, parent)
+		if err == nil && depth < maxParentedCommits {
+			p := parent
+			parentPtr = &p
+		}
 	}
 	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
 	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
