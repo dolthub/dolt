@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -29,6 +31,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/dolthub/fslock"
 	"github.com/fatih/color"
 	"github.com/google/uuid"
 
@@ -546,7 +549,8 @@ func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
 	return err
 }
 
-// Close best-effort deletes this instance's UUID-owned refs.
+// Close best-effort deletes this instance's UUID-owned refs and
+// periodically runs git gc to repack the cache repository.
 func (gbs *GitBlobstore) Close() error {
 	ctx := context.Background()
 
@@ -568,10 +572,50 @@ func (gbs *GitBlobstore) Close() error {
 		return err
 	}
 
+	// Best-effort periodic GC to repack the cache repo.
+	gbs.maybeRunGC()
+
 	return errors.Join(
 		deleteIfExists(gbs.localRef),
 		deleteIfExists(gbs.remoteTrackingRef),
 	)
+}
+
+const gcInterval = 24 * time.Hour
+
+// maybeRunGC runs git gc --prune=now if >24h have elapsed since the last GC.
+// Uses a file lock so only one process GCs at a time, and a marker file whose
+// mtime records when GC last completed. All errors are silently ignored — GC
+// is an optimization, not a correctness requirement.
+func (gbs *GitBlobstore) maybeRunGC() {
+	markerPath := filepath.Join(gbs.gitDir, ".dolt-gc-last")
+	if info, err := os.Stat(markerPath); err == nil {
+		if time.Since(info.ModTime()) < gcInterval {
+			return
+		}
+	}
+
+	lockPath := filepath.Join(gbs.gitDir, ".dolt-gc.lock")
+	lck := fslock.New(lockPath)
+	if err := lck.LockWithTimeout(0); err != nil {
+		return // another process holds the lock, skip
+	}
+	defer func() {
+		if err := lck.Unlock(); err != nil {
+			panic(fmt.Sprintf("failed to unlock %s: %v", lockPath, err))
+		}
+	}()
+
+	// Re-check after acquiring lock — another instance may have GC'd.
+	if info, err := os.Stat(markerPath); err == nil {
+		if time.Since(info.ModTime()) < gcInterval {
+			return
+		}
+	}
+
+	ctx := context.Background()
+	_, _ = gbs.runner.Run(ctx, git.RunOptions{}, "gc", "--prune=now")
+	_ = os.WriteFile(markerPath, nil, 0644)
 }
 
 func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
