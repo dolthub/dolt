@@ -17,40 +17,12 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"runtime"
-	"time"
-
-	"github.com/fatih/color"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
-
-func bsManifestCaller(skip int) string {
-	_, file, line, ok := runtime.Caller(skip)
-	if !ok {
-		return "??:0"
-	}
-	// trim to last two path components for readability
-	short := file
-	for i := len(file) - 1; i >= 0; i-- {
-		if file[i] == '/' {
-			short = file[i+1:]
-			// find one more slash
-			for j := i - 1; j >= 0; j-- {
-				if file[j] == '/' {
-					short = file[j+1:]
-					break
-				}
-			}
-			break
-		}
-	}
-	return fmt.Sprintf("%s:%d", short, line)
-}
 
 const (
 	manifestFile = "manifest"
@@ -65,25 +37,13 @@ func (bsm blobstoreManifest) Name() string {
 }
 
 func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (string, manifestContents, error) {
-	caller := bsManifestCaller(2)
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[bs_manifest.go] manifestVersionAndContents (caller=%s): elapsed: %s\n", caller, time.Since(start)))
-	}()
-
-	t := time.Now()
 	reader, _, ver, err := bs.Get(ctx, manifestFile, blobstore.AllRange)
-	fmt.Fprint(color.Output, fmt.Sprintf("[bs_manifest.go] manifestVersionAndContents.bs.Get(\"manifest\") (caller=%s): elapsed: %s\n", caller, time.Since(t)))
-
 	if err != nil {
 		return "", manifestContents{}, err
 	}
 
 	defer reader.Close()
-	t = time.Now()
 	contents, err := parseManifest(reader)
-	fmt.Fprint(color.Output, fmt.Sprintf("[bs_manifest.go] manifestVersionAndContents.parseManifest (caller=%s): elapsed: %s\n", caller, time.Since(t)))
-
 	if err != nil {
 		return "", manifestContents{}, err
 	}
@@ -94,12 +54,6 @@ func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (st
 // ParseIfExists looks for a manifest in the specified blobstore.  If one exists
 // will return true and the contents, else false and nil
 func (bsm blobstoreManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
-	caller := bsManifestCaller(2)
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[bs_manifest.go:ParseIfExists] (caller=%s): elapsed: %s\n", caller, time.Since(start)))
-	}()
-
 	if readHook != nil {
 		panic("Read hooks not supported")
 	}
@@ -135,20 +89,11 @@ func (bsm blobstoreManifest) UpdateGCGen(ctx context.Context, behavior dherrors.
 }
 
 func updateBSWithChecker(ctx context.Context, behavior dherrors.FatalBehavior, bs blobstore.Blobstore, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
-	caller := bsManifestCaller(2)
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[bs_manifest.go:updateBSWithChecker] (caller=%s): elapsed: %s\n", caller, time.Since(start)))
-	}()
-
 	if writeHook != nil {
 		panic("Write hooks not supported")
 	}
 
-	t := time.Now()
 	ver, contents, err := manifestVersionAndContents(ctx, bs)
-	fmt.Fprint(color.Output, fmt.Sprintf("[bs_manifest.go:updateBSWithChecker] manifestVersionAndContents (read current) (caller=%s): elapsed: %s\n", caller, time.Since(t)))
-
 	if err != nil && !blobstore.IsNotFoundError(err) {
 		return manifestContents{}, err
 	}
@@ -167,10 +112,7 @@ func updateBSWithChecker(ctx context.Context, behavior dherrors.FatalBehavior, b
 			return manifestContents{}, err
 		}
 
-		t = time.Now()
 		_, err = bs.CheckAndPut(ctx, ver, manifestFile, int64(buffer.Len()), buffer)
-		fmt.Fprint(color.Output, fmt.Sprintf("[bs_manifest.go:updateBSWithChecker] bs.CheckAndPut(\"manifest\") (caller=%s): elapsed: %s\n", caller, time.Since(t)))
-
 		if err != nil {
 			if !blobstore.IsCheckAndPutError(err) {
 				return manifestContents{}, err
@@ -180,9 +122,7 @@ func updateBSWithChecker(ctx context.Context, behavior dherrors.FatalBehavior, b
 			// stale (possibly empty) contents from before the race. Without
 			// this, an empty manifestContents can be cached and poison
 			// subsequent Fetch() calls (nbfVers="").
-			t = time.Now()
 			_, contents, err = manifestVersionAndContents(ctx, bs)
-			fmt.Fprint(color.Output, fmt.Sprintf("[bs_manifest.go:updateBSWithChecker] manifestVersionAndContents (re-read after CAS fail) (caller=%s): elapsed: %s\n", caller, time.Since(t)))
 			if err != nil && !blobstore.IsNotFoundError(err) {
 				return manifestContents{}, err
 			}

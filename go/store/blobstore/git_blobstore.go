@@ -23,7 +23,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,7 +31,6 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dolthub/fslock"
-	"github.com/fatih/color"
 	"github.com/google/uuid"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
@@ -625,39 +623,9 @@ func (gbs *GitBlobstore) maybeRunGC() {
 }
 
 func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
-	_, callerFile, callerLine, _ := runtime.Caller(1)
-	fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] >>> syncForRead ENTER (caller=%s:%d)\n", callerFile, callerLine))
-	start := time.Now()
-	var (
-		validateDur time.Duration
-		muWaitDur   time.Duration
-		fetchDur    time.Duration
-		resolveDur  time.Duration
-		mergeDur    time.Duration
-	)
-	defer func() {
-		total := time.Since(start)
-		accounted := validateDur + muWaitDur + fetchDur + resolveDur + mergeDur
-		other := total - accounted
-		if other < 0 {
-			other = 0
-		}
-
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.validateRemoteManaged: elapsed: %s\n", validateDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.muLockWait: elapsed: %s\n", muWaitDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.FetchRef: elapsed: %s\n", fetchDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.TryResolveRefCommit: elapsed: %s\n", resolveDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.mergeCacheFromHead: elapsed: %s\n", mergeDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead.other: elapsed: %s\n", other))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead: elapsed: %s\n", total))
-	}()
-
-	t := time.Now()
 	if err := gbs.validateRemoteManaged(); err != nil {
-		validateDur = time.Since(t)
 		return err
 	}
-	validateDur = time.Since(t)
 
 	// Dedup guard: skip the fetch if we synced recently. The write path
 	// (fetchAlignAndMergeForWrite) always does its own unconditional fetch,
@@ -667,19 +635,12 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		sinceLast := time.Since(gbs.lastSyncedAt)
 		gbs.cacheMu.RUnlock()
 		if sinceLast < ttl {
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] syncForRead: SKIPPED (last sync %s ago < %s)\n", sinceLast, ttl))
 			return nil
 		}
 	}
 
-	t = time.Now()
-	// Read sync no longer acquires the writer mutex.
-	muWaitDur = time.Since(t)
-
-	// 1) Fetch remote ref into our remote-tracking ref.
-	t = time.Now()
+	// Fetch remote ref into our remote-tracking ref.
 	err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef)
-	fetchDur = time.Since(t)
 	if err != nil {
 		// An absent remote ref is treated as an empty store. This is required for NBS open
 		// (manifest ParseIfExists) against a freshly-initialized remote.
@@ -690,9 +651,7 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		return err
 	}
 
-	t = time.Now()
 	remoteHead, okRemote, err := gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
-	resolveDur = time.Since(t)
 	if err != nil {
 		return err
 	}
@@ -701,10 +660,7 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	}
 
 	// Merge cache to reflect fetched contents.
-	t = time.Now()
-	mergeErr := gbs.mergeCacheFromHead(ctx, remoteHead)
-	mergeDur = time.Since(t)
-	return mergeErr
+	return gbs.mergeCacheFromHead(ctx, remoteHead)
 }
 
 type gitblobstoreFetchRefError struct {
@@ -715,51 +671,16 @@ func (e *gitblobstoreFetchRefError) Error() string { return e.err.Error() }
 func (e *gitblobstoreFetchRefError) Unwrap() error { return e.err }
 
 func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remoteHead git.OID, ok bool, err error) {
-	_, callerFile, callerLine, _ := runtime.Caller(1)
-	fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] >>> fetchAlignAndMergeForWrite ENTER (caller=%s:%d)\n", callerFile, callerLine))
-	start := time.Now()
-	var (
-		fetchDur   time.Duration
-		resolveDur time.Duration
-		updateDur  time.Duration
-		mergeDur   time.Duration
-	)
-	defer func() {
-		total := time.Since(start)
-		accounted := fetchDur + resolveDur + updateDur + mergeDur
-		other := total - accounted
-		if other < 0 {
-			other = 0
-		}
-
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.FetchRef: elapsed: %s\n", fetchDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.TryResolveRefCommit: elapsed: %s\n", resolveDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.UpdateRef: elapsed: %s\n", updateDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.mergeCacheFromHead: elapsed: %s\n", mergeDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite.other: elapsed: %s\n", other))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] fetchAlignAndMergeForWrite: elapsed: %s\n", total))
-	}()
-
-	t := time.Now()
 	if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
-		fetchDur = time.Since(t)
 		// If the remote ref is missing, treat this as an empty store and bootstrap on write.
-		// Note: there is no "empty ref" in Git; this means the ref is unborn (no commits yet).
-		// Callers will see ok=false and parent=="" and will:
-		// - build a root commit from an empty tree (no parent),
-		// - create/update gbs.localRef to that commit, and
-		// - push with an empty expected dst OID, which creates gbs.remoteRef on the remote.
 		var rnf *git.RefNotFoundError
 		if errors.As(err, &rnf) && rnf.Ref == gbs.remoteRef {
 			return "", false, nil
 		}
 		return "", false, &gitblobstoreFetchRefError{err: err}
 	}
-	fetchDur = time.Since(t)
 
-	t = time.Now()
 	remoteHead, ok, err = gbs.api.TryResolveRefCommit(ctx, gbs.remoteTrackingRef)
-	resolveDur = time.Since(t)
 	if err != nil {
 		return "", false, err
 	}
@@ -768,95 +689,31 @@ func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remote
 	}
 
 	// Force-set owned local ref to remote head (remote is source-of-truth).
-	t = time.Now()
 	if err := gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync write"); err != nil {
-		updateDur = time.Since(t)
 		return "", false, err
 	}
-	updateDur = time.Since(t)
 
 	// Merge cache to reflect fetched contents.
-	t = time.Now()
 	if err := gbs.mergeCacheFromHead(ctx, remoteHead); err != nil {
-		mergeDur = time.Since(t)
 		return "", false, err
 	}
-	mergeDur = time.Since(t)
 
 	return remoteHead, true, nil
 }
 
 func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string, build func(parent git.OID, ok bool) (git.OID, error)) (string, error) {
-	start := time.Now()
-	var (
-		validateDur time.Duration
-		muWaitDur   time.Duration
-		retryDur    time.Duration
-	)
-	defer func() {
-		total := time.Since(start)
-		accounted := validateDur + muWaitDur + retryDur
-		other := total - accounted
-		if other < 0 {
-			other = 0
-		}
-
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.validateRemoteManaged: elapsed: %s\n", validateDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.writeMuLockWait: elapsed: %s\n", muWaitDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.backoffRetry: elapsed: %s\n", retryDur))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.other: elapsed: %s\n", other))
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite: elapsed: %s\n", total))
-	}()
-
-	t := time.Now()
 	if err := gbs.validateRemoteManaged(); err != nil {
-		validateDur = time.Since(t)
 		return "", err
 	}
-	validateDur = time.Since(t)
 
-	t = time.Now()
 	gbs.writeMu.Lock()
-	muWaitDur = time.Since(t)
 	defer gbs.writeMu.Unlock()
 
 	policy := gbs.casRetryPolicy(ctx)
 
 	var ver string
-	retryStart := time.Now()
 	op := func() error {
-		opStart := time.Now()
-		var (
-			alignDur      time.Duration
-			buildDur      time.Duration
-			updateRefDur  time.Duration
-			pushDur       time.Duration
-			mergeDur      time.Duration
-			resolveKeyDur time.Duration
-			cacheDur      time.Duration
-		)
-		defer func() {
-			totalOp := time.Since(opStart)
-			accountedOp := alignDur + buildDur + updateRefDur + pushDur + mergeDur + resolveKeyDur + cacheDur
-			otherOp := totalOp - accountedOp
-			if otherOp < 0 {
-				otherOp = 0
-			}
-
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.fetchAlignAndMergeForWrite: elapsed: %s\n", alignDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.build: elapsed: %s\n", buildDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.UpdateRef(localRef): elapsed: %s\n", updateRefDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.PushRefWithLease: elapsed: %s\n", pushDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.mergeCacheFromHead: elapsed: %s\n", mergeDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.ResolvePathObject(key): elapsed: %s\n", resolveKeyDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.cacheUpdate: elapsed: %s\n", cacheDur))
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op.other: elapsed: %s\n", otherOp))
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] remoteManagedWrite.op: elapsed: %s\n", totalOp))
-		}()
-
-		step := time.Now()
 		remoteHead, okRemote, err := gbs.fetchAlignAndMergeForWrite(ctx)
-		alignDur = time.Since(step)
 		if err != nil {
 			var fe *gitblobstoreFetchRefError
 			if errors.As(err, &fe) {
@@ -866,45 +723,31 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		}
 
 		// Apply this operation's changes on top of the remote head (or empty store).
-		step = time.Now()
 		newCommit, err := build(remoteHead, okRemote)
-		buildDur = time.Since(step)
 		if err != nil {
 			return backoff.Permanent(err)
 		}
 
-		step = time.Now()
 		if err := gbs.api.UpdateRef(ctx, gbs.localRef, newCommit, msg); err != nil {
-			updateRefDur = time.Since(step)
 			return backoff.Permanent(err)
 		}
-		updateRefDur = time.Since(step)
 
 		// Push local ref to remote with lease.
-		step = time.Now()
 		if err := gbs.api.PushRefWithLease(ctx, gbs.remoteName, gbs.localRef, gbs.remoteRef, remoteHead); err != nil {
-			pushDur = time.Since(step)
 			return err
 		}
-		pushDur = time.Since(step)
 
 		// Merge cache additively to reflect the new head after a successful push.
-		step = time.Now()
 		if err := gbs.mergeCacheFromHead(ctx, newCommit); err != nil {
-			mergeDur = time.Since(step)
 			return backoff.Permanent(err)
 		}
-		mergeDur = time.Since(step)
 
 		// Force-update the cache entry for the key we just wrote, since the
 		// additive merge won't overwrite a stale entry from a previous commit.
-		step = time.Now()
 		keyOID, keyType, err := gbs.api.ResolvePathObject(ctx, newCommit, key)
-		resolveKeyDur = time.Since(step)
 		if err != nil {
 			return backoff.Permanent(err)
 		}
-		step = time.Now()
 		gbs.cacheMu.Lock()
 		gbs.mergeCacheObjectLocked(key, keyOID, keyType, true)
 		parent, base := splitGitPathParentBase(key)
@@ -917,20 +760,17 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			gbs.mergeCacheChildLocked(parent, child, true)
 		}
 		gbs.cacheMu.Unlock()
-		cacheDur = time.Since(step)
 
 		ver = keyOID.String()
 		return nil
 	}
 
 	if err := backoff.Retry(op, policy); err != nil {
-		retryDur = time.Since(retryStart)
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
 		return "", err
 	}
-	retryDur = time.Since(retryStart)
 	return ver, nil
 }
 
@@ -962,12 +802,6 @@ func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expected
 }
 
 func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
-	_, callerFile, callerLine, _ := runtime.Caller(1)
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Exists(key=%q) (caller=%s:%d): elapsed: %s\n", key, callerFile, callerLine, time.Since(start)))
-	}()
-
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
 		return false, err
@@ -977,27 +811,18 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	// If found, skip the remote fetch (covers putDeferred and prior fetches).
 	if key != gitblobstoreManifestKey {
 		if _, ok := gbs.cacheGetObject(key); ok {
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Exists(key=%q): cache HIT, skipping syncForRead\n", key))
 			return true, nil
 		}
 	}
 
-	t := time.Now()
 	if err := gbs.syncForRead(ctx); err != nil {
 		return false, err
 	}
-	fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Exists(key=%q).syncForRead: elapsed: %s\n", key, time.Since(t)))
 	_, ok := gbs.cacheGetObject(key)
 	return ok, nil
 }
 
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
-	_, callerFile, callerLine, _ := runtime.Caller(1)
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Get(key=%q) (caller=%s:%d): elapsed: %s\n", key, callerFile, callerLine, time.Since(start)))
-	}()
-
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
 		return nil, 0, "", err
@@ -1008,16 +833,13 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 	// remote if the key isn't cached yet.
 	if key != gitblobstoreManifestKey {
 		if _, ok := gbs.cacheGetObject(key); ok {
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Get(key=%q): cache HIT, skipping syncForRead\n", key))
 			return gbs.getFromCache(ctx, key, br)
 		}
 	}
 
-	t := time.Now()
 	if err := gbs.syncForRead(ctx); err != nil {
 		return nil, 0, "", err
 	}
-	fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Get(key=%q).syncForRead: elapsed: %s\n", key, time.Since(t)))
 	return gbs.getFromCache(ctx, key, br)
 }
 
@@ -1127,12 +949,6 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 }
 
 func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
-	_, callerFile, callerLine, _ := runtime.Caller(1)
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Put(key=%q, sz=%d) (caller=%s:%d): elapsed: %s\n", key, totalSize, callerFile, callerLine, time.Since(start)))
-	}()
-
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
 		return "", err
@@ -1142,14 +958,12 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 	// and defer the write to be flushed in the next CheckAndPut("manifest").
 	if key != gitblobstoreManifestKey {
 		if obj, ok := gbs.cacheGetObject(key); ok {
-			fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Put(key=%q): cache HIT, returning existing OID\n", key))
 			return obj.oid.String(), nil
 		}
 		plan, err := gbs.planPutWrites(ctx, key, totalSize, reader)
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Put(key=%q): DEFERRED (non-manifest)\n", key))
 		return gbs.enqueuePendingWrite(key, plan), nil
 	}
 
@@ -1377,12 +1191,6 @@ func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent
 }
 
 func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
-	_, callerFile, callerLine, _ := runtime.Caller(1)
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] CheckAndPut(key=%q) (caller=%s:%d): elapsed: %s\n", key, callerFile, callerLine, time.Since(start)))
-	}()
-
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
 		return "", err
@@ -1396,7 +1204,6 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 		pending := gbs.pendingWrites
 		gbs.pendingWrites = nil
 		gbs.pendingMu.Unlock()
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] CheckAndPut(key=%q): manifest path, flushing %d pending writes\n", key, len(pending)))
 		ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg, pending)
 		if err != nil && len(pending) > 0 {
 			gbs.pendingMu.Lock()
@@ -1406,7 +1213,6 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 		return ver, err
 	}
 
-	fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] CheckAndPut(key=%q): non-manifest path\n", key))
 	return gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg, nil)
 }
 
@@ -1423,13 +1229,6 @@ func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, 
 }
 
 func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
-	_, callerFile, callerLine, _ := runtime.Caller(1)
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[git_blobstore.go] Concatenate(key=%q, sources=%d) (caller=%s:%d): elapsed: %s\n", key, len(sources), callerFile, callerLine, time.Since(start)))
-	}()
-
-	// Keep key validation for consistent error behavior.
 	var err error
 	key, err = normalizeGitTreePath(key)
 	if err != nil {

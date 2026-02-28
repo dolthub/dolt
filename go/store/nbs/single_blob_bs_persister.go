@@ -17,11 +17,8 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"time"
-
-	"github.com/fatih/color"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
@@ -42,11 +39,6 @@ var _ tablePersister = &singleBlobBSPersister{}
 var _ tableFilePersister = &singleBlobBSPersister{}
 
 func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[single_blob_bs_persister.go] Persist: elapsed: %s\n", time.Since(start)))
-	}()
-
 	address, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
@@ -71,11 +63,6 @@ func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors
 }
 
 func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[single_blob_bs_persister.go] ConjoinAll: elapsed: %s\n", time.Since(start)))
-	}()
-
 	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, stats)
 	if err != nil {
 		return nil, nil, err
@@ -167,11 +154,6 @@ func (bsp *singleBlobBSPersister) Path() string {
 }
 
 func (bsp *singleBlobBSPersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, _ uint64) error {
-	start := time.Now()
-	defer func() {
-		fmt.Fprint(color.Output, fmt.Sprintf("[single_blob_bs_persister.go] CopyTableFile(%s, sz=%d): elapsed: %s\n", name, fileSz, time.Since(start)))
-	}()
-
 	_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
 	return err
 }

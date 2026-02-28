@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dustin/go-humanize"
@@ -115,6 +116,14 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		printPushResult(sqlRows)
 	}()
 
+	spinner := TextSpinner{}
+	if !apr.Contains(cli.SilentFlag) {
+		cli.Print(spinner.next() + " Uploading...")
+		defer func() {
+			cli.DeleteAndPrint(len(" Uploading...")+1, "")
+		}()
+	}
+
 	for {
 		select {
 		case err = <-errChan:
@@ -131,6 +140,10 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				}
 			}
 			return HandleVErrAndExitCode(nil, usage)
+		case <-time.After(time.Millisecond * 50):
+			if !apr.Contains(cli.SilentFlag) {
+				cli.DeleteAndPrint(len(" Uploading...")+1, spinner.next()+" Uploading...")
+			}
 		}
 	}
 }
