@@ -89,7 +89,7 @@ func (f fakeGitAPI) WriteTree(ctx context.Context, indexFile string) (git.OID, e
 func (f fakeGitAPI) CommitTree(ctx context.Context, tree git.OID, parent *git.OID, message string, author *git.Identity) (git.OID, error) {
 	panic("unexpected call")
 }
-func (f fakeGitAPI) RevListCount(ctx context.Context, oid git.OID) (int, error) {
+func (f fakeGitAPI) RevListCount(ctx context.Context, oid git.OID, maxCount int) (int, error) {
 	panic("unexpected call")
 }
 func (f fakeGitAPI) UpdateRefCAS(ctx context.Context, ref string, newOID git.OID, oldOID git.OID, msg string) error {

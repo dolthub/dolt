@@ -120,10 +120,11 @@ type GitAPI interface {
 	//   GIT_DIR=... git fetch <remote> +<srcRef>:<dstRef>
 	FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error
 
-	// RevListCount returns the number of commits reachable from |oid| (inclusive).
+	// RevListCount returns the number of commits reachable from |oid| (inclusive),
+	// counting at most |maxCount| commits. Pass 0 for unlimited.
 	// Equivalent plumbing:
-	//   GIT_DIR=... git rev-list --count <oid>
-	RevListCount(ctx context.Context, oid OID) (int, error)
+	//   GIT_DIR=... git rev-list --count [--max-count=N] <oid>
+	RevListCount(ctx context.Context, oid OID, maxCount int) (int, error)
 
 	// PushRefWithLease pushes |srcRef| to |dstRef| on |remote|, but only if the remote's |dstRef|
 	// equals |expectedDstOID| (force-with-lease). If |expectedDstOID| is empty, it enforces that

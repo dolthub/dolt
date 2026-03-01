@@ -1137,7 +1137,7 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 	// prune old objects.
 	var parentPtr *git.OID
 	if hasParent && parent != "" {
-		depth, err := gbs.api.RevListCount(ctx, parent)
+		depth, err := gbs.api.RevListCount(ctx, parent, maxParentedCommits+1)
 		if err == nil && depth < maxParentedCommits {
 			p := parent
 			parentPtr = &p

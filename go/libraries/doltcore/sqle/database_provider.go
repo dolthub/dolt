@@ -577,6 +577,11 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 
 		if isGitRemote {
 			p.mu.Lock()
+			if cached, ok := p.remoteDbs[r.Url]; ok {
+				p.mu.Unlock()
+				_ = remoteDB.Close()
+				return cached, nil
+			}
 			p.remoteDbs[r.Url] = remoteDB
 			p.mu.Unlock()
 		}
