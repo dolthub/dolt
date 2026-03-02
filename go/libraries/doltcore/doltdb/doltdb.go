@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,9 +61,21 @@ const (
 
 	// 1GB.
 	defaultTargetFileSize = 1 << 30
+)
 
-	// Keep most recent 10000 materialized commits
-	commitCacheSize = 10000
+var (
+	// Keep the most recently materialized commits cached.
+	//
+	// This was bumped from 10,000 due to an operational issue
+	// on idearoom's hosted instance on 2026/02/27.
+	//
+	// The cache we use grows in size up to this maximum.
+	// Falling off the cache size can cause a performance cliff
+	// for applications which run lots of dolt_log queries.
+	//
+	// This can currently be override by the environment variable
+	// `DOLT_COMMIT_CACHE_SIZE`. See below.
+	commitCacheSize int = 1024 * 1024
 )
 
 var ErrMissingDoltDataDir = errors.New("missing dolt data directory")
@@ -76,6 +89,17 @@ var InMemDoltDB = "mem://"
 
 var ErrNoRootValAtHash = errors.New("there is no dolt root value at that hash")
 var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
+
+func init() {
+	overrideCommitCacheSizeStr := os.Getenv("DOLT_COMMIT_CACHE_SIZE")
+	if overrideCommitCacheSizeStr != "" {
+		overrideCommitCacheSize, err := strconv.Atoi(overrideCommitCacheSizeStr)
+		if err == nil && overrideCommitCacheSize > 0 {
+			commitCacheSize = overrideCommitCacheSize
+		}
+
+	}
+}
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 type DoltDB struct {
