@@ -17,6 +17,7 @@ package tree
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -100,7 +101,9 @@ func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	assertTrue(c.Size() > 0, "empty chunk returned from ChunkStore")
+	if c.Size() == 0 {
+		return nil, fmt.Errorf("empty chunk returned from ChunkStore for hash %s", ref.String())
+	}
 
 	n, _, err = NodeFromBytes(c.Data())
 	if err != nil {

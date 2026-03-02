@@ -1013,6 +1013,49 @@ func TestTextSerializer(t *testing.T) {
 	})
 }
 
+// TestTextSerializer_MissingChunk verifies that when a TEXT column's out-of-band
+// blob chunk is missing from the ChunkStore, the serializer returns an error instead
+// of panicking. This reproduces a production crash where encodeBytesFromAddress
+// panicked with "empty chunk returned from ChunkStore" during DOLT_COMMIT on a
+// table with TEXT columns and binlog enabled.
+func TestTextSerializer_MissingChunk(t *testing.T) {
+	s := textSerializer{}
+
+	// Create a blob in one NodeStore
+	_, addr := createTestBlob(t, []byte("some text data that is stored out of band"))
+
+	// Create a DIFFERENT NodeStore that does NOT have the blob chunk
+	differentStorage := &chunks.MemoryStorage{}
+	differentCS := differentStorage.NewViewWithFormat("__DOLT__")
+	differentNS := tree.NewNodeStore(differentCS)
+
+	// Build a tuple with the blob address from the first NodeStore
+	tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.StringAddrEnc})
+	tupleBuilder := val.NewTupleBuilder(tupleDesc, differentNS)
+	tupleBuilder.PutStringAddr(0, addr)
+	tuple, err := tupleBuilder.Build(buffPool)
+	require.NoError(t, err)
+
+	// Purge the shared node cache — all NodeStores share a global cache, so the
+	// blob written by createTestBlob is cached and would be found by differentNS.
+	// In production, cache eviction under pressure causes the same fallthrough to
+	// ChunkStore.Get, which returns EmptyChunk for missing hashes.
+	differentNS.PurgeCaches()
+
+	sqlCtx := sql.NewEmptyContext()
+
+	// Verify the different NodeStore truly cannot read this address
+	_, readErr := differentNS.Read(sqlCtx, addr)
+	require.Error(t, readErr, "differentNS should not be able to read blob from separate storage")
+
+	// Serialize using the DIFFERENT NodeStore (which doesn't have the chunk).
+	// This should return an error, NOT panic.
+	typ := gmstypes.Text
+	_, err = s.serialize(sqlCtx, typ, tupleDesc, tuple, 0, differentNS)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to read out-of-band data")
+}
+
 func TestGeometrySerializer(t *testing.T) {
 	s := geometrySerializer{}
 
