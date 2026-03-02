@@ -24,7 +24,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -121,81 +120,6 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	authorDateMillis := userTS.UnixMilli()
 
 	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis}, nil
-}
-
-func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
-	if v, ok, err := st.MaybeGet(k); err != nil {
-		return nil, err
-	} else if ok {
-		return v, nil
-	}
-
-	return nil, errors.New("Missing required field \"" + k + "\".")
-}
-
-func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
-	e, err := getRequiredFromSt(st, commitMetaEmailKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	n, err := getRequiredFromSt(st, commitMetaNameKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	d, err := getRequiredFromSt(st, commitMetaDescKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	ts, err := getRequiredFromSt(st, commitMetaTimestampKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	userTS, ok, err := st.MaybeGet(commitMetaUserTSKey)
-
-	if err != nil {
-		return nil, err
-	} else if !ok {
-		userTS = types.Int(int64(uint64(ts.(types.Uint))))
-	}
-
-	signature, ok, err := st.MaybeGet(commitMetaSignature)
-
-	if err != nil {
-		return nil, err
-	} else if !ok {
-		signature = types.String("")
-	}
-
-	return &CommitMeta{
-		Name:          string(n.(types.String)),
-		Email:         string(e.(types.String)),
-		Description:   string(d.(types.String)),
-		Signature:     string(signature.(types.String)),
-		Timestamp:     uint64(ts.(types.Uint)),
-		UserTimestamp: int64(userTS.(types.Int)),
-	}, nil
-}
-
-func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
-	metadata := types.StructData{
-		commitMetaNameKey:      types.String(cm.Name),
-		commitMetaEmailKey:     types.String(cm.Email),
-		commitMetaDescKey:      types.String(cm.Description),
-		commitMetaTimestampKey: types.Uint(cm.Timestamp),
-		commitMetaVersionKey:   types.String(commitMetaVersion),
-		commitMetaUserTSKey:    types.Int(cm.UserTimestamp),
-		commitMetaSignature:    types.String(cm.Signature),
-	}
-
-	return types.NewStruct(nbf, commitMetaStName, metadata)
 }
 
 // Time returns the time at which the commit occurred

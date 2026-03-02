@@ -22,7 +22,11 @@
 package types
 
 import (
+	"bytes"
+	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -178,3 +182,94 @@ type structTypeFields []StructField
 func (s structTypeFields) Len() int           { return len(s) }
 func (s structTypeFields) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s structTypeFields) Less(i, j int) bool { return s[i].Name < s[j].Name }
+
+func verifyFields(fs structTypeFields) {
+	for i, f := range fs {
+		verifyFieldName(f.Name)
+		if i > 0 && strings.Compare(fs[i-1].Name, f.Name) >= 0 {
+			d.Panic("Field names must be unique and ordered alphabetically")
+		}
+	}
+}
+
+func verifyName(name, kind string) {
+	if !IsValidStructFieldName(name) {
+		d.Panic(`Invalid struct%s name: "%s"`, kind, name)
+	}
+}
+
+func verifyFieldName(name string) {
+	verifyName(name, " field")
+}
+
+func verifyStructName(name string) {
+	if name != "" {
+		verifyName(name, "")
+	}
+}
+
+// IsValidStructFieldName returns whether the name is valid as a field name in a struct.
+// Valid names must start with `a-zA-Z` and after that `a-zA-Z0-9_`.
+func IsValidStructFieldName(name string) bool {
+	for i, c := range name {
+		if i == 0 {
+			if !isAlpha(c) {
+				return false
+			}
+		} else if !isAlphaNumOrUnderscore(c) {
+			return false
+		}
+	}
+	return len(name) != 0
+}
+
+func isAlpha(c rune) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+func isAlphaNumOrUnderscore(c rune) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_'
+}
+
+var escapeChar = "Q"
+var headFieldNamePattern = regexp.MustCompile("[a-zA-Z]")
+var tailFieldNamePattern = regexp.MustCompile("[a-zA-Z0-9_]")
+var escapeRegex = regexp.MustCompile(escapeChar)
+
+var fieldNameComponentRe = regexp.MustCompile("^" + headFieldNamePattern.String() + tailFieldNamePattern.String() + "*")
+
+type encodingFunc func(string, *regexp.Regexp) string
+
+func escapeField(input string, encode encodingFunc) string {
+	output := ""
+	pattern := headFieldNamePattern
+	for _, ch := range input {
+		output += encode(string([]rune{ch}), pattern)
+		pattern = tailFieldNamePattern
+	}
+	return output
+}
+
+// EscapeStructField escapes names for use as noms structs with regards to non CSV imported data.
+// Disallowed characters are encoded as 'Q<hex-encoded-utf8-bytes>'.
+// Note that Q itself is also escaped since it is the escape character.
+func EscapeStructField(input string) string {
+	if !escapeRegex.MatchString(input) && IsValidStructFieldName(input) {
+		return input
+	}
+	encode := func(s1 string, p *regexp.Regexp) string {
+		if p.MatchString(s1) && s1 != escapeChar {
+			return s1
+		}
+
+		var hs = fmt.Sprintf("%X", s1)
+		var buf bytes.Buffer
+		buf.WriteString(escapeChar)
+		if len(hs) == 1 {
+			buf.WriteString("0")
+		}
+		buf.WriteString(hs)
+		return buf.String()
+	}
+	return escapeField(input, encode)
+}

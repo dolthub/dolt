@@ -49,9 +49,9 @@ func TestValidateRef(t *testing.T) {
 	r, err := db.WriteValue(context.Background(), b)
 	assert.NoError(t, err)
 
-	_, err = db.validateRefAsCommit(context.Background(), r)
+	err = db.validateRefAsCommit(context.Background(), r)
 	assert.Error(t, err)
-	_, err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, db.Format())))
+	err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, db.Format())))
 }
 
 type DatabaseSuite struct {

@@ -84,7 +84,6 @@ func init() {
 	KindToType[BoolKind] = Bool(false)
 	KindToType[FloatKind] = Float(0)
 	KindToType[RefKind] = Ref{}
-	KindToType[StructKind] = Struct{}
 	KindToType[StringKind] = String("")
 	KindToType[TypeKind] = &Type{}
 	KindToType[UUIDKind] = UUID{}

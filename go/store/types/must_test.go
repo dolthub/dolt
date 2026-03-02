@@ -39,11 +39,6 @@ func mustString(str string, err error) string {
 	return str
 }
 
-func mustStruct(st Struct, err error) Struct {
-	d.PanicIfError(err)
-	return st
-}
-
 func mustHash(h hash.Hash, err error) hash.Hash {
 	d.PanicIfError(err)
 	return h

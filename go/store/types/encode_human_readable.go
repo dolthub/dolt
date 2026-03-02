@@ -252,11 +252,7 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 		w.writeType(v.(*Type), map[*Type]struct{}{})
 
 	case StructKind:
-		err := w.writeStruct(ctx, v.(Struct))
-
-		if err != nil {
-			return err
-		}
+		return fmt.Errorf("unsupported kind: %s", v.Kind())
 
 	default:
 		if IsPrimitiveKind(v.Kind()) {
@@ -267,62 +263,6 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 	}
 
 	return nil
-}
-
-type hrsStructWriter struct {
-	*hrsWriter
-	v Struct
-}
-
-func (w hrsStructWriter) name(ctx context.Context, n string) {
-	w.write("struct ")
-	if n != "" {
-		w.write(n)
-		w.write(" ")
-	}
-	w.write("{")
-	commenters := GetHRSCommenters(n)
-	for _, commenter := range commenters {
-		if comment := commenter.Comment(ctx, w.v); comment != "" {
-			w.write(" // " + comment)
-			break
-		}
-
-	}
-	w.indent()
-}
-
-func (w hrsStructWriter) count(c uint64) {
-	if c > 0 {
-		w.newLine()
-	}
-}
-
-func (w hrsStructWriter) fieldName(n string) {
-	w.write(n)
-	w.write(": ")
-}
-
-func (w hrsStructWriter) fieldValue(ctx context.Context, v Value) error {
-	err := w.Write(ctx, v)
-
-	if err != nil {
-		return err
-	}
-
-	w.write(",")
-	w.newLine()
-
-	return nil
-}
-
-func (w hrsStructWriter) end() {
-	w.outdent()
-	w.write("}")
-}
-
-func (w *hrsWriter) writeStruct(ctx context.Context, v Struct) error {
-	return v.iterParts(ctx, hrsStructWriter{w, v})
 }
 
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {

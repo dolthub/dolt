@@ -126,10 +126,6 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(String("AINT NO THANG"))
 	assertRoundTrips(String("💩"))
 
-	st, err := NewStruct(vs.Format(), "", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)})
-	require.NoError(t, err)
-	assertRoundTrips(st)
-
 }
 
 func TestWritePrimitives(t *testing.T) {
@@ -186,16 +182,6 @@ func TestWriteTuple(t *testing.T) {
 	)
 }
 
-func TestWriteEmptyStruct(t *testing.T) {
-	vrw := newTestValueStore()
-	assertEncoding(t,
-		[]interface{}{
-			StructKind, "S", uint64(0), /* len */
-		},
-		mustValue(NewStruct(vrw.Format(), "S", nil)),
-	)
-}
-
 func TestWriteEmptyTuple(t *testing.T) {
 	vrw := newTestValueStore()
 	assertEncoding(t,
@@ -203,73 +189,6 @@ func TestWriteEmptyTuple(t *testing.T) {
 			TupleKind, uint64(0), /* len */
 		},
 		mustValue(NewTuple(vrw.Format())),
-	)
-}
-
-func TestWriteStruct(t *testing.T) {
-	vrw := newTestValueStore()
-	assertEncoding(t,
-		[]interface{}{
-			StructKind, "S", uint64(2), /* len */
-			"b", BoolKind, true, "x", FloatKind, Float(42),
-		},
-		mustValue(NewStruct(vrw.Format(), "S", StructData{"x": Float(42), "b": Bool(true)})),
-	)
-}
-
-func TestWriteStructTooMuchData(t *testing.T) {
-	vrw := newTestValueStore()
-	s, err := NewStruct(vrw.Format(), "S", StructData{"x": Float(42), "b": Bool(true)})
-	require.NoError(t, err)
-	c, err := EncodeValue(s, vrw.Format())
-	require.NoError(t, err)
-	data := c.Data()
-	buff := make([]byte, len(data)+1)
-	copy(buff, data)
-	buff[len(data)] = 5 // Add a bogus extrabyte
-	assert.Panics(t, func() {
-		_, err := decodeFromBytes(buff, vrw)
-		require.NoError(t, err)
-	})
-}
-
-func TestWriteStructWithTuple(t *testing.T) {
-	vrw := newTestValueStore()
-	// struct S {l: List<String>}({l: ["a", "b"]})
-	assertEncoding(t,
-		[]interface{}{
-			StructKind, "S", uint64(1), /* len */
-			"t", TupleKind, uint64(2) /* len */, StringKind, "a", StringKind, "b",
-		},
-		mustValue(NewStruct(vrw.Format(), "S", StructData{"t": mustValue(NewTuple(vrw.Format(), String("a"), String("b")))})),
-	)
-
-	// struct S {l: List<>}({l: []})
-	assertEncoding(t,
-		[]interface{}{
-			StructKind, "S", uint64(1), /* len */
-			"t", TupleKind, uint64(0), /* len */
-		},
-		mustValue(NewStruct(vrw.Format(), "S", StructData{"t": mustValue(NewTuple(vrw.Format()))})),
-	)
-}
-
-func TestWriteStructWithStruct(t *testing.T) {
-	vrw := newTestValueStore()
-	// struct S2 {
-	//   x: Float
-	// }
-	// struct S {
-	//   s: S2
-	// }
-	assertEncoding(t,
-		[]interface{}{
-			StructKind, "S", uint64(1), // len
-			"s", StructKind, "S2", uint64(1), /* len */
-			"x", FloatKind, Float(42),
-		},
-		// {s: {x: 42}}
-		mustValue(NewStruct(vrw.Format(), "S", StructData{"s": mustValue(NewStruct(vrw.Format(), "S2", StructData{"x": Float(42)}))})),
 	)
 }
 

@@ -157,7 +157,16 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 		return r.walkValueSequence(nbf, cb)
 	case StructKind:
-		return r.walkStruct(nbf, cb)
+		r.skipKind()
+		r.skipString()
+		count := r.readCount()
+		for i := uint64(0); i < count; i++ {
+			r.skipString()
+			if err := r.walkValue(nbf, cb); err != nil {
+				return err
+			}
+		}
+		return nil
 	case TupleKind:
 		return r.walkTuple(nbf, cb)
 	case SerialMessageKind:
@@ -180,10 +189,6 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 	}
 
 	return nil
-}
-
-func (r *refWalker) walkStruct(nbf *NomsBinFormat, cb RefCallback) error {
-	return walkStruct(nbf, r, cb)
 }
 
 func (r *refWalker) walkTuple(nbf *NomsBinFormat, cb RefCallback) error {

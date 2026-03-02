@@ -21,15 +21,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRefChunks(t *testing.T) {
+func TestRefTargetHash(t *testing.T) {
 	assert := assert.New(t)
 
 	vs := newTestValueStore()
 
-	s, err := NewStruct(vs.Format(), "S", StructData{"x": Float(42)})
+	tup, err := NewTuple(vs.Format(), Float(42), String("hello"))
 	require.NoError(t, err)
-	r, err := NewRef(s, vs.Format())
+	r, err := NewRef(tup, vs.Format())
 	require.NoError(t, err)
-	assert.Len(getChunks(vs.Format(), r), 1)
-	assert.Equal(r, getChunks(vs.Format(), r)[0])
+	h, err := tup.Hash(vs.Format())
+	require.NoError(t, err)
+	assert.Equal(h, r.TargetHash())
 }

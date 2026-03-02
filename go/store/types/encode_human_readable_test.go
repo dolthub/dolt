@@ -25,13 +25,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/test"
 )
 
@@ -79,15 +77,6 @@ func TestWriteHumanReadableRef(t *testing.T) {
 	rv, err := vs.WriteValue(context.Background(), x)
 	require.NoError(t, err)
 	assertWriteHRSEqual(t, "#0123456789abcdefghijklmnopqrstuv", rv)
-}
-
-func TestWriteHumanReadableStruct(t *testing.T) {
-	vrw := newTestValueStore()
-	str := mustValue(NewStruct(vrw.Format(), "S1", StructData{
-		"x": Float(1),
-		"y": Float(2),
-	}))
-	assertWriteHRSEqual(t, "struct S1 {\n  x: 1,\n  y: 2,\n}", str)
 }
 
 func TestWriteHumanReadableType(t *testing.T) {
@@ -186,14 +175,9 @@ func TestWriteHumanReadableWriterError(t *testing.T) {
 }
 
 func TestEmptyCollections(t *testing.T) {
-	vrw := newTestValueStore()
-
 	a, err := MakeStructType("Nothing")
 	require.NoError(t, err)
 	assertWriteHRSEqual(t, "Struct Nothing {}", a)
-	b, err := NewStruct(vrw.Format(), "Rien", StructData{})
-	require.NoError(t, err)
-	assertWriteHRSEqual(t, "struct Rien {}", b)
 }
 
 func TestWriteHumanReadableStructOptionalFields(t *testing.T) {
@@ -202,49 +186,4 @@ func TestWriteHumanReadableStructOptionalFields(t *testing.T) {
 		StructField{PrimitiveTypeMap[BoolKind], "b", true})
 	require.NoError(t, err)
 	assertWriteHRSEqual(t, "Struct S1 {\n  a: Bool,\n  b?: Bool,\n}", typ)
-}
-
-type TestCommenter struct {
-	prefix   string
-	testType *Type
-}
-
-func (c TestCommenter) Comment(ctx context.Context, v Value) string {
-	if !(mustType(v.typeOf()).Equals(c.testType)) {
-		return ""
-	}
-
-	v, _, err := v.(Struct).MaybeGet("Name")
-	d.PanicIfError(err)
-
-	return c.prefix + string(v.(String))
-}
-
-func TestRegisterCommenter(t *testing.T) {
-	a := assert.New(t)
-	vrw := newTestValueStore()
-
-	tt, err := NewStruct(vrw.Format(), "TestType1", StructData{"Name": String("abc-123")})
-	a.NoError(err)
-	nt, err := NewStruct(vrw.Format(), "TestType2", StructData{"Name": String("abc-123")})
-	a.NoError(err)
-
-	RegisterHRSCommenter("TestType1", "mylib1", TestCommenter{prefix: "MyTest: ", testType: mustType(tt.typeOf())})
-
-	s1, err := EncodedValue(context.Background(), tt)
-	a.NoError(err)
-	a.True(strings.Contains(s1, "// MyTest: abc-123"))
-	s1, err = EncodedValue(context.Background(), nt)
-	a.NoError(err)
-	a.False(strings.Contains(s1, "// MyTest: abc-123"))
-
-	RegisterHRSCommenter("TestType1", "mylib1", TestCommenter{prefix: "MyTest2: ", testType: mustType(tt.typeOf())})
-	s1, err = EncodedValue(context.Background(), tt)
-	a.NoError(err)
-	a.True(strings.Contains(s1, "// MyTest2: abc-123"))
-
-	UnregisterHRSCommenter("TestType1", "mylib1")
-	s1, err = EncodedValue(context.Background(), tt)
-	a.NoError(err)
-	a.False(strings.Contains(s1, "// MyTest2: abc-123"))
 }

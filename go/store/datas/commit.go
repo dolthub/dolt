@@ -396,45 +396,7 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 		return res, nil
 	}
 
-	c, ok := cv.(types.Struct)
-	if !ok {
-		return nil, errors.New("GetCommitParents: provided value is not a commit.")
-	}
-	if c.Name() != commitName {
-		return nil, errors.New("GetCommitParents: provided value is not a commit.")
-	}
-	var parentRefs []types.Ref
-	err := c.IterFields(func(name string, value types.Value) error {
-		if name == parentsListField || name == parentsField {
-			if ref, ok := value.(types.Ref); ok {
-				parentRefs = append(parentRefs, ref)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	hashes := make([]hash.Hash, len(parentRefs))
-	for i, r := range parentRefs {
-		hashes[i] = r.TargetHash()
-	}
-	vals, err := vr.ReadManyValues(ctx, hashes)
-	if err != nil {
-		return nil, err
-	}
-	res := make([]*Commit, len(parentRefs))
-	for i, val := range vals {
-		if val == nil {
-			return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
-		}
-		res[i] = &Commit{
-			val:    val,
-			height: parentRefs[i].Height(),
-			addr:   parentRefs[i].TargetHash(),
-		}
-	}
-	return res, nil
+	return nil, errors.New("GetCommitParents: unsupported legacy noms struct commit format")
 }
 
 // GetCommitMeta extracts the CommitMeta field from a commit. Returns |nil,
@@ -459,25 +421,7 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		ret.Signature = string(cmsg.Signature())
 		return ret, nil
 	}
-	c, ok := cv.(types.Struct)
-	if !ok {
-		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
-	}
-	if c.Name() != commitName {
-		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
-	}
-	metaVal, found, err := c.MaybeGet(commitMetaField)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, nil
-	}
-	if metaSt, ok := metaVal.(types.Struct); ok {
-		return CommitMetaFromNomsSt(metaSt)
-	} else {
-		return nil, errors.New("GetCommitMeta: Commit had metadata field but it was not a Struct.")
-	}
+	return nil, errors.New("GetCommitMeta: unsupported legacy noms struct commit format")
 }
 
 // GetCommittedValue returns the value of a commit. If the commit isn't found, nil is returned.
@@ -497,15 +441,7 @@ func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value
 		return vr.ReadValue(ctx, roothash)
 	}
 
-	c, ok := cv.(types.Struct)
-	if !ok {
-		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
-	}
-	if c.Name() != commitName {
-		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
-	}
-	v, _, err := c.MaybeGet(valueField)
-	return v, err
+	return nil, errors.New("GetCommittedValue: unsupported legacy noms struct commit format")
 }
 
 func GetCommitRootHash(cv types.Value) (hash.Hash, error) {

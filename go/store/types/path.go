@@ -228,12 +228,6 @@ func NewFieldPath(name string) FieldPath {
 
 func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
 	switch v := v.(type) {
-	case Struct:
-		if sv, ok, err := v.MaybeGet(fp.Name); err != nil {
-			return nil, err
-		} else if ok {
-			return sv, nil
-		}
 	case SerialMessage:
 		if serial.GetFileID(v) == serial.CommitFileID && fp.Name == "value" {
 			var msg serial.Commit

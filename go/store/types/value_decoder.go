@@ -260,7 +260,7 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	case RefKind:
 		return r.readRef(nbf)
 	case StructKind:
-		return r.readStruct(nbf)
+		return nil, fmt.Errorf("unsupported kind: %s", k)
 	case TupleKind:
 		return r.readTuple(nbf)
 	case JSONKind:
@@ -448,9 +448,14 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 			return err
 		}
 	case StructKind:
-		err := r.skipStruct(nbf)
-		if err != nil {
-			return err
+		r.skipKind()
+		r.skipString()
+		count := r.readCount()
+		for i := uint64(0); i < count; i++ {
+			r.skipString()
+			if err := r.SkipValue(nbf); err != nil {
+				return err
+			}
 		}
 	case TupleKind:
 		err := r.skipTuple(nbf)
@@ -512,7 +517,23 @@ func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
 		d.Chk.True(val != nil)
 		return val.typeOf()
 	case StructKind:
-		return readStructTypeOfValue(nbf, r)
+		r.skipKind()
+		name := r.ReadString()
+		count := r.readCount()
+		typeFields := make(structTypeFields, count)
+		for i := uint64(0); i < count; i++ {
+			fname := r.ReadString()
+			t, err := r.readTypeOfValue(nbf)
+			if err != nil {
+				return nil, fmt.Errorf("error decoding type of field %s: %w", fname, err)
+			}
+			typeFields[i] = StructField{
+				Name:     fname,
+				Optional: false,
+				Type:     t,
+			}
+		}
+		return makeStructTypeQuickly(name, typeFields)
 	case TupleKind:
 		val, err := r.readValue(nbf)
 		if err != nil {
@@ -567,7 +588,31 @@ func (r *valueDecoder) isValueSameTypeForSure(nbf *NomsBinFormat, t *Type) (bool
 		// https://github.com/attic-labs/noms/issues/3776
 		return false, nil
 	case StructKind:
-		return isStructSameTypeForSure(nbf, r, t)
+		desc := t.Desc.(StructDesc)
+		r.skipKind()
+		if !r.isStringSame(desc.Name) {
+			return false, nil
+		}
+		count := r.readCount()
+		if count != uint64(len(desc.fields)) {
+			return false, nil
+		}
+		for i := uint64(0); i < count; i++ {
+			if desc.fields[i].Optional {
+				return false, nil
+			}
+			if !r.isStringSame(desc.fields[i].Name) {
+				return false, nil
+			}
+			isSame, err := r.isValueSameTypeForSure(nbf, desc.fields[i].Type)
+			if err != nil {
+				return false, err
+			}
+			if !isSame {
+				return false, nil
+			}
+		}
+		return true, nil
 	case TypeKind:
 		return false, nil
 	case CycleKind, UnionKind, ValueKind:
@@ -605,16 +650,8 @@ func (r *valueDecoder) isStringSame(s string) bool {
 	return true
 }
 
-func (r *valueDecoder) readStruct(nbf *NomsBinFormat) (Value, error) {
-	return readStruct(nbf, r)
-}
-
 func (r *valueDecoder) readTuple(nbf *NomsBinFormat) (Tuple, error) {
 	return readTuple(nbf, r)
-}
-
-func (r *valueDecoder) skipStruct(nbf *NomsBinFormat) error {
-	return skipStruct(nbf, r)
 }
 
 func (r *valueDecoder) skipTuple(nbf *NomsBinFormat) error {

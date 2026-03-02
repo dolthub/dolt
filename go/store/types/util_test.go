@@ -74,26 +74,6 @@ func generateNumbersAsValuesFromToBy(nbf *NomsBinFormat, from, to, by int) Value
 	return nums
 }
 
-func generateNumbersAsStructsFromToBy(nbf *NomsBinFormat, from, to, by int) ValueSlice {
-	d.Chk.True(to >= from)
-	d.Chk.True(by > 0)
-	nums := []Value{}
-	for i := from; i < to; i += by {
-		nums = append(nums, mustValue(NewStruct(nbf, "num", StructData{"n": Float(i)})))
-	}
-	return nums
-}
-
-func generateNumbersAsRefOfStructs(vrw ValueReadWriter, n int) []Value {
-	nums := []Value{}
-	for i := 0; i < n; i++ {
-		r, err := vrw.WriteValue(context.Background(), mustValue(NewStruct(vrw.Format(), "num", StructData{"n": Float(i)})))
-		d.PanicIfError(err)
-		nums = append(nums, r)
-	}
-	return nums
-}
-
 func reverseValues(values []Value) []Value {
 	newValues := make([]Value, len(values))
 	for i := 0; i < len(values); i++ {

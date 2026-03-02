@@ -56,34 +56,6 @@ func assertResolvesToWithVR(assert *assert.Assertions, expect, ref Value, str st
 	}
 }
 
-func TestPathStruct(t *testing.T) {
-	assert := assert.New(t)
-	vs := newTestValueStore()
-
-	v, err := NewStruct(vs.Format(), "", StructData{
-		"foo": String("foo"),
-		"bar": Bool(false),
-		"baz": Float(203),
-	})
-
-	require.NoError(t, err)
-	assertResolvesTo(assert, String("foo"), v, `.foo`)
-	assertResolvesTo(assert, Bool(false), v, `.bar`)
-	assertResolvesTo(assert, Float(203), v, `.baz`)
-	assertResolvesTo(assert, nil, v, `.notHere`)
-
-	v2, err := NewStruct(vs.Format(), "", StructData{
-		"v1": v,
-	})
-
-	require.NoError(t, err)
-	assertResolvesTo(assert, String("foo"), v2, `.v1.foo`)
-	assertResolvesTo(assert, Bool(false), v2, `.v1.bar`)
-	assertResolvesTo(assert, Float(203), v2, `.v1.baz`)
-	assertResolvesTo(assert, nil, v2, `.v1.notHere`)
-	assertResolvesTo(assert, nil, v2, `.notHere.v1`)
-}
-
 func TestPathStructType(t *testing.T) {
 	assert := assert.New(t)
 
@@ -356,25 +328,4 @@ func TestMustParsePath(t *testing.T) {
 	for _, bad := range []string{"", "bad", "[bad]", "!", "💩"} {
 		assert.Panics(t, func() { MustParsePath(bad) })
 	}
-}
-
-func TestPathTarget(t *testing.T) {
-	assert := assert.New(t)
-	vs := newTestValueStore()
-
-	s, err := NewStruct(vs.Format(), "", StructData{
-		"foo": String("bar"),
-	})
-	require.NoError(t, err)
-	r, err := vs.WriteValue(context.Background(), s)
-	require.NoError(t, err)
-	s2, err := NewStruct(vs.Format(), "", StructData{
-		"ref": r,
-	})
-
-	require.NoError(t, err)
-	assertResolvesToWithVR(assert, nil, String("notref"), `@target`, vs)
-	assertResolvesToWithVR(assert, s, r, `@target`, vs)
-	assertResolvesToWithVR(assert, String("bar"), r, `@target.foo`, vs)
-	assertResolvesToWithVR(assert, String("bar"), s2, `.ref@target.foo`, vs)
 }
