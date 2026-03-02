@@ -22,8 +22,6 @@ const (
 	invalidEaId = 0xFFFFFFFF
 )
 
-type PKDuplicateCb func(newKeyString, indexName string, existingKey, existingVal types.Tuple, isPk bool) error
-
 // Options are properties that define different functionality for the tableEditSession.
 // TODO next: all these fields are write-only, remove them
 type Options struct {

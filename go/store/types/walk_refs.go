@@ -11,45 +11,69 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// This file incorporates work covered by the following copyright and
-// permission notice:
-//
-// Copyright 2017 Attic Labs, Inc. All rights reserved.
-// Licensed under the Apache License, version 2.0:
-// http://www.apache.org/licenses/LICENSE-2.0
 
 package types
 
 import (
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// walkRefs calls cb() on each Ref that can be decoded from |c|. The results
-// are precisely equal to DecodeValue(c).walkRefs(cb), but this should be much
-// faster.
 func walkRefs(data []byte, nbf *NomsBinFormat, cb RefCallback) error {
-	rw := newRefWalker(data)
+	rw := refWalker{binaryNomsReader{data, 0}}
 	return rw.walkValue(nbf, cb)
 }
 
 type refWalker struct {
-	typedBinaryNomsReader
-}
-
-func newRefWalker(buff []byte) refWalker {
-	nr := binaryNomsReader{buff, 0}
-	return refWalker{typedBinaryNomsReader{nr, false}}
+	binaryNomsReader
 }
 
 func (r *refWalker) walkRef(nbf *NomsBinFormat, cb RefCallback) error {
-	ref, err := readRef(nbf, &(r.typedBinaryNomsReader))
-
-	if err != nil {
-		return err
-	}
-
+	start := r.pos()
+	offsets := make([]uint32, refPartEnd)
+	offsets[refPartKind] = r.pos()
+	r.skipKind()
+	offsets[refPartTargetHash] = r.pos()
+	r.skipHash()
+	offsets[refPartTargetType] = r.pos()
+	r.skipTypeInner()
+	offsets[refPartHeight] = r.pos()
+	r.skipCount()
+	end := r.pos()
+	ref := Ref{valueImpl{nil, nbf, r.byteSlice(start, end), offsets}}
 	return cb(ref)
+}
+
+func (r *refWalker) skipTypeInner() {
+	k := r.ReadKind()
+	switch k {
+	case ListKind, RefKind, SetKind, TupleKind, JSONKind:
+		r.skipTypeInner()
+	case MapKind:
+		r.skipTypeInner()
+		r.skipTypeInner()
+	case StructKind:
+		r.skipString()
+		count := r.readCount()
+		for i := uint64(0); i < count; i++ {
+			r.skipString()
+		}
+		for i := uint64(0); i < count; i++ {
+			r.skipTypeInner()
+		}
+		for i := uint64(0); i < count; i++ {
+			r.skipBool()
+		}
+	case UnionKind:
+		l := r.readCount()
+		for i := uint64(0); i < l; i++ {
+			r.skipTypeInner()
+		}
+	case CycleKind:
+		r.skipString()
+	default:
+		d.PanicIfFalse(IsPrimitiveKind(k))
+	}
 }
 
 func (r *refWalker) walkBlobLeafSequence() {
@@ -60,34 +84,24 @@ func (r *refWalker) walkBlobLeafSequence() {
 func (r *refWalker) walkValueSequence(nbf *NomsBinFormat, cb RefCallback) error {
 	count := int(r.readCount())
 	for i := 0; i < count; i++ {
-		err := r.walkValue(nbf, cb)
-
-		if err != nil {
+		if err := r.walkValue(nbf, cb); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
 func (r *refWalker) walkMetaSequence(nbf *NomsBinFormat, k NomsKind, level uint64, cb RefCallback) error {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		err := r.walkRef(nbf, cb) // ref to child sequence
-
-		if err != nil {
+		if err := r.walkRef(nbf, cb); err != nil {
 			return err
 		}
-
-		err = r.skipOrderedKey(nbf)
-
-		if err != nil {
+		if err := r.skipOrderedKey(nbf); err != nil {
 			return err
 		}
-
-		r.skipCount() // numLeaves
+		r.skipCount()
 	}
-
 	return nil
 }
 
@@ -97,14 +111,13 @@ func (r *refWalker) skipOrderedKey(nbf *NomsBinFormat) error {
 		r.skipKind()
 		r.skipHash()
 	default:
-		return r.walkValue(nbf, func(r Ref) error { return nil }) // max Value in subtree reachable from here
+		return r.walkValue(nbf, func(r Ref) error { return nil })
 	}
-
 	return nil
 }
 
 func (r *refWalker) walkSerialMessage(nbf *NomsBinFormat, cb RefCallback) error {
-	sm, err := SerialMessage{}.readFrom(nbf, &(r.typedBinaryNomsReader.binaryNomsReader))
+	sm, err := SerialMessage{}.readFrom(nbf, &r.binaryNomsReader)
 	if err != nil {
 		return err
 	}
@@ -123,7 +136,8 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 		r.walkBlobLeafSequence()
 		return nil
 	case JSONKind:
-		return r.walkJSON(nbf, cb)
+		r.skipKind()
+		return r.walkValue(nbf, cb)
 	case ListKind:
 		r.skipKind()
 		level := r.readCount()
@@ -168,13 +182,21 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 		return nil
 	case TupleKind:
-		return r.walkTuple(nbf, cb)
+		r.skipKind()
+		count := r.readCount()
+		for i := uint64(0); i < count; i++ {
+			if err := r.walkValue(nbf, cb); err != nil {
+				return err
+			}
+		}
+		return nil
 	case SerialMessageKind:
 		r.skipKind()
 		return r.walkSerialMessage(nbf, cb)
 	case TypeKind:
 		r.skipKind()
-		return r.skipType()
+		r.skipTypeInner()
+		return nil
 	case CycleKind, UnionKind, ValueKind:
 		d.Panic("A value instance can never have type %s", k)
 	default:
@@ -187,14 +209,11 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 		return ErrUnknownType
 	}
-
 	return nil
 }
 
-func (r *refWalker) walkTuple(nbf *NomsBinFormat, cb RefCallback) error {
-	return walkTuple(nbf, r, cb)
-}
-
-func (r *refWalker) walkJSON(nbf *NomsBinFormat, cb RefCallback) error {
-	return walkJSON(nbf, r, cb)
+func walkRefs_hash(data []byte, nbf *NomsBinFormat, cb func(h hash.Hash) error) error {
+	return walkRefs(data, nbf, func(r Ref) error {
+		return cb(r.TargetHash())
+	})
 }

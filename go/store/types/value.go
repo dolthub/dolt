@@ -196,16 +196,8 @@ func (v valueImpl) Hash(*NomsBinFormat) (hash.Hash, error) {
 	return hash.Of(v.buff), nil
 }
 
-func (v valueImpl) decoder() valueDecoder {
-	return newValueDecoder(v.buff, v.vrw)
-}
-
 func (v valueImpl) format() *NomsBinFormat {
 	return v.nbf
-}
-
-func (v valueImpl) decoderAtOffset(offset int) valueDecoder {
-	return newValueDecoder(v.buff[offset:], v.vrw)
 }
 
 func (v valueImpl) asValueImpl() valueImpl {

@@ -139,9 +139,7 @@ func TestPanicOnBadVersion(t *testing.T) {
 	t.Run("Write", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
 		assert.Panics(t, func() {
-			tup, err := NewTuple(cvs.Format(), Float(1))
-			require.NoError(t, err)
-			_, err = cvs.WriteValue(context.Background(), tup)
+			_, err := cvs.WriteValue(context.Background(), Float(1))
 			require.NoError(t, err)
 
 			rt, err := cvs.Root(context.Background())
@@ -158,21 +156,14 @@ func TestGC(t *testing.T) {
 	ctx := context.Background()
 	vs := newTestValueStore()
 	vs.skipWriteCaching = true
-	r1 := mustRef(vs.WriteValue(ctx, String("committed")))
-	r2 := mustRef(vs.WriteValue(ctx, String("unreferenced")))
-	s1, err := NewTuple(vs.Format(), r1)
-	require.NoError(t, err)
-	s2, err := NewTuple(vs.Format(), r2)
-	require.NoError(t, err)
-
-	h1 := mustRef(vs.WriteValue(ctx, s1)).TargetHash()
+	h1 := mustRef(vs.WriteValue(ctx, String("committed"))).TargetHash()
+	h2 := mustRef(vs.WriteValue(ctx, String("unreferenced"))).TargetHash()
 
 	rt, err := vs.Root(ctx)
 	require.NoError(t, err)
 	ok, err := vs.Commit(ctx, h1, rt)
 	require.NoError(t, err)
 	assert.True(ok)
-	h2 := mustRef(vs.WriteValue(ctx, s2)).TargetHash()
 
 	ok, err = vs.Commit(ctx, h1, h1)
 	require.NoError(t, err)

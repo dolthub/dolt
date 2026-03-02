@@ -113,19 +113,6 @@ func (v MultiPoint) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func readMultiPoint(nbf *NomsBinFormat, b *valueDecoder) (MultiPoint, error) {
-	buf := []byte(b.ReadString())
-	srid, _, geomType, err := DeserializeEWKBHeader(buf)
-	if err != nil {
-		return MultiPoint{}, nil
-	}
-	if geomType != WKBMultiPointID {
-		return MultiPoint{}, errors.New("not a multipoint")
-	}
-	buf = buf[EWKBHeaderSize:]
-	return DeserializeTypesMPoint(buf, false, srid), nil
-}
-
 func (v MultiPoint) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType, err := DeserializeEWKBHeader(buf)

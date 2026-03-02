@@ -51,7 +51,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
@@ -568,7 +567,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 var displayStrLen int
 
-func importStatsCB(stats types.AppliedEditStats) {
+func importStatsCB(stats mvdata.AppliedEditStats) {
 	noEffect := stats.NonExistentDeletes + stats.SameVal
 	total := noEffect + stats.Modifications + stats.Additions
 	p := message.NewPrinter(message.MatchLanguage("en")) // adds commas

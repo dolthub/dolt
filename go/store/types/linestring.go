@@ -129,19 +129,6 @@ func (v LineString) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func readLineString(nbf *NomsBinFormat, b *valueDecoder) (LineString, error) {
-	buf := []byte(b.ReadString())
-	srid, _, geomType, err := DeserializeEWKBHeader(buf)
-	if err != nil {
-		return LineString{}, err
-	}
-	if geomType != WKBLineID {
-		return LineString{}, errors.New("not a linestring")
-	}
-	buf = buf[EWKBHeaderSize:]
-	return DeserializeTypesLine(buf, false, srid), nil
-}
-
 func (v LineString) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType, err := DeserializeEWKBHeader(buf)

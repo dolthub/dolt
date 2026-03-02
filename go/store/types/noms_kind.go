@@ -22,8 +22,12 @@
 package types
 
 import (
+	"errors"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
+
+var ErrUnknownType = errors.New("unknown type $@")
 
 // NomsKind allows a TypeDesc to indicate what kind of type is described.
 type NomsKind uint8
@@ -90,7 +94,6 @@ func init() {
 	KindToType[IntKind] = Int(0)
 	KindToType[UintKind] = Uint(0)
 	KindToType[NullKind] = NullValue
-	KindToType[TupleKind] = Tuple{}
 	KindToType[InlineBlobKind] = InlineBlob{}
 	KindToType[TimestampKind] = Timestamp{}
 	KindToType[DecimalKind] = Decimal{}

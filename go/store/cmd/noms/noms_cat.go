@@ -179,13 +179,7 @@ func runCat(ctx context.Context, args []string) int {
 		}
 
 		if !catNoShow {
-			value, err := types.DecodeValue(chunk, vrw)
-
-			if err != nil {
-				fmt.Println("        error reading value (Could be a format issue).")
-				continue
-			}
-
+			value := types.SerialMessage(chunk.Data())
 			fmt.Printf("        chunk[%d].value.kind:  %s\n", cidx, value.Kind())
 			fmt.Printf("        chunk[%d].value:\n\n", cidx)
 			printValue(ctx, os.Stdout, value, filepath.Dir(chunkFile)+"::#"+b32Hash)

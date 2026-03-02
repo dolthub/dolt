@@ -28,7 +28,6 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
@@ -88,16 +87,15 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	db := sp.GetDatabase(context.Background())
 	vrw := sp.GetVRW(context.Background())
 
-	// Put a value into the db, get its raw serialization, then deserialize it and ensure it comes
-	// out to same thing.
+	// Put a value into the db, get its raw serialization, then verify we can read it back.
 	test := func(in types.Value) {
 		r1, err := vrw.WriteValue(context.Background(), in)
 		s.NoError(err)
 		datas.CommitValue(context.Background(), db, sp.GetDataset(context.Background()), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
 			spec.CreateValueSpecString("nbs", s.DBDir, "#"+r1.TargetHash().String())})
-		ch := chunks.NewChunk([]byte(res))
-		out, err := types.DecodeValue(ch, vrw)
+		s.NotEmpty(res, "show --raw should produce output")
+		out, err := vrw.ReadValue(context.Background(), r1.TargetHash())
 		s.NoError(err)
 		s.True(out.Equals(in))
 	}

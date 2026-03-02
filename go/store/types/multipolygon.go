@@ -121,19 +121,6 @@ func (v MultiPolygon) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func readMultiPolygon(nbf *NomsBinFormat, b *valueDecoder) (MultiPolygon, error) {
-	buf := []byte(b.ReadString())
-	srid, _, geomType, err := DeserializeEWKBHeader(buf)
-	if err != nil {
-		return MultiPolygon{}, err
-	}
-	if geomType != WKBMultiPolyID {
-		return MultiPolygon{}, errors.New("not a multipolygon")
-	}
-	buf = buf[EWKBHeaderSize:]
-	return DeserializeTypesMPoly(buf, false, srid), nil
-}
-
 func (v MultiPolygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType, err := DeserializeEWKBHeader(buf)

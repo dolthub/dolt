@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -39,8 +38,16 @@ const (
 	tableWriterStatUpdateRate = 64 * 1024
 )
 
+type AppliedEditStats struct {
+	Additions          int64
+	Modifications      int64
+	SameVal            int64
+	Deletions          int64
+	NonExistentDeletes int64
+}
+
 // StatsCb is a callback for reporting stats about the rows that have been processed so far
-type StatsCb func(types.AppliedEditStats)
+type StatsCb func(AppliedEditStats)
 
 // SqlEngineTableWriter is a utility for importing a set of rows through the sql engine.
 type SqlEngineTableWriter struct {
@@ -54,7 +61,7 @@ type SqlEngineTableWriter struct {
 	disableFks bool
 
 	statsCB StatsCb
-	stats   types.AppliedEditStats
+	stats   AppliedEditStats
 	statOps int32
 
 	importOption       TableImportOp

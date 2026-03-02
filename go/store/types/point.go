@@ -83,18 +83,6 @@ func (v Point) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func readPoint(nbf *NomsBinFormat, b *valueDecoder) (Point, error) {
-	buf := []byte(b.ReadString())
-	srid, _, geomType, err := DeserializeEWKBHeader(buf)
-	if err != nil {
-		return Point{}, err
-	}
-	if geomType != WKBPointID {
-		return Point{}, errors.New("not a point")
-	}
-	return DeserializeTypesPoint(buf[EWKBHeaderSize:], false, srid), nil
-}
-
 func (v Point) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType, err := DeserializeEWKBHeader(buf)

@@ -121,19 +121,6 @@ func (v GeomColl) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func readGeomColl(nbf *NomsBinFormat, b *valueDecoder) (GeomColl, error) {
-	buf := []byte(b.ReadString())
-	srid, _, geomType, err := DeserializeEWKBHeader(buf)
-	if err != nil {
-		return GeomColl{}, err
-	}
-	if geomType != WKBGeomCollID {
-		return GeomColl{}, errors.New("not a geometry collection")
-	}
-	buf = buf[EWKBHeaderSize:]
-	return DeserializeTypesGeomColl(buf, false, srid), nil
-}
-
 func (v GeomColl) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType, err := DeserializeEWKBHeader(buf)

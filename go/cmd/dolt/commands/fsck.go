@@ -562,12 +562,8 @@ func (rt *roundTripper) roundTripAndCategorizeChunk(chunk chunks.Chunk) {
 // decodeMsg attempts to decode the chunk into a human-readable string for error reporting.
 func (rt *roundTripper) decodeMsg(chk chunks.Chunk) string {
 	hrs := ""
-	val, err := types.DecodeValue(chk, rt.vs)
-	if err == nil {
-		hrs = val.HumanReadableString()
-	} else {
-		hrs = fmt.Sprintf("Unable to decode value: %s", err.Error())
-	}
+	val := types.SerialMessage(chk.Data())
+	hrs = val.HumanReadableString()
 	return hrs
 }
 

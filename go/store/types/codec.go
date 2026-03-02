@@ -31,7 +31,6 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -50,37 +49,6 @@ func EncodeValue(v Value, nbf *NomsBinFormat) (chunks.Chunk, error) {
 	}
 
 	return chunks.NewChunk(w.data()), nil
-}
-
-func decodeFromBytes(data []byte, vrw ValueReadWriter) (Value, error) {
-	dec := newValueDecoder(data, vrw)
-	v, err := dec.readValue(vrw.Format())
-
-	if err != nil {
-		return nil, err
-	}
-
-	d.PanicIfFalse(dec.pos() == uint32(len(data)))
-	return v, nil
-}
-
-func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter) (Value, error) {
-	r := binaryNomsReader{data, 0}
-	dec := newValueDecoderWithValidation(r, vrw)
-	v, err := dec.readValue(vrw.Format())
-
-	if err != nil {
-		return nil, err
-	}
-
-	d.PanicIfFalse(dec.pos() == uint32(len(data)))
-	return v, nil
-}
-
-// DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
-func DecodeValue(c chunks.Chunk, vrw ValueReadWriter) (Value, error) {
-	d.PanicIfTrue(c.IsEmpty())
-	return decodeFromBytes(c.Data(), vrw)
 }
 
 type nomsWriter interface {

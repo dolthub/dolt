@@ -15,6 +15,8 @@
 package row
 
 import (
+	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -35,7 +37,7 @@ type Row interface {
 
 func New(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) (Row, error) {
 	if schema.IsKeyless(sch) {
-		return keylessRowFromTaggedValued(nbf, sch, colVals)
+		return nil, fmt.Errorf("keyless rows are not supported in the legacy row format")
 	}
 	return pkRowFromTaggedValues(nbf, sch, colVals)
 }

@@ -100,38 +100,6 @@ func constructRef(nbf *NomsBinFormat, targetHash hash.Hash, targetType *Type, he
 	return Ref{valueImpl{nil, nbf, w.data(), offsets}}, nil
 }
 
-// readRef reads the data provided by a reader and moves the reader forward.
-func readRef(nbf *NomsBinFormat, dec *typedBinaryNomsReader) (Ref, error) {
-	start := dec.pos()
-	offsets, err := skipRef(dec)
-
-	if err != nil {
-		return Ref{}, err
-	}
-
-	end := dec.pos()
-	return Ref{valueImpl{nil, nbf, dec.byteSlice(start, end), offsets}}, nil
-}
-
-// skipRef moves the reader forward, past the data representing the Ref, and returns the offsets of the component parts.
-func skipRef(dec *typedBinaryNomsReader) ([]uint32, error) {
-	offsets := make([]uint32, refPartEnd)
-	offsets[refPartKind] = dec.pos()
-	dec.skipKind()
-	offsets[refPartTargetHash] = dec.pos()
-	dec.skipHash() // targetHash
-	offsets[refPartTargetType] = dec.pos()
-	err := dec.skipType() // targetType
-
-	if err != nil {
-		return nil, err
-	}
-
-	offsets[refPartHeight] = dec.pos()
-	dec.skipCount() // height
-	return offsets, nil
-}
-
 func maxChunkHeight(nbf *NomsBinFormat, v Value) (max uint64, err error) {
 	if _, ok := v.(SerialMessage); ok {
 		// Refs in SerialMessage do not have height. This should be taller than
@@ -158,9 +126,9 @@ func (r Ref) offsetAtPart(part refPart) uint32 {
 	return r.offsets[part] - r.offsets[refPartKind]
 }
 
-func (r Ref) decoderAtPart(part refPart) valueDecoder {
+func (r Ref) readerAtPart(part refPart) binaryNomsReader {
 	offset := r.offsetAtPart(part)
-	return newValueDecoder(r.buff[offset:], nil)
+	return binaryNomsReader{r.buff[offset:], 0}
 }
 
 func (r Ref) Format() *NomsBinFormat {
@@ -168,13 +136,13 @@ func (r Ref) Format() *NomsBinFormat {
 }
 
 func (r Ref) TargetHash() hash.Hash {
-	dec := r.decoderAtPart(refPartTargetHash)
-	return dec.readHash()
+	rdr := r.readerAtPart(refPartTargetHash)
+	return rdr.readHash()
 }
 
 func (r Ref) Height() uint64 {
-	dec := r.decoderAtPart(refPartHeight)
-	return dec.readCount()
+	rdr := r.readerAtPart(refPartHeight)
+	return rdr.readCount()
 }
 
 // TargetValue retrieves the value pointed to by the Ref from the provided ValueReader. It can return a nil Value
@@ -187,11 +155,6 @@ func (r Ref) TargetValue(ctx context.Context, vr ValueReader) (Value, error) {
 	return val, nil
 }
 
-func (r Ref) TargetType() (*Type, error) {
-	dec := r.decoderAtPart(refPartTargetType)
-	return dec.readType()
-}
-
 // Value interface
 func (r Ref) isPrimitive() bool {
 	return false
@@ -202,13 +165,7 @@ func (r Ref) Value(ctx context.Context) (Value, error) {
 }
 
 func (r Ref) typeOf() (*Type, error) {
-	t, err := r.TargetType()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return makeCompoundType(RefKind, t)
+	return makeCompoundType(RefKind, PrimitiveTypeMap[ValueKind])
 }
 
 func (r Ref) isSameTargetType(other Ref) bool {

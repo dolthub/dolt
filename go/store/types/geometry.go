@@ -96,29 +96,6 @@ func (v Geometry) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func readGeometry(nbf *NomsBinFormat, b *valueDecoder) (Geometry, error) {
-	buf := []byte(b.ReadString())
-	srid, _, geomType, err := DeserializeEWKBHeader(buf) // Assume it's always little endian
-	if err != nil {
-		return Geometry{}, err
-	}
-	buf = buf[EWKBHeaderSize:]
-	var inner Value
-	switch geomType {
-	case WKBPointID:
-		inner = DeserializeTypesPoint(buf, false, srid)
-	case WKBLineID:
-		inner = DeserializeTypesLine(buf, false, srid)
-	case WKBPolyID:
-		inner = DeserializeTypesPoly(buf, false, srid)
-	case WKBMultiPointID:
-		inner = DeserializeTypesMPoint(buf, false, srid)
-	default:
-		return Geometry{}, errors.New("not a geometry")
-	}
-	return Geometry{Inner: inner}, nil
-}
-
 func (v Geometry) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType, err := DeserializeEWKBHeader(buf) // Assume it's always little endian

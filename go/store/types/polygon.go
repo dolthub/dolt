@@ -121,19 +121,6 @@ func (v Polygon) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func readPolygon(nbf *NomsBinFormat, b *valueDecoder) (Polygon, error) {
-	buf := []byte(b.ReadString())
-	srid, _, geomType, err := DeserializeEWKBHeader(buf)
-	if err != nil {
-		return Polygon{}, err
-	}
-	if geomType != WKBPolyID {
-		return Polygon{}, errors.New("not a polygon")
-	}
-	buf = buf[EWKBHeaderSize:]
-	return DeserializeTypesPoly(buf, false, srid), nil
-}
-
 func (v Polygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType, err := DeserializeEWKBHeader(buf)

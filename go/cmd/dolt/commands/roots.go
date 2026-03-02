@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -113,38 +112,25 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 	defer rdCloser.Close()
 
 	return nbs.IterChunks(ctx, rdCloser.(io.ReadSeeker), func(chunk chunks.Chunk) (stop bool, err error) {
-		// Want a clean db every loop
-		sp, _ := spec.ForDatabase("mem")
-		vrw := sp.GetVRW(ctx)
-
-		value, err := types.DecodeValue(chunk, vrw)
-
-		if err != nil {
-			return false, err
-		}
-
-		if sm, ok := value.(types.SerialMessage); ok {
-			if serial.GetFileID(sm) == serial.StoreRootFileID {
-				msg, err := serial.TryGetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
-				if err != nil {
-					return false, err
-				}
-				ambytes := msg.AddressMapBytes()
-				node, fileId, err := tree.NodeFromBytes(ambytes)
-				if err != nil {
-					return false, err
-				}
-				if fileId != serial.AddressMapFileID {
-					return false, fmt.Errorf("unexpected file ID for address map, expected %s, found %s", serial.AddressMapFileID, fileId)
-				}
-				err = tree.OutputAddressMapNode(cli.OutStream, node)
-				if err != nil {
-					return false, err
-				}
-				cli.Println()
+		sm := types.SerialMessage(chunk.Data())
+		if serial.GetFileID(sm) == serial.StoreRootFileID {
+			msg, err := serial.TryGetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
+			if err != nil {
+				return false, err
 			}
-		} else {
-			return false, fmt.Errorf("unexpected value type found in table file: %T", value)
+			ambytes := msg.AddressMapBytes()
+			node, fileId, err := tree.NodeFromBytes(ambytes)
+			if err != nil {
+				return false, err
+			}
+			if fileId != serial.AddressMapFileID {
+				return false, fmt.Errorf("unexpected file ID for address map, expected %s, found %s", serial.AddressMapFileID, fileId)
+			}
+			err = tree.OutputAddressMapNode(cli.OutStream, node)
+			if err != nil {
+				return false, err
+			}
+			cli.Println()
 		}
 
 		return false, nil

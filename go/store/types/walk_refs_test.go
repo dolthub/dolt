@@ -52,10 +52,9 @@ func TestWalkRefs(t *testing.T) {
 		})
 	})
 
-	t.Run("Tuple", func(t *testing.T) {
+	t.Run("Ref", func(t *testing.T) {
 		t.Parallel()
-		tup, err := NewTuple(Format_Default, mustRef(NewRef(Bool(false), Format_Default)), Float(42))
-		require.NoError(t, err)
-		runTest(Format_Default, tup, t)
+		ref := mustRef(NewRef(Bool(false), Format_Default))
+		runTest(Format_Default, ref, t)
 	})
 }

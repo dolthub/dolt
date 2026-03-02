@@ -16,10 +16,8 @@ package types
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -50,37 +48,6 @@ func emptyJSONDoc(nbf *NomsBinFormat) JSON {
 	}
 
 	return JSON{valueImpl{nil, nbf, w.data(), nil}}
-}
-
-// readJSON reads the data provided by a decoder and moves the decoder forward.
-func readJSON(nbf *NomsBinFormat, dec *valueDecoder) (JSON, error) {
-	start := dec.pos()
-
-	k := dec.PeekKind()
-	if k == NullKind {
-		dec.skipKind()
-		return emptyJSONDoc(nbf), nil
-	}
-	if k != JSONKind {
-		return JSON{}, errors.New("current value is not a JSON")
-	}
-
-	if err := skipJSON(nbf, dec); err != nil {
-		return JSON{}, err
-	}
-
-	end := dec.pos()
-	return JSON{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}, nil
-}
-
-func skipJSON(nbf *NomsBinFormat, dec *valueDecoder) error {
-	dec.skipKind()
-	return dec.SkipValue(nbf)
-}
-
-func walkJSON(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
-	r.skipKind()
-	return r.walkValue(nbf, cb)
 }
 
 // CopyOf creates a copy of a JSON.  This is necessary in cases where keeping a reference to the original JSON is
@@ -117,20 +84,8 @@ func (t JSON) Value(ctx context.Context) (Value, error) {
 	return t, nil
 }
 
-// Inner returns the JSON value's inner value.
-func (t JSON) Inner() (Value, error) {
-	dec := newValueDecoder(t.buff, t.vrw)
-	dec.skipKind()
-	return dec.readValue(t.nbf)
-}
-
-// typeOf implements the Value interface.
 func (t JSON) typeOf() (*Type, error) {
-	val, err := t.Inner()
-	if err != nil {
-		return nil, err
-	}
-	return val.typeOf()
+	return PrimitiveTypeMap[JSONKind], nil
 }
 
 // Kind implements the Valuable interface.
@@ -150,32 +105,18 @@ func (t JSON) isPrimitive() bool {
 
 // Less implements the LesserValuable interface.
 func (t JSON) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	otherJSONDoc, ok := other.(JSON)
-	if !ok {
+	if _, ok := other.(JSON); !ok {
 		return JSONKind < other.Kind(), nil
 	}
-
-	cmp, err := t.Compare(ctx, otherJSONDoc)
+	h1, err := t.Hash(nbf)
 	if err != nil {
 		return false, err
 	}
-
-	return cmp == -1, nil
-}
-
-// Compare implements MySQL JSON type compare semantics.
-func (t JSON) Compare(ctx context.Context, other JSON) (int, error) {
-	left, err := t.Inner()
+	h2, err := other.(JSON).Hash(nbf)
 	if err != nil {
-		return 0, err
+		return false, err
 	}
-
-	right, err := other.Inner()
-	if err != nil {
-		return 0, err
-	}
-
-	return compareJSON(ctx, left, right)
+	return h1.Compare(h2) < 0, nil
 }
 
 func (t JSON) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
@@ -186,98 +127,12 @@ func (t JSON) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 	panic("unreachable")
 }
 
-// HumanReadableString implements the Value interface.
 func (t JSON) HumanReadableString() string {
-	val, err := t.Inner()
-	if err != nil {
-		d.PanicIfError(err)
-	}
-	h, err := val.Hash(t.nbf)
+	h, err := t.Hash(t.nbf)
 	if err != nil {
 		d.PanicIfError(err)
 	}
 	return fmt.Sprintf("JSON(%s)", h.String())
-}
-
-func compareJSON(ctx context.Context, a, b Value) (int, error) {
-	aNull := a.Kind() == NullKind
-	bNull := b.Kind() == NullKind
-	if aNull && bNull {
-		return 0, nil
-	} else if aNull && !bNull {
-		return -1, nil
-	} else if !aNull && bNull {
-		return 1, nil
-	}
-
-	switch a := a.(type) {
-	case Bool:
-		return compareJSONBool(a, b)
-	case String:
-		return compareJSONString(a, b)
-	case Float:
-		return compareJSONNumber(a, b)
-	default:
-		return 0, fmt.Errorf("unexpected type: %v", a)
-	}
-}
-
-func compareJSONBool(a Bool, b Value) (int, error) {
-	switch b := b.(type) {
-	case Bool:
-		// The JSON false literal is less than the JSON true literal.
-		if a == b {
-			return 0, nil
-		}
-		if a {
-			// a > b
-			return 1, nil
-		} else {
-			// a < b
-			return -1, nil
-		}
-
-	default:
-		// a is higher precedence
-		return 1, nil
-	}
-}
-
-func compareJSONString(a String, b Value) (int, error) {
-	switch b := b.(type) {
-	case Bool:
-		// a is lower precedence
-		return -1, nil
-
-	case String:
-		return strings.Compare(string(a), string(b)), nil
-
-	default:
-		// a is higher precedence
-		return 1, nil
-	}
-}
-
-func compareJSONNumber(a Float, b Value) (int, error) {
-	switch b := b.(type) {
-	case
-		Bool,
-		String:
-		// a is lower precedence
-		return -1, nil
-
-	case Float:
-		if a > b {
-			return 1, nil
-		} else if a < b {
-			return -1, nil
-		}
-		return 0, nil
-
-	default:
-		// a is higher precedence
-		return 1, nil
-	}
 }
 
 // UnescapeHTMLCodepoints replaces escaped HTML characters in serialized JSON with their unescaped equivalents.

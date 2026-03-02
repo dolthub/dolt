@@ -121,19 +121,6 @@ func (v MultiLineString) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func readMultiLineString(nbf *NomsBinFormat, b *valueDecoder) (MultiLineString, error) {
-	buf := []byte(b.ReadString())
-	srid, _, geomType, err := DeserializeEWKBHeader(buf)
-	if err != nil {
-		return MultiLineString{}, err
-	}
-	if geomType != WKBMultiLineID {
-		return MultiLineString{}, errors.New("not a multilinestring")
-	}
-	buf = buf[EWKBHeaderSize:]
-	return DeserializeTypesMLine(buf, false, srid), nil
-}
-
 func (v MultiLineString) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType, err := DeserializeEWKBHeader(buf)

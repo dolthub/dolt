@@ -200,10 +200,7 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 		return nil, nil
 	}
 
-	v, err := DecodeValue(chunk, lvs)
-	if err != nil {
-		return nil, err
-	}
+	v := Value(SerialMessage(chunk.Data()))
 
 	if v == nil {
 		return nil, errors.New("decoded value is empty")
@@ -240,11 +237,7 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 			return GhostValue{hash: chunk.Hash()}, nil
 		}
 
-		v, ferr := DecodeValue(*chunk, lvs)
-
-		if ferr != nil {
-			return nil, ferr
-		}
+		v := Value(SerialMessage(chunk.Data()))
 
 		if v == nil {
 			return nil, errors.New("decoded value is empty")
