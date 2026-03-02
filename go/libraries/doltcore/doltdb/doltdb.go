@@ -2166,10 +2166,11 @@ func (ddb *DoltDB) TableFileStoreHasJournal(ctx context.Context) (bool, error) {
 	if !ok {
 		return false, errors.New("unsupported operation, doltDB.TableFileStoreHasManifest on non-TableFileStore")
 	}
-	_, tableFiles, _, err := tableFileStore.Sources(ctx)
+	tfsources, err := tableFileStore.Sources(ctx)
 	if err != nil {
 		return false, err
 	}
+	tableFiles := tfsources.TableFiles
 	for _, tableFile := range tableFiles {
 		if tableFile.FileID() == chunks.JournalFileID {
 			return true, nil

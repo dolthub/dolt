@@ -107,11 +107,11 @@ func TestNBSAsTableFileStore(t *testing.T) {
 	}()
 	fileToData := populateLocalStore(t, st, numTableFiles)
 
-	_, sources, _, err := st.Sources(ctx)
+	tfsources, err := st.Sources(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, numTableFiles, len(sources))
+	assert.Equal(t, numTableFiles, len(tfsources.TableFiles))
 
-	for _, src := range sources {
+	for _, src := range tfsources.TableFiles {
 		fileID := src.FileID()
 		expected, ok := fileToData[fileID]
 		require.True(t, ok)
@@ -187,9 +187,9 @@ func (s tableFileSet) findAbsent(ftd fileToData) (absent []string) {
 	return absent
 }
 
-func tableFileSetFromSources(sources []chunks.TableFile) (s tableFileSet) {
-	s = make(tableFileSet, len(sources))
-	for _, src := range sources {
+func tableFileSetFromSources(sources chunks.TableFileSources) (s tableFileSet) {
+	s = make(tableFileSet, len(sources.TableFiles))
+	for _, src := range sources.TableFiles {
 		s[src.FileID()] = src
 	}
 	return s
@@ -225,12 +225,12 @@ func TestNBSPruneTableFiles(t *testing.T) {
 
 	waitForConjoin(st)
 
-	_, sources, _, err := st.Sources(ctx)
+	tfsources, err := st.Sources(ctx)
 	require.NoError(t, err)
-	assert.Greater(t, numTableFiles, len(sources))
+	assert.Greater(t, numTableFiles, len(tfsources.TableFiles))
 
 	// find which input table files were conjoined
-	tfSet := tableFileSetFromSources(sources)
+	tfSet := tableFileSetFromSources(tfsources)
 	absent := tfSet.findAbsent(fileToData)
 	// assert some input table files were conjoined
 	assert.NotEmpty(t, absent)
@@ -251,7 +251,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	}
 
 	preGC := currTableFiles(nomsDir)
-	for _, tf := range sources {
+	for _, tf := range tfsources.TableFiles {
 		assert.True(t, preGC.Contains(tf.FileID()))
 	}
 	for _, fileName := range toDelete {
@@ -262,7 +262,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	postGC := currTableFiles(nomsDir)
-	for _, tf := range sources {
+	for _, tf := range tfsources.TableFiles {
 		assert.True(t, postGC.Contains(tf.FileID()))
 	}
 	for _, fileName := range absent {
@@ -276,7 +276,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 
 	// assert that we only have files for current sources,
 	// the manifest, and the lock file
-	assert.Equal(t, len(sources)+2, len(infos))
+	assert.Equal(t, len(tfsources.TableFiles)+2, len(infos))
 
 	size, err := st.Size(ctx)
 	require.NoError(t, err)

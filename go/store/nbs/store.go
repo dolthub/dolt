@@ -1665,7 +1665,7 @@ func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 
 // Sources retrieves the current root hash, a list of all table files (which may include appendix tablefiles),
 // and a second list of only the appendix table files
-func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
+func (nbs *NomsBlockStore) Sources(ctx context.Context) (chunks.TableFileSources, error) {
 	valctx.ValidateContext(ctx)
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -1673,33 +1673,37 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.Tab
 	exists, contents, err := nbs.manifestMgr.m.ParseIfExists(ctx, nbs.stats, nil)
 
 	if err != nil {
-		return hash.Hash{}, nil, nil, err
+		return chunks.TableFileSources{}, err
 	}
 
 	if !exists {
-		return hash.Hash{}, nil, nil, nil
+		return chunks.TableFileSources{}, nil
 	}
 
 	css, err := nbs.chunkSourcesByAddr()
 	if err != nil {
-		return hash.Hash{}, nil, nil, err
+		return chunks.TableFileSources{}, err
 	}
 
 	appendixTableFiles, err := getTableFiles(css, nbs.fatalBehavior, contents, contents.NumAppendixSpecs(), func(mc manifestContents, idx int) tableSpec {
 		return mc.getAppendixSpec(idx)
 	})
 	if err != nil {
-		return hash.Hash{}, nil, nil, err
+		return chunks.TableFileSources{}, err
 	}
 
 	allTableFiles, err := getTableFiles(css, nbs.fatalBehavior, contents, contents.NumTableSpecs(), func(mc manifestContents, idx int) tableSpec {
 		return mc.getSpec(idx)
 	})
 	if err != nil {
-		return hash.Hash{}, nil, nil, err
+		return chunks.TableFileSources{}, err
 	}
 
-	return contents.GetRoot(), allTableFiles, appendixTableFiles, nil
+	return chunks.TableFileSources{
+		Root: contents.GetRoot(),
+		TableFiles: allTableFiles,
+		AppendixTableFiles: appendixTableFiles,
+	}, nil
 }
 
 func getTableFiles(css map[hash.Hash]chunkSource, behavior dherrors.FatalBehavior, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]chunks.TableFile, error) {

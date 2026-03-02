@@ -43,7 +43,7 @@ var _ chunks.ChunkStoreGarbageCollector = &NBSMetricWrapper{}
 
 // Sources retrieves the current root hash, a list of all the table files,
 // and a list of the appendix table files.
-func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
+func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (chunks.TableFileSources, error) {
 	return nbsMW.nbs.Sources(ctx)
 }
 

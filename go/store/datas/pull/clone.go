@@ -94,10 +94,13 @@ func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.Tab
 const concurrentTableFileDownloads = 3
 
 func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, eventCh chan<- TableFileEvent) error {
-	root, sourceFiles, appendixFiles, err := srcTS.Sources(ctx)
+	sources, err := srcTS.Sources(ctx)
 	if err != nil {
 		return err
 	}
+	root := sources.Root
+	sourceFiles := sources.TableFiles
+	appendixFiles := sources.AppendixTableFiles
 
 	tblFiles := filterAppendicesFromSourceFiles(appendixFiles, sourceFiles)
 	report := func(e TableFileEvent) {
@@ -205,10 +208,10 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 		if failureCount >= maxAttempts {
 			return err
 		}
-		if _, refreshedSourceFiles, refreshedAppendixFiles, err := srcTS.Sources(ctx); err != nil {
+		if refreshSources, err := srcTS.Sources(ctx); err != nil {
 			return err
 		} else {
-			refreshedTblFiles := filterAppendicesFromSourceFiles(refreshedAppendixFiles, refreshedSourceFiles)
+			refreshedTblFiles := filterAppendicesFromSourceFiles(refreshSources.AppendixTableFiles, refreshSources.TableFiles)
 			_, refreshedFileIDToTF, _ := mapTableFiles(refreshedTblFiles)
 			// Sources() will refresh remote table file
 			// sources with new download URLs. However, it

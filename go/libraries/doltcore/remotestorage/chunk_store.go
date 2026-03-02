@@ -1130,19 +1130,23 @@ func (dcs *DoltChunkStore) PruneTableFiles(ctx context.Context) error {
 
 // Sources retrieves the current root hash, a list of all the table files (which may include appendix table files)
 // and a list of only appendix table files
-func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
+func (dcs *DoltChunkStore) Sources(ctx context.Context) (chunks.TableFileSources, error) {
 	id, token := dcs.getRepoId()
 	req := &remotesapi.ListTableFilesRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token}
 	resp, err := dcs.csClient.ListTableFiles(ctx, req)
 	if err != nil {
-		return hash.Hash{}, nil, nil, NewRpcError(err, "ListTableFiles", dcs.host, req)
+		return chunks.TableFileSources{}, NewRpcError(err, "ListTableFiles", dcs.host, req)
 	}
 	if resp.RepoToken != "" {
 		dcs.repoToken.Store(resp.RepoToken)
 	}
 	sourceFiles := getTableFiles(dcs, resp.TableFileInfo)
 	appendixFiles := getTableFiles(dcs, resp.AppendixTableFileInfo)
-	return hash.New(resp.RootHash), sourceFiles, appendixFiles, nil
+	return chunks.TableFileSources{
+		Root:               hash.New(resp.RootHash),
+		TableFiles:         sourceFiles,
+		AppendixTableFiles: appendixFiles,
+	}, nil
 }
 
 func getTableFiles(dcs *DoltChunkStore, infoList []*remotesapi.TableFileInfo) []chunks.TableFile {
