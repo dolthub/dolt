@@ -869,9 +869,15 @@ func encodeBytesFromAddress(ctx *sql.Context, addr hash.Hash, ns tree.NodeStore,
 	if ns == nil {
 		return nil, fmt.Errorf("nil NodeStore used to encode bytes from address")
 	}
-	bytes, err := ns.ReadBytes(ctx, addr)
-	if err != nil {
-		return nil, err
+
+	// A zero hash address means empty content (e.g. empty string stored without
+	// an out-of-band chunk). Skip the ChunkStore lookup and encode zero-length data.
+	var bytes []byte
+	if !addr.IsEmpty() {
+		bytes, err = ns.ReadBytes(ctx, addr)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	blobType := typ.(sql.StringType)
