@@ -19,6 +19,10 @@ on:
       commit_sha:
         description: 'exact commit SHA to build from'
         required: false
+      skip_rpm:
+        description: 'skips rpm releases for older dolt releases'
+        required: false
+        default: false
 
   repository_dispatch:
     types: [ pgo-release ]
@@ -184,6 +188,7 @@ jobs:
           asset_name: install.sh
           asset_content_type: text/plain
       - name: Upload Linux AMD64 RPM
+        if: ${{ !github.event.inputs.skip_rpm }}
         id: upload-linux-amd64-rpm
         uses: dolthub/upload-release-asset@v2
         env:
@@ -194,6 +199,7 @@ jobs:
           asset_name: dolt-${{ needs.format-version.outputs.version }}-1.x86_64.rpm
           asset_content_type: application/zip
       - name: Upload Linux ARM64 RPM
+        if: ${{ !github.event.inputs.skip_rpm }}
         id: upload-linux-arm64-rpm
         uses: dolthub/upload-release-asset@v2
         env:
