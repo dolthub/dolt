@@ -22,11 +22,8 @@
 package types
 
 import (
-	"bytes"
-	"context"
 	"math"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,24 +130,6 @@ func TestRoundTrips(t *testing.T) {
 	require.NoError(t, err)
 	assertRoundTrips(st)
 
-	ll, err := newListLeafSequence(vs, Float(4), Float(5), Float(6), Float(7))
-	require.NoError(t, err)
-	listLeaf := newList(ll)
-	assertRoundTrips(listLeaf)
-
-	ref, err := NewRef(listLeaf, vs.Format())
-	require.NoError(t, err)
-	k10, err := orderedKeyFromInt(10, vs.Format())
-	require.NoError(t, err)
-	k20, err := orderedKeyFromInt(20, vs.Format())
-	require.NoError(t, err)
-	mt1, err := newMetaTuple(ref, k10, 10)
-	require.NoError(t, err)
-	mt2, err := newMetaTuple(ref, k20, 20)
-	require.NoError(t, err)
-	mseq, err := newListMetaSequence(1, []metaTuple{mt1, mt2}, vs)
-	require.NoError(t, err)
-	assertRoundTrips(newList(mseq))
 }
 
 func TestWritePrimitives(t *testing.T) {
@@ -197,27 +176,6 @@ func TestWritePrimitives(t *testing.T) {
 		String("hi"))
 }
 
-func TestWriteSimpleBlob(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			BlobKind, uint64(0), []byte{0x00, 0x01},
-		},
-		mustValue(NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01}))),
-	)
-}
-
-func TestWriteList(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			ListKind, uint64(0), uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
-		},
-		mustValue(NewList(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))),
-	)
-}
 func TestWriteTuple(t *testing.T) {
 	vrw := newTestValueStore()
 	assertEncoding(t,
@@ -225,99 +183,6 @@ func TestWriteTuple(t *testing.T) {
 			TupleKind, uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
 		mustValue(NewTuple(vrw.Format(), Float(0), Float(1), Float(2), Float(3))),
-	)
-}
-
-func TestWriteListOfList(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			ListKind, uint64(0),
-			uint64(2), // len
-			ListKind, uint64(0), uint64(1) /* len */, FloatKind, Float(0),
-			ListKind, uint64(0), uint64(3) /* len */, FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
-		},
-		mustValue(NewList(context.Background(), vrw,
-			mustList(NewList(context.Background(), vrw, Float(0))),
-			mustList(NewList(context.Background(), vrw, Float(1), Float(2), Float(3))))),
-	)
-}
-
-func TestWriteSet(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			SetKind, uint64(0), uint64(4), /* len */
-			FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
-		},
-		mustValue(NewSet(context.Background(), vrw, Float(3), Float(1), Float(2), Float(0))),
-	)
-}
-
-func TestWriteSetOfSet(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			SetKind, uint64(0), uint64(2), // len
-			SetKind, uint64(0), uint64(3) /* len */, FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
-			SetKind, uint64(0), uint64(1) /* len */, FloatKind, Float(0),
-		},
-		mustValue(NewSet(context.Background(), vrw,
-			mustValue(NewSet(context.Background(), vrw, Float(0))),
-			mustValue(NewSet(context.Background(), vrw, Float(1), Float(2), Float(3))))),
-	)
-}
-
-func TestWriteMap(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			MapKind, uint64(0), uint64(3), /* len */
-			StringKind, "a", BoolKind, false,
-			StringKind, "b", BoolKind, true,
-			StringKind, "c", TupleKind, uint64(1), FloatKind, Float(1.0),
-		},
-		mustValue(NewMap(context.Background(), vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), mustValue(NewTuple(vrw.Format(), Float(1.0))))),
-	)
-}
-
-func TestWriteMapOfMap(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			MapKind, uint64(0), uint64(1), // len
-			MapKind, uint64(0), uint64(1) /* len */, StringKind, "a", FloatKind, Float(0),
-			SetKind, uint64(0), uint64(1) /* len */, BoolKind, true,
-		},
-		mustValue(NewMap(context.Background(), vrw,
-			mustValue(NewMap(context.Background(), vrw, String("a"), Float(0))),
-			mustValue(NewSet(context.Background(), vrw, Bool(true))))),
-	)
-}
-
-func TestWriteCompoundBlob(t *testing.T) {
-	r1 := hash.Parse("00000000000000000000000000000001")
-	r2 := hash.Parse("00000000000000000000000000000002")
-	r3 := hash.Parse("00000000000000000000000000000003")
-	vrw := newTestValueStore()
-	assertEncoding(t,
-		[]interface{}{
-			BlobKind, uint64(1),
-			uint64(3), // len
-			RefKind, r1, BlobKind, uint64(11), FloatKind, Float(20), uint64(20),
-			RefKind, r2, BlobKind, uint64(22), FloatKind, Float(40), uint64(40),
-			RefKind, r3, BlobKind, uint64(33), FloatKind, Float(60), uint64(60),
-		},
-		newBlob(mustSeq(newBlobMetaSequence(1, []metaTuple{
-			mustMetaTuple(newMetaTuple(mustRef(constructRef(vrw.Format(), r1, PrimitiveTypeMap[BlobKind], 11)), mustOrdKey(orderedKeyFromInt(20, vrw.Format())), 20)),
-			mustMetaTuple(newMetaTuple(mustRef(constructRef(vrw.Format(), r2, PrimitiveTypeMap[BlobKind], 22)), mustOrdKey(orderedKeyFromInt(40, vrw.Format())), 40)),
-			mustMetaTuple(newMetaTuple(mustRef(constructRef(vrw.Format(), r3, PrimitiveTypeMap[BlobKind], 33)), mustOrdKey(orderedKeyFromInt(60, vrw.Format())), 60)),
-		}, vrw))),
 	)
 }
 
@@ -368,28 +233,6 @@ func TestWriteStructTooMuchData(t *testing.T) {
 	})
 }
 
-func TestWriteStructWithList(t *testing.T) {
-	vrw := newTestValueStore()
-
-	// struct S {l: List<String>}({l: ["a", "b"]})
-	assertEncoding(t,
-		[]interface{}{
-			StructKind, "S", uint64(1), /* len */
-			"l", ListKind, uint64(0), uint64(2) /* len */, StringKind, "a", StringKind, "b",
-		},
-		mustValue(NewStruct(vrw.Format(), "S", StructData{"l": mustValue(NewList(context.Background(), vrw, String("a"), String("b")))})),
-	)
-
-	// struct S {l: List<>}({l: []})
-	assertEncoding(t,
-		[]interface{}{
-			StructKind, "S", uint64(1), /* len */
-			"l", ListKind, uint64(0), uint64(0), /* len */
-		},
-		mustValue(NewStruct(vrw.Format(), "S", StructData{"l": mustList(NewList(context.Background(), vrw))})),
-	)
-}
-
 func TestWriteStructWithTuple(t *testing.T) {
 	vrw := newTestValueStore()
 	// struct S {l: List<String>}({l: ["a", "b"]})
@@ -430,142 +273,6 @@ func TestWriteStructWithStruct(t *testing.T) {
 	)
 }
 
-func TestWriteStructWithBlob(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			StructKind, "S", uint64(1), /* len */
-			"b", BlobKind, uint64(0), []byte{0x00, 0x01},
-		},
-		mustValue(NewStruct(vrw.Format(), "S", StructData{"b": mustBlob(NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01})))})),
-	)
-}
-
-func TestWriteCompoundList(t *testing.T) {
-	vrw := newTestValueStore()
-
-	list1 := newList(mustSeq(newListLeafSequence(vrw, Float(0))))
-	list2 := newList(mustSeq(newListLeafSequence(vrw, Float(1), Float(2), Float(3))))
-	assertEncoding(t,
-		[]interface{}{
-			ListKind, uint64(1), uint64(2), // len,
-			RefKind, mustHash(list1.Hash(vrw.Format())), ListKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(1),
-			RefKind, mustHash(list2.Hash(vrw.Format())), ListKind, FloatKind, uint64(1), FloatKind, Float(3), uint64(3),
-		},
-		newList(mustSeq(newListMetaSequence(1, []metaTuple{
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(list1, vrw.Format())), mustOrdKey(orderedKeyFromInt(1, vrw.Format())), 1)),
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(list2, vrw.Format())), mustOrdKey(orderedKeyFromInt(3, vrw.Format())), 3)),
-		}, vrw))),
-	)
-}
-
-func TestWriteCompoundSet(t *testing.T) {
-	vrw := newTestValueStore()
-
-	sls, err := newSetLeafSequence(vrw, Float(0), Float(1))
-	require.NoError(t, err)
-	sls2, err := newSetLeafSequence(vrw, Float(2), Float(3), Float(4))
-	require.NoError(t, err)
-	set1 := newSet(sls)
-	set2 := newSet(sls2)
-
-	assertEncoding(t,
-		[]interface{}{
-			SetKind, uint64(1), uint64(2), // len,
-			RefKind, mustHash(set1.Hash(vrw.Format())), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
-			RefKind, mustHash(set2.Hash(vrw.Format())), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
-		},
-		newSet(mustOrdSeq(newSetMetaSequence(1, []metaTuple{
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(set1, vrw.Format())), mustOrdKey(orderedKeyFromInt(1, vrw.Format())), 2)),
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(set2, vrw.Format())), mustOrdKey(orderedKeyFromInt(4, vrw.Format())), 3)),
-		}, vrw))),
-	)
-}
-
-func TestWriteCompoundSetOfBlobs(t *testing.T) {
-	vrw := newTestValueStore()
-
-	// Blobs are interesting because unlike the numbers used in TestWriteCompondSet, refs are sorted by their hashes, not their value.
-	newBlobOfInt := func(i int) Blob {
-		return mustBlob(NewBlob(context.Background(), vrw, strings.NewReader(strconv.Itoa(i))))
-	}
-
-	blob0 := newBlobOfInt(0)
-	blob1 := newBlobOfInt(1)
-	blob2 := newBlobOfInt(2)
-	blob3 := newBlobOfInt(3)
-	blob4 := newBlobOfInt(4)
-
-	set1 := newSet(mustOrdSeq(newSetLeafSequence(vrw, blob0, blob1)))
-	set2 := newSet(mustOrdSeq(newSetLeafSequence(vrw, blob2, blob3, blob4)))
-
-	assertEncoding(t,
-		[]interface{}{
-			SetKind, uint64(1), uint64(2), // len,
-			RefKind, mustHash(set1.Hash(vrw.Format())), SetKind, BlobKind, uint64(1), hashKind, mustHash(blob1.Hash(vrw.Format())), uint64(2),
-			RefKind, mustHash(set2.Hash(vrw.Format())), SetKind, BlobKind, uint64(1), hashKind, mustHash(blob4.Hash(vrw.Format())), uint64(3),
-		},
-		newSet(mustOrdSeq(newSetMetaSequence(1, []metaTuple{
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(set1, vrw.Format())), mustOrdKey(newOrderedKey(blob1, vrw.Format())), 2)),
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(set2, vrw.Format())), mustOrdKey(newOrderedKey(blob4, vrw.Format())), 3)),
-		}, vrw))),
-	)
-}
-
-func TestWriteListOfUnion(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		// Note that the order of members in a union is determined based on a hash computation; the particular ordering of Float, Bool, String was determined empirically. This must not change unless deliberately and explicitly revving the persistent format.
-		[]interface{}{
-			ListKind, uint64(0),
-			uint64(4) /* len */, StringKind, "0", FloatKind, Float(1), StringKind, "2", BoolKind, true,
-		},
-		mustList(NewList(context.Background(), vrw,
-			String("0"),
-			Float(1),
-			String("2"),
-			Bool(true),
-		)),
-	)
-}
-
-func TestWriteListOfStruct(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			ListKind, uint64(0), uint64(1), /* len */
-			StructKind, "S", uint64(1) /* len */, "x", FloatKind, Float(42),
-		},
-		mustValue(NewList(context.Background(), vrw, mustValue(NewStruct(vrw.Format(), "S", StructData{"x": Float(42)})))),
-	)
-}
-
-func TestWriteListOfUnionWithType(t *testing.T) {
-	vrw := newTestValueStore()
-
-	structType, err := MakeStructType("S", StructField{PrimitiveTypeMap[FloatKind], "x", false})
-	require.NoError(t, err)
-
-	assertEncoding(t,
-		[]interface{}{
-			ListKind, uint64(0), uint64(4), /* len */
-			BoolKind, true,
-			TypeKind, FloatKind,
-			TypeKind, TypeKind,
-			TypeKind, StructKind, "S", uint64(1) /* len */, "x", FloatKind, false,
-		},
-		mustList(NewList(context.Background(), vrw,
-			Bool(true),
-			PrimitiveTypeMap[FloatKind],
-			PrimitiveTypeMap[TypeKind],
-			structType,
-		)),
-	)
-}
-
 func TestWriteRef(t *testing.T) {
 	r := hash.Parse("0123456789abcdefghijklmnopqrstuv")
 	vrw := newTestValueStore()
@@ -575,40 +282,5 @@ func TestWriteRef(t *testing.T) {
 			RefKind, r, FloatKind, uint64(4),
 		},
 		mustValue(constructRef(vrw.Format(), r, PrimitiveTypeMap[FloatKind], 4)),
-	)
-}
-
-func TestWriteListOfTypes(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			ListKind, uint64(0), uint64(2), /* len */
-			TypeKind, BoolKind, TypeKind, StringKind,
-		},
-		mustValue(NewList(context.Background(), vrw, PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])),
-	)
-}
-
-func TestWriteUnionList(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			ListKind, uint64(0), uint64(3), /* len */
-			FloatKind, Float(23), StringKind, "hi", FloatKind, Float(42),
-		},
-		mustValue(NewList(context.Background(), vrw, Float(23), String("hi"), Float(42))),
-	)
-}
-
-func TestWriteEmptyUnionList(t *testing.T) {
-	vrw := newTestValueStore()
-
-	assertEncoding(t,
-		[]interface{}{
-			ListKind, uint64(0), uint64(0), /* len */
-		},
-		mustValue(NewList(context.Background(), vrw)),
 	)
 }

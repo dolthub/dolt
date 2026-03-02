@@ -81,13 +81,9 @@ var KindToType = make([]Value, 255)
 var SupportedKinds = make([]bool, 255)
 
 func init() {
-	KindToType[BlobKind] = Blob{}
 	KindToType[BoolKind] = Bool(false)
-	KindToType[ListKind] = List{}
-	KindToType[MapKind] = Map{}
 	KindToType[FloatKind] = Float(0)
 	KindToType[RefKind] = Ref{}
-	KindToType[SetKind] = Set{}
 	KindToType[StructKind] = Struct{}
 	KindToType[StringKind] = String("")
 	KindToType[TypeKind] = &Type{}

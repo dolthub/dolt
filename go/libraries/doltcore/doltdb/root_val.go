@@ -201,24 +201,7 @@ var EmptyRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tre
 		return NewRootValue(ctx, vrw, ns, types.SerialMessage(bs))
 	}
 
-	empty, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return nil, err
-	}
-
-	sd := types.StructData{
-		tablesKey:       empty,
-		superSchemasKey: empty,
-		foreignKeyKey:   empty,
-		featureVersKey:  types.Int(DoltFeatureVersion),
-	}
-
-	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewRootValue(ctx, vrw, ns, st)
+	return nil, fmt.Errorf("unsupported storage format: flatbuffers format required")
 }
 
 // LoadRootValueFromRootIshAddr takes the hash of the commit or the hash of a

@@ -39,8 +39,6 @@ func TestCompareTotalOrdering(t *testing.T) {
 		Float(-10), Float(0), Float(10),
 		String("a"), String("b"), String("c"),
 
-		// The order of these are done by the hash.
-		mustValue(NewSet(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))),
 		PrimitiveTypeMap[BoolKind],
 
 		// Value - values cannot be value

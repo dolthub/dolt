@@ -118,17 +118,6 @@ func TestGenericStructSet(t *testing.T) {
 		StructField{PrimitiveTypeMap[FloatKind], "x", false},
 	)).Equals(mustType(TypeOf(s5))))
 
-	// Subtype is not equal.
-	s6, err := NewStruct(vs.Format(), "", StructData{"l": mustList(NewList(context.Background(), vs, Float(0), Float(1), Bool(false), Bool(true)))})
-	require.NoError(t, err)
-	s7, err := s6.Set("l", mustList(NewList(context.Background(), vs, Float(2), Float(3))))
-	require.NoError(t, err)
-	t7, err := MakeStructTypeFromFields("", FieldMap{
-		"l": mustType(MakeListType(PrimitiveTypeMap[FloatKind])),
-	})
-	require.NoError(t, err)
-	assert.True(t7.Equals(mustType(TypeOf(s7))))
-
 	s8, err := NewStruct(vs.Format(), "S", StructData{"a": Bool(true), "c": Bool(true)})
 	require.NoError(t, err)
 	s9, err := s8.Set("b", Bool(true))
@@ -228,52 +217,6 @@ func TestStructDiff(t *testing.T) {
 	assertDiff([]ValueChanged{vc(DiffChangeAdded, "b", nil, String("hi")), vc(DiffChangeRemoved, "d", Float(5), nil)},
 		s1, mustStruct(NewStruct(vs.Format(), "NewType", StructData{"a": Bool(true), "c": Float(4), "d": Float(5)})))
 
-	s2 := mustStruct(NewStruct(vs.Format(), "", StructData{
-		"a": mustList(NewList(context.Background(), vs, Float(0), Float(1))),
-		"b": mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true))),
-		"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
-	}))
-
-	assertDiff([]ValueChanged{},
-		s2, mustStruct(NewStruct(vs.Format(), "", StructData{
-			"a": mustList(NewList(context.Background(), vs, Float(0), Float(1))),
-			"b": mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true))),
-			"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
-		})))
-
-	assertDiff([]ValueChanged{
-		vc(DiffChangeModified, "a",
-			mustList(NewList(context.Background(), vs, Float(1), Float(1))),
-			mustList(NewList(context.Background(), vs, Float(0), Float(1)))),
-		vc(DiffChangeModified, "b",
-			mustMap(NewMap(context.Background(), vs, String("foo"), Bool(true), String("bar"), Bool(true))),
-			mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)))),
-	},
-		s2, mustStruct(NewStruct(vs.Format(), "", StructData{
-			"a": mustList(NewList(context.Background(), vs, Float(1), Float(1))),
-			"b": mustMap(NewMap(context.Background(), vs, String("foo"), Bool(true), String("bar"), Bool(true))),
-			"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
-		})))
-
-	assertDiff([]ValueChanged{
-		vc(DiffChangeModified, "a", mustList(NewList(context.Background(), vs, Float(0))), mustList(NewList(context.Background(), vs, Float(0), Float(1)))),
-		vc(DiffChangeModified, "c", mustSet(NewSet(context.Background(), vs, Float(0), Float(2), String("foo"))), mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo")))),
-	},
-		s2, mustStruct(NewStruct(vs.Format(), "", StructData{
-			"a": mustList(NewList(context.Background(), vs, Float(0))),
-			"b": mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true))),
-			"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(2), String("foo"))),
-		})))
-
-	assertDiff([]ValueChanged{
-		vc(DiffChangeModified, "b", mustMap(NewMap(context.Background(), vs, String("boo"), Bool(false), String("bar"), Bool(true))), mustMap(NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)))),
-		vc(DiffChangeModified, "c", mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("bar"))), mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("foo")))),
-	},
-		s2, mustStruct(NewStruct(vs.Format(), "", StructData{
-			"a": mustList(NewList(context.Background(), vs, Float(0), Float(1))),
-			"b": mustMap(NewMap(context.Background(), vs, String("boo"), Bool(false), String("bar"), Bool(true))),
-			"c": mustSet(NewSet(context.Background(), vs, Float(0), Float(1), String("bar"))),
-		})))
 }
 
 func TestEscStructField(t *testing.T) {

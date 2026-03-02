@@ -184,6 +184,25 @@ func (trd *tupleReaderImpl) Close(context.Context) error {
 	return nil
 }
 
+type KVP struct {
+	Key *Tuple
+	Val Tuple
+}
+
+type EditProvider interface {
+	Next(ctx context.Context) (*KVP, error)
+	ReachedEOF() bool
+	Close(ctx context.Context) error
+}
+
+type AppliedEditStats struct {
+	Additions          int64
+	Modifications      int64
+	SameVal            int64
+	Deletions          int64
+	NonExistentDeletes int64
+}
+
 type TupleReadingEditProvider struct {
 	rd         TupleReader
 	reachedEOF bool

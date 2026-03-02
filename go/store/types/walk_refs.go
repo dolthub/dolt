@@ -70,69 +70,6 @@ func (r *refWalker) walkValueSequence(nbf *NomsBinFormat, cb RefCallback) error 
 	return nil
 }
 
-func (r *refWalker) walkList(nbf *NomsBinFormat, cb RefCallback) error {
-	return r.walkListOrSet(nbf, ListKind, cb)
-}
-
-func (r *refWalker) walkSet(nbf *NomsBinFormat, cb RefCallback) error {
-	return r.walkListOrSet(nbf, SetKind, cb)
-}
-
-func (r *refWalker) walkListOrSet(nbf *NomsBinFormat, kind NomsKind, cb RefCallback) error {
-	r.skipKind()
-	level := r.readCount()
-	if level > 0 {
-		return r.walkMetaSequence(nbf, kind, level, cb)
-	} else {
-		return r.walkValueSequence(nbf, cb)
-	}
-}
-
-func (r *refWalker) walkMap(nbf *NomsBinFormat, cb RefCallback) error {
-	r.skipKind()
-	level := r.readCount()
-	if level > 0 {
-		return r.walkMetaSequence(nbf, MapKind, level, cb)
-	} else {
-		return r.walkMapLeafSequence(nbf, cb)
-	}
-}
-
-func (r *refWalker) walkBlob(nbf *NomsBinFormat, cb RefCallback) error {
-	r.skipKind()
-	level := r.readCount()
-	if level > 0 {
-		err := r.walkMetaSequence(nbf, BlobKind, level, cb)
-
-		if err != nil {
-			return err
-		}
-	} else {
-		r.walkBlobLeafSequence()
-	}
-
-	return nil
-}
-
-func (r *refWalker) walkMapLeafSequence(nbf *NomsBinFormat, cb RefCallback) error {
-	count := r.readCount()
-	for i := uint64(0); i < count; i++ {
-		err := r.walkValue(nbf, cb) // k
-
-		if err != nil {
-			return err
-		}
-
-		err = r.walkValue(nbf, cb) // v
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (r *refWalker) walkMetaSequence(nbf *NomsBinFormat, k NomsKind, level uint64, cb RefCallback) error {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
@@ -178,17 +115,47 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 	k := r.PeekKind()
 	switch k {
 	case BlobKind:
-		return r.walkBlob(nbf, cb)
+		r.skipKind()
+		level := r.readCount()
+		if level > 0 {
+			return r.walkMetaSequence(nbf, BlobKind, level, cb)
+		}
+		r.walkBlobLeafSequence()
+		return nil
 	case JSONKind:
 		return r.walkJSON(nbf, cb)
 	case ListKind:
-		return r.walkList(nbf, cb)
+		r.skipKind()
+		level := r.readCount()
+		if level > 0 {
+			return r.walkMetaSequence(nbf, ListKind, level, cb)
+		}
+		return r.walkValueSequence(nbf, cb)
 	case MapKind:
-		return r.walkMap(nbf, cb)
+		r.skipKind()
+		level := r.readCount()
+		if level > 0 {
+			return r.walkMetaSequence(nbf, MapKind, level, cb)
+		}
+		count := r.readCount()
+		for i := uint64(0); i < count; i++ {
+			if err := r.walkValue(nbf, cb); err != nil {
+				return err
+			}
+			if err := r.walkValue(nbf, cb); err != nil {
+				return err
+			}
+		}
+		return nil
 	case RefKind:
 		return r.walkRef(nbf, cb)
 	case SetKind:
-		return r.walkSet(nbf, cb)
+		r.skipKind()
+		level := r.readCount()
+		if level > 0 {
+			return r.walkMetaSequence(nbf, SetKind, level, cb)
+		}
+		return r.walkValueSequence(nbf, cb)
 	case StructKind:
 		return r.walkStruct(nbf, cb)
 	case TupleKind:

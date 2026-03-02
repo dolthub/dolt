@@ -213,10 +213,6 @@ func compareJSON(ctx context.Context, a, b Value) (int, error) {
 	switch a := a.(type) {
 	case Bool:
 		return compareJSONBool(a, b)
-	case List:
-		return compareJSONArray(ctx, a, b)
-	case Map:
-		return compareJSONObject(ctx, a, b)
 	case String:
 		return compareJSONString(a, b)
 	case Float:
@@ -247,85 +243,9 @@ func compareJSONBool(a Bool, b Value) (int, error) {
 	}
 }
 
-func compareJSONArray(ctx context.Context, a List, b Value) (int, error) {
-	switch b := b.(type) {
-	case Bool:
-		// a is lower precedence
-		return -1, nil
-
-	case List:
-		// Two JSON arrays are equal if they have the same length and values in corresponding positions in the arrays
-		// are equal. If the arrays are not equal, their order is determined by the elements in the first position
-		// where there is a difference. The array with the smaller value in that position is ordered first.
-
-		// TODO(andy): this diverges from GMS
-		aLess, err := a.Less(ctx, a.format(), b)
-		if err != nil {
-			return 0, err
-		}
-		if aLess {
-			return -1, nil
-		}
-
-		bLess, err := b.Less(ctx, a.format(), a)
-		if err != nil {
-			return 0, err
-		}
-		if bLess {
-			return 1, nil
-		}
-
-		return 0, nil
-
-	default:
-		// a is higher precedence
-		return 1, nil
-	}
-}
-
-func compareJSONObject(ctx context.Context, a Map, b Value) (int, error) {
-	switch b := b.(type) {
-	case
-		Bool,
-		List:
-		// a is lower precedence
-		return -1, nil
-
-	case Map:
-		// Two JSON objects are equal if they have the same set of keys, and each key has the same value in both
-		// objects. The order of two objects that are not equal is unspecified but deterministic.
-
-		// TODO(andy): this diverges from GMS
-		aLess, err := a.Less(ctx, a.format(), b)
-		if err != nil {
-			return 0, err
-		}
-		if aLess {
-			return -1, nil
-		}
-
-		bLess, err := b.Less(ctx, b.format(), a)
-		if err != nil {
-			return 0, err
-		}
-		if bLess {
-			return 1, nil
-		}
-
-		return 0, nil
-
-	default:
-		// a is higher precedence
-		return 1, nil
-	}
-}
-
 func compareJSONString(a String, b Value) (int, error) {
 	switch b := b.(type) {
-	case
-		Bool,
-		List,
-		Map:
+	case Bool:
 		// a is lower precedence
 		return -1, nil
 
@@ -342,8 +262,6 @@ func compareJSONNumber(a Float, b Value) (int, error) {
 	switch b := b.(type) {
 	case
 		Bool,
-		List,
-		Map,
 		String:
 		// a is lower precedence
 		return -1, nil

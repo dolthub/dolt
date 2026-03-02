@@ -403,53 +403,35 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 	if c.Name() != commitName {
 		return nil, errors.New("GetCommitParents: provided value is not a commit.")
 	}
-	var refs []types.Ref
-	ps, ok, err := c.MaybeGet(parentsListField)
+	var parentRefs []types.Ref
+	err := c.IterFields(func(name string, value types.Value) error {
+		if name == parentsListField || name == parentsField {
+			if ref, ok := value.(types.Ref); ok {
+				parentRefs = append(parentRefs, ref)
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if ok {
-		p := ps.(types.List)
-		err = p.IterAll(ctx, func(v types.Value, _ uint64) error {
-			refs = append(refs, v.(types.Ref))
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		ps, ok, err = c.MaybeGet(parentsField)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			p := ps.(types.Set)
-			err = p.IterAll(ctx, func(v types.Value) error {
-				refs = append(refs, v.(types.Ref))
-				return nil
-			})
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	hashes := make([]hash.Hash, len(refs))
-	for i, r := range refs {
+	hashes := make([]hash.Hash, len(parentRefs))
+	for i, r := range parentRefs {
 		hashes[i] = r.TargetHash()
 	}
 	vals, err := vr.ReadManyValues(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
-	res := make([]*Commit, len(refs))
+	res := make([]*Commit, len(parentRefs))
 	for i, val := range vals {
 		if val == nil {
 			return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
 		}
 		res[i] = &Commit{
 			val:    val,
-			height: refs[i].Height(),
-			addr:   refs[i].TargetHash(),
+			height: parentRefs[i].Height(),
+			addr:   parentRefs[i].TargetHash(),
 		}
 	}
 	return res, nil

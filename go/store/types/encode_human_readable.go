@@ -199,38 +199,8 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 	case FloatKind: // We're special-casing floats since it requires floatFormat & most other kinds don't need anything special
 		w.write(strconv.FormatFloat(float64(v.(Float)), w.floatFormat, -1, 64))
 
-	case BlobKind:
-		w.write("blob {")
-		blob := v.(Blob)
-		encoder := &hexWriter{hrs: w, size: blob.Len()}
-		_, w.err = io.Copy(encoder, blob.Reader(ctx))
-		w.write("}")
-
-	case ListKind:
-		w.write("[")
-		w.writeSize(v)
-		w.indent()
-
-		err := v.(List).Iter(ctx, func(v Value, i uint64) (bool, error) {
-			if i == 0 {
-				w.newLine()
-			}
-
-			if err := w.Write(ctx, v); err != nil {
-				return true, err
-			}
-
-			w.write(",")
-			w.newLine()
-
-			return false, w.err
-		})
-		if err != nil {
-			return err
-		}
-
-		w.outdent()
-		w.write("]")
+	case BlobKind, ListKind, MapKind, SetKind:
+		return fmt.Errorf("unsupported collection kind: %s", v.Kind())
 
 	case TupleKind:
 		w.write("(")
@@ -258,45 +228,6 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 
 		w.write(")")
 
-	case MapKind:
-		w.write("map {")
-		w.writeSize(v)
-		w.indent()
-		if !v.(Map).Empty() {
-			w.newLine()
-		}
-
-		err := v.(Map).Iter(ctx, func(key, val Value) (bool, error) {
-			err := w.Write(ctx, key)
-
-			if err != nil {
-				return false, err
-			}
-
-			w.write(": ")
-			err = w.Write(ctx, val)
-
-			if err != nil {
-				return false, err
-			}
-
-			w.write(",")
-			w.newLine()
-
-			if w.err != nil {
-				return false, w.err
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return err
-		}
-
-		w.outdent()
-		w.write("}")
-
 	case JSONKind:
 		w.write("json {")
 		w.indent()
@@ -316,38 +247,6 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 	case RefKind:
 		w.write("#")
 		w.write(v.(Ref).TargetHash().String())
-
-	case SetKind:
-		w.write("set {")
-		w.writeSize(v)
-		w.indent()
-		if !v.(Set).Empty() {
-			w.newLine()
-		}
-
-		err := v.(Set).Iter(ctx, func(v Value) (bool, error) {
-			err := w.Write(ctx, v)
-
-			if err != nil {
-				return false, err
-			}
-
-			w.write(",")
-			w.newLine()
-
-			if w.err != nil {
-				return false, err
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return err
-		}
-
-		w.outdent()
-		w.write("}")
 
 	case TypeKind:
 		w.writeType(v.(*Type), map[*Type]struct{}{})
@@ -424,19 +323,6 @@ func (w hrsStructWriter) end() {
 
 func (w *hrsWriter) writeStruct(ctx context.Context, v Struct) error {
 	return v.iterParts(ctx, hrsStructWriter{w, v})
-}
-
-func (w *hrsWriter) writeSize(v Value) {
-	switch v.Kind() {
-	case ListKind, MapKind, SetKind:
-		l := v.(Collection).Len()
-		if l < 4 {
-			return
-		}
-		w.write(fmt.Sprintf("  // %s items", humanize.Comma(int64(l))))
-	default:
-		panic("unreachable")
-	}
 }
 
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {

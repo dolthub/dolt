@@ -32,6 +32,12 @@ var ErrUnexpectedJSONTypeOut = errors.New("unexpected type during JSON unmarshal
 
 const (
 	JSONNull = "null"
+
+	// Struct name and field names for JSON array/object encoding.
+	// List and Map types were removed; we use Struct+Tuple instead.
+	jsonStructName   = "json"
+	jsonArrayField  = "a"
+	jsonObjectField = "o"
 )
 
 // NomsJSON is a type alias for types.JSON. The alias allows MySQL-specific
@@ -114,30 +120,48 @@ func marshalJSON(ctx context.Context, vrw types.ValueReadWriter, val interface{}
 }
 
 func marshalJSONArray(ctx context.Context, vrw types.ValueReadWriter, arr []interface{}) (types.Value, error) {
-	var err error
 	vals := make([]types.Value, len(arr))
 	for i, elem := range arr {
-		vals[i], err = marshalJSON(ctx, vrw, elem)
+		v, err := marshalJSON(ctx, vrw, elem)
 		if err != nil {
 			return nil, err
 		}
+		vals[i] = v
 	}
-	return types.NewList(ctx, vrw, vals...)
+	tup, err := types.NewTuple(vrw.Format(), vals...)
+	if err != nil {
+		return nil, err
+	}
+	return types.NewStruct(vrw.Format(), jsonStructName, types.StructData{jsonArrayField: tup})
 }
 
 func marshalJSONObject(ctx context.Context, vrw types.ValueReadWriter, obj map[string]interface{}) (types.Value, error) {
-	var err error
-	i := 0
-	vals := make([]types.Value, len(obj)*2)
-	for k, v := range obj {
-		vals[i] = types.String(k)
-		vals[i+1], err = marshalJSON(ctx, vrw, v)
+	// Sort keys for deterministic output (by length then alphabetically, per JSON spec)
+	keys := make([]string, 0, len(obj))
+	for k := range obj {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if len(keys[i]) != len(keys[j]) {
+			return len(keys[i]) < len(keys[j])
+		}
+		return keys[i] < keys[j]
+	})
+
+	vals := make([]types.Value, len(keys)*2)
+	for i, k := range keys {
+		v, err := marshalJSON(ctx, vrw, obj[k])
 		if err != nil {
 			return nil, err
 		}
-		i += 2
+		vals[i*2] = types.String(k)
+		vals[i*2+1] = v
 	}
-	return types.NewMap(ctx, vrw, vals...)
+	tup, err := types.NewTuple(vrw.Format(), vals...)
+	if err != nil {
+		return nil, err
+	}
+	return types.NewStruct(vrw.Format(), jsonStructName, types.StructData{jsonObjectField: tup})
 }
 
 func (v NomsJSON) ToInterface(ctx context.Context) (interface{}, error) {
@@ -178,36 +202,79 @@ func unmarshalJSON(ctx context.Context, val types.Value) (interface{}, error) {
 		return string(val), nil
 	case types.Float:
 		return float64(val), nil
-	case types.List:
-		return unmarshalJSONArray(ctx, val)
-	case types.Map:
-		return unmarshalJSONObject(ctx, val)
+	case types.Struct:
+		return unmarshalJSONStruct(ctx, val)
 	default:
 		return nil, ErrUnexpectedJSONTypeIn
 	}
 }
 
-func unmarshalJSONArray(ctx context.Context, l types.List) (arr []interface{}, err error) {
-	arr = make([]interface{}, l.Len())
-	err = l.Iter(ctx, func(v types.Value, index uint64) (stop bool, err error) {
-		arr[index], err = unmarshalJSON(ctx, v)
-		return
-	})
-	return
+func unmarshalJSONStruct(ctx context.Context, s types.Struct) (interface{}, error) {
+	if s.Name() != jsonStructName {
+		return nil, ErrUnexpectedJSONTypeIn
+	}
+	if v, ok, err := s.MaybeGet(jsonArrayField); err != nil {
+		return nil, err
+	} else if ok {
+		tup, ok := v.(types.Tuple)
+		if !ok {
+			return nil, ErrUnexpectedJSONTypeIn
+		}
+		return unmarshalJSONArray(ctx, tup)
+	}
+	if v, ok, err := s.MaybeGet(jsonObjectField); err != nil {
+		return nil, err
+	} else if ok {
+		tup, ok := v.(types.Tuple)
+		if !ok {
+			return nil, ErrUnexpectedJSONTypeIn
+		}
+		return unmarshalJSONObject(ctx, tup)
+	}
+	return nil, ErrUnexpectedJSONTypeIn
 }
 
-func unmarshalJSONObject(ctx context.Context, m types.Map) (obj map[string]interface{}, err error) {
-	obj = make(map[string]interface{}, m.Len())
-	err = m.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		ks, ok := key.(types.String)
-		if !ok {
-			return false, ErrUnexpectedJSONTypeOut
+func unmarshalJSONArray(ctx context.Context, tup types.Tuple) (arr []interface{}, err error) {
+	n := tup.Len()
+	arr = make([]interface{}, n)
+	for i := uint64(0); i < n; i++ {
+		v, err := tup.Get(i)
+		if err != nil {
+			return nil, err
 		}
+		arr[i], err = unmarshalJSON(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return arr, nil
+}
 
-		obj[string(ks)], err = unmarshalJSON(ctx, value)
-		return
-	})
-	return
+func unmarshalJSONObject(ctx context.Context, tup types.Tuple) (obj map[string]interface{}, err error) {
+	n := tup.Len()
+	if n%2 != 0 {
+		return nil, ErrUnexpectedJSONTypeOut
+	}
+	obj = make(map[string]interface{}, n/2)
+	for i := uint64(0); i < n; i += 2 {
+		keyVal, err := tup.Get(i)
+		if err != nil {
+			return nil, err
+		}
+		ks, ok := keyVal.(types.String)
+		if !ok {
+			return nil, ErrUnexpectedJSONTypeOut
+		}
+		valVal, err := tup.Get(i + 1)
+		if err != nil {
+			return nil, err
+		}
+		obj[string(ks)], err = unmarshalJSON(ctx, valVal)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return obj, nil
 }
 
 // JSONString implements the sql.JSONWrapper interface.
@@ -243,59 +310,74 @@ func marshalToString(ctx context.Context, sb *strings.Builder, val types.Value) 
 	case types.Float:
 		sb.WriteString(val.HumanReadableString())
 
-	case types.List:
-		sb.WriteRune('[')
-		seenOne := false
-		err = val.Iter(ctx, func(v types.Value, _ uint64) (stop bool, err error) {
-			if seenOne {
-				sb.WriteString(", ")
-			}
-			seenOne = true
-			err = marshalToString(ctx, sb, v)
-			return
-		})
-		if err != nil {
+	case types.Struct:
+		if val.Name() != jsonStructName {
+			return ErrUnexpectedJSONTypeOut
+		}
+		if tupVal, ok, err := val.MaybeGet(jsonArrayField); err != nil {
 			return err
-		}
-		sb.WriteRune(']')
-
-	case types.Map:
-		obj := make(map[string]types.Value, val.Len())
-		var keys []string
-		err = val.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-			ks, ok := key.(types.String)
-			if !ok {
-				return false, ErrUnexpectedJSONTypeOut
+		} else if ok {
+			tup := tupVal.(types.Tuple)
+			sb.WriteRune('[')
+			for i := uint64(0); i < tup.Len(); i++ {
+				if i > 0 {
+					sb.WriteString(", ")
+				}
+				v, err := tup.Get(i)
+				if err != nil {
+					return err
+				}
+				if err = marshalToString(ctx, sb, v); err != nil {
+					return err
+				}
 			}
-			obj[string(ks)] = value
-			keys = append(keys, string(ks))
-			return
-		})
-		if err != nil {
+			sb.WriteRune(']')
+			return nil
+		}
+		if tupVal, ok, err := val.MaybeGet(jsonObjectField); err != nil {
 			return err
-		}
-		// JSON map keys are sorted k by length then alphabetically
-		sort.Slice(keys, func(i, j int) bool {
-			if len(keys[i]) != len(keys[j]) {
-				return len(keys[i]) < len(keys[j])
+		} else if ok {
+			tup := tupVal.(types.Tuple)
+			obj := make(map[string]types.Value, tup.Len()/2)
+			var keys []string
+			for i := uint64(0); i < tup.Len(); i += 2 {
+				k, err := tup.Get(i)
+				if err != nil {
+					return err
+				}
+				ks, ok := k.(types.String)
+				if !ok {
+					return ErrUnexpectedJSONTypeOut
+				}
+				v, err := tup.Get(i + 1)
+				if err != nil {
+					return err
+				}
+				obj[string(ks)] = v
+				keys = append(keys, string(ks))
 			}
-			return keys[i] < keys[j]
-		})
+			// JSON map keys are sorted by length then alphabetically
+			sort.Slice(keys, func(i, j int) bool {
+				if len(keys[i]) != len(keys[j]) {
+					return len(keys[i]) < len(keys[j])
+				}
+				return keys[i] < keys[j]
+			})
+			sb.WriteRune('{')
+			for i, k := range keys {
+				if i > 0 {
+					sb.WriteString(", ")
+				}
+				sb.WriteString(fmt.Sprintf("\"%s\": ", k))
+				if err = marshalToString(ctx, sb, obj[k]); err != nil {
+					return err
+				}
+			}
+			sb.WriteRune('}')
+			return nil
+		}
+		return ErrUnexpectedJSONTypeOut
 
-		sb.WriteRune('{')
-		seenOne := false
-		for _, k := range keys {
-			if seenOne {
-				sb.WriteString(", ")
-			}
-			seenOne = true
-			sb.WriteString(fmt.Sprintf("\"%s\": ", k))
-			err = marshalToString(ctx, sb, obj[k])
-			if err != nil {
-				return err
-			}
-		}
-		sb.WriteRune('}')
 	default:
 		err = ErrUnexpectedJSONTypeOut
 	}

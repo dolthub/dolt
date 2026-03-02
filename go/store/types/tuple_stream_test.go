@@ -17,6 +17,7 @@ package types
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"math/rand"
 	"sync"
@@ -25,6 +26,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
+
+var errClosed = errors.New("closed")
 
 var _ TupleReader = (*TestTupleStream)(nil)
 var _ TupleWriter = (*TestTupleStream)(nil)

@@ -139,9 +139,9 @@ func TestPanicOnBadVersion(t *testing.T) {
 	t.Run("Write", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
 		assert.Panics(t, func() {
-			b, err := NewEmptyBlob(cvs)
+			s, err := NewStruct(cvs.Format(), "S", StructData{"x": Float(1)})
 			require.NoError(t, err)
-			_, err = cvs.WriteValue(context.Background(), b)
+			_, err = cvs.WriteValue(context.Background(), s)
 			require.NoError(t, err)
 
 			rt, err := cvs.Root(context.Background())
@@ -152,24 +152,6 @@ func TestPanicOnBadVersion(t *testing.T) {
 	})
 }
 
-func TestErrorIfDangling(t *testing.T) {
-	t.Skip("WriteValue errors with dangling ref error")
-	vs := newTestValueStore()
-	vs.skipWriteCaching = true
-
-	r, err := NewRef(Bool(true), vs.Format())
-	require.NoError(t, err)
-	l, err := NewList(context.Background(), vs, r)
-	require.NoError(t, err)
-	_, err = vs.WriteValue(context.Background(), l)
-	require.NoError(t, err)
-
-	rt, err := vs.Root(context.Background())
-	require.NoError(t, err)
-	_, err = vs.Commit(context.Background(), rt, rt)
-	require.Error(t, err)
-}
-
 func TestGC(t *testing.T) {
 	assert := assert.New(t)
 
@@ -178,17 +160,19 @@ func TestGC(t *testing.T) {
 	vs.skipWriteCaching = true
 	r1 := mustRef(vs.WriteValue(ctx, String("committed")))
 	r2 := mustRef(vs.WriteValue(ctx, String("unreferenced")))
-	set1 := mustSet(NewSet(ctx, vs, r1))
-	set2 := mustSet(NewSet(ctx, vs, r2))
+	s1, err := NewStruct(vs.Format(), "S", StructData{"r": r1})
+	require.NoError(t, err)
+	s2, err := NewStruct(vs.Format(), "S", StructData{"r": r2})
+	require.NoError(t, err)
 
-	h1 := mustRef(vs.WriteValue(ctx, set1)).TargetHash()
+	h1 := mustRef(vs.WriteValue(ctx, s1)).TargetHash()
 
 	rt, err := vs.Root(ctx)
 	require.NoError(t, err)
 	ok, err := vs.Commit(ctx, h1, rt)
 	require.NoError(t, err)
 	assert.True(ok)
-	h2 := mustRef(vs.WriteValue(ctx, set2)).TargetHash()
+	h2 := mustRef(vs.WriteValue(ctx, s2)).TargetHash()
 
 	ok, err = vs.Commit(ctx, h1, h1)
 	require.NoError(t, err)

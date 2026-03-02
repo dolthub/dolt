@@ -22,8 +22,6 @@
 package types
 
 import (
-	"bytes"
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,40 +41,6 @@ func TestValueEquals(t *testing.T) {
 		func() (Value, error) { return String(""), nil },
 		func() (Value, error) { return String("hi"), nil },
 		func() (Value, error) { return String("bye"), nil },
-		func() (Value, error) {
-			return NewBlob(context.Background(), vrw, &bytes.Buffer{})
-		},
-		func() (Value, error) {
-			return NewBlob(context.Background(), vrw, bytes.NewBufferString("hi"))
-		},
-		func() (Value, error) {
-			return NewBlob(context.Background(), vrw, bytes.NewBufferString("bye"))
-		},
-		func() (Value, error) {
-			b1, err := NewBlob(context.Background(), vrw, bytes.NewBufferString("hi"))
-
-			if err != nil {
-				return nil, err
-			}
-
-			b2, err := NewBlob(context.Background(), vrw, bytes.NewBufferString("bye"))
-
-			if err != nil {
-				return nil, err
-			}
-
-			return newBlob(mustSeq(newBlobMetaSequence(1, []metaTuple{
-				mustMetaTuple(newMetaTuple(mustRef(NewRef(b1, vrw.Format())), mustOrdKey(orderedKeyFromInt(2, vrw.Format())), 2)),
-				mustMetaTuple(newMetaTuple(mustRef(NewRef(b2, vrw.Format())), mustOrdKey(orderedKeyFromInt(5, vrw.Format())), 5)),
-			}, vrw))), nil
-		},
-		func() (Value, error) { return NewList(context.Background(), vrw) },
-		func() (Value, error) { return NewList(context.Background(), vrw, String("foo")) },
-		func() (Value, error) { return NewList(context.Background(), vrw, String("bar")) },
-		func() (Value, error) { return NewMap(context.Background(), vrw) },
-		func() (Value, error) { return NewMap(context.Background(), vrw, String("a"), String("a")) },
-		func() (Value, error) { return NewSet(context.Background(), vrw) },
-		func() (Value, error) { return NewSet(context.Background(), vrw, String("hi")) },
 
 		func() (Value, error) { return PrimitiveTypeMap[BoolKind], nil },
 		func() (Value, error) { return PrimitiveTypeMap[StringKind], nil },

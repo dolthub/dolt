@@ -32,6 +32,30 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
+type DiffChangeType uint8
+
+const (
+	DiffChangeAdded DiffChangeType = iota
+	DiffChangeRemoved
+	DiffChangeModified
+)
+
+type ValueChanged struct {
+	Key        Value
+	OldValue   Value
+	NewValue   Value
+	ChangeType DiffChangeType
+}
+
+func sendChange(ctx context.Context, changes chan<- ValueChanged, change ValueChanged) error {
+	select {
+	case changes <- change:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
+}
+
 var EmptyStructType, _ = MakeStructType("")
 
 func EmptyStruct(nbf *NomsBinFormat) Struct {

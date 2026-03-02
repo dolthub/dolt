@@ -83,23 +83,6 @@ func (db *database) StatsSummary() string {
 	return db.ChunkStore().StatsSummary()
 }
 
-// DatasetsInRoot returns the Map of datasets in the root represented by the |rootHash| given
-func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash) (types.Map, error) {
-	if rootHash.IsEmpty() {
-		return types.NewMap(ctx, db)
-	}
-
-	val, err := db.ReadValue(ctx, rootHash)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	if val == nil {
-		return types.EmptyMap, fmt.Errorf("root hash doesn't exist: %s", rootHash)
-	}
-
-	return val.(types.Map), nil
-}
 
 func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (prolly.AddressMap, error) {
 	if rootHash.IsEmpty() {

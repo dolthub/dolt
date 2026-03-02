@@ -307,22 +307,9 @@ func (ip IndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value
 	}
 
 	switch v := v.(type) {
-	case List:
-		return seqIndex(func(i uint64) (Value, error) { return v.Get(ctx, i) })
 	case *Type:
 		if cd, ok := v.Desc.(CompoundDesc); ok {
 			return seqIndex(func(i uint64) (Value, error) { return cd.ElemTypes[i], nil })
-		}
-	case Map:
-		if !ip.IntoKey {
-			v, _, err := v.MaybeGet(ctx, ip.Index)
-			return v, err
-		}
-
-		if has, err := v.Has(ctx, ip.Index); err != nil {
-			return nil, err
-		} else if has {
-			return ip.Index, nil
 		}
 	}
 
@@ -372,70 +359,7 @@ func newHashIndexPath(h hash.Hash, intoKey bool) HashIndexPath {
 }
 
 func (hip HashIndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
-	var seq orderedSequence
-	var getCurrentValue func(cur *sequenceCursor) (Value, error)
-
-	switch v := v.(type) {
-	case Set:
-		// Unclear what the behavior should be if |hip.IntoKey| is true, but ignoring it for sets is arguably correct.
-		seq = v.orderedSequence
-		getCurrentValue = func(cur *sequenceCursor) (Value, error) {
-			item, err := cur.current()
-
-			if err != nil {
-				return nil, err
-			}
-
-			return item.(Value), nil
-		}
-	case Map:
-		seq = v.orderedSequence
-		if hip.IntoKey {
-			getCurrentValue = func(cur *sequenceCursor) (Value, error) {
-				item, err := cur.current()
-
-				if err != nil {
-					return nil, err
-				}
-
-				return item.(mapEntry).key, nil
-			}
-		} else {
-			getCurrentValue = func(cur *sequenceCursor) (Value, error) {
-				item, err := cur.current()
-
-				if err != nil {
-					return nil, err
-				}
-
-				return item.(mapEntry).value, nil
-			}
-		}
-	default:
-		return nil, nil
-	}
-
-	cur, err := newCursorAt(ctx, seq, orderedKeyFromHash(hip.Hash), false, false)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !cur.valid() {
-		return nil, nil
-	}
-
-	currKey, err := getCurrentKey(cur)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if currKey.h != hip.Hash {
-		return nil, nil
-	}
-
-	return getCurrentValue(cur)
+	return nil, nil
 }
 
 func (hip HashIndexPath) String() (str string) {
@@ -568,24 +492,6 @@ func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) (V
 	}
 
 	switch v := v.(type) {
-	case List:
-		if !ann.IntoKey {
-			return v.Get(ctx, ai)
-		}
-	case Set:
-		return v.At(ctx, ai)
-	case Map:
-		k, mapv, err := v.At(ctx, ai)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if ann.IntoKey {
-			return k, nil
-		}
-
-		return mapv, nil
 	case *Type:
 		if cd, ok := v.Desc.(CompoundDesc); ok {
 			return cd.ElemTypes[ai], nil
@@ -624,8 +530,6 @@ func getAnnotation(str string) (ann string, hasArg bool, arg, rem string) {
 func getAbsoluteIndex(v Value, relIdx int64) (absIdx uint64, ok bool) {
 	var l uint64
 	switch v := v.(type) {
-	case Collection:
-		l = v.Len()
 	case *Type:
 		if cd, cdOK := v.Desc.(CompoundDesc); cdOK {
 			l = uint64(len(cd.ElemTypes))

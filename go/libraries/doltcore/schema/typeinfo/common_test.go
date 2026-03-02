@@ -15,19 +15,14 @@
 package typeinfo
 
 import (
-	"bytes"
-	"context"
 	"math"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func generateBitTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
@@ -142,19 +137,6 @@ func generateVarStringType(t *testing.T, length int64, rts bool) *varStringType 
 func generateBlobStringType(t *testing.T, length int64) *blobStringType {
 	require.True(t, length > 0)
 	return &blobStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.Text, length)}
-}
-
-func mustBlobString(t *testing.T, vrw types.ValueReadWriter, str string) types.Blob {
-	blob, err := types.NewBlob(context.Background(), vrw, strings.NewReader(str))
-	require.NoError(t, err)
-	return blob
-}
-
-func mustBlobBytes(t *testing.T, b []byte) types.Blob {
-	vrw := types.NewMemoryValueStore()
-	blob, err := types.NewBlob(context.Background(), vrw, bytes.NewReader(b))
-	require.NoError(t, err)
-	return blob
 }
 
 func loop(t *testing.T, start int64, endInclusive int64, numOfSteps uint16, loopedFunc func(int64)) {

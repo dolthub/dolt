@@ -813,21 +813,7 @@ func (t Tuple) TupleCompare(ctx context.Context, nbf *NomsBinFormat, otherTuple 
 			}
 
 		case BlobKind:
-			// readValue expects the Kind to still be there, so we put it back by decrementing the offset
-			dec.offset--
-			otherDec.offset--
-			blob, err := dec.ReadBlob()
-			if err != nil {
-				return 0, err
-			}
-			otherBlob, err := otherDec.ReadBlob()
-			if err != nil {
-				return 0, err
-			}
-			res, err = blob.Compare(ctx, nbf, otherBlob)
-			if err != nil {
-				return 0, err
-			}
+			return 0, fmt.Errorf("blob comparison no longer supported")
 
 		case ExtendedKind:
 			return 0, fmt.Errorf("extended types are not valid in the old format")
@@ -960,11 +946,7 @@ func (t Tuple) String() string {
 		}
 		seenOne = true
 
-		if blob, ok := v.(Blob); ok {
-			b.WriteString(blob.DebugText())
-		} else {
-			b.WriteString(v.HumanReadableString())
-		}
+		b.WriteString(v.HumanReadableString())
 	}
 	b.WriteString(")")
 	return b.String()
