@@ -12,13 +12,6 @@ on:
       profile_key:
         description: 's3 key of dolt profile used to build pgo'
         required: true
-      branch:
-        description: 'git branch to release from'
-        required: false
-        default: 'main'
-      commit_sha:
-        description: 'exact commit SHA to build from'
-        required: false
 
   repository_dispatch:
     types: [ pgo-release ]
@@ -48,14 +41,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
+          ref: ${{ github.event.client_payload.branch || github.ref_name }}
           token: ${{ secrets.DOLT_RELEASE_TOKEN }}
       - name: Pin to exact commit SHA
-        if: ${{ github.event.inputs.commit_sha || github.event.client_payload.from_version }}
+        if: ${{ github.event.client_payload.from_version }}
         run: git checkout -B "$BRANCH" "$SHA"
         env:
-          BRANCH: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
-          SHA: ${{ github.event.inputs.commit_sha || github.event.client_payload.from_version }}
+          BRANCH: ${{ github.event.client_payload.branch || github.ref_name }}
+          SHA: ${{ github.event.client_payload.from_version }}
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
