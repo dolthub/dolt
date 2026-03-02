@@ -37,11 +37,7 @@ func TestBadRow(t *testing.T) {
 	if !IsBadRow(err) {
 		t.Error("Should be a bad row error")
 	}
-
-	if !row.AreEqual(GetBadRowRow(err), emptyRow, sch) {
-		t.Error("did not get back expected empty row")
-	}
-
+	
 	if err.Error() != "details" {
 		t.Error("unexpected details")
 	}

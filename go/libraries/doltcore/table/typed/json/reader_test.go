@@ -28,7 +28,6 @@ import (
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -229,20 +228,4 @@ func TestReaderBadJson(t *testing.T) {
 	}
 	assert.NotEqual(t, io.EOF, err)
 	assert.Error(t, err)
-}
-
-func newRow(sch schema.Schema, id int, first, last string) row.Row {
-	vals := row.TaggedValues{
-		0: types.Int(id),
-		1: types.String(first),
-		2: types.String(last),
-	}
-
-	r, err := row.New(types.Format_Default, sch, vals)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return r
 }

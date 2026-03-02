@@ -38,17 +38,6 @@ func IsBadRow(err error) bool {
 	return ok
 }
 
-// GetBadRow will retrieve the Row from the BadRow error
-func GetBadRowRow(err error) row.Row {
-	br, ok := err.(*BadRow)
-
-	if !ok {
-		panic("Call IsBadRow prior to trying to get the BadRowRow")
-	}
-
-	return br.Row
-}
-
 // Error returns a string with error details.
 func (br *BadRow) Error() string {
 	return strings.Join(br.Details, "\n")
