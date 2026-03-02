@@ -180,28 +180,24 @@ var NewRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.
 
 // EmptyRootValue returns an empty RootValue. This is a variable as it's changed in Doltgres.
 var EmptyRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (RootValue, error) {
-	if vrw.Format().UsesFlatbuffers() {
-		builder := flatbuffers.NewBuilder(80)
+	builder := flatbuffers.NewBuilder(80)
 
-		emptyam, err := prolly.NewEmptyAddressMap(ns)
-		if err != nil {
-			return nil, err
-		}
-		ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
-		tablesoff := builder.CreateByteVector(ambytes)
-
-		var empty hash.Hash
-		fkoff := builder.CreateByteVector(empty[:])
-		serial.RootValueStart(builder)
-		serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
-		serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
-		serial.RootValueAddTables(builder, tablesoff)
-		serial.RootValueAddForeignKeyAddr(builder, fkoff)
-		bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
-		return NewRootValue(ctx, vrw, ns, types.SerialMessage(bs))
+	emptyam, err := prolly.NewEmptyAddressMap(ns)
+	if err != nil {
+		return nil, err
 	}
+	ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
+	tablesoff := builder.CreateByteVector(ambytes)
 
-	return nil, fmt.Errorf("unsupported storage format: flatbuffers format required")
+	var empty hash.Hash
+	fkoff := builder.CreateByteVector(empty[:])
+	serial.RootValueStart(builder)
+	serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
+	serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
+	serial.RootValueAddTables(builder, tablesoff)
+	serial.RootValueAddForeignKeyAddr(builder, fkoff)
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	return NewRootValue(ctx, vrw, ns, types.SerialMessage(bs))
 }
 
 // LoadRootValueFromRootIshAddr takes the hash of the commit or the hash of a
@@ -353,12 +349,12 @@ func GenerateTagsForNewColColl(ctx context.Context, root RootValue, tableName st
 // GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
 // the new columns are used to see the tag generator.
 func GenerateTagsForNewColumns(
-	ctx context.Context,
-	root RootValue,
-	tableName TableName,
-	newColNames []string,
-	newColKinds []types.NomsKind,
-	headRoot RootValue,
+		ctx context.Context,
+		root RootValue,
+		tableName TableName,
+		newColNames []string,
+		newColKinds []types.NomsKind,
+		headRoot RootValue,
 ) ([]uint64, error) {
 	if len(newColNames) != len(newColKinds) {
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
@@ -380,7 +376,7 @@ func GenerateTagsForNewColumns(
 			// Only re-use tags if the noms kind didn't change
 			// TODO: revisit this when new storage format is further along
 			if strings.EqualFold(newColNames[i], col.Name) &&
-				newColKinds[i] == col.TypeInfo.NomsKind() {
+					newColKinds[i] == col.TypeInfo.NomsKind() {
 				newTags[i] = &col.Tag
 				break
 			}
@@ -413,11 +409,11 @@ func GenerateTagsForNewColumns(
 }
 
 func GetExistingColumns(
-	ctx context.Context,
-	root, headRoot RootValue,
-	tableName TableName,
-	newColNames []string,
-	newColKinds []types.NomsKind,
+		ctx context.Context,
+		root, headRoot RootValue,
+		tableName TableName,
+		newColNames []string,
+		newColKinds []types.NomsKind,
 ) ([]schema.Column, error) {
 
 	var existingCols []schema.Column
