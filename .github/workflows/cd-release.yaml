@@ -6,10 +6,6 @@ on:
       version:
         description: 'SemVer format release tag, i.e. 0.24.5'
         required: true
-      branch:
-        description: 'git branch to release from'
-        required: false
-        default: 'main'
 
 jobs:
   format-version:
@@ -34,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch }}
+          ref: ${{ github.ref_name }}
       - name: Get sha
         id: get_sha
         run: |
@@ -44,4 +40,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: profile-dolt
-          client-payload: '{"from_version": "${{ steps.get_sha.outputs.sha }}", "future_version": "${{ needs.format-version.outputs.version }}", "mode": "release", "actor": "${{ github.actor }}", "actor_email": "dustin@dolthub.com", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-profile-job-json.sh", "branch": "${{ github.event.inputs.branch }}"}'
+          client-payload: '{"from_version": "${{ steps.get_sha.outputs.sha }}", "future_version": "${{ needs.format-version.outputs.version }}", "mode": "release", "actor": "${{ github.actor }}", "actor_email": "dustin@dolthub.com", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-profile-job-json.sh", "branch": "${{ github.ref_name }}"}'
