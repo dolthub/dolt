@@ -54,9 +54,17 @@ type binlogProducer struct {
 	logManager      *logManager
 	gtidSequence    int64
 	binlogEventMeta mysql.BinlogEventMetadata
+
+	// gcMu protects against GC deleting chunks while Prolly tree traversals
+	// (prolly.DiffMaps) are in flight. WorkingRootUpdated holds a read lock
+	// for the duration of its diff traversal. Stop() acquires a write lock,
+	// which blocks until all in-flight traversals complete and prevents new
+	// ones from starting. Resume() releases the write lock.
+	gcMu sync.RWMutex
 }
 
 var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
+var _ doltdb.GCPausableListener = (*binlogProducer)(nil)
 
 // NewBinlogProducer creates and returns a new instance of BinlogProducer. Note that callers must register the
 // returned binlogProducer as a DatabaseUpdateListener before it will start receiving database updates and start
@@ -86,6 +94,24 @@ func (b *binlogProducer) LogManager(logManager *logManager) {
 	b.logManager = logManager
 }
 
+// Stop implements the doltdb.GCPausableListener interface. It prevents new WorkingRootUpdated calls from
+// starting Prolly tree traversals and returns a channel that closes when all in-flight traversals have
+// completed. This must be called before GC to prevent chunk deletion during active diff operations.
+func (b *binlogProducer) Stop() chan struct{} {
+	ch := make(chan struct{})
+	go func() {
+		b.gcMu.Lock() // blocks until all in-flight RLock holders (WorkingRootUpdated calls) release
+		close(ch)
+	}()
+	return ch
+}
+
+// Resume implements the doltdb.GCPausableListener interface. It releases the write lock acquired by Stop(),
+// allowing new WorkingRootUpdated calls to proceed.
+func (b *binlogProducer) Resume() {
+	b.gcMu.Unlock()
+}
+
 // WorkingRootUpdated implements the doltdb.DatabaseUpdateListener interface. When a working root changes,
 // this function generates events for the binary log and sends them to all connected replicas.
 //
@@ -101,6 +127,12 @@ func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName strin
 	if isDatabaseFilteredOut(ctx, databaseName) {
 		return nil
 	}
+
+	// Acquire read lock to prevent GC from deleting chunks while we traverse Prolly trees.
+	// Stop() acquires a write lock, so it will block until we release this read lock, and
+	// new calls here will block while GC holds the write lock.
+	b.gcMu.RLock()
+	defer b.gcMu.RUnlock()
 
 	var binlogEvents []mysql.BinlogEvent
 	tableDeltas, err := diff.GetTableDeltas(ctx, before, after)

@@ -1693,6 +1693,20 @@ type DatabaseUpdateListener interface {
 	DatabaseDropped(ctx *sql.Context, databaseName string) error
 }
 
+// GCPausableListener is an optional interface that DatabaseUpdateListeners can
+// implement to participate in GC safepoints. Before GC runs, Stop() is called
+// to prevent new work from starting and to wait for in-flight operations (such
+// as Prolly tree traversals) to complete. After GC finishes, Resume() is called
+// to allow operations to continue.
+type GCPausableListener interface {
+	// Stop signals the listener to stop accepting new work. It returns a
+	// channel that will be closed when all in-flight operations have completed.
+	Stop() chan struct{}
+
+	// Resume allows the listener to accept new work again after GC completes.
+	Resume()
+}
+
 var DatabaseUpdateListeners = make([]DatabaseUpdateListener, 0)
 
 // RegisterDatabaseUpdateListener registers |listener| to receive callbacks when databases are updated.

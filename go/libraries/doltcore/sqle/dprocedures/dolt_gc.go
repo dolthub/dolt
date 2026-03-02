@@ -325,5 +325,23 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chun
 			statsDoneCh: statsDoneCh,
 		}
 	}
+	// Stop any GC-pausable database update listeners (e.g. binlog producer) to prevent
+	// chunk deletion during in-flight Prolly tree traversals (prolly.DiffMaps).
+	var pausedListeners []doltdb.GCPausableListener
+	for _, listener := range doltdb.DatabaseUpdateListeners {
+		if pausable, ok := listener.(doltdb.GCPausableListener); ok {
+			doneCh := pausable.Stop()
+			<-doneCh
+			pausedListeners = append(pausedListeners, pausable)
+		}
+	}
+	if len(pausedListeners) > 0 {
+		defer func() {
+			for _, p := range pausedListeners {
+				p.Resume()
+			}
+		}()
+	}
+
 	return ddb.GC(ctx, mode, cmp, sc)
 }
