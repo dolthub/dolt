@@ -48,4 +48,3 @@ jobs:
           INIT_BIG_REPO: ${{ github.event.client_payload.init_big_repo }}
           NOMS_BIN_FORMAT: "__DOLT__"
           TEMPLATE_SCRIPT: ${{ github.event.client_payload.template_script }}
-          BRANCH: ${{ github.event.client_payload.branch || 'main' }}
