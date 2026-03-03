@@ -2047,10 +2047,12 @@ func (ddb *DoltDB) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 	}
 }
 
-func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- pull.TableFileEvent) error {
-	return pull.Clone(ctx, datas.ChunkStoreFromDatabase(ddb.db),
+func (ddb *DoltDB) Clone(ctx context.Context, tempTableDir string, destDB *DoltDB, eventCh chan<- pull.TableFileEvent) error {
+	return pull.Clone(ctx,
+		datas.ChunkStoreFromDatabase(ddb.db),
 		datas.ChunkStoreFromDatabase(destDB.db),
 		ddb.getAddrs,
+		tempTableDir,
 		eventCh)
 }
 
@@ -2159,24 +2161,6 @@ func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
 			TotalBytes: totalSz,
 		}, nil
 	}
-}
-
-func (ddb *DoltDB) TableFileStoreHasJournal(ctx context.Context) (bool, error) {
-	tableFileStore, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
-	if !ok {
-		return false, errors.New("unsupported operation, doltDB.TableFileStoreHasManifest on non-TableFileStore")
-	}
-	tfsources, err := tableFileStore.Sources(ctx)
-	if err != nil {
-		return false, err
-	}
-	tableFiles := tfsources.TableFiles
-	for _, tableFile := range tableFiles {
-		if tableFile.FileID() == chunks.JournalFileID {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // DatasetsByRootHash returns the DatasetsMap for the specified root |hashof|.

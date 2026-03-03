@@ -329,11 +329,6 @@ func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.Do
 	return destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh, nil)
 }
 
-// Clone pulls all data from a remote source database to a local destination database.
-func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- pull.TableFileEvent) error {
-	return srcDB.Clone(ctx, destDB, eventCh)
-}
-
 // FetchFollowTags fetches all tags from the source DB whose commits have already
 // been fetched into the destination DB.
 // todo: potentially too expensive to iterate over all srcDB tags
@@ -790,15 +785,21 @@ func pruneBranches[C doltdb.Context](ctx context.Context, dbData env.DbData[C], 
 	return nil
 }
 
-// SyncRoots is going to copy the root hash of the database from srcDb to destDb.
-// We can do this |Clone| if (1) destDb is empty, (2) destDb and srcDb are both
-// |TableFileStore|s, and (3) srcDb does *not* have a journal file. The most
-// common scenario where this occurs is when we are restoring a backup.
+// SyncRoots is going to copy the root hash of the database from srcDb
+// to destDb.  Technically we should always be able to do this by
+// copying table files from the source. If we see a journal file in
+// the srcDb, we can convert it to table file on the fly. If we have a
+// non-empty destDb, it does not technically matter - the full set of
+// table files in the source are all we need at the end of the
+// sync. However, it might be more efficient to Pull instead of copy
+// table files if there is a non-empty dest.
 //
-// The journal's interaction with TableFileStore is not great currently ---
-// when accessing a journal file through TableFileStore, the Reader() should in
-// reality return something which is going to result in reading an actual table
-// file. For now, we avoid the |Clone| path when the journal file is present.
+// For now, we only clone into an empty dest. We use some heuristics
+// on the size of the source store vs. the source journal, if there is
+// one, to decide if we use clone or merkle dag walk.
+//
+// Either way, both dest and source need to be table file stores,
+// since otherwise we need to pull chunks individually.
 func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, destDbRoot hash.Hash) (bool, error) {
 	if !destDbRoot.IsEmpty() {
 		return false, nil
@@ -809,11 +810,19 @@ func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, de
 	if !destDb.IsTableFileStore() {
 		return false, nil
 	}
-	srcHasJournal, err := srcDb.TableFileStoreHasJournal(ctx)
+	sizes, err := srcDb.StoreSizes(ctx)
 	if err != nil {
 		return false, err
 	}
-	if srcHasJournal {
+	if sizes.JournalBytes >= (sizes.TotalBytes/5) {
+		// The journal is more than 20% of the entire source.
+		// For now we do a merkle walk instead of converting
+		// all the chunks.
+		return false, nil
+	}
+	if sizes.JournalBytes > 16 * 1024 * 1024 * 1024 {
+		// The journal is larger than 16GB.  For now we do a
+		// merkle walk instead of converting all the chunks.
 		return false, nil
 	}
 	return true, nil
@@ -886,7 +895,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		var err error
 		wg.Go(func() {
 			defer close(tfCh)
-			err = srcDb.Clone(ctx, destDb, tfCh)
+			err = srcDb.Clone(ctx, tempTableDir, destDb, tfCh)
 		})
 		wg.Wait()
 		if err == nil {

@@ -958,6 +958,7 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 		if err != nil {
 			return err
 		}
+		defer body.Close()
 
 		tbfd := &remotesapi.TableFileDetails{
 			Id:            tableFileId[:],

@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/errgroup"
@@ -27,12 +28,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 var ErrNoData = errors.New("no data")
 var ErrCloneUnsupported = errors.New("clone unsupported")
 
-func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, eventCh chan<- TableFileEvent) error {
+func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
 	srcTS, srcOK := srcCS.(chunks.TableFileStore)
 
 	if !srcOK {
@@ -55,7 +57,7 @@ func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, getAddrs chunks
 		return fmt.Errorf("%w: sink db is not a Table File Store", ErrCloneUnsupported)
 	}
 
-	return clone(ctx, srcTS, sinkTS, sinkCS, getAddrs, eventCh)
+	return clone(ctx, srcTS, sinkTS, sinkCS, getAddrs, tempTableDir, eventCh)
 }
 
 type CloneTableFileEvent int
@@ -93,7 +95,7 @@ func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.Tab
 
 const concurrentTableFileDownloads = 3
 
-func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, eventCh chan<- TableFileEvent) error {
+func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
 	sources, err := srcTS.Sources(ctx)
 	if err != nil {
 		return err
@@ -120,7 +122,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 	download := func(ctx context.Context) error {
 		sem := semaphore.NewWeighted(concurrentTableFileDownloads)
 		eg, ctx := errgroup.WithContext(ctx)
-		for i := 0; i < len(desiredFiles); i++ {
+		for i := range desiredFiles {
 			if completed[i] {
 				continue
 			}
@@ -129,11 +131,10 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 				// return the error from wg.Wait() below.
 				break
 			}
-			idx := i
 			eg.Go(func() (err error) {
 				defer sem.Release(1)
 
-				fileID := desiredFiles[idx]
+				fileID := desiredFiles[i]
 				tblFile, ok := fileIDToTF[fileID]
 				if !ok {
 					// conjoin happened during clone
@@ -142,13 +143,18 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 
 				report(TableFileEvent{EventType: DownloadStart, TableFiles: []chunks.TableFile{tblFile}})
 
-				err = sinkTS.WriteTableFile(ctx, tblFile.FileID()+tblFile.LocationSuffix(), tblFile.SplitOffset(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
+				// XXX: This is not the best place to do this conversion.
+				// Some issues:
+				// 1) We have to reconvert the file if this conversion gets retried.
+				// 2) The stats we post through rdStats only reflect the initial read, instead
+				// of reflecting the read + (approximate) upload progress, which the other
+				// branch handles.
+				if tblFile.FileID() == chunks.JournalFileID {
 					rd, contentLength, err := tblFile.Open(ctx)
 					if err != nil {
-						return nil, 0, err
+						return err
 					}
 					rdStats := iohelp.NewReaderWithStats(rd, int64(contentLength))
-
 					rdStats.Start(func(s iohelp.ReadStats) {
 						report(TableFileEvent{
 							EventType:  DownloadStats,
@@ -156,17 +162,72 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 							Stats:      []iohelp.ReadStats{s},
 						})
 					})
+					writer, uploadFileID, err := convertJournalToTableFile(ctx, rdStats, 0, tempTableDir)
+					rdStats.Close()
+					if err != nil {
+						return err
+					}
+					defer writer.Cancel()
+					splitOff, err := writer.ChunkDataLength()
+					if err != nil {
+						return err
+					}
+					err = sinkTS.WriteTableFile(ctx, uploadFileID, splitOff, writer.ChunkCount(), writer.GetMD5(), func() (io.ReadCloser, uint64, error) {
+						rdr, err := writer.Reader()
+						if err != nil {
+							return nil, 0, err
+						}
+						return rdr, writer.FullLength(), nil
+					})
+					if err != nil {
+						report(TableFileEvent{EventType: DownloadFailed, TableFiles: []chunks.TableFile{tblFile}})
+						return err
+					} else {
+						report(TableFileEvent{EventType: DownloadSuccess, TableFiles: []chunks.TableFile{tblFile}})
+						completed[i] = true
 
-					return rdStats, contentLength, nil
-				})
-				if err != nil {
-					report(TableFileEvent{EventType: DownloadFailed, TableFiles: []chunks.TableFile{tblFile}})
-					return err
+						// XXX: A gross hack. fileIDToNumChunks is our input to AddTableFiles. Update it here
+						// so we add the uploaded archive file to the store, not a non-existant table file with
+						// the `vvv...` name.
+						//
+						// We can mutate fileIDToNumChunks safely here because we are the only goroutine
+						// which will ever mutate it and it is not read until after the eg.Wait() on the errgroup
+						// in which we are running.
+						delete(fileIDToNumChunks, chunks.JournalFileID)
+						fileIDToNumChunks[strings.TrimSuffix(uploadFileID, nbs.ArchiveFileSuffix)] = writer.ChunkCount()
+
+						return nil
+					}
+				} else {
+					uploadFileID := tblFile.FileID() + tblFile.LocationSuffix()
+					splitOff := tblFile.SplitOffset()
+					numChunks := tblFile.NumChunks()
+					err = sinkTS.WriteTableFile(ctx, uploadFileID, splitOff, numChunks, nil, func() (io.ReadCloser, uint64, error) {
+						rd, contentLength, err := tblFile.Open(ctx)
+						if err != nil {
+							return nil, 0, err
+						}
+						rdStats := iohelp.NewReaderWithStats(rd, int64(contentLength))
+
+						rdStats.Start(func(s iohelp.ReadStats) {
+							report(TableFileEvent{
+								EventType:  DownloadStats,
+								TableFiles: []chunks.TableFile{tblFile},
+								Stats:      []iohelp.ReadStats{s},
+							})
+						})
+
+						return rdStats, contentLength, nil
+					})
+					if err != nil {
+						report(TableFileEvent{EventType: DownloadFailed, TableFiles: []chunks.TableFile{tblFile}})
+						return err
+					} else {
+						report(TableFileEvent{EventType: DownloadSuccess, TableFiles: []chunks.TableFile{tblFile}})
+						completed[i] = true
+						return nil
+					}
 				}
-
-				report(TableFileEvent{EventType: DownloadSuccess, TableFiles: []chunks.TableFile{tblFile}})
-				completed[idx] = true
-				return nil
 			})
 		}
 
@@ -269,6 +330,25 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 		panic(fmt.Sprintf("runtime error: successful root update with error: %v", err))
 	}
 	return err
+}
+
+func convertJournalToTableFile(ctx context.Context, readCloser io.ReadCloser, off int64, tmpDir string) (*nbs.ArchiveStreamWriter, string, error) {
+	writer, err := nbs.NewArchiveStreamWriter(tmpDir)
+	if err != nil {
+		return nil, "", err
+	}
+	err = nbs.VisitJournalReaderChunks(ctx, readCloser, off, func(cb nbs.CompressedChunk) error {
+		_, err := writer.AddChunk(cb)
+		return err
+	})
+	if err != nil {
+		return nil, "", errors.Join(err, writer.Cancel())
+	}
+	_, name, err := writer.Finish()
+	if err != nil {
+		return nil, "", errors.Join(err, writer.Cancel())
+	}
+	return writer, name, nil
 }
 
 func filterAppendicesFromSourceFiles(appendixFiles []chunks.TableFile, sourceFiles []chunks.TableFile) []chunks.TableFile {

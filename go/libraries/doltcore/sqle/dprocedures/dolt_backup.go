@@ -298,7 +298,7 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 		return err
 	}
 
-	params := map[string]interface{}{}
+	params := make(map[string]any, len(remote.Params))
 	for k, v := range remote.Params {
 		params[k] = v
 	}
