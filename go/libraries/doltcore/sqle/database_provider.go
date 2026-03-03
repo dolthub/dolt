@@ -71,6 +71,11 @@ type DoltDatabaseProvider struct {
 	droppedDatabaseManager *droppedDatabaseManager
 	overrides              sql.EngineOverrides
 
+	// remoteDbs caches remote DoltDB instances by URL so that repeated push calls
+	// to the same remote reuse the store (and its already-opened table chunk sources)
+	// instead of re-opening every table file from the blobstore each time.
+	remoteDbs map[string]*doltdb.DoltDB
+
 	defaultBranch     string
 	dbFactoryUrl      string
 	DropDatabaseHooks []DropDatabaseHook
@@ -181,6 +186,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		isStandby:              new(bool),
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 		overrides:              overrides,
+		remoteDbs:              make(map[string]*doltdb.DoltDB),
 	}, nil
 }
 
@@ -293,6 +299,20 @@ func (p *DoltDatabaseProvider) Close() {
 				_ = ddb.Close()
 			}
 		}
+	}
+
+	// Close cached remote databases.
+	var remoteDbs []*doltdb.DoltDB
+	func() {
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		remoteDbs = make([]*doltdb.DoltDB, 0, len(p.remoteDbs))
+		for _, rdb := range p.remoteDbs {
+			remoteDbs = append(remoteDbs, rdb)
+		}
+	}()
+	for _, rdb := range remoteDbs {
+		_ = rdb.Close()
 	}
 }
 
@@ -539,7 +559,43 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 	}
 
 	if withCaching {
-		return r.GetRemoteDB(ctx, format, dialer)
+		// Only cache git-backed remote DBs. Other remote types (file://, aws, etc.)
+		// register their underlying NBS in a global singleton cache that is closed
+		// separately by CloseAllLocalDatabases(). Caching those here would cause a
+		// double-close panic on process exit.
+		isGitRemote := strings.HasPrefix(strings.ToLower(r.Url), "git+")
+		if isGitRemote {
+			cached := func() *doltdb.DoltDB {
+				p.mu.RLock()
+				defer p.mu.RUnlock()
+				return p.remoteDbs[r.Url]
+			}()
+			if cached != nil {
+				return cached, nil
+			}
+		}
+
+		remoteDB, err := r.GetRemoteDB(ctx, format, dialer)
+		if err != nil {
+			return nil, err
+		}
+
+		if isGitRemote {
+			cached := func() *doltdb.DoltDB {
+				p.mu.Lock()
+				defer p.mu.Unlock()
+				if existing, ok := p.remoteDbs[r.Url]; ok {
+					return existing
+				}
+				p.remoteDbs[r.Url] = remoteDB
+				return nil
+			}()
+			if cached != nil {
+				_ = remoteDB.Close()
+				return cached, nil
+			}
+		}
+		return remoteDB, nil
 	}
 	return r.GetRemoteDBWithoutCaching(ctx, format, dialer)
 }

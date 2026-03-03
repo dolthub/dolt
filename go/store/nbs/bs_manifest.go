@@ -38,14 +38,12 @@ func (bsm blobstoreManifest) Name() string {
 
 func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (string, manifestContents, error) {
 	reader, _, ver, err := bs.Get(ctx, manifestFile, blobstore.AllRange)
-
 	if err != nil {
 		return "", manifestContents{}, err
 	}
 
 	defer reader.Close()
 	contents, err := parseManifest(reader)
-
 	if err != nil {
 		return "", manifestContents{}, err
 	}
@@ -96,7 +94,6 @@ func updateBSWithChecker(ctx context.Context, behavior dherrors.FatalBehavior, b
 	}
 
 	ver, contents, err := manifestVersionAndContents(ctx, bs)
-
 	if err != nil && !blobstore.IsNotFoundError(err) {
 		return manifestContents{}, err
 	}
@@ -116,7 +113,6 @@ func updateBSWithChecker(ctx context.Context, behavior dherrors.FatalBehavior, b
 		}
 
 		_, err = bs.CheckAndPut(ctx, ver, manifestFile, int64(buffer.Len()), buffer)
-
 		if err != nil {
 			if !blobstore.IsCheckAndPutError(err) {
 				return manifestContents{}, err
