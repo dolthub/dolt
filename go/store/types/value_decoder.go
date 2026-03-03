@@ -626,9 +626,6 @@ func (r *typedBinaryNomsReader) readType() (*Type, error) {
 		return nil, err
 	}
 
-	if r.validating {
-		validateType(t)
-	}
 	return t, nil
 }
 
