@@ -193,6 +193,54 @@ func TestBinlogPrimary(t *testing.T) {
 		{"binlog-main.000001", "2377", "", "", uuid + ":1-3"}})
 }
 
+// TestBinlogPrimary_textTypes tests serialization for empty, NULL, and non-empty TEXT
+// and BLOB fields.
+// https://github.com/dolthub/dolt/issues/10601
+func TestBinlogPrimary_textTypes(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	h.primaryDatabase.MustExec("CREATE TABLE test_text (id INT PRIMARY KEY, name VARCHAR(100), description TEXT);")
+	h.primaryDatabase.MustExec("INSERT INTO test_text VALUES (1, 'test', 'hello world');")
+	h.primaryDatabase.MustExec("INSERT INTO test_text VALUES (2, 'empty', '');")
+	h.primaryDatabase.MustExec("INSERT INTO test_text VALUES (3, 'null', NULL);")
+	h.primaryDatabase.MustExec("CALL DOLT_ADD('-A');")
+	h.primaryDatabase.MustExec("CALL DOLT_COMMIT('-m', 'test commit');")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("show tables;", [][]any{{"test_text"}})
+
+	// Debugging output – useful to see deeper status from replica when tests are failing
+	h.outputReplicaApplierStatus()
+	h.outputShowReplicaStatus()
+
+	// Test that the table was created and has the expected data
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "test", "hello world"},
+		{"2", "empty", ""},
+		{"3", "null", nil},
+	})
+
+	// Now test cases for a BLOB field: non-empty, empty, NULL
+	h.primaryDatabase.MustExec("CREATE TABLE test_blob (id INT PRIMARY KEY, name VARCHAR(100), data BLOB);")
+	h.primaryDatabase.MustExec("INSERT INTO test_blob VALUES (1, 'hello', UNHEX('68656C6C6F20776F726C64'));")
+	h.primaryDatabase.MustExec("INSERT INTO test_blob VALUES (2, 'empty', UNHEX(''));")
+	h.primaryDatabase.MustExec("INSERT INTO test_blob VALUES (3, 'null', NULL);")
+	h.primaryDatabase.MustExec("INSERT INTO test_blob VALUES (4, 'binary', UNHEX('0001027F8081FF'));")
+	h.primaryDatabase.MustExec("CALL DOLT_ADD('-A');")
+	h.primaryDatabase.MustExec("CALL DOLT_COMMIT('-m', 'test commit blob');")
+	h.waitForReplicaToCatchUp()
+
+	// Validate bytes via HEX() so you’re not relying on driver string conversions for BLOB
+	h.requireReplicaResults("SELECT id, name, HEX(data) FROM test_blob ORDER BY id;", [][]any{
+		{"1", "hello", "68656C6C6F20776F726C64"},
+		{"2", "empty", ""},
+		{"3", "null", nil},
+		{"4", "binary", "0001027F8081FF"},
+	})
+}
+
 // TestBinlogPrimary_Rotation tests how a Dolt primary server handles rotating the binary log file when the
 // size threshold is reached.
 func TestBinlogPrimary_Rotation(t *testing.T) {
