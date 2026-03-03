@@ -69,8 +69,11 @@ func OpenParquetReader(vrw types.ValueReadWriter, path string, sch schema.Schema
 	return NewParquetReader(vrw, fr, sch)
 }
 
-// NewParquetReader creates a ParquetReader from a given fileReader.
-// The ParquetFileInfo should describe the parquet file being read.
+// NewParquetReader creates a [ParquetReader] from |fr| and |sche|.
+//
+// Columns in |sche| that are not present in the parquet file are skipped so
+// import callers can report schema mismatch warnings and continue processing.
+// This mirrors the update-import behavior used for other flat-file readers.
 func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche schema.Schema) (*ParquetReader, error) {
 	pr, err := reader.NewParquetColumnReader(fr, 4)
 	if err != nil {
@@ -87,6 +90,7 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 	rLevels := make(map[string][]int32)
 	dLevels := make(map[string][]int32)
 	rowReadCounters := make(map[string]int)
+	chosenColumns := make([]schema.Column, 0, len(columns))
 	var colName []string
 	for _, col := range columns {
 		pathName := common.ReformPathStr(fmt.Sprintf("%s.%s", rootName, col.Name))
@@ -95,10 +99,12 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 			return nil, fmt.Errorf("cannot read column: %s", err.Error())
 		}
 		if !found {
+			// Missing columns are ignored so downstream import code can handle
+			// schema differences uniformly across file formats.
 			if resolvedColumnName != "" {
 				return nil, fmt.Errorf("cannot read column: %s is ambiguous", resolvedColumnName)
 			}
-			return nil, fmt.Errorf("cannot read column: %s Column not found", col.Name)
+			continue
 		}
 		colData, rLevel, dLevel, cErr := pr.ReadColumnByPath(resolvedColumnName, num)
 		if cErr != nil {
@@ -111,12 +117,23 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 		dLevels[col.Name] = dLevel
 		rowReadCounters[col.Name] = 0
 		colName = append(colName, col.Name)
+		chosenColumns = append(chosenColumns, col)
+	}
+
+	if len(chosenColumns) == 0 {
+		return nil, fmt.Errorf("cannot read column: no matching columns found in parquet file")
+	}
+
+	chosenColumnCollection := schema.NewColCollection(chosenColumns...)
+	chosenSchema, schErr := schema.SchemaFromCols(chosenColumnCollection)
+	if schErr != nil {
+		chosenSchema = schema.UnkeyedSchemaFromCols(chosenColumnCollection)
 	}
 
 	return &ParquetReader{
 		fileReader:      fr,
 		pReader:         pr,
-		sch:             sche,
+		sch:             chosenSchema,
 		vrw:             vrw,
 		numRow:          int(num),
 		rowsRead:        0,
@@ -128,18 +145,25 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 	}, nil
 }
 
-// resolveColumnPrefix takes a path into a parquet schema and determines:
-// - whether there is exactly one leaf column corresponding to that path
-// - whether any of the types after the prefix are repeated.
+// resolveColumnPrefix reports whether |columnPrefix| resolves to exactly one
+// leaf parquet column and whether the resolved path includes repeated types.
+//
+// If |columnPrefix| is not present in the parquet schema, it returns
+// |found| == false and a nil error. Parse and traversal failures return a
+// non-nil error.
 func resolveColumnPrefix(pr *reader.ParquetReader, columnPrefix string) (columnName string, found bool, isRepeated bool, err error) {
 	inPath, err := pr.SchemaHandler.ConvertToInPathStr(columnPrefix)
 	if err != nil {
-		return "", false, false, err
+		return "", false, false, nil
 	}
 
-	segments := strings.Split(inPath, "\x01")
+	pathSegments := strings.Split(inPath, "\x01")
 	pathMapType := pr.SchemaHandler.PathMap
-	for _, segment := range segments[1:] {
+	if len(pathSegments) < 2 || pathSegments[0] != pathMapType.Path {
+		return "", false, false, nil
+	}
+
+	for _, segment := range pathSegments[1:] {
 		pathMapType, found = pathMapType.Children[segment]
 		if !found {
 			return "", false, isRepeated, nil

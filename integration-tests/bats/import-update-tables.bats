@@ -1486,3 +1486,131 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: --all-text is only supported for create operations" ]] || false
 }
+
+#https://github.com/dolthub/dolt/issues/10589
+@test "import-update-tables: table has more columns than flat file warns and continues for CSV and Parquet" {
+    dolt sql <<SQL
+CREATE TABLE with_created_at_csv (
+    id INT PRIMARY KEY,
+    name VARCHAR(100),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE with_created_at_parquet (
+    id INT PRIMARY KEY,
+    name VARCHAR(100),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO with_created_at_csv (id, name) VALUES (1, 'alice');
+INSERT INTO with_created_at_parquet (id, name) VALUES (1, 'alice');
+SQL
+
+    cat <<DELIM > subset.csv
+id,name
+2,bob
+DELIM
+
+    run dolt table import -u with_created_at_csv subset.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
+    [[ "$output" =~ "Missing columns in with_created_at_csv:" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "SELECT id, name FROM with_created_at_csv ORDER BY id"
+    [ "${lines[1]}" = "1,alice" ]
+    [ "${lines[2]}" = "2,bob" ]
+
+    # Create a parquet flat file with the same two columns / row values as subset.csv.
+    dolt sql -q "CREATE TABLE parquet_subset (id INT PRIMARY KEY, name VARCHAR(100));"
+    dolt sql -q "INSERT INTO parquet_subset VALUES (2, 'bob');"
+    dolt table export parquet_subset subset.parquet
+    dolt sql -q "DROP TABLE parquet_subset;"
+
+    run dolt table import -u with_created_at_parquet subset.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
+    [[ "$output" =~ "Missing columns in with_created_at_parquet:" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "SELECT id, name FROM with_created_at_parquet ORDER BY id"
+    [ "${lines[1]}" = "1,alice" ]
+    [ "${lines[2]}" = "2,bob" ]
+}
+
+
+@test "import-update-tables: parquet subsetting throws error with not null column" {
+    cat <<SQL > 1pk5col-ints-def-sch.sql
+CREATE TABLE test (
+  pk int NOT NULL COMMENT 'tag:0',
+  c1 int,
+  c2 int,
+  c3 int,
+  c4 int NOT NULL,
+  c5 int,
+  PRIMARY KEY (pk)
+);
+SQL
+
+    dolt sql < 1pk5col-ints-def-sch.sql
+
+    dolt sql <<SQL
+CREATE TABLE parquet_subset (
+  pk int PRIMARY KEY,
+  c1 int,
+  c2 int,
+  c5 int,
+  c3 int
+);
+INSERT INTO parquet_subset VALUES (0,1,2,6,3);
+SQL
+    dolt table export parquet_subset 1pk5col-ints-updt.parquet
+    dolt sql -q "DROP TABLE parquet_subset;"
+
+    run dolt table import -u test 1pk5col-ints-updt.parquet
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Field 'c4' doesn't have a default value" ]] || false
+}
+
+@test "import-update-tables: parquet subsetting but with defaults" {
+    cat <<SQL > 1pk5col-ints-def-sch.sql
+CREATE TABLE test (
+  pk int NOT NULL COMMENT 'tag:0',
+  c1 int,
+  c2 int,
+  c3 int,
+  c4 int DEFAULT 42,
+  c5 int,
+  PRIMARY KEY (pk)
+);
+SQL
+
+    dolt sql < 1pk5col-ints-def-sch.sql
+
+    dolt sql <<SQL
+CREATE TABLE parquet_subset (
+  pk int PRIMARY KEY,
+  c1 int,
+  c2 int,
+  c5 int,
+  c3 int
+);
+INSERT INTO parquet_subset VALUES (0,1,2,6,3);
+SQL
+    dolt table export parquet_subset 1pk5col-ints-updt.parquet
+    dolt sql -q "DROP TABLE parquet_subset;"
+
+    run dolt table import -u test 1pk5col-ints-updt.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
+    [[ "$output" =~ "Missing columns in test:" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${lines[1]}" = "0,1,2,3,42,6" ]
+
+    run dolt sql -q "select count(*) from test"
+    [[ "$output" =~ "1" ]] || false
+}
+
