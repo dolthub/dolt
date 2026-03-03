@@ -302,12 +302,15 @@ func (p *DoltDatabaseProvider) Close() {
 	}
 
 	// Close cached remote databases.
-	p.mu.RLock()
-	remoteDbs := make([]*doltdb.DoltDB, 0, len(p.remoteDbs))
-	for _, rdb := range p.remoteDbs {
-		remoteDbs = append(remoteDbs, rdb)
-	}
-	p.mu.RUnlock()
+	var remoteDbs []*doltdb.DoltDB
+	func() {
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		remoteDbs = make([]*doltdb.DoltDB, 0, len(p.remoteDbs))
+		for _, rdb := range p.remoteDbs {
+			remoteDbs = append(remoteDbs, rdb)
+		}
+	}()
 	for _, rdb := range remoteDbs {
 		_ = rdb.Close()
 	}
@@ -562,12 +565,14 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 		// double-close panic on process exit.
 		isGitRemote := strings.HasPrefix(strings.ToLower(r.Url), "git+")
 		if isGitRemote {
-			p.mu.RLock()
-			if cached, ok := p.remoteDbs[r.Url]; ok {
-				p.mu.RUnlock()
+			cached := func() *doltdb.DoltDB {
+				p.mu.RLock()
+				defer p.mu.RUnlock()
+				return p.remoteDbs[r.Url]
+			}()
+			if cached != nil {
 				return cached, nil
 			}
-			p.mu.RUnlock()
 		}
 
 		remoteDB, err := r.GetRemoteDB(ctx, format, dialer)
@@ -576,14 +581,19 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 		}
 
 		if isGitRemote {
-			p.mu.Lock()
-			if cached, ok := p.remoteDbs[r.Url]; ok {
-				p.mu.Unlock()
+			cached := func() *doltdb.DoltDB {
+				p.mu.Lock()
+				defer p.mu.Unlock()
+				if existing, ok := p.remoteDbs[r.Url]; ok {
+					return existing
+				}
+				p.remoteDbs[r.Url] = remoteDB
+				return nil
+			}()
+			if cached != nil {
 				_ = remoteDB.Close()
 				return cached, nil
 			}
-			p.remoteDbs[r.Url] = remoteDB
-			p.mu.Unlock()
 		}
 		return remoteDB, nil
 	}

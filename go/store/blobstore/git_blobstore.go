@@ -552,6 +552,11 @@ func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
 func (gbs *GitBlobstore) Close() error {
 	ctx := context.Background()
 
+	// Best-effort periodic GC to repack the cache repo. Runs outside the
+	// write lock so a slow gc cannot serialize other writers. maybeRunGC
+	// has its own file-based lock for cross-process coordination.
+	gbs.maybeRunGC()
+
 	gbs.writeMu.Lock()
 	defer gbs.writeMu.Unlock()
 
@@ -569,9 +574,6 @@ func (gbs *GitBlobstore) Close() error {
 		_, err = gbs.runner.Run(ctx, git.RunOptions{}, "update-ref", "-d", ref)
 		return err
 	}
-
-	// Best-effort periodic GC to repack the cache repo.
-	gbs.maybeRunGC()
 
 	return errors.Join(
 		deleteIfExists(gbs.localRef),
@@ -604,11 +606,7 @@ func (gbs *GitBlobstore) maybeRunGC() {
 	if err := lck.LockWithTimeout(0); err != nil {
 		return // another process holds the lock, skip
 	}
-	defer func() {
-		if err := lck.Unlock(); err != nil {
-			panic(fmt.Sprintf("failed to unlock %s: %v", lockPath, err))
-		}
-	}()
+	defer lck.Unlock()
 
 	// Re-check after acquiring lock — another instance may have GC'd.
 	if info, err := os.Stat(markerPath); err == nil {
@@ -617,7 +615,8 @@ func (gbs *GitBlobstore) maybeRunGC() {
 		}
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 	_, _ = gbs.runner.Run(ctx, git.RunOptions{}, "gc", "--prune=now")
 	_ = os.WriteFile(markerPath, nil, 0644)
 }
