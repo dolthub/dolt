@@ -120,7 +120,7 @@ func FindTableInRoots(ctx *sql.Context, roots doltdb.Roots, name string) (doltdb
 
 // RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
 // returned roots struct has |Head| set to |branchRoot|.
-func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue, force bool, overwriteIgnore bool) (doltdb.Roots, error) {
+func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := doltdb.NewTableNameSet(nil)
 	if roots.Head == nil {
 		roots.Working = branchRoot
@@ -141,10 +141,6 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 
 	if conflicts.Size() > 0 {
 		return doltdb.Roots{}, ErrCheckoutWouldOverwrite{conflicts.AsStringSlice()}
-	}
-
-	if err := CheckOverwrittenIgnoredTables(ctx, roots, branchRoot, overwriteIgnore); err != nil {
-		return doltdb.Roots{}, err
 	}
 
 	workingForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Working, force)
@@ -342,33 +338,37 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltd
 	return resultMap, nil
 }
 
-// FindOverwrittenIgnoredTables returns ignored tables in |roots.Working| that have a different hash
-// in |branchRoot|. |branchRoot| is the HEAD root of the target branch being checked out.
-func FindOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue) ([]string, error) {
+// CheckOverwrittenIgnoredTables returns an error if |overwriteIgnore| is false and any ignored
+// tables in |roots.Working| would be overwritten by checking out |branchRoot|.
+func CheckOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue, overwriteIgnore bool) error {
+	if overwriteIgnore {
+		return nil
+	}
+
 	workingTables, err := doltdb.UnionTableNames(ctx, roots.Working)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	ignoredTables, err := doltdb.IdentifyIgnoredTables(ctx, roots, workingTables)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if len(ignoredTables) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	var overwritten []string
 	for _, tbl := range ignoredTables {
 		currentHash, _, err := roots.Working.GetTableHash(ctx, tbl)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		newHash, _, err := branchRoot.GetTableHash(ctx, tbl)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// Only flag an overwrite when the target branch has the table
@@ -381,19 +381,6 @@ func FindOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, branc
 		}
 	}
 
-	return overwritten, nil
-}
-
-// CheckOverwrittenIgnoredTables returns an error if |overwriteIgnore| is false and any ignored
-// tables in |roots.Working| would be overwritten by checking out |branchRoot|.
-func CheckOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue, overwriteIgnore bool) error {
-	if overwriteIgnore {
-		return nil
-	}
-	overwritten, err := FindOverwrittenIgnoredTables(ctx, roots, branchRoot)
-	if err != nil {
-		return err
-	}
 	if len(overwritten) > 0 {
 		return ErrCheckoutWouldOverwriteIgnoredTables{Tables: overwritten}
 	}

@@ -15,7 +15,6 @@
 package dprocedures
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -94,13 +93,6 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return fmt.Errorf("unable to get roots")
 	}
 
-	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
-	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-		workingSetExists = false
-	} else if err != nil {
-		return err
-	}
-
 	hasChanges := false
 	if workingSetExists {
 		hasChanges, _, _, err = actions.RootHasUncommittedChanges(initialRoots)
@@ -114,19 +106,19 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return fmt.Errorf("Could not load database %s", dbName)
 	}
 
+	if err := actions.CheckOverwrittenIgnoredTables(ctx, initialRoots, branchHead, overwriteIgnore); err != nil {
+		return err
+	}
+
 	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
 	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
 	// checkoutWouldStompWorkingSetChanges
 	if hasChanges {
-		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force, overwriteIgnore)
+		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force)
 		if err != nil {
 			return err
 		}
 	} else {
-		if err := actions.CheckOverwrittenIgnoredTables(ctx, initialRoots, branchHead, overwriteIgnore); err != nil {
-			return err
-		}
-
 		wsRef, err := ref.WorkingSetRefForHead(branchRef)
 		if err != nil {
 			return err
@@ -159,13 +151,12 @@ func transferWorkingChanges(
 	branchHead doltdb.RootValue,
 	branchRef ref.BranchRef,
 	force bool,
-	overwriteIgnore bool,
 ) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	// Compute the new roots before switching the working set.
 	// This way, we don't leave the branch in a bad state in the event of an error.
-	newRoots, err := actions.RootsForBranch(ctx, initialRoots, branchHead, force, overwriteIgnore)
+	newRoots, err := actions.RootsForBranch(ctx, initialRoots, branchHead, force)
 	if err != nil {
 		return err
 	}
