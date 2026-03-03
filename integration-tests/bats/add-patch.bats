@@ -349,12 +349,12 @@ teardown() {
   ! [[ "$output" =~ "charlie" ]] || false
 
   # Verify workspace table shows correct state
-  run dolt sql -q "SELECT staged, to_pk, to_name FROM dolt_workspace_new_table ORDER BY to_pk" -r csv
+  run dolt sql -q "SELECT IF(staged, 'true', 'false'), to_pk, to_name FROM dolt_workspace_new_table ORDER BY to_pk" -r csv
   [ $status -eq 0 ]
   # First row should be staged (true), others should not be (false)
-  [[ "$output" =~ "1,1,alice"   ]] || false
-  [[ "$output" =~ "0,2,bob"     ]] || false
-  [[ "$output" =~ "0,3,charlie" ]] || false
+  [[ "$output" =~ "true,1,alice"    ]] || false
+  [[ "$output" =~ "false,2,bob"     ]] || false
+  [[ "$output" =~ "false,3,charlie" ]] || false
 
   # Commit the staged changes
   dolt commit -m "partial staging test"
