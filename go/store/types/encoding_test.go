@@ -172,26 +172,6 @@ func TestWritePrimitives(t *testing.T) {
 		String("hi"))
 }
 
-func TestWriteTuple(t *testing.T) {
-	vrw := newTestValueStore()
-	assertEncoding(t,
-		[]interface{}{
-			TupleKind, uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
-		},
-		mustValue(NewTuple(vrw.Format(), Float(0), Float(1), Float(2), Float(3))),
-	)
-}
-
-func TestWriteEmptyTuple(t *testing.T) {
-	vrw := newTestValueStore()
-	assertEncoding(t,
-		[]interface{}{
-			TupleKind, uint64(0), /* len */
-		},
-		mustValue(NewTuple(vrw.Format())),
-	)
-}
-
 func TestWriteRef(t *testing.T) {
 	r := hash.Parse("0123456789abcdefghijklmnopqrstuv")
 	vrw := newTestValueStore()

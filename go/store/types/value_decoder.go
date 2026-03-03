@@ -55,7 +55,6 @@ type CodecReader interface {
 	ReadMultiLineString() (MultiLineString, error)
 	ReadMultiPolygon() (MultiPolygon, error)
 	ReadGeomColl() (GeomColl, error)
-	ReadJSON() (JSON, error)
 }
 
 var _ CodecReader = (*valueDecoder)(nil)
@@ -112,10 +111,6 @@ func (r *valueDecoder) ReadGeomColl() (GeomColl, error) {
 	return readGeomColl(nil, r)
 }
 
-func (r *valueDecoder) ReadJSON() (JSON, error) {
-	return readJSON(r.vrw.Format(), r)
-}
-
 func (r *valueDecoder) readRef(nbf *NomsBinFormat) (Ref, error) {
 	return readRef(nbf, &(r.typedBinaryNomsReader))
 }
@@ -163,10 +158,6 @@ func (r *valueDecoder) skipMap(nbf *NomsBinFormat) error {
 
 func (r *valueDecoder) skipBlob(nbf *NomsBinFormat) error {
 	return r.skipSequence(nbf, BlobKind, r.skipBlobLeafSequence)
-}
-
-func (r *valueDecoder) skipJSON(nbf *NomsBinFormat) error {
-	return skipJSON(nbf, r)
 }
 
 func (r *valueDecoder) skipSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipper func(nbf *NomsBinFormat) ([]uint32, uint64, error)) error {
@@ -261,10 +252,8 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return r.readRef(nbf)
 	case StructKind:
 		return nil, fmt.Errorf("unsupported kind: %s", k)
-	case TupleKind:
-		return r.readTuple(nbf)
-	case JSONKind:
-		return r.ReadJSON()
+	case TupleKind, JSONKind:
+		return nil, fmt.Errorf("unsupported kind: %s", k)
 	case GeometryKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
@@ -457,16 +446,8 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 				return err
 			}
 		}
-	case TupleKind:
-		err := r.skipTuple(nbf)
-		if err != nil {
-			return err
-		}
-	case JSONKind:
-		err := r.skipJSON(nbf)
-		if err != nil {
-			return err
-		}
+	case TupleKind, JSONKind:
+		return fmt.Errorf("unsupported kind: %s", k)
 	case TypeKind:
 		r.skipKind()
 		err := r.skipType()
@@ -534,20 +515,8 @@ func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
 			}
 		}
 		return makeStructTypeQuickly(name, typeFields)
-	case TupleKind:
-		val, err := r.readValue(nbf)
-		if err != nil {
-			return nil, err
-		}
-		d.Chk.True(val != nil)
-		return val.typeOf()
-	case JSONKind:
-		val, err := r.readValue(nbf)
-		if err != nil {
-			return nil, err
-		}
-		d.Chk.True(val != nil)
-		return val.typeOf()
+	case TupleKind, JSONKind:
+		return nil, fmt.Errorf("unsupported kind: %s", k)
 	case TypeKind:
 		r.skipKind()
 		err := r.skipType()
@@ -582,7 +551,7 @@ func (r *valueDecoder) isValueSameTypeForSure(nbf *NomsBinFormat, t *Type) (bool
 	}
 
 	switch k {
-	case RefKind, TupleKind:
+	case RefKind:
 		// TODO: Maybe do some simple cases here too. Performance metrics should determine
 		// what is going to be worth doing.
 		// https://github.com/attic-labs/noms/issues/3776
@@ -648,14 +617,6 @@ func (r *valueDecoder) isStringSame(s string) bool {
 		}
 	}
 	return true
-}
-
-func (r *valueDecoder) readTuple(nbf *NomsBinFormat) (Tuple, error) {
-	return readTuple(nbf, r)
-}
-
-func (r *valueDecoder) skipTuple(nbf *NomsBinFormat) error {
-	return skipTuple(nbf, r)
 }
 
 func (r *typedBinaryNomsReader) readType() (*Type, error) {
@@ -731,22 +692,6 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 		return makeCompoundType(SetKind, t)
 	case StructKind:
 		return r.readStructType(seenStructs)
-	case TupleKind:
-		t, err := r.readTypeInner(seenStructs)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return makeCompoundType(TupleKind, t)
-	case JSONKind:
-		t, err := r.readTypeInner(seenStructs)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return makeCompoundType(JSONKind, t)
 	case UnionKind:
 		t, err := r.readUnionType(seenStructs)
 
@@ -770,7 +715,7 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 func (r *typedBinaryNomsReader) skipTypeInner() {
 	k := r.ReadKind()
 	switch k {
-	case ListKind, RefKind, SetKind, TupleKind, JSONKind:
+	case ListKind, RefKind, SetKind:
 		r.skipTypeInner()
 	case MapKind:
 		r.skipTypeInner()

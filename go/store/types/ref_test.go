@@ -26,11 +26,10 @@ func TestRefTargetHash(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	tup, err := NewTuple(vs.Format(), Float(42), String("hello"))
+	val := String("hello")
+	r, err := NewRef(val, vs.Format())
 	require.NoError(t, err)
-	r, err := NewRef(tup, vs.Format())
-	require.NoError(t, err)
-	h, err := tup.Hash(vs.Format())
+	h, err := val.Hash(vs.Format())
 	require.NoError(t, err)
 	assert.Equal(h, r.TargetHash())
 }

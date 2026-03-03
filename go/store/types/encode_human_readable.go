@@ -202,48 +202,6 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 	case BlobKind, ListKind, MapKind, SetKind:
 		return fmt.Errorf("unsupported collection kind: %s", v.Kind())
 
-	case TupleKind:
-		w.write("(")
-		err := v.(Tuple).IterFields(func(i uint64, v Value) (bool, error) {
-			if i != 0 {
-				w.write(",")
-			}
-
-			err := w.Write(ctx, v)
-
-			if err != nil {
-				return false, err
-			}
-
-			if w.err != nil {
-				return false, w.err
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return err
-		}
-
-		w.write(")")
-
-	case JSONKind:
-		w.write("json {")
-		w.indent()
-		vv, err := v.(JSON).Inner()
-		if err != nil {
-			return err
-		}
-
-		err = w.Write(ctx, vv)
-		if err != nil {
-			return err
-		}
-
-		w.outdent()
-		w.write("}")
-
 	case RefKind:
 		w.write("#")
 		w.write(v.(Ref).TargetHash().String())
@@ -267,7 +225,7 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
-	case ListKind, RefKind, SetKind, MapKind, TupleKind, JSONKind:
+	case ListKind, RefKind, SetKind, MapKind:
 		w.write(t.TargetKind().String())
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {

@@ -14,12 +14,6 @@
 
 package schema
 
-import (
-	"context"
-	"io"
-
-	"github.com/dolthub/dolt/go/store/types"
-)
 
 type Index interface {
 	// AllTags returns the tags of the columns in the entire index, including the primary keys.
@@ -57,9 +51,6 @@ type Index interface {
 	PrimaryKeyTags() []uint64
 	// Schema returns the schema for the internal index map. Can be used for table operations.
 	Schema() Schema
-	// ToTableTuple returns a tuple that may be used to retrieve the original row from the indexed table when given
-	// a full index key (and not a partial index key).
-	ToTableTuple(ctx context.Context, fullKey types.Tuple, format *types.NomsBinFormat) (types.Tuple, error)
 	// PrefixLengths returns the prefix lengths for the index
 	PrefixLengths() []uint16
 	// FullTextProperties returns all properties belonging to a Full-Text index.
@@ -273,43 +264,6 @@ func (ix *indexImpl) Schema() Schema {
 		checkCollection:     NewCheckCollection(),
 		contentHashedFields: contentHashedFields,
 	}
-}
-
-// ToTableTuple implements Index.
-func (ix *indexImpl) ToTableTuple(ctx context.Context, fullKey types.Tuple, format *types.NomsBinFormat) (types.Tuple, error) {
-	pkTags := make(map[uint64]int)
-	for i, tag := range ix.indexColl.pks {
-		pkTags[tag] = i
-	}
-	tplItr, err := fullKey.Iterator()
-	if err != nil {
-		return types.Tuple{}, err
-	}
-	resVals := make([]types.Value, len(pkTags)*2)
-	for {
-		_, tag, err := tplItr.NextUint64()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return types.Tuple{}, err
-		}
-		idx, inPK := pkTags[tag]
-		if inPK {
-			_, valVal, err := tplItr.Next()
-			if err != nil {
-				return types.Tuple{}, err
-			}
-			resVals[idx*2] = types.Uint(tag)
-			resVals[idx*2+1] = valVal
-		} else {
-			err := tplItr.Skip()
-			if err != nil {
-				return types.Tuple{}, err
-			}
-		}
-	}
-	return types.NewTuple(format, resVals...)
 }
 
 // PrefixLengths implements Index.

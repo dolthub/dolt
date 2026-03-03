@@ -231,8 +231,6 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return StringDefaultType
 	case types.TimestampKind:
 		return DatetimeType
-	case types.TupleKind:
-		return TupleType
 	case types.UintKind:
 		return Uint64Type
 	case types.UUIDKind:

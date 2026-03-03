@@ -122,8 +122,6 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 		r.walkBlobLeafSequence()
 		return nil
-	case JSONKind:
-		return r.walkJSON(nbf, cb)
 	case ListKind:
 		r.skipKind()
 		level := r.readCount()
@@ -167,8 +165,6 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 		}
 		return nil
-	case TupleKind:
-		return r.walkTuple(nbf, cb)
 	case SerialMessageKind:
 		r.skipKind()
 		return r.walkSerialMessage(nbf, cb)
@@ -191,10 +187,3 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 
-func (r *refWalker) walkTuple(nbf *NomsBinFormat, cb RefCallback) error {
-	return walkTuple(nbf, r, cb)
-}
-
-func (r *refWalker) walkJSON(nbf *NomsBinFormat, cb RefCallback) error {
-	return walkJSON(nbf, r, cb)
-}

@@ -146,7 +146,7 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 		}
 
 		switch kind {
-		case ListKind, MapKind, RefKind, SetKind, UnionKind, TupleKind, JSONKind:
+		case ListKind, MapKind, RefKind, SetKind, UnionKind:
 			elemTypes := make(typeSlice, len(t.Desc.(CompoundDesc).ElemTypes))
 			for i, et := range t.Desc.(CompoundDesc).ElemTypes {
 				elemTypes[i] = rec(et)
@@ -202,7 +202,7 @@ func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) (*Type, err
 		case CycleKind:
 			break
 
-		case ListKind, MapKind, RefKind, SetKind, TupleKind, JSONKind:
+		case ListKind, MapKind, RefKind, SetKind:
 			elemTypes := t.Desc.(CompoundDesc).ElemTypes
 			for i, et := range elemTypes {
 				elemTypes[i], err = foldUnions(et, seenStructs, intersectStructs)
@@ -258,7 +258,7 @@ func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) (*Typ
 	for t := range ts {
 		var h how
 		switch t.TargetKind() {
-		case RefKind, SetKind, ListKind, MapKind, TupleKind, JSONKind:
+		case RefKind, SetKind, ListKind, MapKind:
 			h = how{k: t.TargetKind()}
 		case StructKind:
 			h = how{k: t.TargetKind(), n: t.Desc.(StructDesc).Name}
@@ -285,7 +285,7 @@ func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) (*Typ
 		var r *Type
 		var err error
 		switch h.k {
-		case ListKind, RefKind, SetKind, TupleKind, JSONKind:
+		case ListKind, RefKind, SetKind:
 			r, err = foldCompoundTypesForUnion(h.k, ts, seenStructs, intersectStructs)
 		case MapKind:
 			r, err = foldMapTypesForUnion(ts, seenStructs, intersectStructs)
