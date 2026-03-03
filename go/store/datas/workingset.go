@@ -150,11 +150,11 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 }
 
 func NewMergeState(
-		preMergeWorking types.Ref,
-		commit *Commit,
-		commitSpecStr string,
-		unmergableTables []string,
-		isCherryPick bool,
+	preMergeWorking types.Ref,
+	commit *Commit,
+	commitSpecStr string,
+	unmergableTables []string,
+	isCherryPick bool,
 ) (*MergeState, error) {
 	ms := &MergeState{
 		preMergeWorkingAddr: new(hash.Hash),

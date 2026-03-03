@@ -14,7 +14,6 @@
 
 package schema
 
-
 type Index interface {
 	// AllTags returns the tags of the columns in the entire index, including the primary keys.
 	// If we imagined a dolt index as being a standard dolt table, then the tags would represent the schema columns.

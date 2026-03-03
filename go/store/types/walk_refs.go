@@ -90,4 +90,3 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 
 	return nil
 }
-

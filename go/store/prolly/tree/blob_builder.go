@@ -18,12 +18,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/goccy/go-json"
-
-	"slices"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
