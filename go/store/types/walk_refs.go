@@ -22,6 +22,8 @@
 package types
 
 import (
+	"fmt"
+
 	"github.com/dolthub/dolt/go/store/d"
 )
 
@@ -52,57 +54,6 @@ func (r *refWalker) walkRef(nbf *NomsBinFormat, cb RefCallback) error {
 	return cb(ref)
 }
 
-func (r *refWalker) walkBlobLeafSequence() {
-	size := r.readCount()
-	r.offset += uint32(size)
-}
-
-func (r *refWalker) walkValueSequence(nbf *NomsBinFormat, cb RefCallback) error {
-	count := int(r.readCount())
-	for i := 0; i < count; i++ {
-		err := r.walkValue(nbf, cb)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *refWalker) walkMetaSequence(nbf *NomsBinFormat, k NomsKind, level uint64, cb RefCallback) error {
-	count := r.readCount()
-	for i := uint64(0); i < count; i++ {
-		err := r.walkRef(nbf, cb) // ref to child sequence
-
-		if err != nil {
-			return err
-		}
-
-		err = r.skipOrderedKey(nbf)
-
-		if err != nil {
-			return err
-		}
-
-		r.skipCount() // numLeaves
-	}
-
-	return nil
-}
-
-func (r *refWalker) skipOrderedKey(nbf *NomsBinFormat) error {
-	switch r.PeekKind() {
-	case hashKind:
-		r.skipKind()
-		r.skipHash()
-	default:
-		return r.walkValue(nbf, func(r Ref) error { return nil }) // max Value in subtree reachable from here
-	}
-
-	return nil
-}
-
 func (r *refWalker) walkSerialMessage(nbf *NomsBinFormat, cb RefCallback) error {
 	sm, err := SerialMessage{}.readFrom(nbf, &(r.typedBinaryNomsReader.binaryNomsReader))
 	if err != nil {
@@ -114,57 +65,10 @@ func (r *refWalker) walkSerialMessage(nbf *NomsBinFormat, cb RefCallback) error 
 func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 	k := r.PeekKind()
 	switch k {
-	case BlobKind:
-		r.skipKind()
-		level := r.readCount()
-		if level > 0 {
-			return r.walkMetaSequence(nbf, BlobKind, level, cb)
-		}
-		r.walkBlobLeafSequence()
-		return nil
-	case ListKind:
-		r.skipKind()
-		level := r.readCount()
-		if level > 0 {
-			return r.walkMetaSequence(nbf, ListKind, level, cb)
-		}
-		return r.walkValueSequence(nbf, cb)
-	case MapKind:
-		r.skipKind()
-		level := r.readCount()
-		if level > 0 {
-			return r.walkMetaSequence(nbf, MapKind, level, cb)
-		}
-		count := r.readCount()
-		for i := uint64(0); i < count; i++ {
-			if err := r.walkValue(nbf, cb); err != nil {
-				return err
-			}
-			if err := r.walkValue(nbf, cb); err != nil {
-				return err
-			}
-		}
-		return nil
+	case BlobKind, ListKind, MapKind, SetKind, StructKind:
+		return fmt.Errorf("unsupported kind: %s", k)
 	case RefKind:
 		return r.walkRef(nbf, cb)
-	case SetKind:
-		r.skipKind()
-		level := r.readCount()
-		if level > 0 {
-			return r.walkMetaSequence(nbf, SetKind, level, cb)
-		}
-		return r.walkValueSequence(nbf, cb)
-	case StructKind:
-		r.skipKind()
-		r.skipString()
-		count := r.readCount()
-		for i := uint64(0); i < count; i++ {
-			r.skipString()
-			if err := r.walkValue(nbf, cb); err != nil {
-				return err
-			}
-		}
-		return nil
 	case SerialMessageKind:
 		r.skipKind()
 		return r.walkSerialMessage(nbf, cb)
