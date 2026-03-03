@@ -334,7 +334,7 @@ teardown() {
   run dolt status
   [ $status -eq 0 ]
   [[ "$output" =~ "new table:" ]] || false
-  [[ "$output" =~ "new_table" ]] || false
+  [[ "$output" =~ "new_table"  ]] || false
 
   # Use add -p to stage only the first row (using expect script)
   run $BATS_TEST_DIRNAME/add-patch-expect/new_table.expect
@@ -345,7 +345,7 @@ teardown() {
   [ $status -eq 0 ]
   [[ "$output" =~ "alice" ]] || false
   # bob and charlie should NOT be in staged
-  ! [[ "$output" =~ "bob" ]] || false
+  ! [[ "$output" =~ "bob"     ]] || false
   ! [[ "$output" =~ "charlie" ]] || false
 
   # Verify workspace table shows correct state
@@ -362,15 +362,15 @@ teardown() {
   # Verify the table and only the first row were committed
   run dolt show
   [ $status -eq 0 ]
-  [[ "$output" =~ "added table" ]] || false
+  [[ "$output" =~ "added table"        ]] || false
   [[ "$output" =~ "| + | 1  | alice |" ]] || false
-  ! [[ "$output" =~ "bob" ]] || false
-  ! [[ "$output" =~ "charlie" ]] || false
+  ! [[ "$output" =~ "bob"              ]] || false
+  ! [[ "$output" =~ "charlie"          ]] || false
 
   # Verify working still has the other rows
   run dolt sql -q "SELECT * FROM dolt_workspace_new_table"
   [ $status -eq 0 ]
-  [[ "$output" =~ "bob" ]] || false
+  [[ "$output" =~ "bob"     ]] || false
   [[ "$output" =~ "charlie" ]] || false
 }
 
