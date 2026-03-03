@@ -162,19 +162,17 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		// content_hash is optional.
+		var contentHash []byte
 		chs := q.Get("content_hash")
-		if chs == "" {
-			logger = logger.WithField("status", http.StatusBadRequest)
-			logger.Warn("bad request: content_hash parameter not provided")
-			respWr.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		contentHash, err := base64.RawURLEncoding.DecodeString(chs)
-		if err != nil {
-			logger = logger.WithField("status", http.StatusBadRequest)
-			logger.WithError(err).Warn("bad request: content_hash parameter did not parse")
-			respWr.WriteHeader(http.StatusBadRequest)
-			return
+		if chs != "" {
+			contentHash, err = base64.RawURLEncoding.DecodeString(chs)
+			if err != nil {
+				logger = logger.WithField("status", http.StatusBadRequest)
+				logger.WithError(err).Warn("bad request: content_hash parameter did not parse")
+				respWr.WriteHeader(http.StatusBadRequest)
+				return
+			}
 		}
 
 		// splitOffset is not required to allow for backwards compatibility with older clients.
@@ -294,7 +292,7 @@ func (u *uploadreader) Close() error {
 		return errBodyLengthTFDMismatch
 	}
 	sum := u.checksum.Sum(nil)
-	if !bytes.Equal(u.expectedsum, sum[:]) {
+	if u.expectedsum != nil && !bytes.Equal(u.expectedsum, sum[:]) {
 		return errBodyHashTFDMismatch
 	}
 	return nil
