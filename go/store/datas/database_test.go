@@ -25,7 +25,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -39,19 +38,6 @@ func TestLocalDatabase(t *testing.T) {
 
 func TestRemoteDatabase(t *testing.T) {
 	suite.Run(t, &RemoteDatabaseSuite{})
-}
-
-func TestValidateRef(t *testing.T) {
-	st := &chunks.TestStorage{}
-	db := NewDatabase(st.NewViewWithDefaultFormat()).(*database)
-	defer db.Close()
-	b := types.Bool(true)
-	r, err := db.WriteValue(context.Background(), b)
-	assert.NoError(t, err)
-
-	err = db.validateRefAsCommit(context.Background(), r)
-	assert.Error(t, err)
-	err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, db.Format())))
 }
 
 type DatabaseSuite struct {

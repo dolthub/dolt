@@ -25,34 +25,8 @@ import (
 )
 
 const (
-	workingSetName      = "WorkingSet"
-	workingSetMetaField = "meta"
-	workingRootRefField = "workingRootRef"
-	stagedRootRefField  = "stagedRootRef"
+	workingSetName = "WorkingSet"
 )
-
-const (
-	mergeStateName                 = "MergeState"
-	mergeStateField                = "mergeState"
-	mergeStateCommitSpecField      = "commitSpec"
-	mergeStateCommitField          = "commit"
-	mergeStateWorkingPreMergeField = "workingPreMerge"
-)
-
-const (
-	rebaseStateField = "rebaseState"
-)
-
-const (
-	workingSetMetaName             = "WorkingSetMeta"
-	workingSetMetaNameField        = "name"
-	workingSetMetaEmailField       = "email"
-	workingSetMetaTimestampField   = "timestamp"
-	workingSetMetaDescriptionField = "description"
-	workingSetMetaVersionField     = "version"
-)
-
-const workingSetMetaVersion = "1.0"
 
 type WorkingSetMeta struct {
 	Name        string
@@ -176,11 +150,11 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 }
 
 func NewMergeState(
-	preMergeWorking types.Ref,
-	commit *Commit,
-	commitSpecStr string,
-	unmergableTables []string,
-	isCherryPick bool,
+		preMergeWorking types.Ref,
+		commit *Commit,
+		commitSpecStr string,
+		unmergableTables []string,
+		isCherryPick bool,
 ) (*MergeState, error) {
 	ms := &MergeState{
 		preMergeWorkingAddr: new(hash.Hash),
@@ -205,11 +179,4 @@ func NewRebaseState(preRebaseWorkingRoot hash.Hash, commitAddr hash.Hash, branch
 		rebasingStarted:            rebasingStarted,
 		skipVerification:           skipVerification,
 	}
-}
-
-func IsWorkingSet(v types.Value) (bool, error) {
-	if sm, ok := v.(types.SerialMessage); ok {
-		return serial.GetFileID(sm) == serial.WorkingSetFileID, nil
-	}
-	return false, nil
 }

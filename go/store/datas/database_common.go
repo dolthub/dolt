@@ -937,20 +937,6 @@ func (db *database) tryCommitChunks(ctx context.Context, newRootHash hash.Hash, 
 	return nil
 }
 
-func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) error {
-	rHead, err := db.readHead(ctx, r.TargetHash())
-	if err != nil {
-		return err
-	}
-	if rHead == nil {
-		return fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
-	}
-	if rHead.TypeName() != commitName {
-		return fmt.Errorf("validateRefAsCommit: referred values is not a commit")
-	}
-	return nil
-}
-
 func hasParentHash(opts CommitOptions, curr hash.Hash) bool {
 	found := false
 	for _, h := range opts.Parents {

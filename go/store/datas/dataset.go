@@ -219,18 +219,12 @@ type MergeState struct {
 	isCherryPick        bool
 }
 
-func (ms *MergeState) PreMergeWorkingAddr(ctx context.Context, vr types.ValueReader) (hash.Hash, error) {
-	if ms.preMergeWorkingAddr != nil {
-		return *ms.preMergeWorkingAddr, nil
-	}
-	return hash.Hash{}, fmt.Errorf("unsupported: legacy noms merge state format")
+func (ms *MergeState) PreMergeWorkingAddr() (hash.Hash, error) {
+	return *ms.preMergeWorkingAddr, nil
 }
 
 func (ms *MergeState) FromCommit(ctx context.Context, vr types.ValueReader) (*Commit, error) {
-	if ms.fromCommitAddr != nil {
-		return LoadCommitAddr(ctx, vr, *ms.fromCommitAddr)
-	}
-	return nil, fmt.Errorf("unsupported: legacy noms merge state format")
+	return LoadCommitAddr(ctx, vr, *ms.fromCommitAddr)
 }
 
 func (ms *MergeState) FromCommitSpec() (string, error) {
@@ -487,25 +481,28 @@ func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, err
 		return nil, fmt.Errorf("head value is nil for address %s", addr.String())
 	}
 
-	if sm, ok := head.(types.SerialMessage); ok {
-		data := []byte(sm)
-		switch serial.GetFileID(data) {
-		case serial.TagFileID:
-			return newSerialTagHead(data, addr)
-		case serial.WorkingSetFileID:
-			return newSerialWorkingSetHead(data, addr)
-		case serial.CommitFileID:
-			return newSerialCommitHead(sm, addr), nil
-		case serial.StashListFileID:
-			return newSerialStashListHead(sm, addr), nil
-		case serial.StatisticFileID:
-			return newStatisticHead(sm, addr), nil
-		case serial.TupleFileID:
-			return newTupleHead(sm, addr), nil
-		}
+	sm, ok := head.(types.SerialMessage)
+	if !ok {
+		return nil, fmt.Errorf("expected SerialMessage type, found %T", head)
 	}
 
-	return nil, fmt.Errorf("database: fetched head at %v but it was not a recognized serial message type", addr)
+	data := []byte(sm)
+	switch serial.GetFileID(data) {
+	case serial.TagFileID:
+		return newSerialTagHead(data, addr)
+	case serial.WorkingSetFileID:
+		return newSerialWorkingSetHead(data, addr)
+	case serial.CommitFileID:
+		return newSerialCommitHead(sm, addr), nil
+	case serial.StashListFileID:
+		return newSerialStashListHead(sm, addr), nil
+	case serial.StatisticFileID:
+		return newStatisticHead(sm, addr), nil
+	case serial.TupleFileID:
+		return newTupleHead(sm, addr), nil
+	default:
+		return nil, fmt.Errorf("database: fetched head at %v but it was not a recognized serial message type", addr)
+	}
 }
 
 func newDataset(ctx context.Context, db *database, id string, head types.Value, addr hash.Hash) (Dataset, error) {

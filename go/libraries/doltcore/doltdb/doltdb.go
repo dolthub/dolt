@@ -827,7 +827,7 @@ func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash
 			return nil, err
 		}
 		ret = append(ret, h)
-		h, err = spec.MergeState.PreMergeWorkingAddr(ctx, ddb.vrw)
+		h, err = spec.MergeState.PreMergeWorkingAddr()
 		ret = append(ret, h)
 	}
 	if spec.RebaseState != nil {
