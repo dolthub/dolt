@@ -940,7 +940,7 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 	}
 	p.applyDBLoadParamsToEnv(dEnv)
 
-	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, depth, dEnv, statsCh)
 	})
 	if err != nil {

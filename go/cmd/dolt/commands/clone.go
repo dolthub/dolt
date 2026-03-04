@@ -166,7 +166,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	// Nil out the old Dolt env so we don't accidentally operate on the wrong database
 	dEnv = nil
 
-	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, depth, clonedEnv, statsCh)
 	})
 	if err != nil {

@@ -239,7 +239,7 @@ func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, bra
 		}
 
 		var cm *doltdb.Commit
-		pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+		pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 			cm, err = actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, branchRef, statsCh)
 		})
 		if err != nil {

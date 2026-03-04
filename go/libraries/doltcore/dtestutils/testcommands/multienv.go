@@ -200,7 +200,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 
-	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.CloneRemote(ctx, srcDB, r.Name, "", false, -1, dEnv, statsCh)
 	})
 	if err != nil {
@@ -362,7 +362,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 		DestDb:  remoteDB,
 		TmpDir:  tmpDir,
 	}
-	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		_, err = actions.DoPush(ctx, pushOptions, statsCh)
 	})
 	if err != nil {

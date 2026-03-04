@@ -116,7 +116,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		DestDb:  remoteDB,
 		TmpDir:  tmpDir,
 	}
-	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		returnMsg, err = actions.DoPush(ctx, po, statsCh)
 	})
 	if err != nil {

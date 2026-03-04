@@ -268,7 +268,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	}
 
 	// Unlike CloneDatabaseFromRemote which clones tracking branches (remote refs), we need all local changes.
-	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.SyncRoots(ctx, remoteDb, newDb.DbData().Ddb, fileSys.TempDir(), statsCh)
 	})
 	if err == nil {
@@ -302,7 +302,7 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 		return err
 	}
 
-	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), statsCh)
 	})
 	if err == nil {
