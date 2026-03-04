@@ -1700,8 +1700,8 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (chunks.TableFileSources
 	}
 
 	return chunks.TableFileSources{
-		Root: contents.GetRoot(),
-		TableFiles: allTableFiles,
+		Root:               contents.GetRoot(),
+		TableFiles:         allTableFiles,
 		AppendixTableFiles: appendixTableFiles,
 	}, nil
 }

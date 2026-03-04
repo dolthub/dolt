@@ -814,13 +814,13 @@ func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, de
 	if err != nil {
 		return false, err
 	}
-	if sizes.JournalBytes >= (sizes.TotalBytes/5) {
+	if sizes.JournalBytes >= (sizes.TotalBytes / 5) {
 		// The journal is more than 20% of the entire source.
 		// For now we do a merkle walk instead of converting
 		// all the chunks.
 		return false, nil
 	}
-	if sizes.JournalBytes > 16 * 1024 * 1024 * 1024 {
+	if sizes.JournalBytes > 16*1024*1024*1024 {
 		// The journal is larger than 16GB.  For now we do a
 		// merkle walk instead of converting all the chunks.
 		return false, nil

@@ -423,8 +423,8 @@ func processJournalRecordsReader(ctx context.Context, r io.Reader, offin int64, 
 func processJournalRecords(ctx context.Context, r io.ReadSeeker, tryTruncate bool, off int64, cb func(o int64, r journalRec) error, warningsCb func(error)) (int64, error) {
 	var (
 		recovered bool
-		rdr *bufio.Reader
-		err error
+		rdr       *bufio.Reader
+		err       error
 	)
 
 	// start processing records from |off|
