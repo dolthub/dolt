@@ -613,14 +613,14 @@ func getCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string
 	}
 
 	// Get all tags
-	tags, err := ddb.GetTagsWithHashes(ctx)
+	tags, err := ddb.GetTagRefsWithHashes(ctx)
 	if err != nil {
 		return nil, err
 	}
 	for _, t := range tags {
-		tagName := t.Tag.GetDoltRef().String()
+		tagName := t.Ref.String()
 		if decoration != "full" {
-			tagName = t.Tag.Name // trim out "refs/tags/"
+			tagName = t.Ref.GetPath() // trim out "refs/tags/"
 		}
 		tagName = fmt.Sprintf("tag: %s", tagName)
 		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], tagName)

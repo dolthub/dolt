@@ -21,8 +21,6 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrNotSysbenchTest = errors.New("sysbench test is required")
@@ -124,14 +122,6 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 // InitDoltRepo initializes a dolt database and returns its path
 func InitDoltRepo(ctx context.Context, dir, serverExec, nomsBinFormat, dbName string) (string, error) {
 	testRepo := filepath.Join(dir, dbName)
-	if nomsBinFormat == types.Format_LD_1.VersionString() {
-		err := ExecCommand(ctx, serverExec, doltCloneCommand, bigEmptyRepo, dbName).Run()
-		if err != nil {
-			return "", err
-		}
-		return testRepo, nil
-	}
-
 	err := os.MkdirAll(testRepo, os.ModePerm)
 	if err != nil {
 		return "", err

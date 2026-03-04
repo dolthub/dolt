@@ -80,16 +80,8 @@ type IndexSet interface {
 
 // RefFromIndex persists the Index and returns a types.Ref to it.
 func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (types.Ref, error) {
-	switch idx.Format() {
-	case types.Format_LD_1:
-		panic("Unsupported format " + idx.Format().VersionString())
-	case types.Format_DOLT:
-		b := shim.ValueFromMap(MapFromIndex(idx))
-		return vrw.WriteValue(ctx, b)
-
-	default:
-		return types.Ref{}, errNbfUnknown
-	}
+	b := shim.ValueFromMap(MapFromIndex(idx))
+	return vrw.WriteValue(ctx, b)
 }
 
 // indexFromRef reads the types.Ref from storage and returns the Index it points to.
@@ -104,20 +96,11 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return nil, err
 	}
 
-	switch vrw.Format() {
-	case types.Format_LD_1:
-		panic("Unsupported format " + vrw.Format().VersionString())
-
-	case types.Format_DOLT:
-		m, err := shim.MapInterfaceFromValue(ctx, v, sch, ns, isKeylessTable)
-		if err != nil {
-			return nil, err
-		}
-		return IndexFromMapInterface(m), nil
-
-	default:
-		return nil, errNbfUnknown
+	m, err := shim.MapInterfaceFromValue(ctx, v, sch, ns, isKeylessTable)
+	if err != nil {
+		return nil, err
 	}
+	return IndexFromMapInterface(m), nil
 }
 
 // NewEmptyPrimaryIndex creates a new empty Index for use as the primary index in a table.
@@ -139,23 +122,14 @@ func NewEmptyIndexFromTableSchema(ctx context.Context, vrw types.ValueReadWriter
 
 // newEmptyIndex returns an index with no rows.
 func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isVector bool, isKeylessSecondary bool) (Index, error) {
-	switch vrw.Format() {
-	case types.Format_LD_1:
-		panic("Unsupported format " + vrw.Format().VersionString())
-
-	case types.Format_DOLT:
-		kd, vd := sch.GetMapDescriptors(ns)
-		if isKeylessSecondary {
-			kd = prolly.AddHashToSchema(kd)
-		}
-		if isVector {
-			return NewEmptyProximityIndex(ctx, ns, kd, vd)
-		} else {
-			return NewEmptyProllyIndex(ctx, ns, kd, vd)
-		}
-
-	default:
-		return nil, errNbfUnknown
+	kd, vd := sch.GetMapDescriptors(ns)
+	if isKeylessSecondary {
+		kd = prolly.AddHashToSchema(kd)
+	}
+	if isVector {
+		return NewEmptyProximityIndex(ctx, ns, kd, vd)
+	} else {
+		return NewEmptyProllyIndex(ctx, ns, kd, vd)
 	}
 }
 
@@ -353,15 +327,11 @@ func (i prollyIndex) DebugString(ctx context.Context, ns tree.NodeStore, schema 
 
 // NewIndexSet returns an empty IndexSet.
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (IndexSet, error) {
-	if vrw.Format().UsesFlatbuffers() {
-		emptyam, err := prolly.NewEmptyAddressMap(ns)
-		if err != nil {
-			return nil, err
-		}
-		return doltDevIndexSet{vrw, ns, emptyam}, nil
+	emptyam, err := prolly.NewEmptyAddressMap(ns)
+	if err != nil {
+		return nil, err
 	}
-
-	panic("Unsupported format " + vrw.Format().VersionString())
+	return doltDevIndexSet{vrw, ns, emptyam}, nil
 }
 
 func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (IndexSet, error) {

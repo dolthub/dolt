@@ -73,6 +73,25 @@ teardown() {
     [ "${#lines[@]}" -eq 7 ]
 }
 
+@test "import-create-tables: create a table with jsonl import" {
+    cat <<JSONL > employees.jsonl
+{"id":0,"first name":"tim","last name":"sehn","title":"ceo","start date":"","end date":""}
+{"id":1,"first name":"aaron","last name":"son","title":"founder","start date":"","end date":""}
+{"id":2,"first name":"brian","last name":"hendricks","title":"founder","start date":"","end date":""}
+JSONL
+
+    run dolt table import -c -s `batshelper employees-sch.sql` employees employees.jsonl
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "employees" ]] || false
+    run dolt sql -q "select * from employees"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tim" ]] || false
+    [ "${#lines[@]}" -eq 7 ]
+}
+
 @test "import-create-tables: create a table with json import, utf8 with bom" {
     run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.utf8bom.json`
     echo "$output"
@@ -116,7 +135,7 @@ teardown() {
 @test "import-create-tables: create a table with json import. no schema." {
     run dolt table import -c employees `batshelper employees-tbl.json`
     [ "$status" -ne 0 ]
-    [ "$output" = "Please specify schema file for .json tables." ]
+    [ "$output" = "Please specify schema file for .json/.jsonl tables." ]
 }
 
 @test "import-create-tables: create a table with json data import. bad json data." {

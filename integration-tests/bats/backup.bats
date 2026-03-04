@@ -402,3 +402,74 @@ EOF
     run dolt sql -r csv -q "select * from t"
     [[ "$output" =~ i.*2.*1 ]] || false
 }
+
+@test "backup: backup pushes table files when journal is small relative to store size" {
+    get_table_files() {
+        find "$1" | while read f; do
+	    base=$(basename "$f")
+	    if [ "$base" != "manifest" ] && [ "$base" != "LOCK" ] && [ "$base" != "journal.idx" ] && ! [ -d "$f" ]; then
+	        echo "$base"
+            fi
+	done | sort
+    }
+    # Create many empty commits to make the journal slightly bigger.
+    cd repo1
+    dolt checkout -b newbranch
+    command=""
+    for i in $(seq 128); do command="$command call dolt_commit('--allow-empty', '-Am', 'empty commit');"; done
+    dolt sql -q "$command" > /dev/null
+    dolt checkout main
+    dolt branch -D newbranch
+    cd ..
+
+    # At the beginning of the test, repo1 should only be a journal file.
+    start_table_files=( $(get_table_files repo1/.dolt/noms) )
+    [[ ${#start_table_files[*]} -eq 1 ]] || false
+    [[ ${start_table_files[0]} == "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" ]] || false
+    start_journal_size=$( wc -c repo1/.dolt/noms/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv | awk '{print $1}')
+
+    # Take a file backup of repo1.
+    cd repo1
+    dolt backup sync-url file://../repo1_start_backup
+    cd ..
+
+    # We should have pushed a table file.
+    backup_table_files=( $(get_table_files repo1_start_backup) )
+    [[ ${#backup_table_files[*]} -eq 1 ]] || false
+    [[ ${backup_table_files[0]} != "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" ]] || false
+    backup_tablefile_size=$( wc -c repo1_start_backup/"${backup_table_files[0]}" | awk '{print $1}')
+
+    # And that table file should be much smaller than our journal.
+    upper_limit=$(( ${start_journal_size} / 5 ))
+    [[ "$backup_tablefile_size" -lt "$upper_limit" ]] || false
+
+    # Add lots of commits again, this time to main, and GC repo1
+    cd repo1
+    dolt sql -q "$command" > /dev/null
+    dolt gc
+    cd ..
+
+    postgc_table_files=( $(get_table_files repo1/.dolt/noms) )
+
+    # Take another backup of repo1
+    cd repo1
+    dolt backup sync-url file://../repo1_postgc_backup
+    cd ..
+
+    postgc_backup_table_files=( $(get_table_files repo1_postgc_backup) )
+
+    # Because we pushed table files, every table file in the source should be in the destination.
+    [[ ${#postgc_backup_table_files[*]} -ge ${#postgc_table_files[*]} ]] || false
+    for tfname in ${postgc_table_files[@]}; do
+        found=0
+        for backuptfname in ${postgc_backup_table_files[@]}; do
+	    if [[ "$backuptfname" == "$tfname" ]]; then
+	        found=1
+	    fi
+	done
+	if [[ "$found" -eq 0 ]]; then
+	    echo "expected to find $tfname in ${postgc_backup_table_files[*]}, but did not"
+	    exit 1
+	fi
+    done
+}

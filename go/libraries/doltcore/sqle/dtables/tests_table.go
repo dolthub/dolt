@@ -31,6 +31,7 @@ var _ sql.DeletableTable = (*TestsTable)(nil)
 var _ sql.InsertableTable = (*TestsTable)(nil)
 var _ sql.ReplaceableTable = (*TestsTable)(nil)
 var _ sql.IndexAddressableTable = (*TestsTable)(nil)
+var _ sql.CheckTable = (*TestsTable)(nil)
 
 // TestsTable is the system table that stores test definitions.
 type TestsTable struct {
@@ -140,6 +141,24 @@ func (tt *TestsTable) GetIndexes(_ *sql.Context) ([]sql.Index, error) {
 
 func (tt *TestsTable) PreciseMatch() bool {
 	return true
+}
+
+// GetChecks implements sql.CheckTable, returning the enforced constraints for
+// assertion_type and assertion_comparator so that invalid values are rejected
+// at INSERT time rather than silently accepted and only caught at test-run time.
+func (tt *TestsTable) GetChecks(_ *sql.Context) ([]sql.CheckDefinition, error) {
+	return []sql.CheckDefinition{
+		{
+			Name:            "assertion_type_check",
+			CheckExpression: "assertion_type IN ('expected_rows', 'expected_columns', 'expected_single_value')",
+			Enforced:        true,
+		},
+		{
+			Name:            "assertion_comparator_check",
+			CheckExpression: "assertion_comparator IN ('==', '!=', '<', '>', '<=', '>=')",
+			Enforced:        true,
+		},
+	}, nil
 }
 
 var _ sql.RowReplacer = (*testsWriter)(nil)

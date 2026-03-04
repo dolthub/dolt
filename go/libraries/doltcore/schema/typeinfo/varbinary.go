@@ -15,9 +15,7 @@
 package typeinfo
 
 import (
-	"context"
 	"fmt"
-	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -60,28 +58,4 @@ func (ti *varBinaryType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *varBinaryType) ToSqlType() sql.Type {
 	return ti.sqlBinaryType
-}
-
-// fromBlob returns a string from a types.Blob.
-func fromBlob(b types.Blob) ([]byte, error) {
-	strLength := b.Len()
-	if strLength == 0 {
-		return []byte{}, nil
-	}
-	str := make([]byte, strLength)
-	n, err := b.ReadAt(context.Background(), str, 0)
-	if err != nil && err != io.EOF {
-		return []byte{}, err
-	}
-	if uint64(n) != strLength {
-		return []byte{}, fmt.Errorf("wanted %d bytes from blob for data, got %d", strLength, n)
-	}
-
-	// For very large byte slices, the standard method of converting a byte slice to a string using "string(str)" will
-	// cause it to duplicate the entire string. This uses a lot more memory and significantly impact performance.
-	// Using an unsafe pointer, we can avoid the duplication and get a fairly large performance gain. In some unofficial
-	// testing, performance improved by 40%.
-	// This is inspired by Go's own source code in strings.Builder.String(): https://golang.org/src/strings/builder.go#L48
-	// This is also marked as a valid strategy in unsafe.Pointer's own method documentation.
-	return str, nil
 }

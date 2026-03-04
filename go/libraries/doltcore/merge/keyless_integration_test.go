@@ -325,11 +325,6 @@ func TestKeylessMergeConflicts(t *testing.T) {
 }
 
 func assertConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
-	types.AssertFormat_DOLT(tbl.Format())
-	assertProllyConflicts(t, ctx, tbl, expected)
-}
-
-func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
 	artIdx, err := tbl.GetArtifacts(ctx)
 	require.NoError(t, err)
 	artM := durable.ProllyMapFromArtifactIndex(artIdx)
@@ -375,7 +370,6 @@ func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 	}
 
 	require.Equal(t, len(expected), c)
-
 }
 
 func mustGetRowValueFromTable(t *testing.T, ctx context.Context, tbl *doltdb.Table, key val.Tuple) val.Tuple {
@@ -405,11 +399,6 @@ func mustGetRowValueFromRootIsh(t *testing.T, ctx context.Context, vrw types.Val
 
 // |expected| is a tupleSet to compensate for random storage order
 func assertKeylessRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected keylessEntries) {
-	types.AssertFormat_DOLT(tbl.Format())
-	assertKeylessProllyRows(t, ctx, tbl, expected)
-}
-
-func assertKeylessProllyRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected []keylessEntry) {
 	idx, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
 	m, _ := durable.ProllyMapFromIndex(idx)
@@ -443,9 +432,6 @@ var keylessSch = dtu.MustSchema(
 	schema.NewColumn("c1", 1, types.IntKind, false),
 	schema.NewColumn("c2", 2, types.IntKind, false),
 )
-var c1Tag = types.Uint(1)
-var c2Tag = types.Uint(2)
-var cardTag = types.Uint(schema.KeylessRowCardinalityTag)
 
 var valDesc = val.NewTupleDescriptor(val.Type{Enc: val.Uint64Enc}, val.Type{Enc: val.Int64Enc, Nullable: true}, val.Type{Enc: val.Int64Enc, Nullable: true})
 var valBld = val.NewTupleBuilder(valDesc, nil)

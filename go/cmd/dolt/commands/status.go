@@ -204,12 +204,12 @@ func createPrintData(queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTabl
 			tableName := row[0].(string)
 			staged := row[1]
 			status := row[2].(string)
-			ignored, err := GetTinyIntColAsBool(row[3])
+			ignored, err := cli.QueryValueAsBool(row[3])
 			if err != nil {
 				return nil, err
 			}
 
-			isStaged, err := GetTinyIntColAsBool(staged)
+			isStaged, err := cli.QueryValueAsBool(staged)
 			if err != nil {
 				return nil, err
 			}
@@ -378,7 +378,7 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
 	mergeActive := false
 	if len(mergeRows) == 1 {
 		isMerging := mergeRows[0][0]
-		mergeActive, err = GetTinyIntColAsBool(isMerging)
+		mergeActive, err = cli.QueryValueAsBool(isMerging)
 		if err != nil {
 			return false, err
 		}

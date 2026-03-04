@@ -174,11 +174,7 @@ func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, er
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
-	dbName = strings.ToLower(dbName)
-
-	var baseName, rev string
-	baseName, rev = doltdb.SplitRevisionDbName(dbName)
-
+	baseName, rev := doltdb.SplitRevisionDbName(strings.ToLower(dbName))
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[baseName]
 	d.mu.Unlock()
@@ -190,7 +186,6 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		}
 
 		branchState, ok := dbState.heads[strings.ToLower(rev)]
-
 		if ok {
 			if dbState.Err != nil {
 				return nil, false, dbState.Err
@@ -199,15 +194,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		}
 	}
 
-	// No state for this db / branch combination yet, look it up from the provider. We use the unqualified DB name (no
-	// branch) if the current DB has not yet been loaded into this session. It will resolve to that DB's default branch
-	// in that case.
-	revisionQualifiedName := dbName
-	if rev != "" {
-		revisionQualifiedName = doltdb.RevisionDbName(baseName, rev)
-	}
-
-	database, ok, err := d.provider.SessionDatabase(ctx, revisionQualifiedName)
+	database, ok, err := d.provider.SessionDatabase(ctx, doltdb.RevisionDbName(baseName, rev))
 	if err != nil {
 		return nil, false, err
 	}
@@ -1385,10 +1372,6 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	// Or better yet, get rid of EditOptions from the database, it's a session setting
-	nbf := types.Format_Default
-	if branchState.dbData.Ddb != nil {
-		nbf = branchState.dbData.Ddb.Format()
-	}
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
 
 	if dbState.Err != nil {
@@ -1418,7 +1401,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			if err != nil {
 				return err
 			}
-			branchState.writeSession = d.writeSessProv(nbf, branchState.WorkingSet(), tracker, editOpts)
+			branchState.writeSession = d.writeSessProv(branchState.WorkingSet(), tracker, editOpts)
 		}
 	}
 
@@ -2082,4 +2065,4 @@ func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, err
 // WriteSessFunc is a constructor that session builders use to
 // create fresh table editors.
 // The indirection avoids a writer/dsess package import cycle.
-type WriteSessFunc func(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession
+type WriteSessFunc func(ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession

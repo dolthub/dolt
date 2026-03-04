@@ -275,34 +275,30 @@ func CreateTestEnvWithName(envName string) *env.DoltEnv {
 func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, error) {
 	ctx := context.Background()
 	var sqlRows []sql.Row
-	if types.Format_Default == types.Format_DOLT {
-		rowData, err := durable.ProllyMapFromIndex(idx)
-		if err != nil {
-			return nil, err
-		}
-		kd, vd := rowData.Descriptors()
-		iter, err := rowData.IterAll(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for {
-			var k, v val.Tuple
-			k, v, err = iter.Next(ctx)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return nil, err
-			}
-			sqlRow, err := sqlRowFromTuples(sch, kd, vd, k, v)
-			if err != nil {
-				return nil, err
-			}
-			sqlRows = append(sqlRows, sqlRow)
-		}
-
-	} else {
-		panic("Unsupported format: " + idx.Format().VersionString())
+	rowData, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return nil, err
 	}
+	kd, vd := rowData.Descriptors()
+	iter, err := rowData.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		var k, v val.Tuple
+		k, v, err = iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		sqlRow, err := sqlRowFromTuples(sch, kd, vd, k, v)
+		if err != nil {
+			return nil, err
+		}
+		sqlRows = append(sqlRows, sqlRow)
+	}
+
 	return sqlRows, nil
 }
 

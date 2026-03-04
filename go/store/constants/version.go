@@ -35,8 +35,6 @@ func init() {
 	}
 }
 
-var NomsGitSHA = "<developer build>"
-
 // See //go/store/types/format.go for corresponding formats.
 
 const FormatLD1String = "__LD_1__"

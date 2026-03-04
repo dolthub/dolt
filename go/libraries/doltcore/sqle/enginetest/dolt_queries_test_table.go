@@ -15,6 +15,10 @@
 package enginetest
 
 import (
+	"fmt"
+	"testing"
+
+	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -484,7 +488,7 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 	{
 		Name: "Can not run multiple queries in one test",
 		SetUpScript: []string{
-			"INSERT INTO dolt_tests VALUES ('should fail', '', 'select * from dolt_log; show tables;', 'expected_orws', '==', '0')",
+			"INSERT INTO dolt_tests VALUES ('should fail', '', 'select * from dolt_log; show tables;', 'expected_rows', '==', '0')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -523,4 +527,64 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 			},
 		},
 	},
+}
+
+// RunDoltTestsValidationTests verifies that dolt_tests rejects invalid
+// assertion_type and assertion_comparator values at INSERT time.
+func RunDoltTestsValidationTests(t *testing.T, harness DoltEnginetestHarness) {
+	type validationCase struct {
+		assertionType       string
+		assertionComparator string
+		expectErr           bool
+	}
+	tests := []validationCase{
+		// Valid assertion_type with every valid comparator.
+		{"expected_rows", "==", false},
+		{"expected_rows", "!=", false},
+		{"expected_rows", "<", false},
+		{"expected_rows", ">", false},
+		{"expected_rows", "<=", false},
+		{"expected_rows", ">=", false},
+		// Each remaining valid assertion_type with at least one comparator.
+		{"expected_columns", "==", false},
+		{"expected_single_value", "==", false},
+
+		// Invalid assertion_type, valid comparator.
+		{"row_count", "==", true},           // common mistake (issue #10568)
+		{"expected_row", "==", true},        // typo: missing trailing 's'
+		{"EXPECTED_ROWS", "==", true},       // wrong case
+		{"count", "==", true},               // too short / wrong name
+		{"", "==", true},                    // empty string
+		{"expected_rows_count", "==", true}, // plausible but wrong compound name
+
+		// Valid assertion_type, invalid comparator.
+		{"expected_rows", "=", true},    // SQL-style equals (common mistake, issue #10568)
+		{"expected_rows", "===", true},  // JavaScript-style strict equals
+		{"expected_rows", "eq", true},   // word form
+		{"expected_rows", "!==", true},  // wrong not-equals
+		{"expected_rows", "LIKE", true}, // SQL keyword
+		{"expected_rows", "", true},     // empty string
+
+		// Invalid both fields.
+		{"row_count", "=", true},
+		{"count", "eq", true},
+	}
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("validation: assertionType=%q comparator=%q", tc.assertionType, tc.assertionComparator), func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			q := fmt.Sprintf(
+				"INSERT INTO dolt_tests VALUES ('test_%d', 'grp', 'SELECT 1', '%s', '%s', '0')",
+				i, tc.assertionType, tc.assertionComparator,
+			)
+			a := queries.ScriptTestAssertion{Query: q}
+			if tc.expectErr {
+				a.ExpectedErr = sql.ErrCheckConstraintViolated
+			}
+			enginetest.TestScript(t, harness, queries.ScriptTest{
+				Name:       t.Name(),
+				Assertions: []queries.ScriptTestAssertion{a},
+			})
+		})
+	}
 }

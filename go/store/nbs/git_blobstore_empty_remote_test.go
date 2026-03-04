@@ -135,8 +135,8 @@ func TestNBS_NewGitStore_DefaultsMaxPartSizeTo50MB(t *testing.T) {
 	defer store.Close()
 
 	// Assert the underlying blobstore is a GitBlobstore and that chunked writes are enabled by default.
-	bsp, ok := store.persister.(*blobstorePersister)
-	require.True(t, ok, "expected persister to be *blobstorePersister, got %T", store.persister)
+	bsp, ok := store.persister.(*singleBlobBSPersister)
+	require.True(t, ok, "expected persister to be *singleBlobBSPersister, got %T", store.persister)
 
 	gbs, ok := bsp.bs.(*blobstore.GitBlobstore)
 	require.True(t, ok, "expected blobstore to be *blobstore.GitBlobstore, got %T", bsp.bs)

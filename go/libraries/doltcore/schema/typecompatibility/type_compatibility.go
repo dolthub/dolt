@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	storetypes "github.com/dolthub/dolt/go/store/types"
 )
 
 // TypeCompatibilityChecker checks if type changes are compatible at the storage layer and is used to
@@ -41,15 +40,10 @@ type TypeCompatibilityChecker interface {
 	IsTypeChangeCompatible(from, to typeinfo.TypeInfo) TypeChangeInfo
 }
 
-// NewTypeCompatabilityCheckerForStorageFormat returns a new TypeCompatibilityChecker
+// NewTypeCompatabilityChecker returns a new TypeCompatibilityChecker
 // instance for the given storage format.
-func NewTypeCompatabilityCheckerForStorageFormat(format *storetypes.NomsBinFormat) TypeCompatibilityChecker {
-	switch format {
-	case storetypes.Format_DOLT:
-		return newDoltTypeCompatibilityChecker()
-	default:
-		panic("unsupported storage format: " + format.VersionString())
-	}
+func NewTypeCompatabilityChecker() TypeCompatibilityChecker {
+	return newDoltTypeCompatibilityChecker()
 }
 
 // doltTypeCompatibilityChecker implements TypeCompatibilityChecker for the DOLT storage

@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrFastForward = errors.New("fast forward")
@@ -174,13 +173,7 @@ func MergeRoots(
 	opts editor.Options,
 	mergeOpts MergeOpts,
 ) (*Result, error) {
-	var (
-		nbf *types.NomsBinFormat
-		err error
-	)
-
-	nbf = ourRoot.VRW().Format()
-	types.AssertFormat_DOLT(nbf)
+	var err error
 
 	// merge collations
 	oColl, err := ourRoot.GetCollation(ctx)

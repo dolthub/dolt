@@ -55,11 +55,6 @@ func mustString(str string, err error) string {
 	return str
 }
 
-func mustList(l types.List, err error) types.List {
-	d.PanicIfError(err)
-	return l
-}
-
 func mustHash(h hash.Hash, err error) hash.Hash {
 	d.PanicIfError(err)
 	return h
@@ -152,7 +147,7 @@ func TestMemDatasetPathSpec(t *testing.T) {
 	db := spec.GetDatabase(context.Background())
 	ds, err := db.GetDataset(context.Background(), "test")
 	assert.NoError(err)
-	_, err = datas.CommitValue(context.Background(), db, ds, mustList(types.NewList(context.Background(), spec.GetVRW(context.Background()), types.Float(42))))
+	_, err = datas.CommitValue(context.Background(), db, ds, types.Float(42))
 	assert.NoError(err)
 
 	value, err := spec.GetValue(context.Background())

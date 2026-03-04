@@ -69,6 +69,8 @@ func TestBasics(t *testing.T) {
 		{NewDataLocation("file.csv", ""), CsvFile.ReadableStr() + ":file.csv", true},
 		{NewDataLocation("file.psv", ""), PsvFile.ReadableStr() + ":file.psv", true},
 		{NewDataLocation("file.json", ""), JsonFile.ReadableStr() + ":file.json", true},
+		{NewDataLocation("file.jsonl", ""), JsonlFile.ReadableStr() + ":file.jsonl", true},
+		{NewDataLocation("file.ignored", "jsonl"), JsonlFile.ReadableStr() + ":file.ignored", true},
 		// {NewDataLocation("file.nbf", ""), NbfFile, "file.nbf", true},
 	}
 
@@ -87,6 +89,7 @@ func TestExists(t *testing.T) {
 		NewDataLocation("file.csv", ""),
 		NewDataLocation("file.psv", ""),
 		NewDataLocation("file.json", ""),
+		NewDataLocation("file.jsonl", ""),
 		// NewDataLocation("file.nbf", ""),
 	}
 

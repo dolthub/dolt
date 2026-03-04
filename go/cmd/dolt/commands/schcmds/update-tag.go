@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // TODO: Update tag should be migrated to call the new dolt_update_column_tag() stored procedure
@@ -68,11 +67,6 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, updateTagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-
-	if !types.IsFormat_DOLT(dEnv.DoltDB(ctx).Format()) {
-		verr := errhand.BuildDError("update-tag is only available in storage format __DOLT__").Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
 
 	if len(apr.Args) != 3 {
 		verr := errhand.BuildDError("must provide <table> <column> <tag>").Build()

@@ -51,6 +51,14 @@ SQL
     dolt table export test test.json
     run cat test.json
     [ "$output" = '{"rows": [{"pk":1,"v1":"2020-04-08","v2":"11:11:11","v3":2020,"v4":"2020-04-08 11:11:11"},{"pk":2,"v1":"2020-04-08","v2":"12:12:12","v3":2020,"v4":"2020-04-08 12:12:12"}]}' ]
+
+    dolt table export test test.jsonl
+    run wc -l test.jsonl
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2 test.jsonl" ]] || false
+    run cat test.jsonl
+    [ "${lines[0]}" = '{"pk":1,"v1":"2020-04-08","v2":"11:11:11","v3":2020,"v4":"2020-04-08 11:11:11"}' ]
+    [ "${lines[1]}" = '{"pk":2,"v1":"2020-04-08","v2":"12:12:12","v3":2020,"v4":"2020-04-08 12:12:12"}' ]
 }
 
 @test "export-tables: dolt table import from stdin export to stdout" {
@@ -79,6 +87,76 @@ if rows[1] != "0,1,2,3,4,5".split(","):
 
 if rows[2] != "9,8,7,6,5,4".split(","):
     sys.exit(1)
+'
+}
+
+@test "export-tables: table export jsonl edge cases" {
+    skiponwindows "Need to install python before this test will work."
+
+    dolt sql <<SQL
+CREATE TABLE jsonl_edge (
+  pk INT PRIMARY KEY,
+  j JSON,
+  b BLOB,
+  vb VARBINARY(4),
+  bin BINARY(3),
+  \`str col\` TEXT,
+  n INT NULL
+);
+INSERT INTO jsonl_edge VALUES
+  (1, CAST('{"a":1,"b":[true,false]}' AS JSON), X'010203', X'00FF10AA', X'112233', CONCAT('hello "quote" ', CHAR(10), 'unicode ☃'), NULL),
+  (2, CAST('[1,2,3]' AS JSON), X'0A0B0C', X'DEADBEEF', X'AABBCC', 'plain', 5);
+SQL
+
+    dolt table export jsonl_edge edge.jsonl
+
+    python3 -c '
+import json, sys
+
+def is_bytesish(v):
+    if isinstance(v, str):
+        return True
+    if isinstance(v, list) and all(isinstance(x, int) and 0 <= x <= 255 for x in v):
+        return True
+    return False
+
+rows = []
+with open("edge.jsonl", "r", encoding="utf-8") as f:
+    for line in f:
+        line = line.rstrip("\n")
+        if line == "":
+            continue
+        rows.append(json.loads(line))
+
+if len(rows) != 2:
+    sys.exit(1)
+
+r1, r2 = rows
+if r1["pk"] != 1 or r2["pk"] != 2:
+    sys.exit(1)
+
+if not isinstance(r1["j"], dict):
+    sys.exit(1)
+if r1["j"].get("a") != 1 or r1["j"].get("b") != [True, False]:
+    sys.exit(1)
+
+if not isinstance(r2["j"], list) or r2["j"] != [1, 2, 3]:
+    sys.exit(1)
+
+if r1["str col"] != "hello \"quote\" \nunicode ☃":
+    sys.exit(1)
+if r2["str col"] != "plain":
+    sys.exit(1)
+
+if "n" in r1:
+    sys.exit(1)
+if r2.get("n") != 5:
+    sys.exit(1)
+
+for r in rows:
+    for k in ("b", "vb", "bin"):
+        if k not in r or not is_bytesish(r[k]):
+            sys.exit(1)
 '
 }
 

@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -148,6 +147,10 @@ func (wtm *WorkspaceTableModifier) statementComplete(ctx *sql.Context) error {
 }
 
 func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
+	if wtu.err != nil {
+		return *wtu.err
+	}
+
 	if old == nil || new == nil {
 		return fmt.Errorf("Runtime error: expected non-nil inputs to WorkspaceTableUpdater.Update")
 	}
@@ -210,6 +213,10 @@ func (wtd *WorkspaceTableDeleter) StatementBegin(ctx *sql.Context) {
 }
 
 func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
+	if wtd.err != nil {
+		return *wtd.err
+	}
+
 	if !wtd.modifiable {
 		return errors.New(fmt.Sprintf("%s table is not modifiable due to schema change", wtd.workspaceTableName))
 	}
@@ -265,6 +272,14 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 	setter := ds.SetWorkingRoot
 	if targetStaging {
 		setter = ds.SetStagingRoot
+
+		// Ensure table exists in staging root before getting writer.
+		// This is necessary when staging rows from a new table that exists
+		// in working but not yet in staging (e.g., 'dolt add -p' on a new table).
+		err := wtm.ensureTableExistsInStaging(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", wtm.ws)
@@ -272,7 +287,7 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 		return nil, nil, err
 	}
 
-	writeSession := writer.NewWriteSession(types.Format_DOLT, wtm.ws, gst, editor.Options{TargetStaging: targetStaging})
+	writeSession := writer.NewWriteSession(wtm.ws, gst, editor.Options{TargetStaging: targetStaging})
 
 	tableWriter, err := writeSession.GetTableWriter(ctx, wtm.tableName, ctx.GetCurrentDatabase(), setter, targetStaging)
 	if err != nil {
@@ -280,6 +295,74 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 	}
 
 	return writeSession, tableWriter, nil
+}
+
+// ensureTableExistsInStaging ensures that the table exists in the staging root
+// before attempting to get a table writer for it. This is necessary for the
+// workspace table update workflow (used by 'dolt add -p') when staging rows
+// from a table that exists in the working root but not yet in the staging root
+// (i.e., a newly created table being staged for the first time).
+//
+// The function:
+//  1. Checks if the table already exists in staging (fast path - no-op)
+//  2. If not, checks if it exists in working
+//  3. If yes, creates an empty table in staging with the same schema
+//  4. Updates the session's staging root and wtm.ws to reflect the change
+//
+// Note: We create an empty table rather than copying data because 'dolt add -p'
+// allows partial staging of individual rows. Each row staged will be inserted
+// into the empty staging table via the workspace table UPDATE mechanism.
+//
+// If the table doesn't exist in either root, this function returns nil and
+// lets GetTableWriter handle the error naturally.
+func (wtm *WorkspaceTableModifier) ensureTableExistsInStaging(ctx *sql.Context) error {
+	stagedRoot := wtm.ws.StagedRoot()
+
+	// Check if table already exists in staging - fast path
+	hasTable, err := stagedRoot.HasTable(ctx, wtm.tableName)
+	if err != nil {
+		return err
+	}
+	if hasTable {
+		return nil
+	}
+
+	// Table doesn't exist in staging - check if it exists in working
+	workingRoot := wtm.ws.WorkingRoot()
+	workingTable, ok, err := workingRoot.GetTable(ctx, wtm.tableName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// Table doesn't exist in either root - let GetTableWriter handle the error
+		return nil
+	}
+
+	// Get the schema from the working table
+	sch, err := workingTable.GetSchema(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get schema for table %s: %w", wtm.tableName, err)
+	}
+
+	// Create an empty table in staging with the same schema.
+	// We don't copy the data because 'dolt add -p' allows partial staging -
+	// each row will be inserted individually via the workspace table UPDATE.
+	newStaged, err := doltdb.CreateEmptyTable(ctx, stagedRoot, wtm.tableName, sch)
+	if err != nil {
+		return fmt.Errorf("failed to create table %s in staging: %w", wtm.tableName, err)
+	}
+
+	// Update the session's staging root
+	ds := dsess.DSessFromSess(ctx.Session)
+	err = ds.SetStagingRoot(ctx, ctx.GetCurrentDatabase(), newStaged)
+	if err != nil {
+		return err
+	}
+
+	// Update wtm.ws to reflect the new staging root
+	wtm.ws = wtm.ws.WithStagedRoot(newStaged)
+
+	return nil
 }
 
 // isTrue returns true if the value is a boolean true, or an int8 value of != 0. Otherwise, it returns false.

@@ -39,11 +39,8 @@ export const branchTests = [
     },
   },
   {
-    q: `CALL DOLT_COMMIT("-A", "-m", :commitMsg, "--author", :authorName)`,
-    p: {
-      commitMsg: "Create table test",
-      authorName: "Dolt <dolt@dolthub.com>",
-    },
+    q: `CALL DOLT_COMMIT('-A', '-m', ?, '--author', ?)`,
+    values: ["Create table test", "Dolt <dolt@dolthub.com>"],
     res: [{ hash: "" }],
   },
   {

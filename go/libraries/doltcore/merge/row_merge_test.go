@@ -155,10 +155,6 @@ var testCases = []testCase{
 }
 
 func TestRowMerge(t *testing.T) {
-	if types.Format_Default != types.Format_DOLT {
-		t.Skip()
-	}
-
 	ctx := sql.NewEmptyContext()
 
 	tests := make([]rowMergeTest, len(testCases))

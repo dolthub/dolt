@@ -88,6 +88,13 @@ func TestValidateGetRepoMetadataRequest(t *testing.T) {
 				NbsVersion: "5",
 			},
 		},
+		{
+			RepoPath: GoodRepoPath,
+			ClientRepoFormat: &remotesapi.ClientRepoFormat{
+				NbfVersion: "__LD_1__",
+				NbsVersion: "5",
+			},
+		},
 	} {
 		t.Run(fmt.Sprintf("Error #%02d", i), func(t *testing.T) {
 			assert.Error(t, ValidateGetRepoMetadataRequest(errMsg), "%v should not validate", errMsg)
@@ -113,13 +120,6 @@ func TestValidateGetRepoMetadataRequest(t *testing.T) {
 			ClientRepoFormat: &remotesapi.ClientRepoFormat{
 				NbfVersion: "__DOLT__",
 				NbsVersion: "4",
-			},
-		},
-		{
-			RepoPath: GoodRepoPath,
-			ClientRepoFormat: &remotesapi.ClientRepoFormat{
-				NbfVersion: "__LD_1__",
-				NbsVersion: "5",
 			},
 		},
 	} {

@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // NewConflictsTable returns a new ConflictsTable instance
@@ -32,7 +31,6 @@ func NewConflictsTable(ctx *sql.Context, tblName doltdb.TableName, srcTable sql.
 		return nil, err
 	}
 
-	types.AssertFormat_DOLT(tbl.Format())
 	upd, ok := srcTable.(sql.UpdatableTable)
 	if !ok {
 		return nil, fmt.Errorf("%s can not have conflicts because it is not updateable", tblName)

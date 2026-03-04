@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var copyTagsDocs = cli.CommandDocumentationContent{
@@ -196,9 +195,6 @@ func (cmd CopyTagsCmd) validateArgs(ctx context.Context, commandStr string, args
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	doltDB := dEnv.DoltDB(ctx)
-	if !types.IsFormat_DOLT(doltDB.Format()) {
-		return "", nil, nil, nil, fmt.Errorf("copy-tags is only available for modern database storage formats")
-	}
 
 	if len(apr.Args) != 1 {
 		return "", nil, nil, nil, fmt.Errorf("must provide <from-branch>")

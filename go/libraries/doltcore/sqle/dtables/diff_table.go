@@ -102,7 +102,7 @@ func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb
 		return nil, err
 	}
 
-	diffTableSchema, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
+	diffTableSchema, err := GetDiffTableSchemaAndJoiner(sch, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -860,12 +860,8 @@ func (dps *DiffPartitions) Close(*sql.Context) error {
 // GetDiffTableSchemaAndJoiner returns the schema for the diff table given a
 // target schema for a row |sch|. In the old storage format, it also returns the
 // associated joiner.
-func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch schema.Schema) (diffTableSchema schema.Schema, err error) {
-	if format == types.Format_DOLT {
-		return CalculateDiffSchema(fromSch, toSch)
-	} else {
-		panic("Unsupported format for diff table schema calculation: " + format.VersionString())
-	}
+func GetDiffTableSchemaAndJoiner(fromSch, toSch schema.Schema) (diffTableSchema schema.Schema, err error) {
+	return CalculateDiffSchema(fromSch, toSch)
 }
 
 // expandFromToSchemas converts input schemas to schemas appropriate for diffs. One argument must be

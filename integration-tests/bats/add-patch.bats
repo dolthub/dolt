@@ -324,3 +324,53 @@ teardown() {
   [[ "$output" =~ "15" ]] || false
 }
 
+# bats test_tags=no_lambda
+@test "add-patch: new table partial staging" {
+  # Create a new table that doesn't exist in HEAD
+  dolt sql -q "CREATE TABLE new_table (pk int primary key, name varchar(32));"
+  dolt sql -q "INSERT INTO new_table VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie');"
+
+  # Verify table is untracked
+  run dolt status
+  [ $status -eq 0 ]
+  [[ "$output" =~ "new table:" ]] || false
+  [[ "$output" =~ "new_table"  ]] || false
+
+  # Use add -p to stage only the first row (using expect script)
+  run $BATS_TEST_DIRNAME/add-patch-expect/new_table.expect
+  [ $status -eq 0 ]
+
+  # Verify the table is now in staging with partial changes
+  run dolt sql -q "SELECT * FROM new_table AS OF STAGED ORDER BY pk"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "alice" ]] || false
+  # bob and charlie should NOT be in staged
+  ! [[ "$output" =~ "bob"     ]] || false
+  ! [[ "$output" =~ "charlie" ]] || false
+
+  # Verify workspace table shows correct state
+  run dolt sql -q "SELECT IF(staged, 'true', 'false'), to_pk, to_name FROM dolt_workspace_new_table ORDER BY to_pk" -r csv
+  [ $status -eq 0 ]
+  # First row should be staged (true), others should not be (false)
+  [[ "$output" =~ "true,1,alice"    ]] || false
+  [[ "$output" =~ "false,2,bob"     ]] || false
+  [[ "$output" =~ "false,3,charlie" ]] || false
+
+  # Commit the staged changes
+  dolt commit -m "partial staging test"
+
+  # Verify the table and only the first row were committed
+  run dolt show
+  [ $status -eq 0 ]
+  [[ "$output" =~ "added table"        ]] || false
+  [[ "$output" =~ "| + | 1  | alice |" ]] || false
+  ! [[ "$output" =~ "bob"              ]] || false
+  ! [[ "$output" =~ "charlie"          ]] || false
+
+  # Verify working still has the other rows
+  run dolt sql -q "SELECT * FROM dolt_workspace_new_table"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "bob"     ]] || false
+  [[ "$output" =~ "charlie" ]] || false
+}
+

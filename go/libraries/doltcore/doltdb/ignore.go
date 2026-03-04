@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -98,10 +97,6 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots, schemas []string)
 			continue
 		}
 		index, err := table.GetRowData(ctx)
-		if table.Format() == types.Format_LD_1 {
-			// dolt_ignore is not supported for the legacy storage format.
-			continue
-		}
 		if err != nil {
 			return nil, err
 		}

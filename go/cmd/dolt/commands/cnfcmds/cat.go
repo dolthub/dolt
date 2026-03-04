@@ -305,7 +305,7 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 	}
 
 	row := rows[0]
-	ms.isMerging, err = commands.GetTinyIntColAsBool(row[0])
+	ms.isMerging, err = cli.QueryValueAsBool(row[0])
 	if err != nil {
 		return ms, fmt.Errorf("error: failed to parse is_merging: %w", err)
 	}

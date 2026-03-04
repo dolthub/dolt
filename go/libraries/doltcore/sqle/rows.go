@@ -23,18 +23,15 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Returns a new row iterator for the table given
 func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, partition doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.GetSchema(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
-	types.AssertFormat_DOLT(tbl.Format())
 	return ProllyRowIterFromPartition(ctx, sch, projCols, partition)
 }
 

@@ -28,13 +28,14 @@ import (
 	"sort"
 	"testing"
 
+	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -63,16 +64,6 @@ func mustString(str string, err error) string {
 	return str
 }
 
-func mustSet(s types.Set, err error) types.Set {
-	d.PanicIfError(err)
-	return s
-}
-
-func mustList(l types.List, err error) types.List {
-	d.PanicIfError(err)
-	return l
-}
-
 func mustParentsClosure(t *testing.T, exists bool) func(types.Ref, bool, error) types.Ref {
 	return func(r types.Ref, got bool, err error) types.Ref {
 		t.Helper()
@@ -97,152 +88,27 @@ func mustValue(val types.Value, err error) types.Value {
 	return val
 }
 
-func TestNewCommit(t *testing.T) {
+func TestIsCommit(t *testing.T) {
 	assert := assert.New(t)
 
-	assertTypeEquals := func(e, a *types.Type) {
-		t.Helper()
-		assert.True(a.Equals(e), "Actual: %s\nExpected %s\n%s", mustString(a.Describe(context.Background())), mustString(e.Describe(context.Background())), a.HumanReadableString())
-	}
+	commitMsg, _ := commit_flatbuffer(hash.Hash{}, CommitOptions{
+		Meta: &CommitMeta{Name: "test", Email: "test@test.com", Description: "test commit"},
+	}, nil, hash.Hash{})
+	metaCommit := types.SerialMessage(commitMsg)
+	ok, err := IsCommit(metaCommit)
+	assert.NoError(err)
+	assert.True(ok)
 
-	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
-	defer db.Close()
-
-	parents := mustList(types.NewList(context.Background(), db))
-	parentsClosure := mustParentsClosure(t, false)(writeTypesCommitParentClosure(context.Background(), db, parents))
-	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
+	rvBuilder := flatbuffers.NewBuilder(64)
+	serial.RootValueStart(rvBuilder)
+	notACommit := types.SerialMessage(serial.FinishMessage(
+		rvBuilder,
+		serial.RootValueEnd(rvBuilder),
+		[]byte(serial.RootValueFileID),
+	))
+	ok, err = IsCommit(notACommit)
 	assert.NoError(err)
-	at, err := types.TypeOf(commit)
-	assert.NoError(err)
-	et, err := makeCommitStructType(
-		types.EmptyStructType,
-		mustType(types.MakeSetType(mustType(types.MakeUnionType()))),
-		mustType(types.MakeListType(mustType(types.MakeUnionType()))),
-		mustType(types.MakeRefType(types.PrimitiveTypeMap[types.ValueKind])),
-		types.PrimitiveTypeMap[types.FloatKind],
-		false,
-	)
-	assert.NoError(err)
-	assertTypeEquals(et, at)
-
-	_, err = db.WriteValue(context.Background(), commit)
-	assert.NoError(err)
-
-	// Committing another Float
-	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
-	commit2, err := newCommit(context.Background(), types.Float(2), parents, parentsClosure, true, types.EmptyStruct(db.Format()))
-	assert.NoError(err)
-	at2, err := types.TypeOf(commit2)
-	assert.NoError(err)
-	et2 := nomdl.MustParseType(`Struct Commit {
-                meta: Struct {},
-                parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure?: Ref<Value>,
-                parents_list: List<Ref<Cycle<Commit>>>,
-                value: Float,
-        }`)
-	assertTypeEquals(et2, at2)
-
-	_, err = db.WriteValue(context.Background(), commit2)
-	assert.NoError(err)
-
-	// Now commit a String
-	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
-	commit3, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, types.EmptyStruct(db.Format()))
-	assert.NoError(err)
-	at3, err := types.TypeOf(commit3)
-	assert.NoError(err)
-	et3 := nomdl.MustParseType(`Struct Commit {
-                meta: Struct {},
-                parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure?: Ref<Value>,
-                parents_list: List<Ref<Cycle<Commit>>>,
-                value: Float | String,
-        }`)
-	assertTypeEquals(et3, at3)
-
-	_, err = db.WriteValue(context.Background(), commit3)
-	assert.NoError(err)
-
-	// Now commit a String with MetaInfo
-	meta, err := types.NewStruct(db.Format(), "Meta", types.StructData{"date": types.String("some date"), "number": types.Float(9)})
-	assert.NoError(err)
-	metaType := nomdl.MustParseType(`Struct Meta {
-                date: String,
-                number: Float,
-	}`)
-	assertTypeEquals(metaType, mustType(types.TypeOf(meta)))
-	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
-	commit4, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, meta)
-	assert.NoError(err)
-	at4, err := types.TypeOf(commit4)
-	assert.NoError(err)
-	et4 := nomdl.MustParseType(`Struct Commit {
-                meta: Struct {} | Struct Meta {
-                        date: String,
-                        number: Float,
-        	},
-                parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure?: Ref<Value>,
-                parents_list: List<Ref<Cycle<Commit>>>,
-                value: Float | String,
-        }`)
-	assertTypeEquals(et4, at4)
-
-	_, err = db.WriteValue(context.Background(), commit4)
-	assert.NoError(err)
-
-	// Merge-commit with different parent types
-	parents = mustList(types.NewList(context.Background(), db,
-		mustRef(types.NewRef(commit2, db.Format())),
-		mustRef(types.NewRef(commit3, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
-	commit5, err := newCommit(
-		context.Background(),
-		types.String("Hi"),
-		parents,
-		parentsClosure,
-		true,
-		types.EmptyStruct(db.Format()))
-	assert.NoError(err)
-	at5, err := types.TypeOf(commit5)
-	assert.NoError(err)
-	et5 := nomdl.MustParseType(`Struct Commit {
-                meta: Struct {},
-                parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure?: Ref<Value>,
-                parents_list: List<Ref<Cycle<Commit>>>,
-                value: Float | String,
-        }`)
-	assertTypeEquals(et5, at5)
-}
-
-func TestCommitWithoutMetaField(t *testing.T) {
-	assert := assert.New(t)
-
-	ctx := context.Background()
-	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
-	defer db.Close()
-
-	metaCommit, err := types.NewStruct(db.Format(), "Commit", types.StructData{
-		"value":   types.Float(9),
-		"parents": mustSet(types.NewSet(ctx, db)),
-		"meta":    types.EmptyStruct(db.Format()),
-	})
-	assert.NoError(err)
-	assert.True(IsCommit(metaCommit))
-
-	noMetaCommit, err := types.NewStruct(db.Format(), "Commit", types.StructData{
-		"value":   types.Float(9),
-		"parents": mustSet(types.NewSet(ctx, db)),
-	})
-	assert.NoError(err)
-	assert.False(IsCommit(noMetaCommit))
+	assert.False(ok)
 }
 
 func mustCommitToTargetHashes(vrw types.ValueReadWriter, commits ...types.Value) []hash.Hash {
@@ -558,35 +424,6 @@ func TestFindCommonAncestor(t *testing.T) {
 		_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb, db.ns, rdb.ns)
 		assert.Error(err)
 	})
-}
-
-func TestNewCommitRegressionTest(t *testing.T) {
-	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
-	defer db.Close()
-
-	parents := mustList(types.NewList(context.Background(), db))
-	parentsClosure := mustParentsClosure(t, false)(writeTypesCommitParentClosure(context.Background(), db, parents))
-	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
-	assert.NoError(t, err)
-	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
-	assert.NoError(t, err)
-	_, err = db.WriteValue(context.Background(), c1)
-	assert.NoError(t, err)
-	_, err = db.WriteValue(context.Background(), cx)
-	assert.NoError(t, err)
-	value := types.String("two")
-	parents, err = types.NewList(context.Background(), db, mustRef(types.NewRef(c1, db.Format())))
-	assert.NoError(t, err)
-	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
-	meta, err := types.NewStruct(db.Format(), "", types.StructData{
-		"basis": cx,
-	})
-	assert.NoError(t, err)
-
-	// Used to fail
-	_, err = newCommit(context.Background(), value, parents, parentsClosure, true, meta)
-	assert.NoError(t, err)
 }
 
 func TestPersistedCommitConsts(t *testing.T) {

@@ -21,8 +21,6 @@ import (
 	"math"
 	"path/filepath"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -56,10 +54,6 @@ func (cmd InspectCmd) RequiresRepo() bool {
 // Description returns a description of the command
 func (cmd InspectCmd) Description() string {
 	return "Inspects a Dolt Database and collects stats."
-}
-
-func (cmd InspectCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT(nbf)
 }
 
 func (cmd InspectCmd) Docs() *cli.CommandDocumentation {
@@ -144,7 +138,7 @@ func (cmd InspectCmd) processTableFile(ctx context.Context, path string, fs file
 	sum = &chunkIndexSummary{
 		file:  path,
 		count: uint32(len(prefixes)),
-		//errs:  make([]float64, 0, len(prefixes)),
+		// errs:  make([]float64, 0, len(prefixes)),
 	}
 
 	for i, prefix := range prefixes {
@@ -156,7 +150,7 @@ func (cmd InspectCmd) processTableFile(ctx context.Context, path string, fs file
 type chunkIndexSummary struct {
 	file  string
 	count uint32
-	//errs   []float64
+	// errs   []float64
 	sumErr float64
 	maxErr float64
 }
@@ -170,7 +164,7 @@ func (s *chunkIndexSummary) addPrefix(i int, prefix uint64) {
 	g := nbs.GuessPrefixOrdinal(prefix, s.count)
 	guessErr := math.Abs(float64(i - g))
 
-	//s.errs = append(s.errs, guessErr)
+	// s.errs = append(s.errs, guessErr)
 	s.sumErr += guessErr
 	if guessErr > s.maxErr {
 		s.maxErr = guessErr

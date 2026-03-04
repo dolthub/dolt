@@ -32,10 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -84,57 +82,6 @@ func (c *Commit) Height() uint64 {
 
 func (c *Commit) Addr() hash.Hash {
 	return c.addr
-}
-
-var commitTemplateWithParentsClosure = types.MakeStructTemplate(commitName, []string{
-	commitMetaField,
-	parentsField,
-	parentsClosureField,
-	parentsListField,
-	valueField,
-})
-
-var commitTemplateWithoutParentsClosure = types.MakeStructTemplate(commitName, []string{
-	commitMetaField,
-	parentsField,
-	parentsListField,
-	valueField,
-})
-
-var valueCommitType = nomdl.MustParseType(`Struct Commit {
-        meta: Struct {},
-        parents: Set<Ref<Cycle<Commit>>>,
-        parents_closure?: Ref<Value>, // Ref<Map<Value,Value>>,
-        parents_list?: List<Ref<Cycle<Commit>>>,
-        value: Value,
-}`)
-
-// newCommit creates a new commit object.
-//
-// A commit has the following type:
-//
-// ```
-//
-//	struct Commit {
-//	  meta: M,
-//	  parents: Set<Ref<Cycle<Commit>>>,
-//	  parentsList: List<Ref<Cycle<Commit>>>,
-//	  parentsClosure: Ref<Value>, // Map<Tuple,List<Ref<Value>>>,
-//	  value: T,
-//	}
-//
-// ```
-// where M is a struct type and T is any type.
-func newCommit(ctx context.Context, value types.Value, parentsList types.List, parentsClosure types.Ref, includeParentsClosure bool, meta types.Struct) (types.Struct, error) {
-	parentsSet, err := parentsList.ToSet(ctx)
-	if err != nil {
-		return types.EmptyStruct(meta.Format()), err
-	}
-	if includeParentsClosure {
-		return commitTemplateWithParentsClosure.NewStruct(meta.Format(), []types.Value{meta, parentsSet, parentsClosure, parentsList, value})
-	} else {
-		return commitTemplateWithoutParentsClosure.NewStruct(meta.Format(), []types.Value{meta, parentsSet, parentsList, value})
-	}
 }
 
 func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
@@ -195,120 +142,62 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	return bytes, maxheight + 1
 }
 
-var commitKeyTupleDesc = val.NewTupleDescriptor(
-	val.Type{Enc: val.Uint64Enc, Nullable: false},
-	val.Type{Enc: val.CommitAddrEnc, Nullable: false},
-)
-var commitValueTupleDesc = val.NewTupleDescriptor()
-
 func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
 	}
 
-	if vrw.Format().UsesFlatbuffers() {
-		r, err := vrw.WriteValue(ctx, v)
-		if err != nil {
-			return nil, err
-		}
-		parents := make([]*serial.Commit, len(opts.Parents))
-		heights := make([]uint64, len(opts.Parents))
-		parentValues, err := vrw.ReadManyValues(ctx, opts.Parents)
-		if err != nil {
-			return nil, err
-		}
-		for i := range heights {
-			parents[i], err = serial.TryGetRootAsCommit([]byte(parentValues[i].(types.SerialMessage)), serial.MessagePrefixSz)
-			if err != nil {
-				return nil, err
-			}
-			heights[i] = parents[i].Height()
-		}
-		parentClosureAddr, err := writeFbCommitParentClosure(ctx, cs, vrw, ns, parents, opts.Parents)
-		if err != nil {
-			return nil, err
-		}
-		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights, parentClosureAddr)
-		v := types.SerialMessage(bs)
-		addr, err := v.Hash(vrw.Format())
-		if err != nil {
-			return nil, err
-		}
-		return &Commit{v, addr, height}, nil
+	r, err := vrw.WriteValue(ctx, v)
+	if err != nil {
+		return nil, err
 	}
+	parents := make([]*serial.Commit, len(opts.Parents))
+	heights := make([]uint64, len(opts.Parents))
+	parentValues, err := vrw.ReadManyValues(ctx, opts.Parents)
+	if err != nil {
+		return nil, err
+	}
+	for i := range heights {
+		parents[i], err = serial.TryGetRootAsCommit([]byte(parentValues[i].(types.SerialMessage)), serial.MessagePrefixSz)
+		if err != nil {
+			return nil, err
+		}
+		heights[i] = parents[i].Height()
+	}
+	parentClosureAddr, err := writeFbCommitParentClosure(ctx, cs, vrw, ns, parents, opts.Parents)
+	if err != nil {
+		return nil, err
+	}
+	bs, height := commit_flatbuffer(r.TargetHash(), opts, heights, parentClosureAddr)
 
-	metaSt, err := opts.Meta.toNomsStruct(vrw.Format())
+	v = types.SerialMessage(bs)
+	addr, err := v.Hash(vrw.Format())
 	if err != nil {
 		return nil, err
 	}
-
-	refs := make([]types.Value, len(opts.Parents))
-	for i, h := range opts.Parents {
-		commitSt, err := vrw.MustReadValue(ctx, h)
-		if err != nil {
-			return nil, err
-		}
-		ref, err := types.NewRef(commitSt, vrw.Format())
-		if err != nil {
-			return nil, err
-		}
-		refs[i] = ref
-	}
-	parentsList, err := types.NewList(ctx, vrw, refs...)
-	if err != nil {
-		return nil, err
-	}
-
-	parentsClosure, includeParentsClosure, err := writeTypesCommitParentClosure(ctx, vrw, parentsList)
-	if err != nil {
-		return nil, err
-	}
-
-	cv, err := newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
-	if err != nil {
-		return nil, err
-	}
-	r, err := types.NewRef(cv, vrw.Format())
-	if err != nil {
-		return nil, err
-	}
-	return &Commit{cv, r.TargetHash(), r.Height()}, nil
+	return &Commit{v, addr, height}, nil
 }
 
 func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, error) {
-	if nbf.UsesFlatbuffers() {
-		bs := []byte(v.(types.SerialMessage))
-		var cm serial.Commit
-		err := serial.InitCommitRoot(&cm, bs, serial.MessagePrefixSz)
-		if err != nil {
-			return nil, err
-		}
-		var addr hash.Hash
-		if r != nil {
-			addr = r.TargetHash()
-		} else {
-			addr, err = v.Hash(nbf)
-			if err != nil {
-				return nil, err
-			}
-		}
-		return &Commit{
-			val:    v,
-			height: cm.Height(),
-			addr:   addr,
-		}, nil
+	bs := []byte(v.(types.SerialMessage))
+	var cm serial.Commit
+	err := serial.InitCommitRoot(&cm, bs, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
 	}
-	if r == nil {
-		rv, err := types.NewRef(v, nbf)
+	var addr hash.Hash
+	if r != nil {
+		addr = r.TargetHash()
+	} else {
+		addr, err = v.Hash(nbf)
 		if err != nil {
 			return nil, err
 		}
-		r = &rv
 	}
 	return &Commit{
 		val:    v,
-		height: r.Height(),
-		addr:   r.TargetHash(),
+		height: cm.Height(),
+		addr:   addr,
 	}, nil
 }
 
@@ -466,101 +355,46 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 		return nil, fmt.Errorf("runtime exception. GetCommitParents called with GhostCommit.")
 	}
 
-	if sm, ok := cv.(types.SerialMessage); ok {
-		data := []byte(sm)
-		if serial.GetFileID(data) != serial.CommitFileID {
-			return nil, errors.New("GetCommitParents: provided value is not a commit.")
-		}
-		addrs, err := types.SerialCommitParentAddrs(vr.Format(), sm)
-		if err != nil {
-			return nil, err
-		}
-
-		vals, err := vr.ReadManyValues(ctx, addrs)
-		if err != nil {
-			return nil, err
-		}
-		res := make([]*Commit, len(vals))
-		for i, v := range vals {
-			if v == nil {
-				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", addrs[i].String())
-			}
-
-			if g, ok := v.(types.GhostValue); ok {
-				res[i] = &Commit{
-					val:  g,
-					addr: addrs[i],
-				}
-			} else {
-				var csm serial.Commit
-				err := serial.InitCommitRoot(&csm, []byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
-				if err != nil {
-					return nil, err
-				}
-				res[i] = &Commit{
-					val:    v,
-					height: csm.Height(),
-					addr:   addrs[i],
-				}
-			}
-		}
-		return res, nil
-	}
-
-	c, ok := cv.(types.Struct)
+	sm, ok := cv.(types.SerialMessage)
 	if !ok {
+		return nil, fmt.Errorf("expected SerialMessage type for commit value, found %T", cv)
+	}
+
+	data := []byte(sm)
+	if serial.GetFileID(data) != serial.CommitFileID {
 		return nil, errors.New("GetCommitParents: provided value is not a commit.")
 	}
-	if c.Name() != commitName {
-		return nil, errors.New("GetCommitParents: provided value is not a commit.")
-	}
-	var refs []types.Ref
-	ps, ok, err := c.MaybeGet(parentsListField)
+	addrs, err := types.SerialCommitParentAddrs(vr.Format(), sm)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
-		p := ps.(types.List)
-		err = p.IterAll(ctx, func(v types.Value, _ uint64) error {
-			refs = append(refs, v.(types.Ref))
-			return nil
-		})
-		if err != nil {
-			return nil, err
+
+	vals, err := vr.ReadManyValues(ctx, addrs)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]*Commit, len(vals))
+	for i, v := range vals {
+		if v == nil {
+			return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", addrs[i].String())
 		}
-	} else {
-		ps, ok, err = c.MaybeGet(parentsField)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			p := ps.(types.Set)
-			err = p.IterAll(ctx, func(v types.Value) error {
-				refs = append(refs, v.(types.Ref))
-				return nil
-			})
+
+		if g, ok := v.(types.GhostValue); ok {
+			res[i] = &Commit{
+				val:  g,
+				addr: addrs[i],
+			}
+		} else {
+			var csm serial.Commit
+			err := serial.InitCommitRoot(&csm, []byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
 			if err != nil {
 				return nil, err
 			}
-		}
-	}
-	hashes := make([]hash.Hash, len(refs))
-	for i, r := range refs {
-		hashes[i] = r.TargetHash()
-	}
-	vals, err := vr.ReadManyValues(ctx, hashes)
-	if err != nil {
-		return nil, err
-	}
-	res := make([]*Commit, len(refs))
-	for i, val := range vals {
-		if val == nil {
-			return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
-		}
-		res[i] = &Commit{
-			val:    val,
-			height: refs[i].Height(),
-			addr:   refs[i].TargetHash(),
+			res[i] = &Commit{
+				val:    v,
+				height: csm.Height(),
+				addr:   addrs[i],
+			}
 		}
 	}
 	return res, nil
@@ -569,91 +403,69 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 // GetCommitMeta extracts the CommitMeta field from a commit. Returns |nil,
 // nil| if there is no metadata for the commit.
 func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
-	if sm, ok := cv.(types.SerialMessage); ok {
-		data := []byte(sm)
-		if serial.GetFileID(data) != serial.CommitFileID {
-			return nil, errors.New("GetCommitMeta: provided value is not a commit.")
-		}
-		var cmsg serial.Commit
-		err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
-		if err != nil {
-			return nil, err
-		}
-		ret := &CommitMeta{}
-		ret.Name = string(cmsg.Name())
-		ret.Email = string(cmsg.Email())
-		ret.Description = string(cmsg.Description())
-		ret.Timestamp = cmsg.TimestampMillis()
-		ret.UserTimestamp = cmsg.UserTimestampMillis()
-		ret.Signature = string(cmsg.Signature())
-		return ret, nil
-	}
-	c, ok := cv.(types.Struct)
+	sm, ok := cv.(types.SerialMessage)
 	if !ok {
+		return nil, fmt.Errorf("expected SerialMessage type for commit value, found %T", cv)
+	}
+
+	data := []byte(sm)
+	if serial.GetFileID(data) != serial.CommitFileID {
 		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
 	}
-	if c.Name() != commitName {
-		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
-	}
-	metaVal, found, err := c.MaybeGet(commitMetaField)
+	var cmsg serial.Commit
+	err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
 	if err != nil {
 		return nil, err
 	}
-	if !found {
-		return nil, nil
-	}
-	if metaSt, ok := metaVal.(types.Struct); ok {
-		return CommitMetaFromNomsSt(metaSt)
-	} else {
-		return nil, errors.New("GetCommitMeta: Commit had metadata field but it was not a Struct.")
-	}
+	ret := &CommitMeta{}
+	ret.Name = string(cmsg.Name())
+	ret.Email = string(cmsg.Email())
+	ret.Description = string(cmsg.Description())
+	ret.Timestamp = cmsg.TimestampMillis()
+	ret.UserTimestamp = cmsg.UserTimestampMillis()
+	ret.Signature = string(cmsg.Signature())
+	return ret, nil
 }
 
 // GetCommittedValue returns the value of a commit. If the commit isn't found, nil is returned.
 func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value) (types.Value, error) {
-	if sm, ok := cv.(types.SerialMessage); ok {
-		data := []byte(sm)
-		if serial.GetFileID(data) != serial.CommitFileID {
-			return nil, errors.New("GetCommittedValue: provided value is not a commit.")
-		}
-		var cmsg serial.Commit
-		err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
-		if err != nil {
-			return nil, err
-		}
-		var roothash hash.Hash
-		copy(roothash[:], cmsg.RootBytes())
-		return vr.ReadValue(ctx, roothash)
+	sm, ok := cv.(types.SerialMessage)
+	if !ok {
+		return nil, fmt.Errorf("expected SerialMessage type for commit value, found %T", cv)
 	}
 
-	c, ok := cv.(types.Struct)
-	if !ok {
+	data := []byte(sm)
+	if serial.GetFileID(data) != serial.CommitFileID {
 		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
 	}
-	if c.Name() != commitName {
-		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
+	var cmsg serial.Commit
+	err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
 	}
-	v, _, err := c.MaybeGet(valueField)
-	return v, err
+	var roothash hash.Hash
+	copy(roothash[:], cmsg.RootBytes())
+	return vr.ReadValue(ctx, roothash)
 }
 
 func GetCommitRootHash(cv types.Value) (hash.Hash, error) {
-	if sm, ok := cv.(types.SerialMessage); ok {
-		data := []byte(sm)
-		if serial.GetFileID(data) != serial.CommitFileID {
-			return hash.Hash{}, errors.New("GetCommitRootHash: provided value is not a commit.")
-		}
-		var cmsg serial.Commit
-		err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
-		if err != nil {
-			return hash.Hash{}, err
-		}
-		var roothash hash.Hash
-		copy(roothash[:], cmsg.RootBytes())
-		return roothash, nil
+	sm, ok := cv.(types.SerialMessage)
+	if !ok {
+		return hash.Hash{}, fmt.Errorf("expected SerialMessage type for commit value, found %T", cv)
 	}
 
-	return hash.Hash{}, errors.New("GetCommitRootHash: Only supports modern storage formats.")
+	data := []byte(sm)
+	if serial.GetFileID(data) != serial.CommitFileID {
+		return hash.Hash{}, errors.New("GetCommitRootHash: provided value is not a commit.")
+	}
+	var cmsg serial.Commit
+	err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	var roothash hash.Hash
+	copy(roothash[:], cmsg.RootBytes())
+	return roothash, nil
 }
 
 func parentsToQueue(ctx context.Context, commits []*Commit, q *CommitByHeightHeap, vr types.ValueReader) error {
@@ -694,52 +506,6 @@ func findCommonCommit(a, b []*Commit) (*Commit, bool) {
 	return nil, false
 }
 
-func makeCommitStructType(metaType, parentsType, parentsListType, parentsClosureType, valueType *types.Type, includeParentsClosure bool) (*types.Type, error) {
-	if includeParentsClosure {
-		return types.MakeStructType(commitName,
-			types.StructField{
-				Name: commitMetaField,
-				Type: metaType,
-			},
-			types.StructField{
-				Name: parentsField,
-				Type: parentsType,
-			},
-			types.StructField{
-				Name: parentsListField,
-				Type: parentsListType,
-			},
-			types.StructField{
-				Name: parentsClosureField,
-				Type: parentsClosureType,
-			},
-			types.StructField{
-				Name: valueField,
-				Type: valueType,
-			},
-		)
-	} else {
-		return types.MakeStructType(commitName,
-			types.StructField{
-				Name: commitMetaField,
-				Type: metaType,
-			},
-			types.StructField{
-				Name: parentsField,
-				Type: parentsType,
-			},
-			types.StructField{
-				Name: parentsListField,
-				Type: parentsListType,
-			},
-			types.StructField{
-				Name: valueField,
-				Type: valueType,
-			},
-		)
-	}
-}
-
 func firstError(l, r error) error {
 	if l != nil {
 		return l
@@ -748,9 +514,7 @@ func firstError(l, r error) error {
 }
 
 func IsCommit(v types.Value) (bool, error) {
-	if s, ok := v.(types.Struct); ok {
-		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
-	} else if sm, ok := v.(types.SerialMessage); ok {
+	if sm, ok := v.(types.SerialMessage); ok {
 		data := []byte(sm)
 		return serial.GetFileID(data) == serial.CommitFileID, nil
 	} else {

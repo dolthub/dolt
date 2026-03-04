@@ -17,26 +17,29 @@ package pull
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 
+	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestNbsPuller(t *testing.T) {
-	testPuller(t, func(ctx context.Context) (types.ValueReadWriter, datas.Database) {
+	testPuller(t, func(ctx context.Context) (tree.NodeStore, datas.Database) {
 		dir := filepath.Join(os.TempDir(), uuid.New().String())
 		err := os.MkdirAll(dir, os.ModePerm)
 		require.NoError(t, err)
@@ -47,13 +50,13 @@ func TestNbsPuller(t *testing.T) {
 		require.NoError(t, err)
 
 		ns := tree.NewNodeStore(st)
-		vs := types.NewValueStore(st)
-		return vs, datas.NewTypesDatabase(vs, ns)
+		db := datas.NewDatabase(st)
+		return ns, db
 	})
 }
 
 func TestChunkJournalPuller(t *testing.T) {
-	testPuller(t, func(ctx context.Context) (types.ValueReadWriter, datas.Database) {
+	testPuller(t, func(ctx context.Context) (tree.NodeStore, datas.Database) {
 		dir := filepath.Join(os.TempDir(), uuid.New().String())
 		err := os.MkdirAll(dir, os.ModePerm)
 		require.NoError(t, err)
@@ -65,8 +68,8 @@ func TestChunkJournalPuller(t *testing.T) {
 		require.NoError(t, err)
 
 		ns := tree.NewNodeStore(st)
-		vs := types.NewValueStore(st)
-		return vs, datas.NewTypesDatabase(vs, ns)
+		db := datas.NewDatabase(st)
+		return ns, db
 	})
 }
 
@@ -104,244 +107,276 @@ func TestPuller(t *testing.T) {
 	})
 }
 
-func addTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map, tableName string, alternatingKeyVals ...types.Value) (types.Map, error) {
-	val, ok, err := m.MaybeGet(ctx, types.String(tableName))
+var (
+	testKeyDesc = val.NewTupleDescriptor(val.Type{Enc: val.Int64Enc, Nullable: false})
+	testValDesc = val.NewTupleDescriptor(
+		val.Type{Enc: val.StringEnc, Nullable: true},
+		val.Type{Enc: val.StringEnc, Nullable: true},
+	)
+)
 
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	var tblMap types.Map
-	if ok {
-		mv, err := val.(types.Ref).TargetValue(ctx, vrw)
-
-		if err != nil {
-			return types.EmptyMap, err
-		}
-
-		me := mv.(types.Map).Edit()
-
-		for i := 0; i < len(alternatingKeyVals); i += 2 {
-			me.Set(alternatingKeyVals[i], alternatingKeyVals[i+1])
-		}
-
-		tblMap, err = me.Map(ctx)
-
-		if err != nil {
-			return types.EmptyMap, err
-		}
-	} else {
-		tblMap, err = types.NewMap(ctx, vrw, alternatingKeyVals...)
-
-		if err != nil {
-			return types.EmptyMap, err
-		}
-	}
-
-	tblRef, err := writeValAndGetRef(ctx, vrw, tblMap)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	me := m.Edit()
-	me.Set(types.String(tableName), tblRef)
-	return me.Map(ctx)
+type testTuple struct {
+	key int64
+	v0  string
+	v1  string
 }
 
-func deleteTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map, tableName string, keys ...types.Value) (types.Map, error) {
+func buildKeyTuple(ns tree.NodeStore, k int64) val.Tuple {
+	tb := val.NewTupleBuilder(testKeyDesc, ns)
+	tb.PutInt64(0, k)
+	tup, _ := tb.Build(ns.Pool())
+	return tup
+}
+
+func buildValTuple(ns tree.NodeStore, v0, v1 string) val.Tuple {
+	tb := val.NewTupleBuilder(testValDesc, ns)
+	tb.PutString(0, v0)
+	tb.PutString(1, v1)
+	tup, _ := tb.Build(ns.Pool())
+	return tup
+}
+
+func createProllyMap(t *testing.T, ctx context.Context, ns tree.NodeStore, data []testTuple) prolly.Map {
+	tuples := make([]val.Tuple, 0, len(data)*2)
+	for _, p := range data {
+		tuples = append(tuples, buildKeyTuple(ns, p.key), buildValTuple(ns, p.v0, p.v1))
+	}
+	m, err := prolly.NewMapFromTuples(ctx, ns, testKeyDesc, testValDesc, tuples...)
+	require.NoError(t, err)
+	return m
+}
+
+func putProllyMapValues(t *testing.T, ctx context.Context, ns tree.NodeStore, m prolly.Map, data []testTuple) prolly.Map {
+	mut := m.Mutate()
+	for _, p := range data {
+		err := mut.Put(ctx, buildKeyTuple(ns, p.key), buildValTuple(ns, p.v0, p.v1))
+		require.NoError(t, err)
+	}
+	result, err := mut.Map(ctx)
+	require.NoError(t, err)
+	return result
+}
+
+func deleteProllyMapKeys(t *testing.T, ctx context.Context, ns tree.NodeStore, m prolly.Map, keys []int64) prolly.Map {
 	if len(keys) == 0 {
-		return m, nil
+		return m
 	}
-
-	val, ok, err := m.MaybeGet(ctx, types.String(tableName))
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	if !ok {
-		return types.EmptyMap, errors.New("can't delete from table that wasn't created")
-	}
-
-	mv, err := val.(types.Ref).TargetValue(ctx, vrw)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	me := mv.(types.Map).Edit()
+	mut := m.Mutate()
 	for _, k := range keys {
-		me.Remove(k)
+		err := mut.Delete(ctx, buildKeyTuple(ns, k))
+		require.NoError(t, err)
 	}
-
-	tblMap, err := me.Map(ctx)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	tblRef, err := writeValAndGetRef(ctx, vrw, tblMap)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	me = m.Edit()
-	me.Set(types.String(tableName), tblRef)
-	return me.Map(ctx)
+	result, err := mut.Map(ctx)
+	require.NoError(t, err)
+	return result
 }
 
-type datasFactory func(context.Context) (types.ValueReadWriter, datas.Database)
+func buildAddressMap(t *testing.T, ctx context.Context, ns tree.NodeStore, tables map[string]prolly.Map) prolly.AddressMap {
+	am, err := prolly.NewEmptyAddressMap(ns)
+	require.NoError(t, err)
+	editor := am.Editor()
+	for name, m := range tables {
+		_, err := ns.Write(ctx, m.Node())
+		require.NoError(t, err)
+		err = editor.Add(ctx, name, m.HashOf())
+		require.NoError(t, err)
+	}
+	am, err = editor.Flush(ctx)
+	require.NoError(t, err)
+	return am
+}
+
+func updateAddressMap(t *testing.T, ctx context.Context, ns tree.NodeStore, am prolly.AddressMap, name string, m prolly.Map) prolly.AddressMap {
+	_, err := ns.Write(ctx, m.Node())
+	require.NoError(t, err)
+	editor := am.Editor()
+	err = editor.Update(ctx, name, m.HashOf())
+	require.NoError(t, err)
+	am, err = editor.Flush(ctx)
+	require.NoError(t, err)
+	return am
+}
+
+func addToAddressMap(t *testing.T, ctx context.Context, ns tree.NodeStore, am prolly.AddressMap, name string, m prolly.Map) prolly.AddressMap {
+	_, err := ns.Write(ctx, m.Node())
+	require.NoError(t, err)
+	editor := am.Editor()
+	err = editor.Add(ctx, name, m.HashOf())
+	require.NoError(t, err)
+	am, err = editor.Flush(ctx)
+	require.NoError(t, err)
+	return am
+}
+
+func deleteFromAddressMap(t *testing.T, ctx context.Context, am prolly.AddressMap, name string) prolly.AddressMap {
+	editor := am.Editor()
+	err := editor.Delete(ctx, name)
+	require.NoError(t, err)
+	am, err = editor.Flush(ctx)
+	require.NoError(t, err)
+	return am
+}
+
+func buildRootValue(am prolly.AddressMap) types.SerialMessage {
+	builder := flatbuffers.NewBuilder(256)
+	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.SerialMessage))
+	tablesoff := builder.CreateByteVector(ambytes)
+	emptyAddr := make([]byte, hash.ByteLen)
+	fkoff := builder.CreateByteVector(emptyAddr)
+	serial.RootValueStart(builder)
+	serial.RootValueAddTables(builder, tablesoff)
+	serial.RootValueAddForeignKeyAddr(builder, fkoff)
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	return types.SerialMessage(bs)
+}
+
+type datasFactory func(context.Context) (tree.NodeStore, datas.Database)
 
 func testPuller(t *testing.T, makeDB datasFactory) {
 	ctx := context.Background()
-	vs, db := makeDB(ctx)
+	ns, db := makeDB(ctx)
 	defer db.Close()
 
-	deltas := []struct {
+	type delta struct {
 		name       string
-		sets       map[string][]types.Value
-		deletes    map[string][]types.Value
+		sets       map[string][]testTuple
+		deletes    map[string][]int64
 		tblDeletes []string
-	}{
+	}
+
+	deltas := []delta{
 		{
-			"empty",
-			map[string][]types.Value{},
-			map[string][]types.Value{},
-			[]string{},
+			name:       "empty",
+			sets:       map[string][]testTuple{},
+			deletes:    map[string][]int64{},
+			tblDeletes: []string{},
 		},
 		{
-			"employees",
-			map[string][]types.Value{
+			name: "employees",
+			sets: map[string][]testTuple{
 				"employees": {
-					mustTuple(types.NewTuple(vs.Format(), types.String("Hendriks"), types.String("Brian"))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.Int(39))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Sehn"), types.String("Timothy"))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("CEO"), types.Int(39))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Son"), types.String("Aaron"))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.Int(36))),
+					{0, "Hendriks", "Software Engineer"},
+					{1, "Sehn", "CEO"},
+					{2, "Son", "Software Engineer"},
 				},
 			},
-			map[string][]types.Value{},
-			[]string{},
+			deletes:    map[string][]int64{},
+			tblDeletes: []string{},
 		},
 		{
-			"ip to country",
-			map[string][]types.Value{
+			name: "ip to country",
+			sets: map[string][]testTuple{
 				"ip_to_country": {
-					types.String("5.183.230.1"), types.String("BZ"),
-					types.String("5.180.188.1"), types.String("AU"),
-					types.String("2.56.9.244"), types.String("GB"),
-					types.String("20.175.7.56"), types.String("US"),
+					{0, "5.183.230.1", "BZ"},
+					{1, "5.180.188.1", "AU"},
+					{2, "2.56.9.244", "GB"},
+					{3, "20.175.7.56", "US"},
 				},
 			},
-			map[string][]types.Value{},
-			[]string{},
+			deletes:    map[string][]int64{},
+			tblDeletes: []string{},
 		},
 		{
-			"more ips",
-			map[string][]types.Value{
+			name: "more ips",
+			sets: map[string][]testTuple{
 				"ip_to_country": {
-					types.String("20.175.193.85"), types.String("US"),
-					types.String("5.196.110.191"), types.String("FR"),
-					types.String("4.14.242.160"), types.String("CA"),
+					{4, "20.175.193.85", "US"},
+					{5, "5.196.110.191", "FR"},
+					{6, "4.14.242.160", "CA"},
 				},
 			},
-			map[string][]types.Value{},
-			[]string{},
+			deletes:    map[string][]int64{},
+			tblDeletes: []string{},
 		},
 		{
-			"more employees",
-			map[string][]types.Value{
+			name: "more employees",
+			sets: map[string][]testTuple{
 				"employees": {
-					mustTuple(types.NewTuple(vs.Format(), types.String("Jesuele"), types.String("Matt"))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.NullValue)),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Wilkins"), types.String("Daylon"))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.NullValue)),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Katie"), types.String("McCulloch"))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.NullValue)),
+					{3, "Jesuele", "Software Engineer"},
+					{4, "Wilkins", "Software Engineer"},
+					{5, "McCulloch", "Software Engineer"},
 				},
 			},
-			map[string][]types.Value{},
-			[]string{},
+			deletes:    map[string][]int64{},
+			tblDeletes: []string{},
 		},
 		{
-			"delete ips table",
-			map[string][]types.Value{},
-			map[string][]types.Value{},
-			[]string{"ip_to_country"},
+			name:       "delete ips table",
+			sets:       map[string][]testTuple{},
+			deletes:    map[string][]int64{},
+			tblDeletes: []string{"ip_to_country"},
 		},
 		{
-			"delete some employees",
-			map[string][]types.Value{},
-			map[string][]types.Value{
-				"employees": {
-					mustTuple(types.NewTuple(vs.Format(), types.String("Hendriks"), types.String("Brian"))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Sehn"), types.String("Timothy"))),
-					mustTuple(types.NewTuple(vs.Format(), types.String("Son"), types.String("Aaron"))),
-				},
+			name: "delete some employees",
+			sets: map[string][]testTuple{},
+			deletes: map[string][]int64{
+				"employees": {0, 1, 2},
 			},
-			[]string{},
+			tblDeletes: []string{},
 		},
 	}
 
 	ds, err := db.GetDataset(ctx, "ds")
 	require.NoError(t, err)
-	rootMap, err := types.NewMap(ctx, vs)
+
+	tables := make(map[string]prolly.Map)
+	am, err := prolly.NewEmptyAddressMap(ns)
 	require.NoError(t, err)
 
 	var parent []hash.Hash
 	states := map[string]hash.Hash{}
-	for _, delta := range deltas {
-		for tbl, sets := range delta.sets {
-			rootMap, err = addTableValues(ctx, vs, rootMap, tbl, sets...)
-			require.NoError(t, err)
+	for _, d := range deltas {
+		for tbl, data := range d.sets {
+			existing, ok := tables[tbl]
+			if !ok {
+				m := createProllyMap(t, ctx, ns, data)
+				tables[tbl] = m
+				am = addToAddressMap(t, ctx, ns, am, tbl, m)
+			} else {
+				m := putProllyMapValues(t, ctx, ns, existing, data)
+				tables[tbl] = m
+				am = updateAddressMap(t, ctx, ns, am, tbl, m)
+			}
 		}
 
-		for tbl, dels := range delta.deletes {
-			rootMap, err = deleteTableValues(ctx, vs, rootMap, tbl, dels...)
-			require.NoError(t, err)
+		for tbl, keys := range d.deletes {
+			existing, ok := tables[tbl]
+			require.True(t, ok, "cannot delete from table that wasn't created")
+			m := deleteProllyMapKeys(t, ctx, ns, existing, keys)
+			tables[tbl] = m
+			am = updateAddressMap(t, ctx, ns, am, tbl, m)
 		}
 
-		me := rootMap.Edit()
-		for _, tbl := range delta.tblDeletes {
-			me.Remove(types.String(tbl))
+		for _, tbl := range d.tblDeletes {
+			delete(tables, tbl)
+			am = deleteFromAddressMap(t, ctx, am, tbl)
 		}
-		rootMap, err = me.Map(ctx)
-		require.NoError(t, err)
 
+		rootVal := buildRootValue(am)
 		commitOpts := datas.CommitOptions{Parents: parent}
-		ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
+		ds, err = db.Commit(ctx, ds, rootVal, commitOpts)
 		require.NoError(t, err)
 
 		dsAddr, ok := ds.MaybeHeadAddr()
 		require.True(t, ok)
 
 		parent = []hash.Hash{dsAddr}
-
-		states[delta.name] = dsAddr
+		states[d.name] = dsAddr
 	}
 
-	tbl, err := makeABigTable(ctx, vs)
-	require.NoError(t, err)
+	bigTable := makeABigProllyTable(t, ctx, ns)
+	am = addToAddressMap(t, ctx, ns, am, "big_table", bigTable)
 
-	tblRef, err := writeValAndGetRef(ctx, vs, tbl)
-	require.NoError(t, err)
-
-	me := rootMap.Edit()
-	me.Set(types.String("big_table"), tblRef)
-	rootMap, err = me.Map(ctx)
-	require.NoError(t, err)
-
+	rootVal := buildRootValue(am)
 	commitOpts := datas.CommitOptions{Parents: parent}
-	ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
+	ds, err = db.Commit(ctx, ds, rootVal, commitOpts)
 	require.NoError(t, err)
 
 	addr, ok := ds.MaybeHeadAddr()
 	require.True(t, ok)
-
 	states["add big table"] = addr
+
+	srcCS := datas.ChunkStoreFromDatabase(db)
 
 	for k, rootAddr := range states {
 		t.Run(k, func(t *testing.T) {
@@ -358,15 +393,16 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 				}
 			}()
 
-			sinkvs, sinkdb := makeDB(ctx)
+			_, sinkdb := makeDB(ctx)
 			defer sinkdb.Close()
 
 			tmpDir := filepath.Join(os.TempDir(), uuid.New().String())
 			err = os.MkdirAll(tmpDir, os.ModePerm)
 			require.NoError(t, err)
-			waf, err := types.WalkAddrsForChunkStore(datas.ChunkStoreFromDatabase(db))
+			waf, err := types.WalkAddrsForChunkStore(srcCS)
 			require.NoError(t, err)
-			plr, err := NewPuller(ctx, tmpDir, 1<<20, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), waf, []hash.Hash{rootAddr}, statsCh)
+			sinkCS := datas.ChunkStoreFromDatabase(sinkdb)
+			plr, err := NewPuller(ctx, tmpDir, 1<<20, srcCS, sinkCS, waf, []hash.Hash{rootAddr}, statsCh)
 			require.NoError(t, err)
 
 			err = plr.Pull(ctx)
@@ -383,74 +419,33 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 			sinkRootAddr, ok := sinkDS.MaybeHeadAddr()
 			require.True(t, ok)
 
-			pullerAddrEquality(t, ctx, rootAddr, sinkRootAddr, vs, sinkvs)
+			pullerHashEquality(t, ctx, rootAddr, sinkRootAddr, srcCS, sinkCS)
 		})
 	}
 }
 
-func makeABigTable(ctx context.Context, vrw types.ValueReadWriter) (types.Map, error) {
-	m, err := types.NewMap(ctx, vrw)
-
-	if err != nil {
-		return types.EmptyMap, nil
-	}
-
-	me := m.Edit()
-
+func makeABigProllyTable(t *testing.T, ctx context.Context, ns tree.NodeStore) prolly.Map {
+	tuples := make([]val.Tuple, 0, 256*1024*2)
 	for i := 0; i < 256*1024; i++ {
-		tpl, err := types.NewTuple(vrw.Format(), types.UUID(uuid.New()), types.String(uuid.New().String()), types.Float(float64(i)))
-
-		if err != nil {
-			return types.EmptyMap, err
-		}
-
-		me.Set(types.Int(i), tpl)
+		k := buildKeyTuple(ns, int64(i))
+		v := buildValTuple(ns, uuid.New().String(), uuid.New().String())
+		tuples = append(tuples, k, v)
 	}
-
-	return me.Map(ctx)
-}
-
-func pullerAddrEquality(t *testing.T, ctx context.Context, expected, actual hash.Hash, src, sink types.ValueReadWriter) {
-	if expected != actual {
-		require.FailNow(t, "expected %v, got %v", expected, actual)
-	}
-
-	expectedVal, err := src.ReadValue(ctx, expected)
+	m, err := prolly.NewMapFromTuples(ctx, ns, testKeyDesc, testValDesc, tuples...)
 	require.NoError(t, err)
-	require.NotNil(t, expectedVal)
+	return m
+}
 
-	actualVal, err := sink.ReadValue(ctx, actual)
+func pullerHashEquality(t *testing.T, ctx context.Context, expected, actual hash.Hash, srcCS, sinkCS chunks.ChunkStore) {
+	require.Equal(t, expected, actual)
+
+	srcChunk, err := srcCS.Get(ctx, expected)
 	require.NoError(t, err)
-	require.NotNil(t, actualVal)
+	require.False(t, srcChunk.IsEmpty())
 
-	require.True(t, expectedVal.Equals(actualVal))
-}
+	sinkChunk, err := sinkCS.Get(ctx, actual)
+	require.NoError(t, err)
+	require.False(t, sinkChunk.IsEmpty())
 
-func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {
-	valRef, err := types.NewRef(val, vrw.Format())
-
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	targetVal, err := valRef.TargetValue(ctx, vrw)
-
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	if targetVal == nil {
-		_, err = vrw.WriteValue(ctx, val)
-
-		if err != nil {
-			return types.Ref{}, err
-		}
-	}
-
-	return valRef, err
-}
-
-func mustTuple(val types.Tuple, err error) types.Tuple {
-	d.PanicIfError(err)
-	return val
+	require.Equal(t, srcChunk.Data(), sinkChunk.Data())
 }

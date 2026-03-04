@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -268,7 +269,22 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	}
 
 	// Unlike CloneDatabaseFromRemote which clones tracking branches (remote refs), we need all local changes.
-	return actions.SyncRoots(ctx, remoteDb, newDb.DbData().Ddb, fileSys.TempDir(), runProgFuncs, stopProgFuncs)
+	statsCh := make(chan pull.Stats)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range statsCh {
+		}
+	})
+	wg.Go(func() {
+		defer close(statsCh)
+		err = actions.SyncRoots(ctx, remoteDb, newDb.DbData().Ddb, fileSys.TempDir(), statsCh)
+	})
+	wg.Wait()
+	if err == nil {
+		// XXX: Old SyncRoots ProgStarter behavior.
+		cli.Println()
+	}
+	return err
 }
 
 // syncRemote syncs the roots from |dbData| to the remote specified by |remote|. It prepares the remote database
@@ -282,7 +298,7 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 		return err
 	}
 
-	params := map[string]interface{}{}
+	params := make(map[string]any, len(remote.Params))
 	for k, v := range remote.Params {
 		params[k] = v
 	}
@@ -295,7 +311,21 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 		return err
 	}
 
-	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), runProgFuncs, stopProgFuncs)
+	statsCh := make(chan pull.Stats)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range statsCh {
+		}
+	})
+	wg.Go(func() {
+		defer close(statsCh)
+		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), statsCh)
+	})
+	wg.Wait()
+	if err == nil {
+		// XXX: Old SyncRoots ProgStarter behavior.
+		cli.Println()
+	}
 	if err != nil && !errors.Is(err, pull.ErrDBUpToDate) {
 		return err
 	}

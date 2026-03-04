@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -58,7 +57,6 @@ func Stat(ctx context.Context, ch chan DiffStatProgress, from, to durable.Index,
 		return fmt.Errorf("cannot perform a diff between keyless and keyed schema")
 	}
 
-	types.AssertFormat_DOLT(from.Format())
 	return diffProllyTrees(ctx, ch, keyless, from, to, fromSch, toSch)
 }
 

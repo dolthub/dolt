@@ -1,27 +1,38 @@
 #!/usr/bin/env bats
+load helper/common
+
+setup_file() {
+    export BATS_TEST_RETRIES=5
+}
 
 setup() {
-  REPO_NAME="dolt_repo_$$"
-  mkdir $REPO_NAME
-  cd $REPO_NAME
+  setup_no_dolt_init
+  REPO_NAME="$(basename "$PWD")"
+  # TODO(elianddb): flaky dolt init and dolt sql-server lock race
+  dolt init && flock -w 30 .dolt/noms/LOCK true
 
-  USER="dolt"
-  dolt sql -q "CREATE USER dolt@'%'; GRANT ALL ON *.* TO dolt@'%';"
-  dolt sql-server --host 0.0.0.0 --loglevel=trace &
-  SERVER_PID=$!
+  PORT=$(definePORT)
+  start_sql_server_with_args_no_port --host 0.0.0.0 --port="$PORT" --loglevel=debug
 
-  # Give the server a chance to start
-  sleep 1
+  export DB_HOST="127.0.0.1"
+  export DB_PORT="$PORT"
+  export DB_USER="root"
+  export DB_PASSWORD=""
+  export DB_NAME="$REPO_NAME"
+  export_DB_URL
 
-  export MYSQL_PWD=""
-  cd ..
+  export MYSQL_HOST="$DB_HOST"
+  export MYSQL_TCP_PORT="$DB_PORT"
+  export MYSQL_PWD="$DB_PASSWORD"
+}
+
+export_DB_URL() {
+    export DB_URL="mysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 }
 
 teardown() {
-  cd ..
-  kill $SERVER_PID
-  rm -rf $REPO_NAME
-  rm -f /tmp/mysql.sock
+  stop_sql_server 1
+  teardown_common
 }
 
 # Peewee is a lightweight ORM library for Python applications. This test checks performs a basic
@@ -49,9 +60,7 @@ teardown() {
 # Prisma is an ORM for Node/TypeScript applications. This is a simple smoke test to make sure
 # Dolt can support the most basic Prisma operations.
 @test "Prisma ORM smoke test" {
-  mysql --protocol TCP -u dolt -e "create database dolt;"
-
-  cd $BATS_TEST_DIRNAME/prisma
+  cd "$BATS_TEST_DIRNAME"/prisma
   npm install
   npx -c "prisma migrate dev --name init"
 }
@@ -71,8 +80,6 @@ teardown() {
 # TypeORM is an ORM for Node/TypeScript applications. This is a simple smoke test to make sure
 # Dolt can support the most basic TypeORM operations.
 @test "TypeORM smoke test" {
-  mysql --protocol TCP -u dolt -e "create database dolt;"
-
   cd $BATS_TEST_DIRNAME/typeorm
   npm install
   npm start
@@ -81,8 +88,6 @@ teardown() {
 # MikroORM is an ORM for Node/TypeScript applications. This is a simple smoke test to make sure
 # Dolt can support the most basic MikroORM operations.
 @test "MikroORM smoke test" {
-  mysql --protocol TCP -u dolt -e "create database dolt;"
-
   cd $BATS_TEST_DIRNAME/mikro-orm
   npm install
   npm start
@@ -92,7 +97,7 @@ teardown() {
 # Dolt can support the most basic Hibernate operations.
 @test "Hibernate smoke test" {
   # need to create tables for it before running the test
-  mysql --protocol TCP -u dolt -e "create database dolt; use dolt; create table STUDENT (id INT NOT NULL auto_increment PRIMARY KEY, first_name VARCHAR(30) NOT NULL, last_name VARCHAR(30) NOT NULL, section VARCHAR(30) NOT NULL);"
+  mysql -D "$DB_NAME" -e "create table STUDENT (id INT NOT NULL auto_increment PRIMARY KEY, first_name VARCHAR(30) NOT NULL, last_name VARCHAR(30) NOT NULL, section VARCHAR(30) NOT NULL);"
 
   cd $BATS_TEST_DIRNAME/hibernate/DoltHibernateSmokeTest
   mvn clean install
@@ -100,8 +105,21 @@ teardown() {
   mvn exec:java
 }
 
-# Turn this test on to prevent the container from exiting if you need to exec a shell into
-# the container to debug failed tests.
-#@test "Pause container for an hour to debug failures" {
-#  sleep 3600
-#}
+# Prisma is an ORM for Node/TypeScript applications. This test reproduces a migration run against a branch-qualified connection string.
+@test "Prisma ORM migration respects branch in connection string" {
+  dolt branch newbranch
+
+  export DB_NAME="${REPO_NAME}@newbranch"
+  export_DB_URL
+
+  cd "$BATS_TEST_DIRNAME"/prisma/branch
+  run npm install
+  log_status_eq 0
+
+  run npx prisma migrate dev --name init
+  log_status_eq 0
+
+  run mysql -D "$DB_NAME" -e "show tables like 'employees';"
+  log_status_eq 0
+  [[ "$output" =~ "employees" ]] || false
+}

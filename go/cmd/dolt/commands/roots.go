@@ -20,7 +20,6 @@ import (
 	"io"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -29,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -57,10 +55,6 @@ func (cmd RootsCmd) Hidden() bool {
 // Description returns a description of the command
 func (cmd RootsCmd) Description() string {
 	return "Displays store root values (or potential store root values) that we find in the current database."
-}
-
-func (cmd RootsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return false
 }
 
 func (cmd RootsCmd) Docs() *cli.CommandDocumentation {
@@ -119,7 +113,7 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 	defer rdCloser.Close()
 
 	return nbs.IterChunks(ctx, rdCloser.(io.ReadSeeker), func(chunk chunks.Chunk) (stop bool, err error) {
-		//Want a clean db every loop
+		// Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
 		vrw := sp.GetVRW(ctx)
 
@@ -129,28 +123,7 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 			return false, err
 		}
 
-		if m, ok := value.(types.Map); ok && types.IsMapLeaf(m) {
-			mightBeDatasetMap := true
-			_ = m.IterAll(ctx, func(key, value types.Value) error {
-				kStr, kOK := key.(types.String)
-				vIsRef := value.Kind() == types.RefKind
-
-				if !kOK || !vIsRef || !(ref.IsRef(string(kStr)) || strings.HasPrefix(string(kStr), "tmp/")) {
-					mightBeDatasetMap = false
-					return io.EOF
-				}
-
-				return nil
-			})
-
-			if mightBeDatasetMap {
-				err := types.WriteEncodedValue(ctx, cli.OutStream, value)
-				if err != nil {
-					return false, err
-				}
-				cli.Println()
-			}
-		} else if sm, ok := value.(types.SerialMessage); ok {
+		if sm, ok := value.(types.SerialMessage); ok {
 			if serial.GetFileID(sm) == serial.StoreRootFileID {
 				msg, err := serial.TryGetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
 				if err != nil {
@@ -170,6 +143,8 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 				}
 				cli.Println()
 			}
+		} else {
+			return false, fmt.Errorf("unexpected value type found in table file: %T", value)
 		}
 
 		return false, nil

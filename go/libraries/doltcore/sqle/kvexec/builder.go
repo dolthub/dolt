@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -396,9 +395,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, err
 		}
-		if rowData.Format() != types.Format_DOLT {
-			panic("Unsupported index format in lookup join: " + rowData.Format().VersionString())
-		}
+
 		priMap, err = durable.ProllyMapFromIndex(rowData)
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, err
@@ -565,10 +562,6 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		// TODO: add interface to include system tables
 		default:
 			return ms, fmt.Errorf("non-standard indexed table not supported")
-		}
-
-		if idx.Format() != types.Format_DOLT {
-			panic("Unsupported index format in merge join: " + idx.Format().VersionString())
 		}
 
 		secIdx, err := index.GetDurableIndex(ctx, doltTable, idx)

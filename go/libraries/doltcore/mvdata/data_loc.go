@@ -52,6 +52,9 @@ const (
 	// JsonFile is the format of a data location that is a json file
 	JsonFile DataFormat = ".json"
 
+	// JsonlFile is the format of a data location that is a jsonl file
+	JsonlFile DataFormat = ".jsonl"
+
 	// SqlFile is the format of a data location that is a .sql file
 	SqlFile DataFormat = ".sql"
 
@@ -72,6 +75,8 @@ func (df DataFormat) ReadableStr() string {
 		return "xlsx file"
 	case JsonFile:
 		return "json file"
+	case JsonlFile:
+		return "jsonl file"
 	case SqlFile:
 		return "sql file"
 	case ParquetFile:
@@ -116,6 +121,8 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 			dataFmt = XlsxFile
 		case string(JsonFile):
 			dataFmt = JsonFile
+		case string(JsonlFile):
+			dataFmt = JsonlFile
 		case string(SqlFile):
 			dataFmt = SqlFile
 		case string(ParquetFile):

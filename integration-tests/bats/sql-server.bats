@@ -444,11 +444,14 @@ EOF
     [ $status -eq 0 ]
     [[ $output =~ " 1 " ]] || false
 
-    # Test import as well (used by doltpy)
+    # Import hasn't been migrated to use a running server connection, so it should fail because of a
+    # read-only check
     echo 'pk,c1,c2' > import.csv
     echo '2,2,2' >> import.csv
+
     run dolt table import -u one_pk import.csv
     [ "$status" -eq 1 ]
+    [[ $output =~ "database is read only" ]] || false
 
     run dolt sql -q "SELECT * FROM one_pk"
     [ $status -eq 0 ]

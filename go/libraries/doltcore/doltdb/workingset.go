@@ -468,7 +468,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 
 	var mergeState *MergeState
 	if dsws.MergeState != nil {
-		preMergeWorkingAddr, err := dsws.MergeState.PreMergeWorkingAddr(ctx, vrw)
+		preMergeWorkingAddr, err := dsws.MergeState.PreMergeWorkingAddr()
 		if err != nil {
 			return nil, err
 		}
@@ -476,7 +476,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		if err != nil {
 			return nil, err
 		}
-		commitSpec, err := dsws.MergeState.FromCommitSpec(ctx, vrw)
+		commitSpec, err := dsws.MergeState.FromCommitSpec()
 		if err != nil {
 			return nil, err
 		}
@@ -500,12 +500,12 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		unmergableTables, err := dsws.MergeState.UnmergableTables(ctx, vrw)
+		unmergableTables, err := dsws.MergeState.UnmergableTables()
 		if err != nil {
 			return nil, err
 		}
 
-		isCherryPick, err := dsws.MergeState.IsCherryPick(ctx, vrw)
+		isCherryPick, err := dsws.MergeState.IsCherryPick()
 		if err != nil {
 			return nil, err
 		}
@@ -629,7 +629,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 		}
 
 		// TODO: Serialize the full TableName
-		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick)
+		mergeState, err = datas.NewMergeState(preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick)
 		if err != nil {
 			return nil, err
 		}

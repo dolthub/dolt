@@ -28,7 +28,6 @@ import (
 	"gopkg.in/go-jose/go-jose.v2/jwt"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/util/datetime"
 )
 
 const (
@@ -146,7 +145,7 @@ func (c *RPCCreds) toBearerToken() (string, error) {
 		Audience: []string{c.Audience},
 		Issuer:   c.Issuer,
 		Subject:  c.Subject,
-		Expiry:   jwt.NewNumericDate(datetime.Now().Add(30 * time.Second)),
+		Expiry:   jwt.NewNumericDate(time.Now().Add(30 * time.Second)),
 	})
 
 	return jwtBuilder.CompactSerialize()

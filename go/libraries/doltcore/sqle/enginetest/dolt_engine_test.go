@@ -619,11 +619,7 @@ func TestConvertPrepared(t *testing.T) {
 }
 
 func TestScripts(t *testing.T) {
-	var skipped []string
-	if types.IsFormat_DOLT(types.Format_Default) {
-		skipped = append(skipped, newFormatSkippedScripts...)
-	}
-	h := newDoltHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
+	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScripts(t, h)
 }
@@ -1149,6 +1145,11 @@ func TestCallAsOf(t *testing.T) {
 	RunCallAsOfTest(t, h)
 }
 
+func TestJsonValueScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunJsonValueScriptsTest(t, harness)
+}
+
 func TestLargeJsonObjects(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunLargeJsonObjectsTest(t, harness)
@@ -1233,6 +1234,16 @@ func TestLegacyIndexScripts(t *testing.T) {
 func TestDoltScripts(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltScriptsTest(t, harness)
+}
+
+func TestDoltDTableScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltDTableScriptsTest(t, harness)
+}
+
+func TestDoltDTableScriptsPrepared(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltDTableScriptsPreparedTest(t, harness)
 }
 
 func TestDoltTempTableScripts(t *testing.T) {
@@ -1835,12 +1846,8 @@ func TestDeleteQueriesPrepared(t *testing.T) {
 }
 
 func TestScriptsPrepared(t *testing.T) {
-	var skipped []string
-	if types.IsFormat_DOLT(types.Format_Default) {
-		skipped = append(skipped, newFormatSkippedScripts...)
-	}
 	skipPreparedTests(t)
-	h := newDoltHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
+	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScriptsPrepared(t, h)
 }

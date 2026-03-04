@@ -32,40 +32,36 @@ const (
 
 // NewStash creates a new stash object.
 func NewStash(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, stashRef types.Ref, headAddr hash.Hash, meta *StashMeta) (hash.Hash, types.Ref, error) {
-	if nbf.UsesFlatbuffers() {
-		headCommit, err := vrw.MustReadValue(ctx, headAddr)
-		if err != nil {
-			return hash.Hash{}, types.Ref{}, err
-		}
-
-		isCommit, err := IsCommit(headCommit)
-		if err != nil {
-			return hash.Hash{}, types.Ref{}, err
-		}
-		if !isCommit {
-			return hash.Hash{}, types.Ref{}, errors.New("newStash: headAddr does not point to a commit")
-		}
-
-		headRef, err := types.NewRef(headCommit, nbf)
-		if err != nil {
-			return hash.Hash{}, types.Ref{}, err
-		}
-
-		data := stash_flatbuffer(stashRef.TargetHash(), headRef.TargetHash(), meta)
-		r, err := vrw.WriteValue(ctx, types.SerialMessage(data))
-		if err != nil {
-			return hash.Hash{}, types.Ref{}, err
-		}
-
-		ref, err := types.ToRefOfValue(r, nbf)
-		if err != nil {
-			return hash.Hash{}, types.Ref{}, err
-		}
-
-		return ref.TargetHash(), ref, nil
-	} else {
-		return hash.Hash{}, types.Ref{}, errors.New("newStash: stash is not supported for old storage format")
+	headCommit, err := vrw.MustReadValue(ctx, headAddr)
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
 	}
+
+	isCommit, err := IsCommit(headCommit)
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+	if !isCommit {
+		return hash.Hash{}, types.Ref{}, errors.New("newStash: headAddr does not point to a commit")
+	}
+
+	headRef, err := types.NewRef(headCommit, nbf)
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+
+	data := stash_flatbuffer(stashRef.TargetHash(), headRef.TargetHash(), meta)
+	r, err := vrw.WriteValue(ctx, types.SerialMessage(data))
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+
+	ref, err := types.ToRefOfValue(r, nbf)
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+
+	return ref.TargetHash(), ref, nil
 }
 
 // GetStashData takes types.Value, which should be of type types.SerialMessage as stash is supported only for new format.

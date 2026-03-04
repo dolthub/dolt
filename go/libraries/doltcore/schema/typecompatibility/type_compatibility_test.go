@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	storetypes "github.com/dolthub/dolt/go/store/types"
 )
 
 type typeChangeCompatibilityTest struct {
@@ -79,7 +78,7 @@ var extendedTypeInfo = typeinfo.CreateExtendedTypeFromSqlType(extendedType{})
 // TestDoltIsTypeChangeCompatible tests that the DOLT TypeCompatibilityChecker implementation
 // correctly computes compatibility between types.
 func TestDoltIsTypeChangeCompatible(t *testing.T) {
-	compatChecker := NewTypeCompatabilityCheckerForStorageFormat(storetypes.Format_DOLT)
+	compatChecker := NewTypeCompatabilityChecker()
 	runTypeCompatibilityTests(t, compatChecker, []typeChangeCompatibilityTest{
 		{
 			name:       "equivalent types are compatible",

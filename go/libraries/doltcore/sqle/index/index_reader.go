@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -47,18 +46,14 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 		return nil, err
 	}
 
-	if types.IsFormat_DOLT(idx.Format()) {
-		prollyRanges, err := idx.prollyRanges(ctx, idx.ns, mysqlRanges...)
-		if len(prollyRanges) > 1 {
-			return nil, fmt.Errorf("expected a single index range")
-		}
-		if err != nil {
-			return nil, err
-		}
-		return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState, lookup.IsReverse)
+	prollyRanges, err := idx.prollyRanges(ctx, idx.ns, mysqlRanges...)
+	if len(prollyRanges) > 1 {
+		return nil, fmt.Errorf("expected a single index range")
 	}
-
-	panic("Unsupported format for RowIterForIndexLookup")
+	if err != nil {
+		return nil, err
+	}
+	return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState, lookup.IsReverse)
 }
 
 func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState, reverse bool) (sql.RowIter, error) {

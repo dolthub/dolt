@@ -1,0 +1,61 @@
+#!/usr/bin/expect
+source "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+set timeout 10
+set env(NO_COLOR) 1
+
+spawn dolt sql
+
+expect_with_defaults {>} { send "create schema `mydb@branch1`;\r" }
+
+# Test twice to make sure no directory is leftover.
+expect_with_defaults_after {Incorrect database name 'mydb@branch1'} {>} { send "create schema `mydb@branch1`;\r" }
+
+expect_with_defaults_after {Incorrect database name 'mydb@branch1'} {>} { send "create schema mydb;\r" }
+
+expect_with_defaults {>} { send "use mydb;\r" }
+
+expect_with_defaults_after {Database Changed} {mydb/main>} { send "call dolt_checkout('-b', 'branch1');\r" }
+
+expect_with_defaults {mydb/main>} { send "use `mydb@branch1`;\r" }
+
+expect_with_defaults_after {Database Changed} {mydb/branch1>} { send "use \`mydb/branch1\`;\r" }
+
+expect_with_defaults {mydb/branch1>} { send "show databases;\r" }
+
+expect_with_defaults_after {rows in set} {mydb/branch1>} { send "use `mydb@branch1`;\r" }
+
+expect_with_defaults_after {Database Changed} {mydb/branch1>} { send "select database();\r" }
+
+expect_with_defaults_after {mydb@branch1} {mydb/branch1>} { send "set @h = (select hashof('branch1') limit 1);\r" }
+
+expect_with_defaults {mydb/branch1>} { send "call dolt_tag('tag1');\r" }
+
+expect_with_defaults {mydb/branch1>} { send "set @use_sql = concat('use `mydb@', @h, '`');\r" }
+
+expect_with_defaults {mydb/branch1>} { send "prepare use_stmt from @use_sql;\r" }
+
+expect_with_defaults {mydb/branch1>} { send "create table t1(i int);\r" }
+
+expect_with_defaults {mydb/branch1*>} { send "call dolt_commit('-Am', 'create table t1');\r" }
+
+expect_with_defaults {mydb/branch1>} { send "show tables;\r" }
+
+expect_with_defaults_after {t1} {mydb/branch1>} { send "execute use_stmt;\r" }
+
+expect_with_defaults_after {Empty set} {mydb/[0-9a-v]{32}>} { send "show tables;\r" }
+
+expect_with_defaults_after {Empty set} {mydb/[0-9a-v]{32}>} { send "select database();\r" }
+
+expect_with_defaults_after {mydb@[0-9a-v]{32}} {mydb/[0-9a-v]{32}>} {send "create database `mydb@branch1`;\r" }
+
+expect_with_defaults_after {database exists} {mydb/[0-9a-v]{32}>} { send "use `mydb@tag1`;\r" }
+
+expect_with_defaults_after {Database Changed} {mydb/tag1>} { send "show tables;\r" }
+
+expect_with_defaults_after {Empty set} {mydb/tag1>} { send "select database();\r" }
+
+expect_with_defaults_after {mydb@tag1} {mydb/tag1>} { send "exit;\r" }
+
+expect eof
+exit 0

@@ -15,7 +15,6 @@
 package doltdb
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -50,10 +49,6 @@ type rootValueStorage interface {
 	nomsValue() types.Value
 }
 
-type nomsRvStorage struct {
-	valueSt types.Struct
-}
-
 type tableMap interface {
 	Get(ctx context.Context, name string) (hash.Hash, error)
 	Iter(ctx context.Context, cb func(name string, addr hash.Hash) (bool, error)) error
@@ -64,166 +59,6 @@ func tmIterAll(ctx context.Context, tm tableMap, cb func(name string, addr hash.
 		cb(name, addr)
 		return false, nil
 	})
-}
-
-func (r nomsRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
-	v, ok, err := r.valueSt.MaybeGet(featureVersKey)
-	if err != nil {
-		return 0, false, err
-	}
-	if ok {
-		return FeatureVersion(v.(types.Int)), true, nil
-	} else {
-		return 0, false, nil
-	}
-}
-
-func (r nomsRvStorage) GetTablesMap(context.Context, types.ValueReadWriter, tree.NodeStore, string) (tableMap, error) {
-	v, found, err := r.valueSt.MaybeGet(tablesKey)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nomsTableMap{types.EmptyMap}, nil
-	}
-	return nomsTableMap{v.(types.Map)}, nil
-}
-
-func (ntm nomsTableMap) Get(ctx context.Context, name string) (hash.Hash, error) {
-	v, f, err := ntm.MaybeGet(ctx, types.String(name))
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	if !f {
-		return hash.Hash{}, nil
-	}
-	return v.(types.Ref).TargetHash(), nil
-}
-
-func (ntm nomsTableMap) Iter(ctx context.Context, cb func(name string, addr hash.Hash) (bool, error)) error {
-	return ntm.Map.Iter(ctx, func(k, v types.Value) (bool, error) {
-		name := string(k.(types.String))
-		addr := v.(types.Ref).TargetHash()
-		return cb(name, addr)
-	})
-}
-
-func (r nomsRvStorage) GetForeignKeys(context.Context, types.ValueReader) (types.Value, bool, error) {
-	v, found, err := r.valueSt.MaybeGet(foreignKeyKey)
-	if err != nil {
-		return types.Map{}, false, err
-	}
-	if !found {
-		return types.Map{}, false, err
-	}
-	return v.(types.Map), true, nil
-}
-
-func (r nomsRvStorage) GetCollation(ctx context.Context) (schema.Collation, error) {
-	v, found, err := r.valueSt.MaybeGet(rootCollationKey)
-	if err != nil {
-		return schema.Collation_Unspecified, err
-	}
-	if !found {
-		return schema.Collation_Default, nil
-	}
-	return schema.Collation(v.(types.Uint)), nil
-}
-
-func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rootValueStorage, error) {
-	m, err := r.GetTablesMap(ctx, vrw, ns, "")
-	if err != nil {
-		return nil, err
-	}
-	nm := m.(nomsTableMap).Map
-
-	me := nm.Edit()
-	for _, e := range edits {
-		if e.old_name.Name != "" {
-			old, f, err := nm.MaybeGet(ctx, types.String(e.old_name.Name))
-			if err != nil {
-				return nil, err
-			}
-			if !f {
-				return nil, ErrTableNotFound
-			}
-			_, f, err = nm.MaybeGet(ctx, types.String(e.name.Name))
-			if err != nil {
-				return nil, err
-			}
-			if f {
-				return nil, ErrTableExists
-			}
-			me = me.Remove(types.String(e.old_name.Name)).Set(types.String(e.name.Name), old)
-		} else {
-			if e.ref == nil {
-				me = me.Remove(types.String(e.name.Name))
-			} else {
-				me = me.Set(types.String(e.name.Name), *e.ref)
-			}
-		}
-	}
-
-	nm, err = me.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	st, err := r.valueSt.Set(tablesKey, nm)
-	if err != nil {
-		return nil, err
-	}
-	return nomsRvStorage{st}, nil
-}
-
-func (r nomsRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rootValueStorage, error) {
-	st, err := r.valueSt.Set(foreignKeyKey, v)
-	if err != nil {
-		return nomsRvStorage{}, err
-	}
-	return nomsRvStorage{st}, nil
-}
-
-func (r nomsRvStorage) SetFeatureVersion(v FeatureVersion) (rootValueStorage, error) {
-	st, err := r.valueSt.Set(featureVersKey, types.Int(v))
-	if err != nil {
-		return nomsRvStorage{}, err
-	}
-	return nomsRvStorage{st}, nil
-}
-
-func (r nomsRvStorage) SetCollation(ctx context.Context, collation schema.Collation) (rootValueStorage, error) {
-	st, err := r.valueSt.Set(rootCollationKey, types.Uint(collation))
-	if err != nil {
-		return nomsRvStorage{}, err
-	}
-	return nomsRvStorage{st}, nil
-}
-
-func (r nomsRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error) {
-	// stub implementation, used only for migration
-	return nil, nil
-}
-
-func (r nomsRvStorage) SetSchemas(ctx context.Context, dbSchemas []schema.DatabaseSchema) (rootValueStorage, error) {
-	panic("schemas not implemented for nomsRvStorage")
-}
-
-func (r nomsRvStorage) DebugString(ctx context.Context) string {
-	var buf bytes.Buffer
-	err := types.WriteEncodedValue(ctx, &buf, r.valueSt)
-	if err != nil {
-		panic(err)
-	}
-	return buf.String()
-}
-
-func (r nomsRvStorage) nomsValue() types.Value {
-	return r.valueSt
-}
-
-type nomsTableMap struct {
-	types.Map
 }
 
 type fbRvStorage struct {

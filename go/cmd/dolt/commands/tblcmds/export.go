@@ -42,6 +42,12 @@ var exportDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Export the contents of a table to a file.`,
 	LongDesc: `{{.EmphasisLeft}}dolt table export{{.EmphasisRight}} will export the contents of {{.LessThan}}table{{.GreaterThan}} to {{.LessThan}}|file{{.GreaterThan}}
 
+The output format is inferred from the file extension, or can be set explicitly with {{.EmphasisLeft}}--file-type{{.EmphasisRight}}.
+
+Supported file types: {{.EmphasisLeft}}csv{{.EmphasisRight}}, {{.EmphasisLeft}}psv{{.EmphasisRight}}, {{.EmphasisLeft}}json{{.EmphasisRight}}, {{.EmphasisLeft}}jsonl{{.EmphasisRight}}, {{.EmphasisLeft}}sql{{.EmphasisRight}}, {{.EmphasisLeft}}parquet{{.EmphasisRight}}.
+
+{{.EmphasisLeft}}.json{{.EmphasisRight}} exports a single JSON object containing a {{.EmphasisLeft}}rows{{.EmphasisRight}} array; {{.EmphasisLeft}}.jsonl{{.EmphasisRight}} exports one JSON object per line.
+
 See the help for {{.EmphasisLeft}}dolt table import{{.EmphasisRight}} as the options are the same.
 `,
 	Synopsis: []string{

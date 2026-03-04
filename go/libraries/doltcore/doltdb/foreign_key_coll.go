@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -179,46 +180,47 @@ func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
 		fk.ReferencedTableIndex == other.ReferencedTableIndex
 }
 
+var fkBufPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 0, 1024)
+	},
+}
+
 // HashOf returns the Noms hash of a ForeignKey.
 func (fk ForeignKey) HashOf() (hash.Hash, error) {
-	var fields []interface{}
-	fields = append(fields, fk.Name, fk.TableName, fk.TableIndex)
-	for _, t := range fk.TableColumns {
-		fields = append(fields, t)
-	}
-	fields = append(fields, fk.ReferencedTableName, fk.ReferencedTableIndex)
-	for _, t := range fk.ReferencedTableColumns {
-		fields = append(fields, t)
-	}
-	fields = append(fields, []byte{byte(fk.OnUpdate), byte(fk.OnDelete)})
-	for _, col := range fk.UnresolvedFKDetails.TableColumns {
-		fields = append(fields, col)
-	}
-	for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-		fields = append(fields, col)
-	}
+	bb := fkBufPool.Get().([]byte)
+	defer func() {
+		bb = bb[:0]
+		fkBufPool.Put(bb)
+	}()
 
-	var bb bytes.Buffer
-	for _, field := range fields {
-		var err error
-		switch t := field.(type) {
-		case string:
-			_, err = bb.Write([]byte(t))
-		case []byte:
-			_, err = bb.Write(t)
-		case uint64:
-			err = binary.Write(&bb, binary.LittleEndian, t)
-		case TableName:
-			_, err = bb.Write([]byte(t.String()))
-		default:
-			return hash.Hash{}, fmt.Errorf("unsupported type %T", t)
-		}
+	var err error
+	bb = append(bb, fk.Name...)
+	bb = append(bb, fk.TableName.String()...)
+	bb = append(bb, fk.TableIndex...)
+	for _, col := range fk.TableColumns {
+		bb, err = binary.Append(bb, binary.LittleEndian, col)
 		if err != nil {
 			return hash.Hash{}, err
 		}
 	}
-
-	return hash.Of(bb.Bytes()), nil
+	bb = append(bb, fk.ReferencedTableName.String()...)
+	bb = append(bb, fk.ReferencedTableIndex...)
+	for _, col := range fk.ReferencedTableColumns {
+		bb, err = binary.Append(bb, binary.LittleEndian, col)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+	}
+	bb = append(bb, byte(fk.OnUpdate))
+	bb = append(bb, byte(fk.OnDelete))
+	for _, col := range fk.UnresolvedFKDetails.TableColumns {
+		bb = append(bb, col...)
+	}
+	for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+		bb = append(bb, col...)
+	}
+	return hash.Of(bb), nil
 }
 
 // CombinedHash returns a combined hash value for all foreign keys in the slice provided.

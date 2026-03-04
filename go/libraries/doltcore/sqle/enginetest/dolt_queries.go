@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -372,393 +373,9 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 	},
 }
 
-var DoltRevisionDbScripts = []queries.ScriptTest{
-	{
-		Name: "database revision specs: Ancestor references",
-		SetUpScript: []string{
-			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_add('t01');",
-			"call dolt_commit('-am', 'creating table t01 on main');",
-			"call dolt_branch('branch1');",
-			"insert into t01 values (1, 1), (2, 2);",
-			"call dolt_commit('-am', 'adding rows to table t01 on main');",
-			"insert into t01 values (3, 3);",
-			"call dolt_commit('-am', 'adding another row to table t01 on main');",
-			"call dolt_tag('tag1');",
-			"call dolt_checkout('branch1');",
-			"insert into t01 values (100, 100), (200, 200);",
-			"call dolt_commit('-am', 'inserting rows in t01 on branch1');",
-			"insert into t01 values (1000, 1000);",
-			"call dolt_commit('-am', 'inserting another row in t01 on branch1');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				Query:    "use `mydb/tag1~`;",
-				Expected: []sql.Row{},
-			},
-			{
-				// The database name is always the requested name
-				Query:    "select database()",
-				Expected: []sql.Row{{"mydb/tag1~"}},
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/tag1~"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				// The branch is nil in the case of a non-branch revision DB
-				Query:    "select active_branch()",
-				Expected: []sql.Row{{nil}},
-			},
-			{
-				Query:    "select * from t01;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
-			},
-			{
-				Query:    "select * from `mydb/tag1^`.t01;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
-			},
-			{
-				// Only merge commits are valid for ^2 ancestor spec
-				Query:          "select * from `mydb/tag1^2`.t01;",
-				ExpectedErrStr: "invalid ancestor spec",
-			},
-			{
-				Query:    "select * from `mydb/tag1~1`.t01;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
-			},
-			{
-				Query:    "select * from `mydb/tag1~2`.t01;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:       "select * from `mydb/tag1~3`.t01;",
-				ExpectedErr: sql.ErrTableNotFound,
-			},
-			{
-				Query:          "select * from `mydb/tag1~20`.t01;",
-				ExpectedErrStr: "invalid ancestor spec",
-			},
-			{
-				Query:    "select * from `mydb/branch1~`.t01;",
-				Expected: []sql.Row{{100, 100}, {200, 200}},
-			},
-			{
-				Query:    "select * from `mydb/branch1^`.t01;",
-				Expected: []sql.Row{{100, 100}, {200, 200}},
-			},
-			{
-				Query:    "select * from `mydb/branch1~2`.t01;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:       "select * from `mydb/branch1~3`.t01;",
-				ExpectedErr: sql.ErrTableNotFound,
-			},
-			{
-				Query:          "select * from dolt_hashof('HEAD^0');",
-				ExpectedErrStr: "invalid ancestor spec",
-			},
-		},
-	},
-	{
-		Name: "database revision specs: tag-qualified revision spec",
-		SetUpScript: []string{
-			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_add('.')",
-			"call dolt_commit('-am', 'creating table t01 on main');",
-			"insert into t01 values (1, 1), (2, 2);",
-			"call dolt_commit('-am', 'adding rows to table t01 on main');",
-			"call dolt_tag('tag1');",
-			"insert into t01 values (3, 3);",
-			"call dolt_commit('-am', 'adding another row to table t01 on main');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				Query:    "use mydb/tag1;",
-				Expected: []sql.Row{},
-			},
-			{
-				// The database name is always the requested name
-				Query:    "select database()",
-				Expected: []sql.Row{{"mydb/tag1"}},
-			},
-			{
-				// The branch is nil in the case of a non-branch revision DB
-				Query:    "select active_branch()",
-				Expected: []sql.Row{{nil}},
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/tag1"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				Query:    "select * from t01;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
-			},
-			{
-				Query:          "call dolt_reset();",
-				ExpectedErrStr: "unable to reset HEAD in read-only databases",
-			},
-			{
-				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
-			},
-			{
-				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
-			},
-			{
-				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
-			},
-			{
-				Query:    "use mydb;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			},
-		},
-	},
-	{
-		Name: "database revision specs: branch-qualified revision spec",
-		SetUpScript: []string{
-			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_add('.')",
-			"call dolt_commit('-am', 'creating table t01 on main');",
-			"insert into t01 values (1, 1), (2, 2);",
-			"call dolt_commit('-am', 'adding rows to table t01 on main');",
-			"call dolt_branch('branch1');",
-			"insert into t01 values (3, 3);",
-			"call dolt_commit('-am', 'adding another row to table t01 on main');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "use mydb/branch1;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				// The database name is always the requested name
-				Query:    "select database()",
-				Expected: []sql.Row{{"mydb/branch1"}},
-			},
-			{
-				Query:    "select active_branch()",
-				Expected: []sql.Row{{"branch1"}},
-			},
-			{
-				Query:    "select * from t01",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
-			},
-			{
-				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
-			},
-			{
-				// TODO: the behavior here is a bit odd: when we call dolt_checkout, we change the current database to the
-				//  base database name. But we should also consider the connection string: if you connect to a revision
-				//  database, that database should always be visible.
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
-			},
-			{
-				Query:    "use mydb/branch1;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "call dolt_reset();",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "select database();",
-				Expected: []sql.Row{{"mydb/branch1"}},
-			},
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				// Create a table in the working set to verify the main db
-				Query:    "create table working_set_table(pk int primary key);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-				Expected: []sql.Row{{"working_set_table"}},
-			},
-			{
-				Query:    "use mydb;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "call dolt_checkout('branch1');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
-			},
-			{
-				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-				Expected: []sql.Row{{"working_set_table"}},
-			},
-		},
-	},
-	{
-		Name: "database revision specs: dolt_checkout uses revision database name for DbData access",
-		SetUpScript: []string{
-			"create database newtest;",
-			"use newtest;",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
-			},
-			{
-				Query:    "call dolt_checkout('-b', 'branch-to-delete');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch-to-delete'"}},
-			},
-			{
-				Query:    "select active_branch();",
-				Expected: []sql.Row{{"branch-to-delete"}},
-			},
-			{
-				Query:    "use `newtest/main`;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
-			},
-			{
-				Query:    "call dolt_branch('-D', 'branch-to-delete');",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
-			},
-			{
-				Query:    "call dolt_checkout('-b', 'another-branch');",
-				Expected: []sql.Row{{0, "Switched to branch 'another-branch'"}},
-			},
-			{
-				Query:    "select active_branch();",
-				Expected: []sql.Row{{"another-branch"}},
-			},
-		},
-	},
-	{
-		Name: "database revision specs: can checkout a table",
-		SetUpScript: []string{
-			"call dolt_checkout('main')",
-			"create table t01 (pk int primary key, c1 int)",
-			"call dolt_add('t01');",
-			"call dolt_commit('-am', 'creating table t01 on branch1');",
-			"insert into t01 values (1, 1), (2, 2);",
-			"call dolt_branch('new-branch')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
-			},
-			{
-				Query:    "use `mydb/main`;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t01", byte(0), "modified"}},
-			},
-			{
-				Query:    "call dolt_checkout('t01')",
-				Expected: []sql.Row{{0, ""}},
-			},
-			{
-				Query: "select * from dolt_status",
-				// Expected: []sql.Row{},
-				SkipResultsCheck: true, // TODO: https://github.com/dolthub/dolt/issues/5816
-			},
-		},
-	},
-}
-
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
-	{
-		// https://github.com/dolthub/dolt/issues/8283
-		Name: "dolt_status tests",
-		SetUpScript: []string{
-			"CALL DOLT_COMMIT('--allow-empty', '-m', 'empty commit');",
-			"SET @commit1 = HASHOF('HEAD');",
-			"CALL DOLT_TAG('tag1');",
-			"CALL DOLT_CHECKOUT('-b', 'branch1');",
-			"CREATE TABLE abc (pk int);",
-			"CALL DOLT_ADD('abc');",
-			"CALL DOLT_CHECKOUT('main');",
-			"CREATE TABLE t (pk int primary key, v varchar(100));",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "SELECT * FROM dolt_status;",
-				Expected: []sql.Row{{"t", byte(0), "new table"}},
-			},
-			{
-				Query:    "SELECT * FROM `mydb/main`.dolt_status;",
-				Expected: []sql.Row{{"t", byte(0), "new table"}},
-			},
-			{
-				Query:    "SELECT * FROM dolt_status AS OF 'tag1';",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "SELECT * FROM dolt_status AS OF @commit1;",
-				Expected: []sql.Row{},
-			},
-			{
-				// HEAD is a special revision spec
-				Query:    "SELECT * FROM dolt_status AS OF 'head';",
-				Expected: []sql.Row{{"t", byte(0), "new table"}},
-			},
-			{
-				Query:    "SELECT * FROM dolt_status AS OF 'HEAD~1';",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "SELECT * FROM dolt_status AS OF 'branch1';",
-				Expected: []sql.Row{{"abc", byte(1), "new table"}},
-			},
-			{
-				Query:    "SELECT * FROM `mydb/branch1`.dolt_status;",
-				Expected: []sql.Row{{"abc", byte(1), "new table"}},
-			},
-		},
-	},
 	{
 		Name: "dolt_status_ignored basic tests",
 		SetUpScript: []string{
@@ -907,6 +524,30 @@ var DoltScripts = []queries.ScriptTest{
 				// test_special is explicitly not ignored (false overrides wildcard)
 				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'test_special';",
 				Expected: []sql.Row{{"test_special", false}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit with only ignored table changes closes the transaction",
+		SetUpScript: []string{
+			"INSERT INTO dolt_ignore VALUES ('ignored_*', true)",
+			"CALL dolt_add('dolt_ignore')",
+			"CALL dolt_commit('-m', 'set up ignore rules')",
+			"START TRANSACTION",
+			"CREATE TABLE ignored_t1 (pk int primary key)",
+			"INSERT INTO ignored_t1 VALUES (42)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL dolt_commit('-Am', 'commit ignored changes')",
+				ExpectedErrStr: "nothing to commit",
+			},
+			{
+				// Even though there was nothing to commit, the SQL transaction should be committed and
+				// a new session should be able to see the new data in the table.
+				NewSession: true,
+				Query:      "SELECT * FROM ignored_t1 ORDER BY pk",
+				Expected:   []sql.Row{{42}},
 			},
 		},
 	},
@@ -5957,6 +5598,75 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 	},
 }
 
+var JsonValueScriptTests = []queries.ScriptTest{
+	{
+		Name: "create JSON table",
+		SetUpScript: []string{
+			"create table js (pk int primary key, js json)",
+		},
+		Query:    "select * from js",
+		Expected: []sql.Row{},
+	},
+	{
+		Name: "insert into a JSON table",
+		SetUpScript: []string{
+			"create table js (pk int primary key, js json)",
+			`insert into js values (1, '{"a":1}'), (2, '{"b":2}')`,
+		},
+		Query: "select * from js",
+		Expected: []sql.Row{
+			{1, types.MustJSON(`{"a":1}`)},
+			{2, types.MustJSON(`{"b":2}`)},
+		},
+	},
+	{
+		Name: "update a JSON table",
+		SetUpScript: []string{
+			"create table js (pk int primary key, js json)",
+			`insert into js values (1, '{"a":1}'), (2, '{"b":2}')`,
+			`update js set js = '{"c":3}' where pk = 2`,
+		},
+		Query: "select * from js",
+		Expected: []sql.Row{
+			{1, types.MustJSON(`{"a":1}`)},
+			{2, types.MustJSON(`{"c":3}`)},
+		},
+	},
+	{
+		Name: "delete from a JSON table",
+		SetUpScript: []string{
+			"create table js (pk int primary key, js json)",
+			`insert into js values (1, '{"a":1}'), (2, '{"b":2}')`,
+			`delete from js where pk = 2`,
+		},
+		Query: "select * from js",
+		Expected: []sql.Row{
+			{1, types.MustJSON(`{"a":1}`)},
+		},
+	},
+	{
+		Name: "merge a JSON table",
+		SetUpScript: []string{
+			"create table js (pk int primary key, js json)",
+			`insert into js values (1, '{"a":1}'), (2, '{"b":2}')`,
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'added a JSON table')",
+			"call dolt_checkout('-b', 'other')",
+			`update js set js = '{"b":22}' where pk = 2`,
+			"call dolt_commit('-am', 'update row pk = 2')",
+			"call dolt_checkout('main')",
+			`update js set js = '{"a":11}' where pk = 1`,
+			"call dolt_commit('-am', 'update row pk = 1')",
+			"call dolt_merge('other')",
+		},
+		Query: "select * from js",
+		Expected: []sql.Row{
+			{1, types.MustJSON(`{"a":11}`)},
+			{2, types.MustJSON(`{"b":22}`)},
+		},
+	},
+}
+
 var LargeJsonObjectScriptTests = []queries.ScriptTest{
 	{
 		Name: "JSON under max length limit",
@@ -5991,9 +5701,6 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// NOTE: This doesn't trigger the same error that we see with sql-server
-				//       because the Golang enginetests use an in-memory chunk store, and
-				//       not the filesystem journaling chunk store.
 				Query:    fmt.Sprintf(`insert into t (pk, j1) VALUES (1, '{"large_value": "%s"}');`, generateStringData(1024*1024*3)),
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
@@ -6003,6 +5710,56 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+}
+
+func init() {
+	LargeJsonObjectScriptTests = append(LargeJsonObjectScriptTests, generateLargeJsonRoundTripTests()...)
+}
+
+func generateLargeJsonRoundTripTests() []queries.ScriptTest {
+	const numRows = 10
+	const objSize = 100
+
+	var insertParts []string
+	for i := 0; i < numRows; i++ {
+		obj := make(map[string]string, objSize)
+		for j := 0; j < objSize; j++ {
+			obj[fmt.Sprintf("key_%d_%d", i, j)] = fmt.Sprintf("val_%d_%d", i, j)
+		}
+		bs, _ := json.Marshal(obj)
+		insertParts = append(insertParts, fmt.Sprintf("(%d, '%s')", i, string(bs)))
+	}
+
+	insertStmt := "insert into js values " + strings.Join(insertParts, ",")
+
+	assertions := make([]queries.ScriptTestAssertion, 0)
+
+	assertions = append(assertions, queries.ScriptTestAssertion{
+		Query:    "select count(*) from js",
+		Expected: []sql.Row{{numRows}},
+	})
+	assertions = append(assertions, queries.ScriptTestAssertion{
+		Query:    "select pk, json_length(js) from js order by pk limit 3",
+		Expected: []sql.Row{{0, objSize}, {1, objSize}, {2, objSize}},
+	})
+
+	for i := 0; i < 3; i++ {
+		assertions = append(assertions, queries.ScriptTestAssertion{
+			Query:    fmt.Sprintf(`select js->>"$.key_%d_0" from js where pk = %d`, i, i),
+			Expected: []sql.Row{{fmt.Sprintf("val_%d_0", i)}},
+		})
+	}
+
+	return []queries.ScriptTest{
+		{
+			Name: "round-trip large JSON objects",
+			SetUpScript: []string{
+				"create table js (pk int primary key, js json)",
+				insertStmt,
+			},
+			Assertions: assertions,
+		},
+	}
 }
 
 // generateStringData generates random string data of length |length|. The data is generated

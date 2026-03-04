@@ -374,14 +374,9 @@ func createTestSchema(t *testing.T) schema.Schema {
 }
 
 func createTestRowData(t *testing.T, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) durable.Index {
-	if types.Format_Default == types.Format_DOLT {
-		idx, err := durable.NewEmptyPrimaryIndex(context.Background(), vrw, ns, sch)
-		require.NoError(t, err)
-		return idx
-	}
-
-	t.Fatal("unsupported format")
-	return nil
+	idx, err := durable.NewEmptyPrimaryIndex(context.Background(), vrw, ns, sch)
+	require.NoError(t, err)
+	return idx
 }
 
 func createHooksTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData durable.Index) (*doltdb.Table, error) {

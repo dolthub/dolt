@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var verifyConstraintsDocs = cli.CommandDocumentationContent{
@@ -52,10 +51,6 @@ func (cmd VerifyConstraintsCmd) Name() string {
 
 func (cmd VerifyConstraintsCmd) Description() string {
 	return "Command to verify that the constraints on the given table(s) are satisfied."
-}
-
-func (cmd VerifyConstraintsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return false
 }
 
 func (cmd VerifyConstraintsCmd) Docs() *cli.CommandDocumentation {

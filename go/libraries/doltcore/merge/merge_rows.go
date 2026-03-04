@@ -212,8 +212,6 @@ func (rm *RootMerger) MergeTable(
 		return nil, nil, err
 	}
 
-	types.AssertFormat_DOLT(tm.vrw.Format())
-
 	// short-circuit here if we can
 	finished, finishedRootObj, stats, err := rm.MaybeShortCircuit(ctx, tm, mergeOpts)
 	if finished != nil || finishedRootObj != nil || stats != nil || err != nil {

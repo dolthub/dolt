@@ -519,7 +519,7 @@ func processTableColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta diff.Table
 // cells to compile a list of modified columns
 func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDelta, colSchDiff *colSchemaDiff) ([]string, []string, error) {
 	// initialize row iterator
-	diffTableSchema, err := GetDiffTableSchemaAndJoiner(delta.ToTable.Format(), delta.FromSch, delta.ToSch)
+	diffTableSchema, err := GetDiffTableSchemaAndJoiner(delta.FromSch, delta.ToSch)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -87,6 +87,9 @@ func (bsp *noConjoinBlobstorePersister) PruneTableFiles(ctx context.Context, kee
 }
 
 func (bsp *noConjoinBlobstorePersister) Close() error {
+	if c, ok := bsp.bs.(io.Closer); ok {
+		return c.Close()
+	}
 	return nil
 }
 

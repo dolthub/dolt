@@ -87,7 +87,6 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 
 // DeserializeSchema deserializes a schema.Schema from a serial.Message.
 func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) (schema.Schema, error) {
-	assertTrue(nbf.UsesFlatbuffers(), "cannot call DeserializeSchema with non-Flatbuffers NomsBinFormat")
 	sm, ok := v.(types.SerialMessage)
 	assertTrue(ok, "must pass types.SerialMessage value to DeserializeSchema")
 	return deserializeSchemaFromFlatbuffer(ctx, sm)

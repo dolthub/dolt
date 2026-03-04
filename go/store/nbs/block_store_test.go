@@ -543,7 +543,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p, testConjoinModeTableFile)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
-		fm.set(constants.FormatLD1String, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
+		fm.set(constants.FormatDoltString, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
 				{conjoinees: upstream[:2], keepers: upstream[2:]},
@@ -579,7 +579,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p, testConjoinModeTableFile)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
-		fm.set(constants.FormatLD1String, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
+		fm.set(constants.FormatDoltString, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
 				{conjoinees: upstream[:2], keepers: upstream[2:]},
