@@ -929,7 +929,7 @@ EOF
   cname="${TEST_PREFIX}latest-docker"
 
   LATEST_IMAGE="dolt-entrypoint-latest:test"
-  EXPECTED_VERSION=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//')
+  EXPECTED_VERSION=$(curl -sI https://github.com/dolthub/dolt/releases/latest | grep -i location | sed 's|.*/v||' | tr -d '[:space:]')
   cd "$WORKSPACE_ROOT/dolt"
   docker build --no-cache -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t "$LATEST_IMAGE" .
 
