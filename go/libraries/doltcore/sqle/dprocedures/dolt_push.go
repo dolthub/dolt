@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
 var doltPushSchema = []*sql.Column{
@@ -115,7 +116,9 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		DestDb:  remoteDB,
 		TmpDir:  tmpDir,
 	}
-	returnMsg, err = actions.DoPush(ctx, po, runProgFuncs, stopProgFuncs)
+	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+		returnMsg, err = actions.DoPush(ctx, po, statsCh)
+	})
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:

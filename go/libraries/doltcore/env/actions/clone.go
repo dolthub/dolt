@@ -166,7 +166,7 @@ func sortedKeys(m map[string]iohelp.ReadStats) []string {
 // The database must be initialized with a remote before calling this function.
 //
 // The `branch` parameter is the branch to clone. If it is empty, the default branch is used.
-func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, singleBranch bool, depth int, dEnv *env.DoltEnv) error {
+func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, singleBranch bool, depth int, dEnv *env.DoltEnv, statsCh chan pull.Stats) error {
 	// We support two forms of cloning: full and shallow. These two approaches have little in common, with the exception
 	// of the first and last steps. Determining the branch to check out and setting the working set to the checked out commit.
 
@@ -190,7 +190,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	if depth <= 0 {
 		checkedOutCommit, err = fullClone(ctx, srcDB, dEnv, srcRefHashes, branch, remoteName, singleBranch)
 	} else {
-		checkedOutCommit, err = shallowCloneDataPull(ctx, dEnv.DbData(ctx), srcDB, remoteName, branch, depth)
+		checkedOutCommit, err = shallowCloneDataPull(ctx, dEnv.DbData(ctx), srcDB, remoteName, branch, depth, statsCh)
 	}
 
 	if err != nil {
@@ -322,7 +322,7 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, src
 
 // shallowCloneDataPull is a shallow clone specific helper function to pull only the data required to show the given branch
 // at the depth given.
-func shallowCloneDataPull[C doltdb.Context](ctx C, destData env.DbData[C], srcDB *doltdb.DoltDB, remoteName, branch string, depth int) (*doltdb.Commit, error) {
+func shallowCloneDataPull[C doltdb.Context](ctx C, destData env.DbData[C], srcDB *doltdb.DoltDB, remoteName, branch string, depth int, statsCh chan pull.Stats) (*doltdb.Commit, error) {
 	remotes, err := destData.Rsr.GetRemotes()
 	if err != nil {
 		return nil, err
@@ -338,7 +338,7 @@ func shallowCloneDataPull[C doltdb.Context](ctx C, destData env.DbData[C], srcDB
 		return nil, err
 	}
 
-	err = ShallowFetchRefSpec(ctx, destData, srcDB, specs[0], &remote, depth)
+	err = ShallowFetchRefSpec(ctx, destData, srcDB, specs[0], &remote, depth, statsCh)
 	if err != nil {
 		return nil, err
 	}

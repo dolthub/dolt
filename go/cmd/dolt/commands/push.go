@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -217,35 +216,6 @@ func handlePushError(err error, usage cli.UsagePrinter) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {
-	p := cli.NewEphemeralPrinter()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case stats, ok := <-statsCh:
-			if !ok {
-				return
-			}
-			if language == downloadLanguage {
-				p.Printf("Downloaded %s chunks, %s @ %s/s.",
-					humanize.Comma(int64(stats.FetchedSourceChunks)),
-					humanize.Bytes(stats.FetchedSourceBytes),
-					humanize.SIWithDigits(stats.FetchedSourceBytesPerSec, 2, "B"),
-				)
-			} else {
-				p.Printf("Uploaded %s of %s @ %s/s.",
-					humanize.Bytes(stats.FinishedSendBytes),
-					humanize.Bytes(stats.BufferedSendBytes),
-					humanize.SIWithDigits(stats.SendBytesPerSec, 2, "B"),
-				)
-			}
-			p.Display()
-		}
-	}
-}
-
 // progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.
 type progLanguage int
 
@@ -254,23 +224,26 @@ const (
 	downloadLanguage
 )
 
-func buildProgStarter(language progLanguage) actions.ProgStarter {
-	return func(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
-		statsCh := make(chan pull.Stats, 128)
-		wg := &sync.WaitGroup{}
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			pullerProgFunc(ctx, statsCh, language)
-		}()
-
-		return wg, statsCh
+func printStats(p *cli.EphemeralPrinter, language progLanguage, stats pull.Stats) {
+	if language == downloadLanguage {
+		p.Printf("Downloaded %s chunks, %s @ %s/s.",
+			humanize.Comma(int64(stats.FetchedSourceChunks)),
+			humanize.Bytes(stats.FetchedSourceBytes),
+			humanize.SIWithDigits(stats.FetchedSourceBytesPerSec, 2, "B"),
+		)
+	} else {
+		p.Printf("Uploaded %s of %s @ %s/s.",
+			humanize.Bytes(stats.FinishedSendBytes),
+			humanize.Bytes(stats.BufferedSendBytes),
+			humanize.SIWithDigits(stats.SendBytesPerSec, 2, "B"),
+		)
 	}
+	p.Display()
 }
 
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
-	cancel()
-	close(statsCh)
-	wg.Wait()
+func processStats(language progLanguage, statsCh chan pull.Stats) {
+	p := cli.NewEphemeralPrinter()
+	for stats := range statsCh {
+		printStats(p, language, stats)
+	}
 }

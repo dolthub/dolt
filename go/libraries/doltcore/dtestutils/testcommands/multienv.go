@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -199,7 +200,9 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 
-	err = actions.CloneRemote(ctx, srcDB, r.Name, "", false, -1, dEnv)
+	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+		err = actions.CloneRemote(ctx, srcDB, r.Name, "", false, -1, dEnv, statsCh)
+	})
 	if err != nil {
 		mr.Errhand(err)
 	}
@@ -359,7 +362,9 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 		DestDb:  remoteDB,
 		TmpDir:  tmpDir,
 	}
-	_, err = actions.DoPush(ctx, pushOptions, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	pull.WithDiscardingStatsCh(func (statsCh chan pull.Stats) {
+		_, err = actions.DoPush(ctx, pushOptions, statsCh)
+	})
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
