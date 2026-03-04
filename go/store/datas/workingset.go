@@ -25,34 +25,8 @@ import (
 )
 
 const (
-	workingSetName      = "WorkingSet"
-	workingSetMetaField = "meta"
-	workingRootRefField = "workingRootRef"
-	stagedRootRefField  = "stagedRootRef"
+	workingSetName = "WorkingSet"
 )
-
-const (
-	mergeStateName                 = "MergeState"
-	mergeStateField                = "mergeState"
-	mergeStateCommitSpecField      = "commitSpec"
-	mergeStateCommitField          = "commit"
-	mergeStateWorkingPreMergeField = "workingPreMerge"
-)
-
-const (
-	rebaseStateField = "rebaseState"
-)
-
-const (
-	workingSetMetaName             = "WorkingSetMeta"
-	workingSetMetaNameField        = "name"
-	workingSetMetaEmailField       = "email"
-	workingSetMetaTimestampField   = "timestamp"
-	workingSetMetaDescriptionField = "description"
-	workingSetMetaVersionField     = "version"
-)
-
-const workingSetMetaVersion = "1.0"
 
 type WorkingSetMeta struct {
 	Name        string
@@ -60,26 +34,6 @@ type WorkingSetMeta struct {
 	Description string
 	Timestamp   uint64
 }
-
-func (m *WorkingSetMeta) toNomsStruct(format *types.NomsBinFormat) (types.Struct, error) {
-	fields := make(types.StructData)
-	fields[workingSetMetaNameField] = types.String(m.Name)
-	fields[workingSetMetaEmailField] = types.String(m.Email)
-	fields[workingSetMetaTimestampField] = types.Uint(m.Timestamp)
-	fields[workingSetMetaDescriptionField] = types.String(m.Description)
-	fields[workingSetMetaVersionField] = types.String(workingSetMetaVersion)
-	return types.NewStruct(format, workingSetMetaName, fields)
-}
-
-func workingSetMetaFromWorkingSetSt(workingSetSt types.Struct) (*WorkingSetMeta, error) {
-	metaV, ok, err := workingSetSt.MaybeGet(workingSetMetaNameField)
-	if err != nil || !ok {
-		return nil, err
-	}
-	return workingSetMetaFromNomsSt(metaV.(types.Struct))
-}
-
-var mergeStateTemplate = types.MakeStructTemplate(mergeStateName, []string{mergeStateCommitField, mergeStateCommitSpecField, mergeStateWorkingPreMergeField})
 
 type WorkingSetSpec struct {
 	Meta        *WorkingSetMeta
@@ -225,60 +179,4 @@ func NewRebaseState(preRebaseWorkingRoot hash.Hash, commitAddr hash.Hash, branch
 		rebasingStarted:            rebasingStarted,
 		skipVerification:           skipVerification,
 	}
-}
-
-func IsWorkingSet(v types.Value) (bool, error) {
-	if s, ok := v.(types.Struct); ok {
-		// We're being more lenient here than in other checks, to make it more likely we can release changes to the
-		// working set data description in a backwards compatible way.
-		// types.IsValueSubtypeOf is very strict about the type description.
-		return s.Name() == workingSetName, nil
-	} else if sm, ok := v.(types.SerialMessage); ok {
-		return serial.GetFileID(sm) == serial.WorkingSetFileID, nil
-	} else {
-		return false, nil
-	}
-}
-
-func workingSetMetaFromNomsSt(st types.Struct) (*WorkingSetMeta, error) {
-	// Like other places that deal with working set meta, we err on the side of leniency w.r.t. this data structure's
-	// contents
-	name, ok, err := st.MaybeGet(workingSetMetaNameField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		name = types.String("not present")
-	}
-
-	email, ok, err := st.MaybeGet(workingSetMetaEmailField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		email = types.String("not present")
-	}
-
-	timestamp, ok, err := st.MaybeGet(workingSetMetaTimestampField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		timestamp = types.Uint(0)
-	}
-
-	description, ok, err := st.MaybeGet(workingSetMetaDescriptionField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		description = types.String("not present")
-	}
-
-	return &WorkingSetMeta{
-		Name:        string(name.(types.String)),
-		Email:       string(email.(types.String)),
-		Timestamp:   uint64(timestamp.(types.Uint)),
-		Description: string(description.(types.String)),
-	}, nil
 }

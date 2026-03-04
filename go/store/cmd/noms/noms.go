@@ -50,7 +50,6 @@ var commands = []*util.Command{
 }
 
 var kingpinCommands = []util.KingpinCommand{
-	nomsBlob,
 	nomsStats,
 }
 

@@ -29,15 +29,12 @@ import (
 func BenchmarkMapGet(b *testing.B) {
 	b.Run("benchmark maps 10k", func(b *testing.B) {
 		benchmarkProllyMapGet(b, 10_000)
-		benchmarkTypesMapGet(b, 10_000)
 	})
 	b.Run("benchmark maps 100k", func(b *testing.B) {
 		benchmarkProllyMapGet(b, 100_000)
-		benchmarkTypesMapGet(b, 100_000)
 	})
 	b.Run("benchmark maps 1M", func(b *testing.B) {
 		benchmarkProllyMapGet(b, 1_000_000)
-		benchmarkTypesMapGet(b, 1_000_000)
 	})
 }
 
@@ -48,7 +45,6 @@ func BenchmarkStepMapGet(b *testing.B) {
 		nm := fmt.Sprintf("benchmark maps %d", sz)
 		b.Run(nm, func(b *testing.B) {
 			benchmarkProllyMapGet(b, sz)
-			benchmarkTypesMapGet(b, sz)
 		})
 	}
 }
@@ -56,15 +52,12 @@ func BenchmarkStepMapGet(b *testing.B) {
 func BenchmarkParallelMapGet(b *testing.B) {
 	b.Run("benchmark maps 10k", func(b *testing.B) {
 		benchmarkProllyMapGetParallel(b, 10_000)
-		benchmarkTypesMapGetParallel(b, 10_000)
 	})
 	b.Run("benchmark maps 100k", func(b *testing.B) {
 		benchmarkProllyMapGetParallel(b, 100_000)
-		benchmarkTypesMapGetParallel(b, 100_000)
 	})
 	b.Run("benchmark maps 1M", func(b *testing.B) {
 		benchmarkProllyMapGetParallel(b, 1_000_000)
-		benchmarkTypesMapGetParallel(b, 1_000_000)
 	})
 }
 
@@ -75,7 +68,6 @@ func BenchmarkStepParallelMapGet(b *testing.B) {
 		nm := fmt.Sprintf("benchmark maps parallel %d", sz)
 		b.Run(nm, func(b *testing.B) {
 			benchmarkProllyMapGetParallel(b, sz)
-			benchmarkTypesMapGetParallel(b, sz)
 		})
 	}
 }
@@ -84,20 +76,12 @@ func BenchmarkGetLargeProlly(b *testing.B) {
 	benchmarkProllyMapGet(b, 1_000_000)
 }
 
-func BenchmarkGetLargeNoms(b *testing.B) {
-	benchmarkTypesMapGet(b, 1_000_000)
-}
-
 func BenchmarkGetLargeBBolt(b *testing.B) {
 	benchmarkBBoltMapGet(b, 1_000_000)
 }
 
 func BenchmarkProllyParallelGetLarge(b *testing.B) {
 	benchmarkProllyMapGetParallel(b, 1_000_000)
-}
-
-func BenchmarkNomsParallelGetLarge(b *testing.B) {
-	benchmarkTypesMapGetParallel(b, 1_000_000)
 }
 
 func benchmarkProllyMapGet(b *testing.B, size uint64) {
@@ -112,19 +96,6 @@ func benchmarkProllyMapGet(b *testing.B, size uint64) {
 			_ = bench.m.Get(ctx, key, func(_, _ val.Tuple) (e error) {
 				return
 			})
-		}
-		b.ReportAllocs()
-	})
-}
-
-func benchmarkTypesMapGet(b *testing.B, size uint64) {
-	bench := generateTypesBench(b, size)
-	b.ResetTimer()
-	b.Run("benchmark old format reads", func(b *testing.B) {
-		ctx := context.Background()
-		for i := 0; i < b.N; i++ {
-			idx := rand.Uint64() % uint64(len(bench.tups))
-			_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
 		}
 		b.ReportAllocs()
 	})
@@ -159,21 +130,6 @@ func benchmarkProllyMapGetParallel(b *testing.B, size uint64) {
 				_ = bench.m.Get(ctx, key, func(_, _ val.Tuple) (e error) {
 					return
 				})
-			}
-		})
-		b.ReportAllocs()
-	})
-}
-
-func benchmarkTypesMapGetParallel(b *testing.B, size uint64) {
-	bench := generateTypesBench(b, size)
-	b.Run(fmt.Sprintf("benchmark old format %d", size), func(b *testing.B) {
-		b.RunParallel(func(pb *testing.PB) {
-			ctx := context.Background()
-			rnd := rand.NewSource(0)
-			for pb.Next() {
-				idx := int(rnd.Int63()) % len(bench.tups)
-				_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
 			}
 		})
 		b.ReportAllocs()

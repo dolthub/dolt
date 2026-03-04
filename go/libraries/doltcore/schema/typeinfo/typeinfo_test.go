@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -126,8 +125,6 @@ var DefaultInlineBlobType = &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.V
 func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeInfo, [][]types.Value) {
 	return [][]TypeInfo{
 			generateBitTypes(t, 16),
-			{&blobStringType{gmstypes.TinyText}, &blobStringType{gmstypes.Text},
-				&blobStringType{gmstypes.MediumText}, &blobStringType{gmstypes.LongText}},
 			{BoolType},
 			{DateType, DatetimeType, TimestampType},
 			generateDecimalTypes(t, 16),
@@ -135,7 +132,6 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			{Float32Type, Float64Type},
 			{DefaultInlineBlobType},
 			{Int8Type, Int16Type, Int24Type, Int32Type, Int64Type},
-			{JSONType},
 			{LineStringType},
 			{PointType},
 			{PolygonType},
@@ -148,8 +144,6 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			{TimeType},
 			{Uint8Type, Uint16Type, Uint24Type, Uint32Type, Uint64Type},
 			{UuidType},
-			{&varBinaryType{gmstypes.TinyBlob}, &varBinaryType{gmstypes.Blob},
-				&varBinaryType{gmstypes.MediumBlob}, &varBinaryType{gmstypes.LongBlob}},
 			append(generateVarStringTypes(t, 12),
 				&varStringType{gmstypes.CreateTinyText(sql.Collation_Default)}, &varStringType{gmstypes.CreateText(sql.Collation_Default)},
 				&varStringType{gmstypes.CreateMediumText(sql.Collation_Default)}, &varStringType{gmstypes.CreateLongText(sql.Collation_Default)}),
@@ -157,8 +151,6 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 		},
 		[][]types.Value{
 			{types.Uint(1), types.Uint(207), types.Uint(79147), types.Uint(34845728), types.Uint(9274618927)}, // Bit
-			{mustBlobString(t, vrw, ""), mustBlobString(t, vrw, "a"), mustBlobString(t, vrw, "abc"), // BlobString
-				mustBlobString(t, vrw, "abcdefghijklmnopqrstuvwxyz"), mustBlobString(t, vrw, "هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر")},
 			{types.Bool(false), types.Bool(true)}, // Bool
 			{types.Timestamp(time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC)), // Datetime
 				types.Timestamp(time.Date(1970, 1, 1, 0, 0, 1, 0, time.UTC)),
@@ -174,9 +166,7 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			{types.Float(1.0), types.Float(65513.75), types.Float(4293902592), types.Float(4.58e71), types.Float(7.172e285)},               // Float
 			{types.InlineBlob{0}, types.InlineBlob{21}, types.InlineBlob{1, 17}, types.InlineBlob{72, 42}, types.InlineBlob{21, 122, 236}}, // InlineBlob
 			{types.Int(20), types.Int(215), types.Int(237493), types.Int(2035753568), types.Int(2384384576063)},                            // Int
-			{json.MustTypesJSON(`null`), json.MustTypesJSON(`[]`), json.MustTypesJSON(`"lorem ipsum"`), json.MustTypesJSON(`2.71`),
-				json.MustTypesJSON(`false`), json.MustTypesJSON(`{"a": 1, "b": []}`)}, // JSON
-			{types.LineString{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}}, // LineString
+			{types.LineString{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}},                               // LineString
 			{types.Point{SRID: 0, X: 1, Y: 2}}, // Point
 			{types.Polygon{SRID: 0, Lines: []types.LineString{{SRID: 0, Points: []types.Point{{SRID: 0, X: 0, Y: 0}, {SRID: 0, X: 0, Y: 1}, {SRID: 0, X: 1, Y: 1}, {SRID: 0, X: 0, Y: 0}}}}}},                                            // Polygon
 			{types.MultiPoint{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}},                                                                                                                             // MultiPoint
@@ -188,8 +178,6 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			{types.Int(0), types.Int(1000000 /*"00:00:01"*/), types.Int(113000000 /*"00:01:53"*/), types.Int(247019000000 /*"68:36:59"*/), types.Int(458830485214 /*"127:27:10.485214"*/)}, // Time
 			{types.Uint(20), types.Uint(275), types.Uint(328395), types.Uint(630257298), types.Uint(93897259874)},                                                                          // Uint
 			{types.UUID{3}, types.UUID{3, 13}, types.UUID{128, 238, 82, 12}, types.UUID{31, 54, 23, 13, 63, 43}, types.UUID{83, 64, 21, 14, 42, 6, 35, 7, 54, 234, 6, 32, 1, 4, 2, 4}},     // Uuid
-			{mustBlobBytes(t, []byte{1}), mustBlobBytes(t, []byte{42, 52}), mustBlobBytes(t, []byte{84, 32, 13, 63, 12, 86}), // VarBinary
-				mustBlobBytes(t, []byte{1, 32, 235, 64, 32, 23, 45, 76}), mustBlobBytes(t, []byte{123, 234, 34, 223, 76, 35, 32, 12, 84, 26, 15, 34, 65, 86, 45, 23, 43, 12, 76, 154, 234, 76, 34})},
 			{types.String(""), types.String("a"), types.String("abc"), // VarString
 				types.String("abcdefghijklmnopqrstuvwxyz"), types.String("هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر")},
 			{types.Int(1901), types.Int(1950), types.Int(2000), types.Int(2080), types.Int(2155)}, // Year

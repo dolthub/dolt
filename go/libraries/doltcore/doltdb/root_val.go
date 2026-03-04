@@ -180,45 +180,24 @@ var NewRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.
 
 // EmptyRootValue returns an empty RootValue. This is a variable as it's changed in Doltgres.
 var EmptyRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (RootValue, error) {
-	if vrw.Format().UsesFlatbuffers() {
-		builder := flatbuffers.NewBuilder(80)
+	builder := flatbuffers.NewBuilder(80)
 
-		emptyam, err := prolly.NewEmptyAddressMap(ns)
-		if err != nil {
-			return nil, err
-		}
-		ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
-		tablesoff := builder.CreateByteVector(ambytes)
-
-		var empty hash.Hash
-		fkoff := builder.CreateByteVector(empty[:])
-		serial.RootValueStart(builder)
-		serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
-		serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
-		serial.RootValueAddTables(builder, tablesoff)
-		serial.RootValueAddForeignKeyAddr(builder, fkoff)
-		bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
-		return NewRootValue(ctx, vrw, ns, types.SerialMessage(bs))
-	}
-
-	empty, err := types.NewMap(ctx, vrw)
+	emptyam, err := prolly.NewEmptyAddressMap(ns)
 	if err != nil {
 		return nil, err
 	}
+	ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
+	tablesoff := builder.CreateByteVector(ambytes)
 
-	sd := types.StructData{
-		tablesKey:       empty,
-		superSchemasKey: empty,
-		foreignKeyKey:   empty,
-		featureVersKey:  types.Int(DoltFeatureVersion),
-	}
-
-	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewRootValue(ctx, vrw, ns, st)
+	var empty hash.Hash
+	fkoff := builder.CreateByteVector(empty[:])
+	serial.RootValueStart(builder)
+	serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
+	serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
+	serial.RootValueAddTables(builder, tablesoff)
+	serial.RootValueAddForeignKeyAddr(builder, fkoff)
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	return NewRootValue(ctx, vrw, ns, types.SerialMessage(bs))
 }
 
 // LoadRootValueFromRootIshAddr takes the hash of the commit or the hash of a

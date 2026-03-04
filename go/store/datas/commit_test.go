@@ -64,16 +64,6 @@ func mustString(str string, err error) string {
 	return str
 }
 
-func mustSet(s types.Set, err error) types.Set {
-	d.PanicIfError(err)
-	return s
-}
-
-func mustList(l types.List, err error) types.List {
-	d.PanicIfError(err)
-	return l
-}
-
 func mustParentsClosure(t *testing.T, exists bool) func(types.Ref, bool, error) types.Ref {
 	return func(r types.Ref, got bool, err error) types.Ref {
 		t.Helper()

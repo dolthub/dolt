@@ -28,18 +28,12 @@ import (
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 type prollyBench struct {
 	m    prolly.Map
 	tups [][2]val.Tuple
-}
-
-type typesBench struct {
-	m    types.Map
-	tups [][2]types.Tuple
 }
 
 type bboltBench struct {
@@ -112,58 +106,6 @@ func generateProllyTuples(kd, vd *val.TupleDesc, size uint64, ns tree.NodeStore)
 		if err != nil {
 			panic(err)
 		}
-	}
-
-	return tups
-}
-
-func generateTypesBench(b *testing.B, size uint64) typesBench {
-	b.StopTimer()
-	defer b.StartTimer()
-	ctx := context.Background()
-	tups := generateTypesTuples(size)
-
-	tt := make([]types.Value, len(tups)*2)
-	for i := range tups {
-		tt[i*2] = tups[i][0]
-		tt[(i*2)+1] = tups[i][1]
-	}
-
-	m, err := types.NewMap(ctx, newTestVRW(), tt...)
-	if err != nil {
-		panic(err)
-	}
-
-	return typesBench{m: m, tups: tups}
-}
-
-func newTestVRW() types.ValueReadWriter {
-	ts := &chunks.TestStorage{}
-	return types.NewValueStore(ts.NewView())
-}
-
-func generateTypesTuples(size uint64) [][2]types.Tuple {
-	src := rand.NewSource(0)
-
-	// tags
-	t0, t1, t2 := types.Uint(0), types.Uint(1), types.Uint(2)
-	t3, t4, t5 := types.Uint(3), types.Uint(4), types.Uint(5)
-
-	tups := make([][2]types.Tuple, size)
-	for i := range tups {
-
-		// key
-		k := types.Int(i)
-		tups[i][0], _ = types.NewTuple(types.Format_Default, t0, k)
-
-		// val
-		var vv [5 * 2]types.Value
-		for i := 1; i < 10; i += 2 {
-			vv[i] = types.Uint(uint64(src.Int63()))
-		}
-		vv[0], vv[2], vv[4], vv[6], vv[8] = t1, t2, t3, t4, t5
-
-		tups[i][1], _ = types.NewTuple(types.Format_Default, vv[:]...)
 	}
 
 	return tups

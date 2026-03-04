@@ -83,24 +83,6 @@ func (db *database) StatsSummary() string {
 	return db.ChunkStore().StatsSummary()
 }
 
-// DatasetsInRoot returns the Map of datasets in the root represented by the |rootHash| given
-func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash) (types.Map, error) {
-	if rootHash.IsEmpty() {
-		return types.NewMap(ctx, db)
-	}
-
-	val, err := db.ReadValue(ctx, rootHash)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	if val == nil {
-		return types.EmptyMap, fmt.Errorf("root hash doesn't exist: %s", rootHash)
-	}
-
-	return val.(types.Map), nil
-}
-
 func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (prolly.AddressMap, error) {
 	if rootHash.IsEmpty() {
 		return prolly.NewEmptyAddressMap(db.ns)
@@ -953,34 +935,6 @@ func (db *database) tryCommitChunks(ctx context.Context, newRootHash hash.Hash, 
 		return ErrOptimisticLockFailed
 	}
 	return nil
-}
-
-func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types.Struct, error) {
-	rHead, err := db.readHead(ctx, r.TargetHash())
-	if err != nil {
-		return types.Struct{}, err
-	}
-	if rHead == nil {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
-	}
-	if rHead.TypeName() != commitName {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred values is not a commit")
-	}
-
-	var v types.Value
-	v = rHead.(nomsHead).st
-
-	is, err := IsCommit(v)
-
-	if err != nil {
-		return types.Struct{}, err
-	}
-
-	if !is {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred values is not a commit")
-	}
-
-	return v.(types.Struct), nil
 }
 
 func hasParentHash(opts CommitOptions, curr hash.Hash) bool {

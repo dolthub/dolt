@@ -29,11 +29,6 @@ func mustValue(val Value, err error) Value {
 	return val
 }
 
-func mustBlob(blob Blob, err error) Blob {
-	d.PanicIfError(err)
-	return blob
-}
-
 func mustType(t *Type, err error) *Type {
 	d.PanicIfError(err)
 	return t
@@ -44,52 +39,7 @@ func mustString(str string, err error) string {
 	return str
 }
 
-func mustStruct(st Struct, err error) Struct {
-	d.PanicIfError(err)
-	return st
-}
-
-func mustList(l List, err error) List {
-	d.PanicIfError(err)
-	return l
-}
-
-func mustMap(m Map, err error) Map {
-	d.PanicIfError(err)
-	return m
-}
-
-func mustSet(s Set, err error) Set {
-	d.PanicIfError(err)
-	return s
-}
-
 func mustHash(h hash.Hash, err error) hash.Hash {
 	d.PanicIfError(err)
 	return h
-}
-
-func mustSeq(seq sequence, err error) sequence {
-	d.PanicIfError(err)
-	return seq
-}
-
-func mustMetaTuple(mt metaTuple, err error) metaTuple {
-	d.PanicIfError(err)
-	return mt
-}
-
-func mustOrdKey(ordKey orderedKey, err error) orderedKey {
-	d.PanicIfError(err)
-	return ordKey
-}
-
-func mustOrdSeq(ordSeq orderedSequence, err error) orderedSequence {
-	d.PanicIfError(err)
-	return ordSeq
-}
-
-func mustSIter(itr SetIterator, err error) SetIterator {
-	d.PanicIfError(err)
-	return itr
 }

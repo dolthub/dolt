@@ -135,16 +135,9 @@ func (t *Type) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-// TypeOf returns the type describing the value. This is not an exact type but
-// often a simplification of the concrete type.
+// TypeOf returns the type describing the value.
 func TypeOf(v Value) (*Type, error) {
-	t, err := v.typeOf()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return simplifyType(t, false)
+	return v.typeOf()
 }
 
 func indexOfType(t *Type, tl []*Type) (uint32, bool) {
