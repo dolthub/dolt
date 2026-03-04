@@ -75,6 +75,7 @@ type DoltSession struct {
 }
 
 var _ sql.Session = (*DoltSession)(nil)
+var _ sql.TriggerCachingSession = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
@@ -1680,6 +1681,14 @@ func (d *DoltSession) GetHost() string {
 // GetController implements the interface branch_control.Context.
 func (d *DoltSession) GetController() *branch_control.Controller {
 	return d.branchController
+}
+
+// GetTriggerCache implements the
+func (d *DoltSession) GetTriggerCache() map[sql.TriggerDefinition]sql.Node {
+	if trigSess, ok := d.Session.(sql.TriggerCachingSession); ok {
+		return trigSess.GetTriggerCache()
+	}
+	return nil
 }
 
 // Implement sql.LifecycleAwareSession, allowing for GC safepoints to be aware of
