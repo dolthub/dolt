@@ -70,7 +70,7 @@ type TableFileStoreOps struct {
 type TableFileStore interface {
 	// Sources retrieves the current root hash, a list of all the table files (which may include appendix table files),
 	// and a second list containing only appendix table files.
-	Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error)
+	Sources(ctx context.Context) (TableFileSources, error)
 
 	// Size  returns the total size, in bytes, of the table files in this Store.
 	Size(ctx context.Context) (uint64, error)
@@ -89,4 +89,10 @@ type TableFileStore interface {
 
 	// SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
 	SupportedOperations() TableFileStoreOps
+}
+
+type TableFileSources struct {
+	Root               hash.Hash
+	TableFiles         []TableFile
+	AppendixTableFiles []TableFile
 }

@@ -86,7 +86,6 @@ func (rws *ReaderWithStats) Close() error {
 	if closer, ok := rws.rd.(io.Closer); ok {
 		return closer.Close()
 	}
-
 	return nil
 }
 
