@@ -1052,4 +1052,78 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_workspace_* stage individual rows from new table",
+		SetUpScript: []string{
+			"create table new_tbl (pk int primary key, val int);",
+			"insert into new_tbl values (1, 100);",
+			"insert into new_tbl values (2, 200);",
+			"insert into new_tbl values (3, 300);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Verify initial state - all rows unstaged
+				Query: "select * from dolt_workspace_new_tbl",
+				Expected: []sql.Row{
+					{0, false, "added", 1, 100, nil, nil},
+					{1, false, "added", 2, 200, nil, nil},
+					{2, false, "added", 3, 300, nil, nil},
+				},
+			},
+			{
+				// Stage first row only - this should create empty table in staging first
+				Query: "UPDATE dolt_workspace_new_tbl SET staged = TRUE WHERE id = 0",
+			},
+			{
+				// Verify first row is staged, others are not
+				Query: "select * from dolt_workspace_new_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 1, 100, nil, nil},
+					{1, false, "added", 2, 200, nil, nil},
+					{2, false, "added", 3, 300, nil, nil},
+				},
+			},
+			{
+				// Stage another row
+				Query: "UPDATE dolt_workspace_new_tbl SET staged = TRUE WHERE id = 2",
+			},
+			{
+				// Verify two rows are now staged
+				// Note: staged rows come first, then unstaged, each sorted by their row values
+				Query: "select * from dolt_workspace_new_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 1, 100, nil, nil},
+					{1, true, "added", 3, 300, nil, nil},
+					{2, false, "added", 2, 200, nil, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* stage all rows from new table at once",
+		SetUpScript: []string{
+			"create table bulk_tbl (pk int primary key, name varchar(32));",
+			"insert into bulk_tbl values (1, 'alice'), (2, 'bob');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_bulk_tbl",
+				Expected: []sql.Row{
+					{0, false, "added", 1, "alice", nil, nil},
+					{1, false, "added", 2, "bob", nil, nil},
+				},
+			},
+			{
+				// Stage all rows at once
+				Query: "UPDATE dolt_workspace_bulk_tbl SET staged = TRUE",
+			},
+			{
+				Query: "select * from dolt_workspace_bulk_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 1, "alice", nil, nil},
+					{1, true, "added", 2, "bob", nil, nil},
+				},
+			},
+		},
+	},
 }

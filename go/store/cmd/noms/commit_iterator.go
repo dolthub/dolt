@@ -182,13 +182,3 @@ func (bl branchList) RemoveBranches(indexes []int) branchList {
 	}
 	return bl
 }
-
-func commitRefsFromSet(ctx context.Context, set types.Set) []types.Ref {
-	res := []types.Ref{}
-	_ = set.IterAll(ctx, func(v types.Value) error {
-		res = append(res, v.(types.Ref))
-		return nil
-	})
-
-	return res
-}

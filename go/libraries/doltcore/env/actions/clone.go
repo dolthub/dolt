@@ -261,17 +261,15 @@ func getSrcRefs(ctx context.Context, branch string, srcDB *doltdb.DoltDB, dEnv *
 func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, srcRefHashes []doltdb.RefWithHash, branch, remoteName string, singleBranch bool) (*doltdb.Commit, error) {
 	eventCh := make(chan pull.TableFileEvent, 128)
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		clonePrint(eventCh)
-	}()
-
-	err := srcDB.Clone(ctx, dEnv.DoltDB(ctx), eventCh)
-
-	close(eventCh)
+	})
+	var err error
+	wg.Go(func() {
+		defer close(eventCh)
+		err = srcDB.Clone(ctx, dEnv.DoltDB(ctx), eventCh)
+	})
 	wg.Wait()
-
 	if err != nil {
 		return nil, err
 	}

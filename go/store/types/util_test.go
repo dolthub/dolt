@@ -25,7 +25,6 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type iterator interface {
@@ -73,68 +72,6 @@ func generateNumbersAsValuesFromToBy(nbf *NomsBinFormat, from, to, by int) Value
 		nums = append(nums, Float(i))
 	}
 	return nums
-}
-
-func generateNumbersAsStructsFromToBy(nbf *NomsBinFormat, from, to, by int) ValueSlice {
-	d.Chk.True(to >= from)
-	d.Chk.True(by > 0)
-	nums := []Value{}
-	for i := from; i < to; i += by {
-		nums = append(nums, mustValue(NewStruct(nbf, "num", StructData{"n": Float(i)})))
-	}
-	return nums
-}
-
-func generateNumbersAsRefOfStructs(vrw ValueReadWriter, n int) []Value {
-	nums := []Value{}
-	for i := 0; i < n; i++ {
-		r, err := vrw.WriteValue(context.Background(), mustValue(NewStruct(vrw.Format(), "num", StructData{"n": Float(i)})))
-		d.PanicIfError(err)
-		nums = append(nums, r)
-	}
-	return nums
-}
-
-func leafCount(c Collection) int {
-	leaves, _, err := LoadLeafNodes(context.Background(), []Collection{c}, 0, c.Len())
-	d.PanicIfError(err)
-	return len(leaves)
-}
-
-func leafDiffCount(c1, c2 Collection) int {
-	count := 0
-	hashes := make(map[hash.Hash]int)
-
-	leaves1, _, err := LoadLeafNodes(context.Background(), []Collection{c1}, 0, c1.Len())
-	d.PanicIfError(err)
-	leaves2, _, err := LoadLeafNodes(context.Background(), []Collection{c2}, 0, c2.Len())
-	d.PanicIfError(err)
-
-	nbf := c1.asSequence().format()
-
-	for _, l := range leaves1 {
-		h, err := l.Hash(nbf)
-		d.PanicIfError(err)
-		hashes[h]++
-	}
-
-	for _, l := range leaves2 {
-		if c, ok := hashes[mustHash(l.Hash(nbf))]; ok {
-			if c == 1 {
-				delete(hashes, mustHash(l.Hash(nbf)))
-			} else {
-				hashes[mustHash(l.Hash(nbf))] = c - 1
-			}
-		} else {
-			count++
-		}
-	}
-
-	for _, c := range hashes {
-		count += c
-	}
-
-	return count
 }
 
 func reverseValues(values []Value) []Value {

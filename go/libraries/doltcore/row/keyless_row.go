@@ -15,49 +15,25 @@
 package row
 
 import (
-	"fmt"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	KeylessFirstValIdx = uint64(2)
-)
-
-// keylessRow is a Row without PRIMARY_KEY fields
-//
-// key: Tuple(
-//
-//				Uint(schema.KeylessRowIdTag),
-//	         UUID(hash.Of(tag1, val1, ..., tagN, valN))
-//	     )
-//
-// val: Tuple(
-//
-//				Uint(schema.KeylessRowCardinalityTag),
-//	         Uint(cardinality),
-//	         Uint(tag1), Value(val1),
-//	           ...
-//	         Uint(tagN), Value(valN)
-//	     )
+// keylessRow is a Row without PRIMARY_KEY fields.
+// Stores column values as TaggedValues for the deprecated Row interface.
 type keylessRow struct {
-	key types.Tuple
-	val types.Tuple
+	value TaggedValues
 }
 
 var _ Row = keylessRow{}
 
 func keylessRowFromTaggedValued(nbf *types.NomsBinFormat, sch schema.Schema, tv TaggedValues) (Row, error) {
-	vals := make([]types.Value, len(tv)*2)
-	i := 0
+	vals := make(TaggedValues)
 
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		v, ok := tv[tag]
 		if ok && v.Kind() != types.NullKind {
-			vals[i] = types.Uint(tag)
-			vals[i+1] = v
-			i += 2
+			vals[tag] = v
 		}
 		return
 	})
@@ -65,125 +41,19 @@ func keylessRowFromTaggedValued(nbf *types.NomsBinFormat, sch schema.Schema, tv 
 		return nil, err
 	}
 
-	return keylessRowWithCardinality(nbf, 1, vals[:i]...)
-}
-
-func keylessRowWithCardinality(nbf *types.NomsBinFormat, card uint64, vals ...types.Value) (Row, error) {
-	id, err := types.UUIDHashedFromValues(nbf, vals...) // don't hash cardinality
-	if err != nil {
-		return nil, err
-	}
-	idTag := types.Uint(schema.KeylessRowIdTag)
-
-	kt, err := types.NewTuple(nbf, idTag, id)
-	if err != nil {
-		return nil, err
-	}
-
-	prefix := []types.Value{
-		types.Uint(schema.KeylessRowCardinalityTag),
-		types.Uint(card),
-	}
-	vals = append(prefix, vals...)
-
-	vt, err := types.NewTuple(nbf, vals...)
-	if err != nil {
-		return nil, err
-	}
-
-	return keylessRow{
-		key: kt,
-		val: vt,
-	}, nil
-}
-
-func (r keylessRow) IterCols(cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error) {
-	iter, err := r.val.IteratorAt(KeylessFirstValIdx) // skip cardinality tag & val
-	if err != nil {
-		return false, err
-	}
-
-	for {
-		_, v, err := iter.Next()
-		if err != nil {
-			return false, err
-		}
-		if v == nil {
-			break
-		}
-
-		tag, ok := v.(types.Uint)
-		if !ok {
-			return false, fmt.Errorf("expected tag types.Uint, got %v", v)
-		}
-
-		_, v, err = iter.Next()
-		if err != nil {
-			return false, err
-		}
-
-		stop, err := cb(uint64(tag), v)
-		if err != nil {
-			return false, nil
-		}
-		if stop {
-			return stop, nil
-		}
-	}
-
-	return true, nil
+	return keylessRow{value: vals}, nil
 }
 
 func (r keylessRow) IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error) {
-	iter, err := r.val.IteratorAt(KeylessFirstValIdx) // skip cardinality tag & val
-	if err != nil {
-		return false, err
-	}
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (bool, error) {
+		value, _ := r.GetColVal(tag)
+		return cb(tag, value)
+	})
 
-	tags := sch.GetAllCols().Tags
-	vals := make([]types.Value, len(tags))
-
-	for {
-		_, v, err := iter.Next()
-		if err != nil {
-			return false, err
-		}
-		if v == nil {
-			break
-		}
-
-		tag, ok := v.(types.Uint)
-		if !ok {
-			return false, fmt.Errorf("expected tag types.Uint, got %v", v)
-		}
-
-		idx := sch.GetAllCols().TagToIdx[uint64(tag)]
-		_, vals[idx], err = iter.Next()
-		if err != nil {
-			return false, err
-		}
-	}
-
-	for idx, tag := range tags {
-		stop, err := cb(tag, vals[idx])
-		if err != nil {
-			return false, err
-		}
-		if stop {
-			return stop, nil
-		}
-	}
-
-	return true, nil
+	return false, err
 }
 
 func (r keylessRow) GetColVal(tag uint64) (val types.Value, ok bool) {
-	_, _ = r.IterCols(func(t uint64, v types.Value) (stop bool, err error) {
-		if tag == t {
-			val = v
-			ok, stop = true, true
-		}
-		return
-	})
+	val, ok = r.value[tag]
 	return val, ok
 }

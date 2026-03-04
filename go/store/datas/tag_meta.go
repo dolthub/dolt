@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -62,61 +60,6 @@ func NewTagMetaWithUserTS(name, email, desc string, userTS time.Time) *TagMeta {
 	userMS := userTS.UnixMilli()
 
 	return &TagMeta{n, e, d, ms, userMS}
-}
-
-func tagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
-	e, err := getRequiredFromSt(st, tagMetaEmailKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	n, err := getRequiredFromSt(st, tagMetaNameKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	d, err := getRequiredFromSt(st, tagMetaDescKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	ts, err := getRequiredFromSt(st, tagMetaTimestampKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	userTS, ok, err := st.MaybeGet(tagMetaUserTSKey)
-
-	if err != nil {
-		return nil, err
-	} else if !ok {
-		userTS = types.Int(int64(uint64(ts.(types.Uint))))
-	}
-
-	return &TagMeta{
-		Name:          string(n.(types.String)),
-		Email:         string(e.(types.String)),
-		Description:   string(d.(types.String)),
-		Timestamp:     uint64(ts.(types.Uint)),
-		UserTimestamp: int64(userTS.(types.Int)),
-	}, nil
-}
-
-func (tm *TagMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
-	metadata := types.StructData{
-		tagMetaNameKey:      types.String(tm.Name),
-		tagMetaEmailKey:     types.String(tm.Email),
-		tagMetaDescKey:      types.String(tm.Description),
-		tagMetaTimestampKey: types.Uint(tm.Timestamp),
-		tagMetaVersionKey:   types.String(tagMetaVersion),
-		commitMetaUserTSKey: types.Int(tm.UserTimestamp),
-	}
-
-	return types.NewStruct(nbf, tagMetaStName, metadata)
 }
 
 // Time returns the time at which the tag occurred

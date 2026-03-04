@@ -665,7 +665,10 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 	if err != nil {
 		return nil, err
 	}
-	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+
+	mm := makeManifestManager(blobstoreManifest{bs})
+	p := &singleBlobBSPersister{bs, q, s3BlockSize}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
 // NewNoConjoinGitStore returns an nbs implementation backed by a GitBlobstore, but disables conjoin.
@@ -681,7 +684,10 @@ func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, 
 	if err != nil {
 		return nil, err
 	}
-	return NewNoConjoinBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+
+	mm := makeManifestManager(blobstoreManifest{bs})
+	p := &noConjoinBlobstorePersister{bs, q, s3BlockSize}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
 }
 
 // NewBSStore returns an nbs implementation backed by a Blobstore
@@ -804,14 +810,12 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
 
 	exists, contents, _, err := nbs.manifestMgr.Fetch(ctx, nbs.stats)
-
 	if err != nil {
 		return nil, err
 	}
 
 	if exists {
 		newTables, err := nbs.tables.rebase(ctx, contents.specs, nil, nbs.stats)
-
 		if err != nil {
 			return nil, err
 		}

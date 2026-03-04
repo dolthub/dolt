@@ -82,6 +82,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 	if _, err = bsp.bs.Concatenate(ctx, name, []string{recordsName, tailName}); err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
+
 	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
 	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
 	if err != nil {

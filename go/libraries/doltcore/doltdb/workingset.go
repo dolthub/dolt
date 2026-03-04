@@ -468,7 +468,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 
 	var mergeState *MergeState
 	if dsws.MergeState != nil {
-		preMergeWorkingAddr, err := dsws.MergeState.PreMergeWorkingAddr(ctx, vrw)
+		preMergeWorkingAddr, err := dsws.MergeState.PreMergeWorkingAddr()
 		if err != nil {
 			return nil, err
 		}

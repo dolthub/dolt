@@ -199,165 +199,18 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 	case FloatKind: // We're special-casing floats since it requires floatFormat & most other kinds don't need anything special
 		w.write(strconv.FormatFloat(float64(v.(Float)), w.floatFormat, -1, 64))
 
-	case BlobKind:
-		w.write("blob {")
-		blob := v.(Blob)
-		encoder := &hexWriter{hrs: w, size: blob.Len()}
-		_, w.err = io.Copy(encoder, blob.Reader(ctx))
-		w.write("}")
-
-	case ListKind:
-		w.write("[")
-		w.writeSize(v)
-		w.indent()
-
-		err := v.(List).Iter(ctx, func(v Value, i uint64) (bool, error) {
-			if i == 0 {
-				w.newLine()
-			}
-
-			if err := w.Write(ctx, v); err != nil {
-				return true, err
-			}
-
-			w.write(",")
-			w.newLine()
-
-			return false, w.err
-		})
-		if err != nil {
-			return err
-		}
-
-		w.outdent()
-		w.write("]")
-
-	case TupleKind:
-		w.write("(")
-		err := v.(Tuple).IterFields(func(i uint64, v Value) (bool, error) {
-			if i != 0 {
-				w.write(",")
-			}
-
-			err := w.Write(ctx, v)
-
-			if err != nil {
-				return false, err
-			}
-
-			if w.err != nil {
-				return false, w.err
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return err
-		}
-
-		w.write(")")
-
-	case MapKind:
-		w.write("map {")
-		w.writeSize(v)
-		w.indent()
-		if !v.(Map).Empty() {
-			w.newLine()
-		}
-
-		err := v.(Map).Iter(ctx, func(key, val Value) (bool, error) {
-			err := w.Write(ctx, key)
-
-			if err != nil {
-				return false, err
-			}
-
-			w.write(": ")
-			err = w.Write(ctx, val)
-
-			if err != nil {
-				return false, err
-			}
-
-			w.write(",")
-			w.newLine()
-
-			if w.err != nil {
-				return false, w.err
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return err
-		}
-
-		w.outdent()
-		w.write("}")
-
-	case JSONKind:
-		w.write("json {")
-		w.indent()
-		vv, err := v.(JSON).Inner()
-		if err != nil {
-			return err
-		}
-
-		err = w.Write(ctx, vv)
-		if err != nil {
-			return err
-		}
-
-		w.outdent()
-		w.write("}")
+	case BlobKind, ListKind, MapKind, SetKind:
+		return fmt.Errorf("unsupported collection kind: %s", v.Kind())
 
 	case RefKind:
 		w.write("#")
 		w.write(v.(Ref).TargetHash().String())
 
-	case SetKind:
-		w.write("set {")
-		w.writeSize(v)
-		w.indent()
-		if !v.(Set).Empty() {
-			w.newLine()
-		}
-
-		err := v.(Set).Iter(ctx, func(v Value) (bool, error) {
-			err := w.Write(ctx, v)
-
-			if err != nil {
-				return false, err
-			}
-
-			w.write(",")
-			w.newLine()
-
-			if w.err != nil {
-				return false, err
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return err
-		}
-
-		w.outdent()
-		w.write("}")
-
 	case TypeKind:
 		w.writeType(v.(*Type), map[*Type]struct{}{})
 
 	case StructKind:
-		err := w.writeStruct(ctx, v.(Struct))
-
-		if err != nil {
-			return err
-		}
+		return fmt.Errorf("unsupported kind: %s", v.Kind())
 
 	default:
 		if IsPrimitiveKind(v.Kind()) {
@@ -370,78 +223,9 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 	return nil
 }
 
-type hrsStructWriter struct {
-	*hrsWriter
-	v Struct
-}
-
-func (w hrsStructWriter) name(ctx context.Context, n string) {
-	w.write("struct ")
-	if n != "" {
-		w.write(n)
-		w.write(" ")
-	}
-	w.write("{")
-	commenters := GetHRSCommenters(n)
-	for _, commenter := range commenters {
-		if comment := commenter.Comment(ctx, w.v); comment != "" {
-			w.write(" // " + comment)
-			break
-		}
-
-	}
-	w.indent()
-}
-
-func (w hrsStructWriter) count(c uint64) {
-	if c > 0 {
-		w.newLine()
-	}
-}
-
-func (w hrsStructWriter) fieldName(n string) {
-	w.write(n)
-	w.write(": ")
-}
-
-func (w hrsStructWriter) fieldValue(ctx context.Context, v Value) error {
-	err := w.Write(ctx, v)
-
-	if err != nil {
-		return err
-	}
-
-	w.write(",")
-	w.newLine()
-
-	return nil
-}
-
-func (w hrsStructWriter) end() {
-	w.outdent()
-	w.write("}")
-}
-
-func (w *hrsWriter) writeStruct(ctx context.Context, v Struct) error {
-	return v.iterParts(ctx, hrsStructWriter{w, v})
-}
-
-func (w *hrsWriter) writeSize(v Value) {
-	switch v.Kind() {
-	case ListKind, MapKind, SetKind:
-		l := v.(Collection).Len()
-		if l < 4 {
-			return
-		}
-		w.write(fmt.Sprintf("  // %s items", humanize.Comma(int64(l))))
-	default:
-		panic("unreachable")
-	}
-}
-
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
-	case ListKind, RefKind, SetKind, MapKind, TupleKind, JSONKind:
+	case ListKind, RefKind, SetKind, MapKind:
 		w.write(t.TargetKind().String())
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {

@@ -355,101 +355,46 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 		return nil, fmt.Errorf("runtime exception. GetCommitParents called with GhostCommit.")
 	}
 
-	if sm, ok := cv.(types.SerialMessage); ok {
-		data := []byte(sm)
-		if serial.GetFileID(data) != serial.CommitFileID {
-			return nil, errors.New("GetCommitParents: provided value is not a commit.")
-		}
-		addrs, err := types.SerialCommitParentAddrs(vr.Format(), sm)
-		if err != nil {
-			return nil, err
-		}
-
-		vals, err := vr.ReadManyValues(ctx, addrs)
-		if err != nil {
-			return nil, err
-		}
-		res := make([]*Commit, len(vals))
-		for i, v := range vals {
-			if v == nil {
-				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", addrs[i].String())
-			}
-
-			if g, ok := v.(types.GhostValue); ok {
-				res[i] = &Commit{
-					val:  g,
-					addr: addrs[i],
-				}
-			} else {
-				var csm serial.Commit
-				err := serial.InitCommitRoot(&csm, []byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
-				if err != nil {
-					return nil, err
-				}
-				res[i] = &Commit{
-					val:    v,
-					height: csm.Height(),
-					addr:   addrs[i],
-				}
-			}
-		}
-		return res, nil
-	}
-
-	c, ok := cv.(types.Struct)
+	sm, ok := cv.(types.SerialMessage)
 	if !ok {
+		return nil, fmt.Errorf("expected SerialMessage type for commit value, found %T", cv)
+	}
+
+	data := []byte(sm)
+	if serial.GetFileID(data) != serial.CommitFileID {
 		return nil, errors.New("GetCommitParents: provided value is not a commit.")
 	}
-	if c.Name() != commitName {
-		return nil, errors.New("GetCommitParents: provided value is not a commit.")
-	}
-	var refs []types.Ref
-	ps, ok, err := c.MaybeGet(parentsListField)
+	addrs, err := types.SerialCommitParentAddrs(vr.Format(), sm)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
-		p := ps.(types.List)
-		err = p.IterAll(ctx, func(v types.Value, _ uint64) error {
-			refs = append(refs, v.(types.Ref))
-			return nil
-		})
-		if err != nil {
-			return nil, err
+
+	vals, err := vr.ReadManyValues(ctx, addrs)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]*Commit, len(vals))
+	for i, v := range vals {
+		if v == nil {
+			return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", addrs[i].String())
 		}
-	} else {
-		ps, ok, err = c.MaybeGet(parentsField)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			p := ps.(types.Set)
-			err = p.IterAll(ctx, func(v types.Value) error {
-				refs = append(refs, v.(types.Ref))
-				return nil
-			})
+
+		if g, ok := v.(types.GhostValue); ok {
+			res[i] = &Commit{
+				val:  g,
+				addr: addrs[i],
+			}
+		} else {
+			var csm serial.Commit
+			err := serial.InitCommitRoot(&csm, []byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
 			if err != nil {
 				return nil, err
 			}
-		}
-	}
-	hashes := make([]hash.Hash, len(refs))
-	for i, r := range refs {
-		hashes[i] = r.TargetHash()
-	}
-	vals, err := vr.ReadManyValues(ctx, hashes)
-	if err != nil {
-		return nil, err
-	}
-	res := make([]*Commit, len(refs))
-	for i, val := range vals {
-		if val == nil {
-			return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
-		}
-		res[i] = &Commit{
-			val:    val,
-			height: refs[i].Height(),
-			addr:   refs[i].TargetHash(),
+			res[i] = &Commit{
+				val:    v,
+				height: csm.Height(),
+				addr:   addrs[i],
+			}
 		}
 	}
 	return res, nil
@@ -458,91 +403,69 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 // GetCommitMeta extracts the CommitMeta field from a commit. Returns |nil,
 // nil| if there is no metadata for the commit.
 func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
-	if sm, ok := cv.(types.SerialMessage); ok {
-		data := []byte(sm)
-		if serial.GetFileID(data) != serial.CommitFileID {
-			return nil, errors.New("GetCommitMeta: provided value is not a commit.")
-		}
-		var cmsg serial.Commit
-		err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
-		if err != nil {
-			return nil, err
-		}
-		ret := &CommitMeta{}
-		ret.Name = string(cmsg.Name())
-		ret.Email = string(cmsg.Email())
-		ret.Description = string(cmsg.Description())
-		ret.Timestamp = cmsg.TimestampMillis()
-		ret.UserTimestamp = cmsg.UserTimestampMillis()
-		ret.Signature = string(cmsg.Signature())
-		return ret, nil
-	}
-	c, ok := cv.(types.Struct)
+	sm, ok := cv.(types.SerialMessage)
 	if !ok {
+		return nil, fmt.Errorf("expected SerialMessage type for commit value, found %T", cv)
+	}
+
+	data := []byte(sm)
+	if serial.GetFileID(data) != serial.CommitFileID {
 		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
 	}
-	if c.Name() != commitName {
-		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
-	}
-	metaVal, found, err := c.MaybeGet(commitMetaField)
+	var cmsg serial.Commit
+	err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
 	if err != nil {
 		return nil, err
 	}
-	if !found {
-		return nil, nil
-	}
-	if metaSt, ok := metaVal.(types.Struct); ok {
-		return CommitMetaFromNomsSt(metaSt)
-	} else {
-		return nil, errors.New("GetCommitMeta: Commit had metadata field but it was not a Struct.")
-	}
+	ret := &CommitMeta{}
+	ret.Name = string(cmsg.Name())
+	ret.Email = string(cmsg.Email())
+	ret.Description = string(cmsg.Description())
+	ret.Timestamp = cmsg.TimestampMillis()
+	ret.UserTimestamp = cmsg.UserTimestampMillis()
+	ret.Signature = string(cmsg.Signature())
+	return ret, nil
 }
 
 // GetCommittedValue returns the value of a commit. If the commit isn't found, nil is returned.
 func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value) (types.Value, error) {
-	if sm, ok := cv.(types.SerialMessage); ok {
-		data := []byte(sm)
-		if serial.GetFileID(data) != serial.CommitFileID {
-			return nil, errors.New("GetCommittedValue: provided value is not a commit.")
-		}
-		var cmsg serial.Commit
-		err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
-		if err != nil {
-			return nil, err
-		}
-		var roothash hash.Hash
-		copy(roothash[:], cmsg.RootBytes())
-		return vr.ReadValue(ctx, roothash)
+	sm, ok := cv.(types.SerialMessage)
+	if !ok {
+		return nil, fmt.Errorf("expected SerialMessage type for commit value, found %T", cv)
 	}
 
-	c, ok := cv.(types.Struct)
-	if !ok {
+	data := []byte(sm)
+	if serial.GetFileID(data) != serial.CommitFileID {
 		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
 	}
-	if c.Name() != commitName {
-		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
+	var cmsg serial.Commit
+	err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
 	}
-	v, _, err := c.MaybeGet(valueField)
-	return v, err
+	var roothash hash.Hash
+	copy(roothash[:], cmsg.RootBytes())
+	return vr.ReadValue(ctx, roothash)
 }
 
 func GetCommitRootHash(cv types.Value) (hash.Hash, error) {
-	if sm, ok := cv.(types.SerialMessage); ok {
-		data := []byte(sm)
-		if serial.GetFileID(data) != serial.CommitFileID {
-			return hash.Hash{}, errors.New("GetCommitRootHash: provided value is not a commit.")
-		}
-		var cmsg serial.Commit
-		err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
-		if err != nil {
-			return hash.Hash{}, err
-		}
-		var roothash hash.Hash
-		copy(roothash[:], cmsg.RootBytes())
-		return roothash, nil
+	sm, ok := cv.(types.SerialMessage)
+	if !ok {
+		return hash.Hash{}, fmt.Errorf("expected SerialMessage type for commit value, found %T", cv)
 	}
 
-	return hash.Hash{}, errors.New("GetCommitRootHash: Only supports modern storage formats.")
+	data := []byte(sm)
+	if serial.GetFileID(data) != serial.CommitFileID {
+		return hash.Hash{}, errors.New("GetCommitRootHash: provided value is not a commit.")
+	}
+	var cmsg serial.Commit
+	err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	var roothash hash.Hash
+	copy(roothash[:], cmsg.RootBytes())
+	return roothash, nil
 }
 
 func parentsToQueue(ctx context.Context, commits []*Commit, q *CommitByHeightHeap, vr types.ValueReader) error {

@@ -30,7 +30,6 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -109,20 +108,4 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	// Ref (one child chunk)
 	test(mustValue(vrw.WriteValue(context.Background(), types.Float(42))))
 
-	// Prolly tree with multiple child chunks
-	items := make([]types.Value, 10000)
-	for i := 0; i < len(items); i++ {
-		items[i] = types.Float(i)
-	}
-	l, err := types.NewList(context.Background(), vrw, items...)
-	s.NoError(err)
-
-	numChildChunks := 0
-	err = types.WalkAddrs(l, vrw.Format(), func(_ hash.Hash, _ bool) error {
-		numChildChunks++
-		return nil
-	})
-	s.NoError(err)
-	s.True(numChildChunks > 0)
-	test(l)
 }
