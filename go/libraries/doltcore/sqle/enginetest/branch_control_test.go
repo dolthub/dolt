@@ -356,6 +356,17 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{
+		Name: "DOLT_MERGE",
+		SetUpScript: []string{
+			"INSERT INTO test VALUES (2, 2);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'message');",
+			"CALL DOLT_CHECKOUT('other');",
+		},
+		Query:       "CALL DOLT_MERGE('main');",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
 		Name:        "DOLT_RESET",
 		Query:       "CALL DOLT_RESET();",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
@@ -1474,84 +1485,74 @@ var BranchControlTests = []BranchControlTest{
 				Query:    "SELECT * FROM test ORDER BY pk;",
 				Expected: []sql.Row{{1, 1}},
 			},
-			// Merge permission blocks INSERT
+			// Merge permission blocks writes
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "INSERT INTO test VALUES (3, 3);",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission blocks UPDATE
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "UPDATE test SET v1 = 10 WHERE pk = 1;",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission blocks DELETE
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "DELETE FROM test WHERE pk = 1;",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission blocks CREATE TABLE
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "CREATE TABLE test2 (pk BIGINT PRIMARY KEY);",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission blocks DROP TABLE
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "DROP TABLE test;",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission blocks DOLT_ADD
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "CALL DOLT_ADD('-A');",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission blocks DOLT_COMMIT
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "CALL DOLT_COMMIT('--allow-empty', '-m', 'msg');",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission blocks DOLT_RESET
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "CALL DOLT_RESET();",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission blocks DOLT_CLEAN
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "CALL DOLT_CLEAN();",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission blocks DOLT_REVERT
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "CALL DOLT_REVERT();",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission allows create branch
+			// Merge permission allows create branch/tag
 			{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('new_branch');",
 				Expected: []sql.Row{{0}},
 			},
-			// Merge permission allows create tag
 			{
 				User:     "testuser",
 				Host:     "localhost",
