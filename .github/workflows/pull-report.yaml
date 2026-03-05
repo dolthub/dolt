@@ -96,7 +96,7 @@ jobs:
                 issue_number: issue_number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: `@${ACTOR} ${FORMAT}\n ${resData}`
+                body: `@${ACTOR} ${FORMAT}\n${resData}`
               });
             }
         env:
