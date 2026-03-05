@@ -194,22 +194,10 @@ func parseGitRemoteFactoryURL(urlObj *url.URL, params map[string]interface{}) (r
 // user's home directory.
 func gitRemoteURLString(u *url.URL) string {
 	if strings.ToLower(u.Scheme) == "ssh" && strings.HasPrefix(u.Path, "/./") {
-		// Can only reconstruct SCP-style when there is no explicit port
-		// and no password in the userinfo.
-		if u.Port() != "" {
-			return u.String()
-		}
-		if u.User != nil {
-			if _, hasPassword := u.User.Password(); hasPassword {
-				return u.String()
-			}
-		}
 		// Reconstruct SCP-style: [user@]host:relativePath
-		host := u.Hostname()
+		host := u.Host
 		if u.User != nil {
-			if username := u.User.Username(); username != "" {
-				host = username + "@" + host
-			}
+			host = u.User.String() + "@" + u.Host
 		}
 		return host + ":" + strings.TrimPrefix(u.Path, "/./")
 	}
