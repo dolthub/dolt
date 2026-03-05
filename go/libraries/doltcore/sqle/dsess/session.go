@@ -15,6 +15,8 @@
 package dsess
 
 import (
+	ast "github.com/dolthub/vitess/go/vt/sqlparser"
+
 	"context"
 	"errors"
 	"fmt"
@@ -1718,6 +1720,13 @@ func (d *DoltSession) Validate() {
 // sql engine through here.
 func (d *DoltSession) GCSafepointController() *gcctx.GCSafepointController {
 	return d.gcSafepointController
+}
+
+func (d *DoltSession) GetParserCache() map[string]ast.Statement {
+	if parseSess, ok := d.Session.(sql.ParserCacheSession); ok {
+		return parseSess.GetParserCache()
+	}
+	return nil
 }
 
 // initializeBranchWorkingSet checks if |db| is a branch revision database, and if |dbState|
