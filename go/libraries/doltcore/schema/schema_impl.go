@@ -353,7 +353,7 @@ func (si *schemaImpl) String() string {
 		b.WriteString(", name: ")
 		b.WriteString(col.Name)
 		b.WriteString(", type: ")
-		b.WriteString(col.KindString())
+		b.WriteString(col.TypeInfo.String())
 		b.WriteString(",\n")
 		return false, nil
 	}

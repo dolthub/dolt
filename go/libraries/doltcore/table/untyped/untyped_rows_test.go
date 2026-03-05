@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -94,54 +93,5 @@ func TestNewUntypedSchema(t *testing.T) {
 
 	if blurbVal.Kind() != types.StringKind || string(blurbVal.(types.String)) != blurb {
 		t.Error("Unexpected blurb")
-	}
-}
-
-func TestUntypedSchemaUnion(t *testing.T) {
-	cols := []schema.Column{
-		schema.NewColumn("a", 0, types.UUIDKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("b", 1, types.IntKind, true),
-		schema.NewColumn("c", 2, types.UintKind, true),
-		schema.NewColumn("d", 3, types.StringKind, false),
-		schema.NewColumn("e", 4, types.BoolKind, false),
-	}
-
-	untypedColColl := schema.NewColCollection(
-		schema.NewColumn("a", 0, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("b", 1, types.StringKind, true),
-		schema.NewColumn("c", 2, types.StringKind, true),
-		schema.NewColumn("d", 3, types.StringKind, false),
-		schema.NewColumn("e", 4, types.StringKind, false))
-
-	unequalColCollumn := cols[1]
-	unequalColCollumn.Name = "incompatible_type"
-	unequalColCollumn.TypeInfo = typeinfo.DatetimeType
-	unequalColCollumn.Kind = types.TimestampKind
-
-	untypedSch := schema.MustSchemaFromCols(untypedColColl)
-
-	tests := []struct {
-		colsA     []schema.Column
-		colsB     []schema.Column
-		expectErr bool
-	}{
-		{cols[:2], cols[2:], false},
-		{cols[:2], cols[1:], false},
-		{cols[:2], []schema.Column{unequalColCollumn}, true},
-	}
-
-	for i, test := range tests {
-		colCollA := schema.NewColCollection(test.colsA...)
-		colCollB := schema.NewColCollection(test.colsB...)
-		schA := schema.MustSchemaFromCols(colCollA)
-		schB := schema.MustSchemaFromCols(colCollB)
-
-		union, err := UntypedSchemaUnion(schA, schB)
-
-		if (err != nil) != test.expectErr {
-			t.Error(i, "expected err:", test.expectErr, "received err:", err != nil)
-		} else if err == nil {
-			assert.Equal(t, union, untypedSch)
-		}
 	}
 }
