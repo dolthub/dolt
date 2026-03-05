@@ -15,8 +15,6 @@
 package dsess
 
 import (
-	ast "github.com/dolthub/vitess/go/vt/sqlparser"
-
 	"context"
 	"errors"
 	"fmt"
@@ -26,6 +24,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
