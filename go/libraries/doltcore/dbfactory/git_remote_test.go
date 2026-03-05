@@ -76,6 +76,16 @@ func TestGitRemoteURLString(t *testing.T) {
 			rawURL:   "ssh://myhost/./relative/repo.git",
 			expected: "myhost:relative/repo.git",
 		},
+		{
+			name:     "ssh with port falls back to full URL",
+			rawURL:   "ssh://git@myhost:2222/./relative/repo.git",
+			expected: "ssh://git@myhost:2222/./relative/repo.git",
+		},
+		{
+			name:     "ssh with password falls back to full URL",
+			rawURL:   "ssh://user:pass@myhost/./relative/repo.git",
+			expected: "ssh://user:pass@myhost/./relative/repo.git",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

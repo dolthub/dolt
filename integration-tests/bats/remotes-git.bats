@@ -573,9 +573,13 @@ seed_git_remote_branch() {
     # Acceptable forms:
     #   git@myhost:relative/repo.git          (SCP-style, preserves relative)
     #   ssh://git@myhost/./relative/repo.git  (explicit relative marker)
-    if [[ "$recorded_url" == "ssh://git@myhost/relative/repo.git" ]]; then
-        echo "BUG: SCP-style relative path was made absolute: $recorded_url"
-        echo "The path 'relative/repo.git' must not become '/relative/repo.git'"
+    if [[ "$recorded_url" != "git@myhost:relative/repo.git" && \
+          "$recorded_url" != "ssh://git@myhost/./relative/repo.git" ]]; then
+        echo "BUG: Unexpected URL passed to git remote add: $recorded_url"
+        echo "Expected one of:"
+        echo "  git@myhost:relative/repo.git"
+        echo "  ssh://git@myhost/./relative/repo.git"
+        echo "Got: $recorded_url"
         false
     fi
 }
