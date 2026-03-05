@@ -47,7 +47,7 @@ jobs:
             
             let resData = '';
             fs = require('fs');
-            fs.readFile(`${GITHUB_WORKSPACE}/results.log`, 'utf8', function (err,data) {
+            fs.readFile(`${GITHUB_WORKSPACE}/results.log`, 'utf8', function (err, data) {
               if (err) {
                 return console.log(err);
               }
@@ -56,11 +56,9 @@ jobs:
             
             // Consider also deleting stale sql-correctness comments
             // Both correctness and performance are posted/deleted here, they may delete each other
-            var commentMarker = '';
             if (JOB_TYPE == "performance-benchmarking") {
-              commentMarker = '<!-- go-run-output -->';
-              body = `${commentMarker}\n@${ACTOR} ${FORMAT}\n ` + resData
-            
+              const commentMarker = '<!-- go-run-output -->';
+
               // List comments on the PR
               const { data: comments } = await github.rest.issues.listComments({
                 issue_number: issue_number,
@@ -82,7 +80,7 @@ jobs:
                   comment_id: comment.id,
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  body: body
+                  body: `${commentMarker}\n@${ACTOR} ${FORMAT}\n${resData}`
                 })
               } else {
                 // Create a new comment
@@ -90,7 +88,7 @@ jobs:
                   issue_number: issue_number,
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  body: body
+                  body: `${commentMarker}\n@${ACTOR} ${FORMAT}\n${resData}`
                 });
               }
             } else {
@@ -98,7 +96,7 @@ jobs:
                 issue_number: issue_number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: body
+                body: `@${ACTOR} ${FORMAT}\n${resData}`
               });
             }
         env:
