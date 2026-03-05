@@ -74,7 +74,15 @@ func NormalizeGitRemoteUrl(urlArg string) (normalized string, ok bool, err error
 	// scp-like ssh: [user@]host:path/repo.git (no scheme, no ://)
 	if isScpLikeGitRemote(urlArg) {
 		host, p := splitScpLike(urlArg)
-		ssh := "git+ssh://" + host + "/" + strings.TrimPrefix(p, "/")
+		var pathPart string
+		if strings.HasPrefix(p, "/") {
+			// Absolute path: git@host:/abs/repo.git → /abs/repo.git
+			pathPart = p
+		} else {
+			// Relative path: git@host:path.git → /./path.git
+			pathPart = "/./" + p
+		}
+		ssh := "git+ssh://" + host + pathPart
 		u, err := url.Parse(ssh)
 		if err != nil {
 			return "", false, err
