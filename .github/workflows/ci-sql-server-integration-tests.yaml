@@ -2,10 +2,10 @@ name: sql-server Integration Tests
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'go/**'
-      - 'integration-tests/go-sql-server-driver/**'
+      - "go/**"
+      - "integration-tests/go-sql-server-driver/**"
 
 concurrency:
   group: ci-sql-server-integration-tests-${{ github.event.pull_request.number || github.ref }}
@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os:  [ ubuntu-22.04 ]
+        os: [ubuntu-22.04]
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go 1.x
@@ -39,5 +39,5 @@ jobs:
       - name: Test all
         run: |
           export DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt"
-          go test .
+          go test . -v
         working-directory: ./integration-tests/go-sql-server-driver
