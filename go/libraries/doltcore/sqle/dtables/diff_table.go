@@ -702,7 +702,7 @@ func SelectFuncForFilters(ctx *sql.Context, vr types.ValueReader, filters []sql.
 		schema.NewColumn(fromCommitDate, fromCommitDateTag, types.TimestampKind, false),
 	)
 
-	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(ctx, vr, schema.UnkeyedSchemaFromCols(colColl), filters)
+	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(ctx, schema.UnkeyedSchemaFromCols(colColl), filters)
 
 	if err != nil {
 		return nil, err
