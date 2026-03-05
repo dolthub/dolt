@@ -251,15 +251,6 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 	}
 	// Get the permissions for the branch, user, and host combination
 	_, perms := controller.Access.Match(database, branch, user, host)
-	// Higher permissions imply lower ones: Admin > Write > Merge > Read.
-	// Expand the matched perms to include all implied permissions.
-	if perms&Permissions_Admin == Permissions_Admin {
-		perms |= Permissions_Write | Permissions_Merge | Permissions_Read
-	} else if perms&Permissions_Write == Permissions_Write {
-		perms |= Permissions_Merge | Permissions_Read
-	} else if perms&Permissions_Merge == Permissions_Merge {
-		perms |= Permissions_Read
-	}
 	if perms&flags == flags {
 		return nil
 	}

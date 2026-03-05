@@ -109,6 +109,7 @@ func (binlog *Binlog) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	// Write the binlog
 	serial.BranchControlBinlogStart(b)
 	serial.BranchControlBinlogAddRows(b, rows)
+	serial.BranchControlBinlogAddVersion(b, 1)
 	return serial.BranchControlBinlogEnd(b)
 }
 
@@ -122,6 +123,7 @@ func (binlog *Binlog) Deserialize(fb *serial.BranchControlBinlog) error {
 		return fmt.Errorf("cannot deserialize to a non-empty binlog")
 	}
 	// Initialize the rows
+	version := fb.Version()
 	binlog.rows = make([]BinlogRow, fb.RowsLength())
 	// Read the rows
 	for i := 0; i < fb.RowsLength(); i++ {
@@ -130,13 +132,17 @@ func (binlog *Binlog) Deserialize(fb *serial.BranchControlBinlog) error {
 		if err != nil {
 			return fmt.Errorf("cannot deserialize binlog, it was created with a later version of Dolt")
 		}
+		perms := serialBinlogRow.Permissions()
+		if version == 0 {
+			perms = migratePermissionsV0(perms)
+		}
 		binlog.rows[i] = BinlogRow{
 			IsInsert:    serialBinlogRow.IsInsert(),
 			Database:    string(serialBinlogRow.Database()),
 			Branch:      string(serialBinlogRow.Branch()),
 			User:        string(serialBinlogRow.User()),
 			Host:        string(serialBinlogRow.Host()),
-			Permissions: serialBinlogRow.Permissions(),
+			Permissions: perms,
 		}
 	}
 	return nil
@@ -175,6 +181,18 @@ func (binlog *Binlog) Delete(database string, branch string, user string, host s
 // Rows returns the underlying rows.
 func (binlog *Binlog) Rows() []BinlogRow {
 	return binlog.rows
+}
+
+// migratePermissionsV0 remaps permissions from v0 (pre-merge-permission) format.
+// In v0: Admin=1, Write=2, Read=4. In v1: Admin=1, Write=2, Merge=4, Read=8.
+// Bit 2 (value 4) meant Read in v0 but means Merge in v1, so we shift it to bit 3.
+func migratePermissionsV0(perms uint64) uint64 {
+	const oldRead = uint64(4)
+	const newRead = uint64(8)
+	if perms&oldRead != 0 {
+		perms = (perms &^ oldRead) | newRead
+	}
+	return perms
 }
 
 // Serialize returns the offset for the BinlogRow written to the given builder.
