@@ -132,7 +132,7 @@ jobs:
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
-          bats --tap $BATS_FILTER .
+          bats --print-output-on-failure --tap $BATS_FILTER .
         working-directory: ./integration-tests/bats
       - name: Test all Unix, SQL_ENGINE=remote-engine
         # If we have AWS credentials, we run these remote-engine tests here instead of in the separate job.
@@ -142,5 +142,5 @@ jobs:
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
-          bats --tap $BATS_FILTER .
+          bats --print-output-on-failure --tap $BATS_FILTER .
         working-directory: ./integration-tests/bats
