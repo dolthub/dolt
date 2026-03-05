@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,6 +48,43 @@ func shortTempDir(t *testing.T) string {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return dir
+}
+
+func TestGitRemoteURLString(t *testing.T) {
+	tests := []struct {
+		name     string
+		rawURL   string
+		expected string
+	}{
+		{
+			name:     "ssh relative path reconstructs SCP-style",
+			rawURL:   "ssh://git@myhost/./relative/repo.git",
+			expected: "git@myhost:relative/repo.git",
+		},
+		{
+			name:     "ssh absolute path unchanged",
+			rawURL:   "ssh://git@myhost/abs/repo.git",
+			expected: "ssh://git@myhost/abs/repo.git",
+		},
+		{
+			name:     "https unchanged",
+			rawURL:   "https://example.com/org/repo.git",
+			expected: "https://example.com/org/repo.git",
+		},
+		{
+			name:     "ssh no user relative path",
+			rawURL:   "ssh://myhost/./relative/repo.git",
+			expected: "myhost:relative/repo.git",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u, err := url.Parse(tt.rawURL)
+			require.NoError(t, err)
+			got := gitRemoteURLString(u)
+			require.Equal(t, tt.expected, got)
+		})
+	}
 }
 
 func TestGitRemoteFactory_GitFile_RequiresGitCacheRootParam(t *testing.T) {

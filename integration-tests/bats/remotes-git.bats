@@ -536,6 +536,121 @@ seed_git_remote_branch() {
     [[ "$output" =~ "terminal prompts disabled" ]] || false
 }
 
+@test "remotes-git: scp-style relative path is not converted to absolute (#10564)" {
+    # Regression test for https://github.com/dolthub/dolt/issues/10564
+    # When a user adds a remote as `git@host:relative/repo.git` (SCP-style,
+    # relative path), the path must NOT become absolute when passed to git.
+    # Bug: dolt was converting this to `ssh://git@host/relative/repo.git`
+    # which git interprets as absolute path `/relative/repo.git`.
+
+    install_fake_git_url_recorder
+
+    old_path="$PATH"
+    export PATH="$BATS_TMPDIR/fakebin:$PATH"
+    export DOLT_IGNORE_LOCK_FILE=1
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -m "init"
+    dolt remote add origin git@myhost:relative/repo.git
+
+    # Trigger CreateDB → ensureGitRemoteURL → git remote add (in internal cache repo).
+    # The push will ultimately fail (fake host), but we only need the remote-add to fire.
+    run dolt push origin main
+
+    export PATH="$old_path"
+
+    # The fake git recorded the URL it received for `git remote add`.
+    [ -f "$BATS_TMPDIR/recorded_remote_urls" ]
+    recorded_url=$(tail -1 "$BATS_TMPDIR/recorded_remote_urls")
+
+    # The URL passed to git must NOT convert the relative SCP path into an
+    # absolute SSH path.  `ssh://git@myhost/relative/repo.git` is wrong because
+    # the leading `/` makes git send `git-upload-pack '/relative/repo.git'` to
+    # the server — an absolute filesystem path.
+    #
+    # Acceptable forms:
+    #   git@myhost:relative/repo.git          (SCP-style, preserves relative)
+    #   ssh://git@myhost/./relative/repo.git  (explicit relative marker)
+    if [[ "$recorded_url" == "ssh://git@myhost/relative/repo.git" ]]; then
+        echo "BUG: SCP-style relative path was made absolute: $recorded_url"
+        echo "The path 'relative/repo.git' must not become '/relative/repo.git'"
+        false
+    fi
+}
+
+install_fake_git_url_recorder() {
+    # Fake git that records the URL passed to `git remote add` so tests can
+    # inspect whether SCP-style relative paths survive normalization intact.
+    # Behaves like install_fake_git_auth_failure but also writes the remote-add
+    # URL to a well-known file for later assertion.
+    mkdir -p "$BATS_TMPDIR/fakebin"
+    cat > "$BATS_TMPDIR/fakebin/git" <<'FAKEGIT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+git_dir=""
+if [[ "${1:-}" == "--git-dir" ]]; then
+  git_dir="${2:-}"
+  shift 2
+fi
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  init)
+    if [[ "${1:-}" == "--bare" ]]; then
+      mkdir -p "$git_dir"
+      exit 0
+    fi
+    ;;
+  remote)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      get-url)
+        shift || true # consume --
+        name="${1:-}"
+        f="${git_dir}/remote_${name}_url"
+        if [[ -f "$f" ]]; then
+          cat "$f"
+          exit 0
+        fi
+        echo "fatal: No such remote '$name'" >&2
+        exit 2
+        ;;
+      add|set-url)
+        shift || true # consume --
+        name="${1:-}"; url="${2:-}"
+        mkdir -p "$git_dir"
+        printf "%s" "$url" > "${git_dir}/remote_${name}_url"
+        # Record URL for test assertions.
+        printf "%s\n" "$url" >> "${BATS_TMPDIR}/recorded_remote_urls"
+        exit 0
+        ;;
+    esac
+    ;;
+  ls-remote)
+    # Return a dummy branch so ensureRemoteHasBranches succeeds, but the
+    # subsequent fetch will fail.  That's fine — we only need the remote-add
+    # URL to be recorded.
+    echo "0000000000000000000000000000000000000000	refs/heads/main"
+    exit 0
+    ;;
+  fetch)
+    echo "fatal: could not connect to 'myhost'" >&2
+    exit 128
+    ;;
+esac
+
+echo "fatal: unknown command" >&2
+exit 128
+FAKEGIT
+    chmod +x "$BATS_TMPDIR/fakebin/git"
+    rm -f "$BATS_TMPDIR/recorded_remote_urls"
+}
+
 install_fake_git_auth_failure() {
     mkdir -p "$BATS_TMPDIR/fakebin"
     cat > "$BATS_TMPDIR/fakebin/git" <<'EOF'
