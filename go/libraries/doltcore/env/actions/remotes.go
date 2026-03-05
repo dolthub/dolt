@@ -831,6 +831,7 @@ func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, de
 }
 
 type SyncRootsDBRelationship int
+
 const (
 	SyncRootsDBRelationshipUnknown = iota
 	SyncRootsDBRelationshipUnrelated
