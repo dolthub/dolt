@@ -246,6 +246,8 @@ func performMerge(
 				ctx.Warn(DoltMergeWarningCode, "%s", err.Error())
 				return ws, "", hasConflictsOrViolations, threeWayMerge, "", err
 			} else if actions.ErrCommitVerificationFailed.Is(err) {
+				// We don't return an error here because that rolls back the transaction, while we actually need the
+				// staged data to allow the user to address the verification problem.
 				return ws, "", noConflictsOrViolations, threeWayMerge, err.Error(), nil
 			} else if err != nil {
 				return ws, "", noConflictsOrViolations, threeWayMerge, "", err
