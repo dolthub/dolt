@@ -87,13 +87,10 @@ func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, 
 }
 
 type Result struct {
-	Root            doltdb.RootValue
-	SchemaConflicts []SchemaConflict
-	Stats           map[doltdb.TableName]*MergeStats
-	// VerificationFailureErr is set when commit verification tests fail during a cherry-pick or merge.
-	// When set, the operation is halted and the workspace is left dirty so the user can fix the
-	// failing tests and retry using --continue (cherry-pick) or CALL dolt_commit() (merge).
-	VerificationFailureErr error
+	Root                  doltdb.RootValue
+	SchemaConflicts       []SchemaConflict
+	Stats                 map[doltdb.TableName]*MergeStats
+	CommitVerificationErr error
 }
 
 func (r Result) HasSchemaConflicts() bool {

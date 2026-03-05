@@ -121,15 +121,14 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, e
 	}
 
 	if mergeResult != nil {
-		if mergeResult.VerificationFailureErr != nil {
-			// Commit the transaction to persist the dirty working set and merge state to disk,
-			// then return the specific verification error. The caller (CLI or SQL client) receives
-			// the error message including the failing test name and details.
+		if mergeResult.CommitVerificationErr != nil {
+			// Commit the transaction to persist the dirty working set to the staged working set.
+			// This allows the user to address the verification failure and then `--continue` the cherry-pick.
 			doltSession := dsess.DSessFromSess(ctx.Session)
 			if txErr := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); txErr != nil {
 				return "", 0, 0, 0, txErr
 			}
-			return "", 0, 0, 0, mergeResult.VerificationFailureErr
+			return "", 0, 0, 0, mergeResult.CommitVerificationErr
 		}
 		return "",
 			mergeResult.CountOfTablesWithDataConflicts(),

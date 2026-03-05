@@ -144,16 +144,13 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		// Returning nil error instead lets CommitTransaction persist the staged changes and merge
 		// state, so the user can fix the failing tests and --continue.
 		if actions.ErrCommitVerificationFailed.Is(err) {
-			// Build the new working set: start from the pre-apply WS (so preMergeWorking
-			// = original working root for correct abort behavior), then apply the current
-			// working and staged roots.
 			newWs := preApplyWs.StartCherryPick(originalCommit, commit).
 				WithWorkingRoot(roots.Working).
 				WithStagedRoot(roots.Staged)
 			if wsErr := doltSession.SetWorkingSet(ctx, dbName, newWs); wsErr != nil {
 				return "", nil, wsErr
 			}
-			mergeResult.VerificationFailureErr = err
+			mergeResult.CommitVerificationErr = err
 			return "", mergeResult, nil
 		}
 		return "", nil, err
@@ -336,9 +333,6 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)
 	if err != nil {
-		// If verification failed, return the specific error so the caller can surface the failing
-		// test details. The merge state on disk remains active (it was committed in the previous
-		// cherry-pick call), so the user can fix the failing tests and --continue again.
 		if actions.ErrCommitVerificationFailed.Is(err) {
 			return "", 0, 0, 0, err
 		}

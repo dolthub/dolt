@@ -144,7 +144,6 @@ var ErrRebaseDataConflict = goerrors.NewKind(RebaseDataConflictPrefix + " %s (%s
 	"Resolve the conflicts and remove them from the dolt_conflicts_<table> tables, " +
 	"then continue the rebase by calling dolt_rebase('--continue')")
 
-// RebaseVerificationFailedPrefix is a prefix used by ErrRebaseVerificationFailed.
 const RebaseVerificationFailedPrefix = "commit verification failed while rebasing commit"
 
 // ErrRebaseVerificationFailed is used when commit verification tests fail while rebasing a commit.
@@ -993,10 +992,7 @@ func handleRebaseCherryPick(
 		return newRebaseError(ErrRebaseDataConflict.New(planStep.CommitHash, planStep.CommitMsg))
 	}
 
-	// If commit verification failed, commit the SQL transaction to preserve the dirty state (staged changes
-	// and merge state set by cherry-pick), then return an error to halt the rebase. The user can fix the
-	// failing tests, run dolt_add(), then call dolt_rebase('--continue') to retry.
-	if mergeResult != nil && mergeResult.VerificationFailureErr != nil {
+	if mergeResult != nil && mergeResult.CommitVerificationErr != nil {
 		if doltSession.GetTransaction() == nil {
 			_, txErr := doltSession.StartTransaction(ctx, sql.ReadWrite)
 			if txErr != nil {
@@ -1006,11 +1002,7 @@ func handleRebaseCherryPick(
 		if txErr := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); txErr != nil {
 			return newRebaseError(txErr)
 		}
-		// Return the verification failure error directly so the user sees the standard
-		// "commit verification failed: ..." message format, and so the engine tests can
-		// match against it exactly. The CLI detects this via isRebaseConflictError which
-		// checks for the "commit verification failed:" prefix.
-		return newRebaseError(mergeResult.VerificationFailureErr)
+		return newRebaseError(mergeResult.CommitVerificationErr)
 	}
 
 	// If this is an edit action and no conflicts occurred, pause the rebase to allow user modifications

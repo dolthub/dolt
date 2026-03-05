@@ -188,7 +188,7 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "cherry-pick with test verification enabled - tests pass",
+		Name: "cherry-pick with test verification enabled - test pass, then test fails",
 		SetUpScript: []string{
 			"SET GLOBAL dolt_commit_verification_groups = '*'",
 			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100))",
@@ -209,19 +209,29 @@ var DoltCommitVerificationScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				// Verify that tests _can_ pass by cherry-picking the first commit, which adds Bob and updates the test to expect 2 users.
 				Query:    "CALL dolt_cherry_pick(@commit_1_hash)",
 				Expected: []sql.Row{{commitHash, int64(0), int64(0), int64(0)}},
 			},
 			{
-				// Verification fails; returns specific error, dirty state preserved
 				Query:          "CALL dolt_cherry_pick(@commit_2_hash)",
 				ExpectedErrStr: "commit verification failed: test_user_count_update (Assertion failed: expected_single_value equal to 2, got 3)",
 			},
 			{
-				// Abort restores clean state
+				// users table is staged (merged content with charlie added is preserved)
+				Query:    "SELECT staged FROM dolt_status WHERE table_name = 'users'",
+				Expected: []sql.Row{{uint64(1)}},
+			},
+			{
+				// --abort restores clean state, with Bob in the table (from first cherry-pick).
 				Query:            "CALL dolt_cherry_pick('--abort')",
 				SkipResultsCheck: true,
 			},
+			{
+				Query:    "SELECT COUNT(*) FROM users",
+				Expected: []sql.Row{{int64(2)}},
+			},
+			{},
 			{ // Test harness bleeds GLOBAL variable changes across tests, so reset after each test.
 				Query:            "SET GLOBAL dolt_commit_verification_groups = ''",
 				SkipResultsCheck: true,

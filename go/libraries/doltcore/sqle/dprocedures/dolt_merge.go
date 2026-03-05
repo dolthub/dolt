@@ -246,8 +246,6 @@ func performMerge(
 				ctx.Warn(DoltMergeWarningCode, "%s", err.Error())
 				return ws, "", hasConflictsOrViolations, threeWayMerge, "", err
 			} else if actions.ErrCommitVerificationFailed.Is(err) {
-				// Verification failed: working set already has dirty merge state in the session.
-				// Return without a SQL error so the transaction commits and preserves dirty state.
 				return ws, "", noConflictsOrViolations, threeWayMerge, err.Error(), nil
 			} else if err != nil {
 				return ws, "", noConflictsOrViolations, threeWayMerge, "", err
@@ -319,9 +317,6 @@ func performMerge(
 		commit, _, err = doDoltCommit(ctx, args)
 		if err != nil {
 			if actions.ErrCommitVerificationFailed.Is(err) {
-				// Verification failed: the working set already has the dirty merge state set in the session
-				// (SetWorkingSet was called before doDoltCommit). Return without a SQL error so the
-				// transaction commits and preserves the dirty state for the user to fix and retry.
 				return ws, "", noConflictsOrViolations, threeWayMerge, err.Error(), nil
 			}
 			return ws, commit, noConflictsOrViolations, threeWayMerge, "", err
