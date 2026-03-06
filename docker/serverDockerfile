@@ -43,15 +43,13 @@ FROM base AS download-binary
 ARG DOLT_VERSION
 RUN if [ "$DOLT_VERSION" = "latest" ]; then \
         # Fetch latest version number from GitHub API
-        ACTUAL_VERSION=$(curl -sI https://github.com/dolthub/dolt/releases/latest \
+        DOLT_VERSION=$(curl -sI https://github.com/dolthub/dolt/releases/latest \
             | grep -i location \
             | sed 's|.*/v||' \
             | tr -d '[:space:]'); \
-    else \
-        ACTUAL_VERSION=$DOLT_VERSION; \
     fi && \
-    if [ "$ACTUAL_VERSION" != "source" ]; then \
-        curl -L "https://github.com/dolthub/dolt/releases/download/v${ACTUAL_VERSION}/install.sh" | bash; \
+    if [ "$DOLT_VERSION" != "source" ]; then \
+        curl -L "https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/install.sh" | bash; \
     fi
 
 
