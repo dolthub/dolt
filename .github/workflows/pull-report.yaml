@@ -47,7 +47,7 @@ jobs:
             
             let resData = '';
             fs = require('fs');
-            fs.readFileSync(`${GITHUB_WORKSPACE}/results.log`, 'utf8', function (err, data) {
+            await fs.readFile(`${GITHUB_WORKSPACE}/results.log`, 'utf8', function (err, data) {
               if (err) {
                 return console.log(err);
               }
