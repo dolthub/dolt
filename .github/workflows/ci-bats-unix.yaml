@@ -103,11 +103,7 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         run: sudo apt-get install -y pcre2-utils
       - name: Install Maven
-        working-directory: ./.ci_bin
-        run: |
-          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.12/binaries/apache-maven-3.9.12-bin.tar.gz
-          tar -xf apache-maven-3.9.12-bin.tar.gz
-          echo "$(pwd)/apache-maven-3.9.12/bin" >> $GITHUB_PATH
+        run: sudo apt-get install -y maven
       - name: Install Hadoop
         working-directory: ./.ci_bin
         run: |
