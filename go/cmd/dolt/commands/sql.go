@@ -405,6 +405,8 @@ func queryMode(
 ) int {
 	_, continueOnError := apr.GetValue(continueFlag)
 
+	warnIfSingleCheckoutQuery(query)
+
 	input := strings.NewReader(query)
 	err := execBatchMode(ctx, qryist, input, continueOnError, format, binaryAsHex)
 	if err != nil {
@@ -412,6 +414,29 @@ func queryMode(
 	}
 
 	return 0
+}
+
+// warnIfSingleCheckoutQuery prints a warning to stderr if the query is a single
+// statement that calls dolt_checkout(). In single-query mode (`dolt sql -q`),
+// each invocation runs in its own session, so the checkout only applies to that
+// session and has no lasting effect.
+func warnIfSingleCheckoutQuery(query string) {
+	trimmed := strings.TrimSpace(query)
+	trimmed = strings.TrimSuffix(trimmed, ";")
+	trimmed = strings.TrimSpace(trimmed)
+
+	// Only warn for single statements — multiple statements separated by
+	// semicolons are valid (e.g. "call dolt_checkout('b'); select * from t").
+	if strings.Contains(trimmed, ";") {
+		return
+	}
+
+	lower := strings.ToLower(trimmed)
+	if strings.Contains(lower, "dolt_checkout") {
+		cli.PrintErrln("WARNING: dolt_checkout() in `dolt sql -q` only changes the branch for this single session, " +
+			"which ends immediately. The checked out branch will NOT persist after this command. " +
+			"Use `dolt checkout <branch>` instead, or include additional statements in the same -q invocation.")
+	}
 }
 
 func SaveQuery(ctx *sql.Context, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {
