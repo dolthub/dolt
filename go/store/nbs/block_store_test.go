@@ -618,7 +618,7 @@ type fakeConjoiner struct {
 	canned []cannedConjoin
 }
 
-func (fc *fakeConjoiner) conjoinRequired(ts tableSet) bool {
+func (fc *fakeConjoiner) conjoinRequired(ts *tableSet) bool {
 	if len(fc.canned) == 0 {
 		return false
 	}

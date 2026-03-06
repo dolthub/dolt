@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/errgroup"
@@ -47,8 +48,9 @@ var ErrDanglingRef = errors.New("dangling ref")
 
 const concurrentCompactions = 5
 
-func newTableSet(p tablePersister, q MemoryQuotaProvider) tableSet {
-	return tableSet{p: p, q: q, rl: make(chan struct{}, concurrentCompactions)}
+func newTableSet(p tablePersister, q MemoryQuotaProvider) *tableSet {
+	var cnt int32 = 1
+	return &tableSet{p: p, q: q, rl: make(chan struct{}, concurrentCompactions), cnt: &cnt, closeCh: make(chan struct{})}
 }
 
 // tableSet is an immutable set of persistable chunkSources.
@@ -57,9 +59,12 @@ type tableSet struct {
 	p               tablePersister
 	q               MemoryQuotaProvider
 	rl              chan struct{}
+
+	cnt     *int32
+	closeCh chan struct{}
 }
 
-func (ts tableSet) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
+func (ts *tableSet) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
 	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
 			has, gcb, err := haver.has(h, keeper)
@@ -90,7 +95,7 @@ func (ts tableSet) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
 	return f(ts.upstream)
 }
 
-func (ts tableSet) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
+func (ts *tableSet) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
 	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
 			has, gcb, err := haver.hasMany(addrs, keeper)
@@ -129,7 +134,7 @@ func (ts tableSet) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior,
 // consulted. Only used for part of the GC workflow where we want to have
 // access to all chunks in the store but need to check for existing chunk
 // presence in only a subset of its files.
-func (ts tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
+func (ts *tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
 	var remaining bool
 	var err error
 	var gcb gcBehavior
@@ -164,7 +169,7 @@ func (ts tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord, keeper 
 	return remaining, gcBehavior_Continue, nil
 }
 
-func (ts tableSet) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
+func (ts *tableSet) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, gcBehavior_Continue, err
 	}
@@ -198,7 +203,7 @@ func (ts tableSet) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (ts *tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
 			remaining, gcb, err := haver.getMany(ctx, eg, reqs, found, keeper, stats)
@@ -229,7 +234,7 @@ func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRe
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (ts *tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
 			remaining, gcb, err := haver.getManyCompressed(ctx, eg, reqs, found, keeper, stats)
@@ -260,7 +265,7 @@ func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, re
 	return f(ts.upstream)
 }
 
-func (ts tableSet) count() (uint32, error) {
+func (ts *tableSet) count() (uint32, error) {
 	f := func(css chunkSourceSet) (count uint32, err error) {
 		for _, haver := range css {
 			thisCount, err := haver.count()
@@ -289,7 +294,7 @@ func (ts tableSet) count() (uint32, error) {
 	return novelCount + upCount, nil
 }
 
-func (ts tableSet) uncompressedLen() (uint64, error) {
+func (ts *tableSet) uncompressedLen() (uint64, error) {
 	f := func(css chunkSourceSet) (data uint64, err error) {
 		for _, haver := range css {
 			uncmpLen, err := haver.uncompressedLen()
@@ -318,7 +323,7 @@ func (ts tableSet) uncompressedLen() (uint64, error) {
 	return novelCount + upCount, nil
 }
 
-func (ts tableSet) physicalLen() (uint64, error) {
+func (ts *tableSet) physicalLen() (uint64, error) {
 	f := func(css chunkSourceSet) (data uint64, err error) {
 		for _, haver := range css {
 			data += haver.currentSize()
@@ -339,7 +344,9 @@ func (ts tableSet) physicalLen() (uint64, error) {
 	return lenNovel + lenUp, nil
 }
 
-func (ts tableSet) close() (err error) {
+func (ts *tableSet) close() (err error) {
+	ts.release()
+	<-ts.closeCh
 	for _, t := range ts.novel {
 		err = errors.Join(err, t.close())
 	}
@@ -349,14 +356,24 @@ func (ts tableSet) close() (err error) {
 	return
 }
 
+func (ts *tableSet) acquire() {
+	atomic.AddInt32(ts.cnt, 1)
+}
+
+func (ts *tableSet) release() {
+	if new := atomic.AddInt32(ts.cnt, -1); new == 0 {
+		close(ts.closeCh)
+	}
+}
+
 // Size returns the number of tables in this tableSet.
-func (ts tableSet) Size() int {
+func (ts *tableSet) Size() int {
 	return len(ts.novel) + len(ts.upstream)
 }
 
 // append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBehavior, mt *memTable, checker refCheck, keeper keeperF, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (tableSet, gcBehavior, error) {
+func (ts *tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBehavior, mt *memTable, checker refCheck, keeper keeperF, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (*tableSet, gcBehavior, error) {
 	addrs := hash.NewHashSet()
 	for _, getAddrs := range mt.getChildAddrs {
 		getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Contains(h) })
@@ -372,25 +389,27 @@ func (ts tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBehav
 	sort.Sort(hasRecordByPrefix(mt.pendingRefs))
 	absent, err := checker(mt.pendingRefs)
 	if err != nil {
-		return tableSet{}, gcBehavior_Continue, err
+		return nil, gcBehavior_Continue, err
 	} else if absent.Size() > 0 {
-		return tableSet{}, gcBehavior_Continue, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
+		return nil, gcBehavior_Continue, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
 	}
 
 	cs, gcb, err := ts.p.Persist(ctx, fatalBehavior, mt, ts, keeper, stats)
 	if err != nil {
-		return tableSet{}, gcBehavior_Continue, err
+		return nil, gcBehavior_Continue, err
 	}
 	if gcb != gcBehavior_Continue {
-		return tableSet{}, gcb, nil
+		return nil, gcb, nil
 	}
 
-	newTs := tableSet{
+	newTs := &tableSet{
 		novel:    copyChunkSourceSet(ts.novel),
 		upstream: copyChunkSourceSet(ts.upstream),
 		p:        ts.p,
 		q:        ts.q,
 		rl:       ts.rl,
+		cnt:      ts.cnt,
+		closeCh:  ts.closeCh,
 	}
 	newTs.novel[cs.hash()] = cs
 	return newTs, gcBehavior_Continue, nil
@@ -398,18 +417,20 @@ func (ts tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBehav
 
 // flatten returns a new tableSet with |upstream| set to the union of ts.novel
 // and ts.upstream.
-func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
-	flattened := tableSet{
+func (ts *tableSet) flatten(ctx context.Context) (*tableSet, error) {
+	flattened := &tableSet{
 		upstream: copyChunkSourceSet(ts.upstream),
 		p:        ts.p,
 		q:        ts.q,
 		rl:       ts.rl,
+		cnt:      ts.cnt,
+		closeCh:  ts.closeCh,
 	}
 
 	for _, src := range ts.novel {
 		cnt, err := src.count()
 		if err != nil {
-			return tableSet{}, err
+			return nil, err
 		} else if cnt > 0 {
 			flattened.upstream[src.hash()] = src
 		}
@@ -425,7 +446,7 @@ func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 // For any files which appear in |novel| or |upstream|, this function
 // will return clones of the chunk sources, instead of opening them
 // anew.
-func (ts tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, stats *Stats) (chunkSourceSet, error) {
+func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, stats *Stats) (chunkSourceSet, error) {
 	ret := make(chunkSourceSet)
 	cleanup := func() {
 		for _, source := range ret {
@@ -483,7 +504,7 @@ func (ts tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, s
 
 // rebase returns a new tableSet holding the novel tables managed by |ts| and
 // those specified by |specs|.
-func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSourceSet, stats *Stats) (tableSet, error) {
+func (ts *tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSourceSet, stats *Stats) (*tableSet, error) {
 	// deduplicate |specs|
 	orig := specs
 	specs = make([]tableSpec, 0, len(orig))
@@ -511,14 +532,14 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSour
 		cnt, err := t.count()
 		if err != nil {
 			closeAll(novel)
-			return tableSet{}, err
+			return nil, err
 		} else if cnt == 0 {
 			continue
 		}
 		t2, err := t.clone()
 		if err != nil {
 			closeAll(novel)
-			return tableSet{}, err
+			return nil, err
 		}
 		novel[t2.hash()] = t2
 	}
@@ -551,19 +572,22 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSour
 	if err := eg.Wait(); err != nil {
 		closeAll(upstream)
 		closeAll(novel)
-		return tableSet{}, err
+		return nil, err
 	}
 
-	return tableSet{
+	var cnt int32 = 1
+	return &tableSet{
 		novel:    novel,
 		upstream: upstream,
 		p:        ts.p,
 		q:        ts.q,
 		rl:       ts.rl,
+		cnt:      &cnt,
+		closeCh:  make(chan struct{}),
 	}, nil
 }
 
-func (ts tableSet) toSpecs() ([]tableSpec, error) {
+func (ts *tableSet) toSpecs() ([]tableSpec, error) {
 	tableSpecs := make([]tableSpec, 0, ts.Size())
 	for a, src := range ts.novel {
 		if _, ok := ts.upstream[a]; ok {
@@ -594,7 +618,7 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 	return tableSpecs, nil
 }
 
-func tableSetCalcReads(ts tableSet, reqs []getRecord, blockSize uint64, keeper keeperF) (reads int, split, remaining bool, gcb gcBehavior, err error) {
+func tableSetCalcReads(ts *tableSet, reqs []getRecord, blockSize uint64, keeper keeperF) (reads int, split, remaining bool, gcb gcBehavior, err error) {
 	all := copyChunkSourceSet(ts.upstream)
 	for a, cs := range ts.novel {
 		all[a] = cs
