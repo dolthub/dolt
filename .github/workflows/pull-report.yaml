@@ -45,14 +45,8 @@ jobs:
             const { owner, repo } = context.repo;
             const issue_number = parseInt(ISSUE_NUMBER, 10);
             
-            let resData = '';
-            fs = require('fs');
-            await fs.readFile(`${GITHUB_WORKSPACE}/results.log`, 'utf8', function (err, data) {
-              if (err) {
-                return console.log(err);
-              }
-              resData = data
-            });
+            const fs = require('fs').promises;
+            const resData = await fs.readFile(`${GITHUB_WORKSPACE}/results.log`, 'utf8');
             
             // Consider also deleting stale sql-correctness comments
             // Both correctness and performance are posted/deleted here, they may delete each other
