@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -1719,13 +1718,6 @@ func (d *DoltSession) Validate() {
 // sql engine through here.
 func (d *DoltSession) GCSafepointController() *gcctx.GCSafepointController {
 	return d.gcSafepointController
-}
-
-func (d *DoltSession) GetParserCache() map[string]ast.Statement {
-	if parseSess, ok := d.Session.(sql.ParserCacheSession); ok {
-		return parseSess.GetParserCache()
-	}
-	return nil
 }
 
 // initializeBranchWorkingSet checks if |db| is a branch revision database, and if |dbState|
