@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package expreval provides go-mysql-server expression evaluation logic that works directly on
-// noms types.
+// Package expreval provides go-mysql-server expression evaluation logic that maps column values
+// stored as noms types to SQL type comparisons.
 package expreval

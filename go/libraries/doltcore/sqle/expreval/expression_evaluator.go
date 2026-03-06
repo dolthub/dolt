@@ -15,31 +15,28 @@
 package expreval
 
 import (
-	"context"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var errUnsupportedComparisonType = errors.NewKind("Unsupported Comparison Type.")
 var errUnknownColumn = errors.NewKind("Column %s not found.")
-var errInvalidConversion = errors.NewKind("Could not convert %s from %s to %s.")
 var errNotImplemented = errors.NewKind("Not Implemented: %s")
 
-// ExpressionFunc is a function that takes a map of tag to value and returns whether some set of criteria are true for
-// the set of values
-type ExpressionFunc func(ctx context.Context, vals map[uint64]types.Value) (bool, error)
+// ExpressionFunc is a function that takes a sql.Row and returns whether some set of criteria are true for
+// the row's values.
+type ExpressionFunc func(ctx *sql.Context, row sql.Row) (bool, error)
 
-// ExpressionFuncFromSQLExpressions returns an ExpressionFunc which represents the slice of sql.Expressions passed in
-func ExpressionFuncFromSQLExpressions(ctx *sql.Context, vr types.ValueReader, sch schema.Schema, expressions []sql.Expression) (ExpressionFunc, error) {
+// ExpressionFuncFromSQLExpressions returns an ExpressionFunc which represents the slice of sql.Expressions passed in.
+// The schema defines column names, types, and positions for row lookups.
+func ExpressionFuncFromSQLExpressions(ctx *sql.Context, sch sql.Schema, expressions []sql.Expression) (ExpressionFunc, error) {
 	var root ExpressionFunc
 	for _, exp := range expressions {
-		expFunc, err := getExpFunc(ctx, vr, sch, exp)
+		expFunc, err := getExpFunc(ctx, sch, exp)
 
 		if err != nil {
 			return nil, err
@@ -53,7 +50,7 @@ func ExpressionFuncFromSQLExpressions(ctx *sql.Context, vr types.ValueReader, sc
 	}
 
 	if root == nil {
-		root = func(ctx context.Context, vals map[uint64]types.Value) (bool, error) {
+		root = func(ctx *sql.Context, row sql.Row) (bool, error) {
 			return true, nil
 		}
 	}
@@ -61,26 +58,26 @@ func ExpressionFuncFromSQLExpressions(ctx *sql.Context, vr types.ValueReader, sc
 	return root, nil
 }
 
-func getExpFunc(ctx *sql.Context, vr types.ValueReader, sch schema.Schema, exp sql.Expression) (ExpressionFunc, error) {
+func getExpFunc(ctx *sql.Context, sch sql.Schema, exp sql.Expression) (ExpressionFunc, error) {
 	switch typedExpr := exp.(type) {
 	case *expression.Equals:
 		return newComparisonFunc(ctx, EqualsOp{}, typedExpr, sch)
 	case *expression.GreaterThan:
-		return newComparisonFunc(ctx, GreaterOp{vr}, typedExpr, sch)
+		return newComparisonFunc(ctx, GreaterOp{}, typedExpr, sch)
 	case *expression.GreaterThanOrEqual:
-		return newComparisonFunc(ctx, GreaterEqualOp{vr}, typedExpr, sch)
+		return newComparisonFunc(ctx, GreaterEqualOp{}, typedExpr, sch)
 	case *expression.LessThan:
-		return newComparisonFunc(ctx, LessOp{vr}, typedExpr, sch)
+		return newComparisonFunc(ctx, LessOp{}, typedExpr, sch)
 	case *expression.LessThanOrEqual:
-		return newComparisonFunc(ctx, LessEqualOp{vr}, typedExpr, sch)
+		return newComparisonFunc(ctx, LessEqualOp{}, typedExpr, sch)
 	case *expression.Or:
-		leftFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Left())
+		leftFunc, err := getExpFunc(ctx, sch, typedExpr.Left())
 
 		if err != nil {
 			return nil, err
 		}
 
-		rightFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Right())
+		rightFunc, err := getExpFunc(ctx, sch, typedExpr.Right())
 
 		if err != nil {
 			return nil, err
@@ -88,13 +85,13 @@ func getExpFunc(ctx *sql.Context, vr types.ValueReader, sch schema.Schema, exp s
 
 		return newOrFunc(leftFunc, rightFunc), nil
 	case *expression.And:
-		leftFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Left())
+		leftFunc, err := getExpFunc(ctx, sch, typedExpr.Left())
 
 		if err != nil {
 			return nil, err
 		}
 
-		rightFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Right())
+		rightFunc, err := getExpFunc(ctx, sch, typedExpr.Right())
 
 		if err != nil {
 			return nil, err
@@ -104,7 +101,7 @@ func getExpFunc(ctx *sql.Context, vr types.ValueReader, sch schema.Schema, exp s
 	case *expression.InTuple:
 		return newComparisonFunc(ctx, EqualsOp{}, typedExpr, sch)
 	case *expression.Not:
-		expFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Child)
+		expFunc, err := getExpFunc(ctx, sch, typedExpr.Child)
 		if err != nil {
 			return nil, err
 		}
@@ -117,8 +114,8 @@ func getExpFunc(ctx *sql.Context, vr types.ValueReader, sch schema.Schema, exp s
 }
 
 func newOrFunc(left ExpressionFunc, right ExpressionFunc) ExpressionFunc {
-	return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
-		lRes, err := left(ctx, vals)
+	return func(ctx *sql.Context, row sql.Row) (b bool, err error) {
+		lRes, err := left(ctx, row)
 
 		if err != nil {
 			return false, err
@@ -128,13 +125,13 @@ func newOrFunc(left ExpressionFunc, right ExpressionFunc) ExpressionFunc {
 			return true, nil
 		}
 
-		return right(ctx, vals)
+		return right(ctx, row)
 	}
 }
 
 func newAndFunc(left ExpressionFunc, right ExpressionFunc) ExpressionFunc {
-	return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
-		lRes, err := left(ctx, vals)
+	return func(ctx *sql.Context, row sql.Row) (b bool, err error) {
+		lRes, err := left(ctx, row)
 
 		if err != nil {
 			return false, err
@@ -144,13 +141,13 @@ func newAndFunc(left ExpressionFunc, right ExpressionFunc) ExpressionFunc {
 			return false, nil
 		}
 
-		return right(ctx, vals)
+		return right(ctx, row)
 	}
 }
 
 func newNotFunc(exp ExpressionFunc) ExpressionFunc {
-	return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
-		res, err := exp(ctx, vals)
+	return func(ctx *sql.Context, row sql.Row) (b bool, err error) {
+		res, err := exp(ctx, row)
 		if err != nil {
 			return false, err
 		}
@@ -216,10 +213,20 @@ func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, 
 	return variables, consts, compType, nil
 }
 
-var trueFunc = func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) { return true, nil }
-var falseFunc = func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) { return false, nil }
+var trueFunc = func(ctx *sql.Context, row sql.Row) (b bool, err error) { return true, nil }
+var falseFunc = func(ctx *sql.Context, row sql.Row) (b bool, err error) { return false, nil }
 
-func newComparisonFunc(ctx *sql.Context, op CompareOp, exp expression.BinaryExpression, sch schema.Schema) (ExpressionFunc, error) {
+// findSchemaCol finds a column in a sql.Schema by name (case-insensitive), returning its index and column.
+func findSchemaCol(name string, sch sql.Schema) (int, *sql.Column, bool) {
+	for i, col := range sch {
+		if strings.EqualFold(col.Name, name) {
+			return i, col, true
+		}
+	}
+	return -1, nil, false
+}
+
+func newComparisonFunc(ctx *sql.Context, op CompareOp, exp expression.BinaryExpression, sch sql.Schema) (ExpressionFunc, error) {
 	vars, consts, compType, err := GetComparisonType(exp)
 
 	if err != nil {
@@ -227,111 +234,122 @@ func newComparisonFunc(ctx *sql.Context, op CompareOp, exp expression.BinaryExpr
 	}
 
 	if compType == ConstConstCompare {
-		res, err := op.CompareLiterals(ctx, consts[0], consts[1])
-
+		n, err := compareLiterals(ctx, consts[0], consts[1])
 		if err != nil {
 			return nil, err
 		}
-
-		if res {
+		if op.ApplyCmp(n) {
 			return trueFunc, nil
-		} else {
-			return falseFunc, nil
 		}
+		return falseFunc, nil
 	} else if compType == VariableConstCompare {
 		colName := vars[0].Name()
-		col, ok := sch.GetAllCols().GetByNameCaseInsensitive(colName)
+		colIdx, col, ok := findSchemaCol(colName, sch)
 
 		if !ok {
 			return nil, errUnknownColumn.New(colName)
 		}
 
-		tag := col.Tag
-		nomsVal, err := LiteralToNomsValue(col.Kind, consts[0])
+		sqlType := col.Type
+		litIsNull := consts[0].Value() == nil
 
-		if err != nil {
-			return nil, err
+		var sqlLitVal interface{}
+		if !litIsNull {
+			sqlLitVal, _, err = sqlType.Convert(ctx, consts[0].Value())
+			if err != nil {
+				return nil, err
+			}
 		}
 
-		compareNomsValues := op.CompareNomsValues
-		compareToNil := op.CompareToNil
-
-		return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
-			colVal, ok := vals[tag]
-
-			if ok && !types.IsNull(colVal) {
-				return compareNomsValues(ctx, colVal, nomsVal)
-			} else {
-				return compareToNil(nomsVal)
+		return func(ctx *sql.Context, row sql.Row) (b bool, err error) {
+			val := row[colIdx]
+			if val != nil {
+				if litIsNull {
+					return false, nil
+				}
+				n, err := sqlType.Compare(ctx, val, sqlLitVal)
+				if err != nil {
+					return false, err
+				}
+				return op.ApplyCmp(n), nil
 			}
+			return op.CompareToNil(litIsNull), nil
 		}, nil
 	} else if compType == VariableVariableCompare {
 		col1Name := vars[0].Name()
-		col1, ok := sch.GetAllCols().GetByNameCaseInsensitive(col1Name)
+		col1Idx, col1, ok := findSchemaCol(col1Name, sch)
 
 		if !ok {
 			return nil, errUnknownColumn.New(col1Name)
 		}
 
 		col2Name := vars[1].Name()
-		col2, ok := sch.GetAllCols().GetByNameCaseInsensitive(col2Name)
+		col2Idx, _, ok := findSchemaCol(col2Name, sch)
 
 		if !ok {
 			return nil, errUnknownColumn.New(col2Name)
 		}
 
-		compareNomsValues := op.CompareNomsValues
-		compareToNull := op.CompareToNil
+		sqlType := col1.Type
+		return func(ctx *sql.Context, row sql.Row) (b bool, err error) {
+			v1 := row[col1Idx]
+			v2 := row[col2Idx]
 
-		tag1, tag2 := col1.Tag, col2.Tag
-		return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
-			v1 := vals[tag1]
-			v2 := vals[tag2]
-
-			if types.IsNull(v1) {
-				return compareToNull(v2)
-			} else {
-				return compareNomsValues(ctx, v1, v2)
+			if v1 == nil {
+				return op.CompareToNil(v2 == nil), nil
 			}
+			if v2 == nil {
+				return false, nil
+			}
+			n, err := sqlType.Compare(ctx, v1, v2)
+			if err != nil {
+				return false, err
+			}
+			return op.ApplyCmp(n), nil
 		}, nil
 	} else if compType == VariableInLiteralList {
 		colName := vars[0].Name()
-		col, ok := sch.GetAllCols().GetByNameCaseInsensitive(colName)
+		colIdx, col, ok := findSchemaCol(colName, sch)
 
 		if !ok {
 			return nil, errUnknownColumn.New(colName)
 		}
 
-		tag := col.Tag
+		sqlType := col.Type
 
-		// Get all the noms values
-		nomsVals := make([]types.Value, len(consts))
+		// Pre-convert all literal values to the column's SQL type
+		sqlVals := make([]interface{}, len(consts))
+		nullFlags := make([]bool, len(consts))
 		for i, c := range consts {
-			nomsVal, err := LiteralToNomsValue(col.Kind, c)
-			if err != nil {
-				return nil, err
+			if c.Value() == nil {
+				nullFlags[i] = true
+			} else {
+				sqlVals[i], _, err = sqlType.Convert(ctx, c.Value())
+				if err != nil {
+					return nil, err
+				}
 			}
-			nomsVals[i] = nomsVal
 		}
 
-		compareNomsValues := op.CompareNomsValues
-		compareToNil := op.CompareToNil
+		return func(ctx *sql.Context, row sql.Row) (b bool, err error) {
+			val := row[colIdx]
+			colIsNull := val == nil
 
-		return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
-			colVal, ok := vals[tag]
-
-			for _, nv := range nomsVals {
-				var lb bool
-				if ok && !types.IsNull(colVal) {
-					lb, err = compareNomsValues(ctx, colVal, nv)
+			for i, sv := range sqlVals {
+				var result bool
+				if colIsNull {
+					result = op.CompareToNil(nullFlags[i])
+				} else if nullFlags[i] {
+					result = false
 				} else {
-					lb, err = compareToNil(nv)
+					n, err := sqlType.Compare(ctx, val, sv)
+					if err != nil {
+						return false, err
+					}
+					result = op.ApplyCmp(n)
 				}
 
-				if err != nil {
-					return false, err
-				}
-				if lb {
+				if result {
 					return true, nil
 				}
 			}
