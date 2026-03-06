@@ -15,93 +15,10 @@
 package expreval
 
 import (
-	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
-
-func getMustBool(t *testing.T) func(bool, error) bool {
-	return func(b bool, e error) bool {
-		require.NoError(t, e)
-		return b
-	}
-}
-
-var jan11990 = time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)
-
-func TestCompareNomsValues(t *testing.T) {
-	tests := []struct {
-		v1   types.Value
-		v2   types.Value
-		name string
-		gt   bool
-		gte  bool
-		lt   bool
-		lte  bool
-		eq   bool
-	}{
-		{
-			name: "int 1 and int 1",
-			v1:   types.Int(1),
-			v2:   types.Int(1),
-			gt:   false,
-			gte:  true,
-			lt:   false,
-			lte:  true,
-			eq:   true,
-		},
-		{
-			name: "int -1 and int -1",
-			v1:   types.Int(-1),
-			v2:   types.Int(1),
-			gt:   false,
-			gte:  false,
-			lt:   true,
-			lte:  true,
-			eq:   false,
-		},
-		{
-			name: "int 0 int -5",
-			v1:   types.Int(0),
-			v2:   types.Int(-5),
-			gt:   true,
-			gte:  true,
-			lt:   false,
-			lte:  false,
-			eq:   false,
-		},
-	}
-
-	vrw := types.NewMemoryValueStore()
-	eqOp := EqualsOp{}
-	gtOp := GreaterOp{vrw}
-	gteOp := GreaterEqualOp{vrw}
-	ltOp := LessOp{vrw}
-	lteOp := LessEqualOp{vrw}
-	ctx := context.Background()
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			mustBool := getMustBool(t)
-			resEq := mustBool(eqOp.CompareNomsValues(ctx, test.v1, test.v2))
-			resGt := mustBool(gtOp.CompareNomsValues(ctx, test.v1, test.v2))
-			resGte := mustBool(gteOp.CompareNomsValues(ctx, test.v1, test.v2))
-			resLt := mustBool(ltOp.CompareNomsValues(ctx, test.v1, test.v2))
-			resLte := mustBool(lteOp.CompareNomsValues(ctx, test.v1, test.v2))
-
-			assert.True(t, resEq == test.eq, "equals failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resGt == test.gt, "greater failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resGte == test.gte, "greater equals failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resLt == test.lt, "less than failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resLte == test.lte, "less than equals failure. Expected: %t Actual %t", test.lte, resLte)
-		})
-	}
-}
 
 func assertOnUnexpectedErr(t *testing.T, expectErr bool, err error) {
 	if expectErr {
@@ -111,56 +28,53 @@ func assertOnUnexpectedErr(t *testing.T, expectErr bool, err error) {
 	}
 }
 
-func TestCompareToNull(t *testing.T) {
-	tests := []struct {
-		v    types.Value
-		name string
-		gt   bool
-		gte  bool
-		lt   bool
-		lte  bool
-		eq   bool
-	}{
-		{
-			name: "nil not equal to nil",
-			v:    types.NullValue,
-			gt:   false,
-			gte:  false,
-			lt:   false,
-			lte:  false,
-			eq:   true,
-		},
-		{
-			name: "not nil",
-			v:    types.Int(5),
-			gt:   false,
-			gte:  false,
-			lt:   false,
-			lte:  false,
-			eq:   false,
-		},
-	}
-
+func TestCompareToNil(t *testing.T) {
 	eqOp := EqualsOp{}
 	gtOp := GreaterOp{}
 	gteOp := GreaterEqualOp{}
 	ltOp := LessOp{}
 	lteOp := LessEqualOp{}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			mustBool := getMustBool(t)
-			resEq := mustBool(eqOp.CompareToNil(test.v))
-			resGt := mustBool(gtOp.CompareToNil(test.v))
-			resGte := mustBool(gteOp.CompareToNil(test.v))
-			resLt := mustBool(ltOp.CompareToNil(test.v))
-			resLte := mustBool(lteOp.CompareToNil(test.v))
+	// When both values are null (otherIsNull = true): only equals returns true
+	assert.True(t, eqOp.CompareToNil(true), "null == null should be true")
+	assert.False(t, gtOp.CompareToNil(true), "null > null should be false")
+	assert.False(t, gteOp.CompareToNil(true), "null >= null should be false")
+	assert.False(t, ltOp.CompareToNil(true), "null < null should be false")
+	assert.False(t, lteOp.CompareToNil(true), "null <= null should be false")
 
-			assert.True(t, resEq == test.eq, "equals failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resGt == test.gt, "greater failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resGte == test.gte, "greater equals failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resLt == test.lt, "less than failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resLte == test.lte, "less than equals failure. Expected: %t Actual %t", test.lte, resLte)
-		})
-	}
+	// When only the column value is null (otherIsNull = false): all return false
+	assert.False(t, eqOp.CompareToNil(false), "null == value should be false")
+	assert.False(t, gtOp.CompareToNil(false), "null > value should be false")
+	assert.False(t, gteOp.CompareToNil(false), "null >= value should be false")
+	assert.False(t, ltOp.CompareToNil(false), "null < value should be false")
+	assert.False(t, lteOp.CompareToNil(false), "null <= value should be false")
+}
+
+func TestApplyCmp(t *testing.T) {
+	eqOp := EqualsOp{}
+	gtOp := GreaterOp{}
+	gteOp := GreaterEqualOp{}
+	ltOp := LessOp{}
+	lteOp := LessEqualOp{}
+
+	// n < 0 means v1 < v2
+	assert.False(t, eqOp.ApplyCmp(-1))
+	assert.False(t, gtOp.ApplyCmp(-1))
+	assert.False(t, gteOp.ApplyCmp(-1))
+	assert.True(t, ltOp.ApplyCmp(-1))
+	assert.True(t, lteOp.ApplyCmp(-1))
+
+	// n == 0 means v1 == v2
+	assert.True(t, eqOp.ApplyCmp(0))
+	assert.False(t, gtOp.ApplyCmp(0))
+	assert.True(t, gteOp.ApplyCmp(0))
+	assert.False(t, ltOp.ApplyCmp(0))
+	assert.True(t, lteOp.ApplyCmp(0))
+
+	// n > 0 means v1 > v2
+	assert.False(t, eqOp.ApplyCmp(1))
+	assert.True(t, gtOp.ApplyCmp(1))
+	assert.True(t, gteOp.ApplyCmp(1))
+	assert.False(t, ltOp.ApplyCmp(1))
+	assert.False(t, lteOp.ApplyCmp(1))
 }

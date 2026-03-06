@@ -15,7 +15,6 @@
 package expreval
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -25,9 +24,6 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestGetComparisonType(t *testing.T) {
@@ -92,7 +88,7 @@ func TestGetComparisonType(t *testing.T) {
 	}
 }
 
-var errFunc = func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
+var errFunc = func(ctx *sql.Context, row sql.Row) (b bool, err error) {
 	return false, errors.New("")
 }
 
@@ -182,7 +178,7 @@ func TestNewAndAndOrFuncs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := sql.NewEmptyContext()
 			or := newOrFunc(test.f1, test.f2)
 			and := newAndFunc(test.f1, test.f2)
 
@@ -205,13 +201,13 @@ func TestNewAndAndOrFuncs(t *testing.T) {
 
 func TestNewComparisonFunc(t *testing.T) {
 	ctx := sql.NewEmptyContext()
-	colColl := schema.NewColCollection(
-		schema.NewColumn("col0", 0, types.IntKind, true),
-		schema.NewColumn("col1", 1, types.IntKind, false),
-		schema.NewColumn("date", 2, types.TimestampKind, false),
-	)
-	testSch, err := schema.SchemaFromCols(colColl)
-	require.NoError(t, err)
+
+	// Schema: col0 (Int64, idx 0), col1 (Int64, idx 1), date (Datetime, idx 2)
+	testSch := sql.Schema{
+		{Name: "col0", Type: gmstypes.Int64},
+		{Name: "col1", Type: gmstypes.Int64},
+		{Name: "date", Type: gmstypes.Datetime},
+	}
 
 	const (
 		eq  string = "eq"
@@ -221,25 +217,23 @@ func TestNewComparisonFunc(t *testing.T) {
 		lte        = "lte"
 	)
 
-	vrw := types.NewMemoryValueStore()
-
 	ops := make(map[string]CompareOp)
 	ops[eq] = EqualsOp{}
-	ops[gt] = GreaterOp{vrw}
-	ops[gte] = GreaterEqualOp{vrw}
-	ops[lt] = LessOp{vrw}
-	ops[lte] = LessEqualOp{vrw}
+	ops[gt] = GreaterOp{}
+	ops[gte] = GreaterEqualOp{}
+	ops[lt] = LessOp{}
+	ops[lte] = LessEqualOp{}
 
 	type funcTestVal struct {
 		name      string
-		vals      map[uint64]types.Value
+		row       sql.Row
 		expectRes map[string]bool
 		expectErr map[string]bool
 	}
 
 	tests := []struct {
 		name         string
-		sch          schema.Schema
+		sch          sql.Schema
 		be           expression.BinaryExpression
 		expectNewErr bool
 		testVals     []funcTestVal
@@ -255,14 +249,14 @@ func TestNewComparisonFunc(t *testing.T) {
 			testVals: []funcTestVal{
 				{
 					name: "col0=-1 and col1=-1",
-					vals: map[uint64]types.Value{0: types.Int(-1), 1: types.Int(-1)},
+					row:  sql.Row{int64(-1), int64(-1), nil},
 					//expectedRes based on comparison of the literals -1 and -1
 					expectRes: map[string]bool{eq: true, gt: false, gte: true, lt: false, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col0=0 and col1=100",
-					vals: map[uint64]types.Value{0: types.Int(0), 1: types.Int(100)},
+					row:  sql.Row{int64(0), int64(100), nil},
 					//expectedRes based on comparison of the literals -1 and -1
 					expectRes: map[string]bool{eq: true, gt: false, gte: true, lt: false, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
@@ -280,14 +274,14 @@ func TestNewComparisonFunc(t *testing.T) {
 			testVals: []funcTestVal{
 				{
 					name: "col0=-1 and col1=-1",
-					vals: map[uint64]types.Value{0: types.Int(-1), 1: types.Int(-1)},
+					row:  sql.Row{int64(-1), int64(-1), nil},
 					//expectedRes based on comparison of the literals -5 and 5
 					expectRes: map[string]bool{eq: false, gt: false, gte: false, lt: true, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col0=0 and col1=100",
-					vals: map[uint64]types.Value{0: types.Int(0), 1: types.Int(100)},
+					row:  sql.Row{int64(0), int64(100), nil},
 					//expectedRes based on comparison of the literals -5 and 5
 					expectRes: map[string]bool{eq: false, gt: false, gte: false, lt: true, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
@@ -305,14 +299,14 @@ func TestNewComparisonFunc(t *testing.T) {
 			testVals: []funcTestVal{
 				{
 					name: "col0=-1 and col1=-1",
-					vals: map[uint64]types.Value{0: types.Int(-1), 1: types.Int(-1)},
+					row:  sql.Row{int64(-1), int64(-1), nil},
 					//expectedRes based on comparison of the literals "b" and "a"
 					expectRes: map[string]bool{eq: false, gt: true, gte: true, lt: false, lte: false},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col0=0 and col1=100",
-					vals: map[uint64]types.Value{0: types.Int(0), 1: types.Int(100)},
+					row:  sql.Row{int64(0), int64(100), nil},
 					//expectedRes based on comparison of the literals "b" and "a"
 					expectRes: map[string]bool{eq: false, gt: true, gte: true, lt: false, lte: false},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
@@ -330,21 +324,21 @@ func TestNewComparisonFunc(t *testing.T) {
 			testVals: []funcTestVal{
 				{
 					name: "col0=0 and col1=-1",
-					vals: map[uint64]types.Value{0: types.Int(0), 1: types.Int(-1)},
+					row:  sql.Row{int64(0), int64(-1), nil},
 					//expectedRes based on comparison of col0=0 to "1"
 					expectRes: map[string]bool{eq: false, gt: false, gte: false, lt: true, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col0=1 and col1=100",
-					vals: map[uint64]types.Value{0: types.Int(1), 1: types.Int(100)},
+					row:  sql.Row{int64(1), int64(100), nil},
 					//expectedRes based on comparison of col0=1 to "1"
 					expectRes: map[string]bool{eq: true, gt: false, gte: true, lt: false, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col0=2 and col1=-10",
-					vals: map[uint64]types.Value{0: types.Int(2), 1: types.Int(-10)},
+					row:  sql.Row{int64(2), int64(-10), nil},
 					//expectedRes based on comparison of col0=2 to "1"
 					expectRes: map[string]bool{eq: false, gt: true, gte: true, lt: false, lte: false},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
@@ -362,33 +356,21 @@ func TestNewComparisonFunc(t *testing.T) {
 			testVals: []funcTestVal{
 				{
 					name: "col0=0 and col1=-1 and date=2000-01-01",
-					vals: map[uint64]types.Value{
-						0: types.Int(0),
-						1: types.Int(-1),
-						2: types.Timestamp(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)),
-					},
+					row:  sql.Row{int64(0), int64(-1), time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)},
 					//expectedRes based on comparison of date=2000-01-01 and "2000-01-01"
 					expectRes: map[string]bool{eq: true, gt: false, gte: true, lt: false, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col0=1 and col1=100 and date=2000-01-02",
-					vals: map[uint64]types.Value{
-						0: types.Int(0),
-						1: types.Int(-1),
-						2: types.Timestamp(time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC)),
-					},
+					row:  sql.Row{int64(0), int64(-1), time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC)},
 					//expectedRes based on comparison of date=2000-01-02 and "2000-01-01"
 					expectRes: map[string]bool{eq: false, gt: true, gte: true, lt: false, lte: false},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col0=2 and col1=-10 and date=1999-12-31",
-					vals: map[uint64]types.Value{
-						0: types.Int(0),
-						1: types.Int(-1),
-						2: types.Timestamp(time.Date(1999, 12, 31, 0, 0, 0, 0, time.UTC)),
-					},
+					row:  sql.Row{int64(0), int64(-1), time.Date(1999, 12, 31, 0, 0, 0, 0, time.UTC)},
 					//expectedRes based on comparison of date=1999-12-31 and "2000-01-01"
 					expectRes: map[string]bool{eq: false, gt: false, gte: false, lt: true, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
@@ -406,39 +388,28 @@ func TestNewComparisonFunc(t *testing.T) {
 			testVals: []funcTestVal{
 				{
 					name: "col1=0 and col0=0",
-					vals: map[uint64]types.Value{
-						1: types.Int(0),
-						0: types.Int(0),
-					},
+					row:  sql.Row{int64(0), int64(0), nil},
 					//expectedRes based on comparison of col1=0 and col0=0
 					expectRes: map[string]bool{eq: true, gt: false, gte: true, lt: false, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col1=0 and col0=1",
-					vals: map[uint64]types.Value{
-						1: types.Int(0),
-						0: types.Int(1),
-					},
+					row:  sql.Row{int64(1), int64(0), nil},
 					//expectedRes based on comparison of col1=0 and col0=1
 					expectRes: map[string]bool{eq: false, gt: false, gte: false, lt: true, lte: true},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col1=1 and col0=0",
-					vals: map[uint64]types.Value{
-						1: types.Int(1),
-						0: types.Int(0),
-					},
+					row:  sql.Row{int64(0), int64(1), nil},
 					//expectedRes based on comparison of col1=1 and col0=0
 					expectRes: map[string]bool{eq: false, gt: true, gte: true, lt: false, lte: false},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 				},
 				{
 					name: "col1=null and col0=0",
-					vals: map[uint64]types.Value{
-						0: types.Int(0),
-					},
+					row:  sql.Row{int64(0), nil, nil},
 					//expectedRes based on comparison of col1=null and col0=0
 					expectRes: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
 					expectErr: map[string]bool{eq: false, gt: false, gte: false, lt: false, lte: false},
@@ -503,8 +474,7 @@ func TestNewComparisonFunc(t *testing.T) {
 					for i := range test.testVals {
 						testVal := test.testVals[i]
 						t.Run(testVal.name, func(t *testing.T) {
-							ctx := context.Background()
-							actual, err := f(ctx, testVal.vals)
+							actual, err := f(ctx, testVal.row)
 							expected := testVal.expectRes[opId]
 							expectErr := testVal.expectErr[opId]
 

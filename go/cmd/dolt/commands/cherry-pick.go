@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
@@ -50,6 +51,12 @@ var ErrCherryPickConflictsOrViolations = errors.NewKind("error: Unable to apply 
 	"to add the tables to the staged set, and `dolt cherry-pick --continue` to complete the cherry-pick. \n" +
 	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.\n" +
 	"For more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts")
+
+var ErrCherryPickVerificationFailed = errors.NewKind("error: Commit verification failed. Your changes are staged " +
+	"in the working set. Fix the failing tests, use `dolt add` to stage your changes, then " +
+	"`dolt cherry-pick --continue` to complete the cherry-pick.\n" +
+	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.\n" +
+	"Run `dolt sql -q 'select * from dolt_test_run()` to see which tests are failing.")
 
 type CherryPickCmd struct{}
 
@@ -166,6 +173,10 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 	}
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
+		if actions.ErrCommitVerificationFailed.Is(err) {
+			cli.PrintErrln(err.Error())
+			return ErrCherryPickVerificationFailed.New()
+		}
 		errorText := err.Error()
 		switch {
 		case strings.Contains("nothing to commit", errorText):
@@ -250,20 +261,27 @@ func cherryPickContinue(sqlCtx *sql.Context, queryist cli.Queryist) error {
 	query := "call dolt_cherry_pick('--continue')"
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
+		if actions.ErrCommitVerificationFailed.Is(err) {
+			cli.PrintErrln(err.Error())
+			return ErrCherryPickVerificationFailed.New()
+		}
 		return err
 	}
 
 	if len(rows) != 1 {
 		return fmt.Errorf("error: unexpected number of rows returned from dolt_cherry_pick: %d", len(rows))
 	}
-	if len(rows[0]) != 4 {
+
+	// No version of dolt_cherry_pick has ever returned less than 4 columns. We don't set an upper bound here to
+	// allow for servers to add more columns in the future without breaking compatibility with older clients.
+	if len(rows[0]) < 4 {
 		return fmt.Errorf("error: unexpected number of columns returned from dolt_cherry_pick: %d", len(rows[0]))
 	}
 
 	row := rows[0]
 
 	// We expect to get an error if there were problems, but we also could get any of the conflicts and
-	// vacation counts being greater than 0 if there were problems. If we got here without an error,
+	// violation counts being greater than 0 if there were problems. If we got here without an error,
 	// but we have conflicts or violations, we should report and stop.
 	dataConflicts, err := getInt64ColAsInt64(row[1])
 	if err != nil {

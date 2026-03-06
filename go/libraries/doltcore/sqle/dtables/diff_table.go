@@ -19,12 +19,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -161,7 +162,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 func (dt *DiffTable) PartitionRanges(ctx *sql.Context, ranges []prolly.Range) (sql.PartitionIter, error) {
 	cmItr := doltdb.CommitItrForRoots[*sql.Context](dt.ddb, dt.head)
 
-	sf, err := SelectFuncForFilters(ctx, dt.ddb.ValueReadWriter(), dt.partitionFilters)
+	sf, err := SelectFuncForFilters(ctx, dt.partitionFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +354,7 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 		return sql.PartitionsToPartitionIter(), nil
 	}
 
-	sf, err := SelectFuncForFilters(ctx, dt.ddb.ValueReadWriter(), dt.partitionFilters)
+	sf, err := SelectFuncForFilters(ctx, dt.partitionFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +557,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 		return sql.PartitionsToPartitionIter(), nil
 	}
 
-	sf, err := SelectFuncForFilters(ctx, dt.ddb.ValueReadWriter(), dt.partitionFilters)
+	sf, err := SelectFuncForFilters(ctx, dt.partitionFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -687,42 +688,29 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 
 type partitionSelectFunc func(*sql.Context, DiffPartition) (bool, error)
 
-func SelectFuncForFilters(ctx *sql.Context, vr types.ValueReader, filters []sql.Expression) (partitionSelectFunc, error) {
-	const (
-		toCommitTag uint64 = iota
-		fromCommitTag
-		toCommitDateTag
-		fromCommitDateTag
-	)
+func SelectFuncForFilters(ctx *sql.Context, filters []sql.Expression) (partitionSelectFunc, error) {
+	sch := sql.Schema{
+		{Name: toCommit, Type: gmstypes.LongText},
+		{Name: fromCommit, Type: gmstypes.LongText},
+		{Name: toCommitDate, Type: gmstypes.Datetime},
+		{Name: fromCommitDate, Type: gmstypes.Datetime},
+	}
 
-	colColl := schema.NewColCollection(
-		schema.NewColumn(toCommit, toCommitTag, types.StringKind, false),
-		schema.NewColumn(fromCommit, fromCommitTag, types.StringKind, false),
-		schema.NewColumn(toCommitDate, toCommitDateTag, types.TimestampKind, false),
-		schema.NewColumn(fromCommitDate, fromCommitDateTag, types.TimestampKind, false),
-	)
-
-	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(ctx, vr, schema.UnkeyedSchemaFromCols(colColl), filters)
-
+	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(ctx, sch, filters)
 	if err != nil {
 		return nil, err
 	}
 
 	return func(ctx *sql.Context, partition DiffPartition) (bool, error) {
-		vals := row.TaggedValues{
-			toCommitTag:   types.String(partition.toName),
-			fromCommitTag: types.String(partition.fromName),
-		}
-
+		var toDate, fromDate interface{}
 		if partition.toDate != nil {
-			vals[toCommitDateTag] = *partition.toDate
+			toDate = time.Time(*partition.toDate)
 		}
-
 		if partition.fromDate != nil {
-			vals[fromCommitDateTag] = *partition.fromDate
+			fromDate = time.Time(*partition.fromDate)
 		}
-
-		return expFunc(ctx, vals)
+		row := sql.Row{partition.toName, partition.fromName, toDate, fromDate}
+		return expFunc(ctx, row)
 	}, nil
 }
 

@@ -45,12 +45,20 @@ jobs:
             const { owner, repo } = context.repo;
             const issue_number = parseInt(ISSUE_NUMBER, 10);
             
+            let resData = '';
+            fs = require('fs');
+            fs.readFile(`${GITHUB_WORKSPACE}/results.log`, 'utf8', function (err, data) {
+              if (err) {
+                return console.log(err);
+              }
+              resData = data
+            });
+            
             // Consider also deleting stale sql-correctness comments
             // Both correctness and performance are posted/deleted here, they may delete each other
-            var commentMarker = '';
             if (JOB_TYPE == "performance-benchmarking") {
-              commentMarker = '<!-- go-run-output -->';
-            
+              const commentMarker = '<!-- go-run-output -->';
+
               // List comments on the PR
               const { data: comments } = await github.rest.issues.listComments({
                 issue_number: issue_number,
@@ -58,29 +66,39 @@ jobs:
                 repo: context.repo.repo
               });
             
-              // Delete existing comments
-              const filteredComments = comments.filter(comment => comment.body.includes(commentMarker));
-              for (const comment of filteredComments) {
-                await github.rest.issues.deleteComment({
+              // Find correct comment to update
+              let comment = null; 
+              if (resData.includes("tpcc-scale-factor-1")) {
+                comment = comments.find(comment => comment.body.includes(commentMarker) && comment.body.includes("tpcc-scale-factor-1"))
+              } else if (resData.includes("read_tests")) {
+                comment = comments.find(comment => comment.body.includes(commentMarker) && comment.body.includes("read_tests"))
+              }
+            
+              if (comment) {
+                // Update the existing comment
+                await github.rest.issues.updateComment({
+                  comment_id: comment.id,
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  comment_id: comment.id
+                  body: `${commentMarker}\n@${ACTOR} ${FORMAT}\n${resData}`
+                })
+              } else {
+                // Create a new comment
+                await github.rest.issues.createComment({
+                  issue_number: issue_number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: `${commentMarker}\n@${ACTOR} ${FORMAT}\n${resData}`
                 });
               }
-            }
-
-            fs = require('fs');
-            fs.readFile(`${GITHUB_WORKSPACE}/results.log`, 'utf8', function (err,data) {
-              if (err) {
-                return console.log(err);
-              }
-              return github.rest.issues.createComment({
-                issue_number,
-                owner,
-                repo,
-                body: `${commentMarker}\n@${ACTOR} ${FORMAT}\n ${data}`
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: issue_number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `@${ACTOR} ${FORMAT}\n${resData}`
               });
-            });
+            }
         env:
           ACTOR: ${{ github.event.client_payload.actor }}
           FORMAT: ${{ github.event.client_payload.noms_bin_format }}
