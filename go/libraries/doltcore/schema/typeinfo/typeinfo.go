@@ -201,6 +201,7 @@ func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
 }
 
 // FromKind returns the default TypeInfo for a given types.Value.
+// Deprecated. Use FromSqlType instead.
 func FromKind(kind types.NomsKind) TypeInfo {
 	switch kind {
 	case types.BlobKind:

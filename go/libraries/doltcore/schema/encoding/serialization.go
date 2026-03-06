@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/store/val"
 	fb "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
@@ -362,6 +363,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			Name:          string(c.Name()),
 			Tag:           c.Tag(),
 			Kind:          sqlType.NomsKind(),
+			Encoding:      val.EncodingFromSerial(c.Encoding()),
 			IsPartOfPK:    c.PrimaryKey(),
 			TypeInfo:      sqlType,
 			Default:       defVal,

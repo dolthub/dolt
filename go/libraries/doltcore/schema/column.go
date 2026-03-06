@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // InvalidTag is used as an invalid tag
@@ -63,6 +64,11 @@ type Column struct {
 	// vestigial with the new storage format. If you seem to need it for something, consider TypeInfo instead.
 	// Its main remaining use is in determining the tag for new columns, so it must be set for that reason.
 	Kind types.NomsKind
+
+	// Encoding is the encoding of column values on disk. It's primarily derived from the column's TypeInfo,
+	// but some column types have multiple possible encodings that can vary based on settings, Dolt version, etc.
+	// This field is considered authoritative for the encoding of a column when reading and writing to disk.
+	Encoding val.Encoding
 
 	// IsPartOfPK says whether this column is part of the primary key
 	IsPartOfPK bool
