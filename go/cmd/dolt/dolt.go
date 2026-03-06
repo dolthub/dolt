@@ -200,6 +200,7 @@ const cpuProf = "cpu"
 const memProf = "mem"
 const blockingProf = "blocking"
 const traceProf = "trace"
+const mutexProf = "mutex"
 
 const featureVersionFlag = "--feature-version"
 
@@ -263,6 +264,9 @@ func runMain() int {
 					cli.Println("block profiling enabled")
 				case traceProf:
 					profileOpts = append(profileOpts, profile.TraceProfile)
+					cli.Println("trace profiling enabled")
+				case mutexProf:
+					profileOpts = append(profileOpts, profile.MutexProfile)
 					cli.Println("trace profiling enabled")
 				default:
 					panic("Unexpected prof flag: " + args[1])
