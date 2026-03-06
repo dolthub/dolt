@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -162,6 +163,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	_, _, _, err = queryist.Queryist.Query(queryist.Context, "COMMIT")
 	if err != nil {
 		cli.Println(err.Error())
+		return 1
+	}
+
+	if msg := getMergeMessage(mergeResultRow); strings.HasPrefix(msg, actions.CommitVerificationFailedPrefix) {
+		cli.Println(msg)
 		return 1
 	}
 
@@ -750,4 +756,18 @@ func everythingUpToDate(row sql.Row) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// getMergeMessage extracts the message column from a merge result row.
+func getMergeMessage(row sql.Row) string {
+	if len(row) == 3 {
+		if msg, ok := row[2].(string); ok {
+			return msg
+		}
+	} else if len(row) == 4 {
+		if msg, ok := row[3].(string); ok {
+			return msg
+		}
+	}
+	return ""
 }

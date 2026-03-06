@@ -87,9 +87,10 @@ func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, 
 }
 
 type Result struct {
-	Root            doltdb.RootValue
-	SchemaConflicts []SchemaConflict
-	Stats           map[doltdb.TableName]*MergeStats
+	Root                  doltdb.RootValue
+	SchemaConflicts       []SchemaConflict
+	Stats                 map[doltdb.TableName]*MergeStats
+	CommitVerificationErr error
 }
 
 func (r Result) HasSchemaConflicts() bool {

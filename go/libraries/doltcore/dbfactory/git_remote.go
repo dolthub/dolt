@@ -134,10 +134,11 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	}
 
 	// Ensure the configured git remote exists and points to the underlying git remote URL.
-	if err := ensureGitRemoteURL(ctx, cacheRepo, remoteName, remoteURL.String()); err != nil {
+	gitURL := gitRemoteURLString(remoteURL)
+	if err := ensureGitRemoteURL(ctx, cacheRepo, remoteName, gitURL); err != nil {
 		return nil, nil, nil, err
 	}
-	if err := ensureRemoteHasBranches(ctx, cacheRepo, remoteName, remoteURL.String()); err != nil {
+	if err := ensureRemoteHasBranches(ctx, cacheRepo, remoteName, gitURL); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -184,6 +185,23 @@ func parseGitRemoteFactoryURL(urlObj *url.URL, params map[string]interface{}) (r
 	cp.RawQuery = ""
 	cp.Fragment = ""
 	return &cp, ref, nil
+}
+
+// gitRemoteURLString converts a parsed remote URL back to a string suitable for
+// passing to git commands. If the URL has an ssh scheme and the path starts with
+// "/./", it was originally an SCP-style relative path (e.g. git@host:path.git).
+// We reconstruct SCP-style format so git treats the path as relative to the SSH
+// user's home directory.
+func gitRemoteURLString(u *url.URL) string {
+	if strings.ToLower(u.Scheme) == "ssh" && strings.HasPrefix(u.Path, "/./") {
+		// Reconstruct SCP-style: [user@]host:relativePath
+		host := u.Host
+		if u.User != nil {
+			host = u.User.String() + "@" + u.Host
+		}
+		return host + ":" + strings.TrimPrefix(u.Path, "/./")
+	}
+	return u.String()
 }
 
 func resolveGitRemoteRef(params map[string]interface{}) string {
