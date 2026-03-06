@@ -102,7 +102,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 	if len(dbName) == 0 {
 		return "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("Empty database name.")
 	}
-	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
 		return "", noConflictsOrViolations, threeWayMerge, "", err
 	}
 

@@ -749,7 +749,19 @@ func (rcv *BranchControlBinlog) RowsLength() int {
 	return 0
 }
 
-const BranchControlBinlogNumFields = 1
+func (rcv *BranchControlBinlog) Version() uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.GetUint32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *BranchControlBinlog) MutateVersion(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(6, n)
+}
+
+const BranchControlBinlogNumFields = 2
 
 func BranchControlBinlogStart(builder *flatbuffers.Builder) {
 	builder.StartObject(BranchControlBinlogNumFields)
@@ -759,6 +771,9 @@ func BranchControlBinlogAddRows(builder *flatbuffers.Builder, rows flatbuffers.U
 }
 func BranchControlBinlogStartRowsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
+}
+func BranchControlBinlogAddVersion(builder *flatbuffers.Builder, version uint32) {
+	builder.PrependUint32Slot(1, version, 0)
 }
 func BranchControlBinlogEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
