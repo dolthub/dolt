@@ -237,6 +237,7 @@ func (ix *indexImpl) Schema() Schema {
 			Name:        col.Name,
 			Tag:         tag,
 			Kind:        col.Kind,
+			Encoding:    col.Encoding,
 			IsPartOfPK:  true,
 			TypeInfo:    col.TypeInfo,
 			Constraints: nil,

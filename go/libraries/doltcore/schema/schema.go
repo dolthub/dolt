@@ -80,12 +80,7 @@ type Schema interface {
 	// If a column has a type that can't appear in a key (such as "address" columns),
 	// that column will get converted to equivalent types that can. (Example: text -> varchar)
 	GetKeyDescriptor(vs val.ValueStore) *val.TupleDesc
-
-	// GetKeyDescriptorWithNoConversion returns the a descriptor for the columns used in the key.
-	// Unlike `GetKeyDescriptor`, it doesn't attempt to convert columns if they can't appear in a key,
-	// and returns them as they are.
-	GetKeyDescriptorWithNoConversion(vs val.ValueStore) *val.TupleDesc
-
+	
 	// GetValueDescriptor returns the value tuple descriptor for this schema.
 	GetValueDescriptor(vs val.ValueStore) *val.TupleDesc
 
@@ -138,8 +133,8 @@ func ExtractAllColNames(sch Schema) (map[uint64]string, error) {
 
 func IsKeyless(sch Schema) bool {
 	return sch != nil &&
-		sch.GetPKCols().Size() == 0 &&
-		sch.GetAllCols().Size() != 0
+			sch.GetPKCols().Size() == 0 &&
+			sch.GetAllCols().Size() != 0
 }
 
 func IsVirtual(sch Schema) bool {
@@ -203,7 +198,7 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	}
 
 	if sch1.Checks() != nil && sch2.Checks() != nil &&
-		!sch1.Checks().Equals(sch2.Checks()) {
+			!sch1.Checks().Equals(sch2.Checks()) {
 		return false
 	}
 
@@ -270,7 +265,7 @@ func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
 		return false
 		// Empty case
 	} else if fromSch == nil || fromSch.GetAllCols().Size() == 0 ||
-		toSch == nil || toSch.GetAllCols().Size() == 0 {
+			toSch == nil || toSch.GetAllCols().Size() == 0 {
 		return true
 	}
 

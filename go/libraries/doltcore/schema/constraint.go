@@ -21,18 +21,11 @@ import (
 )
 
 // ColConstraint is an interface used for evaluating whether a columns value is valid
+// TODO: there is only a single constraint type: NotNull. It should probably just be a bool field on the column.
 type ColConstraint interface {
-	// SatisfiesConstraint takes in a value and returns true if the value satisfies the constraint
-	SatisfiesConstraint(value types.Value) bool
-
 	// GetConstraintType returns a string representation of the type of constraint.  This is used for serialization and
 	// deserialization of constraints (see ColConstraintFromTypeAndParams).
 	GetConstraintType() string
-
-	// GetConstraintParams returns a map[string]string containing the constraints parameters.  This is used for
-	// serialization and deserialization of constraints, and a deserialized constraint must be able to reproduce the same
-	// behavior based on the parameters in this map (See ColConstraintFromTypeAndParams).
-	GetConstraintParams() map[string]string
 
 	// Stringer results are used to inform users of the constraint's properties.
 	fmt.Stringer
@@ -56,11 +49,6 @@ func (nnc NotNullConstraint) GetConstraintType() string {
 	return NotNullConstraintType
 }
 
-// GetConstraintParams returns nil as this constraint does not require any parameters.
-func (nnc NotNullConstraint) GetConstraintParams() map[string]string {
-	return nil
-}
-
 // String returns a useful description of the constraint
 func (nnc NotNullConstraint) String() string {
 	return "Not null"
@@ -80,7 +68,6 @@ func IndexOfConstraint(constraints []ColConstraint, constraintType string) int {
 
 // ColConstraintsAreEqual validates two ColConstraint slices are identical.
 func ColConstraintsAreEqual(a, b []ColConstraint) bool {
-	// kinda shitty.  Probably shouldn't require order to be identical
 	if len(a) != len(b) {
 		return false
 	} else if len(a) == 0 {
@@ -92,23 +79,6 @@ func ColConstraintsAreEqual(a, b []ColConstraint) bool {
 
 		if ca.GetConstraintType() != cb.GetConstraintType() {
 			return false
-		} else {
-			pa := ca.GetConstraintParams()
-			pb := cb.GetConstraintParams()
-
-			if len(pa) != len(pb) {
-				return false
-			} else if len(pa) != 0 {
-				for k, va := range pa {
-					vb, ok := pb[k]
-
-					if !ok {
-						return false
-					} else if va != vb {
-						return false
-					}
-				}
-			}
 		}
 	}
 
