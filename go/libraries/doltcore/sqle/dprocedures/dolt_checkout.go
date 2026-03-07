@@ -104,13 +104,18 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 
 	updateHead := apr.Contains(cli.MoveFlag)
 
+	if apr.ContainsAll(cli.OverwriteIgnoreFlag, cli.NoOverwriteIgnoreFlag) {
+		return 1, "", fmt.Errorf("error: --%s and --%s are mutually exclusive", cli.OverwriteIgnoreFlag, cli.NoOverwriteIgnoreFlag)
+	}
+	overwriteIgnore := !apr.Contains(cli.NoOverwriteIgnoreFlag)
+
 	var rsc doltdb.ReplicationStatusController
 	// If we're switching branches, then we need to clear any Doltgres session objects since they're temporary
 	dSess.DoltgresSessObj = nil
 
 	// Checking out new branch.
 	if branchOrTrack {
-		newBranch, upstream, err := checkoutNewBranch(ctx, currentDbName, dbData, apr, &rsc, updateHead)
+		newBranch, upstream, err := checkoutNewBranch(ctx, currentDbName, dbData, apr, &rsc, updateHead, overwriteIgnore)
 		if err != nil {
 			return 1, "", err
 		} else {
@@ -171,14 +176,14 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		// dolt checkout <ref> --: disambiguates a tracking branch when it shares a name with local table(s).
 		if apr.NArg() == 1 { // assume some <ref> specified because dashDashPos is 1
 			if localRefExists {
-				err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, dSess, &rsc)
+				err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, dSess, &rsc, overwriteIgnore)
 				if err != nil {
 					return 1, "", err
 				}
 				return 0, generateSuccessMessage(firstArg, ""), nil
 			}
 
-			upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
+			upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc, overwriteIgnore)
 			if err != nil {
 				return 1, "", err
 			}
@@ -214,7 +219,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 
 	// git prioritizes local and remote refs over tables
 	if localRefExists {
-		err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, dSess, &rsc)
+		err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, dSess, &rsc, overwriteIgnore)
 		if err != nil {
 			return 1, "", err
 		}
@@ -222,7 +227,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	if validRemoteRefExists {
-		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
+		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc, overwriteIgnore)
 		if err != nil {
 			return 1, "", err
 		}
@@ -329,6 +334,7 @@ func checkoutRemoteBranch(
 	branchName string,
 	apr *argparser.ArgParseResults,
 	rsc *doltdb.ReplicationStatusController,
+	overwriteIgnore bool,
 ) (upstream string, err error) {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
@@ -352,7 +358,7 @@ func checkoutRemoteBranch(
 			return "", err
 		}
 
-		err = checkoutExistingBranch(ctx, dbName, branchName, apr)
+		err = checkoutExistingBranch(ctx, dbName, branchName, apr, overwriteIgnore)
 		if err != nil {
 			return "", err
 		}
@@ -401,6 +407,7 @@ func checkoutNewBranch(
 	apr *argparser.ArgParseResults,
 	rsc *doltdb.ReplicationStatusController,
 	isMove bool,
+	overwriteIgnore bool,
 ) (newBranchName string, remoteAndBranch string, err error) {
 	var remoteName, remoteBranchName string
 	var startPt = "head"
@@ -472,18 +479,17 @@ func checkoutNewBranch(
 	}
 
 	if isMove {
-		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, newBranchName, apr.Contains(cli.ForceFlag), true)
-	} else {
+		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, newBranchName, apr.Contains(cli.ForceFlag), true, overwriteIgnore)
+	}
 
-		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
-		if err != nil {
-			return "", "", err
-		}
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
+	if err != nil {
+		return "", "", err
+	}
 
-		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
-		if err != nil {
-			return "", "", err
-		}
+	err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
+	if err != nil {
+		return "", "", err
 	}
 
 	return newBranchName, remoteAndBranch, nil
@@ -497,6 +503,7 @@ func checkoutExistingBranch(
 	dbName string,
 	branchName string,
 	apr *argparser.ArgParseResults,
+	overwriteIgnore bool,
 ) error {
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
@@ -510,7 +517,7 @@ func checkoutExistingBranch(
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	if apr.Contains(cli.MoveFlag) {
-		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag), false)
+		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag), false, overwriteIgnore)
 	} else {
 		// Ensure that the working set is available
 		ddb, ok := dSess.GetDoltDB(ctx, dbName)
@@ -519,6 +526,18 @@ func checkoutExistingBranch(
 		}
 		if _, err = ddb.ResolveWorkingSet(ctx, wsRef); err != nil {
 			return err
+		}
+
+		if !overwriteIgnore {
+			if currentRoots, hasRoots := dSess.GetRoots(ctx, dbName); hasRoots {
+				branchHead, err := actions.BranchHeadRoot(ctx, ddb, branchName)
+				if err != nil {
+					return err
+				}
+				if err := actions.CheckOverwrittenIgnoredTables(ctx, currentRoots, branchHead, overwriteIgnore); err != nil {
+					return err
+				}
+			}
 		}
 
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
@@ -540,13 +559,14 @@ func checkoutExistingBranchWithWorkingSetFallback(
 	apr *argparser.ArgParseResults,
 	dSess *dsess.DoltSession,
 	rsc *doltdb.ReplicationStatusController,
+	overwriteIgnore bool,
 ) error {
 	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return fmt.Errorf("could not load database %s", dbName)
 	}
 
-	err := checkoutExistingBranch(ctx, dbName, branchName, apr)
+	err := checkoutExistingBranch(ctx, dbName, branchName, apr, overwriteIgnore)
 	if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 		// If there is a branch but there is no working set,
 		// somehow the local branch ref was created without a
@@ -571,7 +591,7 @@ func checkoutExistingBranchWithWorkingSetFallback(
 			return err
 		}
 
-		err = checkoutExistingBranch(ctx, dbName, branchName, apr)
+		err = checkoutExistingBranch(ctx, dbName, branchName, apr, overwriteIgnore)
 		if err != nil {
 			return err
 		}
@@ -662,8 +682,8 @@ func checkoutTablesFromCommit(
 
 // doGlobalCheckout implements the behavior of the `dolt checkout` command line, moving the working set into
 // the new branch and persisting the checked-out branch into future sessions
-func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBranch bool) error {
-	err := MoveWorkingSetToBranch(ctx, branchName, isForce, isNewBranch)
+func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBranch bool, overwriteIgnore bool) error {
+	err := MoveWorkingSetToBranch(ctx, branchName, isForce, isNewBranch, overwriteIgnore)
 	if err != nil && err != doltdb.ErrAlreadyOnBranch {
 		return err
 	}

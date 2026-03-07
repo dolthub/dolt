@@ -15,7 +15,6 @@
 package dprocedures
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -29,7 +28,7 @@ import (
 
 // MoveWorkingSetToBranch moves the working set from the currently checked out branch onto the branch specified
 // by `brName`. This is a POTENTIALLY DESTRUCTIVE ACTION used during command line checkout
-func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBranch bool) error {
+func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBranch bool, overwriteIgnore bool) error {
 	branchRef := ref.NewBranchRef(brName)
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbName := dSess.GetCurrentDatabase()
@@ -94,13 +93,6 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return fmt.Errorf("unable to get roots")
 	}
 
-	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
-	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-		workingSetExists = false
-	} else if err != nil {
-		return err
-	}
-
 	hasChanges := false
 	if workingSetExists {
 		hasChanges, _, _, err = actions.RootHasUncommittedChanges(initialRoots)
@@ -112,6 +104,10 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	if err := actions.CheckOverwrittenIgnoredTables(ctx, initialRoots, branchHead, overwriteIgnore); err != nil {
+		return err
 	}
 
 	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
