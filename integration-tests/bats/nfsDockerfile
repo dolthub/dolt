@@ -1,0 +1,30 @@
+#syntax=docker/dockerfile:1.3
+FROM golang:1.25-trixie AS source-binary
+
+# buildindocker script expects absolute dir /src/
+COPY dolt/go/go.mod /src/
+WORKDIR /src/
+RUN go mod download
+
+COPY dolt/go/ .
+ENV OS_ARCH_TUPLES=linux-amd64
+RUN chmod +x utils/publishrelease/buildindocker.sh && utils/publishrelease/buildindocker.sh
+
+FROM debian:bookworm-slim
+RUN apt-get update -y && apt-get install -y \
+  bats \
+  e2fsprogs \
+  iproute2 \
+  kmod \
+  lsof \
+  netcat-openbsd \
+  nfs-common \
+  nfs-kernel-server \
+  procps \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=source-binary /src/out/dolt-linux-amd64/bin/dolt /usr/local/bin/dolt
+RUN /usr/local/bin/dolt version
+
+VOLUME /var/lib/dolt
+WORKDIR /var/lib/dolt
