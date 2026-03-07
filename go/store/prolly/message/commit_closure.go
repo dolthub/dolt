@@ -148,7 +148,7 @@ func (s CommitClosureSerializer) Serialize(keys, addrs [][]byte, subtrees []uint
 	var keyArr, addrArr, cardArr fb.UOffsetT
 
 	keySz, addrSz, totalSz := estimateCommitClosureSize(keys, addrs, subtrees)
-	b := getFlatbufferBuilder(s.pool, totalSz)
+	b := getFlatbufferBuilder(totalSz)
 
 	// keys
 	keyArr = writeItemBytes(b, keys, keySz)

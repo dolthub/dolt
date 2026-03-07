@@ -81,7 +81,10 @@ func FinishMessage(b *fb.Builder, off fb.UOffsetT, fileID []byte) Message {
 	bytes := b.Bytes[b.Head()-MessagePrefixSz:]
 	bytes[0] = byte(MessageTypesKind)
 	copy(bytes[1:], size[1:])
-	return bytes
+
+	res := make([]byte, len(bytes))
+	copy(res, bytes)
+	return res
 }
 
 // byteSliceToString converts a []byte to string without a heap allocation.
