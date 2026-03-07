@@ -527,7 +527,7 @@ type journalConjoiner struct {
 	child conjoinStrategy
 }
 
-func (c journalConjoiner) conjoinRequired(ts tableSet) bool {
+func (c journalConjoiner) conjoinRequired(ts *tableSet) bool {
 	return c.child.conjoinRequired(ts)
 }
 

@@ -160,7 +160,7 @@ func TestTableSetRebase(t *testing.T) {
 	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
 
-	insert := func(ts tableSet, chunks ...[]byte) tableSet {
+	insert := func(ts *tableSet, chunks ...[]byte) *tableSet {
 		var err error
 		for _, c := range chunks {
 			mt := newMemTable(testMemTableSize)
@@ -243,10 +243,9 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 	}
 
 	ts := newTableSet(p, q)
-	ts2, err := ts.rebase(context.Background(), specs, nil, &Stats{})
+	_, err := ts.rebase(context.Background(), specs, nil, &Stats{})
 	require.Error(t, err)
 
 	assert.NoError(t, ts.close())
-	assert.NoError(t, ts2.close())
 	assert.Equal(t, 0, int(q.Usage()))
 }
