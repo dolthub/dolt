@@ -141,7 +141,7 @@ func TestPushOnWriteHook(t *testing.T) {
 		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
 		require.NoError(t, err)
 
-		ds, err := doltdb.HackDatasDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")
+		ds, err := doltdb.ExposeDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")
 		require.NoError(t, err)
 
 		_, err = hook.Execute(ctx, ds, ddb)
@@ -268,7 +268,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 
 			_, err = ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
 			require.NoError(t, err)
-			ds, err := doltdb.HackDatasDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")
+			ds, err := doltdb.ExposeDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")
 			require.NoError(t, err)
 			_, err = hook.Execute(ctx, ds, ddb)
 			require.NoError(t, err)
@@ -297,13 +297,13 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		})
 
 		// Pretend we replicate a HEAD which does exist.
-		ds, err := doltdb.HackDatasDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")
+		ds, err := doltdb.ExposeDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")
 		require.NoError(t, err)
 		_, err = hook.Execute(ctx, ds, ddb)
 		require.NoError(t, err)
 
 		// Pretend we replicate a HEAD which does not exist, i.e., a branch delete.
-		ds, err = doltdb.HackDatasDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/does_not_exist")
+		ds, err = doltdb.ExposeDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/does_not_exist")
 		require.NoError(t, err)
 		_, err = hook.Execute(ctx, ds, ddb)
 		require.NoError(t, err)

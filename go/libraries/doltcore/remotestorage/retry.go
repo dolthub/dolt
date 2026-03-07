@@ -18,7 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/cenkalti/backoff/v4"
 	"google.golang.org/grpc/codes"
@@ -38,6 +40,12 @@ func processHttpResp(resp *http.Response, err error) error {
 			return nil
 		}
 
+		// Error messages show up in the body of the response. We'll limit ourselves to 1Kb of data,
+		// which should be plenty to get a useful error message.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if detail := strings.TrimSpace(string(body)); detail != "" {
+			return fmt.Errorf("error: %w %d: %s", HttpError, resp.StatusCode, detail)
+		}
 		return fmt.Errorf("error: %w %d", HttpError, resp.StatusCode)
 	}
 
