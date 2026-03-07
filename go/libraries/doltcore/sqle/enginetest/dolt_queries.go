@@ -4073,7 +4073,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "call dolt_checkout('--no-overwrite-ignore', 'other');",
-				ExpectedErrStr: "The following ignored tables would be overwritten by checkout:",
+				ExpectedErrStr: "The following ignored tables would be overwritten by checkout:\n\tignored_tbl\nPlease move or remove them before you switch branches.\nUse --overwrite-ignore to force.",
 			},
 			{
 				Query:    "select active_branch();",
