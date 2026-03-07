@@ -305,30 +305,27 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 		return err
 	}
 
-	// AddTableFilesToManifest can set the root chunk if there is a chunk
-	// journal which we downloaded in the clone. If that happened, the
-	// chunk journal is actually more accurate on what the current root is
-	// than the result of |Sources| up above. We choose not to touch
-	// anything in that case.
-	err = sinkCS.Rebase(ctx)
-	if err != nil {
-		return err
-	}
-	sinkRoot, err := sinkCS.Root(ctx)
-	if err != nil {
-		return err
-	}
-	if !sinkRoot.IsEmpty() {
-		return nil
+	// Clone always sets the destination database to the Root we saw in srcDb.Sources.
+	// Because we fetched all table files which appeared in Sources, that's a root
+	// which is guaranteed to be in our destination store.
+	numRetries := 0
+	var last hash.Hash
+	for numRetries < 10 {
+		var success bool
+		success, err = sinkTS.Commit(ctx, root, last)
+		if success && err != nil {
+			panic(fmt.Sprintf("runtime error: successful root update with error: %v", err))
+		}
+		if err != nil {
+			return err
+		}
+		last, err = sinkCS.Root(ctx)
+		if err != nil {
+			return err
+		}
+		numRetries += 1
 	}
 
-	success, err := sinkTS.Commit(ctx, root, hash.Hash{})
-	if !success && err == nil {
-		return errors.New("root update failure. optimistic lock failed")
-	}
-	if success && err != nil {
-		panic(fmt.Sprintf("runtime error: successful root update with error: %v", err))
-	}
 	return err
 }
 
