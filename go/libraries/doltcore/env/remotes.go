@@ -143,6 +143,7 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 		params[k] = v
 	}
 	params[dbfactory.NoCachingParameter] = "true"
+	params[dbfactory.DisableSingletonCacheParam] = "true"
 	params[dbfactory.GRPCDialProviderParam] = dialer
 	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
 		params[dbfactory.GitRemoteNameParam] = r.Name
