@@ -119,6 +119,9 @@ func (sqlDBActiveBranchResolver) Resolve(sqlCtx *sql.Context, queryist cli.Query
 
 // resolveDirty resolves the dirty state of the current branch and whether the revision type is a branch.
 func resolveDirty(sqlCtx *sql.Context, queryist cli.Queryist, parts Parts) (dirty bool, err error) {
+	if parts.BaseDatabase == "" {
+		return false, nil
+	}
 	if doltdb.IsValidCommitHash(parts.ActiveRevision) {
 		return false, nil
 	}

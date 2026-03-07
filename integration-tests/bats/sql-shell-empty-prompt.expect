@@ -17,7 +17,12 @@ expect {
     timeout { exit 1; }
 }
 
+# After the query the prompt resolver runs. Verify it does not emit errors when
+# no database is selected (regression test for "no database selected" / "Failed
+# to set new current database on post command update").
 expect {
+    "no database selected"               { exit 1 }
+    "Failed to set new current database" { exit 1 }
     "> " { send "exit;\r"; }
     timeout { exit 1; }
 }
