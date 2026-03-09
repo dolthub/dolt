@@ -229,10 +229,15 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		format = dbData.Ddb.Format()
 	}
 
-	remoteDb, err := dsess.Provider().GetRemoteDB(ctx, format, remote, true)
+	remoteDb, err := dsess.Provider().GetRemoteDB(ctx, format, remote, false)
 	if err != nil {
 		return err
 	}
+	// Close the source backup database after restore to release its file descriptors; see the equivalent
+	// comment in syncRemote. Note that remoteDb is only the source being read from — the restored
+	// database (lookupDbName) is a separate database created via [dsess.DoltSessionProvider.CreateDatabase]
+	// and follows the normal caching path.
+	defer remoteDb.Close()
 
 	lookupDbName := apr.Arg(2)
 	hasLookupDb := dsess.Provider().HasDatabase(ctx, lookupDbName)
@@ -288,8 +293,9 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 }
 
 // syncRemote syncs the roots from |dbData| to the remote specified by |remote|. It prepares the remote database
-// location using PrepareDB, which creates directories for file:// URLs if they do not exist. The sync operation copies
-// all chunks from the source database to the destination, effectively overwriting the destination to match the source.
+// location using [dbfactory.PrepareDB], which creates directories for file:// URLs if they do not exist. The sync
+// operation copies all chunks from the source database to the destination, effectively overwriting the destination
+// to match the source.
 func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, remote env.Remote) error {
 	// Commit the current session's working set to the persistent chunk store. This ensures that uncommitted transaction
 	// changes (e.g. INSERTs) are usually visible to the backup procedure, which reads directly from the roots.
@@ -306,10 +312,16 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	// This fails with unsupported schemes (i.e. http[s]), but in such cases we shouldn't have to prepare the database.
 	// We primarily use this to initialize the directory for file URLs without a directory.
 	_ = dbfactory.PrepareDB(ctx, dbData.Ddb.Format(), remote.Url, params)
-	destDb, err := dsess.Provider().GetRemoteDB(ctx, dbData.Ddb.Format(), remote, true)
+
+	destDb, err := dsess.Provider().GetRemoteDB(ctx, dbData.Ddb.Format(), remote, false)
 	if err != nil {
 		return err
 	}
+	// Close the backup database after the sync to release all file descriptors it holds. Without this,
+	// the process retains open file descriptors on the backup directory until exit. On network filesystems
+	// such as NFS, open file descriptors prevent the backup directory from being deleted even after
+	// dolt_backup remove.
+	defer destDb.Close()
 
 	statsCh := make(chan pull.Stats)
 	var wg sync.WaitGroup

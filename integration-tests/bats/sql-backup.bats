@@ -276,3 +276,28 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ i.*3.*4 ]] || false
 }
+
+@test "sql-backup: dolt_backup sync-url releases file descriptors after sync" {
+    backup_dir="$BATS_TEST_TMPDIR/the_backup"
+    backup_url="file://$backup_dir"
+
+    dolt sql -q "create table t (pk int primary key); insert into t values (1); call dolt_commit('-Am', 'init');"
+
+    dolt sql -q "call dolt_backup('sync-url', '$backup_url');"
+    rm -rf "$backup_dir"
+
+    [ "$(lsof -n | grep "$backup_dir" | grep '(deleted)' | wc -l)" -eq 0 ]
+}
+
+@test "sql-backup: dolt_backup restore releases file descriptors after restore" {
+    backup_dir="$BATS_TEST_TMPDIR/the_backup"
+    backup_url="file://$backup_dir"
+
+    dolt sql -q "create table t (pk int primary key); insert into t values (1); call dolt_commit('-Am', 'init');"
+    dolt sql -q "call dolt_backup('sync-url', '$backup_url');"
+
+    dolt sql -q "call dolt_backup('restore', '$backup_url', 'restored_db');"
+    rm -rf "$backup_dir"
+
+    [ "$(lsof -n | grep "$backup_dir" | grep '(deleted)' | wc -l)" -eq 0 ]
+}
