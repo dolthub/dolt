@@ -137,13 +137,25 @@ func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer d
 	return dbfactory.PrepareDB(ctx, nbf, r.Url, params)
 }
 
+// GetRemoteDBWithoutCaching opens the remote database at [Remote.Url] with the following caching layers
+// disabled:
+//
+//   - [dbfactory.NoCachingParameter]: disables the chunk-level read cache in the remotestorage
+//     layer, used for gRPC / DoltHub remotes.
+//   - [dbfactory.DisableSingletonCacheParam]: bypasses the in-process singleton file-DB cache so
+//     each call constructs a fresh underlying store instead of reusing a shared instance.
+//
+// Prefer this over [Remote.GetRemoteDB] when an isolated, point-in-time snapshot of the remote is
+// required and the caller must not share state with any cached instance. Callers are responsible
+// for closing the returned [doltdb.DoltDB] when done to release file descriptors and other
+// associated resources.
 func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
 	params := make(map[string]interface{})
 	for k, v := range r.Params {
 		params[k] = v
 	}
-	params[dbfactory.NoCachingParameter] = "true"
 	params[dbfactory.DisableSingletonCacheParam] = "true"
+	params[dbfactory.NoCachingParameter] = "true"
 	params[dbfactory.GRPCDialProviderParam] = dialer
 	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
 		params[dbfactory.GitRemoteNameParam] = r.Name

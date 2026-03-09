@@ -293,8 +293,9 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 }
 
 // syncRemote syncs the roots from |dbData| to the remote specified by |remote|. It prepares the remote database
-// location using PrepareDB, which creates directories for file:// URLs if they do not exist. The sync operation copies
-// all chunks from the source database to the destination, effectively overwriting the destination to match the source.
+// location using [dbfactory.PrepareDB], which creates directories for file:// URLs if they do not exist. The sync
+// operation copies all chunks from the source database to the destination, effectively overwriting the destination
+// to match the source.
 func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, remote env.Remote) error {
 	// Commit the current session's working set to the persistent chunk store. This ensures that uncommitted transaction
 	// changes (e.g. INSERTs) are usually visible to the backup procedure, which reads directly from the roots.
