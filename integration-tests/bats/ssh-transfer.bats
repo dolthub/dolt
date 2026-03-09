@@ -60,11 +60,11 @@ EOF
     chmod +x "$BATS_TMPDIR/mock_ssh"
     
     # Set environment for SSH operations
-    export DOLT_SSH="$BATS_TMPDIR/mock_ssh"
+    export DOLT_SSH_COMMAND="$BATS_TMPDIR/mock_ssh"
 }
 
 teardown() {
-  unset DOLT_SSH
+  unset DOLT_SSH_COMMAND
   stop_sql_server
 }
 
@@ -160,7 +160,7 @@ echo "$@" >> "$BATS_TMPDIR/ssh_port_args.log"
 exec "$BATS_TMPDIR/mock_ssh" "$@"
 PORTEOF
     chmod +x "$BATS_TMPDIR/mock_ssh_port"
-    export DOLT_SSH="$BATS_TMPDIR/mock_ssh_port"
+    export DOLT_SSH_COMMAND="$BATS_TMPDIR/mock_ssh_port"
 
     cd ..
     run dolt clone "ssh://localhost:9999$BATS_TEST_TMPDIR/repo_porttest" repo_port_clone
@@ -312,7 +312,7 @@ PORTEOF
     [[ "$output" =~ "repository not found" ]] || false
 }
 
-@test "ssh-transfer: verify DOLT_SSH environment variable works" {
+@test "ssh-transfer: verify DOLT_SSH_COMMAND environment variable works" {
     # Create a custom mock SSH that logs calls
     cat > "$BATS_TMPDIR/mock_ssh_logger" <<'EOF'
 #!/bin/bash
@@ -321,7 +321,7 @@ exec "$BATS_TMPDIR/mock_ssh" "$@"
 EOF
     chmod +x "$BATS_TMPDIR/mock_ssh_logger"
     
-    export DOLT_SSH="$BATS_TMPDIR/mock_ssh_logger"
+    export DOLT_SSH_COMMAND="$BATS_TMPDIR/mock_ssh_logger"
     
     mkdir "repo_env_test"
     cd "repo_env_test"
@@ -391,7 +391,7 @@ exec $COMMAND
 MOCK
     chmod +x "$BATS_TMPDIR/mock_ssh_exec"
 
-    export DOLT_SSH="$BATS_TMPDIR/mock_ssh_exec"
+    export DOLT_SSH_COMMAND="$BATS_TMPDIR/mock_ssh_exec"
     export DOLT_SSH_EXEC_PATH="/custom/path/to/dolt"
 
     cd ..

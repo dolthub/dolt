@@ -219,17 +219,29 @@ func filterSSHNoise(s string) string {
 	return strings.Join(lines, "\n")
 }
 
+const (
+	// EnvSSHCommand is the environment variable for the SSH command/script
+	// used to connect to remote hosts. Mirrors git's GIT_SSH_COMMAND.
+	// Supports a full command with arguments (split on whitespace).
+	// Default: "ssh".
+	EnvSSHCommand = "DOLT_SSH_COMMAND"
+
+	// EnvSSHExecPath is the environment variable for the path to the dolt
+	// binary on the remote host. Default: "dolt".
+	EnvSSHExecPath = "DOLT_SSH_EXEC_PATH"
+)
+
 // buildTransferCommand constructs the exec.Cmd for the transfer subprocess.
 // It runs ssh [-p port] [user@]host "<dolt> --data-dir <path> transfer",
-// using DOLT_SSH as the SSH binary if set (default "ssh"), and
+// using DOLT_SSH_COMMAND as the SSH command if set (default "ssh"), and
 // DOLT_SSH_EXEC_PATH as the remote dolt binary path if set (default "dolt").
 func buildTransferCommand(host, port, path, user string) (*exec.Cmd, error) {
-	sshCommand := os.Getenv("DOLT_SSH")
+	sshCommand := os.Getenv(EnvSSHCommand)
 	if sshCommand == "" {
 		sshCommand = "ssh"
 	}
 
-	remoteDolt := os.Getenv("DOLT_SSH_EXEC_PATH")
+	remoteDolt := os.Getenv(EnvSSHExecPath)
 	if remoteDolt == "" {
 		remoteDolt = "dolt"
 	}
@@ -242,7 +254,7 @@ func buildTransferCommand(host, port, path, user string) (*exec.Cmd, error) {
 	remoteCmd := fmt.Sprintf("%s --data-dir %s transfer", remoteDolt, path)
 	sshArgs := strings.Fields(sshCommand)
 	if len(sshArgs) == 0 {
-		return nil, fmt.Errorf("invalid DOLT_SSH command: empty")
+		return nil, fmt.Errorf("invalid %s: empty", EnvSSHCommand)
 	}
 
 	args := append(sshArgs[1:], "-p", port, sshTarget, remoteCmd)
