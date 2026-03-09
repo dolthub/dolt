@@ -24,7 +24,9 @@ RUN apt-get update -y && apt-get install -y \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=source-binary /src/out/dolt-linux-amd64/bin/dolt /usr/local/bin/dolt
-RUN /usr/local/bin/dolt version
+RUN /usr/local/bin/dolt version \
+ && dolt config --global --add user.email 'bats@email.fake' \
+ && dolt config --global --add user.name 'Bats Tests'
 
 VOLUME /var/lib/dolt
 WORKDIR /var/lib/dolt
