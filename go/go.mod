@@ -62,7 +62,7 @@ require (
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/dolt-mcp v0.3.4
-	github.com/dolthub/eventsapi_schema v0.0.0-20260205214132-a7a3c84c84a1
+	github.com/dolthub/eventsapi_schema v0.0.0-20260310172945-37a9265ade69
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
 	github.com/dolthub/go-mysql-server v0.20.1-0.20260309184126-3dbf7f27ab21
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
