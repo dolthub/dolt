@@ -82,9 +82,6 @@ The transfer command:
   - Multiplexes both protocols over stdin/stdout using SMUX
 
 This is a low-level command not intended for direct use.`,
-	Synopsis: []string{
-		"<path>",
-	},
 }
 
 func (cmd TransferCmd) Docs() *cli.CommandDocumentation {
