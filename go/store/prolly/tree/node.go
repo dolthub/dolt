@@ -180,7 +180,8 @@ func (nd *Node) LoadSubtrees() (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	nd.subtrees.CompareAndSwap(nil, (*subtreeCounts)(&sc))
+	stc := subtreeCounts(sc)
+	nd.subtrees.CompareAndSwap(nil, &stc)
 	return nd, nil
 }
 
