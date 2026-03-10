@@ -145,6 +145,27 @@ teardown() {
     [[ "$output" =~ "3" ]]
 }
 
+@test "ssh-transfer: clone of GCed repo" {
+    mkdir "repo_gc"
+    cd "repo_gc"
+    dolt init
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO test VALUES (1), (2), (3);"
+    dolt add .
+    dolt commit -m "test data"
+    dolt gc
+
+    cd ..
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_gc" repo_gc_clone
+    [ "$status" -eq 0 ]
+    [ -d repo_gc_clone ]
+
+    cd repo_gc_clone
+    run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]]
+}
+
 @test "ssh-transfer: pull changes from remote" {
     mkdir "repo_pull_source"
     cd "repo_pull_source"
