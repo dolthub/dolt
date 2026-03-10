@@ -169,7 +169,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 		}
 	}()
 	go func() {
-		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.Serve(listener); err != nil {
 			errCh <- fmt.Errorf("HTTP server error: %w", err)
 		}
 	}()
