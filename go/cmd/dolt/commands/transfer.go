@@ -138,7 +138,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	logger.SetOutput(os.Stderr)
 	logEntry := logrus.NewEntry(logger)
 
-	sealer := &identitySealer{}
+	sealer := &passThruSealer{}
 	chunkStoreService := remotesrv.NewHttpFSBackedChunkStore(
 		logEntry,
 		transferHost,
@@ -159,7 +159,6 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	httpHandler := newTransferFileHandler(dbCache, dEnv.FS, logEntry)
 	httpServer := &http.Server{Handler: httpHandler}
 
-	// Create SMUX-backed listeners for gRPC and HTTP.
 	listener := &smuxListener{session: session}
 
 	// Start both servers.
@@ -193,12 +192,12 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 // host so requests are routed through the SSH connection rather than the network.
 const transferHost = "transfer.local"
 
-// identitySealer is a no-op Sealer for the local stdio transport where URL
+// passThruSealer is a no-op Sealer for the local stdio transport where URL
 // sealing/unsealing is unnecessary.
-type identitySealer struct{}
+type passThruSealer struct{}
 
-func (identitySealer) Seal(u *url.URL) (*url.URL, error)   { return u, nil }
-func (identitySealer) Unseal(u *url.URL) (*url.URL, error) { return u, nil }
+func (passThruSealer) Seal(u *url.URL) (*url.URL, error)   { return u, nil }
+func (passThruSealer) Unseal(u *url.URL) (*url.URL, error) { return u, nil }
 
 // singletonDBCache implements remotesrv.DBCache for a single database,
 // always returning the same chunk store regardless of path.
