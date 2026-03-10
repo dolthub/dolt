@@ -38,6 +38,7 @@ type subtreeCounts []uint64
 // Elements in a Node are generic Items. Interpreting Item
 // contents is deferred to higher layers (see prolly.Map).
 type Node struct {
+	nodeHash hash.Hash
 	// subtrees contains the key cardinality
 	// of each child tree of a non-leaf Node.
 	// this field is lazily decoded from msg
@@ -129,7 +130,10 @@ func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 }
 
 func (nd *Node) HashOf() hash.Hash {
-	return hash.Of(nd.bytes())
+	if nd.nodeHash.IsEmpty() {
+		nd.nodeHash = hash.Of(nd.bytes())
+	}
+	return nd.nodeHash
 }
 
 func (nd *Node) Count() int {
