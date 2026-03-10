@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
 
@@ -4072,8 +4073,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_checkout('--no-overwrite-ignore', 'other');",
-				ExpectedErrStr: "The following ignored tables would be overwritten by checkout:\n\tignored_tbl\nPlease move or remove them before you switch branches.\nUse --overwrite-ignore to force.",
+				Query:       "call dolt_checkout('--no-overwrite-ignore', 'other');",
+				ExpectedErr: actions.ErrCheckoutWouldOverwriteIgnoredTables,
 			},
 			{
 				Query:    "select active_branch();",

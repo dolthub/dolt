@@ -232,7 +232,7 @@ func handleErrors(branchName string, err error) errhand.VerboseError {
 		return errhand.VerboseErrorFromError(err)
 	} else if actions.IsCheckoutWouldOverwrite(err) {
 		return errhand.VerboseErrorFromError(err)
-	} else if actions.IsCheckoutWouldOverwriteIgnoredTables(err) {
+	} else if actions.ErrCheckoutWouldOverwriteIgnoredTables.Is(err) {
 		return errhand.VerboseErrorFromError(err)
 	} else if err.Error() == actions.ErrWorkingSetsOnBothBranches.Error() {
 		str := fmt.Sprintf("error: There are uncommitted changes already on branch '%s'.", branchName) +

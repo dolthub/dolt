@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -382,7 +383,7 @@ func CheckOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, bran
 	}
 
 	if len(overwritten) > 0 {
-		return ErrCheckoutWouldOverwriteIgnoredTables{Tables: overwritten}
+		return ErrCheckoutWouldOverwriteIgnoredTables.New(strings.Join(overwritten, "\n\t"))
 	}
 	return nil
 }

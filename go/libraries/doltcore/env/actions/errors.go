@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"strings"
 
+	goerrors "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
@@ -144,25 +146,10 @@ func CheckoutWouldOverwriteTables(err error) []string {
 	return cwo.tables
 }
 
-type ErrCheckoutWouldOverwriteIgnoredTables struct {
-	Tables []string
-}
-
-func (e ErrCheckoutWouldOverwriteIgnoredTables) Error() string {
-	var buffer bytes.Buffer
-	buffer.WriteString("The following ignored tables would be overwritten by checkout:\n")
-	for _, tbl := range e.Tables {
-		buffer.WriteString("\t" + tbl + "\n")
-	}
-	buffer.WriteString("Please move or remove them before you switch branches.\n")
-	buffer.WriteString("Use --overwrite-ignore to force.")
-	return buffer.String()
-}
-
-func IsCheckoutWouldOverwriteIgnoredTables(err error) bool {
-	_, ok := err.(ErrCheckoutWouldOverwriteIgnoredTables)
-	return ok
-}
+var ErrCheckoutWouldOverwriteIgnoredTables = goerrors.NewKind(
+	"The following ignored tables would be overwritten by checkout:\n\t%s\n" +
+		"Please move or remove them before you switch branches.\n" +
+		"Use --overwrite-ignore to force.")
 
 type NothingStaged struct {
 	NotStagedTbls []diff.TableDelta
