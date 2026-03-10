@@ -8,53 +8,14 @@ load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 setup() {
     cd "$BATS_TEST_TMPDIR"
     
-    # Create mock SSH script
+    # Create mock SSH script that executes the remote command locally.
+    # Real SSH runs its last argument as a command on the remote host.
+    # buildTransferCommand always passes the dolt transfer invocation as
+    # the final argument, so we just exec that.
     cat > "$BATS_TMPDIR/mock_ssh" <<'EOF'
 #!/bin/bash
-# Mock SSH script - executes dolt transfer locally
-# Parses: mock_ssh [options] [user@]host command args...
-
-COMMAND=""
-HOST=""
-SKIP_NEXT=false
-
-for arg in "$@"; do
-    if [[ "$SKIP_NEXT" == "true" ]]; then
-        SKIP_NEXT=false
-        continue
-    fi
-    
-    case "$arg" in
-        -*)
-            # Skip SSH options
-            if [[ "$arg" == "-o" ]] || [[ "$arg" == "-i" ]] || [[ "$arg" == "-p" ]]; then
-                SKIP_NEXT=true
-            fi
-            ;;
-        *@*)
-            # user@host format
-            HOST="${arg#*@}"
-            ;;
-        *)
-            if [[ -z "$HOST" ]] && [[ -z "$COMMAND" ]]; then
-                # First non-option arg is host
-                HOST="$arg"
-            else
-                # Rest is the command
-                if [[ -z "$COMMAND" ]]; then
-                    COMMAND="$arg"
-                else
-                    COMMAND="$COMMAND $arg"
-                fi
-            fi
-            ;;
-    esac
-done
-
-# Log and execute the command locally with proper stdio
+COMMAND="${@: -1}"
 echo "Mock SSH executing: $COMMAND" >> "$BATS_TMPDIR/mock_ssh.log"
-# Use exec to replace the shell process and preserve stdio connections.
-# Tee stderr to a log file so tests can verify server-side log output.
 exec $COMMAND 2> >(tee -a "$BATS_TMPDIR/transfer_stderr.log" >&2)
 EOF
     chmod +x "$BATS_TMPDIR/mock_ssh"
