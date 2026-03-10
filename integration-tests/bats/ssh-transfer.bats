@@ -80,7 +80,7 @@ teardown() {
     cd ..
     run dolt --data-dir="repo1" transfer </dev/null
     # Transfer exits non-zero when stdin closes immediately, but it should
-    # start without crashing. Exit code 1 means it ran and shut down cleanly.
+    # start without crashing. Exit code 1 means it ran and shut down without a panic.
     [ "$status" -eq 1 ]
 }
 
@@ -115,6 +115,19 @@ teardown() {
 
     cd ..
     run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_dotsuffix/.dolt" repo_dotsuffix_clone
+    [ "$status" -eq 0 ]
+    [ -d repo_dotsuffix_clone ]
+
+    cd repo_dotsuffix_clone
+    run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]]
+    cd ..
+    rm -rf repo_dotsuffix_clone
+
+    # repeat with /.dolt/ (trailing slash).
+    cd ..
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_dotsuffix/.dolt/" repo_dotsuffix_clone
     [ "$status" -eq 0 ]
     [ -d repo_dotsuffix_clone ]
 
@@ -424,6 +437,14 @@ MOCK
     # The mock SSH tees remote stderr to transfer_stderr.log.
     # Verify the transfer command's startup log appeared.
     [ -f "$BATS_TMPDIR/transfer_stderr.log" ]
+
+    echo "------------------"
+    env | sort
+    echo "******************"
+    cat "$BATS_TMPDIR/transfer_stderr.log"
+    echo "------------------"
+
+
     grep -q "transfer: serving repository" "$BATS_TMPDIR/transfer_stderr.log"
 }
 
