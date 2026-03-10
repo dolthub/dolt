@@ -1191,8 +1191,9 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 	gbs.pendingCacheEvictions = nil
 
 	// Prune unreferenced tree entries when we know the manifest's table set.
+	// hasParent is required because ListTreeRecursive needs a valid commit OID.
 	var prunedEntries int
-	if allowedTableNames != nil {
+	if allowedTableNames != nil && hasParent {
 		entries, err := gbs.api.ListTreeRecursive(ctx, parent)
 		if err != nil {
 			return "", fmt.Errorf("gitblobstore: listing tree for pruning: %w", err)
