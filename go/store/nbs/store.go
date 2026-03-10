@@ -36,6 +36,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
+	"github.com/fatih/color"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
@@ -51,6 +52,14 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+func _traceNBS(name string) func() {
+	start := time.Now()
+	fmt.Fprintf(color.Output, "[TRACE]       >> NBS.%s\n", name)
+	return func() {
+		fmt.Fprintf(color.Output, "[TRACE]       << NBS.%s [%s]\n", name, time.Since(start))
+	}
+}
 
 var (
 	ErrFetchFailure                           = errors.New("fetch failed")
@@ -672,6 +681,7 @@ func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string
 
 // NewGitStore returns an nbs implementation backed by a GitBlobstore.
 func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	defer _traceNBS("NewGitStore gitDir=" + gitDir + " ref=" + ref)()
 	cacheOnce.Do(makeGlobalCaches)
 
 	// A Git remote may reject large blobs. To keep git-backed remotes broadly usable by default, enable
@@ -882,6 +892,7 @@ func (nbs *NomsBlockStore) waitForGC(ctx context.Context) error {
 }
 
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
+	defer _traceNBS("Put hash=" + c.Hash().String())()
 	valctx.ValidateContext(ctx)
 	return nbs.putChunk(ctx, c, getAddrs, nbs.refCheck)
 }
@@ -1005,6 +1016,7 @@ func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) err
 }
 
 func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
+	defer _traceNBS("Get hash=" + h.String())()
 	valctx.ValidateContext(ctx)
 	ctx, span := tracer.Start(ctx, "nbs.Get")
 	defer span.End()
@@ -1069,6 +1081,7 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 }
 
 func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
+	defer _traceNBS(fmt.Sprintf("GetMany n=%d", len(hashes)))()
 	valctx.ValidateContext(ctx)
 	ctx, span := tracer.Start(ctx, "nbs.GetMany", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
@@ -1217,6 +1230,7 @@ func (nbs *NomsBlockStore) Count() (uint32, error) {
 }
 
 func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
+	defer _traceNBS("Has hash=" + h.String())()
 	valctx.ValidateContext(ctx)
 	t1 := time.Now()
 	defer func() {
@@ -1440,6 +1454,7 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 }
 
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
+	defer _traceNBS("Rebase")()
 	valctx.ValidateContext(ctx)
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -1476,6 +1491,7 @@ func (nbs *NomsBlockStore) rebase(ctx context.Context) error {
 }
 
 func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
+	defer _traceNBS("Root")()
 	valctx.ValidateContext(ctx)
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
@@ -1483,6 +1499,7 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 }
 
 func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (success bool, err error) {
+	defer _traceNBS("Commit current=" + current.String())()
 	valctx.ValidateContext(ctx)
 	return nbs.commit(ctx, current, last, nbs.refCheck)
 }
@@ -1737,6 +1754,7 @@ func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 // Sources retrieves the current root hash, a list of all table files (which may include appendix tablefiles),
 // and a second list of only the appendix table files
 func (nbs *NomsBlockStore) Sources(ctx context.Context) (chunks.TableFileSources, error) {
+	defer _traceNBS("Sources")()
 	valctx.ValidateContext(ctx)
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -1818,6 +1836,7 @@ func newTableFile(cs chunkSource, info tableSpec, behavior dherrors.FatalBehavio
 }
 
 func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
+	defer _traceNBS("Size")()
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
@@ -1870,6 +1889,7 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, splitOffset uint64, numChunks int, _ []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+	defer _traceNBS(fmt.Sprintf("WriteTableFile file=%s chunks=%d", fileName, numChunks))()
 	valctx.ValidateContext(ctx)
 	tfp, ok := nbs.persister.(tableFilePersister)
 	if !ok {
@@ -1892,6 +1912,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 
 // AddTableFilesToManifest adds table files to the manifest
 func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
+	defer _traceNBS(fmt.Sprintf("AddTableFilesToManifest nfiles=%d", len(fileIdToNumChunks)))()
 	valctx.ValidateContext(ctx)
 	return nbs.addTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs, nbs.refCheck)
 }

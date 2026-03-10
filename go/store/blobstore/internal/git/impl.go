@@ -21,7 +21,18 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/fatih/color"
 )
+
+func _traceGit(name string) func() {
+	start := time.Now()
+	fmt.Fprintf(color.Output, "[TRACE] >> git.%s\n", name)
+	return func() {
+		fmt.Fprintf(color.Output, "[TRACE] << git.%s [%s]\n", name, time.Since(start))
+	}
+}
 
 // GitAPIImpl implements GitAPI using the git CLI plumbing commands, via Runner.
 // It supports reads and writes (temporary index via GIT_INDEX_FILE)
@@ -37,6 +48,7 @@ func NewGitAPIImpl(r *Runner) *GitAPIImpl {
 }
 
 func (a *GitAPIImpl) TryResolveRefCommit(ctx context.Context, ref string) (oid OID, ok bool, err error) {
+	defer _traceGit("TryResolveRefCommit ref=" + ref)()
 	out, err := a.r.Run(ctx, RunOptions{}, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	if err == nil {
 		s := strings.TrimSpace(string(out))
@@ -54,6 +66,7 @@ func (a *GitAPIImpl) TryResolveRefCommit(ctx context.Context, ref string) (oid O
 }
 
 func (a *GitAPIImpl) ResolveRefCommit(ctx context.Context, ref string) (OID, error) {
+	defer _traceGit("ResolveRefCommit ref=" + ref)()
 	oid, ok, err := a.TryResolveRefCommit(ctx, ref)
 	if err != nil {
 		return "", err
@@ -65,6 +78,7 @@ func (a *GitAPIImpl) ResolveRefCommit(ctx context.Context, ref string) (OID, err
 }
 
 func (a *GitAPIImpl) ResolvePathBlob(ctx context.Context, commit OID, path string) (OID, error) {
+	defer _traceGit("ResolvePathBlob path=" + path)()
 	spec := commit.String() + ":" + path
 	out, err := a.r.Run(ctx, RunOptions{}, "rev-parse", "--verify", spec)
 	if err != nil {
@@ -89,6 +103,7 @@ func (a *GitAPIImpl) ResolvePathBlob(ctx context.Context, commit OID, path strin
 }
 
 func (a *GitAPIImpl) ResolvePathObject(ctx context.Context, commit OID, path string) (oid OID, typ ObjectType, err error) {
+	defer _traceGit("ResolvePathObject path=" + path)()
 	spec := commit.String() + ":" + path
 	out, err := a.r.Run(ctx, RunOptions{}, "rev-parse", "--verify", spec)
 	if err != nil {
@@ -110,6 +125,7 @@ func (a *GitAPIImpl) ResolvePathObject(ctx context.Context, commit OID, path str
 }
 
 func (a *GitAPIImpl) ListTree(ctx context.Context, commit OID, treePath string) ([]TreeEntry, error) {
+	defer _traceGit("ListTree treePath=" + treePath)()
 	// Note: `git ls-tree <tree-ish>` accepts a tree-ish of the form "<commit>:<path>".
 	// Use that to list children of a tree path without needing to pre-resolve the tree OID.
 	spec := commit.String()
@@ -145,6 +161,7 @@ func (a *GitAPIImpl) ListTree(ctx context.Context, commit OID, treePath string) 
 }
 
 func (a *GitAPIImpl) ListTreeRecursive(ctx context.Context, commit OID) ([]TreeEntry, error) {
+	defer _traceGit("ListTreeRecursive commit=" + commit.String())()
 	// Include trees (-t) so callers can resolve directory paths as tree objects.
 	// Recurse (-r) so we get a full snapshot in one invocation.
 	out, err := a.r.Run(ctx, RunOptions{}, "ls-tree", "-r", "-t", commit.String()+"^{tree}")
@@ -170,6 +187,7 @@ func (a *GitAPIImpl) ListTreeRecursive(ctx context.Context, commit OID) ([]TreeE
 }
 
 func (a *GitAPIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
+	defer _traceGit("CatFileType oid=" + oid.String())()
 	out, err := a.r.Run(ctx, RunOptions{}, "cat-file", "-t", oid.String())
 	if err != nil {
 		return "", err
@@ -178,6 +196,7 @@ func (a *GitAPIImpl) CatFileType(ctx context.Context, oid OID) (string, error) {
 }
 
 func (a *GitAPIImpl) BlobSize(ctx context.Context, oid OID) (int64, error) {
+	defer _traceGit("BlobSize oid=" + oid.String())()
 	out, err := a.r.Run(ctx, RunOptions{}, "cat-file", "-s", oid.String())
 	if err != nil {
 		return 0, err
@@ -191,11 +210,13 @@ func (a *GitAPIImpl) BlobSize(ctx context.Context, oid OID) (int64, error) {
 }
 
 func (a *GitAPIImpl) BlobReader(ctx context.Context, oid OID) (io.ReadCloser, error) {
+	defer _traceGit("BlobReader oid=" + oid.String())()
 	rc, _, err := a.r.Start(ctx, RunOptions{}, "cat-file", "blob", oid.String())
 	return rc, err
 }
 
 func (a *GitAPIImpl) HashObject(ctx context.Context, contents io.Reader) (OID, error) {
+	defer _traceGit("HashObject")()
 	out, err := a.r.Run(ctx, RunOptions{Stdin: contents}, "hash-object", "-w", "--stdin")
 	if err != nil {
 		return "", err
@@ -208,21 +229,25 @@ func (a *GitAPIImpl) HashObject(ctx context.Context, contents io.Reader) (OID, e
 }
 
 func (a *GitAPIImpl) ReadTree(ctx context.Context, commit OID, indexFile string) error {
+	defer _traceGit("ReadTree commit=" + commit.String())()
 	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "read-tree", commit.String()+"^{tree}")
 	return err
 }
 
 func (a *GitAPIImpl) ReadTreeEmpty(ctx context.Context, indexFile string) error {
+	defer _traceGit("ReadTreeEmpty")()
 	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "read-tree", "--empty")
 	return err
 }
 
 func (a *GitAPIImpl) UpdateIndexCacheInfo(ctx context.Context, indexFile string, mode string, oid OID, path string) error {
+	defer _traceGit("UpdateIndexCacheInfo path=" + path)()
 	_, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "update-index", "--add", "--cacheinfo", mode, oid.String(), path)
 	return err
 }
 
 func (a *GitAPIImpl) RemoveIndexPaths(ctx context.Context, indexFile string, paths []string) error {
+	defer _traceGit(fmt.Sprintf("RemoveIndexPaths n=%d", len(paths)))()
 	if len(paths) == 0 {
 		return nil
 	}
@@ -243,6 +268,7 @@ func (a *GitAPIImpl) RemoveIndexPaths(ctx context.Context, indexFile string, pat
 }
 
 func (a *GitAPIImpl) WriteTree(ctx context.Context, indexFile string) (OID, error) {
+	defer _traceGit("WriteTree")()
 	out, err := a.r.Run(ctx, RunOptions{IndexFile: indexFile}, "write-tree")
 	if err != nil {
 		return "", err
@@ -255,6 +281,7 @@ func (a *GitAPIImpl) WriteTree(ctx context.Context, indexFile string) (OID, erro
 }
 
 func (a *GitAPIImpl) CommitTree(ctx context.Context, tree OID, parent *OID, message string, author *Identity) (OID, error) {
+	defer _traceGit("CommitTree msg=" + message)()
 	args := []string{"commit-tree", tree.String(), "-m", message}
 	if parent != nil && parent.String() != "" {
 		args = append(args, "-p", parent.String())
@@ -288,6 +315,7 @@ func (a *GitAPIImpl) CommitTree(ctx context.Context, tree OID, parent *OID, mess
 }
 
 func (a *GitAPIImpl) RevListCount(ctx context.Context, oid OID, maxCount int) (int, error) {
+	defer _traceGit(fmt.Sprintf("RevListCount maxCount=%d", maxCount))()
 	args := []string{"rev-list", "--count"}
 	if maxCount > 0 {
 		args = append(args, fmt.Sprintf("--max-count=%d", maxCount))
@@ -301,6 +329,7 @@ func (a *GitAPIImpl) RevListCount(ctx context.Context, oid OID, maxCount int) (i
 }
 
 func (a *GitAPIImpl) UpdateRefCAS(ctx context.Context, ref string, newOID OID, oldOID OID, msg string) error {
+	defer _traceGit("UpdateRefCAS ref=" + ref)()
 	args := []string{"update-ref"}
 	if msg != "" {
 		args = append(args, "-m", msg)
@@ -311,6 +340,7 @@ func (a *GitAPIImpl) UpdateRefCAS(ctx context.Context, ref string, newOID OID, o
 }
 
 func (a *GitAPIImpl) UpdateRef(ctx context.Context, ref string, newOID OID, msg string) error {
+	defer _traceGit("UpdateRef ref=" + ref)()
 	args := []string{"update-ref"}
 	if msg != "" {
 		args = append(args, "-m", msg)
@@ -321,6 +351,7 @@ func (a *GitAPIImpl) UpdateRef(ctx context.Context, ref string, newOID OID, msg 
 }
 
 func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string, dstRef string) error {
+	defer _traceGit("FetchRef remote=" + remote + " src=" + srcRef)()
 	if remote == "" {
 		return fmt.Errorf("git fetch: remote is required")
 	}
@@ -345,6 +376,7 @@ func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string,
 }
 
 func (a *GitAPIImpl) PushRefWithLease(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID OID) error {
+	defer _traceGit("PushRefWithLease remote=" + remote + " dst=" + dstRef)()
 	if remote == "" {
 		return fmt.Errorf("git push: remote is required")
 	}

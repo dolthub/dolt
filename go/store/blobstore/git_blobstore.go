@@ -31,10 +31,19 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dolthub/fslock"
+	"github.com/fatih/color"
 	"github.com/google/uuid"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
 )
+
+func _traceBS(name string) func() {
+	start := time.Now()
+	fmt.Fprintf(color.Output, "[TRACE]   >> GitBlobstore.%s\n", name)
+	return func() {
+		fmt.Fprintf(color.Output, "[TRACE]   << GitBlobstore.%s [%s]\n", name, time.Since(start))
+	}
+}
 
 const gitblobstorePartNameWidth = 4 // "0001"
 
@@ -453,6 +462,7 @@ func (gbs *GitBlobstore) sortCacheChildrenLocked(dirs map[string]struct{}) {
 // append-only — except for the manifest, which must always reflect the latest
 // remote state.
 func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) error {
+	defer _traceBS("mergeCacheFromHead head=" + head.String())()
 	if head == "" {
 		return fmt.Errorf("gitblobstore: cannot merge cache for empty head")
 	}
@@ -622,6 +632,7 @@ func (gbs *GitBlobstore) maybeRunGC() {
 }
 
 func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
+	defer _traceBS("syncForRead")()
 	if err := gbs.validateRemoteManaged(); err != nil {
 		return err
 	}
@@ -670,6 +681,7 @@ func (e *gitblobstoreFetchRefError) Error() string { return e.err.Error() }
 func (e *gitblobstoreFetchRefError) Unwrap() error { return e.err }
 
 func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remoteHead git.OID, ok bool, err error) {
+	defer _traceBS("fetchAlignAndMergeForWrite")()
 	if err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef); err != nil {
 		// If the remote ref is missing, treat this as an empty store and bootstrap on write.
 		var rnf *git.RefNotFoundError
@@ -701,6 +713,7 @@ func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remote
 }
 
 func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string, build func(parent git.OID, ok bool) (git.OID, error)) (string, error) {
+	defer _traceBS("remoteManagedWrite key=" + key)()
 	if err := gbs.validateRemoteManaged(); err != nil {
 		return "", err
 	}
@@ -801,6 +814,7 @@ func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expected
 }
 
 func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
+	defer _traceBS("Exists key=" + key)()
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
 		return false, err
@@ -822,6 +836,7 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
+	defer _traceBS("Get key=" + key)()
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
 		return nil, 0, "", err
@@ -948,6 +963,7 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 }
 
 func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
+	defer _traceBS(fmt.Sprintf("Put key=%s size=%d", key, totalSize))()
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
 		return "", err
@@ -1009,6 +1025,7 @@ func (gbs *GitBlobstore) cacheUpdateForPlan(key string, plan putPlan) {
 }
 
 func (gbs *GitBlobstore) planPutWrites(ctx context.Context, key string, totalSize int64, reader io.Reader) (putPlan, error) {
+	defer _traceBS(fmt.Sprintf("planPutWrites key=%s size=%d", key, totalSize))()
 	// Minimal policy: chunk only when explicitly enabled and |totalSize| exceeds MaxPartSize.
 	if gbs.maxPartSize == 0 || totalSize <= 0 || uint64(totalSize) <= gbs.maxPartSize {
 		blobOID, err := gbs.api.HashObject(ctx, reader)
@@ -1082,6 +1099,7 @@ func (gbs *GitBlobstore) casRetryPolicy(ctx context.Context) backoff.BackOff {
 }
 
 func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.OID, hasParent bool, key string, plan putPlan, msg string, extraWrites []pendingWrite) (git.OID, error) {
+	defer _traceBS(fmt.Sprintf("buildCommitForKeyWrite key=%s nExtra=%d", key, len(extraWrites)))()
 	_, indexFile, cleanup, err := git.NewTempIndex()
 	if err != nil {
 		return "", err
@@ -1190,6 +1208,7 @@ func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent
 }
 
 func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+	defer _traceBS(fmt.Sprintf("CheckAndPut key=%s size=%d", key, totalSize))()
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
 		return "", err
@@ -1228,6 +1247,7 @@ func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, 
 }
 
 func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
+	defer _traceBS(fmt.Sprintf("Concatenate key=%s nsources=%d", key, len(sources)))()
 	var err error
 	key, err = normalizeGitTreePath(key)
 	if err != nil {
