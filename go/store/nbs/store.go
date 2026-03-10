@@ -106,7 +106,7 @@ type CompressedChunkStoreForGC interface {
 }
 
 type NomsBlockStore struct {
-	tables      tableSet
+	tables      *tableSet
 	manifestMgr manifestManager
 	persister   tablePersister
 
@@ -140,6 +140,8 @@ type NomsBlockStore struct {
 	gcInProgress bool
 
 	fatalBehavior dherrors.FatalBehavior
+
+	closed bool
 }
 
 func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
@@ -231,23 +233,36 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 		return gcBehavior_Continue, nil
 	}
 
+	var tables *tableSet
+	defer func() {
+		if tables != nil {
+			tables.release()
+		}
+	}()
+	var needsContinue bool
 	for {
 		nbs.mu.Lock()
-		tables, keeper, endRead, behavior := nbs.tables, nbs.keeperFunc, nbs.beginRead(), nbs.fatalBehavior
+		if nbs.closed {
+			nbs.mu.Unlock()
+			return nil, errors.New("*NomsBlockStore is closed")
+		}
+		tables = nbs.tables
+		tables.acquire()
+		keeper, endRead, behavior := nbs.keeperFunc, nbs.beginRead(), nbs.fatalBehavior
 		nbs.mu.Unlock()
 
 		gr := toGetRecords(hashes)
 		ranges := make(map[*chunkSource]map[hash.Hash]Range)
 
 		gcb, err := fn(behavior, tables.upstream, gr, ranges, keeper)
-		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, false, endRead, err); err != nil {
+		if needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, false, endRead, tables, err); err != nil {
 			return nil, err
 		} else if needsContinue {
 			continue
 		}
 
 		gcb, err = fn(behavior, tables.novel, gr, ranges, keeper)
-		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err); err != nil {
+		if needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err); err != nil {
 			return nil, err
 		} else if needsContinue {
 			continue
@@ -275,30 +290,34 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 	return res, nil
 }
 
-func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endReadOnSuccess bool, endRead func(), err error) (bool, error) {
+func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endReadOnSuccess bool, endRead func(), tables *tableSet, err error) (bool, *tableSet, error) {
 	if err != nil {
+		tables.release()
 		if endRead != nil {
 			nbs.mu.Lock()
 			endRead()
 			nbs.mu.Unlock()
 		}
-		return false, err
+		return false, nil, err
 	}
 	if gcb == gcBehavior_Block {
+		tables.release()
 		nbs.mu.Lock()
 		if endRead != nil {
 			endRead()
 		}
 		err := nbs.waitForGC(ctx)
 		nbs.mu.Unlock()
-		return true, err
+		return true, nil, err
 	} else {
 		if endRead != nil && endReadOnSuccess {
+			tables.release()
 			nbs.mu.Lock()
 			endRead()
 			nbs.mu.Unlock()
+			return false, nil, nil
 		}
-		return false, nil
+		return false, tables, nil
 	}
 }
 
@@ -500,7 +519,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		}
 	}
 
-	var newTables tableSet
+	var newTables *tableSet
 	newTables, err = nbs.tables.rebase(ctx, updatedContents.specs, sources, nbs.stats)
 	if err != nil {
 		return manifestContents{}, false, err
@@ -996,8 +1015,19 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 		nbs.stats.ChunksPerGet.Sample(1)
 	}()
 
+	var tables *tableSet
+	defer func() {
+		if tables != nil {
+			tables.release()
+		}
+	}()
+	var needsContinue bool
 	for {
 		nbs.mu.Lock()
+		if nbs.closed {
+			nbs.mu.Unlock()
+			return chunks.EmptyChunk, errors.New("*NomsBlockStore is closed")
+		}
 		if nbs.memtable != nil {
 			data, gcb, err := nbs.memtable.get(ctx, h, nbs.keeperFunc, nbs.stats)
 			if err != nil {
@@ -1017,15 +1047,17 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 				return chunks.NewChunkWithHash(h, data), nil
 			}
 		}
-		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		keeper, endRead := nbs.keeperFunc, nbs.beginRead()
+		tables = nbs.tables
+		tables.acquire()
 		nbs.mu.Unlock()
 
 		data, gcb, err := tables.get(ctx, h, keeper, nbs.stats)
-		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err)
+		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err)
 		if err != nil {
 			return chunks.EmptyChunk, err
 		}
-		if needContinue {
+		if needsContinue {
 			continue
 		}
 
@@ -1080,9 +1112,20 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 
 	reqs := toGetRecords(hashes)
 
+	var tables *tableSet
+	defer func() {
+		if tables != nil {
+			tables.release()
+		}
+	}()
+	var needsContinue bool
 	const ioParallelism = 16
 	for {
 		nbs.mu.Lock()
+		if nbs.closed {
+			nbs.mu.Unlock()
+			return errors.New("*NomsBlockStore is closed")
+		}
 		keeper := nbs.keeperFunc
 		if gcDepMode == gcDependencyMode_NoDependency {
 			keeper = nil
@@ -1107,7 +1150,9 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 				return nil
 			}
 		}
-		tables, endRead := nbs.tables, nbs.beginRead()
+		tables = nbs.tables
+		tables.acquire()
+		endRead := nbs.beginRead()
 		nbs.mu.Unlock()
 
 		gcb, err := func() (gcBehavior, error) {
@@ -1116,11 +1161,11 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 			_, gcb, err := getManyFunc(ctx, tables, eg, reqs, keeper, nbs.stats)
 			return gcb, errors.Join(err, eg.Wait())
 		}()
-		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err)
+		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err)
 		if err != nil {
 			return err
 		}
-		if needContinue {
+		if needsContinue {
 			continue
 		}
 
@@ -1179,8 +1224,19 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 		nbs.stats.AddressesPerHas.Sample(1)
 	}()
 
+	var tables *tableSet
+	defer func() {
+		if tables != nil {
+			tables.release()
+		}
+	}()
+	var needsContinue bool
 	for {
 		nbs.mu.Lock()
+		if nbs.closed {
+			nbs.mu.Unlock()
+			return false, errors.New("*NomsBlockStore is closed")
+		}
 		if nbs.memtable != nil {
 			has, gcb, err := nbs.memtable.has(h, nbs.keeperFunc)
 			if err != nil {
@@ -1200,11 +1256,13 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 				return true, nil
 			}
 		}
-		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		keeper, endRead := nbs.keeperFunc, nbs.beginRead()
+		tables = nbs.tables
+		tables.acquire()
 		nbs.mu.Unlock()
 
 		has, gcb, err := tables.has(h, keeper)
-		needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err)
+		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err)
 		if err != nil {
 			return false, err
 		}
@@ -1232,10 +1290,21 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 		nbs.stats.AddressesPerHas.SampleLen(hashes.Size())
 	}()
 
+	var tables *tableSet
+	defer func() {
+		if tables != nil {
+			tables.release()
+		}
+	}()
+	var needsContinue bool
 	for {
 		reqs := toHasRecords(hashes)
 
 		nbs.mu.Lock()
+		if nbs.closed {
+			nbs.mu.Unlock()
+			return nil, errors.New("*NomsBlockStore is closed")
+		}
 		if nbs.memtable != nil {
 			keeper := nbs.keeperFunc
 			if gcDepMode == gcDependencyMode_NoDependency {
@@ -1259,18 +1328,20 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 				return hash.HashSet{}, nil
 			}
 		}
-		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		keeper, endRead := nbs.keeperFunc, nbs.beginRead()
 		if gcDepMode == gcDependencyMode_NoDependency {
 			keeper = nil
 		}
+		tables = nbs.tables
+		tables.acquire()
 		nbs.mu.Unlock()
 
 		remaining, gcb, err := tables.hasMany(reqs, keeper)
-		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err)
+		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err)
 		if err != nil {
 			return nil, err
 		}
-		if needContinue {
+		if needsContinue {
 			continue
 		}
 
@@ -1581,7 +1652,6 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	newTables, err := nbs.tables.flatten(ctx)
-
 	if err != nil {
 		return err
 	}
@@ -1605,6 +1675,7 @@ func (nbs *NomsBlockStore) AccessMode() chunks.ExclusiveAccessMode {
 func (nbs *NomsBlockStore) Close() error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	nbs.closed = true
 	for nbs.conjoinOp != nil {
 		nbs.conjoinOpCond.Wait()
 	}
@@ -2408,12 +2479,10 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 // CalcReads computes the number of IO operations necessary to fetch |hashes|.
 func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keeper keeperF) (int, bool, gcBehavior, error) {
 	reqs := toGetRecords(hashes)
-	tables := func() (tables tableSet) {
+	tables := func() *tableSet {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
-		tables = nbs.tables
-
-		return
+		return nbs.tables
 	}()
 
 	reads, split, remaining, gcb, err := tableSetCalcReads(tables, reqs, blockSize, keeper)

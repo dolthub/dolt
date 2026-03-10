@@ -489,8 +489,9 @@ func (fm *fakeManifest) set(version string, lock hash.Hash, root hash.Hash, spec
 	}
 }
 
-func newFakeTableSet(q MemoryQuotaProvider) tableSet {
-	return tableSet{p: newFakeTablePersister(q), q: q, rl: make(chan struct{}, 1)}
+func newFakeTableSet(q MemoryQuotaProvider) *tableSet {
+	var cnt int32 = 1
+	return &tableSet{p: newFakeTablePersister(q), q: q, rl: make(chan struct{}, 1), cnt: &cnt, closeCh: make(chan struct{})}
 }
 
 func newFakeTablePersister(q MemoryQuotaProvider) fakeTablePersister {
