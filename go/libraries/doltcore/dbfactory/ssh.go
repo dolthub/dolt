@@ -187,8 +187,8 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	return db, vrw, ns, nil
 }
 
-// sshRemoteError builds an error message for SSH remote failures. It waits
-// for the remote's stderr to be fully read (signaled by stderrDone) and
+// sshRemoteError builds an error message for SSH remote failures. It first uses
+// the text of stderr, and if there is none if returns the provided error.
 // uses it to produce a more informative message than the raw gRPC/SMUX error.
 func sshRemoteError(stderrDone <-chan struct{}, stderrBuf *bytes.Buffer, path, msg string, err error) error {
 	<-stderrDone
@@ -199,6 +199,7 @@ func sshRemoteError(stderrDone <-chan struct{}, stderrBuf *bytes.Buffer, path, m
 		}
 		return fmt.Errorf("%s: remote: %s", msg, errMsg)
 	}
+	// If no stderr output, return the original error.
 	return fmt.Errorf("%s: %w", msg, err)
 }
 
@@ -257,14 +258,12 @@ func buildTransferCommand(host, port, path, user string) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("invalid %s: empty", EnvSSHCommand)
 	}
 
-	args := append(sshArgs[1:], "-p", port, sshTarget, remoteCmd)
-	if port == "" {
-		args = append(sshArgs[1:], sshTarget, remoteCmd)
+	args := append(sshArgs[1:], sshTarget, remoteCmd)
+	if port != "" {
+		args = append(sshArgs[1:], "-p", port, sshTarget, remoteCmd)
 	}
 	return exec.Command(sshArgs[0], args...), nil
 }
-
-// --- sshConnection: lifecycle management ---
 
 // sshConnection holds all resources for an SSH transfer connection and
 // implements coordinated cleanup.
@@ -298,8 +297,6 @@ func (c *sshConnection) Close() error {
 	return nil
 }
 
-// --- sshChunkStore: wraps DoltChunkStore with cleanup ---
-
 // sshChunkStore wraps a DoltChunkStore and closes the SSH connection when
 // the chunk store is closed.
 type sshChunkStore struct {
@@ -315,8 +312,6 @@ func (s *sshChunkStore) Close() error {
 	}
 	return connErr
 }
-
-// --- smuxHTTPTransport: http.RoundTripper over SMUX ---
 
 // smuxHTTPTransport implements http.RoundTripper by sending HTTP requests
 // over SMUX streams. Each request gets its own stream.
@@ -358,8 +353,6 @@ func (s *streamBodyCloser) Close() error {
 	s.stream.Close()
 	return err
 }
-
-// --- pipeConn: net.Conn over subprocess pipes ---
 
 // pipeConn implements net.Conn over a subprocess's stdin/stdout pipes.
 type pipeConn struct {
