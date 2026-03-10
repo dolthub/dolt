@@ -26,6 +26,7 @@ import (
 	"crypto/sha512"
 	"hash/crc32"
 	"io"
+	"maps"
 
 	"golang.org/x/sync/errgroup"
 
@@ -283,10 +284,10 @@ type chunkSources []chunkSource
 type chunkSourceSet map[hash.Hash]chunkSource
 
 func copyChunkSourceSet(s chunkSourceSet) (cp chunkSourceSet) {
+	// This is different from maps.Clone() in that it
+	// always returns a non-nil map, even when |s| is nil.
 	cp = make(chunkSourceSet, len(s))
-	for k, v := range s {
-		cp[k] = v
-	}
+	maps.Copy(cp, s)
 	return
 }
 

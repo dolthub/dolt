@@ -408,8 +408,10 @@ func (ts *tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBeha
 		p:        ts.p,
 		q:        ts.q,
 		rl:       ts.rl,
-		cnt:      ts.cnt,
-		closeCh:  ts.closeCh,
+		// The tableset we return takes ownership of the existing
+		// chunk sources. We share the reference count and closeCh.
+		cnt:     ts.cnt,
+		closeCh: ts.closeCh,
 	}
 	newTs.novel[cs.hash()] = cs
 	return newTs, gcBehavior_Continue, nil
@@ -423,8 +425,10 @@ func (ts *tableSet) flatten(ctx context.Context) (*tableSet, error) {
 		p:        ts.p,
 		q:        ts.q,
 		rl:       ts.rl,
-		cnt:      ts.cnt,
-		closeCh:  ts.closeCh,
+		// We take ownership of the chunk sources here,
+		// and so inherit/share the cnt and closeCh.
+		cnt:     ts.cnt,
+		closeCh: ts.closeCh,
 	}
 
 	for _, src := range ts.novel {

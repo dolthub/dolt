@@ -1652,7 +1652,6 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	newTables, err := nbs.tables.flatten(ctx)
-
 	if err != nil {
 		return err
 	}
