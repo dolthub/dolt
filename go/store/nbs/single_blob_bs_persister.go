@@ -17,25 +17,14 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"time"
-
-	"github.com/fatih/color"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
-
-func _tracePersister(name string) func() {
-	start := time.Now()
-	fmt.Fprintf(color.Output, "[TRACE]     >> singleBlobBSPersister.%s\n", name)
-	return func() {
-		fmt.Fprintf(color.Output, "[TRACE]     << singleBlobBSPersister.%s [%s]\n", name, time.Since(start))
-	}
-}
 
 // singleBlobBSPersister writes table files as single blobs (no .records/.tail split)
 // while still supporting ConjoinAll. This avoids intermediate blobs in the git tree
@@ -50,7 +39,6 @@ var _ tablePersister = &singleBlobBSPersister{}
 var _ tableFilePersister = &singleBlobBSPersister{}
 
 func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	defer _tracePersister("Persist")()
 	address, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
@@ -75,7 +63,6 @@ func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors
 }
 
 func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	defer _tracePersister(fmt.Sprintf("ConjoinAll nsources=%d", len(sources)))()
 	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, stats)
 	if err != nil {
 		return nil, nil, err
@@ -131,7 +118,6 @@ func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherr
 }
 
 func (bsp *singleBlobBSPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	defer _tracePersister(fmt.Sprintf("Open name=%s chunks=%d", name.String(), chunkCount))()
 	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
 	if err == nil {
 		return cs, nil
@@ -145,7 +131,6 @@ func (bsp *singleBlobBSPersister) Open(ctx context.Context, name hash.Hash, chun
 }
 
 func (bsp *singleBlobBSPersister) Exists(ctx context.Context, name string, _ uint32, _ *Stats) (bool, error) {
-	defer _tracePersister("Exists name=" + name)()
 	return bsp.bs.Exists(ctx, name)
 }
 
@@ -169,7 +154,6 @@ func (bsp *singleBlobBSPersister) Path() string {
 }
 
 func (bsp *singleBlobBSPersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, _ uint64) error {
-	defer _tracePersister(fmt.Sprintf("CopyTableFile name=%s size=%d", name, fileSz))()
 	_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
 	return err
 }

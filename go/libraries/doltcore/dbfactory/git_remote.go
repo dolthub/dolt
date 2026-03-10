@@ -25,10 +25,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/dolthub/fslock"
-	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/store/blobstore"
@@ -37,14 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-func _traceFactory(name string) func() {
-	start := time.Now()
-	fmt.Fprintf(color.Output, "[TRACE] >> GitRemoteFactory.%s\n", name)
-	return func() {
-		fmt.Fprintf(color.Output, "[TRACE] << GitRemoteFactory.%s [%s]\n", name, time.Since(start))
-	}
-}
 
 const (
 	// GitCacheRootParam is the absolute path to the local Dolt repository root (the directory that contains `.dolt/`).
@@ -103,7 +93,6 @@ func (fact GitRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFo
 }
 
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	defer _traceFactory("CreateDB url=" + urlObj.String())()
 	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
 	if err != nil {
 		return nil, nil, nil, err
@@ -166,7 +155,6 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 }
 
 func ensureRemoteHasBranches(ctx context.Context, gitDir string, remoteName string, remoteURL string) error {
-	defer _traceFactory("ensureRemoteHasBranches remote=" + remoteName)()
 	out, err := runGitInDir(ctx, gitDir, "ls-remote", "--heads", "--", remoteName)
 	if err != nil {
 		return err
@@ -275,7 +263,6 @@ func cacheRepoPath(cacheBase, remoteURL, ref string) (string, error) {
 }
 
 func ensureBareRepo(ctx context.Context, gitDir string) error {
-	defer _traceFactory("ensureBareRepo dir=" + gitDir)()
 	if gitDir == "" {
 		return fmt.Errorf("empty gitDir")
 	}
@@ -291,7 +278,6 @@ func ensureBareRepo(ctx context.Context, gitDir string) error {
 }
 
 func ensureGitRemoteURL(ctx context.Context, gitDir string, remoteName string, remoteURL string) error {
-	defer _traceFactory("ensureGitRemoteURL remote=" + remoteName)()
 	if strings.TrimSpace(remoteName) == "" {
 		return fmt.Errorf("empty remote name")
 	}
