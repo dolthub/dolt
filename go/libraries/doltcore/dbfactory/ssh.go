@@ -52,21 +52,7 @@ func (SSHRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 // (either SSH or dolt transfer directly for localhost) and multiplexes gRPC
 // and HTTP over the subprocess's stdin/stdout using SMUX.
 func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	host := urlObj.Hostname()
-	port := urlObj.Port()
-	path := urlObj.Path
-	user := ""
-
-	path = strings.TrimSuffix(path, "/")
-	path = strings.TrimSuffix(path, "/.dolt")
-
-	if urlObj.User != nil {
-		user = urlObj.User.Username()
-	}
-	if atIdx := strings.LastIndex(host, "@"); atIdx != -1 {
-		user = host[:atIdx]
-		host = host[atIdx+1:]
-	}
+	host, port, path, user := parseSSHURL(urlObj)
 
 	cmd, err := buildTransferCommand(host, port, path, user)
 	if err != nil {
@@ -231,6 +217,25 @@ const (
 	// binary on the remote host. Default: "dolt".
 	EnvSSHExecPath = "DOLT_SSH_EXEC_PATH"
 )
+
+// parseSSHURL extracts host, port, path, and user from an SSH remote URL.
+// It strips trailing "/" and "/.dolt" from the path, and handles user info
+// from both the standard URL userinfo and user@host formats.
+func parseSSHURL(urlObj *url.URL) (host, port, path, user string) {
+	host = urlObj.Hostname()
+	port = urlObj.Port()
+	path = urlObj.Path
+	path = strings.TrimSuffix(path, "/")
+	path = strings.TrimSuffix(path, "/.dolt")
+	if urlObj.User != nil {
+		user = urlObj.User.Username()
+	}
+	if atIdx := strings.LastIndex(host, "@"); atIdx != -1 {
+		user = host[:atIdx]
+		host = host[atIdx+1:]
+	}
+	return
+}
 
 // buildTransferCommand constructs the exec.Cmd for the transfer subprocess.
 // It runs ssh [-p port] [user@]host "<dolt> --data-dir <path> transfer",

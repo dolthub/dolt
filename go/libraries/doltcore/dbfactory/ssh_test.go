@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -293,6 +292,12 @@ func TestSSHURLParsing(t *testing.T) {
 			wantUser: "neil",
 		},
 		{
+			name:     "trailing slash stripped",
+			url:      "ssh://myhost/data/repo/",
+			wantHost: "myhost",
+			wantPath: "/data/repo",
+		},
+		{
 			name:     ".dolt suffix stripped",
 			url:      "ssh://myhost/data/repo/.dolt",
 			wantHost: "myhost",
@@ -315,48 +320,14 @@ func TestSSHURLParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Replicate the URL parsing from CreateDB.
-			urlObj, err := parseSSHURL(tt.url)
+			urlObj, err := url.Parse(tt.url)
 			require.NoError(t, err)
 
-			assert.Equal(t, tt.wantHost, urlObj.host, "host")
-			assert.Equal(t, tt.wantPort, urlObj.port, "port")
-			assert.Equal(t, tt.wantPath, urlObj.path, "path")
-			assert.Equal(t, tt.wantUser, urlObj.user, "user")
+			host, port, path, user := parseSSHURL(urlObj)
+			assert.Equal(t, tt.wantHost, host, "host")
+			assert.Equal(t, tt.wantPort, port, "port")
+			assert.Equal(t, tt.wantPath, path, "path")
+			assert.Equal(t, tt.wantUser, user, "user")
 		})
 	}
-}
-
-// sshURLParts holds the parsed components of an SSH URL.
-// This is a test helper that mirrors the parsing logic in CreateDB.
-type sshURLParts struct {
-	host string
-	port string
-	path string
-	user string
-}
-
-// parseSSHURL replicates the URL parsing logic from SSHRemoteFactory.CreateDB.
-func parseSSHURL(rawURL string) (sshURLParts, error) {
-	urlObj, err := url.Parse(rawURL)
-	if err != nil {
-		return sshURLParts{}, err
-	}
-
-	host := urlObj.Hostname()
-	port := urlObj.Port()
-	path := urlObj.Path
-	user := ""
-
-	path = strings.TrimSuffix(path, "/.dolt")
-
-	if urlObj.User != nil {
-		user = urlObj.User.Username()
-	}
-	if atIdx := strings.LastIndex(host, "@"); atIdx != -1 {
-		user = host[:atIdx]
-		host = host[atIdx+1:]
-	}
-
-	return sshURLParts{host: host, port: port, path: path, user: user}, nil
 }
