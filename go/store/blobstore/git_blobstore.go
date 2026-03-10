@@ -823,15 +823,8 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			gbs.cacheMu.Lock()
 			for _, p := range gbs.pendingCacheEvictions {
 				delete(gbs.cacheObjects, p)
-				parent, base := splitGitPathParentBase(p)
-				if ents, ok := gbs.cacheChildren[parent]; ok {
-					for i, e := range ents {
-						if e.Name == base {
-							gbs.cacheChildren[parent] = append(ents[:i], ents[i+1:]...)
-							break
-						}
-					}
-				}
+				parent, _ := splitGitPathParentBase(p)
+				delete(gbs.cacheChildren, parent)
 			}
 			gbs.cacheMu.Unlock()
 			gbs.pendingCacheEvictions = nil
@@ -1199,7 +1192,7 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 
 	// Prune unreferenced tree entries when we know the manifest's table set.
 	var prunedEntries int
-	if allowedTableNames != nil && hasParent {
+	if allowedTableNames != nil {
 		entries, err := gbs.api.ListTreeRecursive(ctx, parent)
 		if err != nil {
 			return "", fmt.Errorf("gitblobstore: listing tree for pruning: %w", err)
