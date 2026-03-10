@@ -310,6 +310,11 @@ type GitBlobstore struct {
 	// Guarded by gbs.pendingMu.
 	pendingWrites []pendingWrite
 
+	// pendingCacheEvictions holds tree paths that were pruned during the last
+	// buildCommitForKeyWrite call. After a successful push, these are evicted
+	// from the in-memory cache. Protected by writeMu.
+	pendingCacheEvictions []string
+
 	// cacheMu guards all cache fields below.
 	cacheMu sync.RWMutex
 	// cacheHead is the last commit OID whose tree we merged into the cache.
@@ -426,6 +431,78 @@ func splitGitPathParentBase(fullPath string) (parent string, base string) {
 }
 
 const gitblobstoreManifestKey = "manifest"
+
+// parseManifestTableNames extracts table file base names (hash strings) from
+// raw manifest content. These are the names referenced by the current manifest;
+// any git tree entries not matching one of these names (or "manifest" itself)
+// are dead and can be pruned.
+//
+// Manifest V5 format: "5:nbfVers:lock:root:gcGen:name1:count1:name2:count2:..."
+// Manifest V4 format: "4:nbfVers:lock:root:name1:count1:name2:count2:..."
+func parseManifestTableNames(data []byte) []string {
+	s := string(data)
+	parts := strings.Split(s, ":")
+	if len(parts) < 2 {
+		return nil
+	}
+
+	var specStart int
+	switch parts[0] {
+	case "5":
+		// V5: version + nbfVers + lock + root + gcGen = 5 prefix fields
+		specStart = 5
+	case "4":
+		// V4: version + nbfVers + lock + root = 4 prefix fields
+		specStart = 4
+	default:
+		return nil
+	}
+
+	if len(parts) < specStart {
+		return nil
+	}
+
+	specs := parts[specStart:]
+	if len(specs)%2 != 0 {
+		return nil
+	}
+
+	names := make([]string, 0, len(specs)/2)
+	for i := 0; i < len(specs); i += 2 {
+		name := specs[i]
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// isPathReferencedByManifest returns true if a git tree entry path belongs to a
+// table file listed in allowedNames, or is the manifest itself. It strips known
+// suffixes (.records, .tail, .darc) and chunked-part directory components
+// (key/NNNN) to recover the base table name before checking the set.
+func isPathReferencedByManifest(path string, allowedNames map[string]bool) bool {
+	if path == gitblobstoreManifestKey {
+		return true
+	}
+
+	base := path
+
+	// Strip chunked-part directory suffix: "hashname/0001" → "hashname"
+	if i := strings.IndexByte(base, '/'); i >= 0 {
+		base = base[:i]
+	}
+
+	// Strip known file suffixes in order from longest to shortest.
+	for _, sfx := range []string{".darc.records", ".darc.tail", ".records", ".tail", ".darc"} {
+		if strings.HasSuffix(base, sfx) {
+			base = strings.TrimSuffix(base, sfx)
+			break
+		}
+	}
+
+	return allowedNames[base]
+}
 
 func (gbs *GitBlobstore) mergeCacheObjectLocked(path string, oid git.OID, typ git.ObjectType, overwrite bool) {
 	if _, ok := gbs.cacheObjects[path]; !ok || overwrite {
@@ -754,6 +831,25 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 			return backoff.Permanent(err)
 		}
 
+		// Evict any entries that were pruned during buildCommitForKeyWrite.
+		if len(gbs.pendingCacheEvictions) > 0 {
+			gbs.cacheMu.Lock()
+			for _, p := range gbs.pendingCacheEvictions {
+				delete(gbs.cacheObjects, p)
+				parent, base := splitGitPathParentBase(p)
+				if ents, ok := gbs.cacheChildren[parent]; ok {
+					for i, e := range ents {
+						if e.Name == base {
+							gbs.cacheChildren[parent] = append(ents[:i], ents[i+1:]...)
+							break
+						}
+					}
+				}
+			}
+			gbs.cacheMu.Unlock()
+			gbs.pendingCacheEvictions = nil
+		}
+
 		// Force-update the cache entry for the key we just wrote, since the
 		// additive merge won't overwrite a stale entry from a previous commit.
 		keyOID, keyType, err := gbs.api.ResolvePathObject(ctx, newCommit, key)
@@ -788,11 +884,11 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 
 func (gbs *GitBlobstore) putWithRemoteSync(ctx context.Context, key string, plan putPlan, msg string) (string, error) {
 	return gbs.remoteManagedWrite(ctx, key, msg, func(remoteHead git.OID, ok bool) (git.OID, error) {
-		return gbs.buildCommitForKeyWrite(ctx, remoteHead, ok, key, plan, msg, nil)
+		return gbs.buildCommitForKeyWrite(ctx, remoteHead, ok, key, plan, msg, nil, nil)
 	})
 }
 
-func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader, msg string, extraWrites []pendingWrite) (string, error) {
+func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader, msg string, extraWrites []pendingWrite, allowedTableNames map[string]bool) (string, error) {
 	var cachedPlan *putPlan
 	return gbs.remoteManagedWrite(ctx, key, msg, func(remoteHead git.OID, ok bool) (git.OID, error) {
 		actualKeyVersion, err := gbs.currentKeyVersion(ctx, remoteHead, ok, key)
@@ -809,7 +905,7 @@ func (gbs *GitBlobstore) checkAndPutWithRemoteSync(ctx context.Context, expected
 			}
 			cachedPlan = &plan
 		}
-		return gbs.buildCommitForKeyWrite(ctx, remoteHead, ok, key, *cachedPlan, msg, extraWrites)
+		return gbs.buildCommitForKeyWrite(ctx, remoteHead, ok, key, *cachedPlan, msg, extraWrites, allowedTableNames)
 	})
 }
 
@@ -1098,7 +1194,7 @@ func (gbs *GitBlobstore) casRetryPolicy(ctx context.Context) backoff.BackOff {
 	return backoff.WithContext(backoff.WithMaxRetries(bo, maxRetries), ctx)
 }
 
-func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.OID, hasParent bool, key string, plan putPlan, msg string, extraWrites []pendingWrite) (git.OID, error) {
+func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.OID, hasParent bool, key string, plan putPlan, msg string, extraWrites []pendingWrite, allowedTableNames map[string]bool) (git.OID, error) {
 	defer _traceBS(fmt.Sprintf("buildCommitForKeyWrite key=%s nExtra=%d", key, len(extraWrites)))()
 	_, indexFile, cleanup, err := git.NewTempIndex()
 	if err != nil {
@@ -1113,6 +1209,30 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 	} else {
 		if err := gbs.api.ReadTreeEmpty(ctx, indexFile); err != nil {
 			return "", err
+		}
+	}
+
+	// Prune unreferenced tree entries when we know the manifest's table set.
+	var prunedEntries int
+	if allowedTableNames != nil && hasParent {
+		entries, err := gbs.api.ListTreeRecursive(ctx, parent)
+		if err != nil {
+			return "", fmt.Errorf("gitblobstore: listing tree for pruning: %w", err)
+		}
+		var removePaths []string
+		for _, e := range entries {
+			if !isPathReferencedByManifest(e.Name, allowedTableNames) {
+				removePaths = append(removePaths, e.Name)
+			}
+		}
+		prunedEntries = len(removePaths)
+		if prunedEntries > 0 {
+			fmt.Fprintf(color.Output, "[TRACE]   pruning %d unreferenced entries from git tree\n", prunedEntries)
+			if err := gbs.api.RemoveIndexPaths(ctx, indexFile, removePaths); err != nil {
+				return "", fmt.Errorf("gitblobstore: removing pruned entries: %w", err)
+			}
+			// Stage for cache eviction after successful push (writeMu is held by caller).
+			gbs.pendingCacheEvictions = removePaths
 		}
 	}
 
@@ -1151,9 +1271,10 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 	// Use parent commit when available so git push can compute incremental deltas
 	// instead of enumerating the full tree. After maxParentedCommits in the
 	// existing chain, create a parentless commit to sever history so git gc can
-	// prune old objects.
+	// prune old objects. Also force an orphan commit when entries were pruned so
+	// the old bloated tree becomes immediately unreachable from the new tip.
 	var parentPtr *git.OID
-	if hasParent && parent != "" {
+	if hasParent && parent != "" && prunedEntries == 0 {
 		depth, err := gbs.api.RevListCount(ctx, parent, maxParentedCommits+1)
 		if err == nil && depth < maxParentedCommits {
 			p := parent
@@ -1218,11 +1339,27 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 
 	// For the manifest key, flush all pending writes in a single commit+push.
 	if key == gitblobstoreManifestKey {
+		// Buffer manifest content so we can parse table names for pruning
+		// and still pass the data to HashObject via a bytes.Reader.
+		manifestData, err := io.ReadAll(reader)
+		if err != nil {
+			return "", fmt.Errorf("gitblobstore: reading manifest content: %w", err)
+		}
+		names := parseManifestTableNames(manifestData)
+		var allowedNames map[string]bool
+		if names != nil {
+			allowedNames = make(map[string]bool, len(names))
+			for _, n := range names {
+				allowedNames[n] = true
+			}
+		}
+		bufferedReader := bytes.NewReader(manifestData)
+
 		gbs.pendingMu.Lock()
 		pending := gbs.pendingWrites
 		gbs.pendingWrites = nil
 		gbs.pendingMu.Unlock()
-		ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg, pending)
+		ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, bufferedReader, msg, pending, allowedNames)
 		if err != nil && len(pending) > 0 {
 			gbs.pendingMu.Lock()
 			gbs.pendingWrites = append(pending, gbs.pendingWrites...)
@@ -1231,7 +1368,7 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 		return ver, err
 	}
 
-	return gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg, nil)
+	return gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg, nil, nil)
 }
 
 func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, haveCommit bool, key string) (string, error) {
@@ -1280,7 +1417,7 @@ func (gbs *GitBlobstore) Concatenate(ctx context.Context, key string, sources []
 		if err != nil {
 			return "", err
 		}
-		return gbs.buildCommitForKeyWrite(ctx, remoteHead, okRemote, key, plan, msg, nil)
+		return gbs.buildCommitForKeyWrite(ctx, remoteHead, okRemote, key, plan, msg, nil, nil)
 	})
 }
 
