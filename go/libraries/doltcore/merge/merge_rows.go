@@ -17,6 +17,7 @@ package merge
 import (
 	"context"
 	"errors"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -116,32 +117,34 @@ func (tm TableMerger) InvolvesRootObjects() bool {
 }
 
 func (tm TableMerger) tableHashes(ctx context.Context) (left, right, anc hash.Hash, err error) {
-	if tm.leftTbl != nil {
-		if left, err = tm.leftTbl.HashOf(); err != nil {
-			return
+	eg := errgroup.Group{}
+	eg.Go(func() error {
+		if tm.leftTbl != nil {
+			left, err = tm.leftTbl.HashOf()
+		} else if tm.leftRootObj != nil {
+			left, err = tm.leftRootObj.HashOf(ctx)
 		}
-	} else if tm.leftRootObj != nil {
-		if left, err = tm.leftRootObj.HashOf(ctx); err != nil {
-			return
+		return err
+	})
+	eg.Go(func() error {
+		if tm.rightTbl != nil {
+			right, err = tm.rightTbl.HashOf()
+		} else if tm.rightRootObj != nil {
+			right, err = tm.rightRootObj.HashOf(ctx)
 		}
-	}
-	if tm.rightTbl != nil {
-		if right, err = tm.rightTbl.HashOf(); err != nil {
-			return
+		return err
+	})
+	eg.Go(func() error {
+		if tm.ancTbl != nil {
+			anc, err = tm.ancTbl.HashOf()
+		} else if tm.ancRootObj != nil {
+			anc, err = tm.ancRootObj.HashOf(ctx)
 		}
-	} else if tm.rightRootObj != nil {
-		if right, err = tm.rightRootObj.HashOf(ctx); err != nil {
-			return
-		}
-	}
-	if tm.ancTbl != nil {
-		if anc, err = tm.ancTbl.HashOf(); err != nil {
-			return
-		}
-	} else if tm.ancRootObj != nil {
-		if anc, err = tm.ancRootObj.HashOf(ctx); err != nil {
-			return
-		}
+		return err
+	})
+	err = eg.Wait()
+	if err != nil {
+		return
 	}
 	return
 }
