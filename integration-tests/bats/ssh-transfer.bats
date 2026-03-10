@@ -11,11 +11,12 @@ setup() {
     # Create mock SSH script that executes the remote command locally.
     # Real SSH runs its last argument as a command on the remote host.
     # buildTransferCommand always passes the dolt transfer invocation as
-    # the final argument, so we just exec that.
+    # the final argument, so we just exec that.  All args are logged so
+    # tests can verify user@host, -p port, etc.
     cat > "$BATS_TMPDIR/mock_ssh" <<'EOF'
 #!/bin/bash
+echo "$@" >> "$BATS_TMPDIR/mock_ssh.log"
 COMMAND="${@: -1}"
-echo "Mock SSH executing: $COMMAND" >> "$BATS_TMPDIR/mock_ssh.log"
 exec $COMMAND 2> >(tee -a "$BATS_TMPDIR/transfer_stderr.log" >&2)
 EOF
     chmod +x "$BATS_TMPDIR/mock_ssh"
@@ -111,7 +112,10 @@ teardown() {
     run dolt clone "ssh://testuser@localhost$BATS_TEST_TMPDIR/repo_usertest" repo_clone_user
     [ "$status" -eq 0 ]
     [ -d repo_clone_user ]
-    
+
+    # Verify mock SSH received testuser@localhost
+    grep -q "testuser@localhost" "$BATS_TMPDIR/mock_ssh.log"
+
     cd repo_clone_user
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
     [ "$status" -eq 0 ]
@@ -127,22 +131,13 @@ teardown() {
     dolt add .
     dolt commit -m "test data"
 
-    # Use a mock SSH that logs the -p flag for verification
-    cat > "$BATS_TMPDIR/mock_ssh_port" <<'PORTEOF'
-#!/bin/bash
-echo "$@" >> "$BATS_TMPDIR/ssh_port_args.log"
-exec "$BATS_TMPDIR/mock_ssh" "$@"
-PORTEOF
-    chmod +x "$BATS_TMPDIR/mock_ssh_port"
-    export DOLT_SSH_COMMAND="$BATS_TMPDIR/mock_ssh_port"
-
     cd ..
     run dolt clone "ssh://localhost:9999$BATS_TEST_TMPDIR/repo_porttest" repo_port_clone
     [ "$status" -eq 0 ]
     [ -d repo_port_clone ]
 
-    # Verify -p 9999 was passed to SSH
-    grep -q "\-p 9999" "$BATS_TMPDIR/ssh_port_args.log"
+    # Verify -p 9999 was passed to mock SSH
+    grep -q "\-p 9999" "$BATS_TMPDIR/mock_ssh.log"
 
     cd repo_port_clone
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
@@ -287,30 +282,30 @@ PORTEOF
 }
 
 @test "ssh-transfer: verify DOLT_SSH_COMMAND environment variable works" {
-    # Create a custom mock SSH that logs calls
-    cat > "$BATS_TMPDIR/mock_ssh_logger" <<'EOF'
+    # Create a separate mock SSH to prove DOLT_SSH_COMMAND is honored
+    cat > "$BATS_TMPDIR/custom_ssh" <<'EOF'
 #!/bin/bash
-echo "CUSTOM_SSH_CALLED" >> "$BATS_TMPDIR/ssh_calls.log"
-exec "$BATS_TMPDIR/mock_ssh" "$@"
+echo "CUSTOM_SSH $@" >> "$BATS_TMPDIR/custom_ssh.log"
+COMMAND="${@: -1}"
+exec $COMMAND 2>/dev/null
 EOF
-    chmod +x "$BATS_TMPDIR/mock_ssh_logger"
-    
-    export DOLT_SSH_COMMAND="$BATS_TMPDIR/mock_ssh_logger"
-    
+    chmod +x "$BATS_TMPDIR/custom_ssh"
+    export DOLT_SSH_COMMAND="$BATS_TMPDIR/custom_ssh"
+
     mkdir "repo_env_test"
     cd "repo_env_test"
     dolt init
     dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY);"
     dolt add .
     dolt commit -m "test"
-    
+
     cd ..
     run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_env_test" repo_env_clone
     [ "$status" -eq 0 ]
-    
-    # Verify custom SSH was used
-    [ -f "$BATS_TMPDIR/ssh_calls.log" ]
-    grep -q "CUSTOM_SSH_CALLED" "$BATS_TMPDIR/ssh_calls.log"
+
+    # Verify the custom SSH was used
+    [ -f "$BATS_TMPDIR/custom_ssh.log" ]
+    grep -q "CUSTOM_SSH.*localhost" "$BATS_TMPDIR/custom_ssh.log"
 }
 
 @test "ssh-transfer: DOLT_SSH_EXEC_PATH overrides remote dolt path" {
@@ -322,44 +317,12 @@ EOF
     dolt add .
     dolt commit -m "test"
 
-    # Create a mock SSH that logs the remote command it receives
+    # Create a mock SSH that logs the remote command and rewrites the
+    # custom dolt path back to the real binary so it can execute locally.
     cat > "$BATS_TMPDIR/mock_ssh_exec" <<'MOCK'
 #!/bin/bash
-COMMAND=""
-HOST=""
-SKIP_NEXT=false
-
-for arg in "$@"; do
-    if [[ "$SKIP_NEXT" == "true" ]]; then
-        SKIP_NEXT=false
-        continue
-    fi
-    case "$arg" in
-        -*)
-            if [[ "$arg" == "-o" ]] || [[ "$arg" == "-i" ]] || [[ "$arg" == "-p" ]]; then
-                SKIP_NEXT=true
-            fi
-            ;;
-        *@*)
-            HOST="${arg#*@}"
-            ;;
-        *)
-            if [[ -z "$HOST" ]] && [[ -z "$COMMAND" ]]; then
-                HOST="$arg"
-            else
-                if [[ -z "$COMMAND" ]]; then
-                    COMMAND="$arg"
-                else
-                    COMMAND="$COMMAND $arg"
-                fi
-            fi
-            ;;
-    esac
-done
-
-# Log the remote command for verification
+COMMAND="${@: -1}"
 echo "$COMMAND" >> "$BATS_TMPDIR/exec_path.log"
-# Execute locally, replacing the custom path with the real dolt
 COMMAND=$(echo "$COMMAND" | sed "s|/custom/path/to/dolt|$(which dolt)|")
 exec $COMMAND
 MOCK
