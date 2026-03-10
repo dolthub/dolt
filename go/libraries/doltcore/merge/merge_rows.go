@@ -17,9 +17,9 @@ package merge
 import (
 	"context"
 	"errors"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
