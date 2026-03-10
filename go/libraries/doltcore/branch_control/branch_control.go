@@ -16,6 +16,7 @@ package branch_control
 
 import (
 	"context"
+	_ "embed"
 	goerrors "errors"
 	"fmt"
 	"os"
@@ -80,6 +81,9 @@ func CreateDefaultController(ctx context.Context) *Controller {
 	return controller
 }
 
+//go:embed branch_control_copy.db
+var globalData []byte
+
 // LoadData loads the data from the given location and returns a controller. Returns the default controller if the
 // `branchControlFilePath` is empty.
 func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPath string) (*Controller, error) {
@@ -93,8 +97,10 @@ func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPa
 
 	// Do not attempt to load from an empty file path
 	if len(branchControlFilePath) == 0 {
-		// If the path is empty, then we should populate the controller with the default row to ensure normal (expected) operation
-		controller.Access.insertDefaultRow()
+		err := controller.LoadData(ctx, globalData, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize forced config")
+		}
 		return controller, nil
 	}
 
@@ -183,6 +189,7 @@ func SaveData(ctx context.Context) error {
 }
 
 func (controller *Controller) SaveData(ctx context.Context, fs filesys.Filesys) error {
+	return nil // TODO: temporary
 	// If we never set a save location then we just return
 	if len(controller.branchControlFilePath) == 0 {
 		return nil

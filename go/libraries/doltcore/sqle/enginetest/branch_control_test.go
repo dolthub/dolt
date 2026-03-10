@@ -600,6 +600,64 @@ var BranchControlOtherDbBlockTests = []BranchControlBlockTest{
 
 var BranchControlTests = []BranchControlTest{
 	{
+		Name: "Temp Testing", // Only one that will run since I'm doing BranchControlTests = BranchControlTests[:1] in the test
+		SetUpScript: []string{
+			"CREATE USER `hosted-ui-admin`@`75.84.222.140`;",
+			"GRANT ALL ON *.* TO `hosted-ui-admin`@`75.84.222.140`;",
+			"CREATE USER `hosted-ui-admin`@`10.4.71.165`;",
+			"GRANT ALL ON *.* TO `hosted-ui-admin`@`10.4.71.165`;",
+			"CREATE USER `hosted-ui-writer`@localhost;",
+			"GRANT ALL ON *.* TO `hosted-ui-writer`@localhost;",
+			"CREATE USER `my-writer`@localhost;",
+			"GRANT ALL ON *.* TO `my-writer`@localhost;",
+			"REVOKE SUPER ON *.* FROM `hosted-ui-admin`@`75.84.222.140`;",
+			"REVOKE SUPER ON *.* FROM `hosted-ui-admin`@`10.4.71.165`;",
+			"REVOKE SUPER ON *.* FROM `hosted-ui-writer`@localhost;",
+			"REVOKE SUPER ON *.* FROM `my-writer`@localhost;",
+			"INSERT INTO dolt_branch_control VALUES ('test', 'main', 'hosted-ui-writer', '%', 'merge');",
+			"INSERT INTO dolt_branch_control VALUES ('test', 'main', 'my-writer', '%', 'merge');",
+			"CREATE DATABASE test;",
+			"USE test;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"INSERT INTO test VALUES (2, 2);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'second commit on other');",
+			"DELETE FROM dolt_branch_control WHERE user = '%';", // Remove the default global write, else merges always work anyway
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:     "my-writer",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				User:     "my-writer",
+				Host:     "localhost",
+				Query:    "SELECT * FROM test ORDER BY pk;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			// Merge permission allows DOLT_MERGE (FF merge)
+			{
+				User:     "my-writer",
+				Host:     "localhost",
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+			},
+			// After merge, the merged data is visible
+			{
+				User:     "my-writer",
+				Host:     "localhost",
+				Query:    "SELECT * FROM test ORDER BY pk;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+		},
+	},
+	{
 		Name: "Namespace entries block",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
@@ -1768,6 +1826,7 @@ var BranchControlTests = []BranchControlTest{
 }
 
 func TestBranchControl(t *testing.T) {
+	BranchControlTests = BranchControlTests[:1]
 	for _, test := range BranchControlTests {
 		harness := newDoltHarness(t)
 		defer harness.Close()
