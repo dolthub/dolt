@@ -1194,6 +1194,9 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 		}
 	}
 
+	// Clear any stale evictions from a previous retry attempt.
+	gbs.pendingCacheEvictions = nil
+
 	// Prune unreferenced tree entries when we know the manifest's table set.
 	var prunedEntries int
 	if allowedTableNames != nil && hasParent {
@@ -1339,7 +1342,7 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 		pending := gbs.pendingWrites
 		gbs.pendingWrites = nil
 		gbs.pendingMu.Unlock()
-		ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, bufferedReader, msg, pending, allowedNames)
+		ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, int64(len(manifestData)), bufferedReader, msg, pending, allowedNames)
 		if err != nil && len(pending) > 0 {
 			gbs.pendingMu.Lock()
 			gbs.pendingWrites = append(pending, gbs.pendingWrites...)

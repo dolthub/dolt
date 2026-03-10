@@ -203,15 +203,15 @@ func TestGitBlobstore_Prune_ChunkedAndSuffixedEntries(t *testing.T) {
 
 	// Seed tree with various entry types: chunked parts, .records, .tail, .darc
 	_, err = remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
-		"manifest":         []byte("5:__DOLT__:lock:root:gc:keepme:10"),
-		"keepme":           []byte("kept"),
-		"keepme.records":   []byte("kept-records"),
-		"keepme.tail":      []byte("kept-tail"),
-		"dead/0001":        []byte("dead-chunk-1"),
-		"dead/0002":        []byte("dead-chunk-2"),
-		"dead2.darc":       []byte("dead-archive"),
-		"dead3.records":    []byte("dead-records"),
-		"dead3.tail":       []byte("dead-tail"),
+		"manifest":       []byte("5:__DOLT__:lock:root:gc:keepme:10"),
+		"keepme":         []byte("kept"),
+		"keepme.records": []byte("kept-records"),
+		"keepme.tail":    []byte("kept-tail"),
+		"dead/0001":      []byte("dead-chunk-1"),
+		"dead/0002":      []byte("dead-chunk-2"),
+		"dead2.darc":     []byte("dead-archive"),
+		"dead3.records":  []byte("dead-records"),
+		"dead3.tail":     []byte("dead-tail"),
 	}, "seed with mixed entries")
 	require.NoError(t, err)
 

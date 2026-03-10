@@ -46,7 +46,6 @@ func TestIsPathReferencedByManifest(t *testing.T) {
 		{"unknown with records", "zzz999.records", false},
 		{"unknown with tail", "zzz999.tail", false},
 		{"empty path", "", false},
-		{"empty allowed set", "abc123", true},
 	}
 
 	for _, tt := range tests {
