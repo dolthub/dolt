@@ -556,6 +556,9 @@ type LookupMeta struct {
 	Ordinals []int
 }
 
+// GetStrictLookups searches |indexes| and returns a slice of LookupMeta that indicates which indexes can be used
+// for strict lookups. Indexes may be used for strict lookups if they are a unique index and the columns they
+// cover are not nullable.
 func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes []sql.Index) []LookupMeta {
 	var lookups []LookupMeta
 	for _, i := range indexes {

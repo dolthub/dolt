@@ -278,7 +278,8 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 			serial.ColumnAddUsesAdaptiveEncoding(b, true)
 		}
 
-		serial.ColumnAddHidden(b, false)
+		serial.ColumnAddHidden(b, col.Hidden)
+		serial.ColumnAddHiddenSystem(b, col.SystemHidden)
 		offs[i] = serial.ColumnEnd(b)
 	}
 
@@ -392,6 +393,8 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			AutoIncrement: c.AutoIncrement(),
 			Comment:       string(c.Comment()),
 			Constraints:   constraintsFromSerialColumn(&c),
+			Hidden:        c.Hidden(),
+			SystemHidden:  c.HiddenSystem(),
 		}
 	}
 	return cols, nil
