@@ -453,7 +453,7 @@ func runMain() int {
 
 	warnIfMaxFilesTooLow()
 
-	if ok, exit := interceptSendMetrics(ctx, args); ok {
+	if ok, exit := interceptSendMetrics(ctx, cfg.remainingArgs); ok {
 		return exit
 	}
 
