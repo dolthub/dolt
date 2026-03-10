@@ -2500,6 +2500,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, nil
 	}
 
+	// TODO: what if we are never getting the view??
 	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable, viewName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
