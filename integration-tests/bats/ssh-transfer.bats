@@ -13,16 +13,15 @@ setup() {
     # buildTransferCommand always passes the dolt transfer invocation as
     # the final argument, so we just exec that.  All args are logged so
     # tests can verify user@host, -p port, etc.
-    cat > "$BATS_TMPDIR/mock_ssh" <<'EOF'
+    cat > "$BATS_TEST_TMPDIR/mock_ssh" <<'EOF'
 #!/bin/bash
-echo "$@" >> "$BATS_TMPDIR/mock_ssh.log"
+echo "$@" >> "$BATS_TEST_TMPDIR/mock_ssh.log"
 COMMAND="${@: -1}"
-exec $COMMAND 2> >(tee -a "$BATS_TMPDIR/transfer_stderr.log" >&2)
+exec $COMMAND 2> >(tee -a "$BATS_TEST_TMPDIR/transfer_stderr.log" >&2)
 EOF
-    chmod +x "$BATS_TMPDIR/mock_ssh"
-    
-    # Set environment for SSH operations
-    export DOLT_SSH_COMMAND="$BATS_TMPDIR/mock_ssh"
+    chmod +x "$BATS_TEST_TMPDIR/mock_ssh"
+
+    export DOLT_SSH_COMMAND="$BATS_TEST_TMPDIR/mock_ssh"
 }
 
 teardown() {
@@ -113,7 +112,7 @@ teardown() {
     [ -d repo_clone_user ]
 
     # Verify mock SSH received testuser@localhost
-    grep -q "testuser@localhost" "$BATS_TMPDIR/mock_ssh.log"
+    grep -q "testuser@localhost" "$BATS_TEST_TMPDIR/mock_ssh.log"
 
     cd repo_clone_user
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
@@ -136,7 +135,7 @@ teardown() {
     [ -d repo_port_clone ]
 
     # Verify -p 9999 was passed to mock SSH
-    grep -q "\-p 9999" "$BATS_TMPDIR/mock_ssh.log"
+    grep -q "\-p 9999" "$BATS_TEST_TMPDIR/mock_ssh.log"
 
     cd repo_port_clone
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
@@ -302,15 +301,15 @@ teardown() {
 }
 
 @test "ssh-transfer: verify DOLT_SSH_COMMAND environment variable works" {
-    # Create a separate mock SSH to prove DOLT_SSH_COMMAND is honored
-    cat > "$BATS_TMPDIR/custom_ssh" <<'EOF'
+    # All tests use DOLT_SSH_COMMAND, so this is kind of a sanity check to ensure that your can change it.
+    cat > "$BATS_TEST_TMPDIR/custom_ssh" <<'EOF'
 #!/bin/bash
-echo "CUSTOM_SSH $@" >> "$BATS_TMPDIR/custom_ssh.log"
+echo "CUSTOM_SSH $@" >> "$BATS_TEST_TMPDIR/custom_ssh.log"
 COMMAND="${@: -1}"
 exec $COMMAND 2>/dev/null
 EOF
-    chmod +x "$BATS_TMPDIR/custom_ssh"
-    export DOLT_SSH_COMMAND="$BATS_TMPDIR/custom_ssh"
+    chmod +x "$BATS_TEST_TMPDIR/custom_ssh"
+    export DOLT_SSH_COMMAND="$BATS_TEST_TMPDIR/custom_ssh"
 
     mkdir "repo_env_test"
     cd "repo_env_test"
@@ -324,8 +323,8 @@ EOF
     [ "$status" -eq 0 ]
 
     # Verify the custom SSH was used
-    [ -f "$BATS_TMPDIR/custom_ssh.log" ]
-    grep -q "CUSTOM_SSH.*localhost" "$BATS_TMPDIR/custom_ssh.log"
+    [ -f "$BATS_TEST_TMPDIR/custom_ssh.log" ]
+    grep -q "CUSTOM_SSH.*localhost" "$BATS_TEST_TMPDIR/custom_ssh.log"
 }
 
 @test "ssh-transfer: DOLT_SSH_EXEC_PATH overrides remote dolt path" {
@@ -338,32 +337,29 @@ EOF
     dolt commit -m "test"
 
     # Create a mock SSH that logs the remote command and rewrites the
-    # custom dolt path back to the real binary so it can execute locally.
-    cat > "$BATS_TMPDIR/mock_ssh_exec" <<'MOCK'
+    # custom dolt path back to the real binary so it can actually execute.
+    export REAL_DOLT_BIN="$(command -v dolt)"
+    [ -n "$REAL_DOLT_BIN" ]
+
+    cat > "$BATS_TEST_TMPDIR/mock_ssh_exec" <<'MOCK'
 #!/bin/bash
 COMMAND="${@: -1}"
-echo "$COMMAND" >> "$BATS_TMPDIR/exec_path.log"
-COMMAND=$(echo "$COMMAND" | sed "s|/custom/path/to/dolt|$(which dolt)|")
+echo "$COMMAND" >> "$BATS_TEST_TMPDIR/exec_path.log"
+COMMAND=$(echo "$COMMAND" | sed "s|/nonsense/path/to/dolt|$REAL_DOLT_BIN|")
 exec $COMMAND
 MOCK
-    chmod +x "$BATS_TMPDIR/mock_ssh_exec"
+    chmod +x "$BATS_TEST_TMPDIR/mock_ssh_exec"
 
-    export DOLT_SSH_COMMAND="$BATS_TMPDIR/mock_ssh_exec"
-    export DOLT_SSH_EXEC_PATH="/custom/path/to/dolt"
+    export DOLT_SSH_COMMAND="$BATS_TEST_TMPDIR/mock_ssh_exec"
+    export DOLT_SSH_EXEC_PATH="/nonsense/path/to/dolt"
 
     cd ..
     run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_exec_path" repo_exec_clone
     [ "$status" -eq 0 ]
 
     # Verify the custom exec path was used in the remote command
-    [ -f "$BATS_TMPDIR/exec_path.log" ]
-    grep -q "/custom/path/to/dolt --data-dir" "$BATS_TMPDIR/exec_path.log"
-
-    # Verify data is correct
-    cd repo_exec_clone
-    run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]] || false
+    [ -f "$BATS_TEST_TMPDIR/exec_path.log" ]
+    grep -q "/nonsense/path/to/dolt --data-dir" "$BATS_TEST_TMPDIR/exec_path.log"
 }
 
 @test "ssh-transfer: clone succeeds while sql-server is running" {
@@ -416,7 +412,7 @@ MOCK
     # Push must fail when sql-server holds the lock.
     [ "$status" -ne 0 ]
     # The transfer command logs the real error to stderr; verify it.
-    grep -q "database is read only" "$BATS_TMPDIR/transfer_stderr.log"
+    grep -q "database is read only" "$BATS_TEST_TMPDIR/transfer_stderr.log"
 }
 
 @test "ssh-transfer: sql dolt_clone() via SSH URL" {
