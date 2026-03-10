@@ -63,7 +63,7 @@ teardown() {
     cd repo_clone
     run dolt sql -q "SELECT COUNT(*) FROM products;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]]
+    [[ "$output" =~ "2" ]] || false
 }
 
 @test "ssh-transfer: clone with .dolt suffix in URL path" {
@@ -83,12 +83,11 @@ teardown() {
     cd repo_dotsuffix_clone
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]]
-    cd ..
+    [[ "$output" =~ "3" ]] || false
+    cd "$BATS_TEST_TMPDIR"
     rm -rf repo_dotsuffix_clone
 
     # repeat with /.dolt/ (trailing slash).
-    cd ..
     run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_dotsuffix/.dolt/" repo_dotsuffix_clone
     [ "$status" -eq 0 ]
     [ -d repo_dotsuffix_clone ]
@@ -96,7 +95,7 @@ teardown() {
     cd repo_dotsuffix_clone
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]]
+    [[ "$output" =~ "3" ]] || false
 }
 
 @test "ssh-transfer: clone with user@host format" {
@@ -119,7 +118,7 @@ teardown() {
     cd repo_clone_user
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]]
+    [[ "$output" =~ "3" ]] || false
 }
 
 @test "ssh-transfer: clone with custom port in URL" {
@@ -142,7 +141,7 @@ teardown() {
     cd repo_port_clone
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]]
+    [[ "$output" =~ "3" ]] || false
 }
 
 @test "ssh-transfer: clone of GCed repo" {
@@ -163,7 +162,7 @@ teardown() {
     cd repo_gc_clone
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]]
+    [[ "$output" =~ "3" ]] || false
 }
 
 @test "ssh-transfer: pull changes from remote" {
@@ -190,7 +189,7 @@ teardown() {
     
     run dolt sql -q "SELECT COUNT(*) FROM items;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]]
+    [[ "$output" =~ "2" ]] || false
 }
 
 @test "ssh-transfer: push changes to remote" {
@@ -221,7 +220,7 @@ teardown() {
     # match the commit we just pushed.
     run dolt log --oneline -n 1 origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "$PUSH_COMMIT" ]]
+    [[ "$output" =~ "$PUSH_COMMIT" ]] || false
 }
 
 @test "ssh-transfer: handle branch operations" {
@@ -253,7 +252,7 @@ teardown() {
     
     run dolt sql -q "SHOW TABLES;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "feature_table" ]]
+    [[ "$output" =~ "feature_table" ]] || false
 }
 
 @test "ssh-transfer: concurrent clone operations" {
@@ -291,7 +290,7 @@ teardown() {
         cd "$dir"
         run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
         [ "$status" -eq 0 ]
-        [[ "$output" =~ "5" ]]
+        [[ "$output" =~ "5" ]] || false
         cd ..
     done
 }
@@ -364,7 +363,7 @@ MOCK
     cd repo_exec_clone
     run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]]
+    [[ "$output" =~ "2" ]] || false
 }
 
 @test "ssh-transfer: server-side logs are visible on stderr" {
@@ -411,9 +410,9 @@ MOCK
     cd "repo_locked_read_clone"
     run dolt sql -r csv  -q "SELECT * FROM test;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1,one" ]]
-    [[ "$output" =~ "2,two" ]]
-    [[ "$output" =~ "3,three" ]]
+    [[ "$output" =~ "1,one" ]] || false
+    [[ "$output" =~ "2,two" ]] || false
+    [[ "$output" =~ "3,three" ]] || false
 }
 
 @test "ssh-transfer: push fails while sql-server is running" {
@@ -466,7 +465,7 @@ MOCK
     # Verify cloned data
     run dolt --use-db sql_cloned sql -r csv -q "SELECT COUNT(*) FROM test;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]]
+    [[ "$output" =~ "3" ]] || false
 }
 
 @test "ssh-transfer: sql dolt_push() to SSH remote" {
@@ -492,7 +491,7 @@ MOCK
     cd "$BATS_TEST_TMPDIR/repo_sql_push_src"
     run dolt log --oneline -n 1
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "sql push 123" ]]
+    [[ "$output" =~ "sql push 123" ]] || false
 }
 
 @test "ssh-transfer: sql dolt_pull() from SSH remote" {
@@ -519,7 +518,7 @@ MOCK
 
     run dolt sql -r csv -q "SELECT * FROM items WHERE id=99;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new_item" ]]
+    [[ "$output" =~ "new_item" ]] || false
 }
 
 @test "ssh-transfer: sql dolt_remote(add) with SSH URL then push" {
@@ -547,7 +546,7 @@ MOCK
     cd "$BATS_TEST_TMPDIR/repo_sql_remote_target"
     run dolt log --oneline -n 1
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "push to target" ]]
+    [[ "$output" =~ "push to target" ]] || false
 }
 
 @test "ssh-transfer: sql dolt_clone() fails for non-existent SSH repo" {
