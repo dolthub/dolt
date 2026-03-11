@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"sort"
 	"testing"
+	"time"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/stretchr/testify/assert"
@@ -91,8 +92,13 @@ func mustValue(val types.Value, err error) types.Value {
 func TestIsCommit(t *testing.T) {
 	assert := assert.New(t)
 
+	meta, err := NewCommitMetaWithAuthorDate("test", "test@test.com", "test commit", time.UnixMilli(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	commitMsg, _ := commit_flatbuffer(hash.Hash{}, CommitOptions{
-		Meta: &CommitMeta{Name: "test", Email: "test@test.com", Description: "test commit"},
+		Meta: meta,
 	}, nil, hash.Hash{})
 	metaCommit := types.SerialMessage(commitMsg)
 	ok, err := IsCommit(metaCommit)

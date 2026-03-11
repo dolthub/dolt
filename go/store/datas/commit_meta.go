@@ -46,6 +46,35 @@ var ErrEmptyCommitterEmail = errors.New("aborting construction of commit metadat
 var CommitterDate = time.Now
 var CommitLoc = time.Local
 
+// CommitDate represents an optional date for a commit operation. Use [CommitDateNow] to resolve the date at commit
+// creation time, or [CommitDateAt] to specify an explicit date (including zero time).
+type CommitDate struct {
+	t   time.Time
+	set bool
+}
+
+// CommitDateNow returns a CommitDate that resolves to [CommitterDate]() at the time the commit is created.
+func CommitDateNow() CommitDate { return CommitDate{} }
+
+// CommitDateAt returns a CommitDate with the explicitly specified time. The zero time is a valid explicit value.
+func CommitDateAt(t time.Time) CommitDate { return CommitDate{t: t, set: true} }
+
+// Resolve returns the concrete time for this CommitDate. If no date was explicitly set, defaultFn is called.
+func (d CommitDate) Resolve(defaultFn func() time.Time) time.Time {
+	if d.set {
+		return d.t
+	}
+	return defaultFn()
+}
+
+// CommitIdentity groups the name, email, and optional date for a single author or committer.
+// Use [CommitDateAt] for an explicit date or [CommitDateNow] to resolve at commit time.
+type CommitIdentity struct {
+	Name  string
+	Email string
+	Date  CommitDate
+}
+
 // CommitMeta contains all the metadata that is associated with a commit within a data repository to be serialized into
 // the database. This does not include control flags for the commit process like [actions.CommitStagedProps].
 type CommitMeta struct {
@@ -53,79 +82,82 @@ type CommitMeta struct {
 	Email       string
 	Description string
 	Signature   string
-	// Timestamp is the committer date.
-	Timestamp *uint64
-	// UserTimestamp is the author date. The author date is represented as [int64] which indicates it can represent
-	// dates before 1970. When we create a [datas.Commit] object we retrieve and cast the author and committer dates
-	// from Timestamp as a result to avoid these out of range values.
-	// TODO(elianddb): Config variables can overwrite this behavior, allowing out of range values to be written to
-	//  Timestamp. Decide on how to clamp the value.
-	UserTimestamp  *int64
+	// Timestamp is the committer date. CommitDateNow() is resolved at serialization time by newCommitForValue.
+	Timestamp CommitDate
+	// UserTimestamp is the author date. CommitDateNow() is resolved at serialization time by newCommitForValue.
+	UserTimestamp  CommitDate
 	CommitterName  string
 	CommitterEmail string
 }
 
-// NewCommitMeta creates a CommitMeta instance from a name, email, and description.
+// TimestampMillis returns the committer date as milliseconds since Unix epoch.
+func (cm *CommitMeta) TimestampMillis() uint64 {
+	return uint64(cm.Timestamp.Resolve(CommitterDate).UnixMilli())
+}
+
+// UserTimestampMillis returns the author date as milliseconds since Unix epoch.
+func (cm *CommitMeta) UserTimestampMillis() int64 {
+	return cm.UserTimestamp.Resolve(CommitterDate).UnixMilli()
+}
+
+// NewCommitMeta creates a CommitMeta instance from a name, email, and description. Author and committer dates are
+// both resolved to [CommitterDate]().
 func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
-	return NewCommitMetaWithUserTimestamp(name, email, desc, nil)
+	identity := CommitIdentity{Name: name, Email: email, Date: CommitDateNow()}
+	return NewCommitMetaWithAuthorAndCommitter(identity, identity, desc)
 }
 
-// NewCommitMetaWithUserTimestamp creates a [CommitMeta] object using only the author identity, description and author
-// date.
-func NewCommitMetaWithUserTimestamp(name, email, desc string, userTimestamp *time.Time) (*CommitMeta, error) {
-	return NewCommitMetaWithAuthorCommitter(name, email, desc, userTimestamp, name, email, nil)
+// NewCommitMetaWithAuthorDate creates a [CommitMeta] object using only the author identity, description, and an
+// explicit author date. The committer identity mirrors the author, with its date resolved to [CommitterDate]().
+func NewCommitMetaWithAuthorDate(name, email, desc string, authorDate time.Time) (*CommitMeta, error) {
+	author := CommitIdentity{Name: name, Email: email, Date: CommitDateAt(authorDate)}
+	committer := CommitIdentity{Name: name, Email: email, Date: CommitDateNow()}
+	return NewCommitMetaWithAuthorAndCommitter(author, committer, desc)
 }
 
-// NewCommitMetaWithAuthorCommitter creates a [CommitMeta] object using the author and committer identity with the
-// option to specify the author and committer dates explicitly.
-func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, description string, authorTimestamp *time.Time, committerName, committerEmail string, committerTimestamp *time.Time) (*CommitMeta, error) {
-	if authorName == "" {
+// NewCommitMetaWithAuthorAndCommitter creates a fully-resolved [CommitMeta] object with distinct author and committer
+// identities. [CommitDateNow] for either identity resolves to the same captured timestamp so both are never off by
+// different amounts.
+func NewCommitMetaWithAuthorAndCommitter(author CommitIdentity, committer CommitIdentity, description string) (*CommitMeta, error) {
+	if author.Name == "" {
 		return nil, ErrNameNotConfigured
 	}
-
-	if authorEmail == "" {
+	if author.Email == "" {
 		return nil, ErrEmailNotConfigured
 	}
-
 	if description == "" {
 		return nil, ErrEmptyCommitMessage
 	}
-
-	if committerName == "" {
+	if committer.Name == "" {
 		return nil, ErrEmptyCommitterName
 	}
-
-	if committerEmail == "" {
+	if committer.Email == "" {
 		return nil, ErrEmptyCommitterEmail
 	}
 
-	var committerDateMillis *uint64
-
-	// explicit timestamp overwrite (i.e. when using --date) blocking [datas.CommitterDate()] when creating a new commit
-	if committerTimestamp != nil {
-		temp := uint64(committerTimestamp.UnixMilli())
-		committerDateMillis = &temp
-	}
-
-	var authorDateMillis *int64
-	if authorTimestamp != nil {
-		temp := authorTimestamp.UnixMilli()
-		authorDateMillis = &temp
-	}
-
-	return &CommitMeta{authorName, authorEmail, description, "", committerDateMillis, authorDateMillis, committerName, committerEmail}, nil
+	// Dates are intentionally not resolved here. newCommitForValue resolves Timestamp and UserTimestamp at
+	// serialization time, ensuring both share the same CommitterDate() snapshot when using CommitDateNow().
+	return &CommitMeta{
+		Name:           author.Name,
+		Email:          author.Email,
+		Description:    description,
+		CommitterName:  committer.Name,
+		CommitterEmail: committer.Email,
+		Timestamp:      committer.Date,
+		UserTimestamp:  author.Date,
+	}, nil
 }
 
-// Time returns the time at which the commit was authored
-// This does not preserve timezone information, and returns the time in the system's local timezone
+// Time returns the time at which the commit was authored.
+// This does not preserve timezone information, and returns the time in the system's local timezone.
 func (cm *CommitMeta) Time() time.Time {
-	return time.UnixMilli(*cm.UserTimestamp)
+	return cm.UserTimestamp.Resolve(CommitterDate)
 }
 
-// CommitterTime returns the time at which the commit was created
-// This does not preserve timezone information, and returns the time in the system's local timezone
+// CommitterTime returns the time at which the commit was created.
+// This does not preserve timezone information, and returns the time in the system's local timezone.
 func (cm *CommitMeta) CommitterTime() time.Time {
-	return time.UnixMilli(int64(*cm.Timestamp))
+	return cm.Timestamp.Resolve(CommitterDate)
 }
 
 // FormatTS takes the internal timestamp and turns it into a human-readable string in the time.RubyDate format
@@ -162,7 +194,9 @@ func (g *simpleCommitMetaGenerator) Next() (*CommitMeta, error) {
 		return nil, fmt.Errorf("Called simpleCommitMetaGenerator.Next twice. This should never happen.")
 	}
 	g.alreadyGenerated = true
-	return NewCommitMetaWithUserTimestamp(g.name, g.email, g.message, &g.timestamp)
+	author := CommitIdentity{Name: g.name, Email: g.email, Date: CommitDateAt(g.timestamp)}
+	committer := CommitIdentity{Name: g.name, Email: g.email, Date: CommitDateNow()}
+	return NewCommitMetaWithAuthorAndCommitter(author, committer, g.message)
 }
 
 func (*simpleCommitMetaGenerator) IsGoodCommit(*Commit) bool {
@@ -173,9 +207,8 @@ func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMeta
 	return &simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage, alreadyGenerated: false}
 }
 
-// SignaturePayloadV1 generates the legacy signature payload format that includes only author information.
-// This format is used for backward compatibility with commits created before committer metadata was added.
-func SignaturePayloadV1(dbName string, meta *CommitMeta, headHash, stagedHash string) string {
+// signaturePayloadV1 generates the legacy signature payload format that includes only author information.
+func signaturePayloadV1(dbName string, meta *CommitMeta, headHash, stagedHash string) string {
 	return fmt.Sprintf("db: %s\nMessage: %s\nName: %s\nEmail: %s\nDate: %s\nHead: %s\nStaged: %s",
 		dbName,
 		meta.Description,
@@ -187,11 +220,11 @@ func SignaturePayloadV1(dbName string, meta *CommitMeta, headHash, stagedHash st
 	)
 }
 
-// SignaturePayloadV2 generates the new signature payload format that includes both author and committer information.
-// This format appends committer fields at the end to maintain V1 as a prefix for easier compatibility checks.
+// SignaturePayloadV2 generates the signature payload including both author and committer information.
+// Committer fields are appended after the author fields so V1 is a strict prefix, enabling forward compatibility.
 func SignaturePayloadV2(dbName string, meta *CommitMeta, headHash, stagedHash string) string {
-	return fmt.Sprintf("%s\n CommitterName: %s\nCommitterEmail: %s\nCommitterDate: %s",
-		SignaturePayloadV1(dbName, meta, headHash, stagedHash),
+	return fmt.Sprintf("%s\nCommitterName: %s\nCommitterEmail: %s\nCommitterDate: %s",
+		signaturePayloadV1(dbName, meta, headHash, stagedHash),
 		meta.CommitterName,
 		meta.CommitterEmail,
 		meta.CommitterTime().String())

@@ -149,7 +149,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		if err != nil {
 			return "", false, err
 		}
-		commitStagedProps.Date = &t
+		commitStagedProps.Date = datas.CommitDateAt(t)
 	}
 
 	if apr.Contains(cli.ForceFlag) {
@@ -207,9 +207,9 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 			return "", false, err
 		}
 
-		pendingCommit.CommitOptions.Signing = &datas.SigningContext{
+		pendingCommit.CommitOptions.Signer = &datas.CommitSigner{
 			Key:        keyId,
-			SignFunc:   gpg.Sign,
+			Sign:       gpg.Sign,
 			DBName:     dbName,
 			HeadHash:   headHash,
 			StagedHash: stagedHash,

@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -35,8 +34,9 @@ var ErrCommitVerificationFailed = goerrors.NewKind(CommitVerificationFailedPrefi
 
 // CommitStagedProps contains the parameters for a staged commit operation.
 type CommitStagedProps struct {
-	Message          string
-	Date             *time.Time
+	Message string
+	// Date is the author date. Use [datas.CommitDateAt] for an explicit date or [datas.CommitDateNow] to resolve at commit time.
+	Date             datas.CommitDate
 	AllowEmpty       bool
 	SkipEmpty        bool
 	Amend            bool
@@ -45,7 +45,8 @@ type CommitStagedProps struct {
 	Email            string
 	SkipVerification bool
 
-	CommitterDate  *time.Time
+	// CommitterDate is the committer date. Use [datas.CommitDateAt] for an explicit date or [datas.CommitDateNow] to resolve at commit time.
+	CommitterDate  datas.CommitDate
 	CommitterName  string
 	CommitterEmail string
 }
@@ -78,9 +79,8 @@ func getCommitRunTestGroups() []string {
 }
 
 // NewCommitStagedProps creates a new CommitStagedProps with the given author information. Committer fields are
-// automatically populated with the author information. The committer date is left empty to indicate it should be
-// written before serialization.
-func NewCommitStagedProps(name, email string, date *time.Time, message string) CommitStagedProps {
+// automatically populated with the author information.
+func NewCommitStagedProps(name, email string, date datas.CommitDate, message string) CommitStagedProps {
 	return CommitStagedProps{
 		Message:        message,
 		Date:           date,
@@ -88,7 +88,6 @@ func NewCommitStagedProps(name, email string, date *time.Time, message string) C
 		Email:          email,
 		CommitterName:  name,
 		CommitterEmail: email,
-		// CommitterDate if defined overrides CommitterDate() call during serialization in [datas.NewCommitForValue]
 	}
 }
 
@@ -181,7 +180,9 @@ func GetCommitStaged(
 		}
 	}
 
-	commitMeta, err := datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail, props.CommitterDate)
+	author := datas.CommitIdentity{Name: props.Name, Email: props.Email, Date: props.Date}
+	committer := datas.CommitIdentity{Name: props.CommitterName, Email: props.CommitterEmail, Date: props.CommitterDate}
+	commitMeta, err := datas.NewCommitMetaWithAuthorAndCommitter(author, committer, props.Message)
 	if err != nil {
 		return nil, err
 	}

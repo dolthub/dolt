@@ -26,6 +26,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
@@ -146,8 +147,8 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddName(builder, nameoff)
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
-	serial.CommitAddTimestampMillis(builder, *opts.Meta.Timestamp)
-	serial.CommitAddUserTimestampMillis(builder, *opts.Meta.UserTimestamp)
+	serial.CommitAddTimestampMillis(builder, opts.Meta.TimestampMillis())
+	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestampMillis())
 	serial.CommitAddSignature(builder, sigoff)
 	serial.CommitAddCommitterName(builder, committerNameOff)
 	serial.CommitAddCommitterEmail(builder, committerEmailOff)
@@ -158,34 +159,29 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 
 func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
-		opts.Meta = &CommitMeta{}
-		// Noms testing relies on deterministic values when [datas.CommitMeta] is not provided.
-		committerDate := uint64(0)
-		opts.Meta.Timestamp = &committerDate
+		// Noms testing relies on deterministic zero timestamps when CommitMeta is not provided.
+		epoch := CommitDateAt(time.UnixMilli(0))
+		opts.Meta = &CommitMeta{Timestamp: epoch, UserTimestamp: epoch}
+	} else {
+		// Freeze both dates at serialization time. now is captured once so both CommitDateNow() fields
+		// resolve to the same snapshot. Explicit CommitDateAt values are returned as-is by Resolve.
+		now := CommitterDate()
+		opts.Meta.Timestamp = CommitDateAt(opts.Meta.Timestamp.Resolve(func() time.Time { return now }))
+		opts.Meta.UserTimestamp = CommitDateAt(opts.Meta.UserTimestamp.Resolve(func() time.Time { return now }))
 	}
 
-	if opts.Meta.Timestamp == nil {
-		committerTimestamp := uint64(CommitterDate().UnixMilli())
-		opts.Meta.Timestamp = &committerTimestamp
-	}
-
-	if opts.Meta.UserTimestamp == nil {
-		authorTimestamp := int64(*opts.Meta.Timestamp)
-		opts.Meta.UserTimestamp = &authorTimestamp
-	}
-
-	if opts.Signing != nil && opts.Signing.Key != "" && opts.Signing.SignFunc != nil {
+	if opts.Signer != nil && opts.Signer.Key != "" && opts.Signer.Sign != nil {
 		payload := SignaturePayloadV2(
-			opts.Signing.DBName,
+			opts.Signer.DBName,
 			opts.Meta,
-			opts.Signing.HeadHash.String(),
-			opts.Signing.StagedHash.String(),
+			opts.Signer.HeadHash.String(),
+			opts.Signer.StagedHash.String(),
 		)
-		sig, err := opts.Signing.SignFunc(ctx, opts.Signing.Key, []byte(payload))
+		signature, err := opts.Signer.Sign(ctx, opts.Signer.Key, []byte(payload))
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign commit: %w", err)
 		}
-		opts.Meta.Signature = string(sig)
+		opts.Meta.Signature = string(signature)
 	}
 
 	r, err := vrw.WriteValue(ctx, v)
@@ -462,10 +458,8 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	ret.Name = string(serializedCommit.Name())
 	ret.Email = string(serializedCommit.Email())
 	ret.Description = string(serializedCommit.Description())
-	committerDate := serializedCommit.TimestampMillis()
-	ret.Timestamp = &committerDate
-	authorDate := serializedCommit.UserTimestampMillis()
-	ret.UserTimestamp = &authorDate
+	ret.Timestamp = CommitDateAt(time.UnixMilli(int64(serializedCommit.TimestampMillis())))
+	ret.UserTimestamp = CommitDateAt(time.UnixMilli(serializedCommit.UserTimestampMillis()))
 	ret.Signature = string(serializedCommit.Signature())
 	ret.CommitterName = ret.Name
 	if commiterNameBytes := serializedCommit.CommitterName(); commiterNameBytes != nil {

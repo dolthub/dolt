@@ -683,7 +683,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "resolved_value"}},
 			},
 			{
-				Query:    "select committer, email, message, author_date from dolt_log limit 1;",
+				Query:    "select author, author_email, message, author_date from dolt_log limit 1;",
 				Expected: []sql.Row{{"Test User", "test@example.com", "add row from branch1", timeEquals("2022-01-01T12:00:00Z")}},
 			},
 		},
@@ -781,7 +781,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select committer, email, message, author_date from dolt_log limit 1;",
+				Query:    "select author, author_email, message, author_date from dolt_log limit 1;",
 				Expected: []sql.Row{{"Branch User", "branch@example.com", "add rows from branch1", timeEquals("2022-02-01T10:30:00Z")}},
 			},
 		},

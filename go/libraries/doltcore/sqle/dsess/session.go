@@ -40,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -1510,16 +1511,19 @@ func (d *DoltSession) NewCommitStagedProps(ctx *sql.Context, message string, fal
 		return "", nil
 	}
 
-	getDateVar := func(sessionVar, envVar string) (*time.Time, error) {
+	getDateVar := func(sessionVar, envVar string) (datas.CommitDate, error) {
 		strVal, err := getStringVar(sessionVar, envVar)
 		if err != nil {
-			return nil, err
+			return datas.CommitDateNow(), err
 		}
 		if strVal == "" {
-			return nil, nil
+			return datas.CommitDateNow(), nil
 		}
-		date, err := dconfig.ParseDate(strVal)
-		return &date, err
+		t, err := dconfig.ParseDate(strVal)
+		if err != nil {
+			return datas.CommitDateNow(), err
+		}
+		return datas.CommitDateAt(t), nil
 	}
 
 	user := ctx.Client().User

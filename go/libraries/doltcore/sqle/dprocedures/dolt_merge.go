@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -461,7 +462,7 @@ func executeNoFFMerge(
 	}
 	commitStagedProps.Name = spec.Name
 	commitStagedProps.Email = spec.Email
-	commitStagedProps.Date = &spec.Date
+	commitStagedProps.Date = datas.CommitDateAt(spec.Date)
 	commitStagedProps.Force = spec.Force
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, commitStagedProps)
 	commitStagedProps.SkipVerification = skipVerification

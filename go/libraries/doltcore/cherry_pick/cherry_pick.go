@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // ErrCherryPickUncommittedChanges is returned when a cherry-pick is attempted without a clean working set.
@@ -193,8 +194,7 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 
 	commitProps.Name = originalMeta.Name
 	commitProps.Email = originalMeta.Email
-	temp := originalMeta.Time()
-	commitProps.Date = &temp
+	commitProps.Date = datas.CommitDateAt(originalMeta.Time())
 	commitProps.SkipVerification = options.SkipVerification
 
 	if options.CommitMessage != "" {
@@ -324,15 +324,20 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 	}
 
 	// Create the commit with the original commit's metadata. In a conflict workflow, AllowEmpty is always false.
-	authorDate := cherryCommitMeta.Time()
-	commitProps := actions.NewCommitStagedProps(cherryCommitMeta.Name, cherryCommitMeta.Email, &authorDate, cherryCommitMeta.Description)
+	commitProps, err := CreateCommitStagedPropsFromCherryPickOptions(ctx, CherryPickOptions{
+		CommitMessage:              cherryCommitMeta.Description,
+		CommitBecomesEmptyHandling: doltdb.ErrorOnEmptyCommit,
+	}, cherryCommit)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: unable to create commit staged props: %w", err)
+	}
 
 	roots, ok := doltSession.GetRoots(ctx, dbName)
 	if !ok {
 		return "", 0, 0, 0, fmt.Errorf("fatal: unable to load roots for %s", dbName)
 	}
 
-	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)
+	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, *commitProps)
 	if err != nil {
 		if actions.ErrCommitVerificationFailed.Is(err) {
 			return "", 0, 0, 0, err

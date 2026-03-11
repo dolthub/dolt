@@ -27,16 +27,16 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// SignFunc is a function that signs a message and returns the signature.
-type SignFunc func(ctx context.Context, keyId string, message []byte) ([]byte, error)
+// NewSignature is a function that signs a message and returns the signature.
+type NewSignature func(ctx context.Context, keyId string, message []byte) ([]byte, error)
 
-// SigningContext contains all information needed to sign a commit.
+// CommitSigner contains all information needed to sign a commit.
 // If this is nil in CommitOptions, the commit will not be signed.
-type SigningContext struct {
+type CommitSigner struct {
 	// Key is the GPG key ID to use for signing.
 	Key string
-	// SignFunc is the function to use for signing.
-	SignFunc SignFunc
+	// Sign is the function to use for signing.
+	Sign NewSignature
 	// DBName is the name of the database being committed to.
 	DBName string
 	// HeadHash is the hash of the current HEAD before the commit.
@@ -47,6 +47,7 @@ type SigningContext struct {
 
 // CommitOptions is used to pass options into Commit.
 type CommitOptions struct {
+	// Meta contains the metadata for the commit.
 	Meta *CommitMeta
 	// Parents, if provided, is the parent commits of the commit we are
 	// creating. If it is empty, the existing dataset head will be the only
@@ -56,6 +57,6 @@ type CommitOptions struct {
 	// as a parent, in addition to the parent set provided here. When we amend, we want to strictly use the commits
 	// provided in |Parents|, and no others.
 	Amend bool
-	// Signing contains all context needed for signing this commit. If nil, the commit will not be signed.
-	Signing *SigningContext
+	// Signer contains all context needed for signing this commit. If nil, the commit will not be signed.
+	Signer *CommitSigner
 }

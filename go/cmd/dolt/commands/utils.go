@@ -446,6 +446,25 @@ func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string,
 	return branchName, nil
 }
 
+func getTimestampColAsInt64(col interface{}) (int64, error) {
+	switch v := col.(type) {
+	case string:
+		t, err := time.Parse("2006-01-02 15:04:05.999", v)
+		if err != nil {
+			return 0, fmt.Errorf("error parsing timestamp %s: %w", v, err)
+		}
+		return t.UnixMilli(), nil
+	case int64:
+		return v, nil
+	case uint64:
+		return int64(v), nil
+	case time.Time:
+		return v.UnixMilli(), nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or time.Time", v)
+	}
+}
+
 func getTimestampColAsUint64(col interface{}) (uint64, error) {
 	switch v := col.(type) {
 	case string:
@@ -770,7 +789,7 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 	// Older Dolt versions store author metadata in the committer columns so we offer this default.
 	authorName := committerName
 	authorEmail := committerEmail
-	authorDate := committerDate
+	authorDate := int64(committerDate)
 	if supportsAuthorColumns {
 		authorName, ok = row[8+authorColumnsOffset].(string)
 		if !ok {
@@ -780,20 +799,19 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColumnsOffset])
 		}
-		authorDate, err = getTimestampColAsUint64(row[10+authorColumnsOffset])
+		authorDate, err = getTimestampColAsInt64(row[10+authorColumnsOffset])
 		if err != nil {
 			return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColumnsOffset], err)
 		}
 	}
 
-	i64AuthorDate := int64(authorDate)
 	commitMeta := &datas.CommitMeta{
 		Name:           authorName,
 		Email:          authorEmail,
 		Description:    message,
 		Signature:      signature,
-		Timestamp:      &committerDate,
-		UserTimestamp:  &i64AuthorDate,
+		Timestamp:      datas.CommitDateAt(time.UnixMilli(int64(committerDate))),
+		UserTimestamp:  datas.CommitDateAt(time.UnixMilli(authorDate)),
 		CommitterName:  committerName,
 		CommitterEmail: committerEmail,
 	}

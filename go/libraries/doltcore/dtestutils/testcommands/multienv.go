@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -259,7 +260,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 	if err != nil {
 		panic("couldn't get roots: " + err.Error())
 	}
-	commitStagedProps := actions.NewCommitStagedProps(name, email, nil, "auto commit")
+	commitStagedProps := actions.NewCommitStagedProps(name, email, datas.CommitDateNow(), "auto commit")
 	commitStagedProps.AllowEmpty = true
 	pendingCommit, err := actions.GetCommitStaged(ctx, doltdb.SimpleTableResolver{}, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, commitStagedProps)
 	if err != nil {
