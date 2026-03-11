@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -24,7 +23,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -42,7 +40,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -158,8 +155,8 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	)
 	remotesapi.RegisterChunkStoreServiceServer(grpcServer, chunkStoreService)
 
-	// Http handler for storage file transfers.
-	fileServer := newTransferFileHandler(dbCache, dEnv.FS, logEntry)
+	// Http handler for storage file transfers -- reuse remotesrv's filehandler.
+	fileServer := remotesrv.NewFileHandler(logEntry, dbCache, dEnv.FS, false, sealer, true)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
@@ -257,121 +254,3 @@ func (l *smuxListener) Accept() (net.Conn, error) {
 func (l *smuxListener) Close() error   { return nil }
 func (l *smuxListener) Addr() net.Addr { return stdioAddr{} }
 
-// transferFileHandler serves table files over HTTP through the SMUX transport.
-type transferFileHandler struct {
-	dbCache remotesrv.DBCache
-	fs      filesys.Filesys
-	lgr     *logrus.Entry
-}
-
-func newTransferFileHandler(dbCache remotesrv.DBCache, fs filesys.Filesys, lgr *logrus.Entry) *transferFileHandler {
-	return &transferFileHandler{
-		dbCache: dbCache,
-		fs:      fs,
-		lgr:     lgr,
-	}
-}
-
-func (fh *transferFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimLeft(r.URL.Path, "/")
-
-	switch r.Method {
-	case http.MethodGet:
-		fh.handleGet(w, r, path)
-	case http.MethodPost, http.MethodPut:
-		fh.handleUpload(w, r, path)
-	default:
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func (fh *transferFileHandler) handleGet(w http.ResponseWriter, r *http.Request, path string) {
-	reader, err := fh.fs.OpenForRead(path)
-	if err != nil {
-		http.Error(w, "Not Found", http.StatusNotFound)
-		return
-	}
-	defer reader.Close()
-
-	// The underlying reader is an *os.File which implements io.ReadSeeker.
-	// http.ServeContent handles full and range requests with streaming.
-	rs, ok := reader.(io.ReadSeeker)
-	if !ok {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	http.ServeContent(w, r, "", time.Time{}, rs)
-}
-
-func (fh *transferFileHandler) handleUpload(w http.ResponseWriter, r *http.Request, path string) {
-	i := strings.LastIndex(path, "/")
-	if i < 0 {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
-
-	dbPath := path[:i]
-	filename := path[i+1:]
-	q := r.URL.Query()
-
-	numChunksStr := q.Get("num_chunks")
-	if numChunksStr == "" {
-		http.Error(w, "Bad Request: num_chunks required", http.StatusBadRequest)
-		return
-	}
-	numChunks, err := strconv.Atoi(numChunksStr)
-	if err != nil {
-		http.Error(w, "Bad Request: invalid num_chunks", http.StatusBadRequest)
-		return
-	}
-
-	contentLengthStr := q.Get("content_length")
-	if contentLengthStr == "" {
-		http.Error(w, "Bad Request: content_length required", http.StatusBadRequest)
-		return
-	}
-	contentLength, err := strconv.ParseUint(contentLengthStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Bad Request: invalid content_length", http.StatusBadRequest)
-		return
-	}
-
-	contentHashStr := q.Get("content_hash")
-	if contentHashStr == "" {
-		http.Error(w, "Bad Request: content_hash required", http.StatusBadRequest)
-		return
-	}
-	contentHash, err := base64.RawURLEncoding.DecodeString(contentHashStr)
-	if err != nil {
-		http.Error(w, "Bad Request: invalid content_hash", http.StatusBadRequest)
-		return
-	}
-
-	splitOffset := uint64(0)
-	if splitOffsetStr := q.Get("split_offset"); splitOffsetStr != "" {
-		splitOffset, err = strconv.ParseUint(splitOffsetStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Bad Request: invalid split_offset", http.StatusBadRequest)
-			return
-		}
-	}
-
-	cs, err := fh.dbCache.Get(r.Context(), dbPath, "")
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	err = cs.WriteTableFile(r.Context(), filename, splitOffset, numChunks, contentHash, func() (io.ReadCloser, uint64, error) {
-		return r.Body, contentLength, nil
-	})
-	if err != nil {
-		fh.lgr.WithError(err).Error("failed to write table file")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}

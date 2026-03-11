@@ -45,22 +45,33 @@ var (
 )
 
 type filehandler struct {
-	dbCache  DBCache
-	fs       filesys.Filesys
-	readOnly bool
-	lgr      *logrus.Entry
-	sealer   Sealer
+	dbCache       DBCache
+	fs            filesys.Filesys
+	readOnly      bool
+	lgr           *logrus.Entry
+	sealer        Sealer
+	writeErrBody  bool
+}
+
+// NewFileHandler returns an http.Handler that serves table file downloads
+// and uploads backed by the given DBCache and filesystem. When writeErrBody
+// is true, upload errors are written to the response body so clients can
+// surface descriptive error messages (used by the SSH transfer path).
+func NewFileHandler(lgr *logrus.Entry, dbCache DBCache, fs filesys.Filesys, readOnly bool, sealer Sealer, writeErrBody bool) http.Handler {
+	fh := newFileHandler(lgr, dbCache, fs, readOnly, sealer)
+	fh.writeErrBody = writeErrBody
+	return fh
 }
 
 func newFileHandler(lgr *logrus.Entry, dbCache DBCache, fs filesys.Filesys, readOnly bool, sealer Sealer) filehandler {
 	return filehandler{
-		dbCache,
-		fs,
-		readOnly,
-		lgr.WithFields(logrus.Fields{
+		dbCache:  dbCache,
+		fs:       fs,
+		readOnly: readOnly,
+		lgr: lgr.WithFields(logrus.Fields{
 			"service": "dolt.services.remotesapi.v1alpha1.HttpFileServer",
 		}),
-		sealer,
+		sealer: sealer,
 	}
 }
 
@@ -188,7 +199,12 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		logger, statusCode = writeTableFile(req.Context(), logger, fh.dbCache, filepath, file, splitOffset, numChunks, contentHash, uint64(contentLength), req.Body)
+		var writeErr error
+		logger, statusCode, writeErr = writeTableFile(req.Context(), logger, fh.dbCache, filepath, file, splitOffset, numChunks, contentHash, uint64(contentLength), req.Body)
+		if writeErr != nil && fh.writeErrBody {
+			http.Error(respWr, writeErr.Error(), statusCode)
+			return
+		}
 	}
 
 	if statusCode != -1 {
@@ -298,18 +314,18 @@ func (u *uploadreader) Close() error {
 	return nil
 }
 
-func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, path, fileId string, splitOffset uint64, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) (*logrus.Entry, int) {
+func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, path, fileId string, splitOffset uint64, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) (*logrus.Entry, int, error) {
 	if !validateFileName(fileId) {
 		logger = logger.WithField("status", http.StatusBadRequest)
 		logger.Warnf("%s is not a valid hash", fileId)
-		return logger, http.StatusBadRequest
+		return logger, http.StatusBadRequest, fmt.Errorf("%s is not a valid hash", fileId)
 	}
 
 	cs, err := dbCache.Get(ctx, path, types.Format_Default.VersionString())
 	if err != nil {
 		logger = logger.WithField("status", http.StatusInternalServerError)
 		logger.WithError(err).Error("failed to get repository")
-		return logger, http.StatusInternalServerError
+		return logger, http.StatusInternalServerError, err
 	}
 
 	err = cs.WriteTableFile(ctx, fileId, splitOffset, numChunks, contentHash, func() (io.ReadCloser, uint64, error) {
@@ -328,19 +344,19 @@ func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, 
 		if errors.Is(err, errBodyLengthTFDMismatch) {
 			logger = logger.WithField("status", http.StatusBadRequest)
 			logger.Warn("bad request: body length mismatch")
-			return logger, http.StatusBadRequest
+			return logger, http.StatusBadRequest, err
 		}
 		if errors.Is(err, errBodyHashTFDMismatch) {
 			logger = logger.WithField("status", http.StatusBadRequest)
 			logger.Warn("bad request: body hash mismatch")
-			return logger, http.StatusBadRequest
+			return logger, http.StatusBadRequest, err
 		}
 		logger = logger.WithField("status", http.StatusInternalServerError)
 		logger.WithError(err).Error("failed to write upload to table file")
-		return logger, http.StatusInternalServerError
+		return logger, http.StatusInternalServerError, err
 	}
 
-	return logger, http.StatusOK
+	return logger, http.StatusOK, nil
 }
 
 func offsetAndLenFromRange(rngStr string) (int64, int64, string, error) {
