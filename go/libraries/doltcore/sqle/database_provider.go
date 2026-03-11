@@ -637,13 +637,6 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		return err
 	}
 
-	exists, isDir := p.fs.Exists(name)
-	if exists && isDir {
-		return sql.ErrDatabaseExists.New(name)
-	} else if exists {
-		return fmt.Errorf("Cannot create DB, file exists at %s", name)
-	}
-
 	sess := dsess.DSessFromSess(ctx.Session)
 	var rsc doltdb.ReplicationStatusController
 
@@ -661,6 +654,13 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 			p.mu.Unlock()
 		}
 	}()
+
+	exists, isDir := p.fs.Exists(name)
+	if exists && isDir {
+		return sql.ErrDatabaseExists.New(name)
+	} else if exists {
+		return fmt.Errorf("Cannot create DB, file exists at %s", name)
+	}
 
 	err = p.fs.MkDirs(name)
 	if err != nil {
