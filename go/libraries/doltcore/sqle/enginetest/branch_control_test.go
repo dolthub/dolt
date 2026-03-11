@@ -1609,14 +1609,13 @@ var BranchControlTests = []BranchControlTest{
 				Query:    "CALL DOLT_CHECKOUT('other');",
 				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
 			},
-			// Non-fast-forward merge requires creating a merge commit; should succeed with merge permission
 			{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_MERGE('main');",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
-			// After merge, all data from both branches is visible
+
 			{
 				User:     "testuser",
 				Host:     "localhost",
@@ -1657,28 +1656,24 @@ var BranchControlTests = []BranchControlTest{
 				Query:    "CALL DOLT_CHECKOUT('other');",
 				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
 			},
-			// Allow the transaction to commit even with unresolved conflicts
 			{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "SET @@dolt_allow_commit_conflicts = 1;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
-			// Merge with conflicts succeeds (returns conflict indicator) with merge permission
 			{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_MERGE('main');",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
-			// Conflicts are visible in dolt_conflicts
 			{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "SELECT count(*) FROM dolt_conflicts;",
 				Expected: []sql.Row{{int64(1)}},
 			},
-			// Cannot resolve conflicts with only merge permission (requires write)
 			{
 				User:        "testuser",
 				Host:        "localhost",
