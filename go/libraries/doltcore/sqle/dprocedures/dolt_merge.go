@@ -308,34 +308,20 @@ func performMerge(
 
 	var commit string
 	if !noCommit {
-		// Use the session commit methods directly (rather than doDoltCommit) to avoid the branch control
-		// write permission check. A non-fast-forward merge commit is an internal part of the merge operation,
-		// so it should be allowed when the user has Merge permission.
-		roots, _ := sess.GetRoots(ctx, dbName)
-		pendingCommit, err := sess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-			Message:          msg,
-			Date:             spec.Date,
-			Force:            spec.Force,
-			Name:             spec.Name,
-			Email:            spec.Email,
-			SkipVerification: skipVerification,
-		})
+		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
+		args := []string{"-m", msg, "--author", author}
+		if spec.Force {
+			args = append(args, "--"+cli.ForceFlag)
+		}
+		if skipVerification {
+			args = append(args, "--"+cli.SkipVerificationFlag)
+		}
+		commit, _, err = doDoltCommit(ctx, args)
 		if err != nil {
 			if actions.ErrCommitVerificationFailed.Is(err) {
 				return ws, "", noConflictsOrViolations, threeWayMerge, err.Error(), nil
 			}
 			return ws, commit, noConflictsOrViolations, threeWayMerge, "", err
-		}
-		if pendingCommit != nil {
-			newCommit, err := sess.DoltCommit(ctx, dbName, sess.GetTransaction(), pendingCommit)
-			if err != nil {
-				return ws, commit, noConflictsOrViolations, threeWayMerge, "", err
-			}
-			h, err := newCommit.HashOf()
-			if err != nil {
-				return ws, commit, noConflictsOrViolations, threeWayMerge, "", err
-			}
-			commit = h.String()
 		}
 	}
 

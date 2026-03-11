@@ -63,7 +63,7 @@ func doltCommitHashOut(ctx *sql.Context, outHash *string, args ...string) (sql.R
 // of the new commit (or the empty string if the commit was skipped), a boolean that indicates if creating the commit
 // was skipped (e.g. due to --skip-empty), and an error describing any error encountered.
 func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
-	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
 		return "", false, err
 	}
 	// Get the information for the sql context.

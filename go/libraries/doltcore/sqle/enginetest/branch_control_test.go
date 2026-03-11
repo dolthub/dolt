@@ -1525,12 +1525,6 @@ var BranchControlTests = []BranchControlTest{
 			{
 				User:        "testuser",
 				Host:        "localhost",
-				Query:       "CALL DOLT_COMMIT('--allow-empty', '-m', 'msg');",
-				ExpectedErr: branch_control.ErrIncorrectPermissions,
-			},
-			{
-				User:        "testuser",
-				Host:        "localhost",
 				Query:       "CALL DOLT_RESET();",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
@@ -1572,6 +1566,13 @@ var BranchControlTests = []BranchControlTest{
 				Host:     "localhost",
 				Query:    "SELECT * FROM test ORDER BY pk;",
 				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			// Merge permission allows DOLT_COMMIT
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_COMMIT('--allow-empty', '-m', 'msg');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 		},
 	},
