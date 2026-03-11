@@ -31,6 +31,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/xtaci/smux"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -149,28 +151,32 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 		sealer,
 	)
 
+	// gRPC for chunk store operations.
 	grpcServer := grpc.NewServer(
 		grpc.MaxRecvMsgSize(remotesrv.MaxGRPCMessageSize),
 		grpc.MaxSendMsgSize(remotesrv.MaxGRPCMessageSize),
 	)
 	remotesapi.RegisterChunkStoreServiceServer(grpcServer, chunkStoreService)
 
-	// Set up HTTP handler for table file transfers.
-	httpHandler := newTransferFileHandler(dbCache, dEnv.FS, logEntry)
-	httpServer := &http.Server{Handler: httpHandler}
+	// Http handler for storage file transfers.
+	fileServer := newTransferFileHandler(dbCache, dEnv.FS, logEntry)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
+			grpcServer.ServeHTTP(w, r)
+		} else {
+			fileServer.ServeHTTP(w, r)
+		}
+	})
+	h2s := &http2.Server{}
+	httpServer := &http.Server{Handler: h2c.NewHandler(handler, h2s)}
 
 	listener := &smuxListener{session: session}
 
-	// Start both servers.
-	errCh := make(chan error, 2)
-	go func() {
-		if err := grpcServer.Serve(listener); err != nil {
-			errCh <- fmt.Errorf("gRPC server error: %w", err)
-		}
-	}()
+	errCh := make(chan error, 1)
 	go func() {
 		if err := httpServer.Serve(listener); err != nil {
-			errCh <- fmt.Errorf("HTTP server error: %w", err)
+			errCh <- fmt.Errorf("server error: %w", err)
 		}
 	}()
 
