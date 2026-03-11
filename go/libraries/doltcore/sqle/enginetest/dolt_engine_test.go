@@ -1186,6 +1186,39 @@ func TestConcurrentTransactions(t *testing.T) {
 	enginetest.TestConcurrentTransactions(t, h)
 }
 
+func TestConcurrentCreateDatabaseIfNotExists(t *testing.T) {
+	t.Skip("CREATE DATABASE IF NOT EXISTS is not atomic; concurrent calls race and return errors")
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	engine := mustNewEngine(t, harness)
+	defer engine.Close()
+
+	concurrency := 10
+	wg := sync.WaitGroup{}
+	wg.Add(concurrency)
+	errs := make([]error, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		go func(id int) {
+			defer wg.Done()
+			ctx := enginetest.NewSession(harness)
+			_, iter, _, err := engine.Query(ctx, "CREATE DATABASE IF NOT EXISTS newdb")
+			if err != nil {
+				errs[id] = err
+				return
+			}
+			_, err = sql.RowIterToRows(ctx, iter)
+			errs[id] = err
+		}(i)
+	}
+
+	wg.Wait()
+	for i, err := range errs {
+		require.NoError(t, err, "goroutine %d returned error", i)
+	}
+}
+
 func TestLegacySelectScripts(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunLegacySelectScripts(t, harness)
