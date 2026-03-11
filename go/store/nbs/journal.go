@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/dolthub/fslock"
@@ -277,12 +278,26 @@ func (j *ChunkJournal) Persist(ctx context.Context, behavior dherrors.FatalBehav
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
 	}
 
-	for _, record := range mt.order {
+	wg := sync.WaitGroup{}
+	ccs := make([]CompressedChunk, len(mt.order))
+	for i, record := range mt.order {
 		if record.has {
 			continue
 		}
-		c := chunks.NewChunkWithHash(*record.a, mt.chunks[*record.a])
-		err := j.wr.writeCompressedChunk(ctx, behavior, ChunkToCompressedChunk(c))
+		wg.Add(1)
+		go func() {
+			c := chunks.NewChunkWithHash(*record.a, mt.chunks[*record.a])
+			ccs[i] = ChunkToCompressedChunk(c)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	for i, record := range mt.order {
+		if record.has {
+			continue
+		}
+		err := j.wr.writeCompressedChunk(ctx, behavior, ccs[i])
 		if err != nil {
 			return nil, gcBehavior_Continue, err
 		}
