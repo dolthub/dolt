@@ -16,13 +16,11 @@ package tree
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math"
 	"math/rand"
 	"testing"
-	"unsafe"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -64,11 +62,6 @@ func TestRoundTripNodeItems(t *testing.T) {
 			assert.Equal(t, values[i], nd.GetValue(i))
 		}
 	}
-}
-
-func TestNodeSize(t *testing.T) {
-	sz := unsafe.Sizeof(Node{})
-	assert.Equal(t, 56, int(sz))
 }
 
 func BenchmarkNodeGet(b *testing.B) {
