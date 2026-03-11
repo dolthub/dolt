@@ -2640,9 +2640,6 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 			SqlMode:         frag.sqlMode,
 		})
 	}
-	if err != nil {
-		return nil, err
-	}
 
 	return triggers, nil
 }
