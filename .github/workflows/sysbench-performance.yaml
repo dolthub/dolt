@@ -9,6 +9,7 @@ on:
 jobs:
   performance:
     name: Trigger Mini Benchmark Latency K8s Workflow
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-22.04
     steps:
       - name: Build benchmark payload (main HEAD + PR HEAD)

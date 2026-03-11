@@ -47,8 +47,12 @@ type replicationServiceServer struct {
 }
 
 func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req *replicationapi.UpdateUsersAndGrantsRequest) (*replicationapi.UpdateUsersAndGrantsResponse, error) {
+	lgr := s.lgr.WithField("method", "UpdateUsersAndGrants")
+	lgr.Tracef("beginning call")
+	defer lgr.Tracef("completed call")
 	sqlCtx, err := s.ctxFactory(ctx)
 	if err != nil {
+		lgr.WithError(err).Warnf("error getting sqlCtx from ctxFactory")
 		return nil, err
 	}
 
@@ -56,39 +60,51 @@ func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req
 	defer ed.Close()
 	err = s.mysqlDb.OverwriteUsersAndGrantData(sqlCtx, ed, req.SerializedContents)
 	if err != nil {
+		lgr.WithError(err).Warnf("error calling OverwriteUsersAndGrantData")
 		return nil, err
 	}
 	err = s.mysqlDb.Persist(sqlCtx, ed)
 	if err != nil {
+		lgr.WithError(err).Warnf("error calling Persist")
 		return nil, err
 	}
 	return &replicationapi.UpdateUsersAndGrantsResponse{}, nil
 }
 
 func (s *replicationServiceServer) UpdateBranchControl(ctx context.Context, req *replicationapi.UpdateBranchControlRequest) (*replicationapi.UpdateBranchControlResponse, error) {
+	lgr := s.lgr.WithField("method", "UpdateBranchControl")
+	lgr.Tracef("beginning call")
+	defer lgr.Tracef("completed call")
 	sqlCtx, err := s.ctxFactory(ctx)
 	if err != nil {
+		lgr.WithError(err).Warnf("error getting sqlCtx from ctxFactory")
 		return nil, err
 	}
 
 	err = s.branchControl.LoadData(sqlCtx, req.SerializedContents /* isFirstLoad */, false)
 	if err != nil {
+		lgr.WithError(err).Warnf("error calling LoadData")
 		return nil, err
 	}
 	err = s.branchControl.SaveData(sqlCtx, s.branchControlFilesys)
 	if err != nil {
+		lgr.WithError(err).Warnf("error calling SaveData")
 		return nil, err
 	}
 	return &replicationapi.UpdateBranchControlResponse{}, nil
 }
 
 func (s *replicationServiceServer) DropDatabase(ctx context.Context, req *replicationapi.DropDatabaseRequest) (*replicationapi.DropDatabaseResponse, error) {
+	lgr := s.lgr.WithField("method", "DropDatabase")
+	lgr.Tracef("beginning call")
+	defer lgr.Tracef("completed call")
 	if s.dropDatabase == nil {
 		return nil, status.Error(codes.Unimplemented, "unimplemented")
 	}
 
 	sqlCtx, err := s.ctxFactory(ctx)
 	if err != nil {
+		lgr.WithError(err).Warnf("error getting sqlCtx from ctxFactory")
 		return nil, err
 	}
 

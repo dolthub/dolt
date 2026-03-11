@@ -144,6 +144,13 @@ var ErrRebaseDataConflict = goerrors.NewKind(RebaseDataConflictPrefix + " %s (%s
 	"Resolve the conflicts and remove them from the dolt_conflicts_<table> tables, " +
 	"then continue the rebase by calling dolt_rebase('--continue')")
 
+const RebaseVerificationFailedPrefix = "commit verification failed while rebasing commit"
+
+// ErrRebaseVerificationFailed is used when commit verification tests fail while rebasing a commit.
+// The workspace is left dirty so the user can fix the failing tests and retry using --continue.
+var ErrRebaseVerificationFailed = goerrors.NewKind(RebaseVerificationFailedPrefix + " %s (%s): %s\n\n" +
+	"Fix the failing tests and stage your changes, then continue the rebase by calling dolt_rebase('--continue')")
+
 var EditPausePrefix = "edit action paused at commit"
 
 // createEditPauseMessage creates a pause message for edit actions
@@ -983,6 +990,19 @@ func handleRebaseCherryPick(
 
 		// Return error for data conflict - this is a failure state that requires resolution
 		return newRebaseError(ErrRebaseDataConflict.New(planStep.CommitHash, planStep.CommitMsg))
+	}
+
+	if mergeResult != nil && mergeResult.CommitVerificationErr != nil {
+		if doltSession.GetTransaction() == nil {
+			_, txErr := doltSession.StartTransaction(ctx, sql.ReadWrite)
+			if txErr != nil {
+				return newRebaseError(txErr)
+			}
+		}
+		if txErr := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); txErr != nil {
+			return newRebaseError(txErr)
+		}
+		return newRebaseError(mergeResult.CommitVerificationErr)
 	}
 
 	// If this is an edit action and no conflicts occurred, pause the rebase to allow user modifications

@@ -329,11 +329,6 @@ func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.Do
 	return destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh, nil)
 }
 
-// Clone pulls all data from a remote source database to a local destination database.
-func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- pull.TableFileEvent) error {
-	return srcDB.Clone(ctx, destDB, eventCh)
-}
-
 // FetchFollowTags fetches all tags from the source DB whose commits have already
 // been fetched into the destination DB.
 // todo: potentially too expensive to iterate over all srcDB tags
@@ -790,15 +785,21 @@ func pruneBranches[C doltdb.Context](ctx context.Context, dbData env.DbData[C], 
 	return nil
 }
 
-// SyncRoots is going to copy the root hash of the database from srcDb to destDb.
-// We can do this |Clone| if (1) destDb is empty, (2) destDb and srcDb are both
-// |TableFileStore|s, and (3) srcDb does *not* have a journal file. The most
-// common scenario where this occurs is when we are restoring a backup.
+// SyncRoots is going to copy the root hash of the database from srcDb
+// to destDb.  Technically we should always be able to do this by
+// copying table files from the source. If we see a journal file in
+// the srcDb, we can convert it to table file on the fly. If we have a
+// non-empty destDb, it does not technically matter - the full set of
+// table files in the source are all we need at the end of the
+// sync. However, it might be more efficient to Pull instead of copy
+// table files if there is a non-empty dest.
 //
-// The journal's interaction with TableFileStore is not great currently ---
-// when accessing a journal file through TableFileStore, the Reader() should in
-// reality return something which is going to result in reading an actual table
-// file. For now, we avoid the |Clone| path when the journal file is present.
+// For now, we only clone into an empty dest. We use some heuristics
+// on the size of the source store vs. the source journal, if there is
+// one, to decide if we use clone or merkle dag walk.
+//
+// Either way, both dest and source need to be table file stores,
+// since otherwise we need to pull chunks individually.
 func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, destDbRoot hash.Hash) (bool, error) {
 	if !destDbRoot.IsEmpty() {
 		return false, nil
@@ -809,11 +810,19 @@ func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, de
 	if !destDb.IsTableFileStore() {
 		return false, nil
 	}
-	srcHasJournal, err := srcDb.TableFileStoreHasJournal(ctx)
+	sizes, err := srcDb.StoreSizes(ctx)
 	if err != nil {
 		return false, err
 	}
-	if srcHasJournal {
+	if sizes.JournalBytes >= (sizes.TotalBytes / 5) {
+		// The journal is more than 20% of the entire source.
+		// For now we do a merkle walk instead of converting
+		// all the chunks.
+		return false, nil
+	}
+	if sizes.JournalBytes > 16*1024*1024*1024 {
+		// The journal is larger than 16GB.  For now we do a
+		// merkle walk instead of converting all the chunks.
 		return false, nil
 	}
 	return true, nil
@@ -824,7 +833,7 @@ func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, de
 // TODO: this should read/write a backup lock file specific to the client who created the backup
 // TODO     to prevent "restoring a remote", "cloning a backup", "syncing a remote" and "pushing
 // TODO     a backup." SyncRoots has more destructive potential than push right now.
-func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, progStarter ProgStarter, progStopper ProgStopper) error {
+func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, statsCh chan pull.Stats) error {
 	srcRoot, err := srcDb.NomsRoot(ctx)
 	if err != nil {
 		return nil
@@ -839,15 +848,6 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		return pull.ErrDBUpToDate
 	}
 
-	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, statsCh := progStarter(newCtx)
-	defer func() {
-		progStopper(cancelFunc, wg, statsCh)
-		if err == nil {
-			cli.Println()
-		}
-	}()
-
 	canClone, err := canSyncRootsWithClone(ctx, srcDb, destDb, destRoot)
 	if err != nil {
 		return err
@@ -855,53 +855,49 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 
 	if canClone {
 		tfCh := make(chan pull.TableFileEvent)
-		go func() {
+		var wg sync.WaitGroup
+		wg.Go(func() {
 			start := time.Now()
 			stats := make(map[string]iohelp.ReadStats)
-			for {
-				select {
-				case tfe, ok := <-tfCh:
-					if !ok {
-						return
-					}
-					if tfe.EventType == pull.DownloadStats {
-						stats[tfe.TableFiles[0].FileID()] = tfe.Stats[0]
+			for tfe := range tfCh {
+				if tfe.EventType == pull.DownloadStats {
+					stats[tfe.TableFiles[0].FileID()] = tfe.Stats[0]
 
-						totalSentBytes := uint64(0)
-						totalBytes := uint64(0)
+					totalSentBytes := uint64(0)
+					totalBytes := uint64(0)
 
-						for _, v := range stats {
-							if v.Percent > 0.001 {
-								totalSentBytes += v.Read
-								totalBytes += uint64(float64(v.Read) / v.Percent)
-							}
-						}
-
-						// We fake some of these values.
-						toEmit := pull.Stats{
-							FinishedSendBytes: totalSentBytes,
-							BufferedSendBytes: totalSentBytes,
-							SendBytesPerSec:   float64(totalSentBytes) / (time.Since(start).Seconds()),
-
-							// estimate the number of chunks based on an average chunk size of 4096.
-							TotalSourceChunks:   totalBytes / 4096,
-							FetchedSourceChunks: totalSentBytes / 4096,
-
-							FetchedSourceBytes:       totalSentBytes,
-							FetchedSourceBytesPerSec: float64(totalSentBytes) / (time.Since(start).Seconds()),
-						}
-
-						// TODO: This looks wrong without a ctx.Done() select, but Puller does not conditionally send here...
-						select {
-						case statsCh <- toEmit:
+					for _, v := range stats {
+						if v.Percent > 0.001 {
+							totalSentBytes += v.Read
+							totalBytes += uint64(float64(v.Read) / v.Percent)
 						}
 					}
+
+					// We fake some of these values.
+					toEmit := pull.Stats{
+						FinishedSendBytes: totalSentBytes,
+						BufferedSendBytes: totalSentBytes,
+						SendBytesPerSec:   float64(totalSentBytes) / (time.Since(start).Seconds()),
+
+						// estimate the number of chunks based on an average chunk size of 4096.
+						TotalSourceChunks:   totalBytes / 4096,
+						FetchedSourceChunks: totalSentBytes / 4096,
+
+						FetchedSourceBytes:       totalSentBytes,
+						FetchedSourceBytesPerSec: float64(totalSentBytes) / (time.Since(start).Seconds()),
+					}
+
+					// TODO: This looks wrong without a ctx.Done() select, but Puller does not conditionally send here...
+					statsCh <- toEmit
 				}
 			}
-		}()
-
-		err := srcDb.Clone(ctx, destDb, tfCh)
-		close(tfCh)
+		})
+		var err error
+		wg.Go(func() {
+			defer close(tfCh)
+			err = srcDb.Clone(ctx, tempTableDir, destDb, tfCh)
+		})
+		wg.Wait()
 		if err == nil {
 			return nil
 		}

@@ -30,10 +30,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -45,7 +43,7 @@ import (
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
-func ExecuteSql(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, statements string) (doltdb.RootValue, error) {
+func ExecuteSql(ctx context.Context, dEnv *env.DoltEnv, statements string) (doltdb.RootValue, error) {
 	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, err
@@ -81,8 +79,6 @@ func ExecuteSqlOnEngine(ctx *sql.Context, engine *sqle.Engine, statements string
 
 		var execErr error
 		switch sqlStatement.(type) {
-		case *sqlparser.Show:
-			return errors.New("Show statements aren't handled")
 		case *sqlparser.Select, *sqlparser.OtherRead:
 			return errors.New("Select statements aren't handled")
 		case *sqlparser.Insert:
@@ -187,112 +183,6 @@ func ExecuteSelect(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue
 	return rows, nil
 }
 
-// Returns the dolt rows given transformed to sql rows. Exactly the columns in the schema provided are present in the
-// final output rows, even if the input rows contain different columns. The tag numbers for columns in the row and
-// schema given must match.
-func ToSqlRows(sch schema.Schema, rs ...row.Row) []sql.Row {
-	sqlRows := make([]sql.Row, len(rs))
-	compressedSch := CompressSchema(sch)
-	for i := range rs {
-		sqlRows[i], _ = sqlutil.DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
-	}
-	return sqlRows
-}
-
-// Rewrites the tag numbers for the schema given to start at 0, just like result set schemas. If one or more column
-// names are given, only those column names are included in the compressed schema. The column list can also be used to
-// reorder the columns as necessary.
-func CompressSchema(sch schema.Schema, colNames ...string) schema.Schema {
-	var itag uint64
-	var cols []schema.Column
-
-	if len(colNames) > 0 {
-		cols = make([]schema.Column, len(colNames))
-		for _, colName := range colNames {
-			column, ok := sch.GetAllCols().GetByName(colName)
-			if !ok {
-				panic("No column found for column name " + colName)
-			}
-			column.Tag = itag
-			cols[itag] = column
-			itag++
-		}
-	} else {
-		cols = make([]schema.Column, sch.GetAllCols().Size())
-		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			col.Tag = itag
-			cols[itag] = col
-			itag++
-			return false, nil
-		})
-	}
-
-	colCol := schema.NewColCollection(cols...)
-	return schema.UnkeyedSchemaFromCols(colCol)
-}
-
-// Rewrites the tag numbers for the schemas given to start at 0, just like result set schemas.
-func CompressSchemas(schs ...schema.Schema) schema.Schema {
-	var itag uint64
-	var cols []schema.Column
-
-	cols = make([]schema.Column, 0)
-	for _, sch := range schs {
-		sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
-			col.Tag = itag
-			cols = append(cols, col)
-			itag++
-			return false
-		})
-	}
-
-	colCol := schema.NewColCollection(cols...)
-	return schema.UnkeyedSchemaFromCols(colCol)
-}
-
-// Rewrites the tag numbers for the row given to begin at zero and be contiguous, just like result set schemas. We don't
-// want to just use the field mappings in the result set schema used by sqlselect, since that would only demonstrate
-// that the code was consistent with itself, not actually correct.
-func CompressRow(sch schema.Schema, r row.Row) row.Row {
-	var itag uint64
-	compressedRow := make(row.TaggedValues)
-
-	// TODO: this is probably incorrect and will break for schemas where the tag numbering doesn't match the declared order
-	sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
-		if val, ok := r.GetColVal(tag); ok {
-			compressedRow[itag] = val
-		}
-		itag++
-		return false
-	})
-
-	// call to compress schema is a no-op in most cases
-	r, err := row.New(types.Format_Default, CompressSchema(sch), compressedRow)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-// SubsetSchema returns a schema that is a subset of the schema given, with keys and constraints removed. Column names
-// must be verified before subsetting. Unrecognized column names will cause a panic.
-func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
-	srcColls := sch.GetAllCols()
-
-	var cols []schema.Column
-	for _, name := range colNames {
-		if col, ok := srcColls.GetByName(name); !ok {
-			panic("Unrecognized name " + name)
-		} else {
-			cols = append(cols, col)
-		}
-	}
-	colColl := schema.NewColCollection(cols...)
-	return schema.UnkeyedSchemaFromCols(colColl)
-}
-
 func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 	for {
 		_, err := iter.Next(ctx)
@@ -331,33 +221,12 @@ func CreateEnvWithSeedData() (*env.DoltEnv, error) {
 		return nil, err
 	}
 
-	root, err = ExecuteSql(ctx, dEnv, root, seedData)
+	root, err = ExecuteSql(ctx, dEnv, seedData)
 	if err != nil {
 		return nil, err
 	}
 
 	err = dEnv.UpdateWorkingRoot(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	return dEnv, nil
-}
-
-// CreateEmptyTestDatabase creates a test database without any data in it.
-func CreateEmptyTestDatabase() (*env.DoltEnv, error) {
-	dEnv := CreateTestEnv()
-	err := CreateEmptyTestTable(dEnv, PeopleTableName, PeopleTestSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	err = CreateEmptyTestTable(dEnv, EpisodesTableName, EpisodesTestSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	err = CreateEmptyTestTable(dEnv, AppearancesTableName, AppearancesTestSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -403,122 +272,33 @@ func CreateTestEnvWithName(envName string) *env.DoltEnv {
 	return dEnv
 }
 
-// CreateEmptyTestTable creates a new test table with the name, schema, and rows given.
-func CreateEmptyTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema) error {
-	ctx := context.Background()
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	vrw := dEnv.DoltDB(ctx).ValueReadWriter()
-	ns := dEnv.DoltDB(ctx).NodeStore()
-
-	rows, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, sch)
-	if err != nil {
-		return err
-	}
-
-	indexSet, err := durable.NewIndexSetWithEmptyIndexes(ctx, vrw, ns, sch)
-	if err != nil {
-		return err
-	}
-
-	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, indexSet, nil)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
-	if err != nil {
-		return err
-	}
-
-	return dEnv.UpdateWorkingRoot(ctx, newRoot)
-}
-
-// CreateTestDatabase creates a test database with the test data set in it. Has a dirty workspace as well.
-func CreateTestDatabase() (*env.DoltEnv, error) {
-	ctx := context.Background()
-	dEnv, err := CreateEmptyTestDatabase()
-	if err != nil {
-		return nil, err
-	}
-
-	const simpsonsRowData = `
-	INSERT INTO people VALUES
-		(0, "Homer", "Simpson", 1, 40, 8.5, NULL, NULL),
-		(1, "Marge", "Simpson", 1, 38, 8, "00000000-0000-0000-0000-000000000001", 111),
-		(2, "Bart", "Simpson", 0, 10, 9, "00000000-0000-0000-0000-000000000002", 222),
-		(3, "Lisa", "Simpson", 0, 8, 10, "00000000-0000-0000-0000-000000000003", 333),
-		(4, "Moe", "Szyslak", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", 444),
-		(5, "Barney", "Gumble", 0, 40, 4, "00000000-0000-0000-0000-000000000005", 555);
-	INSERT INTO episodes VALUES 
-		(1, "Simpsons Roasting On an Open Fire", "1989-12-18 03:00:00", 8.0),
-		(2, "Bart the Genius", "1990-01-15 03:00:00", 9.0),
-		(3, "Homer's Odyssey", "1990-01-22 03:00:00", 7.0),
-		(4, "There's No Disgrace Like Home", "1990-01-29 03:00:00", 8.5);
-	INSERT INTO appearances VALUES 
-		(0, 1, "Homer is great in this one"),
-		(1, 1, "Marge is here too"),
-		(0, 2, "Homer is great in this one too"),
-		(2, 2, "This episode is named after Bart"),
-		(3, 2, "Lisa is here too"),
-		(4, 2, "I think there's a prank call scene"),
-		(0, 3, "Homer is in every episode"),
-		(1, 3, "Marge shows up a lot too"),
-		(3, 3, "Lisa is the best Simpson"),
-		(5, 3, "I'm making this all up");`
-
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	root, err = ExecuteSql(ctx, dEnv, root, simpsonsRowData)
-	if err != nil {
-		return nil, err
-	}
-
-	err = dEnv.UpdateWorkingRoot(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	return dEnv, nil
-}
-
 func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, error) {
 	ctx := context.Background()
 	var sqlRows []sql.Row
-	if types.Format_Default == types.Format_DOLT {
-		rowData, err := durable.ProllyMapFromIndex(idx)
-		if err != nil {
-			return nil, err
-		}
-		kd, vd := rowData.Descriptors()
-		iter, err := rowData.IterAll(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for {
-			var k, v val.Tuple
-			k, v, err = iter.Next(ctx)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return nil, err
-			}
-			sqlRow, err := sqlRowFromTuples(sch, kd, vd, k, v)
-			if err != nil {
-				return nil, err
-			}
-			sqlRows = append(sqlRows, sqlRow)
-		}
-
-	} else {
-		panic("Unsupported format: " + idx.Format().VersionString())
+	rowData, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return nil, err
 	}
+	kd, vd := rowData.Descriptors()
+	iter, err := rowData.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		var k, v val.Tuple
+		k, v, err = iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		sqlRow, err := sqlRowFromTuples(sch, kd, vd, k, v)
+		if err != nil {
+			return nil, err
+		}
+		sqlRows = append(sqlRows, sqlRow)
+	}
+
 	return sqlRows, nil
 }
 

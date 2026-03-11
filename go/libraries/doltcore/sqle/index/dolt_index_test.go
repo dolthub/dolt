@@ -240,16 +240,16 @@ func TestDoltIndexEqual(t *testing.T) {
 			[]interface{}{4, 3},
 			[]sql.Row{{1, 2, 3, 4}},
 		},
-		//{
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
 		//	[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
-		//},
-		//{
+		// },
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
 		//	[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
-		//},
+		// },
 	}
 
 	for _, typesTest := range typesTests {
@@ -372,16 +372,16 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 			[]interface{}{4, 3},
 			nil,
 		},
-		//{
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
 		//	[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
-		//},
-		//{
+		// },
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
 		//	nil,
-		//},
+		// },
 	}
 
 	for _, typesTest := range typesTests {
@@ -504,16 +504,16 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 			[]interface{}{4, 3},
 			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
 		},
-		//{
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
 		//	[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
-		//},
-		//{
+		// },
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
 		//	[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
-		//},
+		// },
 	}
 
 	for _, typesTest := range typesTests {
@@ -657,16 +657,16 @@ func TestDoltIndexLessThan(t *testing.T) {
 			[]interface{}{4, 4},
 			[]sql.Row{{1, 1, 3, 3}},
 		},
-		//{
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
 		//	nil,
-		//},
-		//{
+		// },
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
 		//	[]sql.Row{{2, 2, 4, 3}, {1, 1, 3, 3}},
-		//},
+		// },
 	}
 
 	for _, typesTest := range typesTests {
@@ -799,16 +799,16 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 			[]interface{}{4, 4},
 			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
-		//{
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
 		//	[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
-		//},
-		//{
+		// },
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
 		//	[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
-		//},
+		// },
 	}
 
 	for _, typesTest := range typesTests {
@@ -967,24 +967,24 @@ func TestDoltIndexBetween(t *testing.T) {
 			[]interface{}{4, 4},
 			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
-		//{
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
 		//	[]interface{}{3},
 		//	[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
-		//},
-		//{
+		// },
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
 		//	[]interface{}{4},
 		//	[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
-		//},
-		//{
+		// },
+		// {
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
 		//	[]interface{}{4},
 		//	[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
-		//},
+		// },
 	}
 
 	for _, typesTest := range typesTests {
@@ -1345,7 +1345,7 @@ func doltIndexSetup(t *testing.T) (doltdb.RootValue, map[string]index.DoltIndex)
 	if err != nil {
 		panic(err)
 	}
-	root, err = sqle.ExecuteSql(ctx, dEnv, root, `
+	root, err = sqle.ExecuteSql(ctx, dEnv, `
 CREATE TABLE onepk (
   pk1 BIGINT PRIMARY KEY,
   v1 BIGINT,

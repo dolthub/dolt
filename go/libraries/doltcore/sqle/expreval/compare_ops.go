@@ -15,188 +15,65 @@
 package expreval
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func compareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (int, error) {
 	return l1.Type().Compare(ctx, l1.Value(), l2.Value())
 }
 
-// CompareOp is an interface for comparing values
+// CompareOp is an interface for comparing values using SQL type semantics.
 type CompareOp interface {
-	// CompareLiterals compares two go-mysql-server literals
-	CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error)
-	// CompareNomsValues compares two noms values
-	CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error)
-	// CompareToNil compares a noms value to nil using sql logic rules
-	CompareToNil(v2 types.Value) (bool, error)
+	// ApplyCmp applies the comparison operator to the result of sql.Type.Compare,
+	// returning true if the comparison satisfies the operator.
+	ApplyCmp(n int) bool
+	// CompareToNil returns the comparison result when the column value is null.
+	// otherIsNull indicates whether the value being compared to is also null.
+	CompareToNil(otherIsNull bool) bool
 }
 
 // EqualsOp implements the CompareOp interface implementing equality logic
 type EqualsOp struct{}
 
-// CompareLiterals compares two go-mysql-server literals for equality
-func (op EqualsOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(ctx, l1, l2)
+// ApplyCmp implements CompareOp, returning true when the values are equal.
+func (op EqualsOp) ApplyCmp(n int) bool { return n == 0 }
 
-	if err != nil {
-		return false, err
-	}
-
-	return n == 0, nil
-}
-
-// CompareNomsValues compares two noms values for equality
-func (op EqualsOp) CompareNomsValues(_ context.Context, v1, v2 types.Value) (bool, error) {
-	return v1.Equals(v2), nil
-}
-
-// CompareToNil always returns false as values are neither greater than, less than, or equal to nil
-// except for equality op, the compared value is null.
-func (op EqualsOp) CompareToNil(v types.Value) (bool, error) {
-	if v == types.NullValue {
-		return true, nil
-	}
-	return false, nil
-}
+// CompareToNil implements CompareOp, returning true only when both values are null.
+func (op EqualsOp) CompareToNil(otherIsNull bool) bool { return otherIsNull }
 
 // GreaterOp implements the CompareOp interface implementing greater than logic
-type GreaterOp struct {
-	vr types.ValueReader
-}
+type GreaterOp struct{}
 
-// CompareLiterals compares two go-mysql-server literals returning true if the value of the first
-// is greater than the second.
-func (op GreaterOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(ctx, l1, l2)
+// ApplyCmp implements CompareOp, returning true when the first value is greater than the second.
+func (op GreaterOp) ApplyCmp(n int) bool { return n > 0 }
 
-	if err != nil {
-		return false, err
-	}
-
-	return n > 0, nil
-}
-
-// CompareNomsValues compares two noms values returning true if the of the first
-// is greater than the second.
-func (op GreaterOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
-	eq := v1.Equals(v2)
-
-	if eq {
-		return false, nil
-	}
-
-	lt, err := v1.Less(ctx, op.vr.Format(), v2)
-
-	if err != nil {
-		return false, nil
-	}
-
-	return !lt, err
-}
-
-// CompareToNil always returns false as values are neither greater than, less than, or equal to nil
-func (op GreaterOp) CompareToNil(types.Value) (bool, error) {
-	return false, nil
-}
+// CompareToNil implements CompareOp, always returning false as null comparisons are never greater than.
+func (op GreaterOp) CompareToNil(bool) bool { return false }
 
 // GreaterEqualOp implements the CompareOp interface implementing greater than or equal to logic
-type GreaterEqualOp struct {
-	vr types.ValueReader
-}
+type GreaterEqualOp struct{}
 
-// CompareLiterals compares two go-mysql-server literals returning true if the value of the first
-// is greater than or equal to the second.
-func (op GreaterEqualOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(ctx, l1, l2)
+// ApplyCmp implements CompareOp, returning true when the first value is greater than or equal to the second.
+func (op GreaterEqualOp) ApplyCmp(n int) bool { return n >= 0 }
 
-	if err != nil {
-		return false, err
-	}
-
-	return n >= 0, nil
-}
-
-// CompareNomsValues compares two noms values returning true if the of the first
-// is greater or equal to than the second.
-func (op GreaterEqualOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
-	res, err := v1.Less(ctx, op.vr.Format(), v2)
-
-	if err != nil {
-		return false, err
-	}
-
-	return !res, nil
-}
-
-// CompareToNil always returns false as values are neither greater than, less than, or equal to nil
-func (op GreaterEqualOp) CompareToNil(types.Value) (bool, error) {
-	return false, nil
-}
+// CompareToNil implements CompareOp, always returning false as null comparisons are never greater than or equal.
+func (op GreaterEqualOp) CompareToNil(bool) bool { return false }
 
 // LessOp implements the CompareOp interface implementing less than logic
-type LessOp struct {
-	vr types.ValueReader
-}
+type LessOp struct{}
 
-// CompareLiterals compares two go-mysql-server literals returning true if the value of the first
-// is less than the second.
-func (op LessOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(ctx, l1, l2)
+// ApplyCmp implements CompareOp, returning true when the first value is less than the second.
+func (op LessOp) ApplyCmp(n int) bool { return n < 0 }
 
-	if err != nil {
-		return false, err
-	}
-
-	return n < 0, nil
-}
-
-// CompareNomsValues compares two noms values returning true if the of the first
-// is less than the second.
-func (op LessOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
-	return v1.Less(ctx, op.vr.Format(), v2)
-}
-
-// CompareToNil always returns false as values are neither greater than, less than, or equal to nil
-func (op LessOp) CompareToNil(types.Value) (bool, error) {
-	return false, nil
-}
+// CompareToNil implements CompareOp, always returning false as null comparisons are never less than.
+func (op LessOp) CompareToNil(bool) bool { return false }
 
 // LessEqualOp implements the CompareOp interface implementing less than or equal to logic
-type LessEqualOp struct {
-	vr types.ValueReader
-}
+type LessEqualOp struct{}
 
-// CompareLiterals compares two go-mysql-server literals returning true if the value of the first
-// is less than or equal to the second.
-func (op LessEqualOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(ctx, l1, l2)
+// ApplyCmp implements CompareOp, returning true when the first value is less than or equal to the second.
+func (op LessEqualOp) ApplyCmp(n int) bool { return n <= 0 }
 
-	if err != nil {
-		return false, err
-	}
-
-	return n <= 0, nil
-}
-
-// CompareNomsValues compares two noms values returning true if the of the first
-// is less than or equal to the second.
-func (op LessEqualOp) CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error) {
-	eq := v1.Equals(v2)
-
-	if eq {
-		return true, nil
-	}
-
-	return v1.Less(ctx, op.vr.Format(), v2)
-}
-
-// CompareToNil always returns false as values are neither greater than, less than, or equal to nil
-func (op LessEqualOp) CompareToNil(types.Value) (bool, error) {
-	return false, nil
-}
+// CompareToNil implements CompareOp, always returning false as null comparisons are never less than or equal.
+func (op LessEqualOp) CompareToNil(bool) bool { return false }

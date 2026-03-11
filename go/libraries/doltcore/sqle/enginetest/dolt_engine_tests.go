@@ -513,6 +513,7 @@ func RunStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 
 func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 	scripts := append(DoltProcedureTests, DoltCleanProcedureScripts...)
+	scripts = append(scripts, DoltBackupProcedureScripts...)
 	for _, script := range scripts {
 		func() {
 			h := h.NewHarness(t)
@@ -525,6 +526,7 @@ func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 
 func RunDoltStoredProceduresPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 	scripts := append(DoltProcedureTests, DoltCleanProcedureScripts...)
+	scripts = append(scripts, DoltBackupProcedureScripts...)
 	for _, script := range scripts {
 		func() {
 			h := h.NewHarness(t)
@@ -545,8 +547,14 @@ func RunCallAsOfTest(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func RunJsonValueScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
+	for _, script := range JsonValueScriptTests {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 func RunLargeJsonObjectsTest(t *testing.T, harness DoltEnginetestHarness) {
-	SkipByDefaultInCI(t)
 	defer harness.Close()
 	for _, script := range LargeJsonObjectScriptTests {
 		enginetest.TestScript(t, harness, script)
@@ -660,6 +668,112 @@ func RunDoltScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
 		enginetest.TestScript(t, harness, script)
 		harness.Close()
 		// }()
+	}
+}
+
+func RunDoltDTableScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range DoltStatusTableScripts {
+		h := harness.NewHarness(t)
+		enginetest.TestScript(t, h, script)
+		h.Close()
+	}
+}
+
+func RunDoltDTableScriptsPreparedTest(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range DoltStatusTableScripts {
+		h := harness.NewHarness(t)
+		enginetest.TestScriptPrepared(t, h, script)
+		h.Close()
+	}
+}
+
+func RunLegacySelectScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacySelectScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyJoinScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyJoinScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyInsertScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyInsertScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyUpdateScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyUpdateScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyDeleteScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyDeleteScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyReplaceScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyReplaceScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyCreateTableScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyCreateTableScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyDropTableScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyDropTableScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunLegacyIndexScripts(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range LegacyIndexScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
 	}
 }
 
@@ -1973,18 +2087,6 @@ func runMergeScriptTestsInBothDirections(t *testing.T, tests []MergeScriptTest, 
 	})
 }
 
-func SkipByDefaultInCI(t *testing.T) {
-	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_NON_RACE_TESTS") == "" {
-		t.Skip()
-	}
-}
-
-var newFormatSkippedScripts = []string{
-	// Different query plans
-	"Partial indexes are used and return the expected result",
-	"Multiple indexes on the same columns in a different order",
-}
-
 func skipPreparedTests(t *testing.T) {
 	if skipPrepared {
 		t.Skip("skip prepared")
@@ -2105,6 +2207,8 @@ func RunDoltTestsTableTests(t *testing.T, harness DoltEnginetestHarness) {
 			enginetest.TestScript(t, harness, script)
 		})
 	}
+
+	RunDoltTestsValidationTests(t, harness)
 }
 
 func RunBranchActivityTests(t *testing.T, harness DoltEnginetestHarness) {

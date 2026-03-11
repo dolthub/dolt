@@ -15,11 +15,7 @@
 package typeinfo
 
 import (
-	"context"
 	"fmt"
-	"strconv"
-	"strings"
-	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -51,61 +47,6 @@ func CreateVarStringTypeFromSqlType(stringType sql.StringType) TypeInfo {
 	return &varStringType{stringType}
 }
 
-// ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *varStringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.String); ok {
-		res := string(val)
-		// As per the MySQL documentation, trailing spaces are removed when retrieved for CHAR types only.
-		// This function is used to retrieve dolt values, hence its inclusion here and not elsewhere.
-		// https://dev.mysql.com/doc/refman/8.0/en/char.html
-		if ti.sqlStringType.Type() == sqltypes.Char {
-			res = strings.TrimRightFunc(res, unicode.IsSpace)
-		}
-		return res, nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
-}
-
-// ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *varStringType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
-	k := reader.ReadKind()
-	switch k {
-	case types.StringKind:
-		val := reader.ReadString()
-		// As per the MySQL documentation, trailing spaces are removed when retrieved for CHAR types only.
-		// This function is used to retrieve dolt values, hence its inclusion here and not elsewhere.
-		// https://dev.mysql.com/doc/refman/8.0/en/char.html
-		if ti.sqlStringType.Type() == sqltypes.Char {
-			val = strings.TrimRightFunc(val, unicode.IsSpace)
-		}
-		return val, nil
-
-	case types.NullKind:
-		return nil, nil
-	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
-}
-
-// ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *varStringType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
-	if v == nil {
-		return types.NullValue, nil
-	}
-	strVal, _, err := ti.sqlStringType.Convert(ctx, v)
-	if err != nil {
-		return nil, err
-	}
-	val, ok := strVal.(string)
-	if ok {
-		return types.String(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
-}
-
 // Equals implements TypeInfo interface.
 func (ti *varStringType) Equals(other TypeInfo) bool {
 	if other == nil {
@@ -119,55 +60,9 @@ func (ti *varStringType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *varStringType) FormatValue(v types.Value) (*string, error) {
-	// TODO: Add context parameter to FormatValue
-	ctx := context.Background()
-	if val, ok := v.(types.String); ok {
-		res, err := ti.ConvertNomsValueToValue(val)
-		if err != nil {
-			return nil, err
-		}
-		resStr, ok, err := sql.Unwrap[string](ctx, res)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			return &resStr, nil
-		}
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
-}
-
-// IsValid implements TypeInfo interface.
-func (ti *varStringType) IsValid(v types.Value) bool {
-	// TODO: Add context parameter or delete typeinfo package
-	ctx := context.Background()
-	if val, ok := v.(types.String); ok {
-		_, _, err := ti.sqlStringType.Convert(ctx, string(val))
-		if err != nil {
-			return false
-		}
-		return true
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return true
-	}
-	return false
-}
-
 // NomsKind implements TypeInfo interface.
 func (ti *varStringType) NomsKind() types.NomsKind {
 	return types.StringKind
-}
-
-// Promote implements TypeInfo interface.
-func (ti *varStringType) Promote() TypeInfo {
-	return &varStringType{ti.sqlStringType.Promote().(sql.StringType)}
 }
 
 // String implements TypeInfo interface.
@@ -189,86 +84,4 @@ func (ti *varStringType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *varStringType) ToSqlType() sql.Type {
 	return ti.sqlStringType
-}
-
-// ConvertToType converts the given string to the destination value. This is a shortcut to calling GetTypeConverter and
-// using the returned TypeConverter when this typeinfo will be used as the source typeinfo. This essentially replaces
-// the old ParseValue function.
-func (ti *varStringType) ConvertToType(ctx context.Context, vrw types.ValueReadWriter, destTi TypeInfo, val types.String) (types.Value, error) {
-	tc, _, err := varStringTypeConverter(ctx, ti, destTi)
-	if err != nil {
-		return nil, err
-	}
-	return tc(ctx, vrw, val)
-}
-
-// varStringTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func varStringTypeConverter(ctx context.Context, src *varStringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
-	switch dest := destTi.(type) {
-	case *bitType:
-		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
-			if v == nil || v == types.NullValue {
-				return types.NullValue, nil
-			}
-			val, ok := v.(types.String)
-			if !ok {
-				return nil, fmt.Errorf("unexpected type converting string to %s: %T", strings.ToLower(dest.String()), v)
-			}
-			newVal, err := strconv.ParseUint(string(val), 10, int(dest.sqlBitType.NumberOfBits()))
-			if err != nil {
-				return nil, err
-			}
-			return types.Uint(newVal), nil
-		}, true, nil
-	case *blobStringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *boolType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *datetimeType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *decimalType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *enumType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *floatType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *geomcollType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *geometryType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *inlineBlobType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *intType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *jsonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *linestringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multilinestringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multipointType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multipolygonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *pointType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *polygonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *setType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *timeType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *uintType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *uuidType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *varBinaryType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *varStringType:
-		return wrapIsValid(dest.IsValid, src, dest)
-	case *yearType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	default:
-		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
-	}
 }

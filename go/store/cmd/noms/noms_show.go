@@ -39,7 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/util/datetime"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"github.com/dolthub/dolt/go/store/util/verbose"
 )
@@ -107,9 +106,6 @@ func runShow(ctx context.Context, args []string) int {
 		types.WriteValueStats(ctx, os.Stdout, value.(types.Value), vrw)
 		return 0
 	}
-
-	tz, _ := locationFromTimezoneArg(tzName, nil)
-	datetime.RegisterHRSCommenter(tz)
 
 	if showPages {
 		pgr := outputpager.Start()

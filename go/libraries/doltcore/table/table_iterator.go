@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // RowIter wraps a sql.RowIter and abstracts away sql.Context for a
@@ -60,13 +59,10 @@ func (i rowIterImpl) Close(ctx context.Context) error {
 // NewTableIterator creates a RowIter that iterates sql.Row's from |idx|.
 // |offset| can be supplied to read at some start point in |idx|.
 func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index) (RowIter, error) {
-	if types.IsFormat_DOLT(idx.Format()) {
-		m := durable.MapFromIndex(idx)
-		itr, err := m.IterAll(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return NewRowIter(index.NewProllyRowIterForMap(sch, m, itr, nil)), nil
+	m := durable.MapFromIndex(idx)
+	itr, err := m.IterAll(ctx)
+	if err != nil {
+		return nil, err
 	}
-	panic("Unsupported format: " + idx.Format().VersionString())
+	return NewRowIter(index.NewProllyRowIterForMap(sch, m, itr, nil)), nil
 }

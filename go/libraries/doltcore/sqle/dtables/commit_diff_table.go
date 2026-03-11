@@ -74,7 +74,7 @@ func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableNam
 		return nil, err
 	}
 
-	diffTableSchema, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
+	diffTableSchema, err := GetDiffTableSchemaAndJoiner(sch, sch)
 	if err != nil {
 		return nil, err
 	}

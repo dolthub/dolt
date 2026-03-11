@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
@@ -41,7 +42,7 @@ type Node struct {
 	// of each child tree of a non-leaf Node.
 	// this field is lazily decoded from msg
 	// because it requires a malloc.
-	subtrees *subtreeCounts
+	subtrees atomic.Pointer[subtreeCounts]
 	// keys and values cache offset metadata
 	// to accelerate Item lookups into msg.
 	keys   *message.ItemAccess
@@ -170,17 +171,18 @@ func (nd *Node) GetValue(i int) Item {
 }
 
 func (nd *Node) LoadSubtrees() (*Node, error) {
-	var err error
-	if nd.subtrees == nil {
-		// deserializing subtree counts requires a malloc,
-		// we don't load them unless explicitly requested
-		sc, err := message.GetSubtrees(nd.msg)
-		if err != nil {
-			return nil, err
-		}
-		nd.subtrees = (*subtreeCounts)(&sc)
+	if nd.subtrees.Load() != nil {
+		return nd, nil
 	}
-	return nd, err
+	// deserializing subtree counts requires a malloc,
+	// we don't load them unless explicitly requested
+	sc, err := message.GetSubtrees(nd.msg)
+	if err != nil {
+		return nil, err
+	}
+	stc := subtreeCounts(sc)
+	nd.subtrees.CompareAndSwap(nil, &stc)
+	return nd, nil
 }
 
 func (nd *Node) GetSubtreeCount(i int) uint64 {
@@ -188,7 +190,7 @@ func (nd *Node) GetSubtreeCount(i int) uint64 {
 		return 1
 	}
 	// this will panic unless subtrees were loaded.
-	return (*nd.subtrees)[i]
+	return (*nd.subtrees.Load())[i]
 }
 
 // getAddress returns the |ith| address of this node.

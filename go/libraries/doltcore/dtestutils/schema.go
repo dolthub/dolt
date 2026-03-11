@@ -15,9 +15,7 @@
 package dtestutils
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // CreateSchema returns a schema from the columns given, panicking on any errors.
@@ -26,21 +24,6 @@ func CreateSchema(columns ...schema.Column) schema.Schema {
 	sch := schema.MustSchemaFromCols(colColl)
 	sch.SetCollation(schema.Collation_Default)
 	return sch
-}
-
-// NewRow creates a row with the schema given, having the values given. Starts at tag 0 and counts up.
-func NewRow(sch schema.Schema, values ...types.Value) row.Row {
-	taggedVals := make(row.TaggedValues)
-	for i := range values {
-		taggedVals[uint64(i)] = values[i]
-	}
-	r, err := row.New(types.Format_Default, sch, taggedVals)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return r
 }
 
 // AddColumnToSchema returns a new schema by adding the given column to the given schema. Will panic on an invalid

@@ -1,0 +1,1995 @@
+// Copyright 2020 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package enginetest
+
+// This file contains tests converted from a legacy test format that predated the enginetest format. They were
+// converted with the help of LLMs from these files, now deleted:
+// * sqlselect_test.go
+// * sqlinsert_test.go
+// * sqlupdate_test.go
+// * sqldelete_test.go
+// * sqlreplace_test.go
+// * sqlddl_test.go
+// These are believed to be mostly supplemental, with substantial overlap in coverage with other enginetests.
+
+import (
+	"time"
+
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
+	"github.com/dolthub/go-mysql-server/sql"
+)
+
+// concatSQLRows concatenates multiple sql.Row values into a single sql.Row.
+// Used to construct expected rows for cross-product and join queries.
+func concatSQLRows(rows ...sql.Row) sql.Row {
+	var result sql.Row
+	for _, r := range rows {
+		result = append(result, r...)
+	}
+	return result
+}
+
+// People rows as returned by SELECT * FROM people (full Simpsons data set)
+var (
+	Homer  = sql.Row{int64(0), "Homer", "Simpson", int64(1), int64(40), 8.5, nil, nil}
+	Marge  = sql.Row{int64(1), "Marge", "Simpson", int64(1), int64(38), 8.0, "00000000-0000-0000-0000-000000000001", uint64(111)}
+	Bart   = sql.Row{int64(2), "Bart", "Simpson", int64(0), int64(10), 9.0, "00000000-0000-0000-0000-000000000002", uint64(222)}
+	Lisa   = sql.Row{int64(3), "Lisa", "Simpson", int64(0), int64(8), 10.0, "00000000-0000-0000-0000-000000000003", uint64(333)}
+	Moe    = sql.Row{int64(4), "Moe", "Szyslak", int64(0), int64(48), 6.5, "00000000-0000-0000-0000-000000000004", uint64(444)}
+	Barney = sql.Row{int64(5), "Barney", "Gumble", int64(0), int64(40), 4.0, "00000000-0000-0000-0000-000000000005", uint64(555)}
+)
+
+// Episode rows as returned by SELECT * FROM episodes
+var (
+	Ep1 = sql.Row{int64(1), "Simpsons Roasting On an Open Fire", time.Date(1989, time.December, 18, 3, 0, 0, 0, time.UTC), 8.0}
+	Ep2 = sql.Row{int64(2), "Bart the Genius", time.Date(1990, time.January, 15, 3, 0, 0, 0, time.UTC), 9.0}
+	Ep3 = sql.Row{int64(3), "Homer's Odyssey", time.Date(1990, time.January, 22, 3, 0, 0, 0, time.UTC), 7.0}
+	Ep4 = sql.Row{int64(4), "There's No Disgrace Like Home", time.Date(1990, time.January, 29, 3, 0, 0, 0, time.UTC), 8.5}
+)
+
+// Setup script that creates and populates the Simpsons test tables.
+// Used by select, update, and delete tests.
+var legacySetupWithData = []string{
+	`CREATE TABLE people (
+		id bigint primary key,
+		first_name varchar(1024) NOT NULL,
+		last_name varchar(1024) NOT NULL,
+		is_married bigint,
+		age bigint,
+		rating double,
+		uuid varchar(1024),
+		num_episodes bigint unsigned
+	)`,
+	`CREATE TABLE episodes (
+		id bigint primary key,
+		name varchar(1024) NOT NULL,
+		air_date datetime,
+		rating double
+	)`,
+	`CREATE TABLE appearances (
+		character_id bigint NOT NULL,
+		episode_id bigint NOT NULL,
+		comments varchar(1024),
+		PRIMARY KEY (character_id, episode_id)
+	)`,
+	`INSERT INTO people VALUES
+		(0, 'Homer', 'Simpson', 1, 40, 8.5, NULL, NULL),
+		(1, 'Marge', 'Simpson', 1, 38, 8.0, '00000000-0000-0000-0000-000000000001', 111),
+		(2, 'Bart', 'Simpson', 0, 10, 9.0, '00000000-0000-0000-0000-000000000002', 222),
+		(3, 'Lisa', 'Simpson', 0, 8, 10.0, '00000000-0000-0000-0000-000000000003', 333),
+		(4, 'Moe', 'Szyslak', 0, 48, 6.5, '00000000-0000-0000-0000-000000000004', 444),
+		(5, 'Barney', 'Gumble', 0, 40, 4.0, '00000000-0000-0000-0000-000000000005', 555)`,
+	`INSERT INTO episodes VALUES
+		(1, 'Simpsons Roasting On an Open Fire', '1989-12-18 03:00:00', 8.0),
+		(2, 'Bart the Genius', '1990-01-15 03:00:00', 9.0),
+		(3, 'Homer''s Odyssey', '1990-01-22 03:00:00', 7.0),
+		(4, 'There''s No Disgrace Like Home', '1990-01-29 03:00:00', 8.5)`,
+	`INSERT INTO appearances VALUES
+		(0, 1, 'Homer is great in this one'),
+		(1, 1, 'Marge is here too'),
+		(0, 2, 'Homer is great in this one too'),
+		(2, 2, 'This episode is named after Bart'),
+		(3, 2, 'Lisa is here too'),
+		(4, 2, 'I think there''s a prank call scene'),
+		(0, 3, 'Homer is in every episode'),
+		(1, 3, 'Marge shows up a lot too'),
+		(3, 3, 'Lisa is the best Simpson'),
+		(5, 3, 'I''m making this all up')`,
+}
+
+// Setup script that creates empty Simpsons test tables (no data).
+// Used by insert and replace tests.
+var legacyEmptySetup = []string{
+	`CREATE TABLE people (
+		id bigint primary key,
+		first_name varchar(1024) NOT NULL,
+		last_name varchar(1024) NOT NULL,
+		is_married bigint,
+		age bigint,
+		rating double,
+		uuid varchar(1024),
+		num_episodes bigint unsigned
+	)`,
+	`CREATE TABLE episodes (
+		id bigint primary key,
+		name varchar(1024) NOT NULL,
+		air_date datetime,
+		rating double
+	)`,
+	`CREATE TABLE appearances (
+		character_id bigint NOT NULL,
+		episode_id bigint NOT NULL,
+		comments varchar(1024),
+		PRIMARY KEY (character_id, episode_id)
+	)`,
+}
+
+// LegacySelectScriptTests are basic SELECT tests converted from sqle/sqlselect_test.go BasicSelectTests.
+var LegacySelectScriptTests = []queries.ScriptTest{
+	{
+		Name:        "legacy basic select tests",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from people where id = 2",
+				Expected: []sql.Row{Bart},
+			},
+			{
+				Query:    "select * from people",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people limit 1",
+				Expected: []sql.Row{Homer},
+			},
+			{
+				Query:    "select * from people limit 0,1",
+				Expected: []sql.Row{Homer},
+			},
+			{
+				Query:    "select * from people limit 1 offset 1",
+				Expected: []sql.Row{Marge},
+			},
+			{
+				Query:    "select * from people limit 5,1",
+				Expected: []sql.Row{Barney},
+			},
+			{
+				Query:    "select * from people limit 6,1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from people limit 0",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from people limit 0,0",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "select * from people limit -1",
+				ExpectedErrStr: "syntax error at position 29 near 'limit'",
+			},
+			{
+				Query:          "select * from people limit -1,1",
+				ExpectedErrStr: "syntax error at position 29 near 'limit'",
+			},
+			{
+				Query:    "select * from people limit 100",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where age < 40",
+				Expected: []sql.Row{Marge, Bart, Lisa},
+			},
+			{
+				Query:    "select * from people where age < 40 limit 1",
+				Expected: []sql.Row{Marge},
+			},
+			{
+				Query:    "select * from people where age < 40 limit 2",
+				Expected: []sql.Row{Marge, Bart},
+			},
+			{
+				Query:    "select * from people where age < 40 limit 100",
+				Expected: []sql.Row{Marge, Bart, Lisa},
+			},
+			{
+				Query:    "select * from people order by id",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people order by id desc",
+				Expected: []sql.Row{Barney, Moe, Lisa, Bart, Marge, Homer},
+			},
+			{
+				Query:    "select * from people order by rating",
+				Expected: []sql.Row{Barney, Moe, Marge, Homer, Bart, Lisa},
+			},
+			{
+				Query:    "select * from people order by first_name",
+				Expected: []sql.Row{Barney, Bart, Homer, Lisa, Marge, Moe},
+			},
+			{
+				Query:    "select * from people order by last_name desc, first_name asc",
+				Expected: []sql.Row{Moe, Bart, Homer, Lisa, Marge, Barney},
+			},
+			{
+				Query:    "select * from people order by first_name limit 2",
+				Expected: []sql.Row{Barney, Bart},
+			},
+			{
+				Query:    "select * from people order by last_name desc, first_name asc limit 2",
+				Expected: []sql.Row{Moe, Bart},
+			},
+			{
+				Query:    "select * from people where 40 > age",
+				Expected: []sql.Row{Marge, Bart, Lisa},
+			},
+			{
+				Query:    "select * from people where age <= 40",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Barney},
+			},
+			{
+				Query:    "select * from people where 40 >= age",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Barney},
+			},
+			{
+				Query:    "select * from people where age > 40",
+				Expected: []sql.Row{Moe},
+			},
+			{
+				Query:    "select * from people where 40 < age",
+				Expected: []sql.Row{Moe},
+			},
+			{
+				Query:    "select * from people where age >= 40",
+				Expected: []sql.Row{Homer, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where 40 <= age",
+				Expected: []sql.Row{Homer, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where last_name > 'Simpson'",
+				Expected: []sql.Row{Moe},
+			},
+			{
+				Query:    "select * from people where last_name < 'Simpson'",
+				Expected: []sql.Row{Barney},
+			},
+			{
+				Query:    "select * from people where last_name = 'Simpson'",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa},
+			},
+			{
+				Query:    "select * from people where rating > 8.0 order by id",
+				Expected: []sql.Row{Homer, Bart, Lisa},
+			},
+			{
+				Query:    "select * from people where rating < 8.0",
+				Expected: []sql.Row{Moe, Barney},
+			},
+			{
+				Query:    "select * from people where rating = 8.0",
+				Expected: []sql.Row{Marge},
+			},
+			{
+				Query:    "select * from people where 8.0 < rating",
+				Expected: []sql.Row{Homer, Bart, Lisa},
+			},
+			{
+				Query:    "select * from people where 8.0 > rating",
+				Expected: []sql.Row{Moe, Barney},
+			},
+			{
+				Query:    "select * from people where 8.0 = rating",
+				Expected: []sql.Row{Marge},
+			},
+			{
+				Query:    "select * from people where is_married = true",
+				Expected: []sql.Row{Homer, Marge},
+			},
+			{
+				Query:    "select * from people where is_married = false",
+				Expected: []sql.Row{Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where is_married <> false",
+				Expected: []sql.Row{Homer, Marge},
+			},
+			{
+				Query:    "select * from people where is_married",
+				Expected: []sql.Row{Homer, Marge},
+			},
+			{
+				Query:    "select * from people where is_married and age > 38",
+				Expected: []sql.Row{Homer},
+			},
+			{
+				Query:    "select * from people where is_married or age < 20",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa},
+			},
+			{
+				Query:    "select * from people where first_name in ('Homer', 'Marge')",
+				Expected: []sql.Row{Homer, Marge},
+			},
+			{
+				Query:    "select * from people where age in (-10, 40)",
+				Expected: []sql.Row{Homer, Barney},
+			},
+			{
+				Query:    "select * from people where rating in (-10.0, 8.5)",
+				Expected: []sql.Row{Homer},
+			},
+			{
+				Query:    "select * from people where first_name in ('Homer', 40)",
+				Expected: []sql.Row{Homer},
+			},
+			{
+				Query:    "select * from people where age in (-10.0, 40)",
+				Expected: []sql.Row{Homer, Barney},
+			},
+			{
+				Query:    "select * from people where first_name not in ('Homer', 'Marge')",
+				Expected: []sql.Row{Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where first_name in ('Homer')",
+				Expected: []sql.Row{Homer},
+			},
+			{
+				Query:    "select * from people where first_name in (1.0)",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from people where uuid is null",
+				Expected: []sql.Row{Homer},
+			},
+			{
+				Query:    "select * from people where uuid is not null",
+				Expected: []sql.Row{Marge, Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where is_married is true",
+				Expected: []sql.Row{Homer, Marge},
+			},
+			{
+				Query:    "select * from people where is_married is not true",
+				Expected: []sql.Row{Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where is_married is false",
+				Expected: []sql.Row{Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where is_married is not false",
+				Expected: []sql.Row{Homer, Marge},
+			},
+			{
+				Query:    "select * from people where age is true",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select age + 1 as a from people where is_married order by a",
+				Expected: []sql.Row{{int64(39)}, {int64(41)}},
+			},
+			{
+				Query:    "select is_married and age >= 40 from people where last_name = 'Simpson' order by id limit 2",
+				Expected: []sql.Row{{true}, {false}},
+			},
+			{
+				Query:    "select first_name, age <= 10 or age >= 40 as not_marge from people where last_name = 'Simpson' order by id desc",
+				Expected: []sql.Row{{"Lisa", true}, {"Bart", true}, {"Marge", false}, {"Homer", true}},
+			},
+			{
+				Query:    "select -age as age from people where is_married order by age",
+				Expected: []sql.Row{{int64(-40)}, {int64(-38)}},
+			},
+			{
+				Query:    "select * from people where -rating = -8.5",
+				Expected: []sql.Row{Homer},
+			},
+			// -first_name evaluates to 0 for all rows (string->num conversion), 'Homer' also evaluates to 0
+			{
+				Query:    "select * from people where -first_name = 'Homer'",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where age + 1 = 41",
+				Expected: []sql.Row{Homer, Barney},
+			},
+			{
+				Query:    "select * from people where age - 1 = 39",
+				Expected: []sql.Row{Homer, Barney},
+			},
+			{
+				Query:    "select * from people where age / 2 = 20",
+				Expected: []sql.Row{Homer, Barney},
+			},
+			{
+				Query:    "select * from people where age * 2 = 80",
+				Expected: []sql.Row{Homer, Barney},
+			},
+			{
+				Query:    "select * from people where age % 4 = 0",
+				Expected: []sql.Row{Homer, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where age / 4 + 2 * 2 = 14",
+				Expected: []sql.Row{Homer, Barney},
+			},
+			{
+				Query:    "select * from people where first_name + 1 = 41",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from people where first_name - 1 = 39",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from people where first_name / 2 = 20",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from people where first_name * 2 = 80",
+				Expected: []sql.Row{},
+			},
+			// 0 % 4 = 0 for all rows (string first_name -> 0)
+			{
+				Query:    "select * from people where first_name % 4 = 0",
+				Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney},
+			},
+			{
+				Query:    "select * from people where `uuid` is not null and first_name <> 'Marge' order by last_name desc, age",
+				Expected: []sql.Row{Moe, Lisa, Bart, Barney},
+			},
+			{
+				Query:    "select first_name, last_name from people where age >= 40",
+				Expected: []sql.Row{{"Homer", "Simpson"}, {"Moe", "Szyslak"}, {"Barney", "Gumble"}},
+			},
+			{
+				Query:    "select first_name as f, last_name as l from people where age >= 40",
+				Expected: []sql.Row{{"Homer", "Simpson"}, {"Moe", "Szyslak"}, {"Barney", "Gumble"}},
+			},
+			{
+				Query:    "select first_name as f, last_name as f from people where age >= 40",
+				Expected: []sql.Row{{"Homer", "Simpson"}, {"Moe", "Szyslak"}, {"Barney", "Gumble"}},
+			},
+			{
+				Query:    "select first_name, first_name from people where age >= 40 order by id",
+				Expected: []sql.Row{{"Homer", "Homer"}, {"Moe", "Moe"}, {"Barney", "Barney"}},
+			},
+			{
+				Query:          "select first_name as f, last_name as f from people, people where age >= 40",
+				ExpectedErrStr: `ambiguous column name "age", it's present in all these tables: [people people]`,
+			},
+			{
+				Query:          "select * from people p, people p where age >= 40",
+				ExpectedErrStr: `ambiguous column name "age", it's present in all these tables: [p p]`,
+			},
+			{
+				Query:    "select first_name from people order by age, first_name",
+				Expected: []sql.Row{{"Lisa"}, {"Bart"}, {"Marge"}, {"Barney"}, {"Homer"}, {"Moe"}},
+			},
+			{
+				Query:    "select first_name as f from people order by age, f",
+				Expected: []sql.Row{{"Lisa"}, {"Bart"}, {"Marge"}, {"Barney"}, {"Homer"}, {"Moe"}},
+			},
+			{
+				Query:    "select p.first_name as f, p.last_name as l from people p where p.first_name = 'Homer'",
+				Expected: []sql.Row{{"Homer", "Simpson"}},
+			},
+			{
+				Query:    "select p.first_name, p.last_name from people p where p.first_name = 'Homer'",
+				Expected: []sql.Row{{"Homer", "Simpson"}},
+			},
+			{
+				Query:          "select m.first_name as f, p.last_name as l from people p where p.f = 'Homer'",
+				ExpectedErrStr: `table "p" does not have column "f"`,
+			},
+			{
+				Query: `select id as i, first_name as f, last_name as l, is_married as m, age as a,
+						rating as r, uuid as u, num_episodes as n from people where age >= 40`,
+				Expected: []sql.Row{
+					{int64(0), "Homer", "Simpson", int64(1), int64(40), 8.5, nil, nil},
+					{int64(4), "Moe", "Szyslak", int64(0), int64(48), 6.5, "00000000-0000-0000-0000-000000000004", uint64(444)},
+					{int64(5), "Barney", "Gumble", int64(0), int64(40), 4.0, "00000000-0000-0000-0000-000000000005", uint64(555)},
+				},
+			},
+			{
+				Query:    "select * from people where age <> 40",
+				Expected: []sql.Row{Marge, Bart, Lisa, Moe},
+			},
+			{
+				Query:    "select * from people where age > 80",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select id, age from people where age > 80",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "select * from dne",
+				ExpectedErrStr: "table not found: dne",
+			},
+			{
+				Query:          "select * from people join dne",
+				ExpectedErrStr: "table not found: dne",
+			},
+			{
+				Query:    "select 1",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "select * from people where dne > 8.0",
+				ExpectedErrStr: `column "dne" could not be found in any table in scope`,
+			},
+			{
+				Query:          "select * from people where rating > 8.0 order by dne",
+				ExpectedErrStr: `column "dne" could not be found in any table in scope`,
+			},
+			{
+				Query:          "select * from people where function(first_name)",
+				ExpectedErrStr: "syntax error at position 37 near 'function'",
+			},
+			{
+				Query:    `select * from people where id = "0"`,
+				Expected: []sql.Row{Homer},
+			},
+		},
+	},
+}
+
+// LegacyJoinScriptTests are JOIN tests converted from sqle/sqlselect_test.go JoinTests.
+var LegacyJoinScriptTests = []queries.ScriptTest{
+	{
+		Name:        "legacy join tests",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `select * from people, episodes order by people.id, episodes.id`,
+				Expected: []sql.Row{
+					concatSQLRows(Homer, Ep1), concatSQLRows(Homer, Ep2), concatSQLRows(Homer, Ep3), concatSQLRows(Homer, Ep4),
+					concatSQLRows(Marge, Ep1), concatSQLRows(Marge, Ep2), concatSQLRows(Marge, Ep3), concatSQLRows(Marge, Ep4),
+					concatSQLRows(Bart, Ep1), concatSQLRows(Bart, Ep2), concatSQLRows(Bart, Ep3), concatSQLRows(Bart, Ep4),
+					concatSQLRows(Lisa, Ep1), concatSQLRows(Lisa, Ep2), concatSQLRows(Lisa, Ep3), concatSQLRows(Lisa, Ep4),
+					concatSQLRows(Moe, Ep1), concatSQLRows(Moe, Ep2), concatSQLRows(Moe, Ep3), concatSQLRows(Moe, Ep4),
+					concatSQLRows(Barney, Ep1), concatSQLRows(Barney, Ep2), concatSQLRows(Barney, Ep3), concatSQLRows(Barney, Ep4),
+				},
+			},
+			{
+				Query: `select * from people p, episodes e where e.id = p.id order by p.id`,
+				Expected: []sql.Row{
+					concatSQLRows(Marge, Ep1),
+					concatSQLRows(Bart, Ep2),
+					concatSQLRows(Lisa, Ep3),
+					concatSQLRows(Moe, Ep4),
+				},
+			},
+			{
+				Query: `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id order by p.id, e.id`,
+				Expected: []sql.Row{
+					concatSQLRows(Homer, Ep1),
+					concatSQLRows(Homer, Ep2),
+					concatSQLRows(Homer, Ep3),
+					concatSQLRows(Marge, Ep1),
+					concatSQLRows(Marge, Ep3),
+					concatSQLRows(Bart, Ep2),
+					concatSQLRows(Lisa, Ep2),
+					concatSQLRows(Lisa, Ep3),
+					concatSQLRows(Moe, Ep2),
+					concatSQLRows(Barney, Ep3),
+				},
+			},
+			{
+				Query:          `select id from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
+				ExpectedErrStr: `ambiguous column name "id", it's present in all these tables: [e p]`,
+			},
+			{
+				Query:          `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = id and a.character_id = id`,
+				ExpectedErrStr: `ambiguous column name "id", it's present in all these tables: [e p]`,
+			},
+			{
+				Query: `select e.id, p.id, e.name, p.first_name, p.last_name from people p, episodes e where e.id = p.id order by p.id`,
+				Expected: []sql.Row{
+					{int64(1), int64(1), "Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{int64(2), int64(2), "Bart the Genius", "Bart", "Simpson"},
+					{int64(3), int64(3), "Homer's Odyssey", "Lisa", "Simpson"},
+					{int64(4), int64(4), "There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: "select e.id as eid, p.id as pid, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p, episodes e where e.id = p.id order by pid",
+				Expected: []sql.Row{
+					{int64(1), int64(1), "Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{int64(2), int64(2), "Bart the Genius", "Bart", "Simpson"},
+					{int64(3), int64(3), "Homer's Odyssey", "Lisa", "Simpson"},
+					{int64(4), int64(4), "There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p, episodes e where e.id = p.id order by `p.id`",
+				Expected: []sql.Row{
+					{int64(1), int64(1), "Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{int64(2), int64(2), "Bart the Genius", "Bart", "Simpson"},
+					{int64(3), int64(3), "Homer's Odyssey", "Lisa", "Simpson"},
+					{int64(4), int64(4), "There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: `select * from people p join episodes e on e.id = p.id order by p.id`,
+				Expected: []sql.Row{
+					concatSQLRows(Marge, Ep1),
+					concatSQLRows(Bart, Ep2),
+					concatSQLRows(Lisa, Ep3),
+					concatSQLRows(Moe, Ep4),
+				},
+			},
+			{
+				Query: `select p.*, e.* from people p join appearances a on a.character_id = p.id join episodes e on a.episode_id = e.id order by p.id, e.id`,
+				Expected: []sql.Row{
+					concatSQLRows(Homer, Ep1),
+					concatSQLRows(Homer, Ep2),
+					concatSQLRows(Homer, Ep3),
+					concatSQLRows(Marge, Ep1),
+					concatSQLRows(Marge, Ep3),
+					concatSQLRows(Bart, Ep2),
+					concatSQLRows(Lisa, Ep2),
+					concatSQLRows(Lisa, Ep3),
+					concatSQLRows(Moe, Ep2),
+					concatSQLRows(Barney, Ep3),
+				},
+			},
+			{
+				Query: `select e.id, p.id, e.name, p.first_name, p.last_name from people p join episodes e on e.id = p.id order by p.id`,
+				Expected: []sql.Row{
+					{int64(1), int64(1), "Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{int64(2), int64(2), "Bart the Genius", "Bart", "Simpson"},
+					{int64(3), int64(3), "Homer's Odyssey", "Lisa", "Simpson"},
+					{int64(4), int64(4), "There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: `select e.name, p.first_name, p.last_name from people p join episodes e on e.id = p.id order by p.id`,
+				Expected: []sql.Row{
+					{"Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{"Bart the Genius", "Bart", "Simpson"},
+					{"Homer's Odyssey", "Lisa", "Simpson"},
+					{"There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: `select e.id, p.id, e.name, p.first_name, p.last_name from people p
+								join episodes e on e.id = p.id
+								order by e.name`,
+				Expected: []sql.Row{
+					{int64(2), int64(2), "Bart the Genius", "Bart", "Simpson"},
+					{int64(3), int64(3), "Homer's Odyssey", "Lisa", "Simpson"},
+					{int64(1), int64(1), "Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{int64(4), int64(4), "There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: `select e.id, p.id, e.name, p.first_name, p.last_name from people p
+								join episodes e on e.id = p.id
+								order by age`,
+				Expected: []sql.Row{
+					{int64(3), int64(3), "Homer's Odyssey", "Lisa", "Simpson"},
+					{int64(2), int64(2), "Bart the Genius", "Bart", "Simpson"},
+					{int64(1), int64(1), "Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{int64(4), int64(4), "There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: "select e.id as eid, p.id as pid, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p join episodes e on e.id = p.id order by pid",
+				Expected: []sql.Row{
+					{int64(1), int64(1), "Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{int64(2), int64(2), "Bart the Genius", "Bart", "Simpson"},
+					{int64(3), int64(3), "Homer's Odyssey", "Lisa", "Simpson"},
+					{int64(4), int64(4), "There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: "select e.id as eid, p.id as pid, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p join episodes e on e.id = p.id order by ename",
+				Expected: []sql.Row{
+					{int64(2), int64(2), "Bart the Genius", "Bart", "Simpson"},
+					{int64(3), int64(3), "Homer's Odyssey", "Lisa", "Simpson"},
+					{int64(1), int64(1), "Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{int64(4), int64(4), "There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p join episodes e on e.id = p.id order by `p.id`",
+				Expected: []sql.Row{
+					{int64(1), int64(1), "Simpsons Roasting On an Open Fire", "Marge", "Simpson"},
+					{int64(2), int64(2), "Bart the Genius", "Bart", "Simpson"},
+					{int64(3), int64(3), "Homer's Odyssey", "Lisa", "Simpson"},
+					{int64(4), int64(4), "There's No Disgrace Like Home", "Moe", "Szyslak"},
+				},
+			},
+			{
+				Query: `select a.episode_id as eid, p.id as pid, p.first_name
+						from appearances a join people p on a.character_id = p.id order by eid, pid`,
+				Expected: []sql.Row{
+					{int64(1), int64(0), "Homer"},
+					{int64(1), int64(1), "Marge"},
+					{int64(2), int64(0), "Homer"},
+					{int64(2), int64(2), "Bart"},
+					{int64(2), int64(3), "Lisa"},
+					{int64(2), int64(4), "Moe"},
+					{int64(3), int64(0), "Homer"},
+					{int64(3), int64(1), "Marge"},
+					{int64(3), int64(3), "Lisa"},
+					{int64(3), int64(5), "Barney"},
+				},
+			},
+		},
+	},
+}
+
+// LegacyInsertScriptTests are INSERT tests converted from sqle/sqlinsert_test.go BasicInsertTests.
+var LegacyInsertScriptTests = []queries.ScriptTest{
+	{
+		Name:        "insert no columns",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)", SkipResultsCheck: true},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
+		},
+	},
+	{
+		Name:        "insert no columns too few values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002')", ExpectedErrStr: "number of values does not match number of columns provided"},
+		},
+	},
+	{
+		Name:        "insert no columns too many values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222, 'abc')", ExpectedErrStr: "number of values does not match number of columns provided"},
+		},
+	},
+	{
+		Name:        "insert full columns",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)", SkipResultsCheck: true},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
+		},
+	},
+	{
+		Name:        "insert full columns mixed order",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (num_episodes, uuid, rating, age, is_married, last_name, first_name, id) values (222, '00000000-0000-0000-0000-000000000002', 9, 10, false, 'Simpson', 'Bart', 2)", SkipResultsCheck: true},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
+		},
+	},
+	{
+		Name:        "insert full columns negative values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (-7, 'Maggie', 'Simpson', false, -1, -5.1, '00000000-0000-0000-0000-000000000005', 677)`, SkipResultsCheck: true},
+			{Query: "select * from people where id = -7 ORDER BY id", Expected: []sql.Row{
+				{int64(-7), "Maggie", "Simpson", int64(0), int64(-1), -5.1, "00000000-0000-0000-0000-000000000005", uint64(677)},
+			}},
+		},
+	},
+	{
+		Name:        "insert full columns null values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (2, 'Bart', 'Simpson', null, null, null, null, null)", SkipResultsCheck: true},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "Bart", "Simpson", nil, nil, nil, nil, nil},
+			}},
+		},
+	},
+	{
+		Name:        "insert partial columns",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name) values (2, 'Bart', 'Simpson')", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name from people where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "Bart", "Simpson"},
+			}},
+		},
+	},
+	{
+		Name:        "insert partial columns mixed order",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (last_name, first_name, id) values ('Simpson', 'Bart', 2)", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name from people where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "Bart", "Simpson"},
+			}},
+		},
+	},
+	{
+		Name:        "insert partial columns duplicate column",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name, first_name) values (2, 'Bart', 'Simpson', 'Bart')", ExpectedErrStr: "column 'first_name' specified twice"},
+		},
+	},
+	{
+		Name:        "insert partial columns invalid column",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name, middle) values (2, 'Bart', 'Simpson', 'Nani')", ExpectedErrStr: "Unknown column 'middle' in 'people'"},
+		},
+	},
+	{
+		Name:        "insert missing non-nullable column",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name) values (2, 'Bart')", ExpectedErrStr: "Field 'last_name' doesn't have a default value"},
+		},
+	},
+	{
+		Name:        "insert partial columns mismatch too many values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name) values (2, 'Bart', 'Simpson', false)", ExpectedErrStr: "number of values does not match number of columns provided"},
+		},
+	},
+	{
+		Name:        "insert partial columns mismatch too few values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name) values (2, 'Bart')", ExpectedErrStr: "number of values does not match number of columns provided"},
+		},
+	},
+	{
+		Name:        "insert partial columns functions",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name) values (2, UPPER('Bart'), 'Simpson')", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name from people where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "BART", "Simpson"},
+			}},
+		},
+	},
+	{
+		Name:        "insert partial columns multiple rows 2",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name) values (0, 'Bart', 'Simpson'), (1, 'Homer', 'Simpson')", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name from people where id < 2 order by id", Expected: []sql.Row{
+				{int64(0), "Bart", "Simpson"},
+				{int64(1), "Homer", "Simpson"},
+			}},
+		},
+	},
+	{
+		Name:        "insert partial columns multiple rows 5",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values
+					(7, 'Maggie', 'Simpson', false, 1, 5.1),
+					(8, 'Milhouse', 'Van Houten', false, 8, 3.5),
+					(9, 'Jacqueline', 'Bouvier', true, 80, 2),
+					(10, 'Patty', 'Bouvier', false, 40, 7),
+					(11, 'Selma', 'Bouvier', false, 40, 7)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id > 6 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "Simpson", int64(0), int64(1), 5.1},
+				{int64(8), "Milhouse", "Van Houten", int64(0), int64(8), 3.5},
+				{int64(9), "Jacqueline", "Bouvier", int64(1), int64(80), 2.0},
+				{int64(10), "Patty", "Bouvier", int64(0), int64(40), 7.0},
+				{int64(11), "Selma", "Bouvier", int64(0), int64(40), 7.0},
+			}},
+		},
+	},
+	{
+		Name:        "insert partial columns multiple rows null pk",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name) values (0, 'Bart', 'Simpson'), (1, 'Homer', null)", ExpectedErrStr: "column name 'last_name' is non-nullable but attempted to set a value of null"},
+		},
+	},
+	{
+		Name:        "insert partial columns multiple rows duplicate",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into people (id, first_name, last_name) values (2, 'Bart', 'Simpson'), (2, 'Bart', 'Simpson')", ExpectedErrStr: "duplicate primary key given: [2]"},
+		},
+	},
+	{
+		Name: "insert partial columns existing pk",
+		SetUpScript: append(legacyEmptySetup,
+			"CREATE TABLE temppeople (id bigint primary key, first_name varchar(1023), last_name varchar(1023))",
+			"INSERT INTO temppeople VALUES (2, 'Bart', 'Simpson')",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "insert into temppeople (id, first_name, last_name) values (2, 'Bart', 'Simpson')", ExpectedErrStr: "duplicate primary key given: [2]"},
+		},
+	},
+	{
+		Name:        "insert type mismatch int -> string",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values (7, 'Maggie', 100, false, 1, 5.1)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "100", int64(0), int64(1), 5.1},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch int -> bool",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values (7, 'Maggie', 'Simpson', 1, 1, 5.1)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "Simpson", int64(1), int64(1), 5.1},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch string -> int",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values ('7', 'Maggie', 'Simpson', false, 1, 5.1)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "Simpson", int64(0), int64(1), 5.1},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch string -> float",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values (7, 'Maggie', 'Simpson', false, 1, '5.1')`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "Simpson", int64(0), int64(1), 5.1},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch string -> uint",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, num_episodes) values (7, 'Maggie', 'Simpson', false, 1, '100')`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, num_episodes from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "Simpson", int64(0), int64(1), uint64(100)},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch float -> string",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values (7, 8.1, 'Simpson', false, 1, 5.1)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "8.1", "Simpson", int64(0), int64(1), 5.1},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch float -> bool",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values (7, 'Maggie', 'Simpson', 0.5, 1, 5.1)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "Simpson", int64(1), int64(1), 5.1},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch float -> int",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values (7, 'Maggie', 'Simpson', false, 1.0, 5.1)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "Simpson", int64(0), int64(1), 5.1},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch bool -> int",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values (true, 'Maggie', 'Simpson', false, 1, 5.1)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 1 ORDER BY id", Expected: []sql.Row{
+				{int64(1), "Maggie", "Simpson", int64(0), int64(1), 5.1},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch bool -> float",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values (7, 'Maggie', 'Simpson', false, 1, true)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "Simpson", int64(0), int64(1), 1.0},
+			}},
+		},
+	},
+	{
+		Name:        "insert type mismatch bool -> string",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `insert into people (id, first_name, last_name, is_married, age, rating) values (7, true, 'Simpson', false, 1, 5.1)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "1", "Simpson", int64(0), int64(1), 5.1},
+			}},
+		},
+	},
+}
+
+// LegacyUpdateScriptTests are UPDATE tests converted from sqle/sqlupdate_test.go BasicUpdateTests.
+var LegacyUpdateScriptTests = []queries.ScriptTest{
+	{
+		Name:        "update one row, one col, primary key where clause",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Domer' where id = 0`, SkipResultsCheck: true},
+			{Query: `select * from people where id = 0`, Expected: []sql.Row{
+				{int64(0), "Domer", "Simpson", int64(1), int64(40), 8.5, nil, nil},
+			}},
+		},
+	},
+	{
+		Name:        "update one row, one col, non-primary key where clause",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Domer' where first_name = 'Homer'`, SkipResultsCheck: true},
+			{Query: `select * from people where first_name = 'Domer'`, Expected: []sql.Row{
+				{int64(0), "Domer", "Simpson", int64(1), int64(40), 8.5, nil, nil},
+			}},
+		},
+	},
+	{
+		Name:        "update one row, two cols, primary key where clause",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Ned', last_name = 'Flanders' where id = 0`, SkipResultsCheck: true},
+			{Query: `select * from people where id = 0`, Expected: []sql.Row{
+				{int64(0), "Ned", "Flanders", int64(1), int64(40), 8.5, nil, nil},
+			}},
+		},
+	},
+	{
+		Name:        "update one row, all cols, non-primary key where clause",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Ned', last_name = 'Flanders', is_married = false, rating = 10,
+				age = 45, num_episodes = 150, uuid = '00000000-0000-0000-0000-000000000050'
+				where age = 38`, SkipResultsCheck: true},
+			{Query: `select * from people where uuid = '00000000-0000-0000-0000-000000000050'`, Expected: []sql.Row{
+				{int64(1), "Ned", "Flanders", int64(0), int64(45), 10.0, "00000000-0000-0000-0000-000000000050", uint64(150)},
+			}},
+		},
+	},
+	{
+		Name:        "update one row, set columns to existing values",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Homer', last_name = 'Simpson', is_married = true, rating = 8.5, age = 40,
+				num_episodes = null, uuid = null where id = 0`, SkipResultsCheck: true},
+			{Query: `select * from people where id = 0`, Expected: []sql.Row{Homer}},
+		},
+	},
+	{
+		Name:        "update one row, null out existing values",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Homer', last_name = 'Simpson', is_married = null, rating = null, age = null,
+				num_episodes = null, uuid = null where first_name = 'Homer'`, SkipResultsCheck: true},
+			{Query: `select * from people where first_name = 'Homer'`, Expected: []sql.Row{
+				{int64(0), "Homer", "Simpson", nil, nil, nil, nil, nil},
+			}},
+		},
+	},
+	{
+		Name:        "update multiple rows, set two columns",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Changed', rating = 0.0 where last_name = 'Simpson'`, SkipResultsCheck: true},
+			{Query: `select * from people where last_name = 'Simpson'`, Expected: []sql.Row{
+				{int64(0), "Changed", "Simpson", int64(1), int64(40), 0.0, nil, nil},
+				{int64(1), "Changed", "Simpson", int64(1), int64(38), 0.0, "00000000-0000-0000-0000-000000000001", uint64(111)},
+				{int64(2), "Changed", "Simpson", int64(0), int64(10), 0.0, "00000000-0000-0000-0000-000000000002", uint64(222)},
+				{int64(3), "Changed", "Simpson", int64(0), int64(8), 0.0, "00000000-0000-0000-0000-000000000003", uint64(333)},
+			}},
+		},
+	},
+	{
+		Name:        "update no matching rows",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Changed', rating = 0.0 where last_name = 'Flanders'`, SkipResultsCheck: true},
+			{Query: `select * from people`, Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney}},
+		},
+	},
+	{
+		Name:        "update without where clause",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Changed', rating = 0.0`, SkipResultsCheck: true},
+			{Query: `select * from people`, Expected: []sql.Row{
+				{int64(0), "Changed", "Simpson", int64(1), int64(40), 0.0, nil, nil},
+				{int64(1), "Changed", "Simpson", int64(1), int64(38), 0.0, "00000000-0000-0000-0000-000000000001", uint64(111)},
+				{int64(2), "Changed", "Simpson", int64(0), int64(10), 0.0, "00000000-0000-0000-0000-000000000002", uint64(222)},
+				{int64(3), "Changed", "Simpson", int64(0), int64(8), 0.0, "00000000-0000-0000-0000-000000000003", uint64(333)},
+				{int64(4), "Changed", "Szyslak", int64(0), int64(48), 0.0, "00000000-0000-0000-0000-000000000004", uint64(444)},
+				{int64(5), "Changed", "Gumble", int64(0), int64(40), 0.0, "00000000-0000-0000-0000-000000000005", uint64(555)},
+			}},
+		},
+	},
+	{
+		Name:        "update set first_name = last_name",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = last_name`, SkipResultsCheck: true},
+			{Query: `select * from people`, Expected: []sql.Row{
+				{int64(0), "Simpson", "Simpson", int64(1), int64(40), 8.5, nil, nil},
+				{int64(1), "Simpson", "Simpson", int64(1), int64(38), 8.0, "00000000-0000-0000-0000-000000000001", uint64(111)},
+				{int64(2), "Simpson", "Simpson", int64(0), int64(10), 9.0, "00000000-0000-0000-0000-000000000002", uint64(222)},
+				{int64(3), "Simpson", "Simpson", int64(0), int64(8), 10.0, "00000000-0000-0000-0000-000000000003", uint64(333)},
+				{int64(4), "Szyslak", "Szyslak", int64(0), int64(48), 6.5, "00000000-0000-0000-0000-000000000004", uint64(444)},
+				{int64(5), "Gumble", "Gumble", int64(0), int64(40), 4.0, "00000000-0000-0000-0000-000000000005", uint64(555)},
+			}},
+		},
+	},
+	{
+		Name:        "update increment age",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set age = age + 1`, SkipResultsCheck: true},
+			{Query: `select * from people`, Expected: []sql.Row{
+				{int64(0), "Homer", "Simpson", int64(1), int64(41), 8.5, nil, nil},
+				{int64(1), "Marge", "Simpson", int64(1), int64(39), 8.0, "00000000-0000-0000-0000-000000000001", uint64(111)},
+				{int64(2), "Bart", "Simpson", int64(0), int64(11), 9.0, "00000000-0000-0000-0000-000000000002", uint64(222)},
+				{int64(3), "Lisa", "Simpson", int64(0), int64(9), 10.0, "00000000-0000-0000-0000-000000000003", uint64(333)},
+				{int64(4), "Moe", "Szyslak", int64(0), int64(49), 6.5, "00000000-0000-0000-0000-000000000004", uint64(444)},
+				{int64(5), "Barney", "Gumble", int64(0), int64(41), 4.0, "00000000-0000-0000-0000-000000000005", uint64(555)},
+			}},
+		},
+	},
+	{
+		Name:        "update reverse rating",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set rating = -rating`, SkipResultsCheck: true},
+			{Query: `select * from people`, Expected: []sql.Row{
+				{int64(0), "Homer", "Simpson", int64(1), int64(40), -8.5, nil, nil},
+				{int64(1), "Marge", "Simpson", int64(1), int64(38), -8.0, "00000000-0000-0000-0000-000000000001", uint64(111)},
+				{int64(2), "Bart", "Simpson", int64(0), int64(10), -9.0, "00000000-0000-0000-0000-000000000002", uint64(222)},
+				{int64(3), "Lisa", "Simpson", int64(0), int64(8), -10.0, "00000000-0000-0000-0000-000000000003", uint64(333)},
+				{int64(4), "Moe", "Szyslak", int64(0), int64(48), -6.5, "00000000-0000-0000-0000-000000000004", uint64(444)},
+				{int64(5), "Barney", "Gumble", int64(0), int64(40), -4.0, "00000000-0000-0000-0000-000000000005", uint64(555)},
+			}},
+		},
+	},
+	{
+		Name:        "update datetime field",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update episodes set air_date = '1993-03-24 20:00:00' where id = 1`, SkipResultsCheck: true},
+			{Query: `select * from episodes where id = 1`, Expected: []sql.Row{
+				{int64(1), "Simpsons Roasting On an Open Fire", time.Date(1993, time.March, 24, 20, 0, 0, 0, time.UTC), 8.0},
+			}},
+		},
+	},
+	{
+		Name:        "update name field",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update episodes set name = 'fake_name' where id = 1`, SkipResultsCheck: true},
+			{Query: `select * from episodes where id = 1`, Expected: []sql.Row{
+				{int64(1), "fake_name", time.Date(1989, time.December, 18, 3, 0, 0, 0, time.UTC), 8.0},
+			}},
+		},
+	},
+	{
+		Name:        "update multiple rows, =",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = 'Homer' where last_name = 'Simpson'`, SkipResultsCheck: true},
+			{Query: `select * from people where last_name = 'Simpson'`, Expected: []sql.Row{
+				Homer,
+				{int64(1), "Homer", "Simpson", int64(1), int64(38), 8.0, "00000000-0000-0000-0000-000000000001", uint64(111)},
+				{int64(2), "Homer", "Simpson", int64(0), int64(10), 9.0, "00000000-0000-0000-0000-000000000002", uint64(222)},
+				{int64(3), "Homer", "Simpson", int64(0), int64(8), 10.0, "00000000-0000-0000-0000-000000000003", uint64(333)},
+			}},
+		},
+	},
+	{
+		Name:        "update multiple rows, <>",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set last_name = 'Simpson' where last_name <> 'Simpson'`, SkipResultsCheck: true},
+			{Query: `select * from people`, Expected: []sql.Row{
+				Homer, Marge, Bart, Lisa,
+				{int64(4), "Moe", "Simpson", int64(0), int64(48), 6.5, "00000000-0000-0000-0000-000000000004", uint64(444)},
+				{int64(5), "Barney", "Simpson", int64(0), int64(40), 4.0, "00000000-0000-0000-0000-000000000005", uint64(555)},
+			}},
+		},
+	},
+	{
+		Name:        "update multiple rows pk increment order by desc",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set id = id + 1 order by id desc`, SkipResultsCheck: true},
+			{Query: `select * from people order by id`, Expected: []sql.Row{
+				{int64(1), "Homer", "Simpson", int64(1), int64(40), 8.5, nil, nil},
+				{int64(2), "Marge", "Simpson", int64(1), int64(38), 8.0, "00000000-0000-0000-0000-000000000001", uint64(111)},
+				{int64(3), "Bart", "Simpson", int64(0), int64(10), 9.0, "00000000-0000-0000-0000-000000000002", uint64(222)},
+				{int64(4), "Lisa", "Simpson", int64(0), int64(8), 10.0, "00000000-0000-0000-0000-000000000003", uint64(333)},
+				{int64(5), "Moe", "Szyslak", int64(0), int64(48), 6.5, "00000000-0000-0000-0000-000000000004", uint64(444)},
+				{int64(6), "Barney", "Gumble", int64(0), int64(40), 4.0, "00000000-0000-0000-0000-000000000005", uint64(555)},
+			}},
+		},
+	},
+	{
+		Name:        "update multiple rows pk increment order by asc",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set id = id + 1 order by id asc`, ExpectedErrStr: "duplicate primary key given: [1]"},
+		},
+	},
+	{
+		Name:        "update primary key col",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set id = 0 where first_name = 'Marge'`, ExpectedErrStr: "duplicate primary key given: [0]"},
+		},
+	},
+	{
+		Name:        "update null constraint failure",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `update people set first_name = null where id = 0`, ExpectedErrStr: "column name 'first_name' is non-nullable but attempted to set a value of null"},
+		},
+	},
+}
+
+// LegacyDeleteScriptTests are DELETE tests converted from sqle/sqldelete_test.go BasicDeleteTests.
+var LegacyDeleteScriptTests = []queries.ScriptTest{
+	{
+		Name:        "delete everything",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{}},
+		},
+	},
+	{
+		Name:        "delete where id equals",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where id = 2", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Lisa, Moe, Barney}},
+		},
+	},
+	{
+		Name:        "delete where id less than",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where id < 3", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Lisa, Moe, Barney}},
+		},
+	},
+	{
+		Name:        "delete where id greater than",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where id > 3", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart, Lisa}},
+		},
+	},
+	{
+		Name:        "delete where id less than or equal",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where id <= 3", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Moe, Barney}},
+		},
+	},
+	{
+		Name:        "delete where id greater than or equal",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where id >= 3", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart}},
+		},
+	},
+	{
+		Name:        "delete where id equals nothing",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where id = 9999", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart, Lisa, Moe, Barney}},
+		},
+	},
+	{
+		Name:        "delete where last_name matches some =",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where last_name = 'Simpson'", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Moe, Barney}},
+		},
+	},
+	{
+		Name:        "delete where last_name matches some <>",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where last_name <> 'Simpson'", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart, Lisa}},
+		},
+	},
+	{
+		Name:        "delete where last_name matches some like",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where last_name like '%pson'", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Moe, Barney}},
+		},
+	},
+	{
+		Name:        "delete order by",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people order by id", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{}},
+		},
+	},
+	{
+		Name:        "delete order by asc limit",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people order by id asc limit 3", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Lisa, Moe, Barney}},
+		},
+	},
+	{
+		Name:        "delete order by desc limit",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people order by id desc limit 3", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Bart}},
+		},
+	},
+	{
+		Name:        "delete order by desc limit offset",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people order by id desc limit 3 offset 1", SkipResultsCheck: true},
+			{Query: "select * from people", Expected: []sql.Row{Homer, Marge, Barney}},
+		},
+	},
+	{
+		Name:        "delete invalid table",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from nobody", ExpectedErrStr: "table not found: nobody"},
+		},
+	},
+	{
+		Name:        "delete invalid column",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "delete from people where z = 'dne'", ExpectedErrStr: `column "z" could not be found in any table in scope`},
+		},
+	},
+}
+
+// LegacyReplaceScriptTests are REPLACE tests converted from sqle/sqlreplace_test.go BasicReplaceTests.
+var LegacyReplaceScriptTests = []queries.ScriptTest{
+	{
+		Name:        "replace no columns",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)", SkipResultsCheck: true},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
+		},
+	},
+	{
+		Name:        "replace set",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people set id = 2, first_name = 'Bart', last_name = 'Simpson', is_married = false, age = 10, rating = 9, uuid = '00000000-0000-0000-0000-000000000002', num_episodes = 222", SkipResultsCheck: true},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
+		},
+	},
+	{
+		Name:        "replace no columns too few values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002')", ExpectedErrStr: "number of values does not match number of columns provided"},
+		},
+	},
+	{
+		Name:        "replace no columns too many values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222, 'abc')", ExpectedErrStr: "number of values does not match number of columns provided"},
+		},
+	},
+	{
+		Name:        "replace full columns",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)", SkipResultsCheck: true},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
+		},
+	},
+	{
+		Name:        "replace full columns mixed order",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (num_episodes, uuid, rating, age, is_married, last_name, first_name, id) values (222, '00000000-0000-0000-0000-000000000002', 9, 10, false, 'Simpson', 'Bart', 2)", SkipResultsCheck: true},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{Bart}},
+		},
+	},
+	{
+		Name:        "replace full columns negative values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `replace into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (-7, 'Maggie', 'Simpson', false, -1, -5.1, '00000000-0000-0000-0000-000000000005', 677)`, SkipResultsCheck: true},
+			{Query: "select * from people where id = -7 ORDER BY id", Expected: []sql.Row{
+				{int64(-7), "Maggie", "Simpson", int64(0), int64(-1), -5.1, "00000000-0000-0000-0000-000000000005", uint64(677)},
+			}},
+		},
+	},
+	{
+		Name:        "replace full columns null values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (2, 'Bart', 'Simpson', null, null, null, null, null)", SkipResultsCheck: true},
+			{Query: "select * from people where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "Bart", "Simpson", nil, nil, nil, nil, nil},
+			}},
+		},
+	},
+	{
+		Name:        "replace partial columns",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson')", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name from people where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "Bart", "Simpson"},
+			}},
+		},
+	},
+	{
+		Name:        "replace partial columns mixed order",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (last_name, first_name, id) values ('Simpson', 'Bart', 2)", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name from people where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "Bart", "Simpson"},
+			}},
+		},
+	},
+	{
+		Name:        "replace partial columns duplicate column",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name, first_name) values (2, 'Bart', 'Simpson', 'Bart')", ExpectedErrStr: "column 'first_name' specified twice"},
+		},
+	},
+	{
+		Name:        "replace partial columns invalid column",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name, middle) values (2, 'Bart', 'Simpson', 'Nani')", ExpectedErrStr: "Unknown column 'middle' in 'people'"},
+		},
+	},
+	{
+		Name:        "replace missing non-nullable column",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name) values (2, 'Bart')", ExpectedErrStr: "Field 'last_name' doesn't have a default value"},
+		},
+	},
+	{
+		Name:        "replace partial columns mismatch too many values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson', false)", ExpectedErrStr: "number of values does not match number of columns provided"},
+		},
+	},
+	{
+		Name:        "replace partial columns mismatch too few values",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name) values (2, 'Bart')", ExpectedErrStr: "number of values does not match number of columns provided"},
+		},
+	},
+	{
+		Name:        "replace partial columns functions",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name) values (2, UPPER('Bart'), 'Simpson')", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name from people where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "BART", "Simpson"},
+			}},
+		},
+	},
+	{
+		Name:        "replace partial columns multiple rows 2",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name) values (0, 'Bart', 'Simpson'), (1, 'Homer', 'Simpson')", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name from people where id < 2 order by id", Expected: []sql.Row{
+				{int64(0), "Bart", "Simpson"},
+				{int64(1), "Homer", "Simpson"},
+			}},
+		},
+	},
+	{
+		Name:        "replace partial columns multiple rows 5",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `replace into people (id, first_name, last_name, is_married, age, rating) values
+					(7, 'Maggie', 'Simpson', false, 1, 5.1),
+					(8, 'Milhouse', 'Van Houten', false, 8, 3.5),
+					(9, 'Jacqueline', 'Bouvier', true, 80, 2),
+					(10, 'Patty', 'Bouvier', false, 40, 7),
+					(11, 'Selma', 'Bouvier', false, 40, 7)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where id > 6 ORDER BY id", Expected: []sql.Row{
+				{int64(7), "Maggie", "Simpson", int64(0), int64(1), 5.1},
+				{int64(8), "Milhouse", "Van Houten", int64(0), int64(8), 3.5},
+				{int64(9), "Jacqueline", "Bouvier", int64(1), int64(80), 2.0},
+				{int64(10), "Patty", "Bouvier", int64(0), int64(40), 7.0},
+				{int64(11), "Selma", "Bouvier", int64(0), int64(40), 7.0},
+			}},
+		},
+	},
+	{
+		Name:        "replace partial columns multiple rows null pk",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name) values (0, 'Bart', 'Simpson'), (1, 'Homer', null)", ExpectedErrStr: "column name 'last_name' is non-nullable but attempted to set a value of null"},
+		},
+	},
+	{
+		Name:        "replace partial columns multiple rows duplicate",
+		SetUpScript: legacyEmptySetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson'), (2, 'Bart', 'Simpson')", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name from people where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "Bart", "Simpson"},
+			}},
+		},
+	},
+	{
+		Name: "replace partial columns multiple rows replace existing pk",
+		SetUpScript: append(legacyEmptySetup,
+			`INSERT INTO people VALUES
+				(0, 'Homer', 'Simpson', 1, 40, 8.5, NULL, NULL),
+				(1, 'Marge', 'Simpson', 1, 38, 8.0, '00000000-0000-0000-0000-000000000001', 111)`,
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `replace into people (id, first_name, last_name, is_married, age, rating) values
+					(0, 'Homer', 'Simpson', true, 45, 100),
+					(8, 'Milhouse', 'Van Houten', false, 8, 100)`, SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, is_married, age, rating from people where rating = 100 order by id", Expected: []sql.Row{
+				{int64(0), "Homer", "Simpson", int64(1), int64(45), 100.0},
+				{int64(8), "Milhouse", "Van Houten", int64(0), int64(8), 100.0},
+			}},
+		},
+	},
+	{
+		Name: "replace partial columns existing pk",
+		SetUpScript: append(legacyEmptySetup,
+			"CREATE TABLE temppeople (id bigint primary key, first_name varchar(1023), last_name varchar(1023), num bigint)",
+			"INSERT INTO temppeople VALUES (2, 'Bart', 'Simpson', 44)",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "replace into temppeople (id, first_name, last_name, num) values (2, 'Bart', 'Simpson', 88)", SkipResultsCheck: true},
+			{Query: "select id, first_name, last_name, num from temppeople where id = 2 ORDER BY id", Expected: []sql.Row{
+				{int64(2), "Bart", "Simpson", int64(88)},
+			}},
+		},
+	},
+}
+
+// legacyEmptyTablesSetup creates the people, episodes, and appearances tables with no data.
+// Matches the CreateEmptyTestDatabase() setup used by TestCreateTable.
+var legacyEmptyTablesSetup = []string{
+	`CREATE TABLE people (
+		id bigint primary key,
+		first_name varchar(1024) NOT NULL,
+		last_name varchar(1024) NOT NULL,
+		is_married bigint,
+		age bigint,
+		rating double,
+		uuid varchar(1024),
+		num_episodes bigint unsigned
+	)`,
+	`CREATE TABLE episodes (
+		id bigint primary key,
+		name varchar(1024) NOT NULL,
+		air_date datetime,
+		rating double
+	)`,
+	`CREATE TABLE appearances (
+		character_id bigint NOT NULL,
+		episode_id bigint NOT NULL,
+		comments varchar(1024),
+		PRIMARY KEY (character_id, episode_id)
+	)`,
+}
+
+// LegacyCreateTableScriptTests are CREATE TABLE tests converted from sqle/sqlddl_test.go TestCreateTable.
+// The original tests verified internal schema.Schema objects; here we verify via SHOW CREATE TABLE
+// and error message checks.
+var LegacyCreateTableScriptTests = []queries.ScriptTest{
+	{
+		Name:        "create single column schema",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable (id int primary key)", SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create two column schema",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable (id int primary key, age int)", SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create two column keyless schema",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable (id int, age int)", SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int,\n  `age` int\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table syntax error",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable id int, age int", ExpectedErrStr: "syntax error at position 26 near 'id'"},
+		},
+	},
+	{
+		Name:        "create table bad table name",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table -testTable (id int primary key, age int)", ExpectedErrStr: "syntax error at position 15 near 'table'"},
+		},
+	},
+	{
+		Name:        "create table reserved name",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table dolt_table (id int primary key, age int)", ExpectedErrStr: "Invalid table name dolt_table. Table names beginning with `dolt_` are reserved for internal use"},
+		},
+	},
+	{
+		Name:        "create table name already in use",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table people (id int primary key, age int)", ExpectedErrStr: "table with name people already exists"},
+		},
+	},
+	{
+		Name:        "create table if not exists on existing table",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table if not exists people (id int primary key, age int)", SkipResultsCheck: true},
+			// Table should still have the original schema
+			{Query: "select count(*) from people", Expected: []sql.Row{{int64(0)}}},
+		},
+	},
+	{
+		Name:        "create table with types",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `create table testTable (
+				id int primary key,
+				age int,
+				first_name varchar(255),
+				is_married boolean)`, SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int,\n  `first_name` varchar(255),\n  `is_married` tinyint(1),\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table all supported types",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `create table testTable (
+				c0 int primary key,
+				c1 tinyint,
+				c2 smallint,
+				c3 mediumint,
+				c4 integer,
+				c5 bigint,
+				c6 bool,
+				c7 boolean,
+				c8 bit(10),
+				c9 text,
+				c10 tinytext,
+				c11 mediumtext,
+				c12 longtext,
+				c16 char(5),
+				c17 varchar(255),
+				c18 varchar(80),
+				c19 float,
+				c20 double,
+				c22 int unsigned,
+				c23 tinyint unsigned,
+				c24 smallint unsigned,
+				c25 mediumint unsigned,
+				c26 bigint unsigned,
+				c27 tinyint(1))`, SkipResultsCheck: true},
+			// Just verify the table was created and has the right number of columns
+			{Query: "select * from testTable", Expected: []sql.Row{}},
+		},
+	},
+	{
+		Name:        "create table with composite primary key",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `create table testTable (
+				id int,
+				age int,
+				first_name varchar(80),
+				is_married bool,
+				primary key (id, age))`, SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int NOT NULL,\n  `first_name` varchar(80),\n  `is_married` tinyint(1),\n  PRIMARY KEY (`id`,`age`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table with not null constraints",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `create table testTable (
+				id int,
+				age int,
+				first_name varchar(80) not null,
+				is_married bool,
+				primary key (id, age))`, SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int NOT NULL,\n  `first_name` varchar(80) NOT NULL,\n  `is_married` tinyint(1),\n  PRIMARY KEY (`id`,`age`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table with quoted columns",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "create table testTable (`id` int, `age` int, `timestamp` varchar(80), `is married` bool, primary key (`id`, `age`))", SkipResultsCheck: true},
+			{Query: "show create table testTable", Expected: []sql.Row{
+				{"testTable", "CREATE TABLE `testTable` (\n  `id` int NOT NULL,\n  `age` int NOT NULL,\n  `timestamp` varchar(80),\n  `is married` tinyint(1),\n  PRIMARY KEY (`id`,`age`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table ip2nation",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `CREATE TABLE ip2nation (
+				ip int(11) unsigned NOT NULL default 0,
+				country char(2) NOT NULL default '',
+				PRIMARY KEY (ip))`, SkipResultsCheck: true},
+			{Query: "show create table ip2nation", Expected: []sql.Row{
+				{"ip2nation", "CREATE TABLE `ip2nation` (\n  `ip` int unsigned NOT NULL DEFAULT '0',\n  `country` char(2) NOT NULL DEFAULT '',\n  PRIMARY KEY (`ip`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+	{
+		Name:        "create table ip2nationCountries",
+		SetUpScript: legacyEmptyTablesSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: `CREATE TABLE ip2nationCountries (
+				code varchar(4) NOT NULL default '',
+				iso_code_2 varchar(2) NOT NULL default '',
+				iso_code_3 varchar(3) default '',
+				iso_country varchar(255) NOT NULL default '',
+				country varchar(255) NOT NULL default '',
+				lat float NOT NULL default 0.0,
+				lon float NOT NULL default 0.0,
+				PRIMARY KEY (code))`, SkipResultsCheck: true},
+			{Query: "show create table ip2nationCountries", Expected: []sql.Row{
+				{"ip2nationCountries", "CREATE TABLE `ip2nationCountries` (\n  `code` varchar(4) NOT NULL DEFAULT '',\n  `iso_code_2` varchar(2) NOT NULL DEFAULT '',\n  `iso_code_3` varchar(3) DEFAULT '',\n  `iso_country` varchar(255) NOT NULL DEFAULT '',\n  `country` varchar(255) NOT NULL DEFAULT '',\n  `lat` float NOT NULL DEFAULT '0',\n  `lon` float NOT NULL DEFAULT '0',\n  PRIMARY KEY (`code`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+			}},
+		},
+	},
+}
+
+// LegacyDropTableScriptTests are DROP TABLE tests converted from sqle/sqlddl_test.go TestDropTable.
+var LegacyDropTableScriptTests = []queries.ScriptTest{
+	{
+		Name:        "drop table",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table people", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+		},
+	},
+	{
+		Name:        "drop table case insensitive",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table PEOPLE", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+		},
+	},
+	{
+		Name:        "drop table if exists",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table if exists people", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+		},
+	},
+	{
+		Name:        "drop non existent table",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table notfound", ExpectedErrStr: "table not found: notfound"},
+		},
+	},
+	{
+		Name:        "drop non existent table if exists",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table if exists notFound", SkipResultsCheck: true},
+		},
+	},
+	{
+		Name:        "drop many tables",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table people, appearances, episodes", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+			{Query: "select * from appearances", ExpectedErrStr: "table not found: appearances"},
+			{Query: "select * from episodes", ExpectedErrStr: "table not found: episodes"},
+		},
+	},
+	{
+		Name:        "drop many tables some don't exist",
+		SetUpScript: legacySetupWithData,
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "drop table if exists people, not_real, appearances, episodes", SkipResultsCheck: true},
+			{Query: "select * from people", ExpectedErrStr: "table not found: people"},
+			{Query: "select * from appearances", ExpectedErrStr: "table not found: appearances"},
+			{Query: "select * from episodes", ExpectedErrStr: "table not found: episodes"},
+		},
+	},
+}
+
+// LegacyIndexScriptTests are index-related DDL tests converted from sqle/sqlddl_test.go
+// (TestIndexOverwrite, TestDropPrimaryKey, TestDropIndex, TestCreateIndexUnique).
+// Internal FK collection state assertions are omitted as they require direct API access.
+var LegacyIndexScriptTests = []queries.ScriptTest{
+	{
+		Name: "index overwrite with foreign keys",
+		SetUpScript: []string{
+			`CREATE TABLE parent (
+				pk bigint PRIMARY KEY,
+				v1 bigint,
+				INDEX (v1)
+			)`,
+			`CREATE TABLE child (
+				pk varchar(10) PRIMARY KEY,
+				parent_value bigint,
+				CONSTRAINT fk_child FOREIGN KEY (parent_value) REFERENCES parent(v1)
+			)`,
+			`CREATE TABLE child_idx (
+				pk varchar(10) PRIMARY KEY,
+				parent_value bigint,
+				INDEX (parent_value),
+				CONSTRAINT fk_child_idx FOREIGN KEY (parent_value) REFERENCES parent(v1)
+			)`,
+			`CREATE TABLE child_unq (
+				pk varchar(10) PRIMARY KEY,
+				parent_value bigint,
+				CONSTRAINT fk_child_unq FOREIGN KEY (parent_value) REFERENCES parent(v1)
+			)`,
+			`CREATE TABLE child_non_unq (
+				pk varchar(10) PRIMARY KEY,
+				parent_value bigint,
+				CONSTRAINT fk_child_non_unq FOREIGN KEY (parent_value) REFERENCES parent(v1)
+			)`,
+			"INSERT INTO parent VALUES (1, 1), (2, 2), (3, 3), (4, NULL), (5, 5), (6, 6), (7, 7)",
+			"INSERT INTO child VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5', 5)",
+			"INSERT INTO child_idx VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5', 5)",
+			"INSERT INTO child_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', NULL), ('5', 5)",
+			"INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5', 5)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// Create indexes
+			{Query: "CREATE INDEX abc ON child (parent_value)", SkipResultsCheck: true},
+			{Query: "CREATE INDEX abc_idx ON child_idx (parent_value)", SkipResultsCheck: true},
+			{Query: "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value)", SkipResultsCheck: true},
+			{Query: "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value)", ExpectedErrStr: "duplicate unique key given: [3,4]"},
+			// Insert tests against index
+			{Query: "INSERT INTO child VALUES ('6', 5)", SkipResultsCheck: true},
+			{Query: "INSERT INTO child_idx VALUES ('6', 5)", SkipResultsCheck: true},
+			// unique index violation
+			{Query: "INSERT INTO child_unq VALUES ('6', 5)", ExpectedErrStr: "duplicate unique key given: [5]"},
+			{Query: "INSERT INTO child_non_unq VALUES ('6', 5)", SkipResultsCheck: true},
+			// Insert tests against foreign key
+			{Query: "INSERT INTO child VALUES ('9', 9)", ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `fk_child`, table: `child`, referenced table: `parent`, key: `[9]`"},
+			{Query: "INSERT INTO child_idx VALUES ('9', 9)", ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `fk_child_idx`, table: `child_idx`, referenced table: `parent`, key: `[9]`"},
+			{Query: "INSERT INTO child_unq VALUES ('9', 9)", ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `fk_child_unq`, table: `child_unq`, referenced table: `parent`, key: `[9]`"},
+			{Query: "INSERT INTO child_non_unq VALUES ('9', 9)", ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `fk_child_non_unq`, table: `child_non_unq`, referenced table: `parent`, key: `[9]`"},
+		},
+	},
+	{
+		Name: "drop primary key with foreign key dependency",
+		SetUpScript: []string{
+			"CREATE TABLE parent (i int, j int, k int, INDEX i_idx (i), INDEX ij_idx (i, j), INDEX ijk_idx (i, j, k), INDEX j_idx (j), INDEX kji_idx (k, j, i))",
+			"CREATE TABLE child (x int, y int, CONSTRAINT fk_child FOREIGN KEY (x, y) REFERENCES parent (i, j))",
+			"ALTER TABLE parent ADD PRIMARY KEY (i, j)",
+			"ALTER TABLE parent DROP INDEX ij_idx",
+			"ALTER TABLE parent DROP INDEX ijk_idx",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// No viable secondary indexes left for the FK; should be unable to drop primary key
+			{Query: "ALTER TABLE parent DROP PRIMARY KEY", ExpectedErrStr: "error: can't drop index 'PRIMARY': needed in foreign key constraint fk_child"},
+		},
+	},
+	{
+		Name: "drop secondary indexes with foreign key dependency",
+		SetUpScript: []string{
+			"CREATE TABLE parent (i int)",
+			"ALTER TABLE parent ADD INDEX idx1 (i)",
+			"ALTER TABLE parent ADD INDEX idx2 (i)",
+			"ALTER TABLE parent ADD INDEX idx3 (i)",
+			"CREATE TABLE child (j int, CONSTRAINT fk_child FOREIGN KEY (j) REFERENCES parent (i))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// Can drop idx1 because idx2 and idx3 remain
+			{Query: "ALTER TABLE parent DROP INDEX idx1", SkipResultsCheck: true},
+			// Can drop idx2 because idx3 remains
+			{Query: "ALTER TABLE parent DROP INDEX idx2", SkipResultsCheck: true},
+			// Cannot drop idx3 because no indexes remain for the FK
+			{Query: "ALTER TABLE parent DROP INDEX idx3", ExpectedErrStr: "cannot drop index: `idx3` is used by foreign key `fk_child`"},
+		},
+	},
+	{
+		Name: "create unique index success and failure",
+		SetUpScript: []string{
+			`CREATE TABLE pass_unique (
+				pk1 BIGINT PRIMARY KEY,
+				v1 BIGINT,
+				v2 BIGINT
+			)`,
+			`CREATE TABLE fail_unique (
+				pk1 BIGINT PRIMARY KEY,
+				v1 BIGINT,
+				v2 BIGINT
+			)`,
+			"INSERT INTO pass_unique VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3)",
+			"INSERT INTO fail_unique VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "CREATE UNIQUE INDEX idx_v1 ON pass_unique(v1)", SkipResultsCheck: true},
+			{Query: "CREATE UNIQUE INDEX idx_v1 ON fail_unique(v1)", ExpectedErrStr: "duplicate unique key given: [2,3]"},
+		},
+	},
+}

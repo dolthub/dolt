@@ -21,85 +21,11 @@
 
 package types
 
-import (
-	"sort"
-
-	"github.com/dolthub/dolt/go/store/d"
-)
-
 func MakePrimitiveType(k NomsKind) (*Type, error) {
 	if typ, ok := PrimitiveTypeMap[k]; ok {
 		return typ, nil
 	}
 	return nil, ErrUnknownType
-}
-
-// MakeUnionType creates a new union type unless the elemTypes can be folded into a single non union type.
-func MakeUnionType(elemTypes ...*Type) (*Type, error) {
-	t, err := makeUnionType(elemTypes...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return simplifyType(t, false)
-}
-
-func MakeListType(elemType *Type) (*Type, error) {
-	t, err := makeCompoundType(ListKind, elemType)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return simplifyType(t, false)
-}
-
-func MakeSetType(elemType *Type) (*Type, error) {
-	t, err := makeCompoundType(SetKind, elemType)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return simplifyType(t, false)
-}
-
-func MakeRefType(elemType *Type) (*Type, error) {
-	t, err := makeCompoundType(RefKind, elemType)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return simplifyType(t, false)
-}
-
-func MakeMapType(keyType, valType *Type) (*Type, error) {
-	t, err := makeCompoundType(MapKind, keyType, valType)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return simplifyType(t, false)
-}
-
-func MakeStructType(name string, fields ...StructField) (*Type, error) {
-	fs := structTypeFields(fields)
-	sort.Sort(fs)
-	t, err := makeStructType(name, fs)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return simplifyType(t, false)
-}
-
-func MakeCycleType(name string) *Type {
-	d.PanicIfTrue(name == "")
-	return newType(CycleDesc(name))
 }
 
 func makePrimitiveType(k NomsKind) *Type {
@@ -115,7 +41,6 @@ var PrimitiveTypeMap = map[NomsKind]*Type{
 func makeCompoundType(kind NomsKind, elemTypes ...*Type) (*Type, error) {
 	for _, el := range elemTypes {
 		if el.Kind() == UnknownKind {
-			// If any of the element's types are an unknown type then this is unknown
 			return nil, ErrUnknownType
 		}
 	}
@@ -133,37 +58,11 @@ func makeUnionType(elemTypes ...*Type) (*Type, error) {
 func makeStructTypeQuickly(name string, fields structTypeFields) (*Type, error) {
 	for _, fld := range fields {
 		if fld.Type.Kind() == UnknownKind {
-			// If any of the fields have an unknown type then this is unknown
 			return nil, ErrUnknownType
 		}
 	}
 
 	return newType(StructDesc{name, fields}), nil
-}
-
-func makeStructType(name string, fields structTypeFields) (*Type, error) {
-	verifyStructName(name)
-	verifyFields(fields)
-	return makeStructTypeQuickly(name, fields)
-}
-
-type FieldMap map[string]*Type
-
-func MakeStructTypeFromFields(name string, fields FieldMap) (*Type, error) {
-	fs := make(structTypeFields, len(fields))
-	i := 0
-	for k, v := range fields {
-		fs[i] = StructField{v, k, false}
-		i++
-	}
-	sort.Sort(fs)
-	t, err := makeStructType(name, fs)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return simplifyType(t, false)
 }
 
 // StructField describes a field in a struct type.

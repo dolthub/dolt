@@ -22,7 +22,6 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -34,7 +33,7 @@ func DeserializeForeignKeys(ctx context.Context, nbf *types.NomsBinFormat, fks t
 	if nbf.UsesFlatbuffers() {
 		return deserializeFlatbufferForeignKeys(fks.(types.SerialMessage))
 	} else {
-		return deserializeNomsForeignKeys(ctx, fks.(types.Map))
+		return nil, fmt.Errorf("unsupported format for deserializing foreign keys: %s", nbf.VersionString())
 	}
 }
 
@@ -42,45 +41,8 @@ func SerializeForeignKeys(ctx context.Context, vrw types.ValueReadWriter, fkc *F
 	if vrw.Format().UsesFlatbuffers() {
 		return serializeFlatbufferForeignKeys(fkc), nil
 	} else {
-		return serializeNomsForeignKeys(ctx, vrw, fkc)
+		return nil, fmt.Errorf("unsupported format for deserializing foreign keys: %s", vrw.Format().VersionString())
 	}
-}
-
-// deserializeNomsForeignKeys returns a new ForeignKeyCollection using the provided map returned previously by GetMap.
-func deserializeNomsForeignKeys(ctx context.Context, fkMap types.Map) (*ForeignKeyCollection, error) {
-	fkc := &ForeignKeyCollection{
-		foreignKeys: make(map[string]ForeignKey),
-	}
-	err := fkMap.IterAll(ctx, func(key, value types.Value) error {
-		foreignKey := &ForeignKey{}
-		err := marshal.Unmarshal(ctx, fkMap.Format(), value, foreignKey)
-		if err != nil {
-			return err
-		}
-		fkc.foreignKeys[string(key.(types.String))] = *foreignKey
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return fkc, nil
-}
-
-// serializeNomsForeignKeys serializes a ForeignKeyCollection as a types.Map.
-func serializeNomsForeignKeys(ctx context.Context, vrw types.ValueReadWriter, fkc *ForeignKeyCollection) (types.Map, error) {
-	fkMap, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	fkMapEditor := fkMap.Edit()
-	for hashOf, foreignKey := range fkc.foreignKeys {
-		val, err := marshal.Marshal(ctx, vrw, foreignKey)
-		if err != nil {
-			return types.EmptyMap, err
-		}
-		fkMapEditor.Set(types.String(hashOf), val)
-	}
-	return fkMapEditor.Map(ctx)
 }
 
 // deserializeFlatbufferForeignKeys returns a new ForeignKeyCollection using the provided map returned previously by GetMap.

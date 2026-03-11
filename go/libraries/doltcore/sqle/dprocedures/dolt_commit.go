@@ -63,7 +63,7 @@ func doltCommitHashOut(ctx *sql.Context, outHash *string, args ...string) (sql.R
 // of the new commit (or the empty string if the commit was skipped), a boolean that indicates if creating the commit
 // was skipped (e.g. due to --skip-empty), and an error describing any error encountered.
 func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
-	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
 		return "", false, err
 	}
 	// Get the information for the sql context.
@@ -184,10 +184,18 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		return "", false, err
 	}
 
-	// Nothing to commit, and we didn't pass --allowEmpty
-	if pendingCommit == nil && apr.Contains(cli.SkipEmptyFlag) {
-		return "", true, nil
-	} else if pendingCommit == nil {
+	// we've checked for the presence of --allow-empty and --skip-empty previously, and verified they don't coexist.
+	if pendingCommit == nil && !apr.Contains(cli.AllowEmptyFlag) {
+		// Nothing to commit. Finalize the transaction if there is one. There could be ignored tables, and we want
+		// to avoid leaving transactions open since dolt_commit is expected to COMMIT.
+		err = dSess.CommitTransaction(ctx, dSess.GetTransaction())
+		if err != nil {
+			return "", false, err
+		}
+
+		if apr.Contains(cli.SkipEmptyFlag) {
+			return "", true, nil
+		}
 		return "", false, errors.New("nothing to commit")
 	}
 

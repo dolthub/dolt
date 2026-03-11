@@ -1090,7 +1090,6 @@ func (t *WritableDoltTable) truncate(
 }
 
 func copyConstraintViolationsAndConflicts(ctx context.Context, from, to *doltdb.Table) (*doltdb.Table, error) {
-	types.AssertFormat_DOLT(to.Format())
 	arts, err := from.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
@@ -1612,7 +1611,7 @@ func (t *AlterableDoltTable) columnChangeRequiresRewrite(oldColumn *sql.Column, 
 			return true
 		} else {
 			// This is overly broad, we could narrow this down a bit
-			compatibilityChecker := typecompatibility.NewTypeCompatabilityCheckerForStorageFormat(t.Format())
+			compatibilityChecker := typecompatibility.NewTypeCompatabilityChecker()
 			typeChangeInfo := compatibilityChecker.IsTypeChangeCompatible(existingCol.TypeInfo, newCol.TypeInfo)
 			return !typeChangeInfo.Compatible || typeChangeInfo.RewriteRows || typeChangeInfo.InvalidateSecondaryIndexes
 		}
@@ -1798,7 +1797,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, fmt.Errorf("cannot rebuild index on a headless branch")
 	}
 
-	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, dbState.WriteSession().GetOptions())
+	writeSession := writer.NewWriteSession(newWs, ait, dbState.WriteSession().GetOptions())
 
 	ed, err := writeSession.GetTableWriter(ctx, t.TableName(), t.db.RevisionQualifiedName(), sess.SetWorkingRoot, false)
 	if err != nil {
@@ -1845,7 +1844,7 @@ func fullTextRewriteEditor(
 		return nil, fmt.Errorf("cannot rebuild index on read only database %s", t.Name())
 	}
 
-	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, dbState.WriteSession().GetOptions())
+	writeSession := writer.NewWriteSession(newWs, ait, dbState.WriteSession().GetOptions())
 
 	parentEditor, err := writeSession.GetTableWriter(ctx, t.TableName(), t.db.RevisionQualifiedName(), sess.SetWorkingRoot, false)
 	if err != nil {
@@ -2412,8 +2411,6 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 
 // CreateFulltextIndex implements fulltext.IndexAlterableTable
 func (t *AlterableDoltTable) CreateFulltextIndex(ctx *sql.Context, idx sql.IndexDef, keyCols fulltext.KeyColumns, tableNames fulltext.IndexTableNames) error {
-	types.AssertFormat_DOLT(t.Format())
-
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}

@@ -29,10 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -296,36 +294,14 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 	return commit
 }
 
-func createTestDataTable(ctx context.Context, ddb *doltdb.DoltDB) (*table.InMemTable, schema.Schema) {
-	rows, sch, err := dtestutils.RowsAndSchema()
-	if err != nil {
-		panic(err)
-	}
-
-	imt := table.NewInMemTable(sch)
-
-	for _, r := range rows {
-		err := imt.AppendRow(ctx, ddb.ValueReadWriter(), r)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	return imt, sch
-}
-
 func (mr *MultiRepoTestSetup) CreateTable(ctx context.Context, dbName, tblName string) {
 	dEnv := mr.envs[dbName]
 
-	imt, sch := createTestDataTable(ctx, dEnv.DoltDB(ctx))
-	rows := make([]row.Row, imt.NumRows())
-	for i := 0; i < imt.NumRows(); i++ {
-		r, err := imt.GetRow(i)
-		if err != nil {
-			mr.Errhand(fmt.Sprintf("Failed to create table: %s", err.Error()))
-		}
-		rows[i] = r
+	sch, err := dtestutils.Schema()
+	if err != nil {
+		mr.Errhand(err)
 	}
+
 	if err := createTestTable(dEnv, tblName, sch); err != nil {
 		mr.Errhand(err)
 	}

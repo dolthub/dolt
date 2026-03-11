@@ -12,8 +12,8 @@ export const mergeTests = [
     res: [],
   },
   {
-    q: `CALL DOLT_MERGE(:branchName, "--no-ff", "-m", :commitMsg)`,
-    p: { branchName: "mybranch", commitMsg: "Merge mybranch into main" },
+    q: `CALL DOLT_MERGE(?, '--no-ff', '-m', ?)`,
+    values: ["mybranch", "Merge mybranch into main"],
     res: [{ hash: "", fast_forward: 0, conflicts: 0, message: "merge successful" }],
     matcher: mergeMatcher,
   },

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -25,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -269,7 +269,7 @@ func (b *JSONDoc) ToLazyJSONDocument(ctx context.Context) (sql.JSONWrapper, erro
 	if err != nil {
 		return sqltypes.JSONDocument{}, err
 	}
-	buf = types.UnescapeHTMLCodepoints(buf)
+	buf = unescapeHTMLCodepoints(buf)
 	return sqltypes.NewLazyJSONDocument(buf), nil
 }
 
@@ -295,4 +295,51 @@ func (b *JSONDoc) ToString(ctx context.Context) (string, error) {
 		toShow = len(buf)
 	}
 	return string(buf[:toShow]), nil
+}
+
+// unescapeHTMLCodepoints replaces escaped HTML characters in serialized JSON with their unescaped equivalents.
+// Due to an oversight, the representation of JSON in storage escapes these characters, and we unescape them
+// before displaying them to the user.
+func unescapeHTMLCodepoints(path []byte) []byte {
+	nextToRead := path
+	nextToWrite := path
+
+	matches := 0
+	index := findNextEscapedUnicodeCodepoint(nextToRead)
+	for index != -1 {
+		newChar := byte(0)
+		if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '3', 'c'}) {
+			newChar = '<'
+		} else if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '3', 'e'}) {
+			newChar = '>'
+		} else if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '2', '6'}) {
+			newChar = '&'
+		}
+		if newChar != 0 {
+			matches += 1
+			copy(nextToWrite, nextToRead[:index])
+			nextToWrite[index] = newChar
+			nextToWrite = nextToWrite[index+1:]
+		}
+		nextToRead = nextToRead[index+6:]
+		index = findNextEscapedUnicodeCodepoint(nextToRead)
+	}
+	copy(nextToWrite, nextToRead)
+	return path[:len(path)-5*matches]
+}
+
+func findNextEscapedUnicodeCodepoint(path []byte) int {
+	index := 0
+	for {
+		if index >= len(path) {
+			return -1
+		}
+		if path[index] == '\\' {
+			if path[index+1] == 'u' {
+				return index
+			}
+			index++
+		}
+		index++
+	}
 }

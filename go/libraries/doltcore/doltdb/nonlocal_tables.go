@@ -20,7 +20,6 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -64,10 +63,6 @@ func GetNonlocalTablePatterns(ctx context.Context, root RootValue, schema string
 	}
 
 	index, err := table.GetRowData(ctx)
-	if table.Format() == types.Format_LD_1 {
-		// dolt_global_tables is not supported for the legacy storage format.
-		return nil
-	}
 	if err != nil {
 		return err
 	}

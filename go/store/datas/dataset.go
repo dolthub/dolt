@@ -214,111 +214,29 @@ func (rs *RebaseState) SkipVerification(_ context.Context) bool {
 type MergeState struct {
 	preMergeWorkingAddr *hash.Hash
 	fromCommitAddr      *hash.Hash
-	nomsMergeStateRef   *types.Ref
-	nomsMergeState      *types.Struct
 	fromCommitSpec      string
 	unmergableTables    []string
 	isCherryPick        bool
 }
 
-func (ms *MergeState) loadIfNeeded(ctx context.Context, vr types.ValueReader) error {
-	if ms.nomsMergeState == nil {
-		v, err := ms.nomsMergeStateRef.TargetValue(ctx, vr)
-		if err != nil {
-			return err
-		}
-		if v == nil {
-			return errors.New("dangling reference to merge state")
-		}
-		st, ok := v.(types.Struct)
-		if !ok {
-			return fmt.Errorf("corrupted MergeState struct")
-		}
-		ms.nomsMergeState = &st
-	}
-	return nil
-}
-
-func (ms *MergeState) PreMergeWorkingAddr(ctx context.Context, vr types.ValueReader) (hash.Hash, error) {
-	if ms.preMergeWorkingAddr != nil {
-		return *ms.preMergeWorkingAddr, nil
-	}
-	if ms.nomsMergeState == nil {
-		err := ms.loadIfNeeded(ctx, vr)
-		if err != nil {
-			return hash.Hash{}, err
-		}
-	}
-
-	workingRootRef, ok, err := ms.nomsMergeState.MaybeGet(mergeStateWorkingPreMergeField)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	if !ok {
-		return hash.Hash{}, fmt.Errorf("corrupted MergeState struct")
-	}
-	return workingRootRef.(types.Ref).TargetHash(), nil
+func (ms *MergeState) PreMergeWorkingAddr() (hash.Hash, error) {
+	return *ms.preMergeWorkingAddr, nil
 }
 
 func (ms *MergeState) FromCommit(ctx context.Context, vr types.ValueReader) (*Commit, error) {
-	if ms.fromCommitAddr != nil {
-		return LoadCommitAddr(ctx, vr, *ms.fromCommitAddr)
-	}
-	if ms.nomsMergeState == nil {
-		err := ms.loadIfNeeded(ctx, vr)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	commitV, ok, err := ms.nomsMergeState.MaybeGet(mergeStateCommitField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("corrupted MergeState struct")
-	}
-
-	return CommitFromValue(vr.Format(), commitV)
+	return LoadCommitAddr(ctx, vr, *ms.fromCommitAddr)
 }
 
-func (ms *MergeState) FromCommitSpec(ctx context.Context, vr types.ValueReader) (string, error) {
-	if vr.Format().UsesFlatbuffers() {
-		return ms.fromCommitSpec, nil
-	}
-
-	if ms.nomsMergeState == nil {
-		err := ms.loadIfNeeded(ctx, vr)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	commitSpecStr, ok, err := ms.nomsMergeState.MaybeGet(mergeStateCommitSpecField)
-	if err != nil {
-		return "", err
-	}
-	if !ok {
-		// Allow noms merge state to be backwards compatible with merge states
-		// that previously did not have a commit spec string.
-		return "", nil
-	}
-
-	return string(commitSpecStr.(types.String)), nil
+func (ms *MergeState) FromCommitSpec() (string, error) {
+	return ms.fromCommitSpec, nil
 }
 
-func (ms *MergeState) IsCherryPick(_ context.Context, vr types.ValueReader) (bool, error) {
-	if vr.Format().UsesFlatbuffers() {
-		return ms.isCherryPick, nil
-	}
-	return false, nil
+func (ms *MergeState) IsCherryPick() (bool, error) {
+	return ms.isCherryPick, nil
 }
 
-func (ms *MergeState) UnmergableTables(ctx context.Context, vr types.ValueReader) ([]string, error) {
-	if vr.Format().UsesFlatbuffers() {
-		return ms.unmergableTables, nil
-	}
-	return nil, nil
+func (ms *MergeState) UnmergableTables() ([]string, error) {
+	return ms.unmergableTables, nil
 }
 
 type dsHead interface {
@@ -328,23 +246,6 @@ type dsHead interface {
 	HeadWorkingSet() (*WorkingSetHead, error)
 
 	value() types.Value
-}
-
-type nomsHead struct {
-	st   types.Struct
-	addr hash.Hash
-}
-
-func (h nomsHead) TypeName() string {
-	return h.st.Name()
-}
-
-func (h nomsHead) Addr() hash.Hash {
-	return h.addr
-}
-
-func (h nomsHead) value() types.Value {
-	return h.st
 }
 
 type serialTagHead struct {
@@ -580,45 +481,28 @@ func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, err
 		return nil, fmt.Errorf("head value is nil for address %s", addr.String())
 	}
 
-	if sm, ok := head.(types.SerialMessage); ok {
-		data := []byte(sm)
-		switch serial.GetFileID(data) {
-		case serial.TagFileID:
-			return newSerialTagHead(data, addr)
-		case serial.WorkingSetFileID:
-			return newSerialWorkingSetHead(data, addr)
-		case serial.CommitFileID:
-			return newSerialCommitHead(sm, addr), nil
-		case serial.StashListFileID:
-			return newSerialStashListHead(sm, addr), nil
-		case serial.StatisticFileID:
-			return newStatisticHead(sm, addr), nil
-		case serial.TupleFileID:
-			return newTupleHead(sm, addr), nil
-		}
+	sm, ok := head.(types.SerialMessage)
+	if !ok {
+		return nil, fmt.Errorf("expected SerialMessage type, found %T", head)
 	}
 
-	matched, err := IsCommit(head)
-	if err != nil {
-		return nil, err
+	data := []byte(sm)
+	switch serial.GetFileID(data) {
+	case serial.TagFileID:
+		return newSerialTagHead(data, addr)
+	case serial.WorkingSetFileID:
+		return newSerialWorkingSetHead(data, addr)
+	case serial.CommitFileID:
+		return newSerialCommitHead(sm, addr), nil
+	case serial.StashListFileID:
+		return newSerialStashListHead(sm, addr), nil
+	case serial.StatisticFileID:
+		return newStatisticHead(sm, addr), nil
+	case serial.TupleFileID:
+		return newTupleHead(sm, addr), nil
+	default:
+		return nil, fmt.Errorf("database: fetched head at %v but it was not a recognized serial message type", addr)
 	}
-	if !matched {
-		matched, err = IsTag(ctx, head)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if !matched {
-		matched, err = IsWorkingSet(head)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if !matched {
-		return nil, fmt.Errorf("database: fetched head at %v but it was not a commit, tag or working set.", addr)
-	}
-
-	return nomsHead{head.(types.Struct), addr}, nil
 }
 
 func newDataset(ctx context.Context, db *database, id string, head types.Value, addr hash.Hash) (Dataset, error) {
@@ -649,11 +533,9 @@ func (ds Dataset) ID() string {
 // returns a new Commit and 'false'.
 func (ds Dataset) MaybeHead() (types.Value, bool) {
 	if ds.head == nil {
-		return types.Struct{}, false
+		return nil, false
 	}
-	if nh, ok := ds.head.(nomsHead); ok {
-		return nh.st, true
-	} else if sch, ok := ds.head.(serialCommitHead); ok {
+	if sch, ok := ds.head.(serialCommitHead); ok {
 		return sch.msg, true
 	} else if slh, ok := ds.head.(serialStashListHead); ok {
 		return slh.msg, true
@@ -720,74 +602,6 @@ func (ds Dataset) HeadWorkingSet() (*WorkingSetHead, error) {
 		return nil, errors.New("HeadWorkingSet call on non-working set head")
 	}
 	return ds.head.HeadWorkingSet()
-}
-
-func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
-	metast, ok, err := h.st.MaybeGet(tagMetaField)
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-	if !ok {
-		return nil, hash.Hash{}, errors.New("no meta field in tag struct head")
-	}
-	meta, err := tagMetaFromNomsSt(metast.(types.Struct))
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-
-	commitRef, ok, err := h.st.MaybeGet(tagCommitRefField)
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-	if !ok {
-		return nil, hash.Hash{}, errors.New("tag struct does not have field commit field")
-	}
-	commitaddr := commitRef.(types.Ref).TargetHash()
-
-	return meta, commitaddr, nil
-}
-
-func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
-	st := h.st
-
-	var ret WorkingSetHead
-
-	meta, err := workingSetMetaFromWorkingSetSt(st)
-	if err != nil {
-		return nil, err
-	}
-	ret.Meta = meta
-
-	workingRootRef, ok, err := st.MaybeGet(workingRootRefField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("workingset struct does not have field %s", workingRootRefField)
-	}
-	ret.WorkingAddr = workingRootRef.(types.Ref).TargetHash()
-
-	stagedRootRef, ok, err := st.MaybeGet(stagedRootRefField)
-	if err != nil {
-		return nil, err
-	}
-	if ok {
-		ret.StagedAddr = new(hash.Hash)
-		*ret.StagedAddr = stagedRootRef.(types.Ref).TargetHash()
-	}
-
-	mergeStateRef, ok, err := st.MaybeGet(mergeStateField)
-	if err != nil {
-		return nil, err
-	}
-	if ok {
-		r := mergeStateRef.(types.Ref)
-		ret.MergeState = &MergeState{
-			nomsMergeStateRef: &r,
-		}
-	}
-
-	return &ret, nil
 }
 
 // HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.

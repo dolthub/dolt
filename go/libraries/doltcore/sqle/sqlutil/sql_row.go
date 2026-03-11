@@ -21,38 +21,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
-
 	// Necessary for the empty context used by some functions to be initialized with system vars
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/sqltypes"
 )
-
-// DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
-func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
-	if doltRow == nil {
-		return nil, nil
-	}
-
-	colVals := make(sql.Row, sch.GetAllCols().Size())
-	i := 0
-
-	_, err := doltRow.IterSchema(sch, func(tag uint64, val types.Value) (stop bool, err error) {
-		col, _ := sch.GetAllCols().GetByTag(tag)
-		colVals[i], err = col.TypeInfo.ConvertNomsValueToValue(val)
-		i++
-
-		stop = err != nil
-		return
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return sql.NewRow(colVals...), nil
-}
 
 // BinaryAsHexDisplayValue is a wrapper for binary values that should be displayed as hex strings.
 type BinaryAsHexDisplayValue string

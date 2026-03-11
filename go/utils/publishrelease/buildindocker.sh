@@ -34,9 +34,9 @@ done
 apt-get update && apt-get install -y p7zip-full pigz curl xz-utils mingw-w64 clang-19 rpm
 
 cd /
-curl -o optcross.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/optcross/"$(uname -m)"-linux_20250327_0.0.3_trixie.tar.xz
+curl -o optcross.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/optcross/"$(uname -m)"-linux_20260225_0.0.4_trixie.tar.xz
 tar Jxf optcross.tar.xz
-curl -o icustatic.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/icustatic/20250327_0.0.3_trixie.tar.xz
+curl -o icustatic.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/icustatic/20260225_0.0.4_trixie.tar.xz
 tar Jxf icustatic.tar.xz
 export PATH=/opt/cross/bin:"$PATH"
 

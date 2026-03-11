@@ -220,21 +220,9 @@ func NewController(lgr *logrus.Logger, cfg servercfg.ClusterConfig, pCfg config.
 
 func (c *Controller) Run() {
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		c.jwks.Run()
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		c.mysqlDbPersister.Run()
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		c.bcReplication.Run()
-	}()
+	wg.Go(c.jwks.Run)
+	wg.Go(c.mysqlDbPersister.Run)
+	wg.Go(c.bcReplication.Run)
 	wg.Wait()
 	for _, client := range c.replicationClients {
 		client.closer()
@@ -411,7 +399,6 @@ func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
 	c.outstandingDropDatabases[dbname] = state
 
 	for _, client := range c.replicationClients {
-		client := client
 		go c.replicateDropDatabase(state, client, dbname)
 	}
 }
@@ -785,7 +772,7 @@ func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql
 		branchControl:        c.branchControlController,
 		branchControlFilesys: c.branchControlFilesys,
 		dropDatabase:         c.dropDatabase,
-		lgr:                  c.lgr.WithFields(logrus.Fields{}),
+		lgr:                  c.lgr.WithFields(logrus.Fields{"service": "replicationServiceServer"}),
 	})
 }
 
@@ -823,31 +810,22 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 	// If we encounter any errors while doing this, we fail the graceful transition.
 
 	var wg sync.WaitGroup
-	wg.Add(3)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		// waitForHooksToReplicate will release the lock while it
 		// blocks, but will return with the lock held.
 		hookStates, hookErr = c.waitForHooksToReplicate(waitForHooksToReplicateTimeout)
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	wg.Go(func() {
 		mysqlStates, mysqlErr = c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout)
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	wg.Go(func() {
 		bcStates, bcErr = c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout)
-	}()
+	})
 	wg.Wait()
 
-	if hookErr != nil {
-		return nil, hookErr
-	}
-	if mysqlErr != nil {
-		return nil, mysqlErr
-	}
-	if bcErr != nil {
-		return nil, bcErr
+	err := errors.Join(hookErr, mysqlErr, bcErr)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(hookStates) != len(c.commithooks) {
@@ -1044,9 +1022,7 @@ func (c *Controller) waitForHooksToReplicate(timeout time.Duration) ([]graceTran
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(commithooks))
-	for li, lch := range commithooks {
-		i := li
-		ch := lch
+	for i, ch := range commithooks {
 		ok := ch.setWaitNotify(func() {
 			// called with ch.mu locked.
 			if !res[i].caughtUp && ch.isCaughtUp() {
@@ -1055,7 +1031,7 @@ func (c *Controller) waitForHooksToReplicate(timeout time.Duration) ([]graceTran
 			}
 		})
 		if !ok {
-			for j := li - 1; j >= 0; j-- {
+			for j := i - 1; j >= 0; j-- {
 				commithooks[j].setWaitNotify(nil)
 			}
 			c.lgr.Warnf("cluster/controller: failed to wait for graceful transition to standby; there were concurrent attempts to transition..")

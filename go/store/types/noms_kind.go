@@ -81,25 +81,18 @@ var KindToType = make([]Value, 255)
 var SupportedKinds = make([]bool, 255)
 
 func init() {
-	KindToType[BlobKind] = Blob{}
 	KindToType[BoolKind] = Bool(false)
-	KindToType[ListKind] = List{}
-	KindToType[MapKind] = Map{}
 	KindToType[FloatKind] = Float(0)
 	KindToType[RefKind] = Ref{}
-	KindToType[SetKind] = Set{}
-	KindToType[StructKind] = Struct{}
 	KindToType[StringKind] = String("")
 	KindToType[TypeKind] = &Type{}
 	KindToType[UUIDKind] = UUID{}
 	KindToType[IntKind] = Int(0)
 	KindToType[UintKind] = Uint(0)
 	KindToType[NullKind] = NullValue
-	KindToType[TupleKind] = Tuple{}
 	KindToType[InlineBlobKind] = InlineBlob{}
 	KindToType[TimestampKind] = Timestamp{}
 	KindToType[DecimalKind] = Decimal{}
-	KindToType[JSONKind] = JSON{}
 	KindToType[GeometryKind] = Geometry{}
 	KindToType[PointKind] = Point{}
 	KindToType[LineStringKind] = LineString{}
@@ -128,11 +121,9 @@ func init() {
 	SupportedKinds[IntKind] = true
 	SupportedKinds[UintKind] = true
 	SupportedKinds[NullKind] = true
-	SupportedKinds[TupleKind] = true
 	SupportedKinds[InlineBlobKind] = true
 	SupportedKinds[TimestampKind] = true
 	SupportedKinds[DecimalKind] = true
-	SupportedKinds[JSONKind] = true
 	SupportedKinds[GeometryKind] = true
 	SupportedKinds[PointKind] = true
 	SupportedKinds[LineStringKind] = true

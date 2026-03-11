@@ -6,6 +6,10 @@ on:
       version:
         description: 'SemVer format release tag, i.e. 0.24.5'
         required: true
+      push_latest:
+        description: 'Also tag and push as latest'
+        type: boolean
+        default: true
   repository_dispatch:
     types: [ push-docker-image ]
 
@@ -53,7 +57,7 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           push: true
-          tags: dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt:latest
+          tags: dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }}${{ (github.event_name != 'workflow_dispatch' || inputs.push_latest) && ' , dolthub/dolt:latest' || '' }}
           build-args: |
             DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
       - name: Build and push dolt-sql-server image
@@ -63,7 +67,7 @@ jobs:
           context: .
           file: ./docker/serverDockerfile
           push: true
-          tags: dolthub/dolt-sql-server:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt-sql-server:latest
+          tags: dolthub/dolt-sql-server:${{ github.event.inputs.version || github.event.client_payload.version }}${{ (github.event_name != 'workflow_dispatch' || inputs.push_latest) && ' , dolthub/dolt-sql-server:latest' || '' }}
           build-args: |
             DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
       - name: Update Docker Hub Readme for dolt image

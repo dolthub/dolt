@@ -54,6 +54,7 @@ table BranchControlNamespaceValue {
 
 table BranchControlBinlog {
   rows: [BranchControlBinlogRow];
+  version: uint32;
 }
 
 table BranchControlBinlogRow {

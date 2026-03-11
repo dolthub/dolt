@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -54,7 +53,6 @@ const (
 type FKViolationReceiver interface {
 	StartFK(ctx *sql.Context, fk doltdb.ForeignKey) error
 	EndCurrFK(ctx context.Context) error
-	NomsFKViolationFound(ctx context.Context, rowKey, rowValue types.Tuple) error
 	ProllyFKViolationFound(ctx context.Context, rowKey, rowValue val.Tuple) error
 }
 
@@ -132,12 +130,12 @@ func RegisterForeignKeyViolations(
 				return err
 			}
 
-			err = childFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postChild, postChild, emptyIdx, receiver)
+			err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild, emptyIdx, receiver)
 			if err != nil {
 				return err
 			}
 		} else {
-			err = childFkConstraintViolations(ctx, baseRoot.VRW(), foreignKey, postParent, postChild, preChild, preChild.RowData, receiver)
+			err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild, preChild.RowData, receiver)
 			if err != nil {
 				return err
 			}
@@ -188,11 +186,6 @@ func (f *foreignKeyViolationTracker) EndCurrFK(ctx context.Context) error {
 	return nil
 }
 
-func (f *foreignKeyViolationTracker) NomsFKViolationFound(ctx context.Context, rowKey, rowValue types.Tuple) error {
-	f.tableSet.Add(f.currFk.TableName)
-	return nil
-}
-
 func (f *foreignKeyViolationTracker) ProllyFKViolationFound(ctx context.Context, rowKey, rowValue val.Tuple) error {
 	f.tableSet.Add(f.currFk.TableName)
 	return nil
@@ -214,10 +207,6 @@ type foreignKeyViolationWriter struct {
 	artEditor     *prolly.ArtifactsEditor
 	kd            *val.TupleDesc
 	cInfoJsonData []byte
-
-	// noms
-	violMapEditor *types.MapEditor
-	nomsVInfo     types.JSON
 }
 
 var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
@@ -257,7 +246,6 @@ func (f *foreignKeyViolationWriter) StartFK(ctx *sql.Context, fk doltdb.ForeignK
 		return err
 	}
 
-	types.AssertFormat_DOLT(tbl.Format())
 	arts, err := tbl.GetArtifacts(ctx)
 	if err != nil {
 		return err
@@ -271,8 +259,6 @@ func (f *foreignKeyViolationWriter) StartFK(ctx *sql.Context, fk doltdb.ForeignK
 }
 
 func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
-	types.AssertFormat_DOLT(f.currTbl.Format())
-
 	artMap, err := f.artEditor.Flush(ctx)
 	if err != nil {
 		return err
@@ -286,18 +272,6 @@ func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return nil
-}
-
-func (f *foreignKeyViolationWriter) NomsFKViolationFound(ctx context.Context, rowKey, rowValue types.Tuple) error {
-	cvKey, cvVal, err := toConstraintViolationRow(ctx, CvType_ForeignKey, f.nomsVInfo, rowKey, rowValue)
-	if err != nil {
-		return err
-	}
-
-	f.violMapEditor.Set(cvKey, cvVal)
-	f.violatedTables.Add(f.currFk.TableName)
-
 	return nil
 }
 
@@ -324,10 +298,6 @@ func parentFkConstraintViolations(
 	preParentRowData durable.Index,
 	receiver FKViolationReceiver,
 ) error {
-	if preParentRowData.Format() != types.Format_DOLT {
-		panic("unsupported format: " + preParentRowData.Format().VersionString())
-	}
-
 	if preParent.IndexData == nil || postParent.Schema.GetPKCols().Size() == 0 || preParent.Schema.GetPKCols().Size() == 0 {
 		m, err := durable.ProllyMapFromIndex(preParentRowData)
 		if err != nil {
@@ -359,16 +329,11 @@ func parentFkConstraintViolations(
 // necessary.
 func childFkConstraintViolations(
 	ctx context.Context,
-	vr types.ValueReader,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild, preChild *constraintViolationsLoadedTable,
 	preChildRowData durable.Index,
 	receiver FKViolationReceiver,
 ) error {
-	if preChildRowData.Format() != types.Format_DOLT {
-		panic("unsupported format: " + preChildRowData.Format().VersionString())
-	}
-
 	if preChild.IndexData == nil || postChild.Schema.GetPKCols().Size() == 0 || preChild.Schema.GetPKCols().Size() == 0 {
 		m, err := durable.ProllyMapFromIndex(preChildRowData)
 		if err != nil {
@@ -465,36 +430,6 @@ func newConstraintViolationsLoadedTable(
 		IndexSchema: idx.Schema(),
 		IndexData:   indexData,
 	}, true, nil
-}
-
-// toConstraintViolationRow converts the given key and value tuples into ones suitable to add to a constraint violation map.
-func toConstraintViolationRow(ctx context.Context, vType CvType, vInfo types.JSON, k, v types.Tuple) (types.Tuple, types.Tuple, error) {
-	constraintViolationKeyVals := []types.Value{types.Uint(schema.DoltConstraintViolationsTypeTag), types.Uint(vType)}
-	keySlice, err := k.AsSlice()
-	if err != nil {
-		emptyTuple := types.EmptyTuple(k.Format())
-		return emptyTuple, emptyTuple, err
-	}
-	constraintViolationKeyVals = append(constraintViolationKeyVals, keySlice...)
-	constraintViolationKey, err := types.NewTuple(k.Format(), constraintViolationKeyVals...)
-	if err != nil {
-		emptyTuple := types.EmptyTuple(k.Format())
-		return emptyTuple, emptyTuple, err
-	}
-
-	constraintViolationValVals, err := v.AsSlice()
-	if err != nil {
-		emptyTuple := types.EmptyTuple(k.Format())
-		return emptyTuple, emptyTuple, err
-	}
-	constraintViolationValVals = append(constraintViolationValVals, types.Uint(schema.DoltConstraintViolationsInfoTag), vInfo)
-	constraintViolationVal, err := types.NewTuple(v.Format(), constraintViolationValVals...)
-	if err != nil {
-		emptyTuple := types.EmptyTuple(k.Format())
-		return emptyTuple, emptyTuple, err
-	}
-
-	return constraintViolationKey, constraintViolationVal, nil
 }
 
 // foreignKeyCVJson converts a foreign key to JSON data for use as the info field in a constraint violations map.

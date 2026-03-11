@@ -569,11 +569,12 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 		return nil, err
 	}
 
-	root, tables, appendixTables, err := cs.Sources(ctx)
+	tfsources, err := cs.Sources(ctx)
 	if err != nil {
 		logger.WithError(err).Error("error getting chunk store Sources")
 		return nil, status.Error(codes.Internal, "failed to get sources")
 	}
+	root, tables, appendixTables := tfsources.Root, tfsources.TableFiles, tfsources.AppendixTableFiles
 
 	md, _ := metadata.FromIncomingContext(ctx)
 

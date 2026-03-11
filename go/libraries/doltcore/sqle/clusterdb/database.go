@@ -133,6 +133,10 @@ func (db database) DoltDatabases() []*doltdb.DoltDB {
 	return nil
 }
 
+func (db database) ShouldCollectStats() bool {
+	return false
+}
+
 func (db database) GetRoot(context *sql.Context) (doltdb.RootValue, error) {
 	return nil, errors.New("unimplemented")
 }

@@ -1872,7 +1872,7 @@ func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) doltdb.R
 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
-	sess := writer.NewWriteSession(ddb.Format(), ws, gst, eo)
+	sess := writer.NewWriteSession(ws, gst, eo)
 
 	ws, err = sess.Flush(sql.NewContext(ctx))
 	require.NoError(t, err)
@@ -1894,7 +1894,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
 	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
-	sess := writer.NewWriteSession(ddb.Format(), ws, gst, eo)
+	sess := writer.NewWriteSession(ws, gst, eo)
 	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name}, "test", noop, false)
 	require.NoError(t, err)
 

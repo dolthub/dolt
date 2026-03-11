@@ -619,11 +619,7 @@ func TestConvertPrepared(t *testing.T) {
 }
 
 func TestScripts(t *testing.T) {
-	var skipped []string
-	if types.IsFormat_DOLT(types.Format_Default) {
-		skipped = append(skipped, newFormatSkippedScripts...)
-	}
-	h := newDoltHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
+	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScripts(t, h)
 }
@@ -1149,6 +1145,11 @@ func TestCallAsOf(t *testing.T) {
 	RunCallAsOfTest(t, h)
 }
 
+func TestJsonValueScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunJsonValueScriptsTest(t, harness)
+}
+
 func TestLargeJsonObjects(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunLargeJsonObjectsTest(t, harness)
@@ -1185,9 +1186,96 @@ func TestConcurrentTransactions(t *testing.T) {
 	enginetest.TestConcurrentTransactions(t, h)
 }
 
+func TestConcurrentCreateDatabaseIfNotExists(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	engine := mustNewEngine(t, harness)
+	defer engine.Close()
+
+	concurrency := 10
+	wg := sync.WaitGroup{}
+	wg.Add(concurrency)
+	errs := make([]error, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		go func(id int) {
+			defer wg.Done()
+			ctx := enginetest.NewSession(harness)
+			_, iter, _, err := engine.Query(ctx, "CREATE DATABASE IF NOT EXISTS newdb")
+			if err != nil {
+				errs[id] = err
+				return
+			}
+			_, err = sql.RowIterToRows(ctx, iter)
+			errs[id] = err
+		}(i)
+	}
+
+	wg.Wait()
+	for i, err := range errs {
+		require.NoError(t, err, "goroutine %d returned error", i)
+	}
+}
+
+func TestLegacySelectScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacySelectScripts(t, harness)
+}
+
+func TestLegacyJoinScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyJoinScripts(t, harness)
+}
+
+func TestLegacyInsertScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyInsertScripts(t, harness)
+}
+
+func TestLegacyUpdateScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyUpdateScripts(t, harness)
+}
+
+func TestLegacyDeleteScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyDeleteScripts(t, harness)
+}
+
+func TestLegacyReplaceScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyReplaceScripts(t, harness)
+}
+
+func TestLegacyCreateTableScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyCreateTableScripts(t, harness)
+}
+
+func TestLegacyDropTableScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyDropTableScripts(t, harness)
+}
+
+func TestLegacyIndexScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLegacyIndexScripts(t, harness)
+}
+
 func TestDoltScripts(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltScriptsTest(t, harness)
+}
+
+func TestDoltDTableScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltDTableScriptsTest(t, harness)
+}
+
+func TestDoltDTableScriptsPrepared(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltDTableScriptsPreparedTest(t, harness)
 }
 
 func TestDoltTempTableScripts(t *testing.T) {
@@ -1790,12 +1878,8 @@ func TestDeleteQueriesPrepared(t *testing.T) {
 }
 
 func TestScriptsPrepared(t *testing.T) {
-	var skipped []string
-	if types.IsFormat_DOLT(types.Format_Default) {
-		skipped = append(skipped, newFormatSkippedScripts...)
-	}
 	skipPreparedTests(t)
-	h := newDoltHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
+	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScriptsPrepared(t, h)
 }

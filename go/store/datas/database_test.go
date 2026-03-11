@@ -25,12 +25,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -41,19 +38,6 @@ func TestLocalDatabase(t *testing.T) {
 
 func TestRemoteDatabase(t *testing.T) {
 	suite.Run(t, &RemoteDatabaseSuite{})
-}
-
-func TestValidateRef(t *testing.T) {
-	st := &chunks.TestStorage{}
-	db := NewDatabase(st.NewViewWithDefaultFormat()).(*database)
-	defer db.Close()
-	b := types.Bool(true)
-	r, err := db.WriteValue(context.Background(), b)
-	assert.NoError(t, err)
-
-	_, err = db.validateRefAsCommit(context.Background(), r)
-	assert.Error(t, err)
-	_, err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, db.Format())))
 }
 
 type DatabaseSuite struct {
@@ -100,38 +84,6 @@ func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
 	suite.Nil(suite.db.ReadValue(context.Background(), hash.Hash{}))
-}
-
-func (suite *DatabaseSuite) TestCompletenessCheck() {
-	ctx := context.Background()
-
-	datasetID := "ds1"
-	ds1, err := suite.db.GetDataset(ctx, datasetID)
-	suite.NoError(err)
-
-	s, err := types.NewSet(ctx, suite.db)
-	suite.NoError(err)
-	se := s.Edit()
-	for i := 0; i < 100; i++ {
-		ref, err := suite.db.WriteValue(ctx, types.Float(100))
-		suite.NoError(err)
-		se.Insert(ctx, ref)
-	}
-	s, err = se.Set(ctx)
-	suite.NoError(err)
-
-	ds1, err = CommitValue(context.Background(), suite.db, ds1, s)
-	suite.NoError(err)
-
-	s = mustHeadValue(ds1).(types.Set)
-	ref, err := types.NewRef(types.Float(1000), suite.db.Format())
-	suite.NoError(err)
-	se, err = s.Edit().Insert(ctx, ref)
-	suite.NoError(err)
-	s, err = se.Set(ctx) // danging ref
-	suite.NoError(err)
-	_, err = CommitValue(ctx, suite.db, ds1, s)
-	suite.Error(err)
 }
 
 func (suite *DatabaseSuite) TestRebase() {
@@ -273,77 +225,6 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	l, err := datasets2.Len()
 	suite.NoError(err)
 	suite.Equal(uint64(2), l)
-}
-
-func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
-	m, ok := dsm.(nomsDatasetsMap)
-	require.True(t, ok)
-	return m.m
-}
-
-func (suite *DatabaseSuite) TestDatasetsMapType() {
-	if suite.db.Format().UsesFlatbuffers() {
-		suite.T().Skip()
-	}
-
-	dsID1, dsID2 := "ds1", "ds2"
-
-	datasets, err := suite.db.Datasets(context.Background())
-	suite.NoError(err)
-	ds, err := suite.db.GetDataset(context.Background(), dsID1)
-	suite.NoError(err)
-	ds, err = CommitValue(context.Background(), suite.db, ds, types.String("a"))
-	suite.NoError(err)
-	dss, err := suite.db.Datasets(context.Background())
-	suite.NoError(err)
-	assertMapOfStringToRefOfCommit(context.Background(), mustNomsMap(suite.T(), dss), mustNomsMap(suite.T(), datasets), suite.db)
-
-	datasets, err = suite.db.Datasets(context.Background())
-	suite.NoError(err)
-	ds2, err := suite.db.GetDataset(context.Background(), dsID2)
-	suite.NoError(err)
-	_, err = CommitValue(context.Background(), suite.db, ds2, types.Float(42))
-	suite.NoError(err)
-	dss, err = suite.db.Datasets(context.Background())
-	suite.NoError(err)
-	assertMapOfStringToRefOfCommit(context.Background(), mustNomsMap(suite.T(), dss), mustNomsMap(suite.T(), datasets), suite.db)
-
-	datasets, err = suite.db.Datasets(context.Background())
-	suite.NoError(err)
-	_, err = suite.db.Delete(context.Background(), ds, "")
-	suite.NoError(err)
-	dss, err = suite.db.Datasets(context.Background())
-	suite.NoError(err)
-	assertMapOfStringToRefOfCommit(context.Background(), mustNomsMap(suite.T(), dss), mustNomsMap(suite.T(), datasets), suite.db)
-}
-
-func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets types.Map, vr types.ValueReader) {
-	var derr error
-	changes := make(chan types.ValueChanged)
-	go func() {
-		defer close(changes)
-		derr = proposed.Diff(ctx, datasets, changes)
-	}()
-	for change := range changes {
-		switch change.ChangeType {
-		case types.DiffChangeAdded, types.DiffChangeModified:
-			// Since this is a Map Diff, change.V is the key at which a change was detected.
-			// Go get the Value there, which should be a Ref<Value>, deref it, and then ensure the target is a Commit.
-			val := change.NewValue
-			ref, ok := val.(types.Ref)
-			if !ok {
-				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but key %s maps to a %s", change.Key.(types.String), mustString(mustType(types.TypeOf(val)).Describe(ctx)))
-			}
-			if targetValue, err := ref.TargetValue(ctx, vr); err != nil {
-				d.PanicIfError(err)
-			} else if is, err := IsCommit(targetValue); err != nil {
-				d.PanicIfError(err)
-			} else if !is {
-				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but the ref at key %s points to a %s", change.Key.(types.String), mustString(mustType(types.TypeOf(targetValue)).Describe(ctx)))
-			}
-		}
-	}
-	d.PanicIfError(derr)
 }
 
 func newOpts(vrw types.ValueReadWriter, parent hash.Hash) CommitOptions {
@@ -584,67 +465,6 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfRefs() {
 	suite.NoError(err)
 	suite.Equal(uint64(2), r2.Height())
 	suite.Equal(uint64(3), mustRef(suite.db.WriteValue(context.Background(), r2)).Height())
-}
-
-func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
-	setOfStringType, err := types.MakeSetType(types.PrimitiveTypeMap[types.StringKind])
-	suite.NoError(err)
-	setOfRefOfStringType, err := types.MakeSetType(mustType(types.MakeRefType(types.PrimitiveTypeMap[types.StringKind])))
-	suite.NoError(err)
-
-	// Set<String>
-	v1 := types.String("hello")
-	v2 := types.String("world")
-	s1, err := types.NewSet(context.Background(), suite.db, v1, v2)
-	suite.NoError(err)
-	ref, err := suite.db.WriteValue(context.Background(), s1)
-	suite.NoError(err)
-	suite.Equal(uint64(1), ref.Height())
-
-	// Set<Ref<String>>
-	s2, err := types.NewSet(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), v1)), mustRef(suite.db.WriteValue(context.Background(), v2)))
-	suite.NoError(err)
-	suite.Equal(uint64(2), mustRef(suite.db.WriteValue(context.Background(), s2)).Height())
-
-	// List<Set<String>>
-	v3 := types.String("foo")
-	v4 := types.String("bar")
-	s3, err := types.NewSet(context.Background(), suite.db, v3, v4)
-	suite.NoError(err)
-	l1, err := types.NewList(context.Background(), suite.db, s1, s3)
-	suite.NoError(err)
-	suite.Equal(uint64(1), mustRef(suite.db.WriteValue(context.Background(), l1)).Height())
-
-	// List<Ref<Set<String>>
-	l2, err := types.NewList(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), s1)), mustRef(suite.db.WriteValue(context.Background(), s3)))
-	suite.NoError(err)
-	suite.Equal(uint64(2), mustRef(suite.db.WriteValue(context.Background(), l2)).Height())
-
-	// List<Ref<Set<Ref<String>>>
-	s4, err := types.NewSet(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), v3)), mustRef(suite.db.WriteValue(context.Background(), v4)))
-	suite.NoError(err)
-	l3, err := types.NewList(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), s4)))
-	suite.NoError(err)
-	suite.Equal(uint64(3), mustRef(suite.db.WriteValue(context.Background(), l3)).Height())
-
-	// List<Set<String> | RefValue<Set<String>>>
-	l4, err := types.NewList(context.Background(), suite.db, s1, mustRef(suite.db.WriteValue(context.Background(), s3)))
-	suite.NoError(err)
-	suite.Equal(uint64(2), mustRef(suite.db.WriteValue(context.Background(), l4)).Height())
-	l5, err := types.NewList(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), s1)), s3)
-	suite.NoError(err)
-	suite.Equal(uint64(2), mustRef(suite.db.WriteValue(context.Background(), l5)).Height())
-
-	// Familiar with the "New Jersey Turnpike" drink? Here's the noms version of that...
-	everything := []types.Value{v1, v2, s1, s2, v3, v4, s3, l1, l2, s4, l3, l4, l5}
-	andMore := make([]types.Value, 0, len(everything)*3+2)
-	for _, v := range everything {
-		andMore = append(andMore, v, mustType(types.TypeOf(v)), mustRef(suite.db.WriteValue(context.Background(), v)))
-	}
-	andMore = append(andMore, setOfStringType, setOfRefOfStringType)
-
-	_, err = suite.db.WriteValue(context.Background(), mustValue(types.NewList(context.Background(), suite.db, andMore...)))
-	suite.NoError(err)
 }
 
 func (suite *DatabaseSuite) TestMetaOption() {

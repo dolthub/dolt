@@ -109,5 +109,5 @@ jobs:
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
-          bats --tap .
+          bats --print-output-on-failure --tap .
         working-directory: ./integration-tests/bats

@@ -15,7 +15,6 @@
 package typeinfo
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,33 +26,11 @@ import (
 
 // TypeInfo is an interface used for encoding type information.
 type TypeInfo interface {
-	// ConvertNomsValueToValue converts a Noms value to a go value. The expected NomsKind of the given
-	// parameter is equivalent to the NomsKind returned by this type info. This is intended for retrieval
-	// from storage, thus we do no validation as we assume the stored value is already validated against
-	// the given type.
-	ConvertNomsValueToValue(v types.Value) (interface{}, error)
-
-	// ReadFrom reads a go value from a noms types.CodecReader directly
-	ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error)
-
-	// ConvertValueToNomsValue converts a go value or Noms value to a Noms value. The type of the Noms
-	// value will be equivalent to the NomsKind returned from NomsKind.
-	ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error)
-
 	// Equals returns whether the given TypeInfo is equivalent to this TypeInfo.
 	Equals(other TypeInfo) bool
 
-	// FormatValue returns the stringified version of the value.
-	FormatValue(v types.Value) (*string, error)
-
-	// IsValid takes in a types.Value and returns whether it is valid for this type.
-	IsValid(v types.Value) bool
-
 	// NomsKind returns the NomsKind that best matches this TypeInfo.
 	NomsKind() types.NomsKind
-
-	// Promote will promote the current TypeInfo to the largest representing TypeInfo of the same kind, such as Int8 to Int64.
-	Promote() TypeInfo
 
 	// ToSqlType returns the TypeInfo as a sql.Type. If an exact match is able to be made then that is
 	// the one returned, otherwise the sql.Type is the closest match possible.
@@ -254,8 +231,6 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return StringDefaultType
 	case types.TimestampKind:
 		return DatetimeType
-	case types.TupleKind:
-		return TupleType
 	case types.UintKind:
 		return Uint64Type
 	case types.UUIDKind:

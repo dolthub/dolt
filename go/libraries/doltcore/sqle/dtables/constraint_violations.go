@@ -18,14 +18,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // NewConstraintViolationsTable returns a sql.Table that lists constraint violations.
 func NewConstraintViolationsTable(ctx *sql.Context, tblName doltdb.TableName, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	if root.VRW().Format() == types.Format_DOLT {
-		return newProllyCVTable(ctx, tblName, root, rs)
-	}
-
-	panic("Unsupported format: " + root.VRW().Format().VersionString())
+	return newProllyCVTable(ctx, tblName, root, rs)
 }

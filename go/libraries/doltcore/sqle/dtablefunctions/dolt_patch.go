@@ -625,7 +625,7 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 // fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columnsWithDiff, "diff_type", fromRef, toRef, tableName)
 // on sql engine, which returns the schema and rowIter of the final data diff result.
 func getDiffQuery(ctx *sql.Context, dbData env.DbData[*sql.Context], td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) (sql.Schema, []sql.Expression, sql.RowIter, error) {
-	diffTableSchema, err := dtables.GetDiffTableSchemaAndJoiner(td.ToTable.Format(), td.FromSch, td.ToSch)
+	diffTableSchema, err := dtables.GetDiffTableSchemaAndJoiner(td.FromSch, td.ToSch)
 	if err != nil {
 		return nil, nil, nil, err
 	}

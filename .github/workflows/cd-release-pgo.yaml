@@ -12,6 +12,17 @@ on:
       profile_key:
         description: 's3 key of dolt profile used to build pgo'
         required: true
+      branch:
+        description: 'git branch to release from'
+        required: false
+        default: 'main'
+      commit_sha:
+        description: 'exact commit SHA to build from'
+        required: false
+      skip_rpm:
+        description: 'skips rpm releases for older dolt releases'
+        required: false
+        default: false
 
   repository_dispatch:
     types: [ pgo-release ]
@@ -41,8 +52,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
           token: ${{ secrets.DOLT_RELEASE_TOKEN }}
+      - name: Pin to exact commit SHA
+        if: ${{ github.event.inputs.commit_sha || github.event.client_payload.from_version }}
+        run: git checkout -B "$BRANCH" "$SHA"
+        env:
+          BRANCH: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
+          SHA: ${{ github.event.inputs.commit_sha || github.event.client_payload.from_version }}
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
@@ -171,6 +188,7 @@ jobs:
           asset_name: install.sh
           asset_content_type: text/plain
       - name: Upload Linux AMD64 RPM
+        if: ${{ !github.event.inputs.skip_rpm }}
         id: upload-linux-amd64-rpm
         uses: dolthub/upload-release-asset@v2
         env:
@@ -181,6 +199,7 @@ jobs:
           asset_name: dolt-${{ needs.format-version.outputs.version }}-1.x86_64.rpm
           asset_content_type: application/zip
       - name: Upload Linux ARM64 RPM
+        if: ${{ !github.event.inputs.skip_rpm }}
         id: upload-linux-arm64-rpm
         uses: dolthub/upload-release-asset@v2
         env:

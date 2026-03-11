@@ -17,6 +17,7 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 var DoltCreateDatabaseScripts = []queries.ScriptTest{
@@ -110,6 +111,58 @@ var DoltCreateDatabaseScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{1},
 				},
+			},
+		},
+	},
+	{
+		Name: "create database and schema forbid revision delimiters in names",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CREATE DATABASE `mydb@branch`",
+				ExpectedErr:    sql.ErrWrongDBName,
+				ExpectedErrStr: "mydb@branch",
+			},
+			{
+				Query:          "CREATE DATABASE `mydb/too`",
+				ExpectedErr:    sql.ErrWrongDBName,
+				ExpectedErrStr: "mydb/too",
+			},
+			{
+				Query:          "CREATE SCHEMA `mydb@branch`",
+				ExpectedErr:    sql.ErrWrongDBName,
+				ExpectedErrStr: "mydb@branch",
+			},
+			{
+				Query:          "CREATE SCHEMA `mydb/too`",
+				ExpectedErr:    sql.ErrWrongDBName,
+				ExpectedErrStr: "mydb/too",
+			},
+			{
+				Query:          "CREATE DATABASE IF NOT EXISTS `mydb@branch`",
+				ExpectedErr:    sql.ErrWrongDBName,
+				ExpectedErrStr: "mydb@branch",
+			},
+			{
+				Query:          "CREATE SCHEMA IF NOT EXISTS `mydb/too`",
+				ExpectedErr:    sql.ErrWrongDBName,
+				ExpectedErrStr: "mydb/too",
+			},
+			{
+				Query:    "START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "CREATE DATABASE `mydb@txbad`",
+				ExpectedErr:    sql.ErrWrongDBName,
+				ExpectedErrStr: "mydb@txbad",
+			},
+			{
+				Query:    "CREATE DATABASE tx_ok",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "SHOW DATABASES LIKE 'tx_ok'",
+				Expected: []sql.Row{{"tx_ok"}},
 			},
 		},
 	},

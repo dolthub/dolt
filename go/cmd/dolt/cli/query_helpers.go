@@ -16,29 +16,10 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
-
-// GetInt8ColAsBool returns the value of an int8 column as a bool
-// This is necessary because Queryist may return an int8 column as a bool (when using SQLEngine)
-// or as a string (when using ConnectionQueryist).
-func GetInt8ColAsBool(col interface{}) (bool, error) {
-	switch v := col.(type) {
-	case int8:
-		return v != 0, nil
-	case string:
-		if v == "ON" || v == "1" {
-			return true, nil
-		} else if v == "OFF" || v == "0" {
-			return false, nil
-		} else {
-			return false, fmt.Errorf("unexpected value for boolean var: %v", v)
-		}
-	default:
-		return false, fmt.Errorf("unexpected type %T, was expecting int8", v)
-	}
-}
 
 // SetSystemVar sets the @@dolt_show_system_tables variable if necessary, and returns a function
 // resetting the variable for after the commands completion, if necessary.
@@ -52,7 +33,7 @@ func SetSystemVar(queryist Queryist, sqlCtx *sql.Context, newVal bool) (func() e
 	if err != nil {
 		return nil, err
 	}
-	prevVal, err := GetInt8ColAsBool(row[0][1])
+	prevVal, err := QueryValueAsBool(row[0][1])
 	if err != nil {
 		return nil, err
 	}
@@ -82,4 +63,70 @@ func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.
 	}
 
 	return rows, nil
+}
+
+// QueryValueAsString converts a single value from a query result to a string. Use this when reading string-like
+// columns from Queryist results, since the type can differ in-process [engine.SQLEngine] versus over the wire
+// [sqlserver.ConnectionQueryist].
+func QueryValueAsString(value any) (str string, err error) {
+	if value == nil {
+		return "", nil
+	}
+
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case []byte:
+		return string(v), nil
+	case fmt.Stringer:
+		return v.String(), nil
+	default:
+		return "", fmt.Errorf("unexpected type %T, expected string-like column value", value)
+	}
+}
+
+// QueryValueAsBool interprets a query result cell as a bool. Strings are normalized and matched as "true"/"1"/"ON"
+// (true) or the opposite for false; matching is case-insensitive. [Queryist] may return a tinyint column as a bool
+// when utilizing the [engine.SQLEngine] or as string when using [sqlserver.ConnectionQueryist].
+func QueryValueAsBool(col interface{}) (bool, error) {
+	switch v := col.(type) {
+	case bool:
+		return v, nil
+	case byte:
+		return v == 1, nil
+	case int:
+		return v == 1, nil
+	case int8:
+		return v == 1, nil
+	case string:
+		s := strings.TrimSpace(v)
+		switch {
+		case s == "1" || strings.EqualFold(s, "true") || strings.EqualFold(s, "ON"):
+			return true, nil
+		case s == "0" || strings.EqualFold(s, "false") || strings.EqualFold(s, "OFF"):
+			return false, nil
+		default:
+			return false, fmt.Errorf("unexpected value for string for bool: %v", v)
+		}
+	default:
+		return false, fmt.Errorf("unexpected type %T, was expecting bool, int, or string", v)
+	}
+}
+
+// WithQueryWarningsLocked runs queries with a preserved warning buffer. Internal shell queries run on the same SQL
+// session as user queries. Without warning locks, these housekeeping queries can clear or overwrite warnings that users
+// expect.
+func WithQueryWarningsLocked(sqlCtx *sql.Context, queryist Queryist, fn func() error) error {
+	_, _, _, err := queryist.Query(sqlCtx, "set lock_warnings = 1")
+	if err != nil {
+		return err
+	}
+
+	runErr := fn()
+
+	_, _, _, err = queryist.Query(sqlCtx, "set lock_warnings = 0")
+	if err != nil {
+		return err
+	}
+	return runErr
 }

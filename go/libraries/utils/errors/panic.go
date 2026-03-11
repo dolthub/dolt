@@ -16,6 +16,8 @@ package errors
 
 import (
 	"fmt"
+	"runtime/debug"
+	"time"
 )
 
 type FatalBehavior int
@@ -34,10 +36,13 @@ const (
 // returned, built with fmt.Errorf on |msg| and |args|.
 func Fatalf(behavior FatalBehavior, msg string, args ...any) error {
 	if behavior == FatalBehaviorCrash {
+		stack := string(debug.Stack())
+		args := append([]any{stack}, args...)
 		go func() {
-			panic(fmt.Sprintf("fatal error: "+msg, args...))
+			panic(fmt.Errorf("%s\n\nfatal error: "+msg, args...).Error())
 		}()
 		for {
+			time.Sleep(60 * time.Minute)
 		}
 	} else {
 		return fmt.Errorf("fatal error: "+msg, args...)

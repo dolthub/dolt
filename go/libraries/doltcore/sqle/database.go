@@ -1279,6 +1279,11 @@ func getStatusTableRootsProvider(
 		concurrentmap.New[string, env.Remote]())
 	ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
 	if err != nil {
+		// Detached HEAD databases are read-only references and do not have a working set.
+		// Status tables should treat them as clean and return no rows.
+		if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+			return nil, nil, nil
+		}
 		return nil, nil, err
 	}
 

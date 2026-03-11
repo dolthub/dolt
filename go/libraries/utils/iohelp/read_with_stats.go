@@ -50,13 +50,14 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 		panic("cannot start ReaderWithStats more than once.")
 	}
 	rws.runningCh = make(chan struct{})
-	defer close(rws.runningCh)
 	rws.start = time.Now()
 	go func() {
 		timer := time.NewTimer(updateFrequency)
+		closeCh := rws.closeCh
+		close(rws.runningCh)
 		for {
 			select {
-			case <-rws.closeCh:
+			case <-closeCh:
 				return
 			case <-timer.C:
 				read := atomic.LoadUint64(&rws.read)
@@ -77,12 +78,14 @@ func (rws *ReaderWithStats) Close() error {
 	if rws.runningCh != nil {
 		<-rws.runningCh
 	}
-	close(rws.closeCh)
+	if rws.closeCh != nil {
+		close(rws.closeCh)
+		rws.closeCh = nil
+	}
 
 	if closer, ok := rws.rd.(io.Closer); ok {
 		return closer.Close()
 	}
-
 	return nil
 }
 

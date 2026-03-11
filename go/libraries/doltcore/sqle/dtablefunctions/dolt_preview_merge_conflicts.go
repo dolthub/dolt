@@ -475,12 +475,8 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		return nil, fmt.Errorf("schema conflicts found: %d", schConflicts.Count())
 	}
 
-	if !tm.InvolvesRootObjects() {
-		if !dtypes.IsFormat_DOLT(pm.rootInfo.leftRoot.VRW().Format()) {
-			return nil, fmt.Errorf("preview_merge_conflicts table function only supports dolt format")
-		}
-	} else {
-		return nil, fmt.Errorf("Dolt does not operate on root objects")
+	if tm.InvolvesRootObjects() {
+		return nil, fmt.Errorf("dolt_preview_merge_conflict does not operate on root objects")
 	}
 
 	keyless := schema.IsKeyless(mergeSch)

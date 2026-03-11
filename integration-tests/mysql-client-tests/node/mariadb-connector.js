@@ -1,4 +1,4 @@
-import mariadb from "mariadb";
+import * as mariadb from "mariadb";
 import { getArgs } from "./helpers.js";
 
 const tests = [

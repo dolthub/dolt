@@ -15,9 +15,7 @@
 package typeinfo
 
 import (
-	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -39,76 +37,6 @@ var (
 	Uint64Type = &uintType{gmstypes.Uint64}
 )
 
-// ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *uintType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.Uint); ok {
-		switch ti.sqlUintType {
-		case gmstypes.Uint8:
-			return uint8(val), nil
-		case gmstypes.Uint16:
-			return uint16(val), nil
-		case gmstypes.Uint24:
-			return uint32(val), nil
-		case gmstypes.Uint32:
-			return uint32(val), nil
-		case gmstypes.Uint64:
-			return uint64(val), nil
-		}
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
-}
-
-// ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *uintType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
-	k := reader.ReadKind()
-	switch k {
-	case types.UintKind:
-		val := reader.ReadUint()
-		switch ti.sqlUintType {
-		case gmstypes.Uint8:
-			return uint8(val), nil
-		case gmstypes.Uint16:
-			return uint16(val), nil
-		case gmstypes.Uint24:
-			return uint32(val), nil
-		case gmstypes.Uint32:
-			return uint32(val), nil
-		case gmstypes.Uint64:
-			return val, nil
-		}
-	case types.NullKind:
-		return nil, nil
-	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
-}
-
-// ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *uintType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
-	if v == nil {
-		return types.NullValue, nil
-	}
-	uintVal, _, err := ti.sqlUintType.Convert(ctx, v)
-	if err != nil {
-		return nil, err
-	}
-	switch val := uintVal.(type) {
-	case uint8:
-		return types.Uint(val), nil
-	case uint16:
-		return types.Uint(val), nil
-	case uint32:
-		return types.Uint(val), nil
-	case uint64:
-		return types.Uint(val), nil
-	default:
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
-}
-
 // Equals implements TypeInfo interface.
 func (ti *uintType) Equals(other TypeInfo) bool {
 	if other == nil {
@@ -121,58 +49,9 @@ func (ti *uintType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *uintType) FormatValue(v types.Value) (*string, error) {
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	uintVal, err := ti.ConvertNomsValueToValue(v)
-	if err != nil {
-		return nil, err
-	}
-	switch val := uintVal.(type) {
-	case uint8:
-		res := strconv.FormatUint(uint64(val), 10)
-		return &res, nil
-	case uint16:
-		res := strconv.FormatUint(uint64(val), 10)
-		return &res, nil
-	case uint32:
-		res := strconv.FormatUint(uint64(val), 10)
-		return &res, nil
-	case uint64:
-		res := strconv.FormatUint(val, 10)
-		return &res, nil
-	default:
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
-}
-
-// IsValid implements TypeInfo interface.
-func (ti *uintType) IsValid(v types.Value) bool {
-	// TODO: Add context parameter to IsValid, or delete the typeinfo package
-	ctx := context.Background()
-	if val, ok := v.(types.Uint); ok {
-		_, _, err := ti.sqlUintType.Convert(ctx, uint64(val))
-		if err != nil {
-			return false
-		}
-		return true
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return true
-	}
-	return false
-}
-
 // NomsKind implements TypeInfo interface.
 func (ti *uintType) NomsKind() types.NomsKind {
 	return types.UintKind
-}
-
-// Promote implements TypeInfo interface.
-func (ti *uintType) Promote() TypeInfo {
-	return &uintType{ti.sqlUintType.Promote().(sql.NumberType)}
 }
 
 // String implements TypeInfo interface.
@@ -196,74 +75,4 @@ func (ti *uintType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *uintType) ToSqlType() sql.Type {
 	return ti.sqlUintType
-}
-
-// uintTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func uintTypeConverter(ctx context.Context, src *uintType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
-	switch dest := destTi.(type) {
-	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *blobStringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *boolType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *datetimeType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *decimalType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *enumType:
-		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
-			if v == nil || v == types.NullValue {
-				return types.NullValue, nil
-			}
-			val, ok := v.(types.Uint)
-			if !ok {
-				return nil, fmt.Errorf("unexpected type converting uint to enum: %T", v)
-			}
-			if val == 0 {
-				return types.Uint(0), nil
-			}
-			return dest.ConvertValueToNomsValue(ctx, vrw, uint64(val))
-		}, true, nil
-	case *floatType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *geomcollType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *geometryType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *inlineBlobType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *intType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *jsonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *linestringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multilinestringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multipointType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multipolygonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *pointType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *polygonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *setType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *timeType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *uintType:
-		return wrapIsValid(dest.IsValid, src, dest)
-	case *uuidType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *varBinaryType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *varStringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *yearType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	default:
-		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
-	}
 }

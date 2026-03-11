@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -315,35 +316,21 @@ func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) 
 	return preservePath, nil
 }
 
-// processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
-// offset |off|, and calls the callback function |cb| with each journal record. The offset where reading was stopped
-// is returned, or any error encountered along the way.
-// If an invalid journal record is found, it is not included and this function stops processing journal
-// entries, but does not return an error. Journal records may be incomplete if the system crashes while
-// records are being persisted to disk. This isn't likely, but the OS filesystem write is not an atomic
-// operation, so it's possible to leave the journal in a corrupted state. We must gracefully recover
-// without preventing the server from starting up, so we are careful to only return the journal file
-// offset that points to end of the last valid record.
-//
-// The |warningsCb| callback is called with any errors encountered that we automatically recover from. This allows the caller
-// to handle the situation in a context specific way.
-func processJournalRecords(ctx context.Context, r io.ReadSeeker, tryTruncate bool, off int64, cb func(o int64, r journalRec) error, warningsCb func(error)) (int64, error) {
-	var (
-		buf []byte
-		err error
-	)
-
-	// start processing records from |off|
-	if _, err = r.Seek(off, io.SeekStart); err != nil {
-		return 0, err
-	}
+func processJournalRecordsReader(ctx context.Context, r io.Reader, offin int64, cb func(o int64, r journalRec) error, warningsCb func(error)) (rdr *bufio.Reader, off int64, recovered bool, err error) {
+	var buf []byte
+	off = offin
 
 	// There are a few ways we can recover from journals which seem truncated or corrupted, but we want to be sure
 	// to scan to the end of the file in these cases to ensure there is no indication of data loss.
-	recovered := false
+	recovered = false
 
-	rdr := bufio.NewReaderSize(r, journalWriterBuffSize)
+	rdr = bufio.NewReaderSize(r, journalWriterBuffSize)
 	for {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return
+		}
+
 		// peek to read next record size
 		if buf, err = rdr.Peek(uint32Size); err != nil {
 			// If we hit EOF here, it's expected. We can have no more than 3 bytes of data left, and we don't really have
@@ -417,6 +404,35 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, tryTruncate boo
 		}
 		off += int64(len(buf))
 	}
+
+	return
+}
+
+// processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
+// offset |off|, and calls the callback function |cb| with each journal record. The offset where reading was stopped
+// is returned, or any error encountered along the way.
+// If an invalid journal record is found, it is not included and this function stops processing journal
+// entries, but does not return an error. Journal records may be incomplete if the system crashes while
+// records are being persisted to disk. This isn't likely, but the OS filesystem write is not an atomic
+// operation, so it's possible to leave the journal in a corrupted state. We must gracefully recover
+// without preventing the server from starting up, so we are careful to only return the journal file
+// offset that points to end of the last valid record.
+//
+// The |warningsCb| callback is called with any errors encountered that we automatically recover from. This allows the caller
+// to handle the situation in a context specific way.
+func processJournalRecords(ctx context.Context, r io.ReadSeeker, tryTruncate bool, off int64, cb func(o int64, r journalRec) error, warningsCb func(error)) (int64, error) {
+	var (
+		recovered bool
+		rdr       *bufio.Reader
+		err       error
+	)
+
+	// start processing records from |off|
+	if _, err = r.Seek(off, io.SeekStart); err != nil {
+		return 0, err
+	}
+
+	rdr, off, recovered, err = processJournalRecordsReader(ctx, r, off, cb, warningsCb)
 
 	// If a non-EOF error was captured while processing journal records, return a
 	// journal offset of 0 and the error, which will cause startup to halt.
@@ -609,4 +625,40 @@ func readUint64(buf []byte) uint64 {
 
 func writeUint64(buf []byte, u uint64) {
 	binary.BigEndian.PutUint64(buf, u)
+}
+
+// Given an io.Reader which reads the bytes of a chunk journal and is
+// currently positioned at the beginning of a chunk record, call |cb|
+// for each compressed chunk which appears in the journal.
+//
+// Returns any errors or warnings encountered when reading the bytes
+// and interpretting them as journal records.
+func VisitJournalReaderChunks(ctx context.Context, r io.Reader, off int64, cb func(chk CompressedChunk) error) error {
+	var warningErr error
+	_, _, _, err := processJournalRecordsReader(ctx, r, off, func(off int64, rec journalRec) error {
+		if warningErr != nil {
+			return warningErr
+		}
+		if rec.kind == chunkJournalRecKind {
+			// We are going to pass the payload along and it might outlive
+			// this call. The buffer which appears in the record is mutable
+			// and is going to be reused by our caller. Copy it here.
+			buf := bytes.Clone(rec.payload)
+			cchk, err := NewCompressedChunk(rec.address, buf)
+			if err != nil {
+				return fmt.Errorf("error making compressed chunk at off %v for address %v: %w", off, rec.address, err)
+			}
+			err = cb(cchk)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}, func(err error) {
+		warningErr = err
+	})
+	if err == io.EOF {
+		err = nil
+	}
+	return errors.Join(err, warningErr)
 }

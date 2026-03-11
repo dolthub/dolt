@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	config "github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/types"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
@@ -120,7 +119,7 @@ type CommandDocumentationContent struct {
 	Synopsis  []string
 }
 
-//type CommandDocumentation
+// type CommandDocumentation
 
 // RepoNotRequiredCommand is an optional interface that commands can implement if the command can be run without
 // the current directory being a valid Dolt data repository.  Any commands not implementing this interface are
@@ -142,12 +141,6 @@ type EventMonitoredCommand interface {
 type HiddenCommand interface {
 	// Hidden should return true if this command should be hidden from the help text
 	Hidden() bool
-}
-
-type FormatGatedCommand interface {
-	Command
-
-	GatedForNBF(nbf *types.NomsBinFormat) bool
 }
 
 // SubCommandHandler is a command implementation which holds subcommands which can be called
@@ -257,14 +250,6 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		var stop context.CancelFunc
 		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
-	}
-
-	fgc, ok := cmd.(FormatGatedCommand)
-	if ok && dEnv.DoltDB(ctx) != nil && fgc.GatedForNBF(dEnv.DoltDB(ctx).Format()) {
-		vs := dEnv.DoltDB(ctx).Format().VersionString()
-		err := fmt.Sprintf("Dolt command '%s' is not supported in format %s", cmd.Name(), vs)
-		PrintErrln(color.YellowString(err))
-		return 1
 	}
 
 	ret := cmd.Exec(ctx, commandStr, args, dEnv, cliCtx)

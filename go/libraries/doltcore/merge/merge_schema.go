@@ -420,7 +420,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 		return nil, nil, mergeInfo, diffInfo, err
 	}
 
-	compatChecker := typecompatibility.NewTypeCompatabilityCheckerForStorageFormat(format)
+	compatChecker := typecompatibility.NewTypeCompatabilityChecker()
 
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on

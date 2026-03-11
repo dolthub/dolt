@@ -79,17 +79,11 @@ var sharePool = pool.NewBuffPool()
 
 // NewTable returns a new Table.
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
-	if vrw.Format().UsesFlatbuffers() {
-		return newDoltDevTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
-	}
-
-	panic("Unsupported format: " + vrw.Format().VersionString())
+	return newDoltTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
 }
 
 // TableFromAddr deserializes the table in the chunk at |addr|.
 func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, addr hash.Hash) (Table, error) {
-	types.AssertFormat_DOLT(vrw.Format())
-
 	val, err := vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
@@ -109,17 +103,17 @@ func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	if err != nil {
 		return nil, err
 	}
-	return doltDevTable{vrw, ns, st}, nil
+	return doltTable{vrw, ns, st}, nil
 }
 
 // VrwFromTable returns the types.ValueReadWriter used by |t|.
 func VrwFromTable(t Table) types.ValueReadWriter {
-	ddt := t.(doltDevTable)
+	ddt := t.(doltTable)
 	return ddt.vrw
 }
 
 func NodeStoreFromTable(t Table) tree.NodeStore {
-	ddt := t.(doltDevTable)
+	ddt := t.(doltTable)
 	return ddt.ns
 }
 
@@ -127,13 +121,13 @@ func schemaFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Ha
 	return encoding.UnmarshalSchemaAtAddr(ctx, vrw, addr)
 }
 
-type doltDevTable struct {
+type doltTable struct {
 	vrw types.ValueReadWriter
 	ns  tree.NodeStore
 	msg *serial.Table
 }
 
-func (t doltDevTable) DebugString(ctx context.Context, ns tree.NodeStore) string {
+func (t doltTable) DebugString(ctx context.Context, ns tree.NodeStore) string {
 	rows, err := t.GetTableRows(ctx)
 	if err != nil {
 		panic(err)
@@ -147,7 +141,7 @@ func (t doltDevTable) DebugString(ctx context.Context, ns tree.NodeStore) string
 	return rows.DebugString(ctx, ns, schema)
 }
 
-var _ Table = doltDevTable{}
+var _ Table = doltTable{}
 
 type serialTableFields struct {
 	schema            []byte
@@ -198,7 +192,7 @@ func (fields serialTableFields) write() (*serial.Table, error) {
 	return serial.TryGetRootAsTable(bs, serial.MessagePrefixSz)
 }
 
-func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
+func newDoltTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
 	schVal, err := encoding.MarshalSchema(ctx, vrw, sch)
 	if err != nil {
 		return nil, err
@@ -244,31 +238,31 @@ func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.Nod
 		return nil, err
 	}
 
-	return doltDevTable{vrw, ns, msg}, nil
+	return doltTable{vrw, ns, msg}, nil
 }
 
-func (t doltDevTable) nomsValue() types.Value {
+func (t doltTable) nomsValue() types.Value {
 	return types.SerialMessage(t.msg.Table().Bytes)
 }
 
-func (t doltDevTable) HashOf() (hash.Hash, error) {
+func (t doltTable) HashOf() (hash.Hash, error) {
 	return t.nomsValue().Hash(t.Format())
 }
 
-func (t doltDevTable) Format() *types.NomsBinFormat {
+func (t doltTable) Format() *types.NomsBinFormat {
 	return t.vrw.Format()
 }
 
-func (t doltDevTable) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
+func (t doltTable) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
 	return hash.New(t.msg.SchemaBytes()), nil
 }
 
-func (t doltDevTable) GetSchema(ctx context.Context) (schema.Schema, error) {
+func (t doltTable) GetSchema(ctx context.Context) (schema.Schema, error) {
 	addr := hash.New(t.msg.SchemaBytes())
 	return schemaFromAddr(ctx, t.vrw, addr)
 }
 
-func (t doltDevTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, error) {
+func (t doltTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, error) {
 	newSchemaVal, err := encoding.MarshalSchema(ctx, t.vrw, sch)
 	if err != nil {
 		return nil, err
@@ -282,10 +276,10 @@ func (t doltDevTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, 
 	addr := schRef.TargetHash()
 	msg := t.clone()
 	copy(msg.SchemaBytes(), addr[:])
-	return doltDevTable{t.vrw, t.ns, msg}, nil
+	return doltTable{t.vrw, t.ns, msg}, nil
 }
 
-func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
+func (t doltTable) GetTableRows(ctx context.Context) (Index, error) {
 	rowbytes := t.msg.PrimaryIndexBytes()
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
@@ -298,7 +292,7 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 	return IndexFromMapInterface(m), nil
 }
 
-func (t doltDevTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd *val.TupleDesc) (Index, error) {
+func (t doltTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd *val.TupleDesc) (Index, error) {
 	rowbytes := t.msg.PrimaryIndexBytes()
 	m, err := shim.MapFromValueWithDescriptors(types.SerialMessage(rowbytes), kd, vd, t.ns)
 	if err != nil {
@@ -307,7 +301,7 @@ func (t doltDevTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd *v
 	return IndexFromMapInterface(m), nil
 }
 
-func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, error) {
+func (t doltTable) SetTableRows(ctx context.Context, rows Index) (Table, error) {
 	rowsbytes, err := rows.bytes()
 	if err != nil {
 		return nil, err
@@ -323,10 +317,10 @@ func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, erro
 		return nil, err
 	}
 
-	return doltDevTable{t.vrw, t.ns, msg}, nil
+	return doltTable{t.vrw, t.ns, msg}, nil
 }
 
-func (t doltDevTable) GetIndexes(ctx context.Context) (IndexSet, error) {
+func (t doltTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 	ambytes := t.msg.SecondaryIndexesBytes()
 	node, fileId, err := tree.NodeFromBytes(ambytes)
 	if err != nil {
@@ -343,7 +337,7 @@ func (t doltDevTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 	return doltDevIndexSet{t.vrw, t.ns, am}, nil
 }
 
-func (t doltDevTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, error) {
+func (t doltTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, error) {
 	fields, err := t.fields()
 	if err != nil {
 		return nil, err
@@ -353,15 +347,11 @@ func (t doltDevTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, 
 	if err != nil {
 		return nil, err
 	}
-	return doltDevTable{t.vrw, t.ns, msg}, nil
+	return doltTable{t.vrw, t.ns, msg}, nil
 }
 
 // GetArtifacts implements Table.
-func (t doltDevTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
-	if t.Format() != types.Format_DOLT {
-		panic("artifacts only implemented for DOLT")
-	}
-
+func (t doltTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -376,11 +366,7 @@ func (t doltDevTable) GetArtifacts(ctx context.Context) (ArtifactIndex, error) {
 }
 
 // SetArtifacts implements Table.
-func (t doltDevTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex) (Table, error) {
-	if t.Format() != types.Format_DOLT {
-		panic("artifacts only implemented for DOLT")
-	}
-
+func (t doltTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex) (Table, error) {
 	var addr hash.Hash
 	if artifacts != nil {
 		c, err := artifacts.Count()
@@ -397,11 +383,11 @@ func (t doltDevTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex)
 	}
 	msg := t.clone()
 	copy(msg.ArtifactsBytes(), addr[:])
-	return doltDevTable{t.vrw, t.ns, msg}, nil
+	return doltTable{t.vrw, t.ns, msg}, nil
 }
 
 // GetAutoIncrement returns the next value to be used for the AUTO_INCREMENT column.
-func (t doltDevTable) GetAutoIncrement(ctx context.Context) (uint64, error) {
+func (t doltTable) GetAutoIncrement(ctx context.Context) (uint64, error) {
 	res := t.msg.AutoIncrementValue()
 	if res == 0 {
 		return 1, nil
@@ -411,7 +397,7 @@ func (t doltDevTable) GetAutoIncrement(ctx context.Context) (uint64, error) {
 
 // SetAutoIncrement sets the next value to be used for the AUTO_INCREMENT column.
 // Since AUTO_INCREMENT starts at 1, setting this to either 0 or 1 will result in the field being unset.
-func (t doltDevTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, error) {
+func (t doltTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, error) {
 	// AUTO_INCREMENT starts at 1, so a value of 1 is the same as being unset.
 	// Normalizing both values to 0 ensures that they both result in the same hash as the field being unset.
 	if val == 1 {
@@ -430,10 +416,10 @@ func (t doltDevTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, 
 			return nil, err
 		}
 	}
-	return doltDevTable{t.vrw, t.ns, msg}, nil
+	return doltTable{t.vrw, t.ns, msg}, nil
 }
 
-func (t doltDevTable) clone() *serial.Table {
+func (t doltTable) clone() *serial.Table {
 	bs := make([]byte, len(t.msg.Table().Bytes))
 	copy(bs, t.msg.Table().Bytes)
 	var ret serial.Table
@@ -441,7 +427,7 @@ func (t doltDevTable) clone() *serial.Table {
 	return &ret
 }
 
-func (t doltDevTable) fields() (serialTableFields, error) {
+func (t doltTable) fields() (serialTableFields, error) {
 	ambytes := t.msg.SecondaryIndexesBytes()
 	node, fileId, err := tree.NodeFromBytes(ambytes)
 	if err != nil {
@@ -475,6 +461,6 @@ func (t doltDevTable) fields() (serialTableFields, error) {
 }
 
 func RefFromNomsTable(ctx context.Context, table Table) (types.Ref, error) {
-	ddt := table.(doltDevTable)
+	ddt := table.(doltTable)
 	return ddt.vrw.WriteValue(ctx, ddt.nomsValue())
 }

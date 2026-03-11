@@ -675,9 +675,6 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 			}
 		}
 	case serial.DoltgresRootValueFileID:
-		if !nbf.UsesFlatbuffers() {
-			return fmt.Errorf("root values for Doltgres only use flatbuffer serialization")
-		}
 		return DoltgresRootValueWalkAddrs(sm, cb)
 	case serial.TableFileID:
 		var msg serial.Table

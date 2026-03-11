@@ -142,7 +142,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	if err != nil {
 		return nil, err
 	}
-	keyBld := maybeGetKeyBuilder(tableRows)
+	keyBld := keyBuilderForIndex(tableRows)
 
 	cols := sch.GetPKCols().GetColumns()
 
@@ -174,13 +174,29 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 
 		indexes = append(indexes, &keyIndex)
 	}
-	if types.IsFormat_DOLT(t.Format()) {
-		indexes = append(indexes, NewCommitIndex(&doltIndex{
-			id:      ToCommitIndexId,
+
+	indexes = append(indexes, NewCommitIndex(&doltIndex{
+		id:      ToCommitIndexId,
+		tblName: doltdb.DoltDiffTablePrefix + tbl,
+		dbName:  db,
+		columns: []schema.Column{
+			schema.NewColumn(ToCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
+		},
+		indexSch:                      sch,
+		tableSch:                      sch,
+		unique:                        true,
+		comment:                       "",
+		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
+		order:                         sql.IndexOrderNone,
+		constrainedToLookupExpression: false,
+	}),
+		NewCommitIndex(&doltIndex{
+			id:      FromCommitIndexId,
 			tblName: doltdb.DoltDiffTablePrefix + tbl,
 			dbName:  db,
 			columns: []schema.Column{
-				schema.NewColumn(ToCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
+				schema.NewColumn(FromCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
 			},
 			indexSch:                      sch,
 			tableSch:                      sch,
@@ -191,24 +207,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 			order:                         sql.IndexOrderNone,
 			constrainedToLookupExpression: false,
 		}),
-			NewCommitIndex(&doltIndex{
-				id:      FromCommitIndexId,
-				tblName: doltdb.DoltDiffTablePrefix + tbl,
-				dbName:  db,
-				columns: []schema.Column{
-					schema.NewColumn(FromCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
-				},
-				indexSch:                      sch,
-				tableSch:                      sch,
-				unique:                        true,
-				comment:                       "",
-				vrw:                           t.ValueReadWriter(),
-				ns:                            t.NodeStore(),
-				order:                         sql.IndexOrderNone,
-				constrainedToLookupExpression: false,
-			}),
-		)
-	}
+	)
 	return indexes, nil
 }
 
@@ -262,10 +261,6 @@ func MockIndex(indexId, dbName, tableName, columnName string, columnType types.N
 }
 
 func DoltCommitIndexes(dbName, tab string, db *doltdb.DoltDB, unique bool) (indexes []sql.Index, err error) {
-	if !types.IsFormat_DOLT(db.Format()) {
-		return nil, nil
-	}
-
 	return []sql.Index{
 		NewCommitIndex(MockIndex(CommitHashIndexId, dbName, tab, CommitHashIndexId, types.StringKind, unique)),
 	}, nil
@@ -376,7 +371,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 	if err != nil {
 		return nil, err
 	}
-	keyBld := maybeGetKeyBuilder(tableRows)
+	keyBld := keyBuilderForIndex(tableRows)
 
 	cols := sch.GetPKCols().GetColumns()
 
@@ -397,7 +392,6 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
-		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
 	}, nil
 }
 
@@ -406,7 +400,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 	if err != nil {
 		return nil, err
 	}
-	keyBld := maybeGetKeyBuilder(indexRows)
+	keyBld := keyBuilderForIndex(indexRows)
 
 	cols := make([]schema.Column, idx.Count())
 	for i, tag := range idx.IndexedColumnTags() {
@@ -432,7 +426,6 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
-		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
 		prefixLengths:                 idx.PrefixLengths(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
@@ -465,7 +458,6 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		keyBld:                        nil,
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
-		doltBinFormat:                 true,
 		prefixLengths:                 idx.PrefixLengths(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
@@ -489,17 +481,11 @@ func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
 	}
 	cols := i.Schema().GetAllCols()
 	var idxCols *schema.ColCollection
-	if types.IsFormat_DOLT(i.Format()) {
-		// prolly indexes can cover an index lookup using
-		// both the key and value fields of the index,
-		// this allows using covering index machinery for
-		// primary key index lookups.
-		idxCols = i.IndexSchema().GetAllCols()
-	} else {
-		// to cover an index lookup, noms indexes must
-		// contain all fields in the index's key.
-		idxCols = i.IndexSchema().GetPKCols()
-	}
+	// prolly indexes can cover an index lookup using
+	// both the key and value fields of the index,
+	// this allows using covering index machinery for
+	// primary key index lookups.
+	idxCols = i.IndexSchema().GetAllCols()
 	covers := true
 	for i := 0; i < cols.Size(); i++ {
 		col := cols.GetByIndex(i)
@@ -556,12 +542,11 @@ type doltIndex struct {
 	order                         sql.IndexOrder
 	constrainedToLookupExpression bool
 
-	vector        bool
-	isPk          bool
-	doltBinFormat bool
-	unique        bool
-	spatial       bool
-	fulltext      bool
+	vector   bool
+	isPk     bool
+	unique   bool
+	spatial  bool
+	fulltext bool
 }
 
 type LookupMeta struct {
@@ -734,17 +719,11 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 	}
 
 	var idxCols *schema.ColCollection
-	if types.IsFormat_DOLT(di.Format()) {
-		// prolly indexes can cover an index lookup using
-		// both the key and value fields of the index,
-		// this allows using covering index machinery for
-		// primary key index lookups.
-		idxCols = di.IndexSchema().GetAllCols()
-	} else {
-		// to cover an index lookup, noms indexes must
-		// contain all fields in the index's key.
-		idxCols = di.IndexSchema().GetPKCols()
-	}
+	// prolly indexes can cover an index lookup using
+	// both the key and value fields of the index,
+	// this allows using covering index machinery for
+	// primary key index lookups.
+	idxCols = di.IndexSchema().GetAllCols()
 
 	if len(cols) > len(idxCols.Tags) {
 		return false
@@ -830,7 +809,7 @@ func (di *doltIndex) Reversible() bool {
 		return false
 	}
 
-	return di.doltBinFormat
+	return true
 }
 
 // Database implement sql.Index
@@ -959,13 +938,10 @@ func (di *doltIndex) FullTextKeyColumns(ctx *sql.Context) (fulltext.KeyColumns, 
 
 var sharePool = pool.NewBuffPool()
 
-func maybeGetKeyBuilder(idx durable.Index) *val.TupleBuilder {
-	if types.IsFormat_DOLT(idx.Format()) {
-		m := durable.MapFromIndex(idx)
-		kd, _ := m.Descriptors()
-		return val.NewTupleBuilder(kd, m.NodeStore())
-	}
-	return nil
+func keyBuilderForIndex(idx durable.Index) *val.TupleBuilder {
+	m := durable.MapFromIndex(idx)
+	kd, _ := m.Descriptors()
+	return val.NewTupleBuilder(kd, m.NodeStore())
 }
 
 func pruneEmptyRanges(sqlRanges []sql.MySQLRange) (pruned []sql.MySQLRange, err error) {

@@ -43,11 +43,18 @@ func TestNormalizeGitRemoteUrl(t *testing.T) {
 		require.Equal(t, "git+https://example.com/org/repo.git", got)
 	})
 
-	t.Run("scp-style becomes git+ssh", func(t *testing.T) {
+	t.Run("scp-style relative becomes git+ssh with dot marker", func(t *testing.T) {
 		got, ok, err := NormalizeGitRemoteUrl("git@github.com:org/repo.git")
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Equal(t, "git+ssh://git@github.com/org/repo.git", got)
+		require.Equal(t, "git+ssh://git@github.com/./org/repo.git", got)
+	})
+
+	t.Run("scp-style absolute becomes git+ssh without dot marker", func(t *testing.T) {
+		got, ok, err := NormalizeGitRemoteUrl("git@host:/abs/repo.git")
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Equal(t, "git+ssh://git@host/abs/repo.git", got)
 	})
 
 	t.Run("schemeless host/path defaults to git+https", func(t *testing.T) {

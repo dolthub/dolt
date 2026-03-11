@@ -17,18 +17,13 @@ package rowconv
 import (
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // ErrMappingFileRead is an error returned when a mapping file cannot be read
 var ErrMappingFileRead = errors.New("error reading mapping file")
-
-// ErrEmptyMapping is an error returned when the mapping is empty (No src columns, no destination columns)
-var ErrEmptyMapping = errors.New("empty mapping error")
 
 // BadMappingErr is a struct which implements the error interface and is used when there is an error with a mapping.
 type BadMappingErr struct {
@@ -63,99 +58,6 @@ func (nm NameMapper) PreImage(str string) string {
 	return str
 }
 
-// FieldMapping defines a mapping from columns in a source schema to columns in a dest schema.
-type FieldMapping struct {
-	// SrcSch is the source schema being mapped from.
-	SrcSch schema.Schema
-
-	// DestSch is the destination schema being mapped to.
-	DestSch schema.Schema
-
-	// SrcToDest is a map from a tag in the source schema to a tag in the dest schema.
-	SrcToDest map[uint64]uint64
-}
-
-// NewFieldMapping creates a FieldMapping from a source schema, a destination schema, and a map from tags in the source
-// schema to tags in the dest schema.
-func NewFieldMapping(srcSch, destSch schema.Schema, srcTagToDestTag map[uint64]uint64) (*FieldMapping, error) {
-	destCols := destSch.GetAllCols()
-
-	for srcTag, destTag := range srcTagToDestTag {
-		_, destOk := destCols.GetByTag(destTag)
-
-		if !destOk {
-			return nil, &BadMappingErr{"src tag:" + strconv.FormatUint(srcTag, 10), "dest tag:" + strconv.FormatUint(destTag, 10)}
-		}
-	}
-
-	if len(srcTagToDestTag) == 0 {
-		return nil, ErrEmptyMapping
-	}
-
-	return &FieldMapping{srcSch, destSch, srcTagToDestTag}, nil
-}
-
-// TagMapping takes a source schema and a destination schema and maps all columns which have a matching tag in the
-// source and destination schemas.
-func TagMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
-	successes := 0
-	srcCols := srcSch.GetAllCols()
-	destCols := destSch.GetAllCols()
-
-	srcToDest := make(map[uint64]uint64, destCols.Size())
-	err := destCols.Iter(func(destTag uint64, col schema.Column) (stop bool, err error) {
-		srcCol, ok := srcCols.GetByTag(destTag)
-
-		if ok {
-			srcToDest[srcCol.Tag] = destTag
-			successes++
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	if successes == 0 {
-		return nil, ErrEmptyMapping
-	}
-
-	return NewFieldMapping(srcSch, destSch, srcToDest)
-}
-
-// NameMapping takes a source schema and a destination schema and maps all columns which have a matching name in the
-// source and destination schemas.
-func NameMapping(srcSch, destSch schema.Schema, nameMapper NameMapper) (*FieldMapping, error) {
-	successes := 0
-	srcCols := srcSch.GetAllCols()
-	destCols := destSch.GetAllCols()
-
-	srcToDest := make(map[uint64]uint64, destCols.Size())
-	err := srcCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		mn := nameMapper.Map(col.Name)
-		outCol, ok := destCols.GetByName(mn)
-
-		if ok {
-			srcToDest[tag] = outCol.Tag
-			successes++
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	if successes == 0 {
-		return nil, ErrEmptyMapping
-	}
-
-	return NewFieldMapping(srcSch, destSch, srcToDest)
-}
-
 // NameMapperFromFile reads a JSON file containing a name mapping and returns a NameMapper.
 func NameMapperFromFile(mappingFile string, FS filesys.ReadableFS) (NameMapper, error) {
 	var nm NameMapper
@@ -176,41 +78,4 @@ func NameMapperFromFile(mappingFile string, FS filesys.ReadableFS) (NameMapper, 
 	}
 
 	return nm, nil
-}
-
-// TagMappingByTagAndName takes a source schema and a destination schema and maps
-// pks by tag and non-pks by name.
-func TagMappingByTagAndName(srcSch, destSch schema.Schema) (*FieldMapping, error) {
-	srcToDest := make(map[uint64]uint64, destSch.GetAllCols().Size())
-
-	keyMap, valMap, err := schema.MapSchemaBasedOnTagAndName(srcSch, destSch)
-	if err != nil {
-		return nil, err
-	}
-
-	var successes int
-	for i, j := range keyMap {
-		if j == -1 {
-			continue
-		}
-		srcTag := srcSch.GetPKCols().GetByIndex(i).Tag
-		dstTag := destSch.GetPKCols().GetByIndex(j).Tag
-		srcToDest[srcTag] = dstTag
-		successes++
-	}
-	for i, j := range valMap {
-		if j == -1 {
-			continue
-		}
-		srcTag := srcSch.GetNonPKCols().GetByIndex(i).Tag
-		dstTag := destSch.GetNonPKCols().GetByIndex(j).Tag
-		srcToDest[srcTag] = dstTag
-		successes++
-	}
-
-	if successes == 0 {
-		return nil, ErrEmptyMapping
-	}
-
-	return NewFieldMapping(srcSch, destSch, srcToDest)
 }

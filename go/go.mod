@@ -13,7 +13,7 @@ require (
 	github.com/dolthub/fslock v0.0.0-20251215194149-ef20baba2318
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20260202234501-b14ed9b1632b
+	github.com/dolthub/vitess v0.0.0-20260309181228-a99af9c518ab
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -62,9 +62,9 @@ require (
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/dolt-mcp v0.3.4
-	github.com/dolthub/eventsapi_schema v0.0.0-20260205214132-a7a3c84c84a1
+	github.com/dolthub/eventsapi_schema v0.0.0-20260310172945-37a9265ade69
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20260220232524-cd9aa3651dba
+	github.com/dolthub/go-mysql-server v0.20.1-0.20260311204756-b77b4b7c3924
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
@@ -81,7 +81,6 @@ require (
 	github.com/oracle/oci-go-sdk/v65 v65.55.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rs/zerolog v1.28.0
-	github.com/shirou/gopsutil/v3 v3.22.1
 	github.com/shirou/gopsutil/v4 v4.25.12
 	github.com/tidwall/gjson v1.14.4
 	github.com/tidwall/sjson v1.2.5
@@ -91,10 +90,10 @@ require (
 	github.com/zeebo/blake3 v0.2.3
 	github.com/zeebo/xxh3 v1.0.2
 	go.etcd.io/bbolt v1.3.6
-	go.opentelemetry.io/otel v1.38.0
+	go.opentelemetry.io/otel v1.40.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.17.0
-	go.opentelemetry.io/otel/sdk v1.38.0
-	go.opentelemetry.io/otel/trace v1.38.0
+	go.opentelemetry.io/otel/sdk v1.40.0
+	go.opentelemetry.io/otel/trace v1.40.0
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/text v0.33.0
 	gonum.org/v1/plot v0.11.0
@@ -110,7 +109,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.5.2 // indirect
 	cloud.google.com/go/monitoring v1.24.2 // indirect
-	filippo.io/edwards25519 v1.1.0 // indirect
+	filippo.io/edwards25519 v1.1.1 // indirect
 	git.sr.ht/~sbinet/gg v0.3.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 // indirect
@@ -191,8 +190,8 @@ require (
 	go.opentelemetry.io/contrib/detectors/gcp v1.38.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
-	go.opentelemetry.io/otel/metric v1.38.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.38.0 // indirect
+	go.opentelemetry.io/otel/metric v1.40.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v1.40.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/image v0.18.0 // indirect

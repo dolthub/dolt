@@ -88,6 +88,7 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 			continue
 		} else if err != nil {
 			sc.descError("", err)
+			continue
 		}
 
 		if ok, err := sc.trySwapStats(ctx, genStart, newStats, gcKv); err != nil {
@@ -204,6 +205,13 @@ func (sc *StatsController) newStatsForRoot(ctx *sql.Context, gcKv *memStats, byp
 			sessDb, ok := db.(dsess.SqlDatabase)
 			if !ok {
 				continue
+			}
+			if statsaware, ok := db.(interface {
+				ShouldCollectStats() bool
+			}); ok {
+				if !statsaware.ShouldCollectStats() {
+					continue
+				}
 			}
 			root, err := sessDb.GetRoot(ctx)
 			if err != nil {

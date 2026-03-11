@@ -15,9 +15,6 @@
 package typeinfo
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -34,53 +31,6 @@ var _ TypeInfo = (*multilinestringType)(nil)
 
 var MultiLineStringType = &multilinestringType{gmstypes.MultiLineStringType{}}
 
-// ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *multilinestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	// Check for null
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-	// Expect a types.MultiLineString, return a sql.MultiLineString
-	if val, ok := v.(types.MultiLineString); ok {
-		return types.ConvertTypesMultiLineStringToSQLMultiLineString(val), nil
-	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
-}
-
-// ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *multilinestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
-	k := reader.ReadKind()
-	switch k {
-	case types.MultiLineStringKind:
-		p, err := reader.ReadMultiLineString()
-		if err != nil {
-			return nil, err
-		}
-		return ti.ConvertNomsValueToValue(p)
-	case types.NullKind:
-		return nil, nil
-	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
-}
-
-// ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *multilinestringType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
-	// Check for null
-	if v == nil {
-		return types.NullValue, nil
-	}
-
-	// Convert to sql.MultiLineString
-	mline, _, err := ti.sqlMultiLineStringType.Convert(ctx, v)
-	if err != nil {
-		return nil, err
-	}
-
-	return types.ConvertSQLMultiLineStringToTypesMultiLineString(mline.(gmstypes.MultiLineString)), nil
-}
-
 // Equals implements TypeInfo interface.
 func (ti *multilinestringType) Equals(other TypeInfo) bool {
 	if other == nil {
@@ -93,38 +43,9 @@ func (ti *multilinestringType) Equals(other TypeInfo) bool {
 	return false
 }
 
-// FormatValue implements TypeInfo interface.
-func (ti *multilinestringType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.MultiLineString); ok {
-		resStr := string(types.SerializeMultiLineString(val))
-		return &resStr, nil
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return nil, nil
-	}
-
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-}
-
-// IsValid implements TypeInfo interface.
-func (ti *multilinestringType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.MultiLineString); ok {
-		return true
-	}
-	if _, ok := v.(types.Null); ok || v == nil {
-		return true
-	}
-	return false
-}
-
 // NomsKind implements TypeInfo interface.
 func (ti *multilinestringType) NomsKind() types.NomsKind {
 	return types.MultiLineStringKind
-}
-
-// Promote implements TypeInfo interface.
-func (ti *multilinestringType) Promote() TypeInfo {
-	return &multilinestringType{ti.sqlMultiLineStringType.Promote().(gmstypes.MultiLineStringType)}
 }
 
 // String implements TypeInfo interface.
@@ -135,64 +56,4 @@ func (ti *multilinestringType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *multilinestringType) ToSqlType() sql.Type {
 	return ti.sqlMultiLineStringType
-}
-
-// multilinestringTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func multilinestringTypeConverter(ctx context.Context, src *multilinestringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
-	switch dest := destTi.(type) {
-	case *bitType:
-		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
-			return types.Uint(0), nil
-		}, true, nil
-	case *blobStringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *boolType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *datetimeType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *decimalType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *enumType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *floatType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *geomcollType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *geometryType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *inlineBlobType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *intType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *jsonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *linestringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multilinestringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multipointType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *multipolygonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *pointType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *polygonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *setType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *timeType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *uintType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *uuidType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *varBinaryType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *varStringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *yearType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	default:
-		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
-	}
 }

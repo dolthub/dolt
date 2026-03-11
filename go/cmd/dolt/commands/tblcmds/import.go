@@ -51,7 +51,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
@@ -91,11 +90,20 @@ var jsonInputFileHelp = "The expected JSON input file format is:" + `
 where column_name is the name of a column of the table being imported and value is the data for that column in the table.
 `
 
+var jsonlInputFileHelp = "The expected JSONL input file format is:" + `
+
+	{"column_name":"value", ...}
+	{"column_name":"value", ...}
+	...
+
+where each line is a JSON object representing a row.
+`
+
 var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Imports data into a dolt table`,
 	LongDesc: `If {{.EmphasisLeft}}--create-table | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} and import the contents of file into it.  If a table already exists at this location then the operation will fail, unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag is provided. The force flag forces the existing table to be overwritten.
 
-The schema for the new table can be specified explicitly by providing a SQL schema definition file, or will be inferred from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key. If no primary key is explicitly defined, the first column in the import file will be used as the primary key.
+The schema for the new table can be specified explicitly by providing a SQL schema definition file, or may be inferred from the imported file (depending on file type). All schemas, inferred or explicitly defined must define a primary key. If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key. If no primary key is explicitly defined, the first column in the import file will be used as the primary key. For {{.EmphasisLeft}}json{{.EmphasisRight}}, {{.EmphasisLeft}}jsonl{{.EmphasisRight}}, and {{.EmphasisLeft}}parquet{{.EmphasisRight}} create operations, a schema file must be provided with {{.EmphasisLeft}}--schema{{.EmphasisRight}}.
 
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
@@ -113,7 +121,9 @@ During import, if there is an error importing any row, the import will be aborte
 		`
 ` + jsonInputFileHelp +
 		`
-In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
+` + jsonlInputFileHelp +
+		`
+ In create, update, and replace scenarios the file's extension is used to infer the type of the file. If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, jsonl, xlsx, parquet). For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
 		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--all-text] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--no-header] [--columns {{.LessThan}}col1,col2,...{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
@@ -226,7 +236,7 @@ func getImportMoveOptions(ctx *sql.Context, apr *argparser.ArgParseResults, dEnv
 		} else if val.Format == mvdata.XlsxFile {
 			// table name must match sheet name currently
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
-		} else if val.Format == mvdata.JsonFile {
+		} else if val.Format == mvdata.JsonFile || val.Format == mvdata.JsonlFile {
 			opts := mvdata.JSONOptions{TableName: tableName, SchFile: schemaFile}
 			if schemaFile != "" {
 				opts.SqlCtx = ctx
@@ -371,8 +381,8 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		}
 
 		_, hasSchema := apr.GetValue(schemaParam)
-		if srcFileLoc.Format == mvdata.JsonFile && apr.Contains(createParam) && !hasSchema {
-			return errhand.BuildDError("Please specify schema file for .json tables.").Build()
+		if (srcFileLoc.Format == mvdata.JsonFile || srcFileLoc.Format == mvdata.JsonlFile) && apr.Contains(createParam) && !hasSchema {
+			return errhand.BuildDError("Please specify schema file for .json/.jsonl tables.").Build()
 		} else if srcFileLoc.Format == mvdata.ParquetFile && apr.Contains(createParam) && !hasSchema {
 			return errhand.BuildDError("Please specify schema file for .parquet tables.").Build()
 		}
@@ -557,7 +567,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 var displayStrLen int
 
-func importStatsCB(stats types.AppliedEditStats) {
+func importStatsCB(stats mvdata.AppliedEditStats) {
 	noEffect := stats.NonExistentDeletes + stats.SameVal
 	total := noEffect + stats.Modifications + stats.Additions
 	p := message.NewPrinter(message.MatchLanguage("en")) // adds commas

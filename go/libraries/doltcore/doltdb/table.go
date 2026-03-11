@@ -112,16 +112,12 @@ func (t *Table) GetOverriddenSchema() schema.Schema {
 
 // HasConflicts returns true if this table contains merge conflicts.
 func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
-	if t.Format() == types.Format_DOLT {
-		art, err := t.GetArtifacts(ctx)
-		if err != nil {
-			return false, err
-		}
-
-		return art.HasConflicts(ctx)
+	art, err := t.GetArtifacts(ctx)
+	if err != nil {
+		return false, err
 	}
 
-	panic("Unsupported format: " + t.Format().VersionString())
+	return art.HasConflicts(ctx)
 }
 
 // GetArtifacts returns the merge artifacts for this table.
@@ -140,37 +136,25 @@ func (t *Table) SetArtifacts(ctx context.Context, artifacts durable.ArtifactInde
 
 // NumRowsInConflict returns the number of rows with merge conflicts for this table.
 func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
-	if t.Format() == types.Format_DOLT {
-		artIdx, err := t.table.GetArtifacts(ctx)
-		if err != nil {
-			return 0, err
-		}
-		return artIdx.ConflictCount(ctx)
+	artIdx, err := t.table.GetArtifacts(ctx)
+	if err != nil {
+		return 0, err
 	}
-
-	panic("Unsupported format: " + t.Format().VersionString())
+	return artIdx.ConflictCount(ctx)
 }
 
 // NumConstraintViolations returns the number of constraint violations for this table.
 func (t *Table) NumConstraintViolations(ctx context.Context) (uint64, error) {
-	if t.Format() == types.Format_DOLT {
-		artIdx, err := t.table.GetArtifacts(ctx)
-		if err != nil {
-			return 0, err
-		}
-		return artIdx.ConstraintViolationCount(ctx)
+	artIdx, err := t.table.GetArtifacts(ctx)
+	if err != nil {
+		return 0, err
 	}
-
-	panic("Unsupported format: " + t.Format().VersionString())
+	return artIdx.ConstraintViolationCount(ctx)
 }
 
 // ClearConflicts deletes all merge conflicts for this table.
 func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
-	if t.Format() == types.Format_DOLT {
-		return t.clearArtifactConflicts(ctx)
-	}
-
-	panic("Unsupported format: " + t.Format().VersionString())
+	return t.clearArtifactConflicts(ctx)
 }
 
 func (t *Table) clearArtifactConflicts(ctx context.Context) (*Table, error) {
@@ -191,11 +175,7 @@ func (t *Table) clearArtifactConflicts(ctx context.Context) (*Table, error) {
 
 // GetConflictSchemas returns the merge conflict schemas for this table.
 func (t *Table) GetConflictSchemas(ctx context.Context, tblName TableName) (base, sch, mergeSch schema.Schema, err error) {
-	if t.Format() == types.Format_DOLT {
-		return t.getProllyConflictSchemas(ctx, tblName)
-	}
-
-	panic("Unsupported format: " + t.Format().VersionString())
+	return t.getProllyConflictSchemas(ctx, tblName)
 }
 
 // The conflict schema is implicitly determined based on the first conflict in the artifacts table.

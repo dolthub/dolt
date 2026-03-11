@@ -22,11 +22,16 @@ import (
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/datas"
 )
+
+const CommitVerificationFailedPrefix = "commit verification failed:"
+
+var ErrCommitVerificationFailed = goerrors.NewKind(CommitVerificationFailedPrefix + " %s")
 
 type CommitStagedProps struct {
 	Message          string
@@ -45,10 +50,10 @@ const (
 	DoltCommitVerificationGroups = "dolt_commit_verification_groups"
 )
 
-// GetCommitRunTestGroups returns the test groups to run for commit operations
+// getCommitRunTestGroups returns the test groups to run for commit operations
 // Returns empty slice if no tests should be run, ["*"] if all tests should be run,
 // or specific group names if only those groups should be run
-func GetCommitRunTestGroups() []string {
+func getCommitRunTestGroups() []string {
 	_, val, ok := sql.SystemVariables.GetGlobal(DoltCommitVerificationGroups)
 	if !ok {
 		return nil
@@ -147,7 +152,7 @@ func GetCommitStaged(
 	}
 
 	if !props.SkipVerification {
-		testGroups := GetCommitRunTestGroups()
+		testGroups := getCommitRunTestGroups()
 		if len(testGroups) > 0 {
 			err := runCommitVerification(ctx, testGroups)
 			if err != nil {
@@ -164,6 +169,9 @@ func GetCommitStaged(
 	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
 }
 
+// runCommitVerification runs the commit verification tests for the given test groups.
+// If any tests fail, it returns ErrCommitVerificationFailed wrapping the failure details.
+// Callers can use errors.Is(err, ErrCommitVerificationFailed) to detect this case.
 func runCommitVerification(ctx *sql.Context, testGroups []string) error {
 	type sessionInterface interface {
 		sql.Session
@@ -216,7 +224,7 @@ func runTestsUsingDtablefunctions(ctx *sql.Context, engine *gms.Engine, testGrou
 	}
 
 	if len(allFailures) > 0 {
-		return fmt.Errorf("commit verification failed: %s", strings.Join(allFailures, ", "))
+		return ErrCommitVerificationFailed.New(strings.Join(allFailures, ", "))
 	}
 
 	return nil

@@ -102,7 +102,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 	if len(dbName) == 0 {
 		return "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("Empty database name.")
 	}
-	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
 		return "", noConflictsOrViolations, threeWayMerge, "", err
 	}
 
@@ -245,6 +245,10 @@ func performMerge(
 				}
 				ctx.Warn(DoltMergeWarningCode, "%s", err.Error())
 				return ws, "", hasConflictsOrViolations, threeWayMerge, "", err
+			} else if actions.ErrCommitVerificationFailed.Is(err) {
+				// We don't return an error here because that rolls back the transaction, while we actually need the
+				// staged data to allow the user to address the verification problem.
+				return ws, "", noConflictsOrViolations, threeWayMerge, err.Error(), nil
 			} else if err != nil {
 				return ws, "", noConflictsOrViolations, threeWayMerge, "", err
 			}
@@ -314,6 +318,9 @@ func performMerge(
 		}
 		commit, _, err = doDoltCommit(ctx, args)
 		if err != nil {
+			if actions.ErrCommitVerificationFailed.Is(err) {
+				return ws, "", noConflictsOrViolations, threeWayMerge, err.Error(), nil
+			}
 			return ws, commit, noConflictsOrViolations, threeWayMerge, "", err
 		}
 	}
@@ -457,6 +464,9 @@ func executeNoFFMerge(
 		SkipVerification: skipVerification,
 	})
 	if err != nil {
+		if actions.ErrCommitVerificationFailed.Is(err) {
+			return ws, nil, err
+		}
 		return nil, nil, err
 	}
 

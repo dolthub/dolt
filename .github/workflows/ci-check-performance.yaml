@@ -7,6 +7,7 @@ on:
     types: [opened, labeled, unlabeled, synchronize]
 jobs:
   label:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       issues: write

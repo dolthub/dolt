@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"sort"
@@ -30,15 +31,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
-func setupEditorFkTest(ctx context.Context, t *testing.T) (*env.DoltEnv, doltdb.RootValue) {
+func setupEditorFkTest(ctx context.Context, t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		panic(err)
-	}
-	initialRoot, err := ExecuteSql(ctx, dEnv, root, `
+	_, err := ExecuteSql(ctx, dEnv, `
 CREATE TABLE one (
   pk BIGINT PRIMARY KEY,
   v1 BIGINT,
@@ -71,7 +69,7 @@ CREATE TABLE child (
 `)
 	require.NoError(t, err)
 
-	return dEnv, initialRoot
+	return dEnv
 }
 
 func TestTableEditorForeignKeyCascade(t *testing.T) {
@@ -153,10 +151,10 @@ func TestTableEditorForeignKeyCascade(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv, initialRoot := setupEditorFkTest(ctx, t)
+			dEnv := setupEditorFkTest(ctx, t)
 			defer dEnv.DoltDB(ctx).Close()
 
-			testRoot, err := ExecuteSql(ctx, dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(ctx, dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
 `)
@@ -165,7 +163,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			root := testRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
-				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(t, context.Background(), dEnv, sqlStatement)
 				require.NoError(t, err)
 			}
 
@@ -204,17 +202,17 @@ func TestTableEditorForeignKeySetNull(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.sqlStatement, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv, initialRoot := setupEditorFkTest(ctx, t)
+			dEnv := setupEditorFkTest(ctx, t)
 			defer dEnv.DoltDB(ctx).Close()
 
-			testRoot, err := ExecuteSql(ctx, dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(ctx, dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UPDATE SET NULL;`)
 			require.NoError(t, err)
 
 			root := testRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
-				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(t, context.Background(), dEnv, sqlStatement)
 				require.NoError(t, err)
 			}
 
@@ -288,26 +286,25 @@ func TestTableEditorForeignKeyRestrict(t *testing.T) {
 			for _, test := range tests {
 				t.Run(test.setup+test.trigger, func(t *testing.T) {
 					ctx := context.Background()
-					dEnv, initialRoot := setupEditorFkTest(ctx, t)
+					dEnv := setupEditorFkTest(ctx, t)
 					defer dEnv.DoltDB(ctx).Close()
 
-					testRoot, err := ExecuteSql(ctx, dEnv, initialRoot, fmt.Sprintf(`
+					_, err := ExecuteSql(ctx, dEnv, fmt.Sprintf(`
 			ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) %s;
 			INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);`, referenceOption))
 					require.NoError(t, err)
 
-					root := testRoot
 					for _, sqlStatement := range strings.Split(test.setup, ";") {
 						var err error
-						root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
+						_, err = executeModify(t, context.Background(), dEnv, sqlStatement)
 						require.NoError(t, err)
 					}
 					if test.expectedErr {
-						root, err = executeModify(t, context.Background(), dEnv, root, test.trigger)
+						_, err = executeModify(t, context.Background(), dEnv, test.trigger)
 						assert.Error(t, err)
 					} else {
-						root, err = executeModify(t, context.Background(), dEnv, root, test.trigger)
+						_, err = executeModify(t, context.Background(), dEnv, test.trigger)
 						assert.NoError(t, err)
 					}
 				})
@@ -361,22 +358,21 @@ func TestTableEditorForeignKeyViolations(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.setup+test.trigger, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv, initialRoot := setupEditorFkTest(ctx, t)
+			dEnv := setupEditorFkTest(ctx, t)
 			defer dEnv.DoltDB(ctx).Close()
 
-			testRoot, err := ExecuteSql(ctx, dEnv, initialRoot, `
+			_, err := ExecuteSql(ctx, dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
 `)
 			require.NoError(t, err)
 
-			root := testRoot
 			for _, sqlStatement := range strings.Split(test.setup, ";") {
 				var err error
-				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
+				_, err = executeModify(t, context.Background(), dEnv, sqlStatement)
 				require.NoError(t, err)
 			}
-			root, err = executeModify(t, context.Background(), dEnv, root, test.trigger)
+			_, err = executeModify(t, context.Background(), dEnv, test.trigger)
 			assert.Error(t, err)
 		})
 	}
@@ -384,10 +380,8 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 
 func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
 	ctx := context.Background()
-	dEnv, initialRoot := setupEditorFkTest(ctx, t)
+	dEnv := setupEditorFkTest(ctx, t)
 	defer dEnv.DoltDB(ctx).Close()
-
-	root := initialRoot
 
 	sequentialTests := []struct {
 		statement   string
@@ -442,23 +436,20 @@ func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
 	}
 
 	for _, test := range sequentialTests {
-		newRoot, err := executeModify(t, ctx, dEnv, root, test.statement)
+		newRoot, err := executeModify(t, ctx, dEnv, test.statement)
 		if test.expectedErr {
 			require.Error(t, err)
 			continue
 		}
 		require.NoError(t, err)
 		assertTableEditorRows(t, newRoot, test.currentTbl, "parent")
-		root = newRoot
 	}
 }
 
 func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
 	ctx := context.Background()
-	dEnv, initialRoot := setupEditorFkTest(ctx, t)
+	dEnv := setupEditorFkTest(ctx, t)
 	defer dEnv.DoltDB(ctx).Close()
-
-	root := initialRoot
 
 	sequentialTests := []struct {
 		statement   string
@@ -543,23 +534,20 @@ func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
 	}
 
 	for _, test := range sequentialTests {
-		newRoot, err := executeModify(t, ctx, dEnv, root, test.statement)
+		newRoot, err := executeModify(t, ctx, dEnv, test.statement)
 		if test.expectedErr {
 			require.Error(t, err)
 			continue
 		}
 		require.NoError(t, err)
 		assertTableEditorRows(t, newRoot, test.currentTbl, "parent")
-		root = newRoot
 	}
 }
 
 func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
 	ctx := context.Background()
-	dEnv, initialRoot := setupEditorFkTest(ctx, t)
+	dEnv := setupEditorFkTest(ctx, t)
 	defer dEnv.DoltDB(ctx).Close()
-
-	root := initialRoot
 
 	sequentialTests := []struct {
 		statement   string
@@ -644,14 +632,13 @@ func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
 	}
 
 	for _, test := range sequentialTests {
-		newRoot, err := executeModify(t, ctx, dEnv, root, test.statement)
+		newRoot, err := executeModify(t, ctx, dEnv, test.statement)
 		if test.expectedErr {
 			require.Error(t, err)
 			continue
 		}
 		require.NoError(t, err)
 		assertTableEditorRows(t, newRoot, test.currentTbl, "parent")
-		root = newRoot
 	}
 }
 
@@ -745,13 +732,10 @@ func sortInt64Rows(rows []sql.Row) []sql.Row {
 	return rows
 }
 
-func setupEditorKeylessFkTest(ctx context.Context, t *testing.T) (*env.DoltEnv, doltdb.RootValue) {
+func setupEditorKeylessFkTest(ctx context.Context, t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
-	root, err := dEnv.WorkingRoot(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	initialRoot, err := ExecuteSql(ctx, dEnv, root, `
+
+	_, err := ExecuteSql(ctx, dEnv, `
 CREATE TABLE one (
   pk BIGINT,
   v1 BIGINT,
@@ -786,7 +770,7 @@ CREATE TABLE child (
 `)
 	require.NoError(t, err)
 
-	return dEnv, initialRoot
+	return dEnv
 }
 
 func TestTableEditorKeylessFKCascade(t *testing.T) {
@@ -868,10 +852,10 @@ func TestTableEditorKeylessFKCascade(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			dEnv, initialRoot := setupEditorKeylessFkTest(ctx, t)
+			dEnv := setupEditorKeylessFkTest(ctx, t)
 			defer dEnv.DoltDB(ctx).Close()
 
-			testRoot, err := ExecuteSql(ctx, dEnv, initialRoot, `
+			testRoot, err := ExecuteSql(ctx, dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
 `)
@@ -880,7 +864,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			root := testRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
-				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(t, context.Background(), dEnv, sqlStatement)
 				require.NoError(t, err)
 			}
 
@@ -919,4 +903,38 @@ func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
 		newSqlRows[i] = newSqlRow
 	}
 	return newSqlRows
+}
+
+// Runs the query given and returns the error (if any).
+func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, query string) (doltdb.RootValue, error) {
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, iter, _, err := engine.Query(sqlCtx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		_, err := iter.Next(sqlCtx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = iter.Close(sqlCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	return db.GetRoot(sqlCtx)
 }

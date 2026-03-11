@@ -156,22 +156,12 @@ type tableEdit struct {
 
 // NewRootValue returns a new RootValue. This is a variable as it's changed in Doltgres.
 var NewRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value) (RootValue, error) {
-	var storage rootValueStorage
-
-	if vrw.Format().UsesFlatbuffers() {
-		srv, err := serial.TryGetRootAsRootValue([]byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
-		if err != nil {
-			return nil, err
-		}
-		storage = fbRvStorage{srv}
-	} else {
-		st, ok := v.(types.Struct)
-		if !ok {
-			return nil, errors.New("invalid value passed to newRootValue")
-		}
-
-		storage = nomsRvStorage{st}
+	srv, err := serial.TryGetRootAsRootValue([]byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
 	}
+	storage := fbRvStorage{srv}
+
 	ver, ok, err := storage.GetFeatureVersion()
 	if err != nil {
 		return nil, err
@@ -185,50 +175,29 @@ var NewRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.
 		}
 	}
 
-	return &rootValue{vrw, ns, storage, nil, hash.Hash{}, 0, nil}, nil
+	return &rootValue{vrw: vrw, ns: ns, st: storage}, nil
 }
 
 // EmptyRootValue returns an empty RootValue. This is a variable as it's changed in Doltgres.
 var EmptyRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (RootValue, error) {
-	if vrw.Format().UsesFlatbuffers() {
-		builder := flatbuffers.NewBuilder(80)
+	builder := flatbuffers.NewBuilder(80)
 
-		emptyam, err := prolly.NewEmptyAddressMap(ns)
-		if err != nil {
-			return nil, err
-		}
-		ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
-		tablesoff := builder.CreateByteVector(ambytes)
-
-		var empty hash.Hash
-		fkoff := builder.CreateByteVector(empty[:])
-		serial.RootValueStart(builder)
-		serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
-		serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
-		serial.RootValueAddTables(builder, tablesoff)
-		serial.RootValueAddForeignKeyAddr(builder, fkoff)
-		bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
-		return NewRootValue(ctx, vrw, ns, types.SerialMessage(bs))
-	}
-
-	empty, err := types.NewMap(ctx, vrw)
+	emptyam, err := prolly.NewEmptyAddressMap(ns)
 	if err != nil {
 		return nil, err
 	}
+	ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
+	tablesoff := builder.CreateByteVector(ambytes)
 
-	sd := types.StructData{
-		tablesKey:       empty,
-		superSchemasKey: empty,
-		foreignKeyKey:   empty,
-		featureVersKey:  types.Int(DoltFeatureVersion),
-	}
-
-	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewRootValue(ctx, vrw, ns, st)
+	var empty hash.Hash
+	fkoff := builder.CreateByteVector(empty[:])
+	serial.RootValueStart(builder)
+	serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
+	serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
+	serial.RootValueAddTables(builder, tablesoff)
+	serial.RootValueAddForeignKeyAddr(builder, fkoff)
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	return NewRootValue(ctx, vrw, ns, types.SerialMessage(bs))
 }
 
 // LoadRootValueFromRootIshAddr takes the hash of the commit or the hash of a
@@ -255,15 +224,9 @@ func decodeRootNomsValue(ctx context.Context, vrw types.ValueReadWriter, ns tree
 
 // isRootValue returns whether the value is a RootValue. This is a variable as it's changed in Doltgres.
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
-	if nbf.UsesFlatbuffers() {
-		if sm, ok := val.(types.SerialMessage); ok {
-			fileID := serial.GetFileID(sm)
-			return fileID == serial.RootValueFileID || fileID == serial.DoltgresRootValueFileID
-		}
-	} else {
-		if st, ok := val.(types.Struct); ok {
-			return st.Name() == ddbRootStructName
-		}
+	if sm, ok := val.(types.SerialMessage); ok {
+		fileID := serial.GetFileID(sm)
+		return fileID == serial.RootValueFileID || fileID == serial.DoltgresRootValueFileID
 	}
 	return false
 }

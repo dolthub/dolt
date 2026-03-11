@@ -32,17 +32,36 @@ export default async function runWorkbenchTests(database) {
 async function runTests(database, tests) {
   await Promise.all(
     tests.map((test) => {
-      const { sql, values } = getQueryWithEscapedParameters(test.q, test.p);
+      const escaped = getQueryWithEscapedParameters(test.q, test.p);
+      // Some stored-procedure option-flag queries can leave a trailing placeholder unbound after named expansion, so those tests provide explicit positional values.
+      const sql = test.values ? test.q : escaped.sql;
+      const values = test.values ?? escaped.values;
+
+      if (test.file) {
+        return database
+          .query({
+            sql,
+            values,
+            infileStreamFactory: () => fs.createReadStream(path.resolve(testDataPath, test.file)),
+          })
+          .then((rows) => {
+            assertEqualRows(test, rows);
+          })
+          .catch((err) => {
+            if (test.expectedErr) {
+              if (err.message.includes(test.expectedErr)) {
+                return;
+              } else {
+                console.log("Query error did not match expected:", test.q);
+              }
+            }
+            console.error(err);
+            process.exit(1);
+          });
+      }
 
       return database
-        .query({
-          sql,
-          values,
-          // For LOAD DATA
-          infileStreamFactory: test.file
-            ? () => fs.createReadStream(path.resolve(testDataPath, test.file))
-            : undefined,
-        })
+        .query(sql, values)
         .then((rows) => {
           assertEqualRows(test, rows);
         })

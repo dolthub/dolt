@@ -82,6 +82,14 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", nil, fmt.Errorf("failed to get roots for current session")
 	}
 
+	// Capture the working set BEFORE applying cherry-pick changes. If commit verification
+	// fails later, we need to set the merge state with preMergeWorking = original working
+	// root so that --abort properly restores the pre-cherry-pick state.
+	preApplyWs, wsErr := doltSession.WorkingSet(ctx, dbName)
+	if wsErr != nil {
+		return "", nil, wsErr
+	}
+
 	mergeResult, commitMsg, originalCommit, err := cherryPick(ctx, doltSession, roots, dbName, commit, options.EmptyCommitHandling)
 	if err != nil {
 		return "", mergeResult, err
@@ -131,6 +139,20 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, *commitProps)
 	if err != nil {
+		// If verification failed, set merge state and return via the result (not as a Go error).
+		// Returning a Go error would roll back the transaction, undoing all working set changes.
+		// Returning nil error instead lets CommitTransaction persist the staged changes and merge
+		// state, so the user can fix the failing tests and --continue.
+		if actions.ErrCommitVerificationFailed.Is(err) {
+			newWs := preApplyWs.StartCherryPick(originalCommit, commit).
+				WithWorkingRoot(roots.Working).
+				WithStagedRoot(roots.Staged)
+			if wsErr := doltSession.SetWorkingSet(ctx, dbName, newWs); wsErr != nil {
+				return "", nil, wsErr
+			}
+			mergeResult.CommitVerificationErr = err
+			return "", mergeResult, nil
+		}
 		return "", nil, err
 	}
 	if pendingCommit == nil {
@@ -231,9 +253,10 @@ func AbortCherryPick(ctx *sql.Context, dbName string) error {
 	return doltSession.SetWorkingSet(ctx, dbName, newWs)
 }
 
-// ContinueCherryPick continues a cherry-pick merge that was paused due to conflicts.
-// It checks that conflicts have been resolved and creates the final commit with the
-// original commit's metadata.
+// ContinueCherryPick continues a cherry-pick merge that was paused due to conflicts or
+// commit verification failure. It checks that conflicts have been resolved and creates
+// the final commit with the original commit's metadata. Returns (hash, dataConflicts,
+// schemaConflicts, constraintViolations, verificationFailures, error).
 func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 
@@ -310,6 +333,9 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)
 	if err != nil {
+		if actions.ErrCommitVerificationFailed.Is(err) {
+			return "", 0, 0, 0, err
+		}
 		return "", 0, 0, 0, fmt.Errorf("error: failed to create pending commit: %w", err)
 	}
 	if pendingCommit == nil {

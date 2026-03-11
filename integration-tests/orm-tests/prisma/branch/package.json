@@ -1,0 +1,19 @@
+{
+  "name": "prisma-debug",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "prisma": "^6.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "csv-parser": "^3.2.0"
+  },
+  "prisma": {
+    "seed": "ts-node --transpile-only ./prisma/seed.ts"
+  }
+}

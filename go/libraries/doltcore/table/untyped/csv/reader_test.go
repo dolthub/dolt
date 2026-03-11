@@ -140,11 +140,7 @@ func TestReader(t *testing.T) {
 			t.Error("Unexpected bad rows count. expected:", expectedBad, "actual:", numBad)
 		}
 
-		if isv, err := row.IsValid(rows[0], sch); err != nil {
-			t.Fatal(err)
-		} else if !isv {
-			t.Fatal("Invalid Row for expected schema")
-		} else if len(rows) != len(test.expectedRows) {
+		if len(rows) != len(test.expectedRows) {
 			t.Error("Did not receive the correct number of rows. expected: ", len(test.expectedRows), "actual:", len(rows))
 		} else {
 			for i, r := range rows {

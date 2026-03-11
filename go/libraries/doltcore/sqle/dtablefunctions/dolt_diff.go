@@ -648,15 +648,9 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		dtf.overriddenSchema = overriddenSchema
 	}
 
-	fromTable, fromTableExists := delta.FromTable, delta.FromTable != nil
-	toTable, toTableExists := delta.ToTable, delta.ToTable != nil
-
-	var format *types.NomsBinFormat
-	if toTableExists {
-		format = toTable.Format()
-	} else if fromTableExists {
-		format = fromTable.Format()
-	} else {
+	fromTableExists := delta.FromTable != nil
+	toTableExists := delta.ToTable != nil
+	if !toTableExists && !fromTableExists {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
@@ -667,7 +661,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		toSchForJoiner = dtf.overriddenSchema
 	}
 
-	diffTableSch, err := dtables.GetDiffTableSchemaAndJoiner(format, fromSchForJoiner, toSchForJoiner)
+	diffTableSch, err := dtables.GetDiffTableSchemaAndJoiner(fromSchForJoiner, toSchForJoiner)
 	if err != nil {
 		return err
 	}

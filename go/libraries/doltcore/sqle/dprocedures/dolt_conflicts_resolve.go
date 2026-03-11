@@ -329,11 +329,7 @@ func ResolveDataConflictsForTable(ctx *sql.Context, dbName string, root doltdb.R
 	}
 
 	if !ours {
-		if tbl.Format() == types.Format_DOLT {
-			tbl, err = resolveProllyConflicts(ctx, tbl, tblName, ourSch, sch)
-		} else {
-			panic("only __DOLT__ format is supported")
-		}
+		tbl, err = resolveProllyConflicts(ctx, tbl, tblName, ourSch, sch)
 		if err != nil {
 			return nil, false, err
 		}

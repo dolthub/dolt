@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	storetypes "github.com/dolthub/dolt/go/store/types"
 )
 
 // TypeCompatibilityChecker checks if type changes are compatible at the storage layer and is used to
@@ -41,50 +40,10 @@ type TypeCompatibilityChecker interface {
 	IsTypeChangeCompatible(from, to typeinfo.TypeInfo) TypeChangeInfo
 }
 
-// NewTypeCompatabilityCheckerForStorageFormat returns a new TypeCompatibilityChecker
+// NewTypeCompatabilityChecker returns a new TypeCompatibilityChecker
 // instance for the given storage format.
-func NewTypeCompatabilityCheckerForStorageFormat(format *storetypes.NomsBinFormat) TypeCompatibilityChecker {
-	switch format {
-	case storetypes.Format_DOLT:
-		return newDoltTypeCompatibilityChecker()
-	case storetypes.Format_LD_1:
-		return ld1TypeCompatibilityChecker{}
-	default:
-		panic("unsupported storage format: " + format.VersionString())
-	}
-}
-
-// ld1TypeCompatibilityChecker implements TypeCompatibilityChecker for the deprecated LD_1
-// storage format. This type should never be directly instantiated; use
-// newTypeCompatabilityCheckerForStorageFormat instead.
-type ld1TypeCompatibilityChecker struct{}
-
-var _ TypeCompatibilityChecker = ld1TypeCompatibilityChecker{}
-
-// IsTypeChangeCompatible implements TypeCompatibilityChecker.IsTypeChangeCompatible for the
-// deprecated LD_1 storage format.
-func (l ld1TypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (res TypeChangeInfo) {
-	// If the types are exactly identical, then they are always compatible
-	fromSqlType := from.ToSqlType()
-	toSqlType := to.ToSqlType()
-	if fromSqlType.Equals(toSqlType) {
-		res.Compatible = true
-		return res
-	}
-
-	// For the older, LD_1 storage format, our compatibility rules are looser
-	if from.NomsKind() != to.NomsKind() {
-		return res
-	}
-
-	if to.ToSqlType().Type() == query.Type_GEOMETRY {
-		// We need to do this because some spatial type changes require a full table check, but not all.
-		// TODO: This could be narrowed down to a smaller set of spatial type changes
-		return res
-	}
-
-	res.Compatible = true
-	return res
+func NewTypeCompatabilityChecker() TypeCompatibilityChecker {
+	return newDoltTypeCompatibilityChecker()
 }
 
 // doltTypeCompatibilityChecker implements TypeCompatibilityChecker for the DOLT storage

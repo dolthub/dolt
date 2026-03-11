@@ -225,12 +225,7 @@ func (p *replicatingMySQLDbPersister) setRole(role Role) {
 func (p *replicatingMySQLDbPersister) Run() {
 	var wg sync.WaitGroup
 	for _, r := range p.replicas {
-		r := r
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			r.Run()
-		}()
+		wg.Go(r.Run)
 	}
 	wg.Wait()
 }
@@ -288,9 +283,7 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(replicas))
-	for li, lr := range replicas {
-		i := li
-		r := lr
+	for i, r := range replicas {
 		ok := r.setWaitNotify(func() {
 			// called with r.mu locked.
 			if !res[i].caughtUp {
@@ -302,9 +295,10 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 			}
 		})
 		if !ok {
-			for j := li - 1; j >= 0; j-- {
+			for j := i - 1; j >= 0; j-- {
 				replicas[j].setWaitNotify(nil)
 			}
+			p.mu.Unlock()
 			return nil, errors.New("cluster: mysqldb replication: could not wait for replication. Concurrent waiters conflicted with each other.")
 		}
 	}

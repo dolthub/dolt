@@ -859,11 +859,11 @@ func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fro
 		summary.FromTableName.Name = row[0].(string)
 		summary.ToTableName.Name = row[1].(string)
 		summary.DiffType = row[2].(string)
-		summary.DataChange, err = GetTinyIntColAsBool(row[3])
+		summary.DataChange, err = cli.QueryValueAsBool(row[3])
 		if err != nil {
 			return nil, fmt.Errorf("error: unable to parse data change value '%s': %w", row[3], err)
 		}
-		summary.SchemaChange, err = GetTinyIntColAsBool(row[4])
+		summary.SchemaChange, err = cli.QueryValueAsBool(row[4])
 		if err != nil {
 			return nil, fmt.Errorf("error: unable to parse schema change value '%s': %w", row[4], err)
 		}

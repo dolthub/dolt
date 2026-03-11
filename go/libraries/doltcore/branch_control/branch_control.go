@@ -251,8 +251,7 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 	}
 	// Get the permissions for the branch, user, and host combination
 	_, perms := controller.Access.Match(database, branch, user, host)
-	// If either the flags match or the user is an admin for this branch, then we allow access
-	if (perms&flags == flags) || (perms&Permissions_Admin == Permissions_Admin) {
+	if perms&flags == flags {
 		return nil
 	}
 	return ErrIncorrectPermissions.New(user, host, branch)

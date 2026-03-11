@@ -15,18 +15,18 @@
 package typeinfo
 
 import (
-	"context"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -36,20 +36,11 @@ func TestTypeInfoSuite(t *testing.T) {
 	t.Run("Equals", func(t *testing.T) {
 		testTypeInfoEquals(t, typeInfoArrays)
 	})
-	t.Run("ForeignKindHandling", func(t *testing.T) {
-		testTypeInfoForeignKindHandling(t, typeInfoArrays, validTypeValues)
-	})
-	t.Run("NullHandling", func(t *testing.T) {
-		testTypeInfoNullHandling(t, typeInfoArrays)
-	})
 	t.Run("NomsKind", func(t *testing.T) {
 		testTypeInfoNomsKind(t, typeInfoArrays, validTypeValues)
 	})
 	t.Run("ToSqlType", func(t *testing.T) {
 		testTypeInfoToSqlType(t, typeInfoArrays)
-	})
-	t.Run("GetTypeConverter Inclusion", func(t *testing.T) {
-		testTypeInfoConversionsExist(t, typeInfoArrays)
 	})
 }
 
@@ -96,81 +87,6 @@ func testTypeInfoEquals(t *testing.T, tiArrays [][]TypeInfo) {
 	}
 }
 
-// ConvertNomsValueToValue and FormatValue should fail if the kind does not match the TypeInfo kind
-func testTypeInfoForeignKindHandling(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]types.Value) {
-	for _, tiArray := range tiArrays {
-		t.Run(tiArray[0].ToSqlType().String(), func(t *testing.T) {
-			for _, ti := range tiArray {
-				t.Run(ti.String(), func(t *testing.T) {
-					for _, vaArray := range vaArrays {
-						for _, val := range vaArray {
-							t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), humanReadableString(val)), func(t *testing.T) {
-								// Should be able to convert all Geometry columns
-								if ti.NomsKind() == types.GeometryKind {
-									if types.IsGeometryKind(val.Kind()) {
-										_, err := ti.ConvertNomsValueToValue(val)
-										assert.NoError(t, err)
-										_, err = ti.FormatValue(val)
-										assert.NoError(t, err)
-									} else {
-										_, err := ti.ConvertNomsValueToValue(val)
-										assert.Error(t, err)
-										_, err = ti.FormatValue(val)
-										assert.Error(t, err)
-									}
-								} else if ti.NomsKind() != val.Kind() {
-									_, err := ti.ConvertNomsValueToValue(val)
-									assert.Error(t, err)
-									_, err = ti.FormatValue(val)
-									assert.Error(t, err)
-								}
-							})
-						}
-					}
-				})
-			}
-		})
-	}
-}
-
-// makes sure that everything can handle nil and NullValue (if applicable)
-func testTypeInfoNullHandling(t *testing.T, tiArrays [][]TypeInfo) {
-	for _, tiArray := range tiArrays {
-		t.Run(tiArray[0].ToSqlType().String(), func(t *testing.T) {
-			for _, ti := range tiArray {
-				t.Run(ti.String(), func(t *testing.T) {
-					t.Run("ConvertNomsValueToValue", func(t *testing.T) {
-						val, err := ti.ConvertNomsValueToValue(types.NullValue)
-						require.NoError(t, err)
-						require.Nil(t, val)
-						val, err = ti.ConvertNomsValueToValue(nil)
-						require.NoError(t, err)
-						require.Nil(t, val)
-					})
-					t.Run("ConvertValueToNomsValue", func(t *testing.T) {
-						vrw := types.NewMemoryValueStore()
-						tVal, err := ti.ConvertValueToNomsValue(context.Background(), vrw, nil)
-						require.NoError(t, err)
-						require.Equal(t, types.NullValue, tVal)
-					})
-					t.Run("FormatValue", func(t *testing.T) {
-						tVal, err := ti.FormatValue(types.NullValue)
-						require.NoError(t, err)
-						require.Nil(t, tVal)
-						tVal, err = ti.FormatValue(nil)
-						require.NoError(t, err)
-						require.Nil(t, tVal)
-					})
-					t.Run("IsValid", func(t *testing.T) {
-						require.True(t, ti.IsValid(types.NullValue))
-						require.True(t, ti.IsValid(nil))
-					})
-				})
-			}
-		})
-	}
-}
-
 // smoke test checking that the returned NomsKind is consistent and matches the values.
 func testTypeInfoNomsKind(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]types.Value) {
 	for rowIndex, tiArray := range tiArrays {
@@ -203,27 +119,12 @@ func testTypeInfoToSqlType(t *testing.T, tiArrays [][]TypeInfo) {
 	}
 }
 
-// ensures that all types at least have a branch to all other types, which is useful in case a developer forgets to add
-// a new type everywhere it needs to go
-func testTypeInfoConversionsExist(t *testing.T, tiArrays [][]TypeInfo) {
-	for _, tiArray1 := range tiArrays {
-		for _, tiArray2 := range tiArrays {
-			ti1 := tiArray1[0]
-			ti2 := tiArray2[0]
-			t.Run(fmt.Sprintf("%s -> %s", ti1.ToSqlType().String(), ti2.ToSqlType().String()), func(t *testing.T) {
-				_, _, err := GetTypeConverter(context.Background(), ti1, ti2)
-				require.False(t, UnhandledTypeConversion.Is(err))
-			})
-		}
-	}
-}
+var DefaultInlineBlobType = &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
 
 // generate unique TypeInfos for each type, and also values that are valid for at least one of the TypeInfos for the matching row
 func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeInfo, [][]types.Value) {
 	return [][]TypeInfo{
 			generateBitTypes(t, 16),
-			{&blobStringType{gmstypes.TinyText}, &blobStringType{gmstypes.Text},
-				&blobStringType{gmstypes.MediumText}, &blobStringType{gmstypes.LongText}},
 			{BoolType},
 			{DateType, DatetimeType, TimestampType},
 			generateDecimalTypes(t, 16),
@@ -231,7 +132,6 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			{Float32Type, Float64Type},
 			{DefaultInlineBlobType},
 			{Int8Type, Int16Type, Int24Type, Int32Type, Int64Type},
-			{JSONType},
 			{LineStringType},
 			{PointType},
 			{PolygonType},
@@ -244,8 +144,6 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			{TimeType},
 			{Uint8Type, Uint16Type, Uint24Type, Uint32Type, Uint64Type},
 			{UuidType},
-			{&varBinaryType{gmstypes.TinyBlob}, &varBinaryType{gmstypes.Blob},
-				&varBinaryType{gmstypes.MediumBlob}, &varBinaryType{gmstypes.LongBlob}},
 			append(generateVarStringTypes(t, 12),
 				&varStringType{gmstypes.CreateTinyText(sql.Collation_Default)}, &varStringType{gmstypes.CreateText(sql.Collation_Default)},
 				&varStringType{gmstypes.CreateMediumText(sql.Collation_Default)}, &varStringType{gmstypes.CreateLongText(sql.Collation_Default)}),
@@ -253,8 +151,6 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 		},
 		[][]types.Value{
 			{types.Uint(1), types.Uint(207), types.Uint(79147), types.Uint(34845728), types.Uint(9274618927)}, // Bit
-			{mustBlobString(t, vrw, ""), mustBlobString(t, vrw, "a"), mustBlobString(t, vrw, "abc"), // BlobString
-				mustBlobString(t, vrw, "abcdefghijklmnopqrstuvwxyz"), mustBlobString(t, vrw, "هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر")},
 			{types.Bool(false), types.Bool(true)}, // Bool
 			{types.Timestamp(time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC)), // Datetime
 				types.Timestamp(time.Date(1970, 1, 1, 0, 0, 1, 0, time.UTC)),
@@ -270,9 +166,7 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			{types.Float(1.0), types.Float(65513.75), types.Float(4293902592), types.Float(4.58e71), types.Float(7.172e285)},               // Float
 			{types.InlineBlob{0}, types.InlineBlob{21}, types.InlineBlob{1, 17}, types.InlineBlob{72, 42}, types.InlineBlob{21, 122, 236}}, // InlineBlob
 			{types.Int(20), types.Int(215), types.Int(237493), types.Int(2035753568), types.Int(2384384576063)},                            // Int
-			{json.MustTypesJSON(`null`), json.MustTypesJSON(`[]`), json.MustTypesJSON(`"lorem ipsum"`), json.MustTypesJSON(`2.71`),
-				json.MustTypesJSON(`false`), json.MustTypesJSON(`{"a": 1, "b": []}`)}, // JSON
-			{types.LineString{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}}, // LineString
+			{types.LineString{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}},                               // LineString
 			{types.Point{SRID: 0, X: 1, Y: 2}}, // Point
 			{types.Polygon{SRID: 0, Lines: []types.LineString{{SRID: 0, Points: []types.Point{{SRID: 0, X: 0, Y: 0}, {SRID: 0, X: 0, Y: 1}, {SRID: 0, X: 1, Y: 1}, {SRID: 0, X: 0, Y: 0}}}}}},                                            // Polygon
 			{types.MultiPoint{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}},                                                                                                                             // MultiPoint
@@ -284,17 +178,8 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			{types.Int(0), types.Int(1000000 /*"00:00:01"*/), types.Int(113000000 /*"00:01:53"*/), types.Int(247019000000 /*"68:36:59"*/), types.Int(458830485214 /*"127:27:10.485214"*/)}, // Time
 			{types.Uint(20), types.Uint(275), types.Uint(328395), types.Uint(630257298), types.Uint(93897259874)},                                                                          // Uint
 			{types.UUID{3}, types.UUID{3, 13}, types.UUID{128, 238, 82, 12}, types.UUID{31, 54, 23, 13, 63, 43}, types.UUID{83, 64, 21, 14, 42, 6, 35, 7, 54, 234, 6, 32, 1, 4, 2, 4}},     // Uuid
-			{mustBlobBytes(t, []byte{1}), mustBlobBytes(t, []byte{42, 52}), mustBlobBytes(t, []byte{84, 32, 13, 63, 12, 86}), // VarBinary
-				mustBlobBytes(t, []byte{1, 32, 235, 64, 32, 23, 45, 76}), mustBlobBytes(t, []byte{123, 234, 34, 223, 76, 35, 32, 12, 84, 26, 15, 34, 65, 86, 45, 23, 43, 12, 76, 154, 234, 76, 34})},
 			{types.String(""), types.String("a"), types.String("abc"), // VarString
 				types.String("abcdefghijklmnopqrstuvwxyz"), types.String("هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر")},
 			{types.Int(1901), types.Int(1950), types.Int(2000), types.Int(2080), types.Int(2155)}, // Year
 		}
-}
-
-func humanReadableString(val types.Value) string {
-	defer func() {
-		_ = recover() // HumanReadableString panics for some types so we ignore the panic
-	}()
-	return val.HumanReadableString()
 }
