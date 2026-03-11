@@ -474,15 +474,15 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 		typeHandler, hasTypeHandler := sqlType.(val.TupleTypeHandler)
 
 		if hasTypeHandler {
-			encoding := EncodingFromSqlType(sqlType)
+			encoding := col.Encoding
 			t = val.Type{
-				Enc:      val.Encoding(encoding),
+				Enc:      encoding,
 				Nullable: columnMissingNotNullConstraint(col),
 			}
 			switch encoding {
-			case serial.EncodingExtendedAddr:
+			case val.ExtendedAddrEnc:
 				handler = val.NewExtendedAddressTypeHandler(vs, typeHandler)
-			case serial.EncodingExtendedAdaptive:
+			case val.ExtendedAdaptiveEnc:
 				handler = val.NewAdaptiveTypeHandler(vs, typeHandler)
 			default:
 				// encoding == serial.EncodingExtended
@@ -508,7 +508,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 				}
 			} else {
 				t = val.Type{
-					Enc:      val.Encoding(EncodingFromSqlType(sqlType)),
+					Enc:      col.Encoding,
 					Nullable: columnMissingNotNullConstraint(col),
 				}
 			}

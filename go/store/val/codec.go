@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"fmt"
 	"math"
 	"math/big"
 	"math/bits"
@@ -158,84 +157,6 @@ const (
 	BytesAdaptiveEnc    = Encoding(serial.EncodingBytesAdaptive)
 	ExtendedAdaptiveEnc = Encoding(serial.EncodingExtendedAdaptive)
 )
-
-// EncodingFromSerial converts a serial.Encoding to an Encoding
-func EncodingFromSerial(enc serial.Encoding) Encoding {
-	switch enc {
-	case serial.EncodingNull:
-		return NullEnc
-	case serial.EncodingInt8:
-		return Int8Enc
-	case serial.EncodingUint8:
-		return Uint8Enc
-	case serial.EncodingInt16:
-		return Int16Enc
-	case serial.EncodingUint16:
-		return Uint16Enc
-	case serial.EncodingInt32:
-		return Int32Enc
-	case serial.EncodingUint32:
-		return Uint32Enc
-	case serial.EncodingInt64:
-		return Int64Enc
-	case serial.EncodingUint64:
-		return Uint64Enc
-	case serial.EncodingFloat32:
-		return Float32Enc
-	case serial.EncodingFloat64:
-		return Float64Enc
-	case serial.EncodingBit64:
-		return Bit64Enc
-	case serial.EncodingHash128:
-		return Hash128Enc
-	case serial.EncodingYear:
-		return YearEnc
-	case serial.EncodingDate:
-		return DateEnc
-	case serial.EncodingTime:
-		return TimeEnc
-	case serial.EncodingDatetime:
-		return DatetimeEnc
-	case serial.EncodingEnum:
-		return EnumEnc
-	case serial.EncodingSet:
-		return SetEnc
-	case serial.EncodingBytesAddr:
-		return BytesAddrEnc
-	case serial.EncodingCommitAddr:
-		return CommitAddrEnc
-	case serial.EncodingStringAddr:
-		return StringAddrEnc
-	case serial.EncodingJSONAddr:
-		return JSONAddrEnc
-	case serial.EncodingCell:
-		return CellEnc
-	case serial.EncodingGeomAddr:
-		return GeomAddrEnc
-	case serial.EncodingExtendedAddr:
-		return ExtendedAddrEnc
-	case serial.EncodingString:
-		return StringEnc
-	case serial.EncodingBytes:
-		return ByteStringEnc
-	case serial.EncodingDecimal:
-		return DecimalEnc
-	case serial.EncodingJSON:
-		return JSONEnc
-	case serial.EncodingGeometry:
-		return GeometryEnc
-	case serial.EncodingExtended:
-		return ExtendedEnc
-	case serial.EncodingStringAdaptive:
-		return StringAdaptiveEnc
-	case serial.EncodingBytesAdaptive:
-		return BytesAdaptiveEnc
-	case serial.EncodingExtendedAdaptive:
-		return ExtendedAdaptiveEnc
-	default:
-		panic(fmt.Sprintf("unknown encoding: %s", enc.String()))
-	}
-}
 
 func sizeFromType(t Type) (ByteSize, bool) {
 	switch t.Enc {

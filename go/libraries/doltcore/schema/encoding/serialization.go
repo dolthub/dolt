@@ -260,7 +260,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		// schema.Schema determines display order
 		serial.ColumnAddDisplayOrder(b, int16(i))
 		serial.ColumnAddTag(b, col.Tag)
-		serial.ColumnAddEncoding(b, encodingFromTypeinfo(col.TypeInfo))
+		serial.ColumnAddEncoding(b, serial.Encoding(col.Encoding))
 		serial.ColumnAddPrimaryKey(b, col.IsPartOfPK)
 		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
 		serial.ColumnAddNullable(b, col.IsNullable())
@@ -363,7 +363,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			Name:          string(c.Name()),
 			Tag:           c.Tag(),
 			Kind:          sqlType.NomsKind(),
-			Encoding:      val.EncodingFromSerial(c.Encoding()),
+			Encoding:      val.Encoding(c.Encoding()),
 			IsPartOfPK:    c.PrimaryKey(),
 			TypeInfo:      sqlType,
 			Default:       defVal,

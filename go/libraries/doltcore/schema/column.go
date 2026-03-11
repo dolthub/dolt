@@ -117,6 +117,7 @@ func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, 
 		Name:          name,
 		Tag:           tag,
 		Kind:          typeInfo.NomsKind(),
+		Encoding:      val.Encoding(EncodingFromSqlType(typeInfo.ToSqlType())),
 		IsPartOfPK:    partOfPK,
 		TypeInfo:      typeInfo,
 		Default:       defaultVal,
@@ -167,18 +168,18 @@ func (c Column) IsNullable() bool {
 // Equals tests equality between two columns.
 func (c Column) Equals(other Column) bool {
 	return c.Name == other.Name &&
-			c.Tag == other.Tag &&
-			c.IsPartOfPK == other.IsPartOfPK &&
-			c.TypeInfo.Equals(other.TypeInfo) &&
-			c.Default == other.Default &&
-			ColConstraintsAreEqual(c.Constraints, other.Constraints)
+		c.Tag == other.Tag &&
+		c.IsPartOfPK == other.IsPartOfPK &&
+		c.TypeInfo.Equals(other.TypeInfo) &&
+		c.Default == other.Default &&
+		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }
 
 // EqualsWithoutTag tests equality between two columns, but does not check the columns' tags.
 func (c Column) EqualsWithoutTag(other Column) bool {
 	return c.Name == other.Name &&
-			c.IsPartOfPK == other.IsPartOfPK &&
-			c.TypeInfo.Equals(other.TypeInfo) &&
-			c.Default == other.Default &&
-			ColConstraintsAreEqual(c.Constraints, other.Constraints)
+		c.IsPartOfPK == other.IsPartOfPK &&
+		c.TypeInfo.Equals(other.TypeInfo) &&
+		c.Default == other.Default &&
+		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }
