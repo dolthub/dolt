@@ -78,7 +78,7 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	}
 	var stderrBuf bytes.Buffer
 	go func() {
-		io.Copy(io.MultiWriter(os.Stderr, &stderrBuf), stderrPipe)
+		io.Copy(&stderrBuf, stderrPipe)
 		close(stderrDone)
 	}()
 
@@ -88,7 +88,25 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, nil, nil, fmt.Errorf("failed to start transfer subprocess: %w", err)
 	}
 
+	// Wait for the subprocess in a background goroutine so we can be
+	// notified of exit via a channel. cmd.Wait() can only be called once,
+	// so this goroutine owns that call.
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- cmd.Wait()
+		close(waitCh)
+	}()
+
 	procCtx, procCancel := context.WithCancelCause(ctx)
+
+	// Construct sshConnection early so error paths can use conn.CloseWithErr()
+	// for coordinated cleanup regardless of how far initialization got.
+	conn := &sshConnection{
+		cmd:        cmd,
+		stdin:      stdin,
+		procCancel: procCancel,
+		waitCh:     waitCh,
+	}
 
 	// Create SMUX client session over the subprocess pipes.
 	pConn := &pipeConn{
@@ -101,10 +119,10 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	session, err := smux.Client(pConn, smuxConfig)
 	if err != nil {
-		cmd.Process.Kill()
-		procCancel(err)
+		conn.CloseWithErr(err)
 		return nil, nil, nil, sshRemoteError(stderrDone, &stderrBuf, path, "failed to create SMUX client session", err)
 	}
+	conn.session = session
 
 	// Monitor the SMUX session in a background goroutine. When the remote
 	// subprocess exits (bad path, missing dolt, SSH failure, etc.), the pipe
@@ -135,37 +153,20 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
 	)
 	if err != nil {
-		session.Close()
-		cmd.Process.Kill()
-		procCancel(err)
+		conn.CloseWithErr(err)
 		return nil, nil, nil, sshRemoteError(stderrDone, &stderrBuf, path, "failed to create gRPC client", err)
 	}
+	conn.grpcConn = grpcConn
 
 	// Create chunk store backed by the remote gRPC service.
 	client := remotesapi.NewChunkStoreServiceClient(grpcConn)
 	cs, err := remotestorage.NewDoltChunkStoreFromPath(procCtx, nbf, urlObj.Path, path, false, client)
 	if err != nil {
-		procCancel(err)
-		grpcConn.Close()
-		session.Close()
-		stdin.Close()
-		if cmd.Process != nil {
-			cmd.Process.Kill()
-		}
+		conn.CloseWithErr(err)
 		return nil, nil, nil, sshRemoteError(stderrDone, &stderrBuf, path, "failed to create chunk store", err)
 	}
 
 	cs = cs.WithHTTPFetcher(httpClient)
-
-	// Wrap the chunk store with cleanup so resources are released when the
-	// database is closed.
-	conn := &sshConnection{
-		cmd:        cmd,
-		session:    session,
-		grpcConn:   grpcConn,
-		stdin:      stdin,
-		procCancel: procCancel,
-	}
 	wrappedCS := &sshChunkStore{DoltChunkStore: cs, conn: conn}
 
 	vrw := types.NewValueStore(wrappedCS)
@@ -280,13 +281,21 @@ type sshConnection struct {
 	grpcConn   *grpc.ClientConn
 	stdin      io.WriteCloser
 	procCancel context.CancelCauseFunc
+	waitCh     <-chan error
 }
 
-// Close releases all resources: unregisters the custom transport, closes
-// the SMUX session, gRPC connection, and kills the subprocess.
+// Close releases all resources: cancels the context, closes the SMUX
+// session, gRPC connection, stdin pipe, and waits for the subprocess to terminate.
 func (c *sshConnection) Close() error {
+	c.CloseWithErr(fmt.Errorf("connection closed"))
+	return nil
+}
+
+// CloseWithErr is like Close but provides a specific cause for the context
+// cancellation, which surfaces in gRPC errors and diagnostics.
+func (c *sshConnection) CloseWithErr(err error) {
 	if c.procCancel != nil {
-		c.procCancel(fmt.Errorf("connection closed"))
+		c.procCancel(err)
 	}
 	if c.session != nil {
 		c.session.Close()
@@ -297,19 +306,18 @@ func (c *sshConnection) Close() error {
 	if c.stdin != nil {
 		c.stdin.Close()
 	}
-	if c.cmd != nil && c.cmd.Process != nil {
-		// Kill the subprocess and reap it. If Kill succeeds, Wait will
-		// return a "signal: killed" error which we ignore since we
-		// initiated the kill. If Kill fails (process already exited),
-		// Wait returns the real exit status -- surface that since it
-		// means SSH itself failed (auth error, connection refused, etc.).
-		killErr := c.cmd.Process.Kill()
-		waitErr := c.cmd.Wait()
-		if killErr != nil && waitErr != nil {
-			return waitErr
+	if c.waitCh != nil {
+		// Wait for the subprocess to exit gracefully. If it hangs,
+		// forcefully kill it after a short timeout because it's really supposed to be done when we reach this point.
+		select {
+		case <-c.waitCh:
+		case <-time.After(1 * time.Second):
+			if c.cmd != nil && c.cmd.Process != nil {
+				c.cmd.Process.Kill()
+			}
+			<-c.waitCh
 		}
 	}
-	return nil
 }
 
 // sshChunkStore wraps a DoltChunkStore and closes the SSH connection when

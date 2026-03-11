@@ -441,15 +441,10 @@ func runMain() int {
 	}
 	args = nil
 
-	var restoreIO func()
 	if needsIORedirect(cfg.subCommand) {
-		restoreIO = cli.InitIO()
+		restoreIO := cli.InitIO()
+		defer restoreIO()
 	}
-	defer func() {
-		if restoreIO != nil {
-			restoreIO()
-		}
-	}()
 
 	warnIfMaxFilesTooLow()
 
