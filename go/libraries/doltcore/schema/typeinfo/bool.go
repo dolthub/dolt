@@ -19,15 +19,17 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type boolType struct {
 	sqlBitType gmstypes.BitType
+	enc        val.Encoding
 }
 
 var _ TypeInfo = (*boolType)(nil)
 
-var BoolType TypeInfo = &boolType{gmstypes.MustCreateBitType(1)}
+var BoolType TypeInfo = &boolType{sqlBitType: gmstypes.MustCreateBitType(1)}
 
 // Equals implements TypeInfo interface.
 func (ti *boolType) Equals(other TypeInfo) bool {
@@ -46,6 +48,19 @@ func (ti *boolType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *boolType) String() string {
 	return "Bool"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *boolType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.Int8Enc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *boolType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &boolType{sqlBitType: ti.sqlBitType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

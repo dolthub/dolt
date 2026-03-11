@@ -19,17 +19,19 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type linestringType struct {
 	sqlLineStringType gmstypes.LineStringType
+	enc               val.Encoding
 }
 
 var _ TypeInfo = (*linestringType)(nil)
 
-var LineStringType = &linestringType{gmstypes.LineStringType{}}
+var LineStringType = &linestringType{sqlLineStringType: gmstypes.LineStringType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *linestringType) Equals(other TypeInfo) bool {
@@ -51,6 +53,19 @@ func (ti *linestringType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *linestringType) String() string {
 	return "LineString"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *linestringType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *linestringType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &linestringType{sqlLineStringType: ti.sqlLineStringType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

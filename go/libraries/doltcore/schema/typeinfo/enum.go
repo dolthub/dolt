@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -32,12 +33,13 @@ const (
 // within is directly reliant on the go-mysql-server implementation.
 type enumType struct {
 	sqlEnumType sql.EnumType
+	enc         val.Encoding
 }
 
 var _ TypeInfo = (*enumType)(nil)
 
 func CreateEnumTypeFromSqlEnumType(sqlEnumType sql.EnumType) TypeInfo {
-	return &enumType{sqlEnumType}
+	return &enumType{sqlEnumType: sqlEnumType}
 }
 
 // Equals implements TypeInfo interface.
@@ -66,6 +68,19 @@ func (ti *enumType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *enumType) String() string {
 	return fmt.Sprintf(`Enum(Collation: %v, Values: %v)`, ti.sqlEnumType.Collation().String(), strings.Join(ti.sqlEnumType.Values(), ", "))
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *enumType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.EnumEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *enumType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &enumType{sqlEnumType: ti.sqlEnumType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

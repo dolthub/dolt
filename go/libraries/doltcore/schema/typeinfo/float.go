@@ -22,18 +22,20 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type FloatWidth int8
 
 type floatType struct {
 	sqlFloatType sql.NumberType
+	enc          val.Encoding
 }
 
 var _ TypeInfo = (*floatType)(nil)
 var (
-	Float32Type = &floatType{gmstypes.Float32}
-	Float64Type = &floatType{gmstypes.Float64}
+	Float32Type = &floatType{sqlFloatType: gmstypes.Float32}
+	Float64Type = &floatType{sqlFloatType: gmstypes.Float64}
 )
 
 // Equals implements TypeInfo interface.
@@ -62,6 +64,24 @@ func (ti *floatType) String() string {
 	default:
 		panic(fmt.Errorf(`unknown float type info sql type "%v"`, ti.sqlFloatType.Type().String()))
 	}
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *floatType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	switch ti.sqlFloatType.Type() {
+	case sqltypes.Float32:
+		return val.Float32Enc
+	default:
+		return val.Float64Enc
+	}
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *floatType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &floatType{sqlFloatType: ti.sqlFloatType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

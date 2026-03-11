@@ -19,17 +19,19 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multipointType struct {
 	sqlMultiPointType gmstypes.MultiPointType
+	enc               val.Encoding
 }
 
 var _ TypeInfo = (*multipointType)(nil)
 
-var MultiPointType = &multipointType{gmstypes.MultiPointType{}}
+var MultiPointType = &multipointType{sqlMultiPointType: gmstypes.MultiPointType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *multipointType) Equals(other TypeInfo) bool {
@@ -51,6 +53,19 @@ func (ti *multipointType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *multipointType) String() string {
 	return "multipoint"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *multipointType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *multipointType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &multipointType{sqlMultiPointType: ti.sqlMultiPointType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

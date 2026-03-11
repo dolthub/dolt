@@ -21,6 +21,7 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -34,6 +35,7 @@ const (
 // columns.
 type blobStringType struct {
 	sqlStringType sql.StringType
+	enc           val.Encoding // 0 means use default based on UseAdaptiveEncoding
 }
 
 var _ TypeInfo = (*blobStringType)(nil)
@@ -42,6 +44,11 @@ var (
 	TextType     TypeInfo = &blobStringType{sqlStringType: gmstypes.Text}
 	LongTextType TypeInfo = &blobStringType{sqlStringType: gmstypes.LongText}
 )
+
+// CreateBlobStringTypeFromSqlType creates a blobStringType with the default encoding based on UseAdaptiveEncoding.
+func CreateBlobStringTypeFromSqlType(sqlStringType sql.StringType) TypeInfo {
+	return &blobStringType{sqlStringType: sqlStringType}
+}
 
 // Equals implements TypeInfo interface.
 func (ti *blobStringType) Equals(other TypeInfo) bool {
@@ -63,6 +70,25 @@ func (ti *blobStringType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *blobStringType) String() string {
 	return fmt.Sprintf(`BlobString(%v, %v)`, ti.sqlStringType.Collation().String(), ti.sqlStringType.MaxCharacterLength())
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *blobStringType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	if UseAdaptiveEncoding {
+		return val.StringAdaptiveEnc
+	}
+	return val.StringAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *blobStringType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc == ti.Encoding() {
+		return ti
+	}
+	return &blobStringType{sqlStringType: ti.sqlStringType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

@@ -260,7 +260,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		// schema.Schema determines display order
 		serial.ColumnAddDisplayOrder(b, int16(i))
 		serial.ColumnAddTag(b, col.Tag)
-		serial.ColumnAddEncoding(b, serial.Encoding(col.Encoding))
+		serial.ColumnAddEncoding(b, serial.Encoding(col.TypeInfo.Encoding()))
 		serial.ColumnAddPrimaryKey(b, col.IsPartOfPK)
 		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
 		serial.ColumnAddNullable(b, col.IsNullable())
@@ -345,6 +345,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 		if err != nil {
 			return nil, err
 		}
+		sqlType = sqlType.WithEncoding(val.Encoding(c.Encoding()))
 
 		var defVal, generatedVal, onUpdateVal string
 		if c.DefaultValue() != nil {
@@ -363,7 +364,6 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			Name:          string(c.Name()),
 			Tag:           c.Tag(),
 			Kind:          sqlType.NomsKind(),
-			Encoding:      val.Encoding(c.Encoding()),
 			IsPartOfPK:    c.PrimaryKey(),
 			TypeInfo:      sqlType,
 			Default:       defVal,
@@ -709,7 +709,7 @@ func typeinfoFromSqlType(s string) (typeinfo.TypeInfo, error) {
 }
 
 func encodingFromTypeinfo(t typeinfo.TypeInfo) serial.Encoding {
-	return schema.EncodingFromSqlType(t.ToSqlType())
+	return serial.Encoding(t.Encoding())
 }
 
 func constraintsFromSerialColumn(col *serial.Column) (cc []schema.ColConstraint) {

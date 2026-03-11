@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // varStringType handles CHAR and VARCHAR. The TEXT types are handled by blobStringType. For any repositories that were
@@ -31,6 +32,7 @@ import (
 // must use blobStringType for all TEXT types to ensure proper behavior.
 type varStringType struct {
 	sqlStringType sql.StringType
+	enc           val.Encoding
 }
 
 var _ TypeInfo = (*varStringType)(nil)
@@ -38,13 +40,13 @@ var _ TypeInfo = (*varStringType)(nil)
 var (
 	MaxVarcharLength = int64(16383)
 	// StringDefaultType is sized to 1k, which allows up to 16 fields per row
-	StringDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, MaxVarcharLength/16)}
+	StringDefaultType = &varStringType{sqlStringType: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, MaxVarcharLength/16)}
 	// StringImportDefaultType is sized to 200, which allows up to 80+ fields per row during import operations
-	StringImportDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 200)}
+	StringImportDefaultType = &varStringType{sqlStringType: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 200)}
 )
 
 func CreateVarStringTypeFromSqlType(stringType sql.StringType) TypeInfo {
-	return &varStringType{stringType}
+	return &varStringType{sqlStringType: stringType}
 }
 
 // Equals implements TypeInfo interface.
@@ -79,6 +81,19 @@ func (ti *varStringType) String() string {
 		panic(fmt.Errorf(`unknown varstring type info sql type "%v"`, ti.sqlStringType.Type().String()))
 	}
 	return fmt.Sprintf(`VarString(%v, %v, SQL: %v)`, ti.sqlStringType.Collation().String(), ti.sqlStringType.MaxCharacterLength(), sqlType)
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *varStringType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.StringEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *varStringType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &varStringType{sqlStringType: ti.sqlStringType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

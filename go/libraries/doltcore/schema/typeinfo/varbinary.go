@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // As a type, this is modeled more after MySQL's story for binary data. There, it's treated
@@ -30,6 +31,7 @@ import (
 // This type handles the BLOB types. BINARY and VARBINARY are handled by inlineBlobType.
 type varBinaryType struct {
 	sqlBinaryType sql.StringType
+	enc           val.Encoding // 0 means use default based on UseAdaptiveEncoding
 }
 
 var _ TypeInfo = (*varBinaryType)(nil)
@@ -53,6 +55,25 @@ func (ti *varBinaryType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *varBinaryType) String() string {
 	return fmt.Sprintf(`VarBinary(%v)`, ti.sqlBinaryType.MaxCharacterLength())
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *varBinaryType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	if UseAdaptiveEncoding {
+		return val.BytesAdaptiveEnc
+	}
+	return val.BytesAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *varBinaryType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc == ti.Encoding() {
+		return ti
+	}
+	return &varBinaryType{sqlBinaryType: ti.sqlBinaryType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

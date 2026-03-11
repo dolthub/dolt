@@ -21,6 +21,7 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -35,6 +36,7 @@ const (
 // This type handles the BLOB types. BINARY and VARBINARY are handled by inlineBlobType.
 type vectorType struct {
 	sqlVectorType gmstypes.VectorType
+	enc           val.Encoding
 }
 
 var _ TypeInfo = (*vectorType)(nil)
@@ -58,6 +60,19 @@ func (ti *vectorType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *vectorType) String() string {
 	return fmt.Sprintf(`Vector(%v)`, ti.sqlVectorType.Dimensions)
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *vectorType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.BytesAdaptiveEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *vectorType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &vectorType{sqlVectorType: ti.sqlVectorType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

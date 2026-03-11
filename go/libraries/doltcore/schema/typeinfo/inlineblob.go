@@ -21,11 +21,13 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // inlineBlobType handles BINARY and VARBINARY. BLOB types are handled by varBinaryType.
 type inlineBlobType struct {
 	sqlBinaryType sql.StringType
+	enc           val.Encoding
 }
 
 var _ TypeInfo = (*inlineBlobType)(nil)
@@ -59,6 +61,19 @@ func (ti *inlineBlobType) String() string {
 		panic(fmt.Errorf(`unknown inlineblob type info sql type "%v"`, ti.sqlBinaryType.Type().String()))
 	}
 	return fmt.Sprintf(`InlineBlob(%v, SQL: %v)`, ti.sqlBinaryType.MaxCharacterLength(), sqlType)
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *inlineBlobType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.ByteStringEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *inlineBlobType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &inlineBlobType{sqlBinaryType: ti.sqlBinaryType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

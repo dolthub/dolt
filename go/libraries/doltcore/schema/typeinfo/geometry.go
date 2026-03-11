@@ -19,17 +19,19 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Geometry, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type geometryType struct {
 	sqlGeometryType gmstypes.GeometryType // References the corresponding GeometryType in GMS
+	enc             val.Encoding
 }
 
 var _ TypeInfo = (*geometryType)(nil)
 
-var GeometryType = &geometryType{gmstypes.GeometryType{}}
+var GeometryType = &geometryType{sqlGeometryType: gmstypes.GeometryType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *geometryType) Equals(other TypeInfo) bool {
@@ -51,6 +53,19 @@ func (ti *geometryType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *geometryType) String() string {
 	return "Geometry"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *geometryType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *geometryType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &geometryType{sqlGeometryType: ti.sqlGeometryType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

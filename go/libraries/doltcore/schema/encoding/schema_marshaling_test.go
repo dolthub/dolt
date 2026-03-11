@@ -115,7 +115,7 @@ func TestSchemaMarshalling(t *testing.T) {
 		require.NoError(t, err)
 		s, err := UnmarshalSchema(ctx, nbf, v)
 		require.NoError(t, err)
-		assert.Equal(t, sch, s)
+		assert.True(t, schema.SchemasAreEqual(sch, s))
 	}
 }
 

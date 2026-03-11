@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -157,12 +156,10 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		onUpdateVal = col.OnUpdate.String()
 	}
 
-	encoding := schema.EncodingFromSqlType(typeInfo.ToSqlType())
 	c := schema.Column{
 		Name:          col.Name,
 		Tag:           tag,
 		Kind:          typeInfo.NomsKind(),
-		Encoding:      val.Encoding(encoding),
 		IsPartOfPK:    col.PrimaryKey,
 		TypeInfo:      typeInfo,
 		Default:       defaultVal,

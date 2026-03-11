@@ -20,15 +20,17 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type uuidType struct {
 	sqlCharType sql.StringType
+	enc         val.Encoding
 }
 
 var _ TypeInfo = (*uuidType)(nil)
 
-var UuidType = &uuidType{gmstypes.MustCreateString(sqltypes.Char, 36, sql.Collation_ascii_bin)}
+var UuidType = &uuidType{sqlCharType: gmstypes.MustCreateString(sqltypes.Char, 36, sql.Collation_ascii_bin)}
 
 // Equals implements TypeInfo interface.
 func (ti *uuidType) Equals(other TypeInfo) bool {
@@ -47,6 +49,19 @@ func (ti *uuidType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *uuidType) String() string {
 	return "Uuid"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *uuidType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.StringEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *uuidType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &uuidType{sqlCharType: ti.sqlCharType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

@@ -89,7 +89,7 @@ func generateEnumType(t *testing.T, numOfElements int) *enumType {
 		str[3] = alphabet[i%len(alphabet)]
 		vals[i] = string(str)
 	}
-	return &enumType{gmstypes.MustCreateEnumType(vals, sql.Collation_Default)}
+	return &enumType{sqlEnumType: gmstypes.MustCreateEnumType(vals, sql.Collation_Default)}
 }
 
 func generateSetTypes(t *testing.T, numOfTypes int64) []TypeInfo {
@@ -108,7 +108,7 @@ func generateSetType(t *testing.T, numOfElements int) *setType {
 	for i := 0; i < numOfElements; i++ {
 		vals[i] = string([]byte{alphabet[(i/lenAlphabet)%lenAlphabet], alphabet[i%lenAlphabet]})
 	}
-	return &setType{gmstypes.MustCreateSetType(vals, sql.Collation_Default)}
+	return &setType{sqlSetType: gmstypes.MustCreateSetType(vals, sql.Collation_Default)}
 }
 
 func generateVarStringTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
@@ -128,15 +128,15 @@ func generateVarStringType(t *testing.T, length int64, rts bool) *varStringType 
 	if rts {
 		t, err := gmstypes.CreateStringWithDefaults(sqltypes.Char, length)
 		if err == nil {
-			return &varStringType{t}
+			return &varStringType{sqlStringType: t}
 		}
 	}
-	return &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, length)}
+	return &varStringType{sqlStringType: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, length)}
 }
 
 func generateBlobStringType(t *testing.T, length int64) *blobStringType {
 	require.True(t, length > 0)
-	return &blobStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.Text, length)}
+	return &blobStringType{sqlStringType: gmstypes.MustCreateStringWithDefaults(sqltypes.Text, length)}
 }
 
 func loop(t *testing.T, start int64, endInclusive int64, numOfSteps uint16, loopedFunc func(int64)) {

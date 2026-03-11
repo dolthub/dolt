@@ -21,18 +21,20 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Set, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type setType struct {
 	sqlSetType sql.SetType
+	enc        val.Encoding
 }
 
 var _ TypeInfo = (*setType)(nil)
 
 func CreateSetTypeFromSqlSetType(sqlSetType sql.SetType) TypeInfo {
-	return &setType{sqlSetType}
+	return &setType{sqlSetType: sqlSetType}
 }
 
 // Equals implements TypeInfo interface.
@@ -61,6 +63,19 @@ func (ti *setType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *setType) String() string {
 	return fmt.Sprintf(`Set(Collation: %v, Values: %v)`, ti.sqlSetType.Collation().String(), strings.Join(ti.sqlSetType.Values(), ","))
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *setType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.SetEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *setType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &setType{sqlSetType: ti.sqlSetType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

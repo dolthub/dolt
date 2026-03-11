@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
 // EncodingFromSqlType returns a serial.Encoding for a sql.Type.
@@ -37,11 +38,6 @@ func EncodingFromSqlType(typ sql.Type) serial.Encoding {
 	}
 	return EncodingFromQueryType(typ.Type())
 }
-
-// UseAdaptiveEncoding indicates whether to use adaptive encoding for large/unbounded fields instead of address encoding.
-// Tests can set this variable to true in order to force Dolt to use adaptive encoding for TEXT and BLOB columns.
-// Extended types will always use adaptive encoding for TEXT and BLOB types regardless of this value.
-var UseAdaptiveEncoding = false
 
 // EncodingFromQueryType returns a serial.Encoding for a query.Type.
 func EncodingFromQueryType(typ query.Type) serial.Encoding {
@@ -101,12 +97,12 @@ func EncodingFromQueryType(typ query.Type) serial.Encoding {
 	case query.Type_JSON:
 		return serial.EncodingJSONAddr
 	case query.Type_BLOB:
-		if UseAdaptiveEncoding {
+		if typeinfo.UseAdaptiveEncoding {
 			return serial.EncodingBytesAdaptive
 		}
 		return serial.EncodingBytesAddr
 	case query.Type_TEXT:
-		if UseAdaptiveEncoding {
+		if typeinfo.UseAdaptiveEncoding {
 			return serial.EncodingStringAdaptive
 		}
 		return serial.EncodingStringAddr

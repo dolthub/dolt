@@ -19,17 +19,19 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multilinestringType struct {
 	sqlMultiLineStringType gmstypes.MultiLineStringType
+	enc                    val.Encoding
 }
 
 var _ TypeInfo = (*multilinestringType)(nil)
 
-var MultiLineStringType = &multilinestringType{gmstypes.MultiLineStringType{}}
+var MultiLineStringType = &multilinestringType{sqlMultiLineStringType: gmstypes.MultiLineStringType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *multilinestringType) Equals(other TypeInfo) bool {
@@ -51,6 +53,19 @@ func (ti *multilinestringType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *multilinestringType) String() string {
 	return "MultiLineString"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *multilinestringType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *multilinestringType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &multilinestringType{sqlMultiLineStringType: ti.sqlMultiLineStringType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

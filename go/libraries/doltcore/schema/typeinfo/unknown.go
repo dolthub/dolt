@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type unknownType struct{}
@@ -42,6 +43,12 @@ func (ti *unknownType) NomsKind() types.NomsKind {
 func (ti *unknownType) String() string {
 	return "Unknown"
 }
+
+// Encoding implements TypeInfo interface.
+func (ti *unknownType) Encoding() val.Encoding { return val.NullEnc }
+
+// WithEncoding implements TypeInfo interface.
+func (ti *unknownType) WithEncoding(_ val.Encoding) TypeInfo { return &unknownType{} }
 
 // ToSqlType implements TypeInfo interface.
 func (ti *unknownType) ToSqlType() sql.Type {

@@ -19,17 +19,19 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multipolygonType struct {
 	sqlMultiPolygonType gmstypes.MultiPolygonType
+	enc                 val.Encoding
 }
 
 var _ TypeInfo = (*multipolygonType)(nil)
 
-var MultiPolygonType = &multipolygonType{gmstypes.MultiPolygonType{}}
+var MultiPolygonType = &multipolygonType{sqlMultiPolygonType: gmstypes.MultiPolygonType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *multipolygonType) Equals(other TypeInfo) bool {
@@ -51,6 +53,19 @@ func (ti *multipolygonType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *multipolygonType) String() string {
 	return "MultiPolygon"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *multipolygonType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *multipolygonType) WithEncoding(enc val.Encoding) TypeInfo {
+	return &multipolygonType{sqlMultiPolygonType: ti.sqlMultiPolygonType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.
