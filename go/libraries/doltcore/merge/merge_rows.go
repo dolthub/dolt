@@ -119,6 +119,7 @@ func (tm TableMerger) InvolvesRootObjects() bool {
 func (tm TableMerger) tableHashes(ctx context.Context) (left, right, anc hash.Hash, err error) {
 	eg := errgroup.Group{}
 	eg.Go(func() error {
+		var err error
 		if tm.leftTbl != nil {
 			left, err = tm.leftTbl.HashOf()
 		} else if tm.leftRootObj != nil {
@@ -127,6 +128,7 @@ func (tm TableMerger) tableHashes(ctx context.Context) (left, right, anc hash.Ha
 		return err
 	})
 	eg.Go(func() error {
+		var err error
 		if tm.rightTbl != nil {
 			right, err = tm.rightTbl.HashOf()
 		} else if tm.rightRootObj != nil {
@@ -135,6 +137,7 @@ func (tm TableMerger) tableHashes(ctx context.Context) (left, right, anc hash.Ha
 		return err
 	})
 	eg.Go(func() error {
+		var err error
 		if tm.ancTbl != nil {
 			anc, err = tm.ancTbl.HashOf()
 		} else if tm.ancRootObj != nil {
@@ -143,9 +146,6 @@ func (tm TableMerger) tableHashes(ctx context.Context) (left, right, anc hash.Ha
 		return err
 	})
 	err = eg.Wait()
-	if err != nil {
-		return
-	}
 	return
 }
 
