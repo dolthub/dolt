@@ -130,7 +130,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	db := doltdb.ExposeDatabaseFromDoltDB(ddb)
 	cs := datas.ChunkStoreFromDatabase(db)
 
-	// GenerationalChunkStore implements RemoteSrvStore, so this is going to work for any "normal" Dole db.
+	// GenerationalChunkStore implements RemoteSrvStore, so this is going to work for any "normal" Dolt db.
 	if _, ok := cs.(remotesrv.RemoteSrvStore); !ok {
 		return HandleVErrAndExitCode(errhand.BuildDError("chunk store does not implement RemoteSrvStore").Build(), usage)
 	}
