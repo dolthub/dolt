@@ -1187,7 +1187,6 @@ func TestConcurrentTransactions(t *testing.T) {
 }
 
 func TestConcurrentCreateDatabaseIfNotExists(t *testing.T) {
-	t.Skip("CREATE DATABASE IF NOT EXISTS is not atomic; concurrent calls race and return errors")
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
