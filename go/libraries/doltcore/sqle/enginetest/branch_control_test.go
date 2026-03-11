@@ -1625,6 +1625,68 @@ var BranchControlTests = []BranchControlTest{
 		},
 	},
 	{
+		Name: "Merge permission allows merge with conflicts",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			// Make conflicting changes: both branches modify the same row with different values
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE test SET v1 = 100 WHERE pk = 1;",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit on other');",
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE test SET v1 = 200 WHERE pk = 1;",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit on main');",
+			// Give testuser merge permission on 'other'
+			"INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'merge');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			// Allow the transaction to commit even with unresolved conflicts
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SET @@dolt_allow_commit_conflicts = 1;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			// Merge with conflicts succeeds (returns conflict indicator) with merge permission
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_MERGE('main');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			// Conflicts are visible in dolt_conflicts
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT count(*) FROM dolt_conflicts;",
+				Expected: []sql.Row{{int64(1)}},
+			},
+			// Cannot resolve conflicts with only merge permission (requires write)
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_CONFLICTS_RESOLVE('--ours', 'test');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
+	{
 		Name: "Read-only user cannot merge",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
