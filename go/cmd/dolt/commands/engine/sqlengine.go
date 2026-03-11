@@ -582,26 +582,38 @@ func doltSessionFactory(
 
 var ErrFailedToInitCommitIdentity = fmt.Errorf("failed to initialize commit identity session variables from environment")
 
-// InitCommitIdentitySessionVars sends SET statements to initialize commit identity session variables from the client's
-// environment variables. Works for both local and remote queryists. This should be called from client-side code not
-// server-side session creation, since environment variables are local to the client.
-func InitCommitIdentitySessionVars(queryist cli.Queryist, sqlCtx *sql.Context) error {
-	envVarToSessionVar := map[string]string{
-		dconfig.EnvDoltAuthorName:     dsess.DoltAuthorName,
-		dconfig.EnvDoltAuthorEmail:    dsess.DoltAuthorEmail,
-		dconfig.EnvDoltAuthorDate:     dsess.DoltAuthorDate,
-		dconfig.EnvDoltCommitterName:  dsess.DoltCommitterName,
-		dconfig.EnvDoltCommitterEmail: dsess.DoltCommitterEmail,
-		dconfig.EnvDoltCommitterDate:  dsess.DoltCommitterDate,
+// InitCommitIdentitySessionConfig sends a single SET statement to initialize all commit identity session variables
+// from environment variables in one transaction. Should be called after [sql.SessionCommandBegin].
+func InitCommitIdentitySessionConfig(queryist cli.Queryist, sqlCtx *sql.Context) error {
+	envVarToSessionVar := []struct{ environmentConfigVar, sessionConfigVar string }{
+		{dconfig.EnvDoltAuthorName, dsess.DoltAuthorName},
+		{dconfig.EnvDoltAuthorEmail, dsess.DoltAuthorEmail},
+		{dconfig.EnvDoltAuthorDate, dsess.DoltAuthorDate},
+		{dconfig.EnvDoltCommitterName, dsess.DoltCommitterName},
+		{dconfig.EnvDoltCommitterEmail, dsess.DoltCommitterEmail},
+		{dconfig.EnvDoltCommitterDate, dsess.DoltCommitterDate},
 	}
-	for envVar, sessionVar := range envVarToSessionVar {
-		if val := os.Getenv(envVar); val != "" {
-			query := fmt.Sprintf("SET @@SESSION.%s = %q", sessionVar, val)
-			_, _, _, err := queryist.Query(sqlCtx, query)
+	var sb strings.Builder
+	for _, pair := range envVarToSessionVar {
+		if val := os.Getenv(pair.environmentConfigVar); val != "" {
+			if sb.Len() == 0 {
+				sb.WriteString("SET ")
+			} else {
+				sb.WriteString(", ")
+			}
+			_, err := fmt.Fprintf(&sb, "@@SESSION.%s = %q", pair.sessionConfigVar, val)
 			if err != nil {
-				return fmt.Errorf("%w: %s: %v", ErrFailedToInitCommitIdentity, sessionVar, err)
+				return err
 			}
 		}
+	}
+	if sb.Len() == 0 {
+		return nil
+	}
+	query := sb.String()
+	_, _, _, err := queryist.Query(sqlCtx, query)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrFailedToInitCommitIdentity, err)
 	}
 	return nil
 }

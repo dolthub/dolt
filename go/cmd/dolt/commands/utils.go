@@ -310,8 +310,8 @@ func newLateBindingEngine(
 			// Ensure a root user exists, with superuser privs
 			dbUser = DefaultUser
 			ed := rawDb.Editor()
-			defer ed.Close()
 			rawDb.AddEphemeralSuperUser(ed, dbUser, config.ServerHost, "")
+			ed.Close()
 		}
 
 		sqlCtx, err := se.NewDefaultContext(ctx)
@@ -323,13 +323,13 @@ func newLateBindingEngine(
 		// database set when you begin using them.
 		sqlCtx.SetCurrentDatabase(database)
 
-		if err := engine.InitCommitIdentitySessionVars(se, sqlCtx); err != nil {
-			cli.PrintErr(err.Error())
-		}
-
 		// For now, we treat the entire lifecycle of this
 		// sqlCtx as one big session-in-use window.
 		sql.SessionCommandBegin(sqlCtx.Session)
+
+		if err := engine.InitCommitIdentitySessionConfig(se, sqlCtx); err != nil {
+			cli.PrintErr(err.Error())
+		}
 
 		close := func() {
 			sql.SessionCommandEnd(sqlCtx.Session)

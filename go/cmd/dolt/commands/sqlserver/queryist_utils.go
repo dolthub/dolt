@@ -103,7 +103,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 		sqlCtx := sql.NewContext(ctx)
 		sqlCtx.SetCurrentDatabase(dbRev)
 
-		if err := engine.InitCommitIdentitySessionVars(queryist, sqlCtx); err != nil {
+		if err := engine.InitCommitIdentitySessionConfig(queryist, sqlCtx); err != nil {
 			cli.PrintErr(err.Error())
 		}
 
