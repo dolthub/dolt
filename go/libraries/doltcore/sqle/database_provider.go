@@ -657,6 +657,20 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 
 	exists, isDir := p.fs.Exists(name)
 	if exists && isDir {
+		// The database exists on disk (possibly created by another engine
+		// sharing the same storage). Ensure it's registered in our in-memory
+		// map so that subsequent USE/queries can resolve it.
+		formattedName := formatDbMapKeyName(name)
+		if _, ok := p.databases[formattedName]; !ok {
+			newFs, err := p.fs.WithWorkingDir(name)
+			if err != nil {
+				return err
+			}
+			newEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+			if err := p.registerNewDatabase(ctx, name, newEnv); err != nil {
+				return err
+			}
+		}
 		return sql.ErrDatabaseExists.New(name)
 	} else if exists {
 		return fmt.Errorf("Cannot create DB, file exists at %s", name)
