@@ -121,12 +121,12 @@ func walkOpaqueNodes(ctx context.Context, nd *Node, ns NodeStore, cb NodeCb) err
 func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 	fileId, keys, values, level, count, err := message.UnpackFields(msg)
 	return &Node{
-		keys:     keys,
-		values:   values,
-		count:    count,
-		level:    level,
-		msg:      msg,
-		nodeHash: hash.Of(msg),
+		keys:   keys,
+		values: values,
+		count:  count,
+		level:  level,
+		msg:    msg,
+		//nodeHash: hash.Of(msg),
 	}, fileId, err
 }
 
@@ -143,6 +143,9 @@ func NodeFromChunk(chunk *chunks.Chunk) (node *Node, fieldId string, err error) 
 }
 
 func (nd *Node) HashOf() hash.Hash {
+	if nd.nodeHash.IsEmpty() {
+		nd.nodeHash = hash.Of(nd.bytes())
+	}
 	return nd.nodeHash
 }
 
