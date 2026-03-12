@@ -87,6 +87,7 @@ require (
 	github.com/vbauerster/mpb/v8 v8.0.2
 	github.com/xitongsys/parquet-go v1.6.1
 	github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371
+	github.com/xtaci/smux v1.5.56
 	github.com/zeebo/blake3 v0.2.3
 	github.com/zeebo/xxh3 v1.0.2
 	go.etcd.io/bbolt v1.3.6

@@ -86,7 +86,7 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, docs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB(ctx))
+	db := doltdb.ExposeDatabaseFromDoltDB(dEnv.DoltDB(ctx))
 	cs := datas.ChunkStoreFromDatabase(db)
 	if _, ok := cs.(*nbs.GenerationalNBS); !ok {
 		cli.PrintErrln("archive command requires a GenerationalNBS")

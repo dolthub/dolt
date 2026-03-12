@@ -31,6 +31,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
+// MaxGRPCMessageSize is the maximum gRPC message size used for chunk store
+// operations. This applies to both send and receive directions.
+const MaxGRPCMessageSize = 128 * 1024 * 1024
+
 type Server struct {
 	wg       sync.WaitGroup
 	stopChan chan struct{}
@@ -94,7 +98,7 @@ func NewServer(args ServerArgs) (*Server, error) {
 
 	s.wg.Add(2)
 	s.grpcListenAddr = args.GrpcListenAddr
-	s.grpcSrv = grpc.NewServer(append([]grpc.ServerOption{grpc.MaxRecvMsgSize(128 * 1024 * 1024)}, args.Options...)...)
+	s.grpcSrv = grpc.NewServer(append([]grpc.ServerOption{grpc.MaxRecvMsgSize(MaxGRPCMessageSize)}, args.Options...)...)
 	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, scheme, args.ConcurrencyControl, sealer)
 
 	if args.ReadOnly {

@@ -165,9 +165,10 @@ func (ddb *DoltDB) GetDatabaseName() string {
 	return ddb.databaseName
 }
 
-// HackDatasDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
-// Deprecated: only for use in dolt migrate.
-func HackDatasDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
+// ExposeDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
+// This method should really only be used in cases where we need to get to the internals of the database, such
+// as scanning for corruption or migrating data formats. Generally avoid this function.
+func ExposeDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
 	return ddb.db
 }
 
