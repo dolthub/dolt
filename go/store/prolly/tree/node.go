@@ -126,7 +126,18 @@ func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 		count:  count,
 		level:  level,
 		msg:    msg,
-		//nodeHash: hash.Of(msg),
+	}, fileId, err
+}
+
+func NodeFromBytesWithHash(msg []byte, hash hash.Hash) (node *Node, fileId string, err error) {
+	fileId, keys, values, level, count, err := message.UnpackFields(msg)
+	return &Node{
+		keys:     keys,
+		values:   values,
+		count:    count,
+		level:    level,
+		msg:      msg,
+		nodeHash: hash,
 	}, fileId, err
 }
 
