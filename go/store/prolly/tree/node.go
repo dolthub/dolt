@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"io"
 	"sync/atomic"
 
@@ -121,18 +122,28 @@ func walkOpaqueNodes(ctx context.Context, nd *Node, ns NodeStore, cb NodeCb) err
 func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 	fileId, keys, values, level, count, err := message.UnpackFields(msg)
 	return &Node{
-		keys:   keys,
-		values: values,
-		count:  count,
-		level:  level,
-		msg:    msg,
+		keys:     keys,
+		values:   values,
+		count:    count,
+		level:    level,
+		msg:      msg,
+		nodeHash: hash.Of(msg),
 	}, fileId, err
 }
 
+func NodeFromChunk(chunk *chunks.Chunk) (node *Node, fieldId string, err error) {
+	fieldId, keys, values, level, count, err := message.UnpackFields(chunk.Data())
+	return &Node{
+		keys:     keys,
+		values:   values,
+		count:    count,
+		level:    level,
+		msg:      chunk.Data(),
+		nodeHash: chunk.Hash(),
+	}, fieldId, err
+}
+
 func (nd *Node) HashOf() hash.Hash {
-	if nd.nodeHash.IsEmpty() {
-		nd.nodeHash = hash.Of(nd.bytes())
-	}
 	return nd.nodeHash
 }
 

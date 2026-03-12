@@ -84,7 +84,7 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 
 // TableFromAddr deserializes the table in the chunk at |addr|.
 func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, addr hash.Hash) (Table, error) {
-	val, err := vrw.MustReadValue(ctx, addr)
+	val, err := vrw.MustReadValue(ctx, addr) // TODO: keep this addr for node?
 	if err != nil {
 		return nil, err
 	}
