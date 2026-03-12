@@ -40,9 +40,11 @@ teardown() {
     
     cd ..
     run dolt --data-dir="repo1" transfer </dev/null
-    # Transfer exits non-zero when stdin closes immediately, but it should
-    # start without crashing. Exit code 1 means it ran and shut down without a panic.
-    [ "$status" -eq 1 ]
+    # transfer command is kind of strange in that it always exits with status 0. It will even show an odd error
+    # here. That's all fine. We don't expect people to run this directly. We'll look at messages more closely from
+    # dolt clone, dolt push, dolt pull.
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "server error: EOF" ]] || false
 }
 
 @test "ssh-transfer: clone via SSH URL" {

@@ -82,6 +82,8 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		close(stderrDone)
 	}()
 
+	// Start the subprocess. From this point forward we must ensure that we call conn.CloseAndTerminate()
+	// on all error paths to avoid leaking subprocesses.
 	if err := cmd.Start(); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to start transfer subprocess: %w", err)
 	}
@@ -296,8 +298,16 @@ func (c *sshConnection) Close() error {
 		c.stdin.Close()
 	}
 	if c.cmd != nil && c.cmd.Process != nil {
-		c.cmd.Process.Kill()
-		c.cmd.Wait()
+		// Kill the subprocess and reap it. If Kill succeeds, Wait will
+		// return a "signal: killed" error which we ignore since we
+		// initiated the kill. If Kill fails (process already exited),
+		// Wait returns the real exit status -- surface that since it
+		// means SSH itself failed (auth error, connection refused, etc.).
+		killErr := c.cmd.Process.Kill()
+		waitErr := c.cmd.Wait()
+		if killErr != nil && waitErr != nil {
+			return waitErr
+		}
 	}
 	return nil
 }

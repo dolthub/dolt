@@ -80,6 +80,11 @@ The transfer command:
   - Starts an HTTP server for table file transfers
   - Multiplexes both protocols over stdin/stdout using SMUX
 
+The exit code of the transfer command is not meaningful to callers. All errors
+are surfaced through the gRPC and HTTP responses on the multiplexed IO streams.
+The client detects a failed subprocess via pipe EOF, which closes the SMUX
+session and cancels in-flight operations.
+
 This is a low-level command not intended for direct use.`,
 }
 
@@ -182,7 +187,8 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	case err := <-errCh:
 		// We get away with printing directly to stderr here since transfer command is special-cased to leave IO streams alone.
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		return 1
+		// Transfer command exit code is not meaningful to callers. HTTP/gRPC Errors rule.
+		return 0
 	case <-session.CloseChan():
 		return 0
 	case <-ctx.Done():
@@ -253,4 +259,3 @@ func (l *smuxListener) Accept() (net.Conn, error) {
 
 func (l *smuxListener) Close() error   { return nil }
 func (l *smuxListener) Addr() net.Addr { return stdioAddr{} }
-
