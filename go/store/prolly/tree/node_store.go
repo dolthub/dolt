@@ -102,7 +102,8 @@ func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 	}
 	assertTrue(c.Size() > 0, "empty chunk returned from ChunkStore")
 
-	n, _, err = NodeFromBytes(c.Data())
+	//n, _, err = NodeFromBytes(c.Data())
+	n, _, err = NodeFromChunk(&c)
 	if err != nil {
 		return nil, err
 	}
