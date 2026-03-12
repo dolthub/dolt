@@ -937,12 +937,13 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, er
 		return nil, fmt.Errorf("invalid root chunk: %s. expected store root file id, got: %s", rootHash.String(), serial.GetFileID(rootData))
 	}
 
-	sr, err := serial.TryGetRootAsStoreRoot(rootData, serial.MessagePrefixSz)
-	if err != nil {
-		return nil, err
-	}
-	mapBytes := sr.AddressMapBytes()
-	node, fileId, err := tree.NodeFromBytes(mapBytes)
+	//sr, err := serial.TryGetRootAsStoreRoot(rootData, serial.MessagePrefixSz)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//mapBytes := sr.AddressMapBytes()
+	//node, fileId, err := tree.NodeFromChunk(mapBytes)
+	node, fileId, err := tree.NodeFromChunk(&rootChunk)
 	if err != nil {
 		return nil, err
 	}
