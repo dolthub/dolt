@@ -45,12 +45,12 @@ var (
 )
 
 type filehandler struct {
-	dbCache       DBCache
-	fs            filesys.Filesys
-	readOnly      bool
-	lgr           *logrus.Entry
-	sealer        Sealer
-	writeErrBody  bool
+	dbCache      DBCache
+	fs           filesys.Filesys
+	readOnly     bool
+	lgr          *logrus.Entry
+	sealer       Sealer
+	writeErrBody bool
 }
 
 // NewFileHandler returns an http.Handler that serves table file downloads
