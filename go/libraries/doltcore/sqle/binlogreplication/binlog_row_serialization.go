@@ -110,13 +110,12 @@ func serializeRowToBinlogBytes(ctx *sql.Context, fromSch, toSch schema.Schema, k
 				"unsupported type: %v (%d)\n", typ.String(), typ.Type())
 		}
 
-		value, notNull, err := deserializer.deserialize(ctx, typ, descriptor, tuple, tupleIdx, ns)
+		value, err := deserializer.deserialize(ctx, typ, descriptor, tuple, tupleIdx, ns)
 		if err != nil {
 			return nil, nullBitmap, err
 		}
 
-		var newData []byte
-		if notNull {
+		if value != nil {
 			toCol, ok := toSch.GetAllCols().GetByTag(col.Tag)
 			if !ok {
 				return nil, nullBitmap, fmt.Errorf("unable to find column %s (tag %v) in destination schema", col.Name, col.Tag)
@@ -128,16 +127,13 @@ func serializeRowToBinlogBytes(ctx *sql.Context, fromSch, toSch schema.Schema, k
 					"unsupported type: %v (%d)\n", typ.String(), typ.Type())
 			}
 
-			newData, err = serializer.serialize(ctx, toCol.TypeInfo.ToSqlType(), value, ns)
+			newData, err := serializer.serialize(ctx, toCol.TypeInfo.ToSqlType(), value, ns)
 			if err != nil {
 				return nil, mysql.Bitmap{}, err
 			}
-		}
-
-		if newData == nil {
-			nullBitmap.Set(rowIdx, true)
-		} else {
 			data = append(data, newData...)
+		} else {
+			nullBitmap.Set(rowIdx, true)
 		}
 	}
 

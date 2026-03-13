@@ -37,12 +37,10 @@ import (
 // typeSerializer defines the serialization interface for deserializing a value in Dolt's
 // storage system and serializing it to the binary encoded used in MySQL's binlog.
 type typeSerializer interface {
-	// TODO: Remove the notNull bool return param and just rely on the interface{} value being nil
-
 	// deserialize extracts the value from |tuple| in position |tupleIdx| using the information
 	// from the |descriptor| as a type of |typ|. |ns| is optionally used if the value is an
 	// address that needs to be loaded from a store.
-	deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error)
+	deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error)
 
 	// serialize serializes |value| as a type of |type| to the MySQL binlog serialization format
 	// and returns the serialized bytes. |ns| is provided so that any addresses of BLOB values
@@ -104,50 +102,80 @@ type integerSerializer struct{}
 
 var _ typeSerializer = (*integerSerializer)(nil)
 
-func (i integerSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (i integerSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	switch typ.Type() {
 	case query.Type_INT8: // TINYINT
 		intValue, notNull := descriptor.GetInt8(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	case query.Type_UINT8: // TINYINT UNSIGNED
 		intValue, notNull := descriptor.GetUint8(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	case query.Type_INT16: // SMALLINT
 		intValue, notNull := descriptor.GetInt16(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	case query.Type_UINT16: // SMALLINT UNSIGNED
 		intValue, notNull := descriptor.GetUint16(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	case query.Type_INT24: // MEDIUMINT
 		intValue, notNull := descriptor.GetInt32(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	case query.Type_UINT24: // MEDIUMINT UNSIGNED
 		intValue, notNull := descriptor.GetUint32(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	case query.Type_INT32: // INT
 		intValue, notNull := descriptor.GetInt32(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	case query.Type_UINT32: // INT UNSIGNED
 		intValue, notNull := descriptor.GetUint32(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	case query.Type_INT64: // BIGINT
 		intValue, notNull := descriptor.GetInt64(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	case query.Type_UINT64: // BIGINT UNSIGNED
 		intValue, notNull := descriptor.GetUint64(tupleIdx, tuple)
-		return intValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return intValue, nil
 
 	default:
-		return nil, false, fmt.Errorf("unsupported type %s", typ)
+		return nil, fmt.Errorf("unsupported type %s", typ)
 	}
 }
 
@@ -240,18 +268,24 @@ type floatSerializer struct{}
 
 var _ typeSerializer = (*floatSerializer)(nil)
 
-func (f floatSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (f floatSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	switch typ.Type() {
 	case query.Type_FLOAT32:
 		floatValue, notNull := descriptor.GetFloat32(tupleIdx, tuple)
-		return floatValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return floatValue, nil
 
 	case query.Type_FLOAT64:
 		floatValue, notNull := descriptor.GetFloat64(tupleIdx, tuple)
-		return floatValue, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return floatValue, nil
 
 	default:
-		return nil, false, fmt.Errorf("unsupported type %v", typ)
+		return nil, fmt.Errorf("unsupported type %v", typ)
 	}
 }
 
@@ -296,9 +330,12 @@ type decimalSerializer struct{}
 
 var _ typeSerializer = (*decimalSerializer)(nil)
 
-func (d decimalSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (d decimalSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	decimalValue, notNull := descriptor.GetDecimal(tupleIdx, tuple)
-	return decimalValue, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return decimalValue, nil
 }
 
 func (d decimalSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -434,9 +471,12 @@ type timeSerializer struct{}
 
 var _ typeSerializer = (*timeSerializer)(nil)
 
-func (t timeSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (t timeSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	durationInMicroseconds, notNull := descriptor.GetSqlTime(tupleIdx, tuple)
-	return time.UnixMicro(durationInMicroseconds), notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return time.UnixMicro(durationInMicroseconds), nil
 }
 
 func (t timeSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -503,9 +543,12 @@ type dateSerializer struct{}
 
 var _ typeSerializer = (*dateSerializer)(nil)
 
-func (d dateSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (d dateSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	dateValue, notNull := descriptor.GetDate(tupleIdx, tuple)
-	return dateValue, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return dateValue, nil
 }
 
 func (d dateSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -540,9 +583,12 @@ type timestampSerializer struct{}
 
 var _ typeSerializer = (*timestampSerializer)(nil)
 
-func (t timestampSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (t timestampSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	timeValue, notNull := descriptor.GetDatetime(tupleIdx, tuple)
-	return timeValue, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return timeValue, nil
 }
 
 func (t timestampSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -586,9 +632,12 @@ type datetimeSerializer struct{}
 
 var _ typeSerializer = (*datetimeSerializer)(nil)
 
-func (d datetimeSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (d datetimeSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	timeValue, notNull := descriptor.GetDatetime(tupleIdx, tuple)
-	return timeValue, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return timeValue, nil
 }
 
 func (d datetimeSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -648,9 +697,12 @@ type yearSerializer struct{}
 
 var _ typeSerializer = (*yearSerializer)(nil)
 
-func (y yearSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (y yearSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	intValue, notNull := descriptor.GetYear(tupleIdx, tuple)
-	return intValue, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return intValue, nil
 }
 
 func (y yearSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -673,18 +725,24 @@ type stringSerializer struct{}
 
 var _ typeSerializer = (*stringSerializer)(nil)
 
-func (s *stringSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (s *stringSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	switch typ.Type() {
 	case query.Type_VARBINARY, query.Type_BINARY:
 		bytes, notNull := descriptor.GetBytes(tupleIdx, tuple)
-		return bytes, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return bytes, nil
 
 	case query.Type_VARCHAR, query.Type_CHAR:
 		stringVal, notNull := descriptor.GetString(tupleIdx, tuple)
-		return stringVal, notNull, nil
+		if !notNull {
+			return nil, nil
+		}
+		return stringVal, nil
 
 	default:
-		return nil, false, fmt.Errorf("unsupported type %v", typ)
+		return nil, fmt.Errorf("unsupported type %v", typ)
 	}
 }
 
@@ -747,12 +805,15 @@ type bitSerializer struct{}
 
 var _ typeSerializer = (*bitSerializer)(nil)
 
-func (b bitSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (b bitSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	// NOTE: descriptor.GetBit(tupleIdx, tuple) doesn't work here. BIT datatypes are described with a Uint64
 	//       encoding, so trying to use GetBit results in an error. At the data level, both are stored with a
 	//       uint64 value, so they are compatible, but we seem to only use Uint64 in the descriptor.
 	bitValue, notNull := descriptor.GetUint64(tupleIdx, tuple)
-	return bitValue, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return bitValue, nil
 }
 
 func (b bitSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -790,9 +851,12 @@ type setSerializer struct{}
 
 var _ typeSerializer = (*setSerializer)(nil)
 
-func (s setSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (s setSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	setValue, notNull := descriptor.GetSet(tupleIdx, tuple)
-	return setValue, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return setValue, nil
 }
 
 func (s setSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -828,9 +892,12 @@ type enumSerializer struct{}
 
 var _ typeSerializer = (*enumSerializer)(nil)
 
-func (e enumSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (e enumSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	enumValue, notNull := descriptor.GetEnum(tupleIdx, tuple)
-	return enumValue, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return enumValue, nil
 }
 
 func (e enumSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -870,9 +937,12 @@ type blobSerializer struct{}
 
 var _ typeSerializer = (*blobSerializer)(nil)
 
-func (b blobSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (b blobSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	addr, notNull := descriptor.GetBytesAddr(tupleIdx, tuple)
-	return addr, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return addr, nil
 }
 
 func (b blobSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -910,9 +980,12 @@ type textSerializer struct{}
 
 var _ typeSerializer = (*textSerializer)(nil)
 
-func (t textSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (t textSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	addr, notNull := descriptor.GetStringAddr(tupleIdx, tuple)
-	return addr, notNull, nil
+	if !notNull {
+		return nil, nil
+	}
+	return addr, nil
 }
 
 func (t textSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -960,9 +1033,9 @@ type jsonSerializer struct{}
 
 var _ typeSerializer = (*jsonSerializer)(nil)
 
-func (j jsonSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (j jsonSerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	json, err := tree.GetField(ctx, descriptor, tupleIdx, tuple, ns)
-	return json, json != nil, err
+	return json, err
 }
 
 func (j jsonSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
@@ -1010,12 +1083,12 @@ type geometrySerializer struct{}
 
 var _ typeSerializer = (*geometrySerializer)(nil)
 
-func (g geometrySerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, bool, error) {
+func (g geometrySerializer) deserialize(ctx context.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (interface{}, error) {
 	// NOTE: Using descriptor.GetGeometry() here will return the stored bytes, but
 	//       we need to use tree.GetField() so that they get deserialized into WKB
 	//       format bytes for the correct MySQL binlog serialization format.
 	geometry, err := tree.GetField(ctx, descriptor, tupleIdx, tuple, ns)
-	return geometry, geometry != nil, err
+	return geometry, err
 }
 
 func (g geometrySerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {

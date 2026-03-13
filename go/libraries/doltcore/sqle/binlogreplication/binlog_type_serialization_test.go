@@ -52,9 +52,8 @@ func TestStringSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(context.Background(), varchar20, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(context.Background(), varchar20, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, varchar20, value, ns)
@@ -69,9 +68,8 @@ func TestStringSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(context.Background(), varchar255, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(context.Background(), varchar255, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, varchar255, value, ns)
@@ -87,9 +85,8 @@ func TestStringSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -105,9 +102,8 @@ func TestStringSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -125,9 +121,8 @@ func TestStringSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -145,9 +140,8 @@ func TestStringSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		// VARBINARY representation is NOT right padded to the full length
@@ -166,9 +160,8 @@ func TestStringSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		// BINARY representation is NOT right padded to the full length
@@ -193,9 +186,8 @@ func TestFloatSerializer_Float32(t *testing.T) {
 	tupleBuilder.PutFloat32(0, 3.1415927)
 	tuple, err := tupleBuilder.Build(buffPool)
 	require.NoError(t, err)
-	value, notNull, err := s.deserialize(nil, gmstypes.Float32, tupleDesc, tuple, 0, nil)
+	value, err := s.deserialize(nil, gmstypes.Float32, tupleDesc, tuple, 0, nil)
 	require.NoError(t, err)
-	require.True(t, notNull)
 	bytes, err := s.serialize(nil, gmstypes.Float32, value, nil)
 
 	require.NoError(t, err)
@@ -216,9 +208,8 @@ func TestFloatSerializer_Float64(t *testing.T) {
 	tuple, err := tupleBuilder.Build(buffPool)
 	require.NoError(t, err)
 
-	value, notNull, err := s.deserialize(nil, gmstypes.Float64, tupleDesc, tuple, 0, nil)
+	value, err := s.deserialize(nil, gmstypes.Float64, tupleDesc, tuple, 0, nil)
 	require.NotNil(t, value)
-	require.True(t, notNull)
 	require.Nil(t, err)
 
 	bytes, err := s.serialize(nil, gmstypes.Float64, value, nil)
@@ -239,9 +230,8 @@ func TestYearSerializer(t *testing.T) {
 	tuple, err := tupleBuilder.Build(buffPool)
 	require.NoError(t, err)
 
-	value, notNull, err := s.deserialize(nil, gmstypes.Year, tupleDesc, tuple, 0, nil)
+	value, err := s.deserialize(nil, gmstypes.Year, tupleDesc, tuple, 0, nil)
 	require.NoError(t, err)
-	require.True(t, notNull)
 	require.NotNil(t, value)
 
 	bytes, err := s.serialize(nil, gmstypes.Year, value, nil)
@@ -266,10 +256,9 @@ func TestDatetimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0,
+		value, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0,
 			nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, datetimeType, value, nil)
@@ -289,9 +278,8 @@ func TestDatetimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, datetimeType, value, nil)
@@ -311,9 +299,8 @@ func TestDatetimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, datetimeType, value, nil)
@@ -333,9 +320,8 @@ func TestDatetimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, datetimeType, value, nil)
@@ -355,9 +341,8 @@ func TestDatetimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, datetimeType, value, nil)
@@ -377,9 +362,8 @@ func TestDatetimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, datetimeType, value, nil)
@@ -399,9 +383,8 @@ func TestDatetimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, datetimeType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, datetimeType, value, nil)
@@ -427,9 +410,8 @@ func TestTimestampSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, timestampType, value, nil)
@@ -449,9 +431,8 @@ func TestTimestampSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, timestampType, value, nil)
@@ -471,9 +452,8 @@ func TestTimestampSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, timestampType, value, nil)
@@ -493,9 +473,8 @@ func TestTimestampSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, timestampType, value, nil)
@@ -515,9 +494,8 @@ func TestTimestampSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, timestampType, value, nil)
@@ -537,9 +515,8 @@ func TestTimestampSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, timestampType, value, nil)
@@ -559,9 +536,8 @@ func TestTimestampSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, timestampType, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, timestampType, value, nil)
@@ -585,9 +561,8 @@ func TestDateSerializer(t *testing.T) {
 	tuple, err := tupleBuilder.Build(buffPool)
 	require.NoError(t, err)
 
-	value, notNull, err := s.deserialize(nil, gmstypes.Date, tupleDesc, tuple, 0, nil)
+	value, err := s.deserialize(nil, gmstypes.Date, tupleDesc, tuple, 0, nil)
 	require.NoError(t, err)
-	require.True(t, notNull)
 	require.NotNil(t, value)
 
 	bytes, err := s.serialize(nil, gmstypes.Date, value, nil)
@@ -610,9 +585,8 @@ func TestTimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -630,9 +604,8 @@ func TestTimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -650,9 +623,8 @@ func TestTimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -670,9 +642,8 @@ func TestTimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -690,9 +661,8 @@ func TestTimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -710,9 +680,8 @@ func TestTimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -730,9 +699,8 @@ func TestTimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -750,9 +718,8 @@ func TestTimeSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -774,9 +741,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -793,9 +759,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -812,9 +777,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -831,9 +795,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -850,9 +813,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -869,9 +831,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -888,9 +849,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -907,9 +867,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -926,9 +885,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -945,9 +903,8 @@ func TestIntegerSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -971,9 +928,8 @@ func TestDecimalSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -992,9 +948,8 @@ func TestDecimalSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -1013,9 +968,8 @@ func TestDecimalSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -1034,9 +988,8 @@ func TestDecimalSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -1055,9 +1008,8 @@ func TestDecimalSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -1076,9 +1028,8 @@ func TestDecimalSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -1097,9 +1048,8 @@ func TestDecimalSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -1120,9 +1070,8 @@ func TestBitSerializer(t *testing.T) {
 	tuple, err := tupleBuilder.Build(buffPool)
 	require.NoError(t, err)
 
-	value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+	value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 	require.NoError(t, err)
-	require.True(t, notNull)
 	require.NotNil(t, value)
 
 	bytes, err := s.serialize(nil, typ, value, nil)
@@ -1143,9 +1092,8 @@ func TestEnumSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -1162,9 +1110,8 @@ func TestEnumSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, nil)
@@ -1185,9 +1132,8 @@ func TestSetSerializer(t *testing.T) {
 	tuple, err := tupleBuilder.Build(buffPool)
 	require.NoError(t, err)
 
-	value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+	value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 	require.NoError(t, err)
-	require.True(t, notNull)
 	require.NotNil(t, value)
 
 	bytes, err := s.serialize(nil, typ, value, nil)
@@ -1209,9 +1155,8 @@ func TestBlobSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -1229,9 +1174,8 @@ func TestBlobSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -1249,9 +1193,8 @@ func TestBlobSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -1269,9 +1212,8 @@ func TestBlobSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -1293,9 +1235,8 @@ func TestJsonSerializer(t *testing.T) {
 	tuple, err := tupleBuilder.Build(buffPool)
 	require.NoError(t, err)
 
-	value, notNull, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, ns)
+	value, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, ns)
 	require.NoError(t, err)
-	require.True(t, notNull)
 	require.NotNil(t, value)
 
 	bytes, err := s.serialize(context.Background(), typ, value, ns)
@@ -1318,9 +1259,8 @@ func TestTextSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -1338,9 +1278,8 @@ func TestTextSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -1358,9 +1297,8 @@ func TestTextSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -1378,9 +1316,8 @@ func TestTextSerializer(t *testing.T) {
 		tuple, err := tupleBuilder.Build(buffPool)
 		require.NoError(t, err)
 
-		value, notNull, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
+		value, err := s.deserialize(nil, typ, tupleDesc, tuple, 0, nil)
 		require.NoError(t, err)
-		require.True(t, notNull)
 		require.NotNil(t, value)
 
 		bytes, err := s.serialize(nil, typ, value, ns)
@@ -1405,9 +1342,8 @@ func TestGeometrySerializer(t *testing.T) {
 	tuple, err := tupleBuilder.Build(buffPool)
 	require.NoError(t, err)
 
-	value, notNull, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, ns)
+	value, err := s.deserialize(context.Background(), typ, tupleDesc, tuple, 0, ns)
 	require.NoError(t, err)
-	require.True(t, notNull)
 	require.NotNil(t, value)
 
 	bytes, err := s.serialize(nil, typ, value, ns)
