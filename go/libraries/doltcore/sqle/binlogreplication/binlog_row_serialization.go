@@ -91,26 +91,49 @@ func (rsi *rowSerializationIter) nextColumn() (schema.Column, *val.TupleDesc, va
 // MySQL binlog binary format. For data stored out of band (e.g. BLOB, TEXT, GEOMETRY, JSON), |ns| is used to load the
 // out-of-band data. This function returns the binary representation of the row, as well as a bitmap that indicates
 // which fields of the row are null (and therefore don't contribute any bytes to the returned binary data).
-func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
-	columns := sch.GetAllCols().GetColumns()
+func serializeRowToBinlogBytes(ctx *sql.Context, fromSch, toSch schema.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
+	columns := toSch.GetAllCols().GetColumns()
 	nullBitmap = mysql.NewServerBitmap(len(columns))
 
-	iter := newRowSerializationIter(sch, key, value, ns)
+	// TODO: Document/explain the fromSch and toSch parameters
+
+	iter := newRowSerializationIter(fromSch, key, value, ns)
 	rowIdx := -1
 	for iter.hasNext() {
 		rowIdx++
 		col, descriptor, tuple, tupleIdx := iter.nextColumn()
 
 		typ := col.TypeInfo.ToSqlType()
-		serializer, ok := typeSerializersMap[typ.Type()]
+		deserializer, ok := typeSerializersMap[typ.Type()]
 		if !ok {
 			return nil, nullBitmap, fmt.Errorf(
 				"unsupported type: %v (%d)\n", typ.String(), typ.Type())
 		}
-		newData, err := serializer.serialize(ctx, typ, descriptor, tuple, tupleIdx, ns)
+
+		value, notNull, err := deserializer.deserialize(ctx, typ, descriptor, tuple, tupleIdx, ns)
 		if err != nil {
-			return nil, mysql.Bitmap{}, err
+			return nil, nullBitmap, err
 		}
+
+		var newData []byte
+		if notNull {
+			toCol, ok := toSch.GetAllCols().GetByTag(col.Tag)
+			if !ok {
+				return nil, nullBitmap, fmt.Errorf("unable to find column %s (tag %v) in destination schema", col.Name, col.Tag)
+			}
+
+			serializer, ok := typeSerializersMap[toCol.TypeInfo.ToSqlType().Type()]
+			if !ok {
+				return nil, nullBitmap, fmt.Errorf(
+					"unsupported type: %v (%d)\n", typ.String(), typ.Type())
+			}
+
+			newData, err = serializer.serialize(ctx, toCol.TypeInfo.ToSqlType(), value, ns)
+			if err != nil {
+				return nil, mysql.Bitmap{}, err
+			}
+		}
+
 		if newData == nil {
 			nullBitmap.Set(rowIdx, true)
 		} else {

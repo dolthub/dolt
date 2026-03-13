@@ -411,6 +411,17 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			return nil, err
 		}
 
+		// Grab the schema of the "from" table, if it isn't null (e.g. when
+		// creating a new table, the "from" table is not set). If it is null,
+		// just use the "to" schema so simplify nil checking.
+		fromSch := sch
+		if tableDelta.FromTable != nil {
+			fromSch, err = tableDelta.FromTable.GetSchema(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		columns := sch.GetAllCols().GetColumns()
 		tableId := tablesToId[tableName.Name]
 
@@ -429,8 +440,10 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 
 			switch diffType {
 			case tree.AddedDiff:
+				// For inserted rows, there's no existing row to be identified, so
+				// we don't need to use the from schema.
 				data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+					sch, sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -442,13 +455,21 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				}
 
 			case tree.ModifiedDiff:
+				// For an updated row, we don't need to use the "from" schema for the
+				// new values being updated.
 				data, nullColumns, err := serializeRowToBinlogBytes(ctx,
-					sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+					sch, sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
+
+				// We DO need to use the "from" schema to build the row identity information.
+				// This information must match the current values in the row to be updated, so
+				// we need the "from" schema to properly extract the values from the tuple, in
+				// case there have been any schema/type changes, and we need the "to" schema so
+				// that we can assemble and serialize the row information to the current schema.
 				identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(ctx,
-					sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+					fromSch, sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -462,8 +483,13 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				}
 
 			case tree.RemovedDiff:
+				// When removing a row, we must supply row identity information that exactly matches
+				// the current values in the row to be deleted. Because of schema changes that may have
+				// occurred in the transaction we're recording, we must use the "from" schema to
+				// correctly extract the values from the "from" diff, but also use the "to" schema to
+				// assemble and encode the values to the current schema.
 				identifyData, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+					fromSch, sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
