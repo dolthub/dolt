@@ -3211,11 +3211,6 @@ var MergeScripts = []queries.ScriptTest{
 	},
 	{
 		// https://github.com/dolthub/dolt/issues/10676
-		// Merging when one branch drops a FK constraint + its backing index and then re-adds the FK
-		// (creating a new secondary index with a different name) while another branch added rows to
-		// the child table panics with "index out of range [1] with length 1" in foreignKeysAreCompatibleTypes.
-		// The panic occurs because childPriIdxDesc (child's full composite PK) has more handlers than
-		// parentIdxPrefixDesc (prefix limited to len(foreignKey.TableColumns)).dd more
 		Name: "Merge does not panic when FK is dropped and re-added on one branch and child has composite PK",
 		SetUpScript: []string{
 			`CREATE TABLE parent (pk INT PRIMARY KEY);`,
@@ -3247,19 +3242,19 @@ var MergeScripts = []queries.ScriptTest{
 				Query:    "CALL DOLT_MERGE('main')",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
-			// All parent rows from both branches must be present.
 			{
-				Query:    "SELECT pk FROM parent ORDER BY pk;",
+				Query: "SELECT pk FROM parent ORDER BY pk;",
+				// All parent rows from both branches must be present.
 				Expected: []sql.Row{{1}},
 			},
-			// All child rows from both branches must survive the merges.
 			{
-				Query:    "SELECT pk1, pk2, fk_col FROM child ORDER BY pk1, pk2;",
+				Query: "SELECT pk1, pk2, fk_col FROM child ORDER BY pk1, pk2;",
+				// All child rows from both branches must survive the merges.
 				Expected: []sql.Row{{1, 1, 1}, {1, 2, 1}},
 			},
-			// The re-added FK constraint (fk2) must still be enforced after the merge.
 			{
-				Query:       "INSERT INTO child VALUES (2, 1, 99);",
+				Query: "INSERT INTO child VALUES (2, 1, 99);",
+				// The re-added FK constraint (fk2) must still be enforced after the merge.
 				ExpectedErr: sql.ErrForeignKeyChildViolation,
 			},
 		},
