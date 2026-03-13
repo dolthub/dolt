@@ -473,3 +473,65 @@ EOF
 	fi
     done
 }
+
+@test "backup: backup restore pulls table files" {
+    get_table_files() {
+        find "$1" | while read f; do
+	    base=$(basename "$f")
+	    if [ "$base" != "manifest" ] && [ "$base" != "LOCK" ] && [ "$base" != "journal.idx" ] && ! [ -d "$f" ]; then
+	        echo "$base"
+            fi
+	done | sort
+    }
+    # Create many commits and then GC the repo.
+    cd repo1
+    command=""
+    for i in $(seq 128); do command="$command call dolt_commit('--allow-empty', '-Am', 'empty commit');"; done
+    dolt sql -q "$command" > /dev/null
+    dolt gc
+    expected_commits=$(dolt sql -r csv -q 'select count(1) from dolt_log()' | tail -n 1)
+    dolt branch -v
+    cd ..
+
+    # Make a backup.
+    cd repo1
+    dolt backup sync-url file://../repo1_backup
+    cd ..
+
+    # Restore the backup.
+    dolt backup restore file://./repo1_backup repo1_backup_restored
+
+    backup_table_files=( $(get_table_files repo1_backup) )
+    restored_table_files=( $(get_table_files repo1_backup_restored/.dolt/noms) )
+
+    # Check that the restored backup is as expected.
+    cd repo1_backup_restored
+    restored_commits=$(dolt sql -r csv -q 'select count(1) from dolt_log()' | tail -n 1)
+    echo $expected_commits $restored_commits
+    echo ${restored_table_files[*]}
+    find .
+    echo
+    echo
+    find ../repo1_backup
+    dolt branch -v
+    echo
+    cat ../repo1/.dolt/noms/manifest
+    echo
+    cat ../repo1_backup/manifest
+    echo
+    cat ./.dolt/noms/manifest
+    [[ $expected_commits -eq $restored_commits ]] || false
+
+    for tfname in ${backup_table_files[@]}; do
+        found=0
+        for restoredtfname in ${restored_table_files[@]}; do
+	    if [[ "$restoredtfname" == "$tfname" ]]; then
+	        found=1
+	    fi
+	done
+	if [[ "$found" -eq 0 ]]; then
+	    echo "expected to find $tfname in ${_table_files[*]}, but did not"
+	    exit 1
+	fi
+    done
+}
