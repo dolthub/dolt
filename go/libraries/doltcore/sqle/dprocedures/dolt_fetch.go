@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
 // doltFetch is the stored procedure version for the CLI command `dolt fetch`.
@@ -92,7 +93,9 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, defaultRefSpec, &remote, mode, runProgFuncs, stopProgFuncs)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, defaultRefSpec, &remote, mode, statsCh)
+	})
 	if err != nil {
 		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
 	}

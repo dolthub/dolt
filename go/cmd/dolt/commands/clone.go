@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -165,7 +166,9 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	// Nil out the old Dolt env so we don't accidentally operate on the wrong database
 	dEnv = nil
 
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, depth, clonedEnv)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, depth, clonedEnv, statsCh)
+	})
 	if err != nil {
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.
