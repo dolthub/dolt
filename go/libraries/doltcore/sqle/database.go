@@ -2483,6 +2483,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		if ok {
 			return view, ok, nil
 		}
+		return sql.ViewDefinition{}, false, nil
 	}
 
 	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
