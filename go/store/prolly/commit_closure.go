@@ -55,6 +55,7 @@ func (o commitClosureKeyOrdering) Compare(ctx context.Context, left, right Commi
 }
 
 func NewEmptyCommitClosure(ns tree.NodeStore) (CommitClosure, error) {
+	// TODO: since this is constant, we should make a constant for it
 	serializer := message.NewCommitClosureSerializer(ns.Pool())
 	msg := serializer.Serialize(nil, nil, nil, 0)
 	node, fileId, err := tree.NodeFromBytes(msg)

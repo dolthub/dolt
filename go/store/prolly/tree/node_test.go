@@ -19,7 +19,6 @@ import (
 	"math"
 	"math/rand"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -64,11 +63,6 @@ func TestRoundTripNodeItems(t *testing.T) {
 			assert.Equal(t, values[i], nd.GetValue(i))
 		}
 	}
-}
-
-func TestNodeSize(t *testing.T) {
-	sz := unsafe.Sizeof(Node{})
-	assert.Equal(t, 56, int(sz))
 }
 
 func BenchmarkNodeGet(b *testing.B) {

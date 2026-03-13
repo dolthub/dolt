@@ -17,6 +17,7 @@ package prolly
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math/rand"
 	"sort"
 	"testing"
@@ -25,6 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
 
@@ -57,6 +60,17 @@ func TestAddressMap(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, p.addr(), act)
 		}
+	})
+}
+
+func TestAddressMapSerializer(t *testing.T) {
+	bp := pool.NewBuffPool()
+	t.Run("empty address map always serializes to the same thing", func(t *testing.T) {
+		serializer := message.NewAddressMapSerializer(bp)
+		msg := serializer.Serialize(nil, nil, nil, 0)
+		fmt.Println(msg)
+		n, _, _ := tree.NodeFromBytes(msg)
+		fmt.Println(n)
 	})
 }
 

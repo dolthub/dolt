@@ -45,7 +45,7 @@ func NewParentsClosure(ctx context.Context, c *Commit, sv types.SerialMessage, v
 	if types.IsNull(v) {
 		return prolly.CommitClosure{}, fmt.Errorf("internal error or data loss: dangling commit parent closure for addr %s for commit %s", addr.String(), c.Addr().String())
 	}
-	node, fileId, err := tree.NodeFromBytes(v.(types.SerialMessage))
+	node, fileId, err := tree.NodeFromBytesWithHash(v.(types.SerialMessage), addr)
 	if err != nil {
 		return prolly.CommitClosure{}, err
 	}
@@ -140,7 +140,7 @@ func writeFbCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw t
 	closures := make([]prolly.CommitClosure, len(parents))
 	for i := range addrs {
 		if !types.IsNull(vs[i]) {
-			node, fileId, err := tree.NodeFromBytes(vs[i].(types.SerialMessage))
+			node, fileId, err := tree.NodeFromBytesWithHash(vs[i].(types.SerialMessage), addrs[i])
 			if err != nil {
 				return hash.Hash{}, err
 			}

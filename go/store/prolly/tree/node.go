@@ -21,9 +21,9 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
@@ -38,6 +38,7 @@ type subtreeCounts []uint64
 // Elements in a Node are generic Items. Interpreting Item
 // contents is deferred to higher layers (see prolly.Map).
 type Node struct {
+	nodeHash hash.Hash
 	// subtrees contains the key cardinality
 	// of each child tree of a non-leaf Node.
 	// this field is lazily decoded from msg
@@ -128,8 +129,35 @@ func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 	}, fileId, err
 }
 
+func NodeFromBytesWithHash(msg []byte, hash hash.Hash) (node *Node, fileId string, err error) {
+	fileId, keys, values, level, count, err := message.UnpackFields(msg)
+	return &Node{
+		keys:     keys,
+		values:   values,
+		count:    count,
+		level:    level,
+		msg:      msg,
+		nodeHash: hash,
+	}, fileId, err
+}
+
+func NodeFromChunk(chunk *chunks.Chunk) (node *Node, fieldId string, err error) {
+	fieldId, keys, values, level, count, err := message.UnpackFields(chunk.Data())
+	return &Node{
+		keys:     keys,
+		values:   values,
+		count:    count,
+		level:    level,
+		msg:      chunk.Data(),
+		nodeHash: chunk.Hash(),
+	}, fieldId, err
+}
+
 func (nd *Node) HashOf() hash.Hash {
-	return hash.Of(nd.bytes())
+	if nd.nodeHash.IsEmpty() {
+		nd.nodeHash = hash.Of(nd.bytes())
+	}
+	return nd.nodeHash
 }
 
 func (nd *Node) Count() int {

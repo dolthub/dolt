@@ -2311,11 +2311,11 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 				// in the store after the GC is finished.
 				return
 			}
-			addErr = i.gcc.addChunk(ctx, tc)
+			addErr = i.gcc.addChunk(ctx, tc) // TODO: slow
 			if addErr != nil {
 				return
 			}
-			c, err := tc.ToChunk()
+			c, err := tc.ToChunk() // TODO: slow
 			if err != nil {
 				addErr = err
 				return
