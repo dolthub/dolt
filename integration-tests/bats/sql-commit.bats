@@ -278,3 +278,43 @@ SQL
   dolt sql -q "CALL DOLT_COMMIT('--skip-empty', '-m', 'commit message');"
   [ $new_head = $(get_head_commit) ]
 }
+
+@test "sql-commit: committer environment variables set committer meta" {
+  dolt sql -q "create table test_committer (pk int, c1 int, primary key(pk))"
+  dolt add test_committer
+  dolt commit -m "Initial commit"
+
+  dolt sql -q "create table test_committer2 (pk int, c1 int, primary key(pk))"
+  dolt add test_committer2
+  DOLT_COMMITTER_NAME="Test Committer" DOLT_COMMITTER_EMAIL="committer@test.com" dolt commit -m "Commit with different author and committer"
+
+  run dolt sql -r csv -q "SELECT author, author_email, committer, email FROM dolt_log WHERE message = 'Commit with different author and committer'"
+  [ "$status" -eq 0 ]
+  echo $output
+  [[ "$output" =~ author,author_email,committer,email ]] || false
+  [[ "$output" =~ "Bats Tests,bats@email.fake,Test Committer,committer@test.com" ]] || false
+
+  dolt sql -q "create table test_committer3 (pk int, c1 int, primary key(pk))"
+  dolt add test_committer3
+  # The inline modification of the author should take precedence.
+  DOLT_AUTHOR_NAME="Test Author" dolt commit --author="Another Author <another@test.com>" -m "Commit with only author set"
+
+  run dolt sql -r csv -q "SELECT author, author_email, committer, email FROM dolt_log WHERE message = 'Commit with only author set'"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ author,author_email,committer,email ]] || false
+  [[ "$output" =~ "Another Author,another@test.com,Bats Tests,bats@email.fake" ]] || false
+
+  dolt sql -q "create table test_committer4 (pk int, c1 int, primary key(pk))"
+  dolt add test_committer4
+  TZ=PST+8 DOLT_COMMITTER_NAME="Date Committer" DOLT_COMMITTER_EMAIL="date@committer.com" DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' DOLT_AUTHOR_NAME='Date Author' dolt commit -m "Commit with different committer timestamp"
+
+  run dolt sql -r csv -q "SELECT committer, email, date FROM dolt_commits WHERE message = 'Commit with different committer timestamp'"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ committer,email,date ]] || false
+  [[ "$output" =~ "Date Committer,date@committer.com,2023-09-26 12:34:56" ]] || false
+
+  run dolt sql -r csv -q "SELECT author, author_date, committer, date FROM dolt_log WHERE message = 'Commit with different committer timestamp'"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ author,author_date,committer,date ]] || false
+  [[ "$output" =~ "Date Author,2023-09-26 01:23:45,Date Committer,2023-09-26 12:34:56" ]] || false
+}

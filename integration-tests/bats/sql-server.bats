@@ -63,16 +63,16 @@ EOF
   # By default, commits will be authored by the current sql user (user1)
   dolt -u user1 sql -q "create table t2(pk int primary key);"
   dolt -u user1 sql -q "call dolt_commit('-Am', 'committing as user1');"
-  run dolt -u user1 sql -q "select committer, email, message from dolt_log limit 1;"
-  [ $status -eq 0 ]
-  [[ $output =~ "| user1     | user1@% | committing as user1 |" ]] || false
+  run dolt -u user1 sql -q "select committer, email, message from dolt_log limit 1;" -r csv
+  [ "$status" -eq 0 ]
+  [[ $output =~ "user1,user1@%,committing as user1" ]] || false
 
   # If --author is explicitly provided, then always use that, even if dolt_sql_user_is_committer is enabled
   dolt -u user1 sql -q "create table t3(pk int primary key);"
   dolt -u user1 sql -q "call dolt_commit('--author', 'barbie <barbie@plastic.com>', '-Am', 'committing as barbie');"
-  run dolt -u user1 sql -q "select committer, email, message from dolt_log limit 1;"
-  [ $status -eq 0 ]
-  [[ $output =~ "| barbie    | barbie@plastic.com | committing as barbie |" ]] || false
+  run dolt -u user1 sql -q "select author, author_email, message, committer, email from dolt_log limit 1;" -r csv
+  [ "$status" -eq 0 ]
+  [[ $output =~ "barbie,barbie@plastic.com,committing as barbie,user1,user1@%" ]] || false
 }
 
 @test "sql-server: can create savepoint when no database is selected" {

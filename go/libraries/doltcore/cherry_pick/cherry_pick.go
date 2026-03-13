@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // ErrCherryPickUncommittedChanges is returned when a cherry-pick is attempted without a clean working set.
@@ -177,19 +178,24 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 }
 
 // CreateCommitStagedPropsFromCherryPickOptions converts the specified cherry-pick |options| into a CommitStagedProps
-// instance that can be used to create a pending commit.
+// instance that can be used to create a pending commit. The author identity comes from the original commit being
+// cherry-picked (to preserve authorship), while the committer identity comes from [dsess.DoltSession].
 func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options CherryPickOptions, originalCommit *doltdb.Commit) (*actions.CommitStagedProps, error) {
 	originalMeta, err := originalCommit.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	commitProps := actions.CommitStagedProps{
-		Date:             originalMeta.Time(),
-		Name:             originalMeta.Name,
-		Email:            originalMeta.Email,
-		SkipVerification: options.SkipVerification,
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	commitProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, doltSession, "")
+	if err != nil {
+		return nil, err
 	}
+
+	commitProps.Name = originalMeta.Name
+	commitProps.Email = originalMeta.Email
+	commitProps.Date = datas.CommitDateAt(originalMeta.Time())
+	commitProps.SkipVerification = options.SkipVerification
 
 	if options.CommitMessage != "" {
 		commitProps.Message = options.CommitMessage
@@ -317,13 +323,13 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 		return "", 0, 0, 0, fmt.Errorf("error: unable to get commit metadata: %w", err)
 	}
 
-	// Create the commit with the original commit's metadata
-	commitProps := actions.CommitStagedProps{
-		Message:    cherryCommitMeta.Description,
-		Date:       cherryCommitMeta.Time(),
-		AllowEmpty: false, // in a conflict workflow, never will be 'true'
-		Name:       cherryCommitMeta.Name,
-		Email:      cherryCommitMeta.Email,
+	// Create the commit with the original commit's metadata. In a conflict workflow, AllowEmpty is always false.
+	commitProps, err := CreateCommitStagedPropsFromCherryPickOptions(ctx, CherryPickOptions{
+		CommitMessage:              cherryCommitMeta.Description,
+		CommitBecomesEmptyHandling: doltdb.ErrorOnEmptyCommit,
+	}, cherryCommit)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: unable to create commit staged props: %w", err)
 	}
 
 	roots, ok := doltSession.GetRoots(ctx, dbName)
@@ -331,7 +337,7 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 		return "", 0, 0, 0, fmt.Errorf("fatal: unable to load roots for %s", dbName)
 	}
 
-	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)
+	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, *commitProps)
 	if err != nil {
 		if actions.ErrCommitVerificationFailed.Is(err) {
 			return "", 0, 0, 0, err

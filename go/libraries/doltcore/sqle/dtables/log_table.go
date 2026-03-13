@@ -24,7 +24,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 )
@@ -39,15 +41,40 @@ type LogTable struct {
 	dbName            string
 	tableName         string
 	headHash          hash.Hash
+	showCommitterOnly bool
 }
 
 var _ sql.Table = (*LogTable)(nil)
 var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 
+// LogSchemaCommitterColumns legacy committer schema columns.
+var LogSchemaCommitterColumns = sql.Schema{
+	&sql.Column{Name: "commit_hash", Type: types.Text, PrimaryKey: true},
+	&sql.Column{Name: "committer", Type: types.Text},
+	&sql.Column{Name: "email", Type: types.Text},
+	&sql.Column{Name: "date", Type: types.Datetime3},
+	&sql.Column{Name: "message", Type: types.Text},
+	&sql.Column{Name: "commit_order", Type: types.Uint64},
+}
+
+// LogSchemaAuthorColumns additional author columns to create full dolt_log schema.
+var LogSchemaAuthorColumns = sql.Schema{
+	&sql.Column{Name: "author", Type: types.Text},
+	&sql.Column{Name: "author_email", Type: types.Text},
+	&sql.Column{Name: "author_date", Type: types.Datetime},
+}
+
 // NewLogTable creates a LogTable
-func NewLogTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head}
+func NewLogTable(ctx *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	sco, _ := dsess.GetBooleanSystemVar(ctx, dsess.DoltLogCommitterOnly)
+	return &LogTable{
+		dbName:            dbName,
+		tableName:         tableName,
+		ddb:               ddb,
+		head:              head,
+		showCommitterOnly: sco,
+	}
 }
 
 // DataLength implements sql.StatisticsTable
@@ -84,16 +111,34 @@ func (dt *LogTable) String() string {
 	return dt.tableName
 }
 
+// NewLogTableSchema returns the log table schema based on the flag.
+func NewLogTableSchema(showCommitterOnly bool) sql.Schema {
+	cols := make(sql.Schema, 0, len(LogSchemaCommitterColumns))
+	cols = append(cols, LogSchemaCommitterColumns...)
+	if !showCommitterOnly {
+		cols = append(cols, LogSchemaAuthorColumns...)
+	}
+	return cols
+}
+
+// NewLogTableRow builds a dolt_log row with the option to show author columns.
+func NewLogTableRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, showCommitterOnly bool) sql.Row {
+	rowVals := make([]interface{}, 0, len(LogSchemaCommitterColumns))
+	rowVals = append(rowVals, commitHash.String(), meta.CommitterName, meta.CommitterEmail, meta.CommitterTime(), meta.Description, height)
+	if !showCommitterOnly {
+		rowVals = append(rowVals, meta.Name, meta.Email, meta.Time())
+	}
+	return sql.NewRow(rowVals...)
+}
+
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "committer", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "date", Type: types.Datetime3, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "commit_order", Type: types.Uint64, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+	sch := NewLogTableSchema(dt.showCommitterOnly)
+	for _, col := range sch {
+		col.Source = dt.tableName
+		col.DatabaseSource = dt.dbName
 	}
+	return sch
 }
 
 // Collation implements the sql.Table interface.
@@ -114,9 +159,9 @@ func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIte
 		if err != nil {
 			return nil, err
 		}
-		return sql.RowsToRowIter(sql.NewRow(p.Hash().String(), p.Meta().Name, p.Meta().Email, p.Meta().Time(), p.Meta().Description, height)), nil
+		return sql.RowsToRowIter(NewLogTableRow(p.Hash(), p.Meta(), height, dt.showCommitterOnly)), nil
 	default:
-		return NewLogItr(ctx, dt.ddb, dt.head)
+		return dt.NewLogItr(ctx, dt.ddb, dt.head)
 	}
 }
 
@@ -214,11 +259,12 @@ func (dt *LogTable) HeadHash() (hash.Hash, error) {
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
-	child doltdb.CommitItr[*sql.Context]
+	child             doltdb.CommitItr[*sql.Context]
+	showCommitterOnly bool
 }
 
 // NewLogItr creates a LogItr from the current environment.
-func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
+func (dt *LogTable) NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
 	h, err := head.HashOf()
 	if err != nil {
 		return nil, err
@@ -229,7 +275,7 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogI
 		return nil, err
 	}
 
-	return &LogItr{child}, nil
+	return &LogItr{child: child, showCommitterOnly: dt.showCommitterOnly}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -260,7 +306,7 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height), nil
+	return NewLogTableRow(h, meta, height, itr.showCommitterOnly), nil
 }
 
 // Close closes the iterator.
