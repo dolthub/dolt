@@ -89,8 +89,8 @@ sleep 1
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
   --time=120 \
-  --report_interval=1 \
-  --threads=2 \
+  --report_interval=10 \
+  --threads=1 \
   --tables=1 \
   --scale=1 \
   --trx_level="RR" prepare
@@ -118,8 +118,8 @@ echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
   --time=120 \
-  --report_interval=1 \
-  --threads=2 \
+  --report_interval=10 \
+  --threads=1 \
   --tables=1 \
   --scale=1 \
   --trx_level="RR" run
