@@ -583,7 +583,9 @@ func doltSessionFactory(
 var ErrFailedToInitCommitIdentity = fmt.Errorf("failed to initialize commit identity session variables from environment")
 
 // InitCommitIdentitySessionConfig sends a single SET statement to initialize all commit identity session variables
-// from environment variables in one transaction. Should be called after [sql.SessionCommandBegin].
+// (DOLT_AUTHOR_NAME, DOLT_AUTHOR_EMAIL, DOLT_AUTHOR_DATE, DOLT_COMMITTER_NAME, DOLT_COMMITTER_EMAIL,
+// DOLT_COMMITTER_DATE) from the corresponding environment variables. Must be called after [sql.SessionCommandBegin].
+// The loaded values become the highest-priority identity source in [dsess.DoltSession.NewCommitStagedProps].
 func InitCommitIdentitySessionConfig(queryist cli.Queryist, sqlCtx *sql.Context) error {
 	envVarToSessionVar := []struct{ environmentConfigVar, sessionConfigVar string }{
 		{dconfig.EnvDoltAuthorName, dsess.DoltAuthorName},

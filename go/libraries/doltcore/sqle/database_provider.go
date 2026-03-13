@@ -780,7 +780,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 			return fmt.Errorf("unable to get roots for database %s", name)
 		}
 
-		commitStagedProps, err := sess.NewCommitStagedProps(ctx, "CREATE DATABASE", dsess.FallbackToSQLClient)
+		commitStagedProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, sess, "CREATE DATABASE")
 		if err != nil {
 			return err
 		}

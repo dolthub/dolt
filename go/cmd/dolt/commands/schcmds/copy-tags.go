@@ -273,7 +273,7 @@ func doltCommitUpdatedTags(ctx *sql.Context, tableResolver doltdb.TableResolver,
 
 	doltDB := dEnv.DoltDB(ctx)
 	dSess := dsess.DSessFromSess(ctx.Session)
-	commitStagedProps, err := dSess.NewCommitStagedProps(ctx, "Syncing column tags from "+fromBranchName+" branch", dsess.FallbackToDoltConfig)
+	commitStagedProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, dSess, "Syncing column tags from "+fromBranchName+" branch")
 	if err != nil {
 		return err
 	}

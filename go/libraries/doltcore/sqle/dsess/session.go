@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -506,7 +507,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 		dbName := ctx.GetCurrentDatabase()
 		var pendingCommit *doltdb.PendingCommit
-		commitStagedProps, err := d.NewCommitStagedProps(ctx, message, FallbackToSQLClient)
+		commitStagedProps, err := CommitStagedPropsFromDoltSess(ctx, d, message)
 		if err != nil {
 			return err
 		}
@@ -1491,28 +1492,43 @@ func (d *DoltSession) Email() string {
 	return d.email
 }
 
-// NewCommitStagedProps creates a [actions.CommitStagedProps] using session variables for author and committer identity.
-// It reads [DoltAuthorName], [DoltAuthorEmail], [DoltAuthorDate], [DoltCommitterName], [DoltCommitterEmail], and
-// [DoltCommitterDate] if set. If a session variable is not set, it falls back to the corresponding OS environment
-// variable (e.g. DOLT_AUTHOR_NAME), then to either the SQL client identity or dolt config values depending on the
-// [IdentityFallback] parameter.
-func (d *DoltSession) NewCommitStagedProps(ctx *sql.Context, message string, fallback IdentityFallback) (actions.CommitStagedProps, error) {
-	getStringVar := func(sessionVar, envVar string) (string, error) {
-		val, err := d.Session.GetSessionVariable(ctx, sessionVar)
+// defaultCommitIdentity returns the fallback name and email for [DoltSession.NewCommitStagedProps] when no
+// session variable is set. It uses [sqlserver.RunningInServerMode] to distinguish remote server connections
+// (SQL client identity) from CLI and local connections ([DoltSession.Username] / [DoltSession.Email]).
+func (d *DoltSession) defaultCommitIdentity(ctx *sql.Context) (name, email string) {
+	clientAddr := ctx.Client().Address
+	if sqlserver.RunningInServerMode() && !isLoopbackAddress(clientAddr) {
+		return ctx.Client().User, fmt.Sprintf("%s@%s", ctx.Client().User, clientAddr)
+	}
+	return d.Username(), d.Email()
+}
+
+// NewCommitStagedProps creates an [actions.CommitStagedProps] using session variables for author and committer
+// identity.
+//
+// Identity is resolved in the following order:
+//  1. Session variables ([DoltAuthorName], [DoltCommitterName], etc.). DOLT_AUTHOR_* and DOLT_COMMITTER_* env vars
+//     are preloaded into these at session startup by engine.InitCommitIdentitySessionConfig, so they share this tier.
+//  2. The SQL client identity ([sql.Client.User] and [sql.Client.Address]) is used when [sqlserver.RunningInServerMode]
+//     returns true and the client address is not a loopback address.
+//  3. Dolt config values ([DoltSession.Username] and [DoltSession.Email]) are used in CLI mode and for local clients.
+func (d *DoltSession) NewCommitStagedProps(ctx *sql.Context, message string) (actions.CommitStagedProps, error) {
+	defaultUser, defaultEmail := d.defaultCommitIdentity(ctx)
+
+	// getStringConfig reads a session variable, returning defaultVal if unset or empty.
+	getStringConfig := func(sessionVar, defaultVal string) (string, error) {
+		val, err := d.GetSessionVariable(ctx, sessionVar)
 		if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {
 			return "", err
 		}
 		if strVal, ok := val.(string); ok && strVal != "" {
 			return strVal, nil
 		}
-		if envVal := os.Getenv(envVar); envVal != "" {
-			return envVal, nil
-		}
-		return "", nil
+		return defaultVal, nil
 	}
 
-	getDateVar := func(sessionVar, envVar string) (datas.CommitDate, error) {
-		strVal, err := getStringVar(sessionVar, envVar)
+	getDateConfig := func(sessionVar string) (datas.CommitDate, error) {
+		strVal, err := getStringConfig(sessionVar, "")
 		if err != nil {
 			return datas.CommitDateNow(), err
 		}
@@ -1526,51 +1542,32 @@ func (d *DoltSession) NewCommitStagedProps(ctx *sql.Context, message string, fal
 		return datas.CommitDateAt(t), nil
 	}
 
-	user := ctx.Client().User
-	email := fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
-	if fallback == FallbackToDoltConfig {
-		user = d.Username()
-		email = d.Email()
+	// resolveIdentity reads the name and email session variables, falling back to the default identity.
+	resolveIdentity := func(nameVar, emailVar string) (name, email string, err error) {
+		name, err = getStringConfig(nameVar, defaultUser)
+		if err != nil {
+			return
+		}
+		email, err = getStringConfig(emailVar, defaultEmail)
+		return
 	}
 
-	authorName, err := getStringVar(DoltAuthorName, dconfig.EnvDoltAuthorName)
-	if err != nil {
-		return actions.CommitStagedProps{}, err
-	}
-	if authorName == "" {
-		authorName = user
-	}
-
-	authorEmail, err := getStringVar(DoltAuthorEmail, dconfig.EnvDoltAuthorEmail)
-	if err != nil {
-		return actions.CommitStagedProps{}, err
-	}
-	if authorEmail == "" {
-		authorEmail = email
-	}
-
-	authorDate, err := getDateVar(DoltAuthorDate, dconfig.EnvDoltAuthorDate)
+	authorName, authorEmail, err := resolveIdentity(DoltAuthorName, DoltAuthorEmail)
 	if err != nil {
 		return actions.CommitStagedProps{}, err
 	}
 
-	committerName, err := getStringVar(DoltCommitterName, dconfig.EnvDoltCommitterName)
+	authorDate, err := getDateConfig(DoltAuthorDate)
 	if err != nil {
 		return actions.CommitStagedProps{}, err
 	}
-	if committerName == "" {
-		committerName = user
 
-	}
-	committerEmail, err := getStringVar(DoltCommitterEmail, dconfig.EnvDoltCommitterEmail)
+	committerName, committerEmail, err := resolveIdentity(DoltCommitterName, DoltCommitterEmail)
 	if err != nil {
 		return actions.CommitStagedProps{}, err
 	}
-	if committerEmail == "" {
-		committerEmail = email
-	}
 
-	committerDate, err := getDateVar(DoltCommitterDate, dconfig.EnvDoltCommitterDate)
+	committerDate, err := getDateConfig(DoltCommitterDate)
 	if err != nil {
 		return actions.CommitStagedProps{}, err
 	}
@@ -1584,6 +1581,13 @@ func (d *DoltSession) NewCommitStagedProps(ctx *sql.Context, message string, fal
 		CommitterName:  committerName,
 		CommitterEmail: committerEmail,
 	}, nil
+}
+
+// isLoopbackAddress reports whether addr is a loopback address (127.x.x.x or ::1),
+// meaning the client is connecting from the same machine as the server.
+func isLoopbackAddress(addr string) bool {
+	ip := net.ParseIP(addr)
+	return ip != nil && ip.IsLoopback()
 }
 
 // setDbSessionVars updates the three session vars that track the value of the session root hashes
@@ -2161,3 +2165,75 @@ func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, err
 // create fresh table editors.
 // The indirection avoids a writer/dsess package import cycle.
 type WriteSessFunc func(ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession
+
+// CommitStagedPropsFromDoltSess returns an [actions.CommitStagedProps] based on the DoltSession
+// user configuration and MySQL Dolt-specific commit configuration system variables. The default
+// identity is resolved on whether the connection is local or remote.
+//
+// Commit identity environment variables are initialized into the MySQL session variables via
+// engine.InitCommitIdentitySessionConfig at session startup. This is done for over-the-wire and
+// local connections, so we don't have to check environment variables to overwrite the default
+// commit identity, only session variables.
+func CommitStagedPropsFromDoltSess(ctx *sql.Context, doltSess *DoltSession, message string) (commitStagedProps actions.CommitStagedProps, err error) {
+	defaultIdentity := commitIdentityFromConn(ctx, doltSess, ctx.Session.ID())
+
+	committer, err := CommitIdentityFromSessionVars(ctx, DoltCommitterName, DoltCommitterEmail, DoltCommitterDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	if committer.Name == "" {
+		committer.Name = defaultIdentity.Name
+	}
+	if committer.Email == "" {
+		committer.Email = defaultIdentity.Email
+	}
+
+	author, err := CommitIdentityFromSessionVars(ctx, DoltAuthorName, DoltAuthorEmail, DoltAuthorDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	if author.Name == "" {
+		author.Name = defaultIdentity.Name
+	}
+	if author.Email == "" {
+		author.Email = defaultIdentity.Email
+	}
+
+	return actions.CommitStagedProps{
+		Message:        message,
+		Name:           author.Name,
+		Date:           author.Date,
+		Email:          author.Email,
+		CommitterDate:  committer.Date,
+		CommitterName:  committer.Name,
+		CommitterEmail: committer.Email,
+	}, nil
+}
+
+// commitIdentityFromConn resolves the [datas.CommitIdentity] based on whether the connection
+// is local or remote. The command-line interface is treated as local. For server connections,
+// [sqlserver.GetRunningServer] retrieves the [mysql.Conn] from [server.SessionManager] via |connID|.
+//
+// Local (loopback) connections use [DoltSession.Username] and [DoltSession.Email]. Remote connections
+// use the [sql.Client] identity, constructing an email from the MySQL user and address pattern.
+func commitIdentityFromConn(ctx *sql.Context, doltSess *DoltSession, connID uint32) (commitIdentity datas.CommitIdentity) {
+	commitIdentity.Name = doltSess.Username()
+	commitIdentity.Email = doltSess.Email()
+
+	srv := sqlserver.GetRunningServer()
+	if srv == nil {
+		return commitIdentity
+	}
+
+	conn, ok := srv.SessionManager().GetConn(connID)
+	if !ok {
+		return commitIdentity
+	}
+
+	if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok && !tcpAddr.IP.IsLoopback() {
+		commitIdentity.Name = ctx.Client().User
+		commitIdentity.Email = fmt.Sprintf("%s@%s", commitIdentity.Name, ctx.Client().Address)
+	}
+
+	return commitIdentity
+}

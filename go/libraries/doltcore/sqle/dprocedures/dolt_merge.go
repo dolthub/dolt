@@ -456,7 +456,7 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	commitStagedProps, err := dSess.NewCommitStagedProps(ctx, msg, dsess.FallbackToSQLClient)
+	commitStagedProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, dSess, msg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -542,7 +542,7 @@ func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, 
 		return cli.ParseAuthor(authorStr)
 	}
 	dSess := dsess.DSessFromSess(ctx.Session)
-	props, err := dSess.NewCommitStagedProps(ctx, "", dsess.FallbackToSQLClient)
+	props, err := dsess.CommitStagedPropsFromDoltSess(ctx, dSess, "")
 	if err != nil {
 		return "", "", err
 	}

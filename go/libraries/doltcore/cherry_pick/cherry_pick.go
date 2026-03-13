@@ -187,7 +187,7 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 	}
 
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	commitProps, err := doltSession.NewCommitStagedProps(ctx, "", dsess.FallbackToSQLClient)
+	commitProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, doltSession, "")
 	if err != nil {
 		return nil, err
 	}

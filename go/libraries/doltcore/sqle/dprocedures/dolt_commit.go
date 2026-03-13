@@ -110,7 +110,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
-	commitStagedProps, err := dSess.NewCommitStagedProps(ctx, msg, dsess.FallbackToSQLClient)
+	commitStagedProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, dSess, msg)
 	if err != nil {
 		return "", false, err
 	}

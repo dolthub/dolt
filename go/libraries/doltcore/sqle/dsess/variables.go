@@ -21,7 +21,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // Per-DB system variables
@@ -80,16 +82,6 @@ const (
 	DoltCommitterName  = "dolt_committer_name"
 	DoltCommitterEmail = "dolt_committer_email"
 	DoltCommitterDate  = "dolt_committer_date"
-)
-
-// IdentityFallback specifies what identity source to use when session/env variables are not set.
-type IdentityFallback int
-
-const (
-	// FallbackToSQLClient uses the SQL client identity [sql.Context.Client] as the fallback.
-	FallbackToSQLClient IdentityFallback = iota
-	// FallbackToDoltConfig uses dolt config values from [DoltSession] as the fallback.
-	FallbackToDoltConfig
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"
@@ -210,6 +202,59 @@ func GetBooleanSystemVar(ctx *sql.Context, varName string) (bool, error) {
 	}
 
 	return i8 == int8(1), nil
+}
+
+// CommitIdentityFromSessionVars returns the [datas.CommitIdentity] based on the named |sessionVars| for name,
+// email, and date. Any missing or extra session variables will be reported as an error, but unknown system
+// variables are ignored for older Dolt servers.
+func CommitIdentityFromSessionVars(ctx *sql.Context, sessionVars ...string) (identity datas.CommitIdentity, err error) {
+	if len(sessionVars) != 3 {
+		return identity, fmt.Errorf("")
+	}
+	name, err := GetStringSessionVar(ctx, sessionVars[0])
+	if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {
+		return identity, err
+	}
+	if name != "" {
+		identity.Name = name
+	}
+
+	email, _ := GetStringSessionVar(ctx, sessionVars[1])
+	if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {
+		return identity, err
+	}
+	if email != "" {
+		identity.Email = email
+	}
+
+	dateStr, _ := GetStringSessionVar(ctx, sessionVars[2])
+	if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {
+		return identity, err
+	}
+	if dateStr != "" {
+		identity.Date, err = datas.NewCommitDate(dateStr)
+		if dconfig.ErrUnsupportedDateFormat.Is(err) {
+			return identity, err
+		}
+	} else {
+		identity.Date = datas.CommitDateNow()
+	}
+
+	return identity, nil
+}
+
+// GetStringSessionVar returns the string value for the session variable named, returning an error if the variable
+// doesn't exist in the session or has a non-string type.
+func GetStringSessionVar(ctx *sql.Context, varName string) (string, error) {
+	val, err := ctx.GetSessionVariable(ctx, varName)
+	if err != nil {
+		return "", err
+	}
+	strVal, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected type for variable %s: %T", varName, val)
+	}
+	return strVal, nil
 }
 
 // IgnoreReplicationErrors returns true if the dolt_skip_replication_errors system variable is set to true, which means

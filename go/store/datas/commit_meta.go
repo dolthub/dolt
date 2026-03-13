@@ -18,6 +18,10 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	errors2 "gopkg.in/src-d/go-errors.v1"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 )
 
 const (
@@ -35,11 +39,9 @@ const (
 
 const defaultInitialCommitMessage = "Initialize data repository"
 
-var ErrNameNotConfigured = errors.New("Aborting commit due to empty committer name. Is your config set?")
-var ErrEmailNotConfigured = errors.New("Aborting commit due to empty committer email. Is your config set?")
+var ErrNameNotConfigured = errors2.NewKind("Aborting commit due to empty %s name. Is your config set?")
+var ErrEmailNotConfigured = errors2.NewKind("Aborting commit due to empty %s email. Is your config set?")
 var ErrEmptyCommitMessage = errors.New("Aborting commit due to empty commit message.")
-var ErrEmptyCommitterName = errors.New("aborting construction of commit metadata, missing committer name in constructor")
-var ErrEmptyCommitterEmail = errors.New("aborting construction of commit metadata, missing committer email in constructor")
 
 // CommitterDate is the function used to get the committer time when creating commits. Tests rely on this function to
 // produce deterministic hash values and results.
@@ -65,6 +67,19 @@ func (d CommitDate) Resolve(defaultFn func() time.Time) time.Time {
 		return d.t
 	}
 	return defaultFn()
+}
+
+// NewCommitDate parses |dateStr| into a [time.Time] to create a CommitDate using CommitDateAt. If the time
+// is unparsable an error is returned with the default CommitDateNow alternative.
+func NewCommitDate(dateStr string) (commitDate CommitDate, err error) {
+	if dateStr == "" {
+		return CommitDateNow(), fmt.Errorf("date string cannot be empty for new CommitDate")
+	}
+	t, err := dconfig.ParseDate(dateStr)
+	if err != nil {
+		return CommitDateNow(), err
+	}
+	return CommitDateAt(t), nil
 }
 
 // CommitIdentity groups the name, email, and optional date for a single author or committer.
@@ -120,19 +135,19 @@ func NewCommitMetaWithAuthorDate(name, email, desc string, authorDate time.Time)
 // different amounts.
 func NewCommitMetaWithAuthorAndCommitter(author CommitIdentity, committer CommitIdentity, description string) (*CommitMeta, error) {
 	if author.Name == "" {
-		return nil, ErrNameNotConfigured
+		return nil, ErrNameNotConfigured.New("author")
 	}
 	if author.Email == "" {
-		return nil, ErrEmailNotConfigured
+		return nil, ErrEmailNotConfigured.New("author")
 	}
 	if description == "" {
 		return nil, ErrEmptyCommitMessage
 	}
 	if committer.Name == "" {
-		return nil, ErrEmptyCommitterName
+		return nil, ErrNameNotConfigured.New("committer")
 	}
 	if committer.Email == "" {
-		return nil, ErrEmptyCommitterEmail
+		return nil, ErrEmailNotConfigured.New("committer")
 	}
 
 	// Dates are intentionally not resolved here. newCommitForValue resolves Timestamp and UserTimestamp at

@@ -323,10 +323,15 @@ func newLateBindingEngine(
 		// database set when you begin using them.
 		sqlCtx.SetCurrentDatabase(database)
 
+		// SetClient must come before InitCommitIdentitySessionConfig since it requires an authenticated client on the context.
+		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
+
 		// For now, we treat the entire lifecycle of this
 		// sqlCtx as one big session-in-use window.
 		sql.SessionCommandBegin(sqlCtx.Session)
 
+		// Load DOLT_AUTHOR_* / DOLT_COMMITTER_* env vars into session variables so they take
+		// effect as the highest-priority identity source in [dsess.DoltSession.NewCommitStagedProps].
 		if err := engine.InitCommitIdentitySessionConfig(se, sqlCtx); err != nil {
 			cli.PrintErr(err.Error())
 		}
@@ -336,9 +341,6 @@ func newLateBindingEngine(
 			sql.SessionEnd(sqlCtx.Session)
 			se.Close()
 		}
-
-		// Set client to specified user
-		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
 		res.Queryist = se
 		res.Context = sqlCtx
 		res.Closer = close
