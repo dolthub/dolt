@@ -80,14 +80,7 @@ func (a ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
 	if err != nil {
 		return chunks.EmptyChunk, err
 	}
-
-	newChunk := chunks.NewChunk(rawChunk)
-
-	// TODO: remove this once we have confidence in archives.
-	if newChunk.Hash() != a.h {
-		panic("Hash Mismatch!!")
-	}
-
+	newChunk := chunks.NewChunkWithHash(a.h, rawChunk)
 	return newChunk, err
 }
 
