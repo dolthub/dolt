@@ -32,6 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// prollyParentSecDiffFkConstraintViolations checks for FK violations caused by changes to the
+// parent table's secondary index between the merge ancestor and the merged result.
 func prollyParentSecDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
@@ -76,7 +78,7 @@ func prollyParentSecDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeysAreCompatibleTypes(parentIdxPrefixDesc, childSecIdxDesc)
+	compatibleTypes := fkIndexKeyDescsAreSerializationCompatible(parentIdxPrefixDesc, childSecIdxDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -127,6 +129,9 @@ func prollyParentSecDiffFkConstraintViolations(
 	return nil
 }
 
+// prollyParentPriDiffFkConstraintViolations checks for FK violations caused by changes to the
+// parent table's primary index when the parent's FK-backing secondary index was absent from the
+// ancestor.
 func prollyParentPriDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
@@ -171,7 +176,7 @@ func prollyParentPriDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeysAreCompatibleTypes(partialDesc, childSecIdxDesc)
+	compatibleTypes := fkIndexKeyDescsAreSerializationCompatible(partialDesc, childSecIdxDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -231,6 +236,9 @@ func prollyParentPriDiffFkConstraintViolations(
 	return nil
 }
 
+// prollyChildPriDiffFkConstraintViolations checks for FK violations caused by additions or
+// modifications to the child table when the child's FK-backing secondary index was absent from
+// the merge ancestor.
 func prollyChildPriDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
@@ -253,7 +261,7 @@ func prollyChildPriDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeysAreCompatibleTypes(childPriIdxDesc, parentIdxPrefixDesc)
+	compatibleTypes := fkIndexKeyDescsAreSerializationCompatible(childPriIdxDesc, parentIdxPrefixDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -300,6 +308,12 @@ func prollyChildPriDiffFkConstraintViolations(
 	return nil
 }
 
+// prollyChildSecDiffFkConstraintViolations checks for FK violations caused by additions or
+// modifications to the child table using the child's FK-backing secondary index.
+//
+// Both the parent prefix descriptor and the child secondary index prefix descriptor are truncated
+// to len(foreignKey.TableColumns) entries before being passed to fkIndexKeyDescsAreSerializationCompatible,
+// so the two descriptors always have the same length in this path.
 func prollyChildSecDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
@@ -328,7 +342,7 @@ func prollyChildSecDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeysAreCompatibleTypes(childIdxPrefixDesc, parentIdxPrefixDesc)
+	compatibleTypes := fkIndexKeyDescsAreSerializationCompatible(childIdxPrefixDesc, parentIdxPrefixDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -372,17 +386,35 @@ func prollyChildSecDiffFkConstraintViolations(
 	return nil
 }
 
-// foreignKeysAreCompatibleTypes returns whether the serializations for two tuple descriptors are binary compatible
-func foreignKeysAreCompatibleTypes(keyDescA, keyDescB *val.TupleDesc) bool {
-	compatibleTypes := true
-	for i, handlerA := range keyDescA.Handlers {
-		handlerB := keyDescB.Handlers[i]
+// fkIndexKeyDescsAreSerializationCompatible reports whether the type serializations of two tuple descriptors
+// are binary compatible for the columns they share.
+//
+// Only the first min(len(|keyDescA|.Handlers), len(|keyDescB|.Handlers)) positions are compared:
+//
+//   - In the normal secondary-index paths (prollyParentSecDiffFkConstraintViolations and
+//     prollyChildSecDiffFkConstraintViolations) both descriptors are already truncated to
+//     len(foreignKey.TableColumns) entries, so they are the same length and the min is a no-op.
+//
+//   - In the primary-key fallback path (prollyChildPriDiffFkConstraintViolations), |keyDescA|
+//     is the child table's full primary key descriptor, which may have more entries than |keyDescB|
+//     (the parent FK index prefix, which is always len(foreignKey.TableColumns) wide) when the
+//     child has a composite PK with more columns than the FK references. Columns in |keyDescA|
+//     beyond the FK scope are not part of the FK relationship and must not be subscripted into
+//     |keyDescB|; clamping to the minimum prevents an index-out-of-range panic like in [Dolt #10676].
+//
+// A return value of false means at least one FK column pair has incompatible serializations and a
+// type conversion step is required before using child key bytes as a parent index lookup key.
+//
+// [Dolt #10676]: https://github.com/dolthub/dolt/issues/10676
+func fkIndexKeyDescsAreSerializationCompatible(keyDescA, keyDescB *val.TupleDesc) bool {
+	n := min(len(keyDescA.Handlers), len(keyDescB.Handlers))
+	for i := range n {
+		handlerA, handlerB := keyDescA.Handlers[i], keyDescB.Handlers[i]
 		if handlerA != nil && handlerB != nil && !handlerA.SerializationCompatible(handlerB) {
-			compatibleTypes = false
-			break
+			return false
 		}
 	}
-	return compatibleTypes
+	return true
 }
 
 // convertSerializedFkField converts a serialized foreign key value from one type handler to another.
