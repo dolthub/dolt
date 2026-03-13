@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"strings"
 
+	goerrors "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
@@ -143,6 +145,11 @@ func CheckoutWouldOverwriteTables(err error) []string {
 
 	return cwo.tables
 }
+
+var ErrCheckoutWouldOverwriteIgnoredTables = goerrors.NewKind(
+	"The following ignored tables would be overwritten by checkout:\n\t%s\n" +
+		"Please move or remove them before you switch branches.\n" +
+		"Use --overwrite-ignore to force.")
 
 type NothingStaged struct {
 	NotStagedTbls []diff.TableDelta
