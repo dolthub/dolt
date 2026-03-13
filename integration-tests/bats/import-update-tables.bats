@@ -1615,6 +1615,7 @@ SQL
 }
 
 # https://github.com/dolthub/dolt/issues/10627
+# https://github.com/dolthub/dolt/issues/10657
 @test "import-update-tables: ON UPDATE columns are updated" {
     # create table
     dolt sql -q "CREATE TABLE table1(pk int primary key, val int, updated_at datetime(6) not null default current_timestamp(6) on update current_timestamp(6))"
@@ -1643,6 +1644,7 @@ DELIM
     cat <<DELIM > table1_update.csv
 pk,val
 1,6
+2,2
 DELIM
 
     # import table with updated csv
