@@ -3209,6 +3209,56 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/10676
+		Name: "Merge does not panic when FK is dropped and re-added on one branch and child has composite PK",
+		SetUpScript: []string{
+			`CREATE TABLE parent (pk INT PRIMARY KEY);`,
+			`CREATE TABLE child (
+                pk1 INT,
+                pk2 INT,
+                fk_col INT,
+                PRIMARY KEY (pk1, pk2),
+                CONSTRAINT fk1 FOREIGN KEY (fk_col) REFERENCES parent (pk)
+            );`,
+			`INSERT INTO parent VALUES (1);`,
+			`INSERT INTO child VALUES (1, 1, 1);`,
+			`CALL DOLT_COMMIT('-Am', 'initial setup');`,
+			`CALL DOLT_BRANCH('other_branch');`,
+			// Drop FK then drop its backing index so re-adding creates a fresh index with a new name.
+			// If we only drop the FK (not the index), re-adding reuses the old index name, which still
+			// exists in the merge ancestor and avoids the bug.
+			`ALTER TABLE child DROP FOREIGN KEY fk1;`,
+			`ALTER TABLE child DROP INDEX fk1;`,
+			`CALL DOLT_COMMIT('-Am', 'drop fk and its backing index');`,
+			`ALTER TABLE child ADD CONSTRAINT fk2 FOREIGN KEY (fk_col) REFERENCES parent (pk);`,
+			`CALL DOLT_COMMIT('-Am', 're-add fk, creates new backing index fk2');`,
+			`CALL DOLT_CHECKOUT('other_branch');`,
+			`INSERT INTO child VALUES (1, 2, 1);`,
+			`CALL DOLT_COMMIT('-Am', 'add child row on other branch');`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('main')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "SELECT pk FROM parent ORDER BY pk;",
+				// All parent rows from both branches must be present.
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query: "SELECT pk1, pk2, fk_col FROM child ORDER BY pk1, pk2;",
+				// All child rows from both branches must survive the merges.
+				Expected: []sql.Row{{1, 1, 1}, {1, 2, 1}},
+			},
+			{
+				Query: "INSERT INTO child VALUES (2, 1, 99);",
+				// The re-added FK constraint (fk2) must still be enforced after the merge.
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
