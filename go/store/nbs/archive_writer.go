@@ -622,6 +622,12 @@ func (asw *ArchiveStreamWriter) Remove() error {
 	return os.Remove(asw.writer.path)
 }
 
+// FlushToFile writes the archive to disk. The input is the directory where the file should be written, the file name
+// will be the footer hash + ".darc" as a suffix.
+func (asw *ArchiveStreamWriter) FlushToFile(fullPath string) error {
+	return asw.writer.flushToFile(fullPath)
+}
+
 func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) (uint32, error) {
 	dict := chunker.dict
 
