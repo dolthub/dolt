@@ -38,7 +38,9 @@ type subtreeCounts []uint64
 // Elements in a Node are generic Items. Interpreting Item
 // contents is deferred to higher layers (see prolly.Map).
 type Node struct {
-	nodeHash hash.Hash
+	// nodeHash contains the calculated hash.Hash
+	// for this node
+	nodeHash atomic.Value
 	// subtrees contains the key cardinality
 	// of each child tree of a non-leaf Node.
 	// this field is lazily decoded from msg
@@ -131,33 +133,37 @@ func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 
 func NodeFromBytesWithHash(msg []byte, hash hash.Hash) (node *Node, fileId string, err error) {
 	fileId, keys, values, level, count, err := message.UnpackFields(msg)
-	return &Node{
-		keys:     keys,
-		values:   values,
-		count:    count,
-		level:    level,
-		msg:      msg,
-		nodeHash: hash,
-	}, fileId, err
+	node = &Node{
+		keys:   keys,
+		values: values,
+		count:  count,
+		level:  level,
+		msg:    msg,
+	}
+	node.nodeHash.Store(hash)
+	return node, fileId, err
 }
 
 func NodeFromChunk(chunk *chunks.Chunk) (node *Node, fieldId string, err error) {
 	fieldId, keys, values, level, count, err := message.UnpackFields(chunk.Data())
-	return &Node{
-		keys:     keys,
-		values:   values,
-		count:    count,
-		level:    level,
-		msg:      chunk.Data(),
-		nodeHash: chunk.Hash(),
-	}, fieldId, err
+	node = &Node{
+		keys:   keys,
+		values: values,
+		count:  count,
+		level:  level,
+		msg:    chunk.Data(),
+	}
+	node.nodeHash.Store(chunk.Hash())
+	return node, fieldId, err
 }
 
 func (nd *Node) HashOf() hash.Hash {
-	if nd.nodeHash.IsEmpty() {
-		nd.nodeHash = hash.Of(nd.bytes())
+	h := nd.nodeHash.Load().(hash.Hash)
+	if h.IsEmpty() {
+		h = hash.Of(nd.bytes())
+		nd.nodeHash.Store(h)
 	}
-	return nd.nodeHash
+	return h
 }
 
 func (nd *Node) Count() int {

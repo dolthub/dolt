@@ -125,14 +125,12 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 
 		if sm, ok := value.(types.SerialMessage); ok {
 			if serial.GetFileID(sm) == serial.StoreRootFileID {
-				// TODO: wtf is storeroot and is it different than normal?
-				//msg, err := serial.TryGetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
-				//if err != nil {
-				//	return false, err
-				//}
-				//ambytes := msg.AddressMapBytes()
-				//node, fileId, err := tree.NodeFromBytes(ambytes)
-				node, fileId, err := tree.NodeFromChunk(&chunk)
+				msg, err := serial.TryGetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
+				if err != nil {
+					return false, err
+				}
+				ambytes := msg.AddressMapBytes()
+				node, fileId, err := tree.NodeFromBytes(ambytes)
 				if err != nil {
 					return false, err
 				}
