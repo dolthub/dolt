@@ -752,6 +752,9 @@ func (s *stringSerializer) serialize(ctx context.Context, typ sql.Type, value in
 		// conversion logic for BINARY types that adds right-padded NULL bytes, which
 		// we don't want to send over the binlog wire protocol.
 		data = valueAsBytes
+	} else if valueAsAddr, ok := value.(hash.Hash); ok {
+		// Support addresses in case this data was previously stored in a TEXT type
+		return encodeBytesFromAddress(ctx, valueAsAddr, ns, typ)
 	} else {
 		convertedValue, _, err := typ.Convert(ctx, value)
 		if err != nil {

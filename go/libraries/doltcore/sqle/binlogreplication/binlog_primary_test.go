@@ -265,10 +265,18 @@ func TestBinlogPrimary_alteringTextTypes(t *testing.T) {
 		{"3", "null", nil},
 	})
 
-	// Now test altering the TEXT field
+	// Change the VARCHAR field to a LONGTEXT field
 	h.primaryDatabase.MustExec("ALTER TABLE test_text MODIFY COLUMN name LONGTEXT;")
 	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "test", "hello world"},
+		{"2", "empty", ""},
+		{"3", "null", nil},
+	})
 
+	// Then change it back to VARCHAR
+	h.primaryDatabase.MustExec("ALTER TABLE test_text MODIFY COLUMN name VARCHAR(90);")
+	h.waitForReplicaToCatchUp()
 	h.requireReplicaResults("select * from test_text;", [][]any{
 		{"1", "test", "hello world"},
 		{"2", "empty", ""},
