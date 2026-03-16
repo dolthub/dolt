@@ -61,6 +61,8 @@ type GenericTableWriter interface {
 	Remove() error
 	// Terminate the inprogress write and attempt to cleanup any resources.
 	Cancel() error
+	// FlushToFile writes the archive to disk. The input is the directory where the file should be written.
+	FlushToFile(fullPath string) error
 }
 
 const defaultTableSinkBlockSize = 2 * 1024 * 1024
