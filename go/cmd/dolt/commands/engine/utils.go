@@ -16,6 +16,8 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -52,6 +54,9 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsess.SqlDataba
 
 func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv) (sqle.Database, error) {
 	dbdata := dEnv.DbData(ctx)
+	if !dEnv.Valid() {
+		return sqle.Database{}, fmt.Errorf("failed to load database %q: %w", name, errors.Join(dEnv.CfgLoadErr, dEnv.DBLoadError))
+	}
 	// Databases registered with the SQL engine are always
 	// configured for FatalBehaviorCrash. These are local
 	// databases and it isn't necessarily safe to continue
