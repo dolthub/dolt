@@ -835,3 +835,66 @@ teardown() {
 
      stop_sql_server 1
 }
+
+# https://github.com/dolthub/dolt/issues/10688
+@test "sql-privs: dolt sql does not create stray .doltcfg in CWD when data-dir is elsewhere" {
+    make_multi_test_repo
+    run ls -a
+    ! [[ "$output" =~ ".dolt" ]] || false
+    [ "$status" -eq 0 ]
+
+    # Start server with --data-dir=db_dir; this creates db_dir/.doltcfg/privileges.db.
+    start_sql_server_with_args --host 0.0.0.0 --data-dir=db_dir
+
+    # Verify the server wrote privileges.db into db_dir/.doltcfg (correct location).
+    run ls db_dir/.doltcfg
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "privileges.db" ]] || false
+
+    # Run cli dolt sql from test_db/
+    run dolt sql -q "create schema testdb;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "create table t(i int);"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "insert into t values (1),(2);"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "update t set i = 3 where i = 1;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from t order by i;" -r csv
+    [[ "$output" =~ i.*2.*3 ]] || false
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "delete from t where i = 2;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from t;" -r csv
+    [[ "$output" =~ i.*3 ]] || false
+    [[ ! "$output" =~ 2 ]] || false
+    [ "$status" -eq 0 ]
+
+    echo "list of contents @ test_dir/"
+    run ls -a
+    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [ "$status" -eq 0 ]
+
+    # check cli dolt sql from db_dir now sees both test_db/.doltcfg (parent, stray)
+    # and db_dir/.doltcfg (current, server-created), triggering "multiple .doltcfg directories detected".
+    (
+        cd db_dir
+
+        run ls -a
+        [[ "$output" =~ ".doltcfg" ]] || false
+        [ "$status" -eq 0 ]
+
+        run dolt sql -q "select 1 as num;" -r csv
+        ! [[ "$output" =~ "multiple .doltcfg directories detected" ]] || false
+        [[ "$output" =~ num.*1 ]] || false
+        [ "$status" -eq 0 ]
+    )
+
+    stop_sql_server
+}
