@@ -279,14 +279,6 @@ func TestBinlogPrimary_alteringTextTypes(t *testing.T) {
 // TestBinlogPrimary_addingAndDroppingColumns tests how we can replicate schema changes that
 // add or drop columns.
 func TestBinlogPrimary_addingAndDroppingColumns(t *testing.T) {
-	// TODO: When a column is added... we never serialize that column, because we work from
-	//       the "from" schema, which won't have that column. We need a way to find any new
-	//       columns in the "to" schema that don't exist in the "from" schema. There's probably
-	//       a similar issue with dropping columns in the "to" schema, since they wouldn't match
-	//       up with the current schema that the replica is expecting.
-	//       Unskip this test once we fix that problem.
-	t.Skip()
-
 	h := newHarness(t)
 	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
 	h.setupForDoltToMySqlReplication()
@@ -301,6 +293,7 @@ func TestBinlogPrimary_addingAndDroppingColumns(t *testing.T) {
 	h.waitForReplicaToCatchUp()
 	h.requireReplicaResults("show tables;", [][]any{{"test_text"}})
 
+	// First test adding a column, with a default, in a manual transaction
 	h.primaryDatabase.MustExec("START TRANSACTION;")
 	h.primaryDatabase.MustExec("UPDATE test_text SET name = '_foo_' WHERE id = 1;")
 	h.primaryDatabase.MustExec("ALTER TABLE test_text ADD COLUMN b INT DEFAULT 7;")
@@ -311,6 +304,32 @@ func TestBinlogPrimary_addingAndDroppingColumns(t *testing.T) {
 		{"1", "_foo_", "hello world", "7"},
 		{"2", "empty", "", "7"},
 		{"3", "null", nil, "7"},
+	})
+
+	// Now test dropping a column
+	h.primaryDatabase.MustExec("START TRANSACTION;")
+	h.primaryDatabase.MustExec("UPDATE test_text SET name = '_bar_' WHERE id = 1;")
+	h.primaryDatabase.MustExec("ALTER TABLE test_text DROP COLUMN description;")
+	h.primaryDatabase.MustExec("COMMIT;")
+	h.waitForReplicaToCatchUp()
+
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "_bar_", "7"},
+		{"2", "empty", "7"},
+		{"3", "null", "7"},
+	})
+
+	// Test renaming a column
+	h.primaryDatabase.MustExec("START TRANSACTION;")
+	h.primaryDatabase.MustExec("UPDATE test_text SET name = '_baz_' WHERE id = 1;")
+	h.primaryDatabase.MustExec("ALTER TABLE test_text RENAME COLUMN b to c;")
+	h.primaryDatabase.MustExec("COMMIT;")
+	h.waitForReplicaToCatchUp()
+
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "_baz_", "7"},
+		{"2", "empty", "7"},
+		{"3", "null", "7"},
 	})
 }
 
