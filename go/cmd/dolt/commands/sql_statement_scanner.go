@@ -92,9 +92,9 @@ func (qs qState) insideQuote() bool {
 	return qs.quoteChar != 0
 }
 
-// ignoreSpecialCharacters returns if special characters should be ignored. If inside a comment or a quote, delimiters
-// and character signally the start of a comment should be ignored
-func (qs qState) ignoreSpecialCharacters() bool {
+// ignoreDelimiters returns if delimiters should be ignored. If inside a comment or a quote, delimiters, including
+// comment delimiters, should be ignored
+func (qs qState) ignoreDelimiters() bool {
 	return qs.insideComment() || qs.insideQuote()
 }
 
@@ -287,7 +287,7 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 			}
 
 			// check if we've matched the delimiter string
-			if !s.state.ignoreSpecialCharacters() && s.buf[i] == s.delimiter[s.state.numConsecutiveDelimiterMatches] {
+			if !s.state.ignoreDelimiters() && s.buf[i] == s.delimiter[s.state.numConsecutiveDelimiterMatches] {
 				s.state.numConsecutiveDelimiterMatches++
 				if s.state.numConsecutiveDelimiterMatches == len(s.delimiter) {
 					s.state.end = s.i - len(s.delimiter) + 1
@@ -307,13 +307,13 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 			case hyphen:
 				// If inside quote or already inside comment, ignore. Otherwise, if previous character is also a hyphen,
 				// ie "--", begin line comment.
-				if !s.state.ignoreSpecialCharacters() && s.state.lastChar == hyphen {
+				if !s.state.ignoreDelimiters() && s.state.lastChar == hyphen {
 					s.state.insideLineComment = true
 				}
 			case asterisk:
 				// If inside quote or already inside comment, ignore. Otherwise, if previous character is a slash, ie
 				// "/*", begin block comment.
-				if !s.state.ignoreSpecialCharacters() && s.state.lastChar == slash {
+				if !s.state.ignoreDelimiters() && s.state.lastChar == slash {
 					s.state.insideBlockComment = true
 				}
 			case slash:
