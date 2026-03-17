@@ -1139,12 +1139,16 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	// Ensure any provider-supplied DB load params are applied before any lazy DB load occurs.
 	p.applyDBLoadParamsToEnv(newEnv)
 
+	// Before constructing the sqle.Database, ensure that the database on the DoltEnv
+	// loaded successfully.
 	ddb := newEnv.DoltDB(ctx)
 	err = errors.Join(newEnv.DBLoadError, newEnv.CfgLoadErr)
 	if err != nil {
 		return err
 	}
-	ddb.SetCrashOnFatalError()
+	if ddb == nil {
+		return fmt.Errorf("nil DoltDB value after loading database %s; cannot create database", name)
+	}
 	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return err
