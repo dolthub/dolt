@@ -104,10 +104,9 @@ func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return nil, err
 	}
 	return doltTable{
-		vrw:       vrw,
-		ns:        ns,
-		msg:       st,
-		tableHash: addr,
+		vrw: vrw,
+		ns:  ns,
+		msg: st,
 	}, nil
 }
 
@@ -127,10 +126,9 @@ func schemaFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Ha
 }
 
 type doltTable struct {
-	vrw       types.ValueReadWriter
-	ns        tree.NodeStore
-	msg       *serial.Table
-	tableHash hash.Hash
+	vrw types.ValueReadWriter
+	ns  tree.NodeStore
+	msg *serial.Table
 }
 
 func (t doltTable) DebugString(ctx context.Context, ns tree.NodeStore) string {
@@ -256,14 +254,7 @@ func (t doltTable) nomsValue() types.Value {
 }
 
 func (t doltTable) HashOf() (hash.Hash, error) {
-	if t.tableHash.IsEmpty() {
-		var err error
-		t.tableHash, err = t.nomsValue().Hash(t.Format())
-		if err != nil {
-			return hash.Hash{}, err
-		}
-	}
-	return t.tableHash, nil
+	return t.nomsValue().Hash(t.Format())
 }
 
 func (t doltTable) Format() *types.NomsBinFormat {
