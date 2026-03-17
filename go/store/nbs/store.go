@@ -114,6 +114,11 @@ type NomsBlockStore struct {
 	conjoinOp     *conjoinOperation
 	conjoinOpCond *sync.Cond
 
+	// Incremented by DisableConjoin, decremented by
+	// RestoreDefaultConjoinBeahvior. The conjoiner
+	// is only consulted when this value is 0.
+	conjoinBlockCnt int32
+
 	stats    *Stats
 	memtable *memTable
 	// Guarded by |mu|. Notified on gcInProgress and gcOutstandingReads changes.
@@ -323,6 +328,9 @@ func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavio
 
 func (nbs *NomsBlockStore) startConjoinIfRequired(ctx context.Context) error {
 	if nbs.conjoinOp != nil {
+		return nil
+	}
+	if nbs.conjoinDynamicallyDisabled() {
 		return nil
 	}
 	if nbs.conjoiner.conjoinRequired(nbs.tables) {
@@ -2585,4 +2593,16 @@ func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) 
 		}
 	}
 	return tableSpec{name: storageId, chunkCount: 0}, false
+}
+
+func (nbs *NomsBlockStore) DisableConjoin() {
+	atomic.AddInt32(&nbs.conjoinBlockCnt, 1)
+}
+
+func (nbs *NomsBlockStore) RestoreDefaultConjoinBehavior() {
+	atomic.AddInt32(&nbs.conjoinBlockCnt, -1)
+}
+
+func (nbs *NomsBlockStore) conjoinDynamicallyDisabled() bool {
+	return atomic.LoadInt32(&nbs.conjoinBlockCnt) != 0
 }

@@ -102,3 +102,11 @@ func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes has
 func (nbsMW NBSMetricWrapper) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
 	return nbsMW.nbs.PersistGhostHashes(ctx, refs)
 }
+
+func (nbsMW NBSMetricWrapper) DisableConjoin() {
+	nbsMW.nbs.DisableConjoin()
+}
+
+func (nbsMW NBSMetricWrapper) RestoreDefaultConjoinBehavior() {
+	nbsMW.nbs.RestoreDefaultConjoinBehavior()
+}
