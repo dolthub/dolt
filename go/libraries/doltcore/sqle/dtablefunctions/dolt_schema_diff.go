@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -171,13 +172,14 @@ func (ds *SchemaDiffTableFunction) WithChildren(children ...sql.Node) (sql.Node,
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (ds *SchemaDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	baseDB, _ := doltdb.SplitRevisionDbName(ds.Database().Name())
 	if ds.tableNameExpr != nil {
 		_, _, _, tableName, err := ds.evaluateArguments()
 		if err != nil {
 			return ExpressionIsDeferred(ds.tableNameExpr)
 		}
 
-		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tableName}
+		subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tableName}
 		return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
@@ -187,7 +189,7 @@ func (ds *SchemaDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Pri
 	}
 	operations := make([]sql.PrivilegedOperation, 0, len(tblNames))
 	for _, tblName := range tblNames {
-		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tblName}
+		subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tblName}
 		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
