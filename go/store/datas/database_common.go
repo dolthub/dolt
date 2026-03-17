@@ -97,7 +97,7 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 		return prolly.AddressMap{}, fmt.Errorf("root hash doesn't exist: %s", rootHash)
 	}
 
-	return parse_storeroot([]byte(val.(types.SerialMessage)), rootHash, db.nodeStore())
+	return parse_storeroot(val.(types.SerialMessage), db.nodeStore())
 }
 
 type refmapDatasetsMap struct {
