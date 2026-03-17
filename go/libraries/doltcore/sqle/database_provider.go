@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -70,6 +71,11 @@ type DoltDatabaseProvider struct {
 	mu                     *sync.RWMutex
 	droppedDatabaseManager *droppedDatabaseManager
 	overrides              sql.EngineOverrides
+
+	// Databases named in deletingDatbases are currently undergoing deletion.
+	// Databases with these names cannot created, but also return ErrNoDatabase
+	// when accessed.
+	deletingDatabases map[string]struct{}
 
 	// remoteDbs caches remote DoltDB instances by URL so that repeated push calls
 	// to the same remote reuse the store (and its already-opened table chunk sources)
@@ -176,6 +182,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 	return &DoltDatabaseProvider{
 		dbLocations:            dbLocations,
 		databases:              dbs,
+		deletingDatabases:      make(map[string]struct{}),
 		functions:              funcs,
 		tableFunctions:         tableFuncs,
 		externalProcedures:     externalProcedures,
@@ -263,7 +270,7 @@ func (p *DoltDatabaseProvider) FileSystem() filesys.Filesys {
 }
 
 func (p *DoltDatabaseProvider) Close() {
-	p.mu.RLock()
+	p.rlockAwaitingEmptyDeletingDatabases()
 	closeDoltDBs := p.dbLoadParams != nil
 	if closeDoltDBs {
 		_, closeDoltDBs = p.dbLoadParams[dbfactory.DisableSingletonCacheParam]
@@ -449,15 +456,34 @@ func (p *DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	return err == nil
 }
 
+// Grab p.mu.RLock(), but wait until p.deletingDatabases is empty
+// before returning with the lock held.
+//
+// This should be used any time we are enumerating databases for a
+// caller. While databases which are being deleted no longer appear in
+// p.databases, and thus won't be directly enumerated, while they are
+// in the process of being deleted they might be visible in other
+// systems because they are still on the filesystem, still running
+// their dropdatabasehooks, etc.
+func (p *DoltDatabaseProvider) rlockAwaitingEmptyDeletingDatabases() {
+	for {
+		p.mu.RLock()
+		if len(p.deletingDatabases) == 0 {
+			return
+		}
+		p.mu.RUnlock()
+		time.Sleep(1 * time.Millisecond)
+	}
+}
+
 func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	_, revision := doltdb.SplitRevisionDbName(ctx.GetCurrentDatabase())
-	p.mu.RLock()
-
 	showBranches, err := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabases)
 	if err != nil {
 		ctx.GetLogger().Warn(err)
 	}
 
+	p.rlockAwaitingEmptyDeletingDatabases()
 	all = make([]sql.Database, 0, len(p.databases))
 	for _, db := range p.databases {
 		all = append(all, db)
@@ -495,15 +521,14 @@ func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Databas
 
 // DoltDatabases implements the dsess.DoltDatabaseProvider interface
 func (p *DoltDatabaseProvider) DoltDatabases() []dsess.SqlDatabase {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
+	p.rlockAwaitingEmptyDeletingDatabases()
 	dbs := make([]dsess.SqlDatabase, len(p.databases))
 	i := 0
 	for _, db := range p.databases {
 		dbs[i] = db
 		i++
 	}
+	p.mu.RUnlock()
 
 	sort.Slice(dbs, func(i, j int) bool {
 		return strings.ToLower(dbs[i].Name()) < strings.ToLower(dbs[j].Name())
@@ -655,6 +680,9 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 	}()
 
+	if _, ok := p.deletingDatabases[name]; ok {
+		return sql.ErrDatabaseExists.New(name)
+	}
 	exists, isDir := p.fs.Exists(name)
 	if exists && isDir {
 		return sql.ErrDatabaseExists.New(name)
@@ -689,7 +717,6 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	if err != nil {
 		return err
 	}
-	newEnv.DoltDB(ctx).SetCrashOnFatalError()
 
 	updatedCollation, updatedSchemas := false, false
 
@@ -875,6 +902,9 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface
+//
+// TODO: This holds the database provider lock across the entire duration of
+// the clone, which is much too long to hold this lock.
 func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	ctx *sql.Context,
 	dbName, branch, remoteName, remoteUrl string,
@@ -883,6 +913,10 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 ) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if _, ok := p.deletingDatabases[dbName]; ok {
+		return sql.ErrDatabaseExists.New(dbName)
+	}
 
 	exists, isDir := p.fs.Exists(dbName)
 	if exists && isDir {
@@ -959,40 +993,78 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		return fmt.Errorf("unable to drop revision database: %s", name)
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	var db dsess.SqlDatabase
+	var dbLoc filesys.Filesys
+	var dbKey, dropDbLoc string
+	err := func() error {
+		p.mu.Lock()
+		defer p.mu.Unlock()
 
-	// get the case-sensitive name for case-sensitive file systems
-	dbKey := formatDbMapKeyName(name)
-	db := p.databases[dbKey]
+		// get the case-sensitive name for case-sensitive file systems
+		dbKey = formatDbMapKeyName(name)
+		db = p.databases[dbKey]
 
-	var database *doltdb.DoltDB
-	if ddb, ok := db.(Database); ok {
-		database = ddb.ddb
-	} else {
-		return fmt.Errorf("unable to drop database: %s", name)
-	}
+		// get location of database that's being dropped
+		dbLoc = p.dbLocations[dbKey]
 
-	err := database.Close()
+		if _, ok := db.(Database); !ok {
+			return fmt.Errorf("unable to drop database: %s", name)
+		}
+
+		if dbLoc == nil {
+			return sql.ErrDatabaseNotFound.New(db.Name())
+		}
+
+		var err error
+		dropDbLoc, err = dbLoc.Abs("")
+		if err != nil {
+			return err
+		}
+		// We not only have to delete tracking metadata for this database, but also for any derivative
+		// ones we've stored as a result of USE or connection strings
+		derivativeNamePrefix := strings.ToLower(dbKey + doltdb.DbRevisionDelimiter)
+		for dbName := range p.databases {
+			if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
+				delete(p.databases, dbName)
+			}
+		}
+		delete(p.databases, dbKey)
+		p.deletingDatabases[dbKey] = struct{}{}
+		return nil
+	}()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		delete(p.deletingDatabases, dbKey)
+	}()
 
-	// get location of database that's being dropped
-	dbLoc := p.dbLocations[dbKey]
-	if dbLoc == nil {
-		return sql.ErrDatabaseNotFound.New(db.Name())
+	var retErr error
+
+	// XXX: From this point forward, the database is inaccessible to new sessions in the server
+	// and is soon to be inaccessible to existing sessions.
+	//
+	// We accumulate any errors we see see along the way, but we try to do most of the following work
+	// without returning early.
+
+	err = p.invalidateDbStateInAllSessions(ctx, name)
+	if err != nil {
+		retErr = errors.Join(retErr, err)
 	}
 
-	dropDbLoc, err := dbLoc.Abs("")
-	if err != nil {
-		return err
+	// We run the drop hooks before we close the database.
+	for _, dropHook := range p.DropDatabaseHooks {
+		// For symmetry with InitDatabaseHook and the names we see in
+		// MultiEnv initialization, we use `name` here, not `dbKey`.
+		dropHook(ctx, name)
 	}
 
 	// If this database is re-created, we don't want to return any cached results.
-	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/noms"), false)
+	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/noms"), true)
 	if err != nil {
-		return err
+		retErr = errors.Join(retErr, err)
 	}
 	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/stats/.dolt/noms"), true)
 	if err != nil {
@@ -1003,26 +1075,10 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 
 	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
 	if err != nil {
-		return err
+		retErr = errors.Join(retErr, err)
 	}
 
-	for _, dropHook := range p.DropDatabaseHooks {
-		// For symmetry with InitDatabaseHook and the names we see in
-		// MultiEnv initialization, we use `name` here, not `dbKey`.
-		dropHook(ctx, name)
-	}
-
-	// We not only have to delete tracking metadata for this database, but also for any derivative
-	// ones we've stored as a result of USE or connection strings
-	derivativeNamePrefix := strings.ToLower(dbKey + doltdb.DbRevisionDelimiter)
-	for dbName := range p.databases {
-		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
-			delete(p.databases, dbName)
-		}
-	}
-	delete(p.databases, dbKey)
-
-	return p.invalidateDbStateInAllSessions(ctx, name)
+	return retErr
 }
 
 func (p *DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {
@@ -1039,6 +1095,10 @@ func (p *DoltDatabaseProvider) DbFactoryUrl() string {
 func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if _, ok := p.deletingDatabases[name]; ok {
+		return sql.ErrDatabaseExists.New(name)
+	}
 
 	newFs, exactCaseName, err := p.droppedDatabaseManager.UndropDatabase(ctx, name)
 	if err != nil {
@@ -1079,6 +1139,12 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	// Ensure any provider-supplied DB load params are applied before any lazy DB load occurs.
 	p.applyDBLoadParamsToEnv(newEnv)
 
+	ddb := newEnv.DoltDB(ctx)
+	err = errors.Join(newEnv.DBLoadError, newEnv.CfgLoadErr)
+	if err != nil {
+		return err
+	}
+	ddb.SetCrashOnFatalError()
 	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return err
