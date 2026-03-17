@@ -1377,16 +1377,41 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT 1 AS pk', 'SELECT 2 AS pk');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:     "tester",
-				Host:     "localhost",
-				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM test', 'SELECT pk FROM test');",
-				Expected: []sql.Row{},
+				User:  "tester",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM test', 'SELECT pk FROM test');",
+				// TODO(elianddb): Add privilege checks scoped to tables touched in query args.
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT 1 AS pk', 'SELECT 2 AS pk');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM (SELECT pk FROM test2) s', 'SELECT pk FROM (SELECT pk FROM test) s');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
 			},
 			{
 				User:     "root",
@@ -1397,7 +1422,26 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:     "tester",
 				Host:     "localhost",
-				Query:    "SELECT * FROM dolt_query_diff('SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk');",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = 2');",
+				Expected: []sql.Row{{1, 2, "modified"}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT 1 AS pk', 'SELECT 2 AS pk');",
+				Expected: []sql.Row{{1, 2, "modified"}},
+			},
+			{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM test limit 1', 'SELECT pk FROM test2 limit 1');",
+				// TODO(elianddb): Add privilege checks scoped to tables touched in query args.
+				Expected: []sql.Row{{1, nil, "deleted"}, {nil, 1, "added"}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM (SELECT pk FROM test2) s', 'SELECT pk FROM (SELECT pk FROM test) s');",
 				Expected: []sql.Row{},
 			},
 		},
