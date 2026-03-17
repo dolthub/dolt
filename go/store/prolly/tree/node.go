@@ -158,12 +158,12 @@ func NodeFromChunk(chunk *chunks.Chunk) (node *Node, fieldId string, err error) 
 }
 
 func (nd *Node) HashOf() hash.Hash {
-	h := nd.nodeHash.Load().(hash.Hash)
-	if h.IsEmpty() {
+	h := nd.nodeHash.Load()
+	if h == nil {
 		h = hash.Of(nd.bytes())
 		nd.nodeHash.Store(h)
 	}
-	return h
+	return h.(hash.Hash)
 }
 
 func (nd *Node) Count() int {
