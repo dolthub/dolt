@@ -38,6 +38,10 @@ const (
 	dQuote         = '"'
 	backslash      = '\\'
 	backtick       = '`'
+	hyphen         = '-'
+	asterisk       = '*'
+	slash          = '/'
+	newline        = '\n'
 )
 
 const delimPrefixLen = 10
@@ -76,6 +80,22 @@ type qState struct {
 	seenNonWhitespaceChar          bool // whether we have encountered a non-whitespace character since we returned the last token
 	numConsecutiveDelimiterMatches int  // the consecutive number of characters that have been matched to the delimiter
 	statementStartLine             int
+	insideBlockComment             bool
+	insideLineComment              bool
+}
+
+func (qs qState) insideComment() bool {
+	return qs.insideLineComment || qs.insideBlockComment
+}
+
+func (qs qState) insideQuote() bool {
+	return qs.quoteChar != 0
+}
+
+// ignoreSpecialCharacters returns if special characters should be ignored. If inside a comment or a quote, delimiters
+// and character signally the start of a comment should be ignored
+func (qs qState) ignoreSpecialCharacters() bool {
+	return qs.insideComment() || qs.insideQuote()
 }
 
 func (s *StreamScanner) Scan() bool {
@@ -267,7 +287,7 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 			}
 
 			// check if we've matched the delimiter string
-			if s.state.quoteChar == 0 && s.buf[i] == s.delimiter[s.state.numConsecutiveDelimiterMatches] {
+			if !s.state.ignoreSpecialCharacters() && s.buf[i] == s.delimiter[s.state.numConsecutiveDelimiterMatches] {
 				s.state.numConsecutiveDelimiterMatches++
 				if s.state.numConsecutiveDelimiterMatches == len(s.delimiter) {
 					s.state.end = s.i - len(s.delimiter) + 1
@@ -281,11 +301,34 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 			}
 
 			switch s.buf[i] {
-			case '\n':
+			case newline:
+				s.state.insideLineComment = false
 				s.lineNum++
+			case hyphen:
+				// If inside quote or already inside comment, ignore. Otherwise, if previous character is also a hyphen,
+				// ie "--", begin line comment.
+				if !s.state.ignoreSpecialCharacters() && s.state.lastChar == hyphen {
+					s.state.insideLineComment = true
+				}
+			case asterisk:
+				// If inside quote or already inside comment, ignore. Otherwise, if previous character is a slash, ie
+				// "/*", begin block comment.
+				if !s.state.ignoreSpecialCharacters() && s.state.lastChar == slash {
+					s.state.insideBlockComment = true
+				}
+			case slash:
+				// If previous character is an asterisk, ie "*/", end block comment.
+				if s.state.lastChar == asterisk {
+					s.state.insideBlockComment = false
+				}
 			case backslash:
 				s.state.numConsecutiveBackslashes++
 			case sQuote, dQuote, backtick:
+				// ignore quotes inside comments
+				if s.state.insideComment() {
+					break
+				}
+
 				prevNumConsecutiveBackslashes := s.state.numConsecutiveBackslashes
 				s.state.numConsecutiveBackslashes = 0
 
@@ -295,7 +338,7 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 				}
 
 				// currently in a quoted string
-				if s.state.quoteChar != 0 {
+				if s.state.insideQuote() {
 					if i+1 >= s.fill {
 						// require lookahead or EOF
 						if err := s.read(); err != nil {
