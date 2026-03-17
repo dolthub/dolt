@@ -97,6 +97,7 @@ func CloseAllLocalDatabases() (err error) {
 			err = fmt.Errorf("error closing DB %s (%s)", name, cerr)
 		}
 	}
+	singletons = make(map[string]singletonDB)
 	return
 }
 
