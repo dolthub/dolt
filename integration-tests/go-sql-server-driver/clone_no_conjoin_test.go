@@ -38,13 +38,13 @@ import (
 //
 // Concretely, to setup the store, this test first creates a new dolt
 // commit on `main` and then runs GC. This creates a new table file in
-// the old gen. It does this 192 times. It then uses a remotesapi
-// endpoint on another running sql-server to do a similar thing. It
+// the old gen. It does this 192 times. It then uses a file remote,
+// populated by another running sql-server, to do a similar thing. It
 // creates a remote to the remote database and then fetches it. It
-// creates a new commit on the remote database and then fetches
-// that. This creates a new table file in the new gen. It does this
-// 192 times. At the end, the new gen has more than 192 table files
-// and the old gen has exactly 192 table files.
+// creates a new commit on the remote database, pushes it, and then
+// fetches that. This creates a new table file in the new gen. It does
+// this 192 times. At the end, the new gen has more than 192 table
+// files and the old gen has exactly 192 table files.
 //
 // Then this test calls dolt_backup(sync-url) to a file remote.
 //
@@ -162,5 +162,5 @@ func TestCloneNoConjoin(t *testing.T) {
 		return nil
 	})
 	t.Logf("found %v table files", numTableFiles)
-	assert.Greater(t, numTableFiles, 256)
+	assert.GreaterOrEqual(t, numTableFiles, 384)
 }
