@@ -394,26 +394,36 @@ func validateRebaseBranchHasntChanged(ctx *sql.Context, branch string, rebaseSta
 	if !ok {
 		return fmt.Errorf("unable to access doltDB for database %s", ctx.GetCurrentDatabase())
 	}
-
-	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branch))
+	roots, err := doltDb.ResolveBranchRoots(ctx, ref.NewBranchRef(branch))
 	if err != nil {
 		return err
 	}
 
-	resolvedWorkingSet, err := doltDb.ResolveWorkingSet(ctx, wsRef)
+	// Diff the changes between the branch's working set and the pre-rebase working set
+	deltas, err := diff.GetTableDeltas(ctx, rebaseState.PreRebaseWorkingRoot(), roots.Working)
 	if err != nil {
 		return err
 	}
-	hash2, err := resolvedWorkingSet.StagedRoot().HashOf()
+	schemas := diff.GetUniqueSchemaNamesFromTableDeltas(deltas)
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
 	if err != nil {
 		return err
 	}
-	hash1, err := rebaseState.PreRebaseWorkingRoot().HashOf()
-	if err != nil {
-		return err
-	}
-	if hash1 != hash2 {
-		return fmt.Errorf("rebase aborted due to changes in branch %s", branch)
+	for _, delta := range deltas {
+		tableName := delta.ToName
+		if delta.ToTable == nil {
+			tableName = delta.FromName
+		}
+
+		// If any table with a diff isn't an ignored table, then return an error
+		patterns := ignorePatternMap[tableName.Schema]
+		ignoreResult, err := (&patterns).IsTableNameIgnored(tableName)
+		if err != nil {
+			return err
+		}
+		if ignoreResult != doltdb.Ignore {
+			return fmt.Errorf("rebase aborted due to changes in branch %s", branch)
+		}
 	}
 
 	return nil
