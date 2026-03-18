@@ -308,6 +308,7 @@ func (p *PatchTableFunction) WithChildren(children ...sql.Node) (sql.Node, error
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (p *PatchTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	baseDB, _ := doltdb.SplitRevisionDbName(p.database.Name())
 	if p.tableNameExpr != nil {
 		if !sqltypes.IsText(p.tableNameExpr.Type()) {
 			return ExpressionIsDeferred(p.tableNameExpr)
@@ -322,7 +323,7 @@ func (p *PatchTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privilege
 			return false
 		}
 
-		subject := sql.PrivilegeCheckSubject{Database: p.database.Name(), Table: tableName}
+		subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tableName}
 		return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
@@ -333,7 +334,7 @@ func (p *PatchTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privilege
 
 	operations := make([]sql.PrivilegedOperation, 0, len(tblNames))
 	for _, tblName := range tblNames {
-		subject := sql.PrivilegeCheckSubject{Database: p.database.Name(), Table: tblName}
+		subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tblName}
 		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 

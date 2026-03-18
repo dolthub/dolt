@@ -312,6 +312,7 @@ func (ltf *LogTableFunction) WithChildren(children ...sql.Node) (sql.Node, error
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (ltf *LogTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	baseDB, _ := doltdb.SplitRevisionDbName(ltf.database.Name())
 	tblNames, err := ltf.database.GetTableNames(ctx)
 	if err != nil {
 		return false
@@ -319,7 +320,7 @@ func (ltf *LogTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privilege
 
 	var operations []sql.PrivilegedOperation
 	for _, tblName := range tblNames {
-		subject := sql.PrivilegeCheckSubject{Database: ltf.database.Name(), Table: tblName}
+		subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tblName}
 		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
