@@ -74,7 +74,7 @@ const (
 	MultiPolygonKind
 	GeometryCollectionKind
 	ExtendedKind
-	
+
 	GhostKind            = 254
 	UnknownKind NomsKind = 255
 )
