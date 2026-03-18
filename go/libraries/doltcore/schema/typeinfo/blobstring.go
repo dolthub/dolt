@@ -45,11 +45,6 @@ var (
 	LongTextType TypeInfo = &blobStringType{sqlStringType: gmstypes.LongText}
 )
 
-// CreateBlobStringTypeFromSqlType creates a blobStringType with the default encoding based on UseAdaptiveEncoding.
-func CreateBlobStringTypeFromSqlType(sqlStringType sql.StringType) TypeInfo {
-	return &blobStringType{sqlStringType: sqlStringType}
-}
-
 // Equals implements TypeInfo interface.
 func (ti *blobStringType) Equals(other TypeInfo) bool {
 	if other == nil {

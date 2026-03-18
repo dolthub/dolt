@@ -708,10 +708,6 @@ func typeinfoFromSqlType(s string) (typeinfo.TypeInfo, error) {
 	return typeinfo.FromSqlType(sqlType)
 }
 
-func encodingFromTypeinfo(t typeinfo.TypeInfo) serial.Encoding {
-	return serial.Encoding(t.Encoding())
-}
-
 func constraintsFromSerialColumn(col *serial.Column) (cc []schema.ColConstraint) {
 	if !col.Nullable() || col.PrimaryKey() {
 		cc = append(cc, schema.NotNullConstraint{})
