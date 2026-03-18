@@ -41,6 +41,76 @@ CREATE TABLE def (
   i INT check (i > 0)
 );
 INSERT INTO def VALUES (1), (2), (3);
+
+CREATE TABLE all_types (
+  pk INT NOT NULL PRIMARY KEY,
+  c_tinyint TINYINT,
+  c_smallint SMALLINT,
+  c_mediumint MEDIUMINT,
+  c_int INT,
+  c_bigint BIGINT,
+  c_bigint_u BIGINT UNSIGNED,
+  c_float FLOAT,
+  c_double DOUBLE,
+  c_decimal DECIMAL(10,2),
+  c_char CHAR(10),
+  c_varchar VARCHAR(255),
+  c_tinytext TINYTEXT,
+  c_text TEXT,
+  c_mediumtext MEDIUMTEXT,
+  c_longtext LONGTEXT,
+  c_varbinary VARBINARY(255),
+  c_tinyblob TINYBLOB,
+  c_blob BLOB,
+  c_mediumblob MEDIUMBLOB,
+  c_longblob LONGBLOB,
+  c_date DATE,
+  c_time TIME,
+  c_datetime DATETIME,
+  c_timestamp TIMESTAMP NULL DEFAULT NULL,
+  c_year YEAR,
+  c_json JSON,
+  c_enum ENUM('val1','val2','val3'),
+  c_set SET('a','b','c','d')
+);
+INSERT INTO all_types (pk, c_tinyint, c_smallint, c_mediumint, c_int, c_bigint, c_bigint_u,
+  c_float, c_double, c_decimal, c_char, c_varchar,
+  c_tinytext, c_text, c_mediumtext, c_longtext,
+  c_varbinary, c_tinyblob, c_blob, c_mediumblob, c_longblob,
+  c_date, c_time, c_datetime, c_timestamp, c_year,
+  c_json, c_enum, c_set) VALUES (
+  1,
+  100, 1000, 100000, 2000000, 9223372036854775807,
+  18446744073709551615,
+  1.5, 2.5, 12345.67,
+  'hello', 'hello world',
+  'tinytext val', 'text val', 'mediumtext val', 'longtext val',
+  'varbinary val', 'tinyblob val', 'blob val', 'mediumblob val', 'longblob val',
+  '2024-01-15', '13:30:45', '2024-01-15 13:30:45', '2024-01-15 13:30:45',
+  2024,
+  '{"k":"v"}',
+  'val2', 'a');
+INSERT INTO all_types (pk, c_tinyint, c_smallint, c_mediumint, c_int, c_bigint, c_bigint_u,
+  c_float, c_double, c_decimal, c_char, c_varchar,
+  c_tinytext, c_text, c_mediumtext, c_longtext,
+  c_varbinary, c_tinyblob, c_blob, c_mediumblob, c_longblob,
+  c_date, c_time, c_datetime, c_timestamp, c_year,
+  c_json, c_enum, c_set) VALUES (
+  2,
+  -100, -1000, -100000, -2000000, -9223372036854775807,
+  0,
+  -1.5, -2.5, -12345.67,
+  'hi', 'hi there',
+  'tinytext2', 'text val2', 'mediumtext2', 'longtext2',
+  'varbinary2', 'tinyblob2', 'blob val2', 'mediumblob2', 'longblob2',
+  '2023-12-31', '23:59:59', '2023-12-31 23:59:59', NULL,
+  2023,
+  '[1,2,3]',
+  'val1', 'b');
+INSERT INTO all_types (pk, c_text, c_mediumtext, c_longtext, c_blob, c_mediumblob, c_longblob) VALUES (
+  3,
+  REPEAT('t', 500), REPEAT('m', 500), REPEAT('l', 500),
+  REPEAT('b', 500), REPEAT('x', 500), REPEAT('y', 500));
 SQL
 dolt sql < "../../test_files/big_table.sql"  # inserts 1K rows to `big`
 dolt add .
