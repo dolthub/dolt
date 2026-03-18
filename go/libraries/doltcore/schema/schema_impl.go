@@ -493,12 +493,12 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 			// a hashed field in a unique index
 			if !contentHashedField && queryType == query.Type_BLOB {
 				t = val.Type{
-					Enc:      val.Encoding(EncodingFromQueryType(query.Type_VARBINARY)),
+					Enc:      val.Encoding(encodingFromQueryType(query.Type_VARBINARY)),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
 			} else if !contentHashedField && queryType == query.Type_TEXT {
 				t = val.Type{
-					Enc:      val.Encoding(EncodingFromQueryType(query.Type_VARCHAR)),
+					Enc:      val.Encoding(encodingFromQueryType(query.Type_VARCHAR)),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
 			} else if !contentHashedField && queryType == query.Type_GEOMETRY {
