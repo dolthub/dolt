@@ -25,19 +25,20 @@ get_platform_tuple() {
     echo "tests only support linux or macOS." 1>&2
     exit 1
   fi
-  if [ "$ARCH" != x86_64 -a "$ARCH" != i386 -a "$ARCH" != i686 ]; then
-    echo "tests only support x86_64 or x86." 1>&2
-    exit 1
-  fi
+
   if [ "$OS" == Linux ]; then
     PLATFORM_TUPLE=linux
   else
     PLATFORM_TUPLE=darwin
   fi
+
+  
   if [ "$ARCH" == x86_64 ]; then
-    PLATFORM_TUPLE="$PLATFORM_TUPLE"-amd64
+      PLATFORM_TUPLE="$PLATFORM_TUPLE"-amd64
+  elif [ "$ARCH" == arm64 ]; then
+      PLATFORM_TUPLE="$PLATFORM_TUPLE"-arm64
   else
-    PLATFORM_TUPLE="$PLATFORM_TUPLE"-386
+      PLATFORM_TUPLE="$PLATFORM_TUPLE"-386
   fi
   echo "$PLATFORM_TUPLE"
 }
@@ -65,7 +66,7 @@ function test_backward_compatibility() {
   PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
   echo "Run the bats tests with current Dolt version hitting repositories from older Dolt version $ver"
-  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats ./test_files/bats
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats --print-output-on-failure ./test_files/bats
 }
 
 function list_forward_compatible_versions() {

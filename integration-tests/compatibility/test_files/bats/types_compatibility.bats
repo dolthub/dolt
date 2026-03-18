@@ -136,13 +136,15 @@ teardown() {
 }
 
 @test "timestamp column readable from old dolt" {
+    dolt sql -q "SELECT pk, c_timestamp IS NOT NULL FROM all_types WHERE pk=1;" -r csv
     run dolt sql -q "SELECT pk, c_timestamp IS NOT NULL FROM all_types WHERE pk=1;" -r csv
+    # note that dolt SQL shell uses "true" and "false" for boolean results, instead of 1 and 0
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[1]}" =~ "1,true" ]] || false
 
     run dolt sql -q "SELECT pk, c_timestamp IS NULL FROM all_types WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "2,1" ]] || false
+    [[ "${lines[1]}" =~ "2,true" ]] || false
 }
 
 @test "json column readable from old dolt" {
