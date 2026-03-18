@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/val"
 	fb "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
@@ -29,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
