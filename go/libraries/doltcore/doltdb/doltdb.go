@@ -2077,9 +2077,7 @@ func (ddb *DoltDB) IsTableFileStore() bool {
 // GenerationalNBS...)
 func (ddb *DoltDB) disableConjoin() {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
-	if i, ok := cs.(interface {
-		DisableConjoin()
-	}); ok {
+	if i, ok := cs.(nbs.DynamicConjoin); ok {
 		i.DisableConjoin()
 	}
 }
@@ -2089,9 +2087,7 @@ func (ddb *DoltDB) disableConjoin() {
 // GenerationalNBS...).
 func (ddb *DoltDB) restoreDefaultConjoinBehavior() {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
-	if i, ok := cs.(interface {
-		RestoreDefaultConjoinBehavior()
-	}); ok {
+	if i, ok := cs.(nbs.DynamicConjoin); ok {
 		i.RestoreDefaultConjoinBehavior()
 	}
 }

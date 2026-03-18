@@ -2606,3 +2606,12 @@ func (nbs *NomsBlockStore) RestoreDefaultConjoinBehavior() {
 func (nbs *NomsBlockStore) conjoinDynamicallyDisabled() bool {
 	return atomic.LoadInt32(&nbs.conjoinBlockCnt) != 0
 }
+
+type DynamicConjoin interface {
+	DisableConjoin()
+	RestoreDefaultConjoinBehavior()
+}
+
+var _ DynamicConjoin = (*NomsBlockStore)(nil)
+var _ DynamicConjoin = NBSMetricWrapper{}
+var _ DynamicConjoin = (*GenerationalNBS)(nil)
