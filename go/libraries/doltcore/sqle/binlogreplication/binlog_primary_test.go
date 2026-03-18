@@ -241,6 +241,106 @@ func TestBinlogPrimary_textTypes(t *testing.T) {
 	})
 }
 
+// TestBinlogPrimary_alteringTextTypes tests that we can successfully replicate schema changes
+// such as changing a VARCHAR column to TEXT.
+func TestBinlogPrimary_alteringTextTypes(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	h.primaryDatabase.MustExec("CREATE TABLE test_text (id INT PRIMARY KEY, name VARCHAR(100), description TEXT);")
+	h.primaryDatabase.MustExec("INSERT INTO test_text VALUES (1, 'test', 'hello world');")
+	h.primaryDatabase.MustExec("INSERT INTO test_text VALUES (2, 'empty', '');")
+	h.primaryDatabase.MustExec("INSERT INTO test_text VALUES (3, 'null', NULL);")
+	h.primaryDatabase.MustExec("CALL DOLT_ADD('-A');")
+	h.primaryDatabase.MustExec("CALL DOLT_COMMIT('-m', 'test commit');")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("show tables;", [][]any{{"test_text"}})
+
+	// Test that the table was created and has the expected data
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "test", "hello world"},
+		{"2", "empty", ""},
+		{"3", "null", nil},
+	})
+
+	// Change the VARCHAR field to a LONGTEXT field
+	h.primaryDatabase.MustExec("ALTER TABLE test_text MODIFY COLUMN name LONGTEXT;")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "test", "hello world"},
+		{"2", "empty", ""},
+		{"3", "null", nil},
+	})
+
+	// Then change it back to VARCHAR
+	h.primaryDatabase.MustExec("ALTER TABLE test_text MODIFY COLUMN name VARCHAR(90);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "test", "hello world"},
+		{"2", "empty", ""},
+		{"3", "null", nil},
+	})
+}
+
+// TestBinlogPrimary_addingAndDroppingColumns tests how we can replicate schema changes that
+// add or drop columns.
+func TestBinlogPrimary_addingAndDroppingColumns(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	h.primaryDatabase.MustExec("CREATE TABLE test_text (id INT PRIMARY KEY, name VARCHAR(100), description TEXT);")
+	h.primaryDatabase.MustExec("INSERT INTO test_text VALUES (1, 'test', 'hello world');")
+	h.primaryDatabase.MustExec("INSERT INTO test_text VALUES (2, 'empty', '');")
+	h.primaryDatabase.MustExec("INSERT INTO test_text VALUES (3, 'null', NULL);")
+	h.primaryDatabase.MustExec("CALL DOLT_ADD('-A');")
+	h.primaryDatabase.MustExec("CALL DOLT_COMMIT('-m', 'test commit');")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("show tables;", [][]any{{"test_text"}})
+
+	// First test adding a column, with a default, in a manual transaction
+	h.primaryDatabase.MustExec("START TRANSACTION;")
+	h.primaryDatabase.MustExec("UPDATE test_text SET name = '_foo_' WHERE id = 1;")
+	h.primaryDatabase.MustExec("ALTER TABLE test_text ADD COLUMN b INT DEFAULT 7;")
+	h.primaryDatabase.MustExec("COMMIT;")
+	h.waitForReplicaToCatchUp()
+
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "_foo_", "hello world", "7"},
+		{"2", "empty", "", "7"},
+		{"3", "null", nil, "7"},
+	})
+
+	// Now test dropping a column
+	h.primaryDatabase.MustExec("START TRANSACTION;")
+	h.primaryDatabase.MustExec("UPDATE test_text SET name = '_bar_' WHERE id = 1;")
+	h.primaryDatabase.MustExec("ALTER TABLE test_text DROP COLUMN description;")
+	h.primaryDatabase.MustExec("COMMIT;")
+	h.waitForReplicaToCatchUp()
+
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "_bar_", "7"},
+		{"2", "empty", "7"},
+		{"3", "null", "7"},
+	})
+
+	// Test renaming a column
+	h.primaryDatabase.MustExec("START TRANSACTION;")
+	h.primaryDatabase.MustExec("UPDATE test_text SET name = '_baz_' WHERE id = 1;")
+	h.primaryDatabase.MustExec("ALTER TABLE test_text RENAME COLUMN b to c;")
+	h.primaryDatabase.MustExec("COMMIT;")
+	h.waitForReplicaToCatchUp()
+
+	h.requireReplicaResults("select * from test_text;", [][]any{
+		{"1", "_baz_", "7"},
+		{"2", "empty", "7"},
+		{"3", "null", "7"},
+	})
+}
+
 // TestBinlogPrimary_Rotation tests how a Dolt primary server handles rotating the binary log file when the
 // size threshold is reached.
 func TestBinlogPrimary_Rotation(t *testing.T) {
