@@ -80,3 +80,52 @@ func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]dol
 
 	return s.AsSlice(), nil
 }
+
+func GetGeneratedSystemTablesBySchema(ctx context.Context, root doltdb.RootValue, schema schema.DatabaseSchema) ([]doltdb.TableName, error) {
+	s := doltdb.NewTableNameSet(nil)
+
+	// Depending on whether the search path is used, the generated system tables will either be in the dolt namespace
+	// or the empty (default) namespace.
+	if !UseSearchPath || schema.Name == doltdb.DoltNamespace {
+
+		for _, tableName := range doltdb.GeneratedSystemTableNames() {
+			adapter, ok := adapters.DoltTableAdapterRegistry.Adapters[tableName]
+			if ok {
+				tableName = adapter.TableName()
+			}
+
+			tableUnique := doltdb.TableName{Name: tableName}
+			if UseSearchPath {
+				tableUnique.Schema = doltdb.DoltNamespace
+			}
+
+			s.Add(tableUnique)
+		}
+	}
+
+	tableNames, err := root.GetTableNames(ctx, schema.Name, false)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, pre := range doltdb.GeneratedSystemTablePrefixes {
+		for _, tableName := range tableNames {
+			s.Add(doltdb.TableName{
+				Name:   pre + tableName,
+				Schema: schema.Name,
+			})
+		}
+	}
+
+	// For doltgres, we also support the legacy dolt_ table names, addressable in any user schema
+	if UseSearchPath && schema.Name != "pg_catalog" && schema.Name != doltdb.DoltNamespace {
+		for _, name := range doltdb.DoltGeneratedTableNames {
+			s.Add(doltdb.TableName{
+				Name:   name,
+				Schema: schema.Name,
+			})
+		}
+	}
+
+	return s.AsSlice(), nil
+}

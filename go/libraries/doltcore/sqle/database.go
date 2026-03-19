@@ -1744,9 +1744,8 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, inc
 	}
 
 	if includeGeneratedSystemTables {
-		// TODO: this should work on the current schema only, if there is one
 		// TODO: this is getting called with showSystemTables = true, which seems wrong in most cases
-		systemTables, err := resolve.GetGeneratedSystemTables(ctx, root)
+		systemTables, err := resolve.GetGeneratedSystemTablesBySchema(ctx, root, schema.DatabaseSchema{Name: db.schemaName})
 		if err != nil {
 			return nil, err
 		}
