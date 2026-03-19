@@ -239,7 +239,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		schemasTable := wrapper.backingTable
 
 		if !schemasTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) ||
-				!schemasTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
+			!schemasTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
 			return migrateOldSchemasTableToNew(ctx, db, schemasTable)
 		} else {
 			return schemasTable, nil
