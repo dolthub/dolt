@@ -88,6 +88,34 @@ stop_remotesrv() {
     [[ "$output" =~ "5" ]] || false
 }
 
+@test "remotesrv: pushing new branch to remotesrv does not create new working set" {
+    mkdir remote
+    mkdir cloned
+    cd remote
+    dolt init
+    dolt sql -q 'create table vals (i int);'
+    dolt add vals
+    dolt commit -m 'create vals table.'
+
+    remotesrv --http-port 1234 --repo-mode &
+    remotesrv_pid=$!
+
+    cd ../cloned
+    dolt clone http://localhost:50051/test-org/test-repo repo1
+    cd repo1
+    dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
+    dolt commit -am 'insert some values'
+    dolt push origin main:new_branch
+
+    stop_remotesrv
+    cd ../../remote
+    run dolt admin show-root
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "workingSets/heads/new_branch" ]] || false
+    [[ "$output" =~ "workingSets/heads/main" ]] || false
+}
+
 @test "remotesrv: can write to remotesrv when repo has a dirty working set" {
     mkdir remote
     mkdir cloned
