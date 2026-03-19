@@ -105,7 +105,9 @@ SELECT 'abcdefg';"
     cd ../../cloned_remote
 
     dolt checkout -b new_branch
+    dolt checkout -b new_forced_branch
     dolt push origin new_branch
+    dolt push -f origin new_forced_branch
 
     # Assert that the expected working set exists, in addition to the branch.
     cd ../db/remote
@@ -116,6 +118,7 @@ SELECT 'abcdefg';"
     echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "workingSets/heads/new_branch" ]] || false
+    [[ "$output" =~ "workingSets/heads/new_forced_branch" ]] || false
 }
 
 @test "sql-server-remotesrv: can access a created database from sql-server with --remotesapi-port" {
