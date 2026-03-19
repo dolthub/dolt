@@ -1345,45 +1345,6 @@ func GetSchemaHash(ctx context.Context, root RootValue, name TableName, override
 	return root.GetTableSchemaHash(ctx, name)
 }
 
-// ValidateTagUniqueness checks for tag collisions between columns in the given table.
-func ValidateTagUniqueness(ctx context.Context, root RootValue, tableName string, table *Table) error {
-	prevTName := TableName{Name: tableName}
-	prevHash, err := GetSchemaHash(ctx, root, prevTName, table.overriddenSchema)
-	if err != nil {
-		return err
-	}
-	if !prevHash.IsEmpty() {
-		newHash, err := table.GetSchemaHash(ctx)
-		if err != nil {
-			return err
-		}
-
-		// short-circuit if schema unchanged
-		if prevHash == newHash {
-			return nil
-		}
-	}
-
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-
-	tagsSeen := make(map[uint64]struct{})
-	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if _, ok := tagsSeen[tag]; ok {
-			return true, schema.NewErrTagPrevUsed(tag, col.Name, tableName, tableName)
-		}
-
-		tagsSeen[tag] = struct{}{}
-		return false, nil
-	})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // DebugString returns a human readable string with the contents of this root. If |transitive| is true, row data from
 // all tables is also included. This method is very expensive for large root values, so |transitive| should only be used
 // when debugging tests.
