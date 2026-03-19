@@ -37,8 +37,10 @@ func (ti *uuidType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*uuidType)
-	return ok
+	if ti2, ok := other.(*uuidType); ok {
+		return ti.Encoding() == ti2.Encoding()
+	}
+	return false
 }
 
 // NomsKind implements TypeInfo interface.

@@ -40,7 +40,8 @@ func (ti *multipointType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*multipointType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlMultiPointType.DefinedSRID && !o.sqlMultiPointType.DefinedSRID) || ti.sqlMultiPointType.SRID == o.sqlMultiPointType.SRID
+		return ((!ti.sqlMultiPointType.DefinedSRID && !o.sqlMultiPointType.DefinedSRID) || ti.sqlMultiPointType.SRID == o.sqlMultiPointType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }

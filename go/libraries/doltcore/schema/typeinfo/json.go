@@ -32,8 +32,10 @@ var JSONType = &jsonType{jsonType: sqltypes.JsonType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *jsonType) Equals(other TypeInfo) bool {
-	_, ok := other.(*jsonType)
-	return ok
+	if ti2, ok := other.(*jsonType); ok {
+		return ti.Encoding() == ti2.Encoding()
+	}
+	return false
 }
 
 // NomsKind implements TypeInfo interface.

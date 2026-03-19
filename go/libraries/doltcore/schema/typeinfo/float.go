@@ -44,7 +44,8 @@ func (ti *floatType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if ti2, ok := other.(*floatType); ok {
-		return ti.sqlFloatType.Type() == ti2.sqlFloatType.Type()
+		return ti.sqlFloatType.Type() == ti2.sqlFloatType.Type() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }

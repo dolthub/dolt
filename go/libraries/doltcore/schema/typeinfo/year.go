@@ -38,8 +38,10 @@ func (ti *yearType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*yearType)
-	return ok
+	if ti2, ok := other.(*yearType); ok {
+		return ti.Encoding() == ti2.Encoding()
+	}
+	return false
 }
 
 // NomsKind implements TypeInfo interface.

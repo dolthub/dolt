@@ -50,7 +50,7 @@ func (ti *setType) Equals(other TypeInfo) bool {
 				return false
 			}
 		}
-		return true
+		return ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }

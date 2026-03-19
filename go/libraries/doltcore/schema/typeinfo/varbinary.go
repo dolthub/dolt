@@ -42,7 +42,8 @@ func (ti *varBinaryType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if ti2, ok := other.(*varBinaryType); ok {
-		return ti.sqlBinaryType.MaxCharacterLength() == ti2.sqlBinaryType.MaxCharacterLength()
+		return ti.sqlBinaryType.MaxCharacterLength() == ti2.sqlBinaryType.MaxCharacterLength() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }

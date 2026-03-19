@@ -47,7 +47,8 @@ func (ti *vectorType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if ti2, ok := other.(*vectorType); ok {
-		return ti.sqlVectorType.Dimensions == ti2.sqlVectorType.Dimensions
+		return ti.sqlVectorType.Dimensions == ti2.sqlVectorType.Dimensions &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }

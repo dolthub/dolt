@@ -40,7 +40,8 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*linestringType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise, return false
-		return (!ti.sqlLineStringType.DefinedSRID && !o.sqlLineStringType.DefinedSRID) || ti.sqlLineStringType.SRID == o.sqlLineStringType.SRID
+		return ((!ti.sqlLineStringType.DefinedSRID && !o.sqlLineStringType.DefinedSRID) || ti.sqlLineStringType.SRID == o.sqlLineStringType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }

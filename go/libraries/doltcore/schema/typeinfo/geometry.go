@@ -40,7 +40,8 @@ func (ti *geometryType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*geometryType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlGeometryType.DefinedSRID && !o.sqlGeometryType.DefinedSRID) || ti.sqlGeometryType.SRID == o.sqlGeometryType.SRID
+		return ((!ti.sqlGeometryType.DefinedSRID && !o.sqlGeometryType.DefinedSRID) || ti.sqlGeometryType.SRID == o.sqlGeometryType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }

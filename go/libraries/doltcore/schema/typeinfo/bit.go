@@ -62,7 +62,8 @@ func (ti *bitType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if ti2, ok := other.(*bitType); ok {
-		return ti.sqlBitType.NumberOfBits() == ti2.sqlBitType.NumberOfBits()
+		return ti.sqlBitType.NumberOfBits() == ti2.sqlBitType.NumberOfBits() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }

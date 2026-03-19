@@ -39,7 +39,8 @@ func (ti *inlineBlobType) Equals(other TypeInfo) bool {
 	}
 	if ti2, ok := other.(*inlineBlobType); ok {
 		return ti.sqlBinaryType.MaxCharacterLength() == ti2.sqlBinaryType.MaxCharacterLength() &&
-			ti.sqlBinaryType.Type() == ti2.sqlBinaryType.Type()
+			ti.sqlBinaryType.Type() == ti2.sqlBinaryType.Type() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }

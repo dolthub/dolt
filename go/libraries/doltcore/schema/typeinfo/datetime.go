@@ -55,7 +55,8 @@ func (ti *datetimeType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if ti2, ok := other.(*datetimeType); ok {
-		return ti.sqlDatetimeType.Type() == ti2.sqlDatetimeType.Type()
+		return ti.sqlDatetimeType.Type() == ti2.sqlDatetimeType.Type() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }

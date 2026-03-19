@@ -40,7 +40,8 @@ func (ti *multipolygonType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*multipolygonType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlMultiPolygonType.DefinedSRID && !o.sqlMultiPolygonType.DefinedSRID) || ti.sqlMultiPolygonType.SRID == o.sqlMultiPolygonType.SRID
+		return ((!ti.sqlMultiPolygonType.DefinedSRID && !o.sqlMultiPolygonType.DefinedSRID) || ti.sqlMultiPolygonType.SRID == o.sqlMultiPolygonType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }

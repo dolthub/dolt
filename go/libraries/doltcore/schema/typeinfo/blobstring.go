@@ -52,7 +52,8 @@ func (ti *blobStringType) Equals(other TypeInfo) bool {
 	}
 	if ti2, ok := other.(*blobStringType); ok {
 		return ti.sqlStringType.MaxCharacterLength() == ti2.sqlStringType.MaxCharacterLength() &&
-			ti.sqlStringType.Collation().Equals(ti2.sqlStringType.Collation())
+			ti.sqlStringType.Collation().Equals(ti2.sqlStringType.Collation()) &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }

@@ -74,7 +74,8 @@ func (ti *decimalType) Equals(other TypeInfo) bool {
 	}
 	if ti2, ok := other.(*decimalType); ok {
 		return ti.sqlDecimalType.Precision() == ti2.sqlDecimalType.Precision() &&
-			ti.sqlDecimalType.Scale() == ti2.sqlDecimalType.Scale()
+			ti.sqlDecimalType.Scale() == ti2.sqlDecimalType.Scale() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }
