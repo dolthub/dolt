@@ -40,6 +40,8 @@ func NewInitDatabaseHook(sc *StatsController) sqle.InitDatabaseHook {
 			return nil
 		}
 
+		denv.DoltDB(ctx).PrependCommitHooks(ctx, sc.commithook())
+
 		// call should only fail if backpressure in secondary queue
 		return sc.AddFs(ctx, sqlDb, denv.FS, true)
 	}

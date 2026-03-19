@@ -68,6 +68,8 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 		default:
 		}
 
+		wake := sc.newQuiescedAwake()
+
 		gcKv = nil
 		genStart := sc.genCnt.Load()
 
@@ -97,11 +99,33 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 			} else {
 				sc.descError("swapped stats with flush failure", err)
 			}
-		} else if ok && lastSuccessfulStats != nil && lastSuccessfulStats.hash != newStats.hash {
-			lastSuccessfulStats = newStats
-			sc.logger.Tracef("stats successful swap: %s\n", newStats.String())
+		} else if ok {
+			if lastSuccessfulStats != nil && lastSuccessfulStats.hash == newStats.hash {
+				select {
+				case <-ctx.Done():
+				case <-wake:
+				}
+			} else {
+				lastSuccessfulStats = newStats
+				sc.logger.Tracef("stats successful swap: %s\n", newStats.String())
+			}
 		}
 	}
+}
+
+// Always returns a non-nil chan. Sometimes that channel is already
+// closed, if the worker thread should not quiesce regardless of
+// whether it found novelty in computing stats or not.
+func (sc *StatsController) newQuiescedAwake() chan struct{} {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	ret := make(chan struct{})
+	if len(sc.listeners) == 0 {
+		sc.quiescedAwake = ret
+	} else {
+		close(ret)
+	}
+	return ret
 }
 
 func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, newStats *rootStats, gcKv *memStats) (ok bool, err error) {
