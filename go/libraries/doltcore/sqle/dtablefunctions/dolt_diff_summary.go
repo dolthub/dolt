@@ -153,6 +153,7 @@ func (ds *DiffSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (ds *DiffSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	baseDB, _ := doltdb.SplitRevisionDbName(ds.database.Name())
 	if ds.tableNameExpr != nil {
 		if !types.IsText(ds.tableNameExpr.Type()) {
 			return ExpressionIsDeferred(ds.tableNameExpr)
@@ -170,7 +171,7 @@ func (ds *DiffSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Pr
 			return false
 		}
 
-		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tableName}
+		subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tableName}
 		// TODO: Add tests for privilege checking
 		return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
@@ -182,7 +183,7 @@ func (ds *DiffSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Pr
 
 	var operations []sql.PrivilegedOperation
 	for _, tblName := range tblNames {
-		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tblName}
+		subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tblName}
 		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 

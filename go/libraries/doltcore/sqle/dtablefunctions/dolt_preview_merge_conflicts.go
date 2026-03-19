@@ -171,7 +171,8 @@ func (pm *PreviewMergeConflictsTableFunction) CheckAuth(ctx *sql.Context, opChec
 		return false
 	}
 
-	subject := sql.PrivilegeCheckSubject{Database: pm.database.Name(), Table: tableName}
+	baseDB, _ := doltdb.SplitRevisionDbName(pm.database.Name())
+	subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tableName}
 	// TODO: Add tests for privilege checking
 	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }

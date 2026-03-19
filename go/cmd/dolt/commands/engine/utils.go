@@ -16,6 +16,8 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -52,16 +54,8 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsess.SqlDataba
 
 func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv) (sqle.Database, error) {
 	dbdata := dEnv.DbData(ctx)
-	// Databases registered with the SQL engine are always
-	// configured for FatalBehaviorCrash. These are local
-	// databases and it isn't necessarily safe to continue
-	// operating after an I/O on the write path. This is in
-	// contrast to something like a remote in the context of a
-	// backup, replication or a push, where an I/O error is just
-	// an error to perform the requested operation.
-	//
-	// See also sqle/database_provider.go, where we do this when
-	// creating new databases as well.
-	dbdata.Ddb.SetCrashOnFatalError()
+	if !dEnv.Valid() {
+		return sqle.Database{}, fmt.Errorf("failed to load database %q: %w", name, errors.Join(dEnv.CfgLoadErr, dEnv.DBLoadError))
+	}
 	return sqle.NewDatabase(ctx, name, dbdata, editor.Options{})
 }

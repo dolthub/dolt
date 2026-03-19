@@ -70,9 +70,30 @@ func TestRevisionDatabasePrivileges(t *testing.T) {
 		"Error in test setup: one or more expected tests not found. "+
 			"Did the name of a test change?")
 
+	mutated := make([]queries.UserPrivilegeTest, len(scripts))
+	for i, script := range scripts {
+		script.SetUpScript = append(script.SetUpScript, revisionDatabasePrivsSetupPostfix...)
+		mutated[i] = script
+	}
+	runRevisionDBPrivilegeTests(t, mutated)
+}
+
+func TestDoltOnlyRevisionTableFunctionPrivileges(t *testing.T) {
+	runRevisionDBPrivilegeTests(t, DoltOnlyRevisionTableFunctionPrivilegeTests)
+}
+
+func TestDoltOnlyRevisionDatabasePrivileges(t *testing.T) {
+	runRevisionDBPrivilegeTests(t, DoltOnlyRevisionDbPrivilegeTests)
+}
+
+// runRevisionDBPrivilegeTests runs each script in |scripts| against a fresh engine with the
+// current database set to `mydb/b1` for every assertion. The setup script runs as root before
+// assertions execute, allowing tests to establish schema, data, users, and grants. The branch
+// b1 and the revision database mydb/b1 are not created by this function; each script is
+// responsible for creating them in its SetUpScript.
+func runRevisionDBPrivilegeTests(t *testing.T, scripts []queries.UserPrivilegeTest) {
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
-		harness.configureStats = true
 		harness.Setup(setup.MydbData, setup.MytableData)
 		t.Run(script.Name, func(t *testing.T) {
 			engine := mustNewEngine(t, harness)
@@ -86,18 +107,11 @@ func TestRevisionDatabasePrivileges(t *testing.T) {
 			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
 			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
-			for _, statement := range append(script.SetUpScript, revisionDatabasePrivsSetupPostfix...) {
-				if harness.SkipQueryTest(statement) {
-					t.Skip()
-				}
+			for _, statement := range script.SetUpScript {
 				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)
 			}
 
 			for _, assertion := range script.Assertions {
-				if harness.SkipQueryTest(assertion.Query) {
-					t.Skipf("Skipping query %s", assertion.Query)
-				}
-
 				user := assertion.User
 				host := assertion.Host
 				if user == "" {
@@ -971,55 +985,465 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 	},
 }
 
-func TestDoltOnlyRevisionDatabasePrivileges(t *testing.T) {
-	for _, script := range DoltOnlyRevisionDbPrivilegeTests {
-		harness := newDoltHarness(t)
-		harness.Setup(setup.MydbData, setup.MytableData)
-		t.Run(script.Name, func(t *testing.T) {
-			engine := mustNewEngine(t, harness)
-			defer engine.Close()
-
-			ctx := enginetest.NewContext(harness)
-			ctx.WithClient(sql.Client{
-				User:    "root",
-				Address: "localhost",
-			})
-			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
-			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
-
-			for _, statement := range script.SetUpScript {
-				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)
-			}
-
-			for _, assertion := range script.Assertions {
-				user := assertion.User
-				host := assertion.Host
-				if user == "" {
-					user = "root"
-				}
-				if host == "" {
-					host = "localhost"
-				}
-				ctx := enginetest.NewContextWithClient(harness, sql.Client{
-					User:    user,
-					Address: host,
-				})
-				ctx.SetCurrentDatabase("mydb/b1")
-
-				if assertion.ExpectedErr != nil {
-					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, nil, assertion.ExpectedErr)
-					})
-				} else if assertion.ExpectedErrStr != "" {
-					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, nil, nil, assertion.ExpectedErrStr)
-					})
-				} else {
-					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.TestQueryWithContext(t, ctx, engine, harness, assertion.Query, assertion.Expected, nil, nil, nil)
-					})
-				}
-			}
-		})
-	}
+var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
+	{
+		Name: "dolt_schema_diff privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+			"ALTER TABLE test CHANGE COLUMN col1 word varchar(20);",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_schema_diff('HEAD', 'WORKING', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_schema_diff('HEAD', 'WORKING');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_schema_diff('HEAD', 'WORKING', 'test');",
+				Expected: []sql.Row{
+					{"test", "test",
+						"CREATE TABLE `test` (\n  `pk` bigint NOT NULL,\n  `col1` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `test` (\n  `pk` bigint NOT NULL,\n  `word` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_schema_diff('HEAD', 'WORKING');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_schema_diff('HEAD', 'WORKING');",
+				Expected: []sql.Row{
+					{"test", "test",
+						"CREATE TABLE `test` (\n  `pk` bigint NOT NULL,\n  `col1` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `test` (\n  `pk` bigint NOT NULL,\n  `word` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_diff privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('HEAD', 'WORKING', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_diff('HEAD', 'WORKING', 'test');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_diff_stat privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_stat('HEAD', 'WORKING', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_stat('HEAD', 'WORKING');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_diff_stat('HEAD', 'WORKING', 'test');",
+				Expected: []sql.Row{},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_diff_stat('HEAD', 'WORKING');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_diff_summary privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_summary('HEAD', 'WORKING', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff_summary('HEAD', 'WORKING');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_diff_summary('HEAD', 'WORKING', 'test');",
+				Expected: []sql.Row{},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_log privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT count(*) FROM dolt_log();",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT count(*) FROM dolt_log();",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT count(*) FROM dolt_log('main', '--tables', 'test');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT count(*) FROM dolt_log();",
+				Expected: []sql.Row{{int64(3)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT count(*) FROM dolt_log('main', '--tables', 'test');",
+				Expected: []sql.Row{{int64(1)}},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('HEAD', 'WORKING', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_patch('HEAD', 'WORKING');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_patch('HEAD', 'WORKING', 'test');",
+				Expected: []sql.Row{},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_patch('HEAD', 'WORKING');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_preview_merge_conflicts privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_preview_merge_conflicts('main', 'b1', 'test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts('main', 'b1', 'test');",
+				Expected: []sql.Row{},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_preview_merge_conflicts('main', 'b1', 'test2');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+		},
+	},
+	{
+		Name: "dolt_preview_merge_conflicts_summary privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'b1');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'b1');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'b1');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_query_diff privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test2 VALUES (1, 'a'), (2, 'b');",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM test', 'SELECT pk FROM test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT 1 AS pk', 'SELECT 2 AS pk');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM test', 'SELECT pk FROM test');",
+				// TODO(elianddb): Add privilege checks scoped to tables touched in query args.
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT 1 AS pk', 'SELECT 2 AS pk');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM (SELECT pk FROM test2) s', 'SELECT pk FROM (SELECT pk FROM test) s');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = 2');",
+				Expected: []sql.Row{{1, 2, "modified"}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT 1 AS pk', 'SELECT 2 AS pk');",
+				Expected: []sql.Row{{1, 2, "modified"}},
+			},
+			{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM test limit 1', 'SELECT pk FROM test2 limit 1');",
+				// TODO(elianddb): Add privilege checks scoped to tables touched in query args.
+				Expected: []sql.Row{{1, nil, "deleted"}, {nil, 1, "added"}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM (SELECT pk FROM test2) s', 'SELECT pk FROM (SELECT pk FROM test) s');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }

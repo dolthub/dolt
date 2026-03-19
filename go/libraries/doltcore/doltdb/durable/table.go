@@ -84,12 +84,12 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 
 // TableFromAddr deserializes the table in the chunk at |addr|.
 func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, addr hash.Hash) (Table, error) {
-	val, err := vrw.MustReadValue(ctx, addr)
+	v, err := vrw.MustReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
 
-	sm, ok := val.(types.SerialMessage)
+	sm, ok := v.(types.SerialMessage)
 	if !ok {
 		err = errors.New("table ref is unexpected noms value; not SerialMessage")
 		return nil, err
@@ -103,7 +103,11 @@ func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	if err != nil {
 		return nil, err
 	}
-	return doltTable{vrw, ns, st}, nil
+	return doltTable{
+		vrw: vrw,
+		ns:  ns,
+		msg: st,
+	}, nil
 }
 
 // VrwFromTable returns the types.ValueReadWriter used by |t|.
@@ -238,7 +242,11 @@ func newDoltTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeSt
 		return nil, err
 	}
 
-	return doltTable{vrw, ns, msg}, nil
+	return doltTable{
+		vrw: vrw,
+		ns:  ns,
+		msg: msg,
+	}, nil
 }
 
 func (t doltTable) nomsValue() types.Value {
@@ -276,7 +284,11 @@ func (t doltTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, err
 	addr := schRef.TargetHash()
 	msg := t.clone()
 	copy(msg.SchemaBytes(), addr[:])
-	return doltTable{t.vrw, t.ns, msg}, nil
+	return doltTable{
+		vrw: t.vrw,
+		ns:  t.ns,
+		msg: msg,
+	}, nil
 }
 
 func (t doltTable) GetTableRows(ctx context.Context) (Index, error) {
@@ -317,7 +329,11 @@ func (t doltTable) SetTableRows(ctx context.Context, rows Index) (Table, error) 
 		return nil, err
 	}
 
-	return doltTable{t.vrw, t.ns, msg}, nil
+	return doltTable{
+		vrw: t.vrw,
+		ns:  t.ns,
+		msg: msg,
+	}, nil
 }
 
 func (t doltTable) GetIndexes(ctx context.Context) (IndexSet, error) {
@@ -347,7 +363,11 @@ func (t doltTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, err
 	if err != nil {
 		return nil, err
 	}
-	return doltTable{t.vrw, t.ns, msg}, nil
+	return doltTable{
+		vrw: t.vrw,
+		ns:  t.ns,
+		msg: msg,
+	}, nil
 }
 
 // GetArtifacts implements Table.
@@ -383,7 +403,11 @@ func (t doltTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex) (T
 	}
 	msg := t.clone()
 	copy(msg.ArtifactsBytes(), addr[:])
-	return doltTable{t.vrw, t.ns, msg}, nil
+	return doltTable{
+		vrw: t.vrw,
+		ns:  t.ns,
+		msg: msg,
+	}, nil
 }
 
 // GetAutoIncrement returns the next value to be used for the AUTO_INCREMENT column.
@@ -416,7 +440,11 @@ func (t doltTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, err
 			return nil, err
 		}
 	}
-	return doltTable{t.vrw, t.ns, msg}, nil
+	return doltTable{
+		vrw: t.vrw,
+		ns:  t.ns,
+		msg: msg,
+	}, nil
 }
 
 func (t doltTable) clone() *serial.Table {

@@ -165,9 +165,10 @@ func (ddb *DoltDB) GetDatabaseName() string {
 	return ddb.databaseName
 }
 
-// HackDatasDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
-// Deprecated: only for use in dolt migrate.
-func HackDatasDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
+// ExposeDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
+// This method should really only be used in cases where we need to get to the internals of the database, such
+// as scanning for corruption or migrating data formats. Generally avoid this function.
+func ExposeDatabaseFromDoltDB(ddb *DoltDB) datas.Database {
 	return ddb.db
 }
 
@@ -2048,6 +2049,15 @@ func (ddb *DoltDB) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 }
 
 func (ddb *DoltDB) Clone(ctx context.Context, tempTableDir string, destDB *DoltDB, eventCh chan<- pull.TableFileEvent) error {
+	// When cloning into destDB, we don't want to immediately conjoin
+	// whatever table files we end copying into destDB. If destDB
+	// goes on to be used as a normal database, then its default
+	// conjoin strategy can prevail, but especially for something
+	// like taking a backup, conjoining immediately just because
+	// newgen + oldgen was near the threshold is contrary to our
+	// immediate goals.
+	destDB.disableConjoin()
+	defer destDB.restoreDefaultConjoinBehavior()
 	return pull.Clone(ctx,
 		datas.ChunkStoreFromDatabase(ddb.db),
 		datas.ChunkStoreFromDatabase(destDB.db),
@@ -2060,6 +2070,26 @@ func (ddb *DoltDB) Clone(ctx context.Context, tempTableDir string, destDB *DoltD
 func (ddb *DoltDB) IsTableFileStore() bool {
 	_, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
 	return ok
+}
+
+// Internally used to temporarily disable conjoin.  Only works on
+// NomsBlockStore and some friends (MetricsWrapper,
+// GenerationalNBS...)
+func (ddb *DoltDB) disableConjoin() {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+	if i, ok := cs.(nbs.DynamicConjoin); ok {
+		i.DisableConjoin()
+	}
+}
+
+// If disableConjoin is called, this will restore the behavior back to
+// its default.  NomsBlockStore and some friends (MetricsWrapper,
+// GenerationalNBS...).
+func (ddb *DoltDB) restoreDefaultConjoinBehavior() {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+	if i, ok := cs.(nbs.DynamicConjoin); ok {
+		i.RestoreDefaultConjoinBehavior()
+	}
 }
 
 // Iterates an unspecified number of previous root hashes for this

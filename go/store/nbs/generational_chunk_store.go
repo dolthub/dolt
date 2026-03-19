@@ -564,3 +564,13 @@ func (gcs *GenerationalNBS) Count() (uint32, error) {
 	}
 	return newGenCnt + oldGenCnt, nil
 }
+
+func (gcs *GenerationalNBS) DisableConjoin() {
+	gcs.newGen.DisableConjoin()
+	gcs.oldGen.DisableConjoin()
+}
+
+func (gcs *GenerationalNBS) RestoreDefaultConjoinBehavior() {
+	gcs.newGen.RestoreDefaultConjoinBehavior()
+	gcs.oldGen.RestoreDefaultConjoinBehavior()
+}

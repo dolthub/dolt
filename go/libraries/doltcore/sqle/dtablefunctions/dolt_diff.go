@@ -396,7 +396,8 @@ func (dtf *DiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privileg
 		return ExpressionIsDeferred(dtf.tableNameExpr)
 	}
 
-	subject := sql.PrivilegeCheckSubject{Database: dtf.database.Name(), Table: tableName}
+	baseDB, _ := doltdb.SplitRevisionDbName(dtf.database.Name())
+	subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tableName}
 	// TODO: Add tests for privilege checking
 	return opChecker.UserHasPrivileges(ctx,
 		sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))

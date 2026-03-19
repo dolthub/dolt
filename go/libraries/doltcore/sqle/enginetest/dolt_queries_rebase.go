@@ -2030,6 +2030,35 @@ commit
 			},
 		},
 	},
+	{
+		Name: "dolt_rebase: ignored tables",
+		SetUpScript: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY)",
+			"INSERT INTO t VALUES (1)",
+			"INSERT INTO dolt_ignore VALUES ('ignored_table', true)",
+			"CALL dolt_commit('-Am', 'Initial table')",
+			"INSERT INTO t VALUES (2)",
+			"CALL dolt_commit('-am', 'More data')",
+			"INSERT INTO dolt_ignore (pattern, ignored) VALUES ('ignored_%', true)",
+			"CALL dolt_commit('-am', 'Ignore rules')",
+			"CREATE TABLE ignored_table (id INT PRIMARY KEY)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// status should be empty, because only an ignored table is changed
+				Query:    "select * from dolt_status;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL dolt_rebase('-i', 'HEAD~2')",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_main; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"}},
+			},
+			{
+				Query:    "CALL dolt_rebase('--continue')",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/main"}},
+			},
+		},
+	},
 }
 
 var DoltRebaseMultiSessionScriptTests = []queries.ScriptTest{

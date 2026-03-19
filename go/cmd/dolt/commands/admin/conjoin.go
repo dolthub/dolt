@@ -109,7 +109,7 @@ func (cmd ConjoinCmd) Exec(ctx context.Context, commandStr string, args []string
 
 	// Get the ChunkStore from DoltDB
 	ddb := dEnv.DoltDB(ctx)
-	db := doltdb.HackDatasDatabaseFromDoltDB(ddb)
+	db := doltdb.ExposeDatabaseFromDoltDB(ddb)
 	cs := datas.ChunkStoreFromDatabase(db)
 
 	var targetNBS *nbs.NomsBlockStore

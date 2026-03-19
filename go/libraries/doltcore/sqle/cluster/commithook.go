@@ -153,7 +153,7 @@ func (h *commithook) replicate(ctx context.Context) {
 				defer sql.SessionCommandEnd(sqlCtx.Session)
 
 				// When the replicate thread comes up, it attempts to replicate the current head.
-				datasDB := doltdb.HackDatasDatabaseFromDoltDB(h.srcDB)
+				datasDB := doltdb.ExposeDatabaseFromDoltDB(h.srcDB)
 				cs := datas.ChunkStoreFromDatabase(datasDB)
 				h.nextHead, err = cs.Root(sqlCtx)
 				if err != nil {
@@ -269,7 +269,7 @@ func (h *commithook) attemptHeartbeat(ctx context.Context) {
 	// sql Session lifecycle events are for
 	// accessing srcDB, not destDB.
 	h.mu.Unlock()
-	datasDB := doltdb.HackDatasDatabaseFromDoltDB(destDB)
+	datasDB := doltdb.ExposeDatabaseFromDoltDB(destDB)
 	cs := datas.ChunkStoreFromDatabase(datasDB)
 	cs.Commit(ctx, head, head)
 	h.mu.Lock()
@@ -336,7 +336,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	err = destDB.PullChunks(sqlCtx, h.tempDir, h.srcDB, []hash.Hash{toPush}, nil, nil)
 	if err == nil {
 		lgr.Tracef("cluster/commithook: successfully pushed chunks, setting root")
-		datasDB := doltdb.HackDatasDatabaseFromDoltDB(destDB)
+		datasDB := doltdb.ExposeDatabaseFromDoltDB(destDB)
 		cs := datas.ChunkStoreFromDatabase(datasDB)
 		var curRootHash hash.Hash
 		if err = cs.Rebase(sqlCtx); err == nil {

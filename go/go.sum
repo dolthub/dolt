@@ -212,8 +212,8 @@ github.com/dolthub/fslock v0.0.0-20251215194149-ef20baba2318 h1:n+vdH5G5Db+1qnDC
 github.com/dolthub/fslock v0.0.0-20251215194149-ef20baba2318/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
 github.com/dolthub/go-icu-regex v0.0.0-20250916051405-78a38d478790 h1:zxMsH7RLiG+dlZ/y0LgJHTV26XoiSJcuWq+em6t6VVc=
 github.com/dolthub/go-icu-regex v0.0.0-20250916051405-78a38d478790/go.mod h1:F3cnm+vMRK1HaU6+rNqQrOCyR03HHhR1GWG2gnPOqaE=
-github.com/dolthub/go-mysql-server v0.20.1-0.20260311204756-b77b4b7c3924 h1:+AfMYXZLQWpRZ+haX9psiDUs0bWUjmsTot3vDfabRO4=
-github.com/dolthub/go-mysql-server v0.20.1-0.20260311204756-b77b4b7c3924/go.mod h1:ZPKRptEeXSk9Ytb9LhB+8tB4BkltxuNYiYDFvIqXD/4=
+github.com/dolthub/go-mysql-server v0.20.1-0.20260316223625-fdcf3f20a2bc h1:4wyGwwaKzPlABRdpgWoYoWgJP6bWoBsvHw6JUh/Kwn0=
+github.com/dolthub/go-mysql-server v0.20.1-0.20260316223625-fdcf3f20a2bc/go.mod h1:ZPKRptEeXSk9Ytb9LhB+8tB4BkltxuNYiYDFvIqXD/4=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63 h1:OAsXLAPL4du6tfbBgK0xXHZkOlos63RdKYS3Sgw/dfI=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63/go.mod h1:lV7lUeuDhH5thVGDCKXbatwKy2KW80L4rMT46n+Y2/Q=
 github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718 h1:lT7hE5k+0nkBdj/1UOSFwjWpNxf+LCApbRHgnCA17XE=
@@ -559,6 +559,8 @@ github.com/xitongsys/parquet-go-source v0.0.0-20190524061010-2b72cbee77d5/go.mod
 github.com/xitongsys/parquet-go-source v0.0.0-20200817004010-026bad9b25d0/go.mod h1:HYhIKsdns7xz80OgkbgJYrtQY7FjHWHKH6cvN7+czGE=
 github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371 h1:RfGiOP/lWKBeNgpXmCeandYGV4pAnZsl42kX50p1UgE=
 github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371/go.mod h1:qLb2Itmdcp7KPa5KZKvhE9U1q5bYSOmgeOckF/H2rQA=
+github.com/xtaci/smux v1.5.56 h1:Eyv/dUULmkGZZNucLUisnkzJ/4UQ5YZTschhugFBM0U=
+github.com/xtaci/smux v1.5.56/go.mod h1:IGQ9QYrBphmb/4aTnLEcJby0TNr3NV+OslIOMrX825Q=
 github.com/yosida95/uritemplate/v3 v3.0.2 h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=
 github.com/yosida95/uritemplate/v3 v3.0.2/go.mod h1:ILOh0sOhIJR3+L/8afwt/kE++YT040gmv5BQTMR2HP4=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

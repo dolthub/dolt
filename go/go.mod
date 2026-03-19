@@ -64,7 +64,7 @@ require (
 	github.com/dolthub/dolt-mcp v0.3.4
 	github.com/dolthub/eventsapi_schema v0.0.0-20260310172945-37a9265ade69
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20260311204756-b77b4b7c3924
+	github.com/dolthub/go-mysql-server v0.20.1-0.20260316223625-fdcf3f20a2bc
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
@@ -87,6 +87,7 @@ require (
 	github.com/vbauerster/mpb/v8 v8.0.2
 	github.com/xitongsys/parquet-go v1.6.1
 	github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371
+	github.com/xtaci/smux v1.5.56
 	github.com/zeebo/blake3 v0.2.3
 	github.com/zeebo/xxh3 v1.0.2
 	go.etcd.io/bbolt v1.3.6

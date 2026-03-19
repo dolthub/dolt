@@ -69,6 +69,7 @@ type fsTablePersister struct {
 
 var _ tablePersister = &fsTablePersister{}
 var _ tableFilePersister = &fsTablePersister{}
+var _ movingTableFilePersister = &fsTablePersister{}
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, stats)
@@ -166,7 +167,7 @@ func (ftp *fsTablePersister) CopyTableFile(_ context.Context, r io.Reader, fileI
 	return file.Rename(tn, path)
 }
 
-func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w *CmpChunkTableWriter) error {
+func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w GenericTableWriter) error {
 	path := filepath.Join(ftp.dir, filename)
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {

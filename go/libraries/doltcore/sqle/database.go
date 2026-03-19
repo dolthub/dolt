@@ -199,6 +199,14 @@ func (db Database) DoltDatabases() []*doltdb.DoltDB {
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(ctx context.Context, name string, dbData env.DbData[context.Context], editOpts editor.Options) (Database, error) {
+	// Databases registered with the SQL engine are always
+	// configured for FatalBehaviorCrash. These are local
+	// databases and it isn't necessarily safe to continue
+	// operating after an I/O on the write path. This is in
+	// contrast to something like a remote in the context of a
+	// backup, replication or a push, where an I/O error is just
+	// an error to perform the requested operation.
+	dbData.Ddb.SetCrashOnFatalError()
 	globalState, err := dsess.NewGlobalStateStoreForDb(ctx, name, dbData.Ddb)
 	if err != nil {
 		return Database{}, err
@@ -2639,9 +2647,6 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 			CreatedAt:       frag.created,
 			SqlMode:         frag.sqlMode,
 		})
-	}
-	if err != nil {
-		return nil, err
 	}
 
 	return triggers, nil

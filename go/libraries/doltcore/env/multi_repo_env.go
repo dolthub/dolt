@@ -188,8 +188,10 @@ func MultiEnvForDirectory(
 	}
 
 	envSet := map[string]*DoltEnv{}
+	var openedEnvs []*DoltEnv
 	if newDEnv.Valid() {
 		envSet[dbName] = newDEnv
+		openedEnvs = append(openedEnvs, newDEnv)
 	} else {
 		dbErr := newDEnv.DBLoadError
 		if dbErr != nil {
@@ -231,6 +233,7 @@ func MultiEnvForDirectory(
 		}
 		if newEnv.Valid() {
 			envSet[dbfactory.DirToDBName(dir)] = newEnv
+			openedEnvs = append(openedEnvs, newEnv)
 		} else {
 			dbErr := newEnv.DBLoadError
 			if dbErr != nil {
@@ -249,6 +252,11 @@ func MultiEnvForDirectory(
 		return false
 	})
 	if err != nil {
+		for _, dEnv := range openedEnvs {
+			if ddb := dEnv.DoltDB(ctx); ddb != nil {
+				ddb.Close()
+			}
+		}
 		return nil, err
 	}
 
@@ -309,6 +317,19 @@ func (mrEnv *MultiRepoEnv) RemoteDialProvider() dbfactory.GRPCDialProvider {
 
 func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
 	return mrEnv.cfg
+}
+
+// Close closes all DoltDBs held by environments in this MultiRepoEnv.
+func (mrEnv *MultiRepoEnv) Close(ctx context.Context) error {
+	var errs []error
+	for _, namedEnv := range mrEnv.envs {
+		if ddb := namedEnv.env.DoltDB(ctx); ddb != nil {
+			if err := ddb.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // addEnv adds an environment to the MultiRepoEnv by name
