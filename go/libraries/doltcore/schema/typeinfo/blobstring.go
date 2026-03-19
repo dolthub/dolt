@@ -52,8 +52,8 @@ func (ti *blobStringType) Equals(other TypeInfo) bool {
 	}
 	if ti2, ok := other.(*blobStringType); ok {
 		return ti.sqlStringType.MaxCharacterLength() == ti2.sqlStringType.MaxCharacterLength() &&
-			ti.sqlStringType.Collation().Equals(ti2.sqlStringType.Collation()) &&
-			ti.Encoding() == ti2.Encoding()
+				ti.sqlStringType.Collation().Equals(ti2.sqlStringType.Collation()) &&
+				ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }
@@ -85,9 +85,6 @@ func (ti *blobStringType) WithEncoding(enc val.Encoding) TypeInfo {
 	case val.StringAdaptiveEnc, val.StringAddrEnc:
 	default:
 		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
-	}
-	if enc == ti.Encoding() {
-		return ti
 	}
 	return &blobStringType{sqlStringType: ti.sqlStringType, enc: enc}
 }

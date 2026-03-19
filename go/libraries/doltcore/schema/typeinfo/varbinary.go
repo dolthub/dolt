@@ -76,9 +76,6 @@ func (ti *varBinaryType) WithEncoding(enc val.Encoding) TypeInfo {
 	default:
 		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
 	}
-	if enc == ti.Encoding() {
-		return ti
-	}
 	return &varBinaryType{sqlBinaryType: ti.sqlBinaryType, enc: enc}
 }
 
