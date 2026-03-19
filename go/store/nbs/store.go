@@ -1594,10 +1594,10 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 					return err
 				}
 				if gcb == gcBehavior_Block {
-					err = nbs.waitForGC(ctx)
-					if err != nil {
-						return err
-					}
+					//err = nbs.waitForGC(ctx)
+					//if err != nil {
+					//	return err
+					//}
 					continue
 				}
 				nbs.addPendingRefsToHasCache()
