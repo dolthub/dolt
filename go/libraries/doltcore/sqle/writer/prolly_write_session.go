@@ -122,7 +122,6 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 		}
 	}
 
-	// TODO: get schema hash here to flush faster?
 	twr := &prollyTableWriter{
 		tableName:     tableName,
 		dbName:        db,
