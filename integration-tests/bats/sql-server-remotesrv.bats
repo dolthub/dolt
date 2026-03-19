@@ -83,6 +83,44 @@ SELECT 'abcdefg';"
     [[ "$output" =~ "abcdefg" ]] || false
 }
 
+@test "sql-server-remotesrv: pushing a new branch creates a working set" {
+    mkdir -p db/remote
+    cd db/remote
+    dolt init
+    dolt sql-server --remotesapi-port 50051 &
+    srv_pid=$!
+
+    cd ../..
+
+    # By cloning here, we have a near-at-hand way to wait for the server to be ready.
+    dolt clone http://localhost:50051/remote cloned_remote
+    cd cloned_remote
+
+    cd ../db/remote
+    # If stats is running, it might create
+    # a working set before we inspect.
+    # Stop it to ensure the working set
+    # exists as a result of our push.
+    dolt sql -q 'call dolt_stats_stop()'
+    cd ../../cloned_remote
+
+    dolt checkout -b new_branch
+    dolt checkout -b new_forced_branch
+    dolt push origin new_branch
+    dolt push -f origin new_forced_branch
+
+    # Assert that the expected working set exists, in addition to the branch.
+    cd ../db/remote
+    kill $srv_pid
+    wait $srv_pid
+    srv_pid=
+    run dolt admin show-root
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "workingSets/heads/new_branch" ]] || false
+    [[ "$output" =~ "workingSets/heads/new_forced_branch" ]] || false
+}
+
 @test "sql-server-remotesrv: can access a created database from sql-server with --remotesapi-port" {
     mkdir -p db/remote
     cd db/remote
