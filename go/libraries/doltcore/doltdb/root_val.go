@@ -885,11 +885,6 @@ var DefaultSchemaName = ""
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func (root *rootValue) PutTable(ctx context.Context, tName TableName, table *Table) (RootValue, error) {
-	//err := ValidateTagUniqueness(ctx, root, tName.Name, table)
-	//if err != nil {
-	//	return nil, err
-	//}
-
 	tableRef, err := RefFromNomsTable(ctx, table)
 	if err != nil {
 		return nil, err

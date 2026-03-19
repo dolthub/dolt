@@ -180,10 +180,8 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 	eg, egCtx := errgroup.WithContext(ctx)
 	sqlEgCtx := ctx.WithContext(egCtx)
 
-	for n := range s.tables {
-		name := n // make a copy
+	for name, wr := range s.tables {
 		eg.Go(func() error {
-			wr := s.tables[name]
 			t, err := wr.table(sqlEgCtx)
 			if err != nil {
 				return err
