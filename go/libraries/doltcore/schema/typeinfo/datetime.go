@@ -84,6 +84,9 @@ func (ti *datetimeType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *datetimeType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != (&datetimeType{sqlDatetimeType: ti.sqlDatetimeType}).Encoding() {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &datetimeType{sqlDatetimeType: ti.sqlDatetimeType, enc: enc}
 }
 

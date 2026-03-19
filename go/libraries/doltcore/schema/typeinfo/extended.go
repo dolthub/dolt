@@ -76,6 +76,9 @@ func (ti *extendedType) Encoding() val.Encoding {
 
 // WithEncoding implements the TypeInfo interface.
 func (ti *extendedType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != (&extendedType{sqlExtendedType: ti.sqlExtendedType}).Encoding() {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &extendedType{sqlExtendedType: ti.sqlExtendedType, enc: enc}
 }
 

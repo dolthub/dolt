@@ -15,6 +15,8 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -66,6 +68,9 @@ func (ti *multipointType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *multipointType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.GeomAddrEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &multipointType{sqlMultiPointType: ti.sqlMultiPointType, enc: enc}
 }
 

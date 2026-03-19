@@ -100,6 +100,9 @@ func (ti *decimalType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *decimalType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.DecimalEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &decimalType{sqlDecimalType: ti.sqlDecimalType, enc: enc}
 }
 

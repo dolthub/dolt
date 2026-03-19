@@ -94,6 +94,9 @@ func (ti *varStringType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *varStringType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.StringEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &varStringType{sqlStringType: ti.sqlStringType, enc: enc}
 }
 

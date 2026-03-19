@@ -15,6 +15,8 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -58,6 +60,9 @@ func (ti *jsonType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *jsonType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.JSONAddrEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &jsonType{jsonType: ti.jsonType, enc: enc}
 }
 

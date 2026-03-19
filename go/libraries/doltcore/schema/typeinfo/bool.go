@@ -15,6 +15,8 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -62,6 +64,9 @@ func (ti *boolType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *boolType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.Int8Enc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &boolType{sqlBitType: ti.sqlBitType, enc: enc}
 }
 

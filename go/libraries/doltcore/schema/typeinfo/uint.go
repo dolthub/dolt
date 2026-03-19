@@ -96,6 +96,9 @@ func (ti *uintType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *uintType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != (&uintType{sqlUintType: ti.sqlUintType}).Encoding() {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &uintType{sqlUintType: ti.sqlUintType, enc: enc}
 }
 

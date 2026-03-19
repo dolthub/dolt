@@ -15,6 +15,8 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -63,6 +65,9 @@ func (ti *uuidType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *uuidType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.StringEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &uuidType{sqlCharType: ti.sqlCharType, enc: enc}
 }
 

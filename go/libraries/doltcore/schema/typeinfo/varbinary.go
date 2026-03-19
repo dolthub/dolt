@@ -71,6 +71,11 @@ func (ti *varBinaryType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *varBinaryType) WithEncoding(enc val.Encoding) TypeInfo {
+	switch enc {
+	case val.BytesAdaptiveEnc, val.BytesAddrEnc:
+	default:
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	if enc == ti.Encoding() {
 		return ti
 	}

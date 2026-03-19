@@ -80,6 +80,9 @@ func (ti *enumType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *enumType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.EnumEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &enumType{sqlEnumType: ti.sqlEnumType, enc: enc}
 }
 

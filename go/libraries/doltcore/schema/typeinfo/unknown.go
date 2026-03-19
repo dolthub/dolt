@@ -48,7 +48,9 @@ func (ti *unknownType) String() string {
 func (ti *unknownType) Encoding() val.Encoding { return val.NullEnc }
 
 // WithEncoding implements TypeInfo interface.
-func (ti *unknownType) WithEncoding(_ val.Encoding) TypeInfo { return &unknownType{} }
+func (ti *unknownType) WithEncoding(enc val.Encoding) TypeInfo {
+	panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+}
 
 // ToSqlType implements TypeInfo interface.
 func (ti *unknownType) ToSqlType() sql.Type {

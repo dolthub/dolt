@@ -15,6 +15,8 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -64,6 +66,9 @@ func (ti *yearType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *yearType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.YearEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &yearType{sqlYearType: ti.sqlYearType, enc: enc}
 }
 

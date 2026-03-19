@@ -75,6 +75,9 @@ func (ti *setType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *setType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.SetEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &setType{sqlSetType: ti.sqlSetType, enc: enc}
 }
 

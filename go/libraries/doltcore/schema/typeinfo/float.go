@@ -82,6 +82,9 @@ func (ti *floatType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *floatType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != (&floatType{sqlFloatType: ti.sqlFloatType}).Encoding() {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &floatType{sqlFloatType: ti.sqlFloatType, enc: enc}
 }
 

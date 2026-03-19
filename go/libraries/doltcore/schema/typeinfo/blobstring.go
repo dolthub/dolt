@@ -81,6 +81,11 @@ func (ti *blobStringType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *blobStringType) WithEncoding(enc val.Encoding) TypeInfo {
+	switch enc {
+	case val.StringAdaptiveEnc, val.StringAddrEnc:
+	default:
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	if enc == ti.Encoding() {
 		return ti
 	}

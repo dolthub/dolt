@@ -73,6 +73,9 @@ func (ti *vectorType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *vectorType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.BytesAdaptiveEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &vectorType{sqlVectorType: ti.sqlVectorType, enc: enc}
 }
 

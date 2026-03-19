@@ -15,6 +15,8 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -64,6 +66,9 @@ func (ti *timeType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *timeType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.TimeEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &timeType{sqlTimeType: ti.sqlTimeType, enc: enc}
 }
 

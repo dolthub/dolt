@@ -74,6 +74,9 @@ func (ti *inlineBlobType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *inlineBlobType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.ByteStringEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &inlineBlobType{sqlBinaryType: ti.sqlBinaryType, enc: enc}
 }
 

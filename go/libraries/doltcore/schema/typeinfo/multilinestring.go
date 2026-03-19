@@ -15,6 +15,8 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -66,6 +68,9 @@ func (ti *multilinestringType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *multilinestringType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.GeomAddrEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &multilinestringType{sqlMultiLineStringType: ti.sqlMultiLineStringType, enc: enc}
 }
 

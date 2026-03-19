@@ -88,6 +88,9 @@ func (ti *bitType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *bitType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.Uint64Enc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
 	return &bitType{sqlBitType: ti.sqlBitType, enc: enc}
 }
 
