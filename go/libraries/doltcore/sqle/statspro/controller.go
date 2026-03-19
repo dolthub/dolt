@@ -120,10 +120,11 @@ type rootStats struct {
 	hash            uint64
 	hashes          map[tableIndexesKey]hash.Hash
 	stats           map[tableIndexesKey][]*stats.Statistic
-	DbCnt           int `json:"dbCnt"`
-	BucketWrites    int `json:"bucketWrites"`
-	TablesProcessed int `json:"tablesProcessed"`
-	TablesSkipped   int `json:"tablesSkipped"`
+	DbCnt           int 	  `json:"dbCnt"`
+	BucketWrites    int 	  `json:"bucketWrites"`
+	TablesProcessed int 	  `json:"tablesProcessed"`
+	TablesSkipped   int 	  `json:"tablesSkipped"`
+	LastUpdate      time.Time `json:"lastUpdate"`
 }
 
 func newRootStats() *rootStats {
@@ -248,6 +249,7 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 		GenCnt:            int(sc.genCnt.Load()),
 		GcCnt:             sc.gcCnt,
 		Backing:           filepath.Base(backing),
+		LastUpdate:        sc.Stats.LastUpdate,
 	}, nil
 }
 

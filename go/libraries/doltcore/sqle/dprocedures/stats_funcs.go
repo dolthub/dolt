@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -53,16 +54,17 @@ func statsFunc(fn func(ctx *sql.Context, args ...string) (interface{}, error)) f
 
 // StatsInfo gives a summary of the current coordinator stats.
 type StatsInfo struct {
-	DbCnt             int    `json:"dbCnt"`
-	Active            bool   `json:"active"`
-	StorageBucketCnt  int    `json:"storageBucketCnt"`
-	CachedBucketCnt   int    `json:"cachedBucketCnt"`
-	CachedBoundCnt    int    `json:"cachedBoundCnt"`
-	CachedTemplateCnt int    `json:"cachedTemplateCnt"`
-	StatCnt           int    `json:"statCnt"`
-	GcCnt             int    `json:"gcCnt,omitempty"`
-	GenCnt            int    `json:"genCnt,omitempty"`
-	Backing           string `json:"backing"`
+	DbCnt             int       `json:"dbCnt"`
+	Active            bool      `json:"active"`
+	StorageBucketCnt  int       `json:"storageBucketCnt"`
+	CachedBucketCnt   int       `json:"cachedBucketCnt"`
+	CachedBoundCnt    int       `json:"cachedBoundCnt"`
+	CachedTemplateCnt int       `json:"cachedTemplateCnt"`
+	StatCnt           int       `json:"statCnt"`
+	GcCnt             int       `json:"gcCnt,omitempty"`
+	GenCnt            int       `json:"genCnt,omitempty"`
+	Backing           string    `json:"backing"`
+	LastUpdate        time.Time `json:"lastUpdate"`
 }
 
 // ToJson returns stats info as a json string. Use the |short|

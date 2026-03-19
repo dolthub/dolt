@@ -22,6 +22,7 @@ import (
 	"log"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -36,6 +37,8 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+var mockableTimeSource func() time.Time = time.Now
 
 const collectBatchSize = 20
 
@@ -303,6 +306,7 @@ func (sc *StatsController) newStatsForRoot(ctx *sql.Context, gcKv *memStats, byp
 	}
 
 	newStats.hash = digest.Sum64()
+	newStats.LastUpdate = mockableTimeSource()
 	return newStats, nil
 }
 
