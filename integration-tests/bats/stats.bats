@@ -293,7 +293,6 @@ SQL
     start_sql_server
 
     dolt sql -q "call dolt_stats_wait();"
-    dolt sql -q "call dolt_stats_info('--short');"
     run dolt sql -r csv -q "call dolt_stats_info('--short');"
     [ "$status" -eq 0 ]
     [[ "$output" =~ '"{""dbCnt"":2,""active"":true,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":3,""backing"":""repo1"","' ]] || false
@@ -474,4 +473,56 @@ EOF
     run dolt sql -r csv -q "call dolt_stats_once(); select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[3]}" = "1" ]
+}
+
+@test "stats: worker thread quiesces and then runs again on new writes" {
+    get_stats_time() {
+        dolt sql -r csv -q 'call dolt_stats_info()' | tail -n 1 | sed -e 's|.*lastUpdate"":""||' -e 's|""}"$||'
+    }
+    newtime=
+    wait_for_new_time() {
+        # We don't use dolt_stats_wait here, because that would
+	# trigger a stats run on its own. Here we want to assert
+	# that an incoming write triggered the run.
+        cnt=0
+        while [[ "$newtime" == "$origtime" ]]; do
+	    newtime=$(get_stats_time)
+            if [ "$cnt" -eq 8 ]; then
+                echo "took too long to run stats after a write" 1>&2
+                exit 1
+            fi
+	    sleep 1
+	done
+    }
+    wait_for_quiesced() {
+        dolt sql -q 'call dolt_stats_wait();'
+        origtime=$(get_stats_time)
+        cnt=0
+        while [[ ! "$cnt" -eq 8 ]]; do
+            newtime=$(get_stats_time)
+            [[ "$newtime" == "$origtime" ]] || false
+            cnt=$((cnt+1))
+        done
+    }
+
+    start_sql_server
+
+    # After it runs, stats quiesces until a new write.
+    wait_for_quiesced
+
+    # Doing a write makes it run again
+    dolt sql -q 'create table vals (id int primary key)'
+    wait_for_new_time
+
+    wait_for_quiesced
+
+    # Creating a new database makes it run again
+    dolt sql -q 'create database newdb'
+    wait_for_new_time
+
+    wait_for_quiesced
+
+    # Writing against the new database makes it run again
+    dolt sql -q 'create table `newdb`.`newtable` (id int primary key)'
+    wait_for_new_time
 }

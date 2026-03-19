@@ -206,6 +206,10 @@ func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs file
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
+	// Registering the new database wakes stats, just like an incoming write
+	// on an existing registered database.
+	sc.wakeStatsOnNewWriteLocked()
+
 	firstDb := len(sc.dbFs) == 0
 	sc.dbFs[db.AliasedName()] = fs
 	if rotateOk && firstDb {
@@ -658,15 +662,23 @@ type commithook struct {
 }
 
 func (h commithook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
-	h.sc.mu.Lock()
-	defer h.sc.mu.Unlock()
-	if h.sc.quiescedAwake != nil {
-		close(h.sc.quiescedAwake)
-		h.sc.quiescedAwake = nil
-	}
+	h.sc.wakeStatsOnNewWrite()
 	return nil, nil
 }
 
 func (h commithook) ExecuteForWorkingSets() bool {
 	return true
+}
+
+func (sc *StatsController) wakeStatsOnNewWrite() {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.wakeStatsOnNewWriteLocked()
+}
+
+func (sc *StatsController) wakeStatsOnNewWriteLocked() {
+	if sc.quiescedAwake != nil {
+		close(sc.quiescedAwake)
+		sc.quiescedAwake = nil
+	}
 }
