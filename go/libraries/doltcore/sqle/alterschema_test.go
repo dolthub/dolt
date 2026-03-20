@@ -247,7 +247,7 @@ func TestAddColumnToTable(t *testing.T) {
 			tt.expectedSchema.Indexes().AddIndex(index)
 			_, err = tt.expectedSchema.Checks().AddCheck("test-check", "age < 123", true)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedSchema, sch)
+			require.True(t, schema.SchemasAreEqual(tt.expectedSchema, sch))
 		})
 	}
 }
@@ -760,7 +760,7 @@ func TestModifyColumn(t *testing.T) {
 			require.NoError(t, err)
 			_, err = tt.expectedSchema.Checks().AddCheck("test-check", "age < 123", true)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedSchema, sch)
+			require.True(t, schema.SchemasAreEqual(tt.expectedSchema, sch))
 		})
 	}
 }

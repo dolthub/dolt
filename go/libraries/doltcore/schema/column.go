@@ -59,7 +59,9 @@ type Column struct {
 	// Tag should be unique per versioned schema and allows
 	Tag uint64
 
-	// Kind is the types.NomsKind that values of this column will be
+	// Kind is the types.NomsKind of values in this column. This value is mostly symbolic and this field mostly
+	// vestigial with the new storage format. If you seem to need it for something, consider TypeInfo instead.
+	// Its main remaining use is in determining the tag for new columns, so it must be set for that reason.
 	Kind types.NomsKind
 
 	// IsPartOfPK says whether this column is part of the primary key
@@ -91,6 +93,7 @@ type Column struct {
 }
 
 // NewColumn creates a Column instance with the default type info for the NomsKind
+// Deprecated. Use NewColumnWithTypeInfo instead.
 func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, constraints ...ColConstraint) Column {
 	typeInfo := typeinfo.FromKind(kind)
 	col, err := NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", false, "", constraints...)
@@ -136,10 +139,6 @@ func ValidateColumn(c Column) error {
 		return errors.New("cannot instantiate column with nil type info")
 	}
 
-	if c.TypeInfo.NomsKind() != c.Kind {
-		return errors.New("type info and kind do not match")
-	}
-
 	return nil
 }
 
@@ -163,7 +162,6 @@ func (c Column) IsNullable() bool {
 func (c Column) Equals(other Column) bool {
 	return c.Name == other.Name &&
 		c.Tag == other.Tag &&
-		c.Kind == other.Kind &&
 		c.IsPartOfPK == other.IsPartOfPK &&
 		c.TypeInfo.Equals(other.TypeInfo) &&
 		c.Default == other.Default &&
@@ -173,22 +171,8 @@ func (c Column) Equals(other Column) bool {
 // EqualsWithoutTag tests equality between two columns, but does not check the columns' tags.
 func (c Column) EqualsWithoutTag(other Column) bool {
 	return c.Name == other.Name &&
-		c.Kind == other.Kind &&
 		c.IsPartOfPK == other.IsPartOfPK &&
 		c.TypeInfo.Equals(other.TypeInfo) &&
 		c.Default == other.Default &&
 		ColConstraintsAreEqual(c.Constraints, other.Constraints)
-}
-
-// Compatible tests compatibility between two columns. Compatible columns have the same tag and can store the same
-// kinds of values at the storage layer, but may have different constraints or type parameters.
-func (c Column) Compatible(other Column) bool {
-	return c.Tag == other.Tag &&
-		c.Kind == other.Kind &&
-		c.IsPartOfPK == other.IsPartOfPK
-}
-
-// KindString returns the string representation of the NomsKind stored in the column.
-func (c Column) KindString() string {
-	return KindToLwrStr[c.Kind]
 }

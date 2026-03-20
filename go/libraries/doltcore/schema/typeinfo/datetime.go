@@ -19,8 +19,10 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -33,17 +35,18 @@ const (
 
 type datetimeType struct {
 	sqlDatetimeType sql.DatetimeType
+	enc             val.Encoding
 }
 
 var _ TypeInfo = (*datetimeType)(nil)
 var (
-	DateType      = &datetimeType{gmstypes.Date}
-	DatetimeType  = &datetimeType{gmstypes.DatetimeMaxPrecision}
-	TimestampType = &datetimeType{gmstypes.TimestampMaxPrecision}
+	DateType      = &datetimeType{sqlDatetimeType: gmstypes.Date}
+	DatetimeType  = &datetimeType{sqlDatetimeType: gmstypes.DatetimeMaxPrecision}
+	TimestampType = &datetimeType{sqlDatetimeType: gmstypes.TimestampMaxPrecision}
 )
 
 func CreateDatetimeTypeFromSqlType(typ sql.DatetimeType) *datetimeType {
-	return &datetimeType{typ}
+	return &datetimeType{sqlDatetimeType: typ}
 }
 
 // Equals implements TypeInfo interface.
@@ -52,7 +55,8 @@ func (ti *datetimeType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if ti2, ok := other.(*datetimeType); ok {
-		return ti.sqlDatetimeType.Type() == ti2.sqlDatetimeType.Type()
+		return ti.sqlDatetimeType.Type() == ti2.sqlDatetimeType.Type() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }
@@ -65,6 +69,25 @@ func (ti *datetimeType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *datetimeType) String() string {
 	return fmt.Sprintf(`Datetime(SQL: "%v")`, ti.sqlDatetimeType.String())
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *datetimeType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	if ti.sqlDatetimeType.Type() == sqltypes.Date {
+		return val.DateEnc
+	}
+	return val.DatetimeEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *datetimeType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != (&datetimeType{sqlDatetimeType: ti.sqlDatetimeType}).Encoding() {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &datetimeType{sqlDatetimeType: ti.sqlDatetimeType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

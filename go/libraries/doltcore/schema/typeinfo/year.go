@@ -15,29 +15,35 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Year, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type yearType struct {
 	sqlYearType sql.YearType
+	enc         val.Encoding
 }
 
 var _ TypeInfo = (*yearType)(nil)
 
-var YearType = &yearType{gmstypes.Year}
+var YearType = &yearType{sqlYearType: gmstypes.Year}
 
 // Equals implements TypeInfo interface.
 func (ti *yearType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*yearType)
-	return ok
+	if ti2, ok := other.(*yearType); ok {
+		return ti.Encoding() == ti2.Encoding()
+	}
+	return false
 }
 
 // NomsKind implements TypeInfo interface.
@@ -48,6 +54,22 @@ func (ti *yearType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *yearType) String() string {
 	return "Year"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *yearType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.YearEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *yearType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.YearEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &yearType{sqlYearType: ti.sqlYearType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

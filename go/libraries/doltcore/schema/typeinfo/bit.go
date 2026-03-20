@@ -22,6 +22,7 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -32,11 +33,12 @@ const (
 // within is directly reliant on the go-mysql-server implementation.
 type bitType struct {
 	sqlBitType gmstypes.BitType
+	enc        val.Encoding
 }
 
 var _ TypeInfo = (*bitType)(nil)
 
-var PseudoBoolType TypeInfo = &bitType{gmstypes.MustCreateBitType(1)}
+var PseudoBoolType TypeInfo = &bitType{sqlBitType: gmstypes.MustCreateBitType(1)}
 
 func CreateBitTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if bitStr, ok := params[bitTypeParam_Bits]; ok {
@@ -48,7 +50,7 @@ func CreateBitTypeFromParams(params map[string]string) (TypeInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &bitType{sqlBitType}, nil
+		return &bitType{sqlBitType: sqlBitType}, nil
 	} else {
 		return nil, fmt.Errorf(`create bit type info is missing param "%v"`, bitTypeParam_Bits)
 	}
@@ -60,7 +62,8 @@ func (ti *bitType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if ti2, ok := other.(*bitType); ok {
-		return ti.sqlBitType.NumberOfBits() == ti2.sqlBitType.NumberOfBits()
+		return ti.sqlBitType.NumberOfBits() == ti2.sqlBitType.NumberOfBits() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }
@@ -73,6 +76,22 @@ func (ti *bitType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *bitType) String() string {
 	return fmt.Sprintf("Bit(%v)", ti.sqlBitType.NumberOfBits())
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *bitType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.Uint64Enc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *bitType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.Uint64Enc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &bitType{sqlBitType: ti.sqlBitType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

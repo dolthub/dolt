@@ -353,7 +353,7 @@ func (si *schemaImpl) String() string {
 		b.WriteString(", name: ")
 		b.WriteString(col.Name)
 		b.WriteString(", type: ")
-		b.WriteString(col.KindString())
+		b.WriteString(col.TypeInfo.String())
 		b.WriteString(",\n")
 		return false, nil
 	}
@@ -447,15 +447,10 @@ func (si *schemaImpl) GetMapDescriptors(vs val.ValueStore) (keyDesc, valueDesc *
 
 // GetKeyDescriptor implements the Schema interface.
 func (si *schemaImpl) GetKeyDescriptor(vs val.ValueStore) *val.TupleDesc {
-	return si.getKeyColumnsDescriptor(vs, true)
+	return si.getKeyColumnsDescriptor(vs)
 }
 
-// GetKeyDescriptorWithNoConversion implements the Schema interface.
-func (si *schemaImpl) GetKeyDescriptorWithNoConversion(vs val.ValueStore) *val.TupleDesc {
-	return si.getKeyColumnsDescriptor(vs, false)
-}
-
-func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressColumns bool) *val.TupleDesc {
+func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc {
 	if IsKeyless(si) {
 		return val.KeylessTupleDesc
 	}
@@ -479,39 +474,41 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressC
 		typeHandler, hasTypeHandler := sqlType.(val.TupleTypeHandler)
 
 		if hasTypeHandler {
-			encoding := EncodingFromSqlType(sqlType)
+			encoding := col.TypeInfo.Encoding()
 			t = val.Type{
-				Enc:      val.Encoding(encoding),
+				Enc:      encoding,
 				Nullable: columnMissingNotNullConstraint(col),
 			}
 			switch encoding {
-			case serial.EncodingExtendedAddr:
+			case val.ExtendedAddrEnc:
 				handler = val.NewExtendedAddressTypeHandler(vs, typeHandler)
-			case serial.EncodingExtendedAdaptive:
+			case val.ExtendedAdaptiveEnc:
 				handler = val.NewAdaptiveTypeHandler(vs, typeHandler)
 			default:
 				// encoding == serial.EncodingExtended
 				handler = typeHandler
 			}
 		} else {
-			if convertAddressColumns && !contentHashedField && queryType == query.Type_BLOB {
+			// For key columns, even types that are typically stored out of band get an inline encoding, unless they're
+			// a hashed field in a unique index
+			if !contentHashedField && queryType == query.Type_BLOB {
 				t = val.Type{
-					Enc:      val.Encoding(EncodingFromQueryType(query.Type_VARBINARY)),
+					Enc:      val.Encoding(encodingFromQueryType(query.Type_VARBINARY)),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
-			} else if convertAddressColumns && !contentHashedField && queryType == query.Type_TEXT {
+			} else if !contentHashedField && queryType == query.Type_TEXT {
 				t = val.Type{
-					Enc:      val.Encoding(EncodingFromQueryType(query.Type_VARCHAR)),
+					Enc:      val.Encoding(encodingFromQueryType(query.Type_VARCHAR)),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
-			} else if convertAddressColumns && !contentHashedField && queryType == query.Type_GEOMETRY {
+			} else if !contentHashedField && queryType == query.Type_GEOMETRY {
 				t = val.Type{
 					Enc:      val.Encoding(serial.EncodingCell),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
 			} else {
 				t = val.Type{
-					Enc:      val.Encoding(EncodingFromSqlType(sqlType)),
+					Enc:      col.TypeInfo.Encoding(),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
 			}
@@ -560,10 +557,10 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 		}
 
 		sqlType := col.TypeInfo.ToSqlType()
-		encoding := EncodingFromSqlType(sqlType)
+		encoding := col.TypeInfo.Encoding()
 		queryType := sqlType.Type()
 		tt = append(tt, val.Type{
-			Enc:      val.Encoding(encoding),
+			Enc:      encoding,
 			Nullable: col.IsNullable(),
 		})
 		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR {
@@ -575,12 +572,12 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 
 		if typeHandler, ok := sqlType.(val.TupleTypeHandler); ok {
 			switch encoding {
-			case serial.EncodingExtendedAddr:
+			case val.ExtendedAddrEnc:
 				handlers = append(handlers, val.NewExtendedAddressTypeHandler(vs, typeHandler))
-			case serial.EncodingExtendedAdaptive:
+			case val.ExtendedAdaptiveEnc:
 				handlers = append(handlers, val.NewAdaptiveTypeHandler(vs, typeHandler))
 			default:
-				// encoding == serial.EncodingExtended
+				// encoding == val.ExtendedEnc
 				handlers = append(handlers, typeHandler)
 			}
 		} else {

@@ -29,7 +29,9 @@ import (
 type NomsKind uint8
 
 // All supported kinds of Noms types are enumerated here.
-// The ordering of these (especially Bool, Float and String) is important for ordering of values.
+// DO NOT REORDER THIS LIST OR DELETE ELEMENTS. ADD NEW ELEMENTS AT THE END ONLY.
+// The integer value of these constants is used when creating column tags, so changing these values will break
+// compatibility with existing versions of Dolt.
 const (
 	BoolKind NomsKind = iota
 	FloatKind

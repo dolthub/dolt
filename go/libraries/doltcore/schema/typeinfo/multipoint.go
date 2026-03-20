@@ -15,21 +15,25 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multipointType struct {
 	sqlMultiPointType gmstypes.MultiPointType
+	enc               val.Encoding
 }
 
 var _ TypeInfo = (*multipointType)(nil)
 
-var MultiPointType = &multipointType{gmstypes.MultiPointType{}}
+var MultiPointType = &multipointType{sqlMultiPointType: gmstypes.MultiPointType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *multipointType) Equals(other TypeInfo) bool {
@@ -38,7 +42,8 @@ func (ti *multipointType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*multipointType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlMultiPointType.DefinedSRID && !o.sqlMultiPointType.DefinedSRID) || ti.sqlMultiPointType.SRID == o.sqlMultiPointType.SRID
+		return ((!ti.sqlMultiPointType.DefinedSRID && !o.sqlMultiPointType.DefinedSRID) || ti.sqlMultiPointType.SRID == o.sqlMultiPointType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }
@@ -51,6 +56,22 @@ func (ti *multipointType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *multipointType) String() string {
 	return "multipoint"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *multipointType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *multipointType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.GeomAddrEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &multipointType{sqlMultiPointType: ti.sqlMultiPointType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

@@ -15,23 +15,29 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type jsonType struct {
 	jsonType sqltypes.JsonType
+	enc      val.Encoding
 }
 
 var _ TypeInfo = (*jsonType)(nil)
-var JSONType = &jsonType{sqltypes.JsonType{}}
+var JSONType = &jsonType{jsonType: sqltypes.JsonType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *jsonType) Equals(other TypeInfo) bool {
-	_, ok := other.(*jsonType)
-	return ok
+	if ti2, ok := other.(*jsonType); ok {
+		return ti.Encoding() == ti2.Encoding()
+	}
+	return false
 }
 
 // NomsKind implements TypeInfo interface.
@@ -42,6 +48,22 @@ func (ti *jsonType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *jsonType) String() string {
 	return "JSON"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *jsonType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.JSONAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *jsonType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.JSONAddrEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &jsonType{jsonType: ti.jsonType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

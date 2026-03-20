@@ -15,21 +15,25 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multilinestringType struct {
 	sqlMultiLineStringType gmstypes.MultiLineStringType
+	enc                    val.Encoding
 }
 
 var _ TypeInfo = (*multilinestringType)(nil)
 
-var MultiLineStringType = &multilinestringType{gmstypes.MultiLineStringType{}}
+var MultiLineStringType = &multilinestringType{sqlMultiLineStringType: gmstypes.MultiLineStringType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *multilinestringType) Equals(other TypeInfo) bool {
@@ -38,7 +42,8 @@ func (ti *multilinestringType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*multilinestringType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlMultiLineStringType.DefinedSRID && !o.sqlMultiLineStringType.DefinedSRID) || ti.sqlMultiLineStringType.SRID == o.sqlMultiLineStringType.SRID
+		return ((!ti.sqlMultiLineStringType.DefinedSRID && !o.sqlMultiLineStringType.DefinedSRID) || ti.sqlMultiLineStringType.SRID == o.sqlMultiLineStringType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }
@@ -51,6 +56,22 @@ func (ti *multilinestringType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *multilinestringType) String() string {
 	return "MultiLineString"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *multilinestringType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *multilinestringType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.GeomAddrEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &multilinestringType{sqlMultiLineStringType: ti.sqlMultiLineStringType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

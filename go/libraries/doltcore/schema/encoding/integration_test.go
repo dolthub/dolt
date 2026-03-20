@@ -55,7 +55,7 @@ func testSchemaSerializationNoms(t *testing.T, sch schema.Schema) {
 	require.NoError(t, err)
 	s, err := encoding.UnmarshalSchema(ctx, nbf, v)
 	require.NoError(t, err)
-	assert.Equal(t, sch, s)
+	assert.True(t, schema.SchemasAreEqual(sch, s))
 }
 
 func testSchemaSerializationFlatbuffers(t *testing.T, sch schema.Schema) {
@@ -66,7 +66,7 @@ func testSchemaSerializationFlatbuffers(t *testing.T, sch schema.Schema) {
 	require.NoError(t, err)
 	s, err := encoding.DeserializeSchema(ctx, nbf, v)
 	require.NoError(t, err)
-	assert.Equal(t, sch, s)
+	assert.True(t, schema.SchemasAreEqual(sch, s))
 }
 
 func parseSchemaString(t *testing.T, s string) schema.Schema {
