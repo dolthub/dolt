@@ -42,6 +42,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -102,16 +103,28 @@ type StatsController struct {
 	// as last-writer wins
 	genCnt atomic.Uint64
 	gcCnt  int
+
+	// If non-nil, this will be closed when a new write comes in
+	// and it will be nil'd out. It will also be closed when
+	// addListener adds a new listener.
+	//
+	// In turn, when the worker thread reaches the end of its run
+	// and it sees that the stats it just computed are the same
+	// as the stats it started with, it can quiesce by selecting
+	// against the quiescedAwake channel which it installed at
+	// the beginning of that run.
+	quiescedAwake chan struct{}
 }
 
 type rootStats struct {
 	hash            uint64
 	hashes          map[tableIndexesKey]hash.Hash
 	stats           map[tableIndexesKey][]*stats.Statistic
-	DbCnt           int `json:"dbCnt"`
-	BucketWrites    int `json:"bucketWrites"`
-	TablesProcessed int `json:"tablesProcessed"`
-	TablesSkipped   int `json:"tablesSkipped"`
+	DbCnt           int       `json:"dbCnt"`
+	BucketWrites    int       `json:"bucketWrites"`
+	TablesProcessed int       `json:"tablesProcessed"`
+	TablesSkipped   int       `json:"tablesSkipped"`
+	LastUpdate      time.Time `json:"lastUpdate"`
 }
 
 func newRootStats() *rootStats {
@@ -193,6 +206,10 @@ func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs file
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
+	// Registering the new database wakes stats, just like an incoming write
+	// on an existing registered database.
+	sc.wakeStatsOnNewWriteLocked()
+
 	firstDb := len(sc.dbFs) == 0
 	sc.dbFs[db.AliasedName()] = fs
 	if rotateOk && firstDb {
@@ -236,6 +253,7 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 		GenCnt:            int(sc.genCnt.Load()),
 		GcCnt:             sc.gcCnt,
 		Backing:           filepath.Base(backing),
+		LastUpdate:        sc.Stats.LastUpdate,
 	}, nil
 }
 
@@ -629,4 +647,38 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		}, nil
 	}
 	return NewProllyStats(ctx, statsDb)
+}
+
+// A hook to go on all DoltDBs stats watches. It just triggers
+// StatsController.quiescedAwake on any incoming write to the database
+// to ensure that the worker thread wakes up and processes stats after
+// that write.
+func (sc *StatsController) commithook() commithook {
+	return commithook{sc}
+}
+
+type commithook struct {
+	sc *StatsController
+}
+
+func (h commithook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
+	h.sc.wakeStatsOnNewWrite()
+	return nil, nil
+}
+
+func (h commithook) ExecuteForWorkingSets() bool {
+	return true
+}
+
+func (sc *StatsController) wakeStatsOnNewWrite() {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.wakeStatsOnNewWriteLocked()
+}
+
+func (sc *StatsController) wakeStatsOnNewWriteLocked() {
+	if sc.quiescedAwake != nil {
+		close(sc.quiescedAwake)
+		sc.quiescedAwake = nil
+	}
 }
