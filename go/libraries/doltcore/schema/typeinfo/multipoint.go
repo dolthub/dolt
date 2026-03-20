@@ -68,7 +68,7 @@ func (ti *multipointType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *multipointType) WithEncoding(enc val.Encoding) TypeInfo {
-	if enc != val.GeomAddrEnc {
+	if enc != val.GeomAddrEnc && enc != val.GeometryEnc {
 		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
 	}
 	return &multipointType{sqlMultiPointType: ti.sqlMultiPointType, enc: enc}

@@ -43,7 +43,7 @@ func (ti *pointType) Equals(other TypeInfo) bool {
 	if o, ok := other.(*pointType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
 		return ((!ti.sqlPointType.DefinedSRID && !o.sqlPointType.DefinedSRID) || ti.sqlPointType.SRID == o.sqlPointType.SRID) &&
-			ti.Encoding() == o.Encoding()
+				ti.Encoding() == o.Encoding()
 	}
 	return false
 }
@@ -68,7 +68,7 @@ func (ti *pointType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *pointType) WithEncoding(enc val.Encoding) TypeInfo {
-	if enc != val.GeomAddrEnc {
+	if enc != val.GeomAddrEnc && enc != val.GeometryEnc {
 		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
 	}
 	return &pointType{sqlPointType: ti.sqlPointType, enc: enc}
