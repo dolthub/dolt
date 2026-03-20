@@ -111,6 +111,34 @@ INSERT INTO all_types (pk, c_text, c_mediumtext, c_longtext, c_blob, c_mediumblo
   3,
   REPEAT('t', 500), REPEAT('m', 500), REPEAT('l', 500),
   REPEAT('b', 500), REPEAT('x', 500), REPEAT('y', 500));
+
+CREATE TABLE geom_types (
+  pk INT NOT NULL PRIMARY KEY,
+  c_point POINT,
+  c_linestring LINESTRING,
+  c_polygon POLYGON,
+  c_geometry GEOMETRY,
+  c_multipoint MULTIPOINT,
+  c_multilinestring MULTILINESTRING,
+  c_multipolygon MULTIPOLYGON,
+  c_geometrycollection GEOMETRYCOLLECTION
+);
+INSERT INTO geom_types VALUES (
+  1,
+  ST_GeomFromText('POINT(1 2)'),
+  ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'),
+  ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))'),
+  ST_GeomFromText('POINT(3 4)'),
+  ST_GeomFromText('MULTIPOINT(0 0,1 2)'),
+  ST_GeomFromText('MULTILINESTRING((0 0,1 1),(2 2,3 3))'),
+  ST_GeomFromText('MULTIPOLYGON(((0 0,1 0,1 1,0 1,0 0)))'),
+  ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(1 1,2 2))')
+);
+INSERT INTO geom_types (pk, c_point, c_geometry) VALUES (
+  2,
+  ST_GeomFromText('POINT(10 20)'),
+  ST_GeomFromText('LINESTRING(0 0,5 5)')
+);
 SQL
 dolt sql < "../../test_files/big_table.sql"  # inserts 1K rows to `big`
 dolt add .
