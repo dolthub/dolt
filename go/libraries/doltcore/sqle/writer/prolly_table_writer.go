@@ -155,9 +155,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 		}
 	}
 
-	if err = w.primary.Insert(ctx, sqlRow); err != nil {
-		return err
-	}
 	for _, wr := range w.secondary {
 		if err = wr.Insert(ctx, sqlRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
@@ -165,6 +162,9 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 			}
 			return err
 		}
+	}
+	if err = w.primary.Insert(ctx, sqlRow); err != nil {
+		return err
 	}
 
 	w.setAutoIncrement = true
