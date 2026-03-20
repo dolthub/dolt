@@ -428,14 +428,10 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		tb.PutByteString(i, v.([]byte))
 	case val.Hash128Enc:
 		tb.PutHash128(i, v.([]byte))
-	// TODO: eventually remove GeometryEnc, but in the meantime write them as GeomAddrEnc
+	// TODO: eventually remove GeometryEnc, some old DBs may still use it
 	case val.GeometryEnc:
 		geo := serializeGeometry(v)
-		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
-		if err != nil {
-			return err
-		}
-		tb.PutGeometryAddr(i, h)
+		tb.PutGeometry(i, geo)
 	case val.GeomAddrEnc:
 		geo := serializeGeometry(v)
 		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
