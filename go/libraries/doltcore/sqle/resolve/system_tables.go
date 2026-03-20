@@ -81,6 +81,8 @@ func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]dol
 	return s.AsSlice(), nil
 }
 
+// GetGeneratedSystemTablesBySchema returns table names of all generated system tables within the specified schema.
+// In Dolt, this is synonymous with getting all tables names in the connected database.
 func GetGeneratedSystemTablesBySchema(ctx context.Context, root doltdb.RootValue, schema schema.DatabaseSchema) ([]doltdb.TableName, error) {
 	s := doltdb.NewTableNameSet(nil)
 
@@ -117,7 +119,7 @@ func GetGeneratedSystemTablesBySchema(ctx context.Context, root doltdb.RootValue
 		}
 	}
 
-	// For doltgres, we also support the legacy dolt_ table names, addressable in any user schema
+	// For Doltgres, we also support the legacy dolt_ table names, addressable in any user schema
 	if UseSearchPath && schema.Name != "pg_catalog" && schema.Name != doltdb.DoltNamespace {
 		for _, name := range doltdb.DoltGeneratedTableNames {
 			s.Add(doltdb.TableName{
