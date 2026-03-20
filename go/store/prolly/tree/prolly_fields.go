@@ -94,7 +94,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 			err = json.Unmarshal(buf, &doc.Val)
 			v = doc
 		}
-	// TODO: eventually remove this, and only read GeomAddrEnc
+	// GeometryEnc is no longer written by new columns, but could be used by older databases
 	case val.GeometryEnc:
 		var buf []byte
 		buf, ok = td.GetGeometry(i, tup)
@@ -102,22 +102,15 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 			v, err = deserializeGeometry(buf)
 		}
 	case val.GeomAddrEnc:
-		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
 		var buf []byte
-		buf, ok = td.GetGeometry(i, tup)
+		var h hash.Hash
+		h, ok = td.GetGeometryAddr(i, tup)
 		if ok {
-			v, err = deserializeGeometry(buf)
-		}
-		if !ok || err != nil {
-			var h hash.Hash
-			h, ok = td.GetGeometryAddr(i, tup)
-			if ok {
-				buf, err = ns.ReadBytes(ctx, h)
-				if err != nil {
-					return nil, err
-				}
-				v, err = deserializeGeometry(buf)
+			buf, err = ns.ReadBytes(ctx, h)
+			if err != nil {
+				return nil, err
 			}
+			v, err = deserializeGeometry(buf)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
@@ -463,7 +456,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		tb.PutBytesAddr(i, h)
 	case val.StringAddrEnc:
-		//todo: v will be []byte after daylon's changes
+		// todo: v will be []byte after daylon's changes
 		h, err := getStringAddrHash(ctx, ns, v)
 		if err != nil {
 			return err
