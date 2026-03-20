@@ -241,7 +241,15 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			}
 			return tree.OutputAddressMapNode(w, node)
 		case serial.ProllyTreeNodeFileID:
-			fallthrough
+			node, _, err := shim.NodeFromValue(value)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(w, "(rows %d, depth %d) #%s {",
+				node.Count(), node.Level()+1, node.HashOf().String()[:8])
+			err = tree.OutputProllyNodeBytes(w, node)
+			fmt.Fprintf(w, "}\n")
+			return err
 		case serial.AddressMapFileID:
 			node, _, err := shim.NodeFromValue(value)
 			if err != nil {
