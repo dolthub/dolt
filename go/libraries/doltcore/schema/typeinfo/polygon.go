@@ -68,7 +68,7 @@ func (ti *polygonType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *polygonType) WithEncoding(enc val.Encoding) TypeInfo {
-	if enc != val.GeomAddrEnc {
+	if enc != val.GeomAddrEnc && enc != val.GeometryEnc {
 		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
 	}
 	return &polygonType{sqlPolygonType: ti.sqlPolygonType, enc: enc}
