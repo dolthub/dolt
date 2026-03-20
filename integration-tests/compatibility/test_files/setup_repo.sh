@@ -139,6 +139,8 @@ INSERT INTO geom_types (pk, c_point, c_geometry) VALUES (
   ST_GeomFromText('POINT(10 20)'),
   ST_GeomFromText('LINESTRING(0 0,5 5)')
 );
+CREATE VIEW all_types_view AS SELECT * FROM all_types;
+CREATE VIEW geom_view AS SELECT * FROM geom_types;
 SQL
 dolt sql < "../../test_files/big_table.sql"  # inserts 1K rows to `big`
 dolt add .

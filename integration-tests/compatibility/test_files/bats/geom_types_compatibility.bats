@@ -281,3 +281,53 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "98,4" ]] || false
 }
+
+# ---------------------------------------------------------------------------
+# View tests: verify that a view over geom_types written by old Dolt is
+# correctly deserialized and queryable by the current Dolt version.
+# ---------------------------------------------------------------------------
+
+@test "geom_view has expected row count" {
+    run dolt sql -q "SELECT count(*) FROM geom_view;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "2" ]] || false
+}
+
+@test "geom_view returns same rows as underlying table" {
+    run dolt sql -q "SELECT pk, ST_X(c_point), ST_Y(c_point) FROM geom_view WHERE pk=1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "1,1,2" ]] || false
+
+    run dolt sql -q "SELECT pk, ST_X(c_point), ST_Y(c_point) FROM geom_view WHERE pk=2;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "2,10,20" ]] || false
+}
+
+@test "geom_view supports filtering" {
+    run dolt sql -q "SELECT count(*) FROM geom_view WHERE pk = 1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "1" ]] || false
+}
+
+@test "geom_view geometry columns readable via view" {
+    run dolt sql -q "SELECT pk, ST_AsText(c_point) FROM geom_view WHERE pk=1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "POINT(1 2)" ]] || false
+}
+
+@test "geom_view shows in dolt_schemas" {
+    run dolt sql -q "SELECT name FROM dolt_schemas WHERE name='geom_view';" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "geom_view" ]] || false
+}
+
+@test "insert into base table visible through geom_view" {
+    dolt sql -q "INSERT INTO geom_types (pk, c_point) VALUES (99, ST_GeomFromText('POINT(7 7)'));"
+    run dolt sql -q "SELECT count(*) FROM geom_view;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "3" ]] || false
+
+    run dolt sql -q "SELECT pk, ST_X(c_point) FROM geom_view WHERE pk=99;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "99,7" ]] || false
+}

@@ -517,3 +517,42 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "98,commit text" ]] || false
 }
+
+# ---------------------------------------------------------------------------
+# View tests: verify that views over all_types written by old Dolt are
+# correctly deserialized and queryable by the current Dolt version.
+# ---------------------------------------------------------------------------
+
+@test "all_types_view has expected row count" {
+    run dolt sql -q "SELECT count(*) FROM all_types_view;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "3" ]] || false
+}
+
+@test "all_types_view returns same rows as underlying table" {
+    run dolt sql -q "SELECT pk, c_tinyint, c_varchar FROM all_types_view WHERE pk=1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "1,100,hello world" ]] || false
+
+    run dolt sql -q "SELECT pk, c_tinyint, c_varchar FROM all_types_view WHERE pk=2;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "2,-100,hi there" ]] || false
+}
+
+@test "all_types_view supports filtering" {
+    run dolt sql -q "SELECT count(*) FROM all_types_view WHERE pk < 3;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "2" ]] || false
+}
+
+@test "all_types_view text and blob columns readable" {
+    run dolt sql -q "SELECT pk, c_text, c_tinyblob FROM all_types_view WHERE pk=1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "1,text val,tinyblob val" ]] || false
+}
+
+@test "all_types_view shows in dolt_schemas" {
+    run dolt sql -q "SELECT name FROM dolt_schemas WHERE name='all_types_view';" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "all_types_view" ]] || false
+}
