@@ -15,6 +15,7 @@
 package writer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -183,31 +184,34 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 		return err
 	}
 
-	// If the old row is empty, there is nothing to delete.
-	// This can happen when updating a row in a conflict table if the row did not exist on one branch.
-	if oldKey.Count() != 0 {
-		// todo(andy): we can skip building, deleting |oldKey|
-		//  if we know the key fields are unchanged
-		if err := m.mut.Delete(ctx, oldKey); err != nil {
-			return err
-		}
-	}
-
 	newKey, err := m.keyFromRow(ctx, newRow)
 	if err != nil {
 		return err
 	}
 
-	ok, err := m.mut.Has(ctx, newKey)
-	if err != nil {
-		return err
-	} else if ok {
-		for to := range m.keyMap {
-			from := m.keyMap.MapOrdinal(to)
-			m.key[to] = newRow[from]
+	if bytes.Compare(oldKey, newKey) != 0 {
+		// If the old row is empty, there is nothing to delete.
+		// This can happen when updating a row in a conflict table if the row did not exist on one branch.
+		if oldKey.Count() != 0 {
+			// todo(andy): we can skip building, deleting |oldKey|
+			//  if we know the key fields are unchanged
+			if err := m.mut.Delete(ctx, oldKey); err != nil {
+				return err
+			}
 		}
-		keyStr := FormatKeyForUniqKeyErr(ctx, newKey, m.keyBld.Desc, m.key)
-		return m.uniqueKeyError(ctx, keyStr, newKey, true)
+
+		ok, err := m.mut.Has(ctx, newKey)
+		if err != nil {
+			return err
+		}
+		if ok {
+			for to := range m.keyMap {
+				from := m.keyMap.MapOrdinal(to)
+				m.key[to] = newRow[from]
+			}
+			keyStr := FormatKeyForUniqKeyErr(ctx, newKey, m.keyBld.Desc, m.key)
+			return m.uniqueKeyError(ctx, keyStr, newKey, true)
+		}
 	}
 
 	for to := range m.valMap {
