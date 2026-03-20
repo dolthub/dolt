@@ -787,3 +787,55 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     [[ "$output" =~ "new_branch" ]] || false
     [[ "$output" =~ "main" ]] || false
 }
+
+# Verifies that commit hooks installed on a sql-server DoltDB (e.g. push-on-write
+# replication) are triggered when a push is received via the --remotesapi-port
+# endpoint, not just when writes come through the SQL engine.
+@test "sql-server-remotesrv: push via remotesapi port triggers push-on-write replication" {
+    mkdir server_db replication_remote
+    cd server_db
+    dolt init
+    dolt sql -q 'create table t1 (a int primary key);'
+    dolt add t1
+    dolt commit -m 'initial commit'
+
+    # Set up a file remote as the push-on-write replication target and seed
+    # it with the initial state of the server database.
+    dolt remote add replication_target file://../replication_remote
+    dolt push replication_target main
+
+    # Configure push-on-write replication so that commit hooks push to the
+    # file remote whenever a branch is updated.
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote replication_target
+
+    # Create a SQL user so the remotesapi endpoint requires credentials.
+    dolt sql -q "CREATE USER root@'%' IDENTIFIED BY 'rootpass'; GRANT ALL ON *.* TO root@'%';"
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+
+    APIPORT=$( definePORT )
+    start_sql_server_with_args --remotesapi-port $APIPORT
+
+    # Clone the server database via the remotesapi endpoint.
+    cd ..
+    dolt clone http://localhost:$APIPORT/server_db client_clone -u root
+    cd client_clone
+
+    # Push a new commit from the client back to the sql-server via the
+    # remotesapi endpoint. This exercises the hooksFiringRemoteSrvStore
+    # code path that fires commit hooks after a low-level ChunkStore commit.
+    dolt sql -q 'insert into t1 values (1), (2), (3);'
+    dolt commit -am 'add rows via remotesapi push'
+    run dolt push origin main:main --user root
+    [ "$status" -eq 0 ]
+
+    # The commit hooks on the server's DoltDB should have fired and
+    # replicated the new commit to the file remote. Clone the replication
+    # target and verify the replicated commit is present.
+    cd ..
+    dolt clone file://./replication_remote replication_clone
+    cd replication_clone
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "add rows via remotesapi push" ]] || false
+}
