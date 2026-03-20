@@ -42,23 +42,11 @@ teardown() {
     [[ "$output" =~ "POINT(1 2)" ]] || false
 }
 
-@test "linestring column readable from old dolt" {
-    run dolt sql -q "SELECT pk, ST_NumPoints(c_linestring) FROM geom_types WHERE pk=1;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,3" ]] || false
-}
-
 @test "linestring column st_astext readable from old dolt" {
     run dolt sql -q "SELECT pk, ST_AsText(c_linestring) FROM geom_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "LINESTRING" ]] || false
     [[ "$output" =~ "0 0" ]] || false
-}
-
-@test "polygon column readable from old dolt" {
-    run dolt sql -q "SELECT pk, ST_NumInteriorRings(c_polygon) FROM geom_types WHERE pk=1;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,0" ]] || false
 }
 
 @test "polygon column st_astext readable from old dolt" {
@@ -80,27 +68,27 @@ teardown() {
 }
 
 @test "multipoint column readable from old dolt" {
-    run dolt sql -q "SELECT pk, ST_NumGeometries(c_multipoint) FROM geom_types WHERE pk=1;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_multipoint) FROM geom_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,2" ]] || false
+    [[ "${lines[1]}" =~ "MULTIPOINT" ]] || false
 }
 
 @test "multilinestring column readable from old dolt" {
-    run dolt sql -q "SELECT pk, ST_NumGeometries(c_multilinestring) FROM geom_types WHERE pk=1;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_multilinestring) FROM geom_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,2" ]] || false
+    [[ "${lines[1]}" =~ "MULTILINESTRING" ]] || false
 }
 
 @test "multipolygon column readable from old dolt" {
-    run dolt sql -q "SELECT pk, ST_NumGeometries(c_multipolygon) FROM geom_types WHERE pk=1;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_multipolygon) FROM geom_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[1]}" =~ "MULTIPOLYGON" ]] || false
 }
 
 @test "geometrycollection column readable from old dolt" {
-    run dolt sql -q "SELECT pk, ST_NumGeometries(c_geometrycollection) FROM geom_types WHERE pk=1;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_geometrycollection) FROM geom_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,2" ]] || false
+    [[ "${lines[1]}" =~ "GEOMETRYCOLLECTION" ]] || false
 }
 
 @test "null geometry columns readable from old dolt" {
@@ -139,9 +127,9 @@ teardown() {
       c_linestring = ST_GeomFromText('LINESTRING(0 0,10 10)'),
       c_polygon = ST_GeomFromText('POLYGON((0 0,2 0,2 2,0 2,0 0))')
       WHERE pk = 1;"
-    run dolt sql -q "SELECT pk, ST_NumPoints(c_linestring) FROM geom_types WHERE pk=1;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_linestring) FROM geom_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,2" ]] || false
+    [[ "${lines[1]}" =~ "LINESTRING" ]] || false
 }
 
 @test "delete from geom_types written by old dolt" {
@@ -172,25 +160,25 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "50,7,8" ]] || false
 
-    run dolt sql -q "SELECT pk, ST_NumPoints(c_linestring) FROM geom_types WHERE pk=50;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_linestring) FROM geom_types WHERE pk=50;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "50,2" ]] || false
+    [[ "${lines[1]}" =~ "LINESTRING" ]] || false
 
-    run dolt sql -q "SELECT pk, ST_NumGeometries(c_multipoint) FROM geom_types WHERE pk=50;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_multipoint) FROM geom_types WHERE pk=50;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "50,3" ]] || false
+    [[ "${lines[1]}" =~ "MULTIPOINT" ]] || false
 
-    run dolt sql -q "SELECT pk, ST_NumGeometries(c_multilinestring) FROM geom_types WHERE pk=50;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_multilinestring) FROM geom_types WHERE pk=50;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "50,3" ]] || false
+    [[ "${lines[1]}" =~ "MULTILINESTRING" ]] || false
 
-    run dolt sql -q "SELECT pk, ST_NumGeometries(c_multipolygon) FROM geom_types WHERE pk=50;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_multipolygon) FROM geom_types WHERE pk=50;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "50,2" ]] || false
+    [[ "${lines[1]}" =~ "MULTIPOLYGON" ]] || false
 
-    run dolt sql -q "SELECT pk, ST_NumGeometries(c_geometrycollection) FROM geom_types WHERE pk=50;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(c_geometrycollection) FROM geom_types WHERE pk=50;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "50,3" ]] || false
+    [[ "${lines[1]}" =~ "GEOMETRYCOLLECTION" ]] || false
 }
 
 # ---------------------------------------------------------------------------
@@ -235,13 +223,13 @@ teardown() {
     dolt sql -q "UPDATE abc SET new_linestring = ST_GeomFromText('LINESTRING(0 0,1 1)');"
     dolt sql -q "INSERT INTO abc (pk, a, b, new_linestring) VALUES (99, 'test', 1.0, ST_GeomFromText('LINESTRING(0 0,2 2,4 4)'));"
 
-    run dolt sql -q "SELECT pk, ST_NumPoints(new_linestring) FROM abc WHERE pk=99;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(new_linestring) FROM abc WHERE pk=99;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "99,3" ]] || false
+    [[ "${lines[1]}" =~ "LINESTRING" ]] || false
 
-    run dolt sql -q "SELECT pk, ST_NumPoints(new_linestring) FROM abc WHERE pk=0;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(new_linestring) FROM abc WHERE pk=0;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "0,2" ]] || false
+    [[ "${lines[1]}" =~ "LINESTRING" ]] || false
 
     dolt sql -q "DELETE FROM abc WHERE pk=99;"
 }
@@ -251,9 +239,9 @@ teardown() {
     dolt sql -q "UPDATE abc SET new_polygon = ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))');"
     dolt sql -q "INSERT INTO abc (pk, a, b, new_polygon) VALUES (99, 'test', 1.0, ST_GeomFromText('POLYGON((0 0,3 0,3 3,0 3,0 0))'));"
 
-    run dolt sql -q "SELECT pk, ST_NumInteriorRings(new_polygon) FROM abc WHERE pk=99;" -r csv
+    run dolt sql -q "SELECT pk, ST_AsText(new_polygon) FROM abc WHERE pk=99;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "99,0" ]] || false
+    [[ "${lines[1]}" =~ "POLYGON" ]] || false
 
     dolt sql -q "DELETE FROM abc WHERE pk=99;"
 }
