@@ -144,12 +144,19 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	if err = w.primary.ValidateKeyViolations(ctx, sqlRow); err != nil {
+		return err
+	}
 	for _, wr := range w.secondary {
 		if err = wr.ValidateKeyViolations(ctx, sqlRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
 				return w.primary.(primaryIndexErrBuilder).errForSecondaryUniqueKeyError(ctx, uke)
 			}
 		}
+	}
+
+	if err = w.primary.Insert(ctx, sqlRow); err != nil {
+		return err
 	}
 	for _, wr := range w.secondary {
 		if err = wr.Insert(ctx, sqlRow); err != nil {
@@ -158,13 +165,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 			}
 			return err
 		}
-	}
-	// TODO: want to combine these checks, but we may insert something that violates a later check
-	if err = w.primary.ValidateKeyViolations(ctx, sqlRow); err != nil {
-		return err
-	}
-	if err = w.primary.Insert(ctx, sqlRow); err != nil {
-		return err
 	}
 
 	w.setAutoIncrement = true
