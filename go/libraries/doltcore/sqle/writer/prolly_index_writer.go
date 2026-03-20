@@ -31,20 +31,20 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (prollyIndexWriter, error) {
+func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (*prollyIndexWriter, error) {
 	idx, err := t.GetRowDataWithDescriptors(ctx, schState.PkKeyDesc, schState.PkValDesc)
 	if err != nil {
-		return prollyIndexWriter{}, err
+		return nil, err
 	}
 
 	m, err := durable.ProllyMapFromIndex(idx)
 	if err != nil {
-		return prollyIndexWriter{}, err
+		return nil, err
 	}
 
 	keyDesc, valDesc := m.Descriptors()
 
-	return prollyIndexWriter{
+	return &prollyIndexWriter{
 		mut:    m.Mutate(),
 		keyBld: val.NewTupleBuilder(keyDesc, m.NodeStore()),
 		keyMap: schState.PriIndex.KeyMapping,
@@ -103,22 +103,23 @@ type prollyIndexWriter struct {
 	valMap val.OrdinalMapping
 
 	// buffer to reduce memory allocations
-	key sql.Row
+	key    sql.Row
+	keyTup val.Tuple
 }
 
-var _ indexWriter = prollyIndexWriter{}
-var _ primaryIndexErrBuilder = prollyIndexWriter{}
+var _ indexWriter = &prollyIndexWriter{}
+var _ primaryIndexErrBuilder = &prollyIndexWriter{}
 
-func (m prollyIndexWriter) Name() string {
+func (m *prollyIndexWriter) Name() string {
 	// primary indexes don't have a name
 	return ""
 }
 
-func (m prollyIndexWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
+func (m *prollyIndexWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return m.mut.Map(ctx)
 }
 
-func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
+func (m *prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
 		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
@@ -128,7 +129,9 @@ func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.
 	return m.keyBld.BuildPermissive(sharePool)
 }
 
-func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
+// ValidateKeyViolations ensures that |sqlRow| can be inserted into |m.mut| without error.
+// Additionally, it caches the generated key tuple for prollyIndexWriter.Insert() later.
+func (m *prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	k, err := m.keyFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
@@ -137,7 +140,8 @@ func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql
 	ok, err := m.mut.Has(ctx, k)
 	if err != nil {
 		return err
-	} else if ok {
+	}
+	if ok {
 		for to := range m.keyMap {
 			from := m.keyMap.MapOrdinal(to)
 			m.key[to] = sqlRow[from]
@@ -145,18 +149,16 @@ func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql
 		keyStr := FormatKeyForUniqKeyErr(ctx, k, m.keyBld.Desc, m.key)
 		return m.uniqueKeyError(ctx, keyStr, k, true)
 	}
+	m.keyTup = k
 	return nil
 }
 
-func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
-	k, err := m.keyFromRow(ctx, sqlRow)
-	if err != nil {
-		return err
-	}
-
+// Insert writes sqlRow to |m.mut| assuming |m.ValidateKeyViolations| succeeded.
+func (m *prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err := tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
+		err := tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from])
+		if err != nil {
 			return err
 		}
 	}
@@ -165,10 +167,10 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	return m.mut.Put(ctx, k, v)
+	return m.mut.Put(ctx, m.keyTup, v)
 }
 
-func (m prollyIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
+func (m *prollyIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
 	k, err := m.keyFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
@@ -177,7 +179,7 @@ func (m prollyIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
 	return m.mut.Delete(ctx, k)
 }
 
-func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
+func (m *prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
 	oldKey, err := m.keyFromRow(ctx, oldRow)
 	if err != nil {
 		return err
@@ -224,34 +226,34 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	return m.mut.Put(ctx, newKey, v)
 }
 
-func (m prollyIndexWriter) Commit(ctx context.Context) error {
+func (m *prollyIndexWriter) Commit(ctx context.Context) error {
 	return m.mut.Checkpoint(ctx)
 }
 
-func (m prollyIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (m *prollyIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
 	return m.mut.VisitGCRoots(ctx, roots)
 }
 
-func (m prollyIndexWriter) Discard(ctx context.Context) error {
+func (m *prollyIndexWriter) Discard(ctx context.Context) error {
 	m.mut.Revert(ctx)
 	return nil
 }
 
-func (m prollyIndexWriter) HasEdits(ctx context.Context) bool {
+func (m *prollyIndexWriter) HasEdits(ctx context.Context) bool {
 	return m.mut.HasEdits()
 }
 
-func (m prollyIndexWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
+func (m *prollyIndexWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
 	return m.mut.IterRange(ctx, rng)
 }
 
-func (m prollyIndexWriter) errForSecondaryUniqueKeyError(ctx context.Context, err secondaryUniqueKeyError) error {
+func (m *prollyIndexWriter) errForSecondaryUniqueKeyError(ctx context.Context, err secondaryUniqueKeyError) error {
 	return m.uniqueKeyError(ctx, err.keyStr, err.existingKey, false)
 }
 
 // uniqueKeyError builds a sql.UniqueKeyError. It fetches the existing row using
 // |key| and passes it as the |existing| row.
-func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, key val.Tuple, isPk bool) error {
+func (m *prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, key val.Tuple, isPk bool) error {
 	existing := make(sql.Row, len(m.keyMap)+len(m.valMap))
 
 	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {

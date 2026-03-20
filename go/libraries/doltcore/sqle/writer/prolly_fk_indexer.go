@@ -96,7 +96,7 @@ func (n *prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.
 	if err != nil {
 		return nil, err
 	}
-	if primary, ok := n.writer.primary.(prollyIndexWriter); ok {
+	if primary, ok := n.writer.primary.(*prollyIndexWriter); ok {
 		return &prollyFkPkRowIter{
 			rangeIter:  rangeIter,
 			pkToIdxMap: pkToIdxMap,
@@ -117,7 +117,7 @@ func (n *prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.
 type prollyFkPkRowIter struct {
 	rangeIter  prolly.MapIter
 	pkToIdxMap val.OrdinalMapping
-	primary    prollyIndexWriter
+	primary    *prollyIndexWriter
 	sqlSch     sql.Schema
 	refCheck   bool
 }

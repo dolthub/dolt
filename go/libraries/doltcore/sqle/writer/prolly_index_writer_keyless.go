@@ -46,7 +46,7 @@ func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.MapInterface, erro
 	return k.mut.Map(ctx)
 }
 
-// ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are possible
+// ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are impossible
 func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	return nil
 }
