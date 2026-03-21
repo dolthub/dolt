@@ -208,4 +208,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
+replace github.com/dolthub/go-mysql-server => github.com/majiayu000/go-mysql-server v0.20.1-0.20260321223822-d93f4fe6386e
+
 go 1.25.6
