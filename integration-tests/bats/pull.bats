@@ -716,6 +716,7 @@ SQL
 }
 
 @test "pull: pull --rebase with data conflict pauses rebase" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -871,6 +872,7 @@ SQL
 }
 
 @test "pull: pull --rebase conflict resolved with --theirs verifies data" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -909,6 +911,7 @@ SQL
 }
 
 @test "pull: pull --rebase conflict resolved with --ours keeps upstream data" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -951,6 +954,7 @@ SQL
 }
 
 @test "pull: pull --rebase with multiple conflicts across multiple commits" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -1177,6 +1181,7 @@ SQL
 }
 
 @test "pull: pull --rebase abort then retry" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -1260,6 +1265,7 @@ SQL
 }
 
 @test "pull: pull --rebase shows conflicts during paused rebase" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
