@@ -350,19 +350,19 @@ SQL
     dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-01 00:00:00');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1000-01-01 00:00:00 " ]] || false
+    [[ "${lines[3]}" =~ " 1000-01-01 00:00:00.000000 " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-02');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1000-01-02 00:00:00 " ]] || false
+    [[ "${lines[3]}" =~ " 1000-01-02 00:00:00.000000 " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-3');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1000-01-03 00:00:00 " ]] || false
+    [[ "${lines[3]}" =~ " 1000-01-03 00:00:00.000000 " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-04');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1000-01-04 00:00:00 " ]] || false
+    [[ "${lines[3]}" =~ " 1000-01-04 00:00:00.000000 " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-5');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -1328,7 +1328,7 @@ SQL
     dolt sql -q "UPDATE test SET v='11:22' WHERE pk=1;"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 11:22:00 " ]] || false
+    [[ "${lines[3]}" =~ " 11:22:00.000000 " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '850:00:00');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -1362,7 +1362,7 @@ SQL
     dolt sql -q "REPLACE INTO test VALUES (1, '1970-01-01 00:00:01');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1970-01-01 00:00:01 " ]] || false
+    [[ "${lines[3]}" =~ " 1970-01-01 00:00:01.000000 " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '2038-01-19 03:14:07.999999');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
