@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Auto GC is the ability of a running SQL server engine to perform
@@ -45,21 +44,23 @@ import (
 // database as wanting a GC.
 
 type AutoGCController struct {
-	workCh   chan autoGCWork
-	lgr      *logrus.Logger
-	hooks    map[string]*autoGCCommitHook
-	ctxF     func(context.Context) (*sql.Context, error)
-	threads  *sql.BackgroundThreads
-	arcLevel chunks.GCArchiveLevel
-	mu       sync.Mutex
+	workCh              chan autoGCWork
+	lgr                 *logrus.Logger
+	hooks               map[string]*autoGCCommitHook
+	ctxF                func(context.Context) (*sql.Context, error)
+	threads             *sql.BackgroundThreads
+	arcLevel            chunks.GCArchiveLevel
+	incrementalFileSize uint64
+	mu                  sync.Mutex
 }
 
-func NewAutoGCController(arcLevel chunks.GCArchiveLevel, lgr *logrus.Logger) *AutoGCController {
+func NewAutoGCController(arcLevel chunks.GCArchiveLevel, incrementalArchiveSize uint64, lgr *logrus.Logger) *AutoGCController {
 	return &AutoGCController{
-		workCh:   make(chan autoGCWork),
-		lgr:      lgr,
-		hooks:    make(map[string]*autoGCCommitHook),
-		arcLevel: arcLevel,
+		workCh:              make(chan autoGCWork),
+		lgr:                 lgr,
+		hooks:               make(map[string]*autoGCCommitHook),
+		arcLevel:            arcLevel,
+		incrementalFileSize: incrementalArchiveSize,
 	}
 }
 
