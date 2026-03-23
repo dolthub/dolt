@@ -5,7 +5,14 @@ skiponwindows() { :; }
 IS_WINDOWS=${IS_WINDOWS:-false}
 WINDOWS_BASE_DIR=${WINDOWS_BASE_DIR:-/mnt/c}
 
-if [ -d "$WINDOWS_BASE_DIR"/Windows/System32 ]  || [ "$IS_WINDOWS" == true ]; then
+# Detect WSL: it mounts the Windows drive at /mnt/c but runs a Linux kernel.
+# /proc/version contains "microsoft" or "WSL" in WSL environments.
+IS_WSL=false
+if grep -qi microsoft /proc/version 2>/dev/null || grep -qi wsl /proc/version 2>/dev/null; then
+    IS_WSL=true
+fi
+
+if { [ -d "$WINDOWS_BASE_DIR"/Windows/System32 ] && [ "$IS_WSL" == false ]; } || [ "$IS_WINDOWS" == true ]; then
     IS_WINDOWS=true
     if [ ! -d "$WINDOWS_BASE_DIR"/batstmp ]; then
         mkdir "$WINDOWS_BASE_DIR"/batstmp
