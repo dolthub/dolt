@@ -63,6 +63,8 @@ type GetAddrsCurry func(c Chunk) GetAddrsCb
 // GetAddrsCb adds the refs for a pre-specified chunk to |addrs|
 type GetAddrsCb func(ctx context.Context, addrs hash.HashSet, exists PendingRefExists) error
 
+type GetAddrs func(c Chunk, cb func(a hash.Hash) error) error
+
 type PendingRefExists func(hash.Hash) bool
 
 func NoopPendingRefExists(_ hash.Hash) bool { return false }
@@ -266,7 +268,7 @@ type ChunkStoreGarbageCollector interface {
 	// filtered through the |filter| and their references are walked with
 	// |getAddrs|, each of those addresses being filtered and copied as
 	// well.
-	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode, cmp GCArchiveLevel) (MarkAndSweeper, error)
+	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrs, filter HasManyFunc, dest ChunkStore, config GCConfig) (MarkAndSweeper, error)
 
 	// Count returns the number of chunks in the store.
 	Count() (uint32, error)

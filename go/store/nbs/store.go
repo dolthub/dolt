@@ -2253,7 +2253,7 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 type markAndSweeper struct {
 	src      CompressedChunkStoreForGC
 	dest     *NomsBlockStore
-	getAddrs chunks.GetAddrsCurry
+	getAddrs chunks.GetAddrs
 	filter   chunks.HasManyFunc
 
 	visited hash.HashSet

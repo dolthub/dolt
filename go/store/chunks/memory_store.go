@@ -360,7 +360,7 @@ func (mgcf msvGcFinalizer) SwapChunksInStore(ctx context.Context) error {
 type msvMarkAndSweeper struct {
 	ms *MemoryStoreView
 
-	getAddrs GetAddrsCurry
+	getAddrs GetAddrs
 	filter   HasManyFunc
 
 	keepers map[hash.Hash]Chunk
@@ -386,7 +386,10 @@ func (i *msvMarkAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) 
 				return err
 			}
 			i.keepers[h] = c
-			err = i.getAddrs(c)(ctx, newAddrs, NoopPendingRefExists)
+			err = i.getAddrs(c, func(a hash.Hash) error {
+				newAddrs.Insert(a)
+				return nil
+			})
 			if err != nil {
 				return err
 			}

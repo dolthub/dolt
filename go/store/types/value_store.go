@@ -129,6 +129,10 @@ func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 	}
 }
 
+func (lvs *ValueStore) walkAddrs(c chunks.Chunk, cb func(a hash.Hash) error) error {
+	return WalkAddrsFromNomsValue(c, lvs.nbf, cb)
+}
+
 const (
 	defaultDecodedChunksSize = 1 << 25 // 32MB
 	defaultPendingPutMax     = 1 << 28 // 256MB
@@ -748,7 +752,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointController GCSafepointController,
 	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
-	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.getAddrs, hashFilter, dest, chksMode, cmp)
+	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.walkAddrs, hashFilter, dest, gcConfig)
 	if err != nil {
 		return nil, err
 	}
