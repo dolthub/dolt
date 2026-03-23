@@ -44,6 +44,7 @@ const (
 	HardResetParam         = "hard"
 	HostFlag               = "host"
 	IncludeUntrackedFlag   = "include-untracked"
+	IncrementalGCFileSize  = "incremental-file-chunks"
 	InteractiveFlag        = "interactive"
 	JobFlag                = "job"
 	ListFlag               = "list"
