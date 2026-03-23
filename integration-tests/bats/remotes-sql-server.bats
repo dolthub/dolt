@@ -525,10 +525,10 @@ teardown() {
     [[ ! "$output" =~ "ignored_table" ]] || false
 
     REMOTESAPI_PORT=$(definePORT)
-    start_sql_server_with_args --host 0.0.0.0 --remotesapi-port=$REMOTESAPI_PORT
+    start_sql_server_with_args --host 0.0.0.0 --remotesapi-port="$REMOTESAPI_PORT"
 
     cd ..
-    dolt clone http://localhost:$REMOTESAPI_PORT/remote_repo local_repo
+    dolt clone "http://localhost:$REMOTESAPI_PORT/remote_repo" local_repo
     cd local_repo
     dolt sql -q "INSERT INTO t VALUES (2)"
     dolt add .
