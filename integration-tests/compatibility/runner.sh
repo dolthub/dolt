@@ -91,6 +91,7 @@ function test_forward_compatibility() {
       dolt push file-remote init
       dolt push file-remote no-data
       dolt push file-remote other
+      dolt push file-remote check_merge
       cd ../../
   fi
   REMOTE="`pwd`"/repos/HEAD/file-remote
@@ -112,6 +113,8 @@ function test_forward_compatibility() {
   PATH="$relpath" dolt branch no-data origin/no-data
   PATH="$relpath" dolt branch init origin/init
   PATH="$relpath" dolt branch other origin/other
+  PATH="$relpath" dolt branch check_merge origin/check_merge
+
   # Also copy the files exported by setup_repo
   cp ../../repos/HEAD/*.csv ./
   cp ../../repos/HEAD/*.json ./
@@ -119,8 +122,8 @@ function test_forward_compatibility() {
 
   # Run the bats tests
   PATH="`pwd`"/"$bin":"$PATH" dolt version
-  echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
-  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
+  echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
+  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
 }
 
 _main() {
@@ -132,22 +135,20 @@ _main() {
 
   # test backward compatibility
   list_backward_compatible_versions | while IFS= read -r ver; do
-    test_backward_compatibility "$ver"
+      test_backward_compatibility "$ver"
   done
 
   # setup repo for current dolt version
   setup_repo HEAD
 
   # test forward compatibility
-  if [ -s "test_files/forward_compatible_versions.txt" ]; then
-      list_forward_compatible_versions | while IFS= read -r ver; do
-        test_forward_compatibility "$ver"
-      done
-  fi
+  list_forward_compatible_versions | while IFS= read -r ver; do
+      test_forward_compatibility "$ver"
+  done
 
   # sanity check: run tests against current version
   echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
-  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats ./test_files/bats
+  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats --print-output-on-failure ./test_files/bats
 }
 
 _main
