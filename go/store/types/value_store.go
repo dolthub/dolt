@@ -94,7 +94,18 @@ const (
 	gcState_Finalizing
 )
 
-func AddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) (err error) {
+func WalkAddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, cb func(a hash.Hash) error) (err error) {
+	if NomsKind(c.Data()[0]) == SerialMessageKind {
+		err = SerialMessage(c.Data()).WalkAddrs(nbf, cb)
+	} else {
+		err = walkRefs(c.Data(), nbf, func(r Ref) error {
+			return cb(r.TargetHash())
+		})
+	}
+	return
+}
+
+func InsertAddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) (err error) {
 	if NomsKind(c.Data()[0]) == SerialMessageKind {
 		err = SerialMessage(c.Data()).WalkAddrs(nbf, func(a hash.Hash) error {
 			addrs.Insert(a)
@@ -112,7 +123,7 @@ func AddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) 
 
 func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
-		return AddrsFromNomsValue(c, lvs.nbf, addrs)
+		return InsertAddrsFromNomsValue(c, lvs.nbf, addrs)
 	}
 }
 

@@ -683,7 +683,7 @@ func (rs *RemoteChunkStore) getAddrs(version string) chunks.GetAddrsCurry {
 	}
 	return func(c chunks.Chunk) chunks.GetAddrsCb {
 		return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
-			return types.AddrsFromNomsValue(c, fmt, addrs)
+			return types.InsertAddrsFromNomsValue(c, fmt, addrs)
 		}
 	}
 }

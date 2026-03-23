@@ -2044,7 +2044,7 @@ func pullHash(
 
 func (ddb *DoltDB) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
-		return types.AddrsFromNomsValue(c, ddb.Format(), addrs)
+		return types.InsertAddrsFromNomsValue(c, ddb.Format(), addrs)
 	}
 }
 
