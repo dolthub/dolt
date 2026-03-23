@@ -2147,9 +2147,9 @@ func (nbs *NomsBlockStore) beginRead() (endRead func()) {
 	return nil
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig) (chunks.MarkAndSweeper, error) {
 	valctx.ValidateContext(ctx)
-	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, mode, cmp)
+	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, gcConfig)
 }
 
 // Returns true if this NomsBlockStore instance is carrying local
@@ -2167,7 +2167,7 @@ func (nbs *NomsBlockStore) hasLocalGCNovelty() bool {
 	return false
 }
 
-func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
+func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, gcConfig chunks.GCConfig) (chunks.MarkAndSweeper, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
@@ -2200,7 +2200,7 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 		if nbs.upstream.gcGen == gcGenCheck {
 			return chunks.ErrNothingToCollect
 		}
-		if mode != chunks.GCMode_Full {
+		if gcConfig.Mode != chunks.GCMode_Full {
 			// Allow a non-full GC to match the no-op work check as well.
 			gcGenCheck := generateLockHash(nbs.upstream.root, nbs.upstream.specs, nbs.upstream.appendix, nil)
 			if nbs.upstream.gcGen == gcGenCheck {
@@ -2233,7 +2233,7 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
 
-	gcc, err := newGarbageCollectionCopier(cmp, tfp)
+	gcc, err := newGarbageCollectionCopier(gcConfig, tfp)
 	if err != nil {
 		return nil, err
 	}
@@ -2246,7 +2246,7 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 		visited:  make(hash.HashSet),
 		tfp:      tfp,
 		gcc:      gcc,
-		mode:     mode,
+		mode:     gcConfig.Mode,
 	}, nil
 }
 

@@ -568,7 +568,7 @@ type GCSafepointController interface {
 }
 
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
-func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchiveLevel, oldGenRefs, newGenRefs hash.HashSet, safepoint GCSafepointController) error {
+func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenRefs, newGenRefs hash.HashSet, safepoint GCSafepointController) error {
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	lvs.transitionToOldGenGC()
@@ -577,30 +577,27 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 	gcs, gcsOK := lvs.cs.(chunks.GenerationalCS)
 	collector, collectorOK := lvs.cs.(chunks.ChunkStoreGarbageCollector)
 
-	var chksMode chunks.GCMode
-
 	if gcsOK && collectorOK {
 		oldGen := gcs.OldGen()
 		newGen := gcs.NewGen()
 
 		var oldGenHasMany chunks.HasManyFunc
-		switch mode {
-		case GCModeDefault:
+		switch gcConfig.Mode {
+		case chunks.GCMode_Default:
 			oldGenHasMany = gcs.OldGenGCFilter()
-			chksMode = chunks.GCMode_Default
-		case GCModeFull:
+		case chunks.GCMode_Full:
 			oldGenHasMany = unfilteredHashFunc
-			chksMode = chunks.GCMode_Full
+			gcConfig.IncrementalFileSize = 0
 		default:
-			return fmt.Errorf("unsupported GCMode %v", mode)
+			return fmt.Errorf("unsupported GCMode %v", gcConfig.Mode)
 		}
 
 		err := func() error {
-			err := collector.BeginGC(lvs.gcAddChunk, chksMode)
+			err := collector.BeginGC(lvs.gcAddChunk, gcConfig.Mode)
 			if err != nil {
 				return err
 			}
-			defer collector.EndGC(chksMode)
+			defer collector.EndGC(gcConfig.Mode)
 
 			var callCancelSafepoint bool
 			if safepoint != nil {
@@ -626,7 +623,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 			newGenRefs.Insert(root)
 
 			var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
-			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, chksMode, cmp, collector, oldGen, nil, func() hash.HashSet {
+			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, gcConfig, collector, oldGen, nil, func() hash.HashSet {
 				n := lvs.transitionToNewGenGC()
 				newGenRefs.InsertAll(n)
 				return make(hash.HashSet)
@@ -646,13 +643,13 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 				return err
 			}
 
-			if mode == GCModeDefault {
+			if gcConfig.Mode == chunks.GCMode_Default {
 				oldGenHasMany = gcs.OldGenGCFilter()
 			} else {
 				oldGenHasMany = newFileHasMany
 			}
 
-			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, chksMode, cmp, collector, newGen, safepoint, lvs.transitionToFinalizingGC)
+			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, gcConfig, collector, newGen, safepoint, lvs.transitionToFinalizingGC)
 			if err != nil {
 				return err
 			}
@@ -663,7 +660,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 				return err
 			}
 
-			if mode == GCModeFull {
+			if gcConfig.Mode == chunks.GCMode_Full {
 				err = oldGenFinalizer.SwapChunksInStore(ctx)
 				if err != nil {
 					return err
@@ -712,7 +709,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 			newGenRefs.Insert(root)
 
 			var finalizer chunks.GCFinalizer
-			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, chunks.GCMode_Full, cmp, collector, collector, safepoint, lvs.transitionToFinalizingGC)
+			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, gcConfig, collector, collector, safepoint, lvs.transitionToFinalizingGC)
 			if err != nil {
 				return err
 			}
@@ -743,8 +740,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 func (lvs *ValueStore) gc(ctx context.Context,
 	toVisit hash.HashSet,
 	hashFilter chunks.HasManyFunc,
-	chksMode chunks.GCMode,
-	cmp chunks.GCArchiveLevel,
+	gcConfig chunks.GCConfig,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointController GCSafepointController,
 	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {

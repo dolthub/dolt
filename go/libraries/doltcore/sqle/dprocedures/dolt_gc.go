@@ -266,7 +266,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	return cmdSuccess, nil
 }
 
-func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chunks.GCArchiveLevel, dbname string) error {
+func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, gcConfig chunks.GCConfig, dbname string) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	var sc types.GCSafepointController
 	var statsDoneCh chan struct{}
@@ -325,5 +325,5 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chun
 			statsDoneCh: statsDoneCh,
 		}
 	}
-	return ddb.GC(ctx, mode, cmp, sc)
+	return ddb.GC(ctx, gcConfig, sc)
 }

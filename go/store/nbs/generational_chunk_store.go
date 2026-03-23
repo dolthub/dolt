@@ -537,8 +537,8 @@ func (gcs *GenerationalNBS) EndGC(mode chunks.GCMode) {
 	gcs.newGen.EndGC(mode)
 }
 
-func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
-	return markAndSweepChunks(ctx, gcs.newGen, gcs, dest, getAddrs, filter, mode, cmp)
+func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig) (chunks.MarkAndSweeper, error) {
+	return markAndSweepChunks(ctx, gcs.newGen, gcs, dest, getAddrs, filter, gcConfig)
 }
 
 func (gcs *GenerationalNBS) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {

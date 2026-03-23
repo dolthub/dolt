@@ -220,6 +220,19 @@ const (
 	MaxArchiveLevel = SimpleArchive // Currently GroupedArchives are not supported in GC.
 )
 
+// GCConfig describes the behavior of garbage collection.
+type GCConfig struct {
+	Mode         GCMode
+	ArchiveLevel GCArchiveLevel
+}
+
+func NewGCConfig(mode GCMode, archiveLevel GCArchiveLevel) GCConfig {
+	return GCConfig{
+		Mode:         mode,
+		ArchiveLevel: archiveLevel,
+	}
+}
+
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
 type ChunkStoreGarbageCollector interface {
 	ChunkStore
