@@ -268,3 +268,4 @@ teardown() {
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "Uploading..." ]] || false
 }
+

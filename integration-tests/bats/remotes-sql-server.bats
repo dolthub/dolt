@@ -505,6 +505,39 @@ teardown() {
     [ "${#lines[@]}" -ne 0 ]
 }
 
+@test "remotes-sql-server: push succeeds when remote sql-server has ignored tables in working set" {
+    skiponwindows "Missing dependencies"
+
+    make_repo remote_repo
+    cd remote_repo
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY)"
+    dolt sql -q "INSERT INTO t VALUES (1)"
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('ignored_table', true)"
+    dolt add .
+    dolt commit -m "Initial commit"
+
+    dolt sql -q "CREATE TABLE ignored_table (id INT PRIMARY KEY)"
+    dolt sql -q "INSERT INTO ignored_table VALUES (1)"
+
+    # Sanity check: ignored_table must not appear in dolt_status
+    run dolt sql -q "SELECT * FROM dolt_status" -r csv
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "ignored_table" ]] || false
+
+    REMOTESAPI_PORT=$(definePORT)
+    start_sql_server_with_args --host 0.0.0.0 --remotesapi-port=$REMOTESAPI_PORT
+
+    cd ..
+    dolt clone http://localhost:$REMOTESAPI_PORT/remote_repo local_repo
+    cd local_repo
+    dolt sql -q "INSERT INTO t VALUES (2)"
+    dolt add .
+    dolt commit -m "Second commit"
+
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }

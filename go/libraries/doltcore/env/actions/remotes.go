@@ -25,6 +25,7 @@ import (
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -47,6 +48,21 @@ var ErrShallowPushImpossible = errors.New("shallow repository missing chunks to 
 
 type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan pull.Stats)
 type ProgStopper func(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats)
+
+// pushSkippingIgnoredTables is called when FastForwardWithWorkspaceCheck returns ErrDirtyWorkspace.
+// If the only uncommitted changes on the remote are ignored tables, the push is allowed to proceed
+// by falling back to FastForward without the workspace assertion.
+func pushSkippingIgnoredTables(ctx context.Context, destDB *doltdb.DoltDB, destRef ref.BranchRef, commit *doltdb.Commit) error {
+	roots, err := destDB.ResolveBranchRoots(ctx, destRef)
+	if err != nil {
+		return datas.ErrDirtyWorkspace
+	}
+	onlyIgnored, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+	if err != nil || !onlyIgnored {
+		return datas.ErrDirtyWorkspace
+	}
+	return destDB.FastForward(ctx, destRef, commit)
+}
 
 // Push will update a destination branch, in a given destination database if it can be done as a fast forward merge.
 // This is accomplished first by verifying that the remote tracking reference for the source database can be updated to
@@ -89,6 +105,9 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	case ref.FastForwardOnly:
 		err = destDB.FastForwardWithWorkspaceCheck(ctx, destRef, commit)
+		if errors.Is(err, datas.ErrDirtyWorkspace) {
+			err = pushSkippingIgnoredTables(ctx, destDB, destRef, commit)
+		}
 		if err != nil {
 			return err
 		}
