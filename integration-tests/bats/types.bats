@@ -366,7 +366,7 @@ SQL
     dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-5');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1000-01-05 00:00:00 " ]] || false
+    [[ "${lines[3]}" =~ " 1000-01-05 00:00:00.000000 " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '9999-01-01 23:59:59.999999');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -1332,11 +1332,11 @@ SQL
     dolt sql -q "REPLACE INTO test VALUES (1, '850:00:00');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 838:59:59 " ]] || false
+    [[ "${lines[3]}" =~ " 838:59:59.000000 " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '-850:00:00');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " -838:59:59 " ]] || false
+    [[ "${lines[3]}" =~ " -838:59:59.000000 " ]] || false
 
     # check information_schema.COLUMNS table
     # TODO: time precision is not supported, this type's 'datetime_precision' and 'column_type' should be '0', 'time' respectively.
