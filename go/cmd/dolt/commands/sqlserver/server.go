@@ -278,6 +278,7 @@ func ConfigureServices(
 
 	InitAutoGCController := &svcs.AnonService{
 		InitF: func(context.Context) error {
+			return nil
 			// Having AutoGCBehavior == nil means that they are using default behavior, which is enabled.
 			if cfg.ServerConfig.AutoGCBehavior() == nil {
 				config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, lgr)
