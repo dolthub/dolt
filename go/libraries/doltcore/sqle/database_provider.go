@@ -885,7 +885,7 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 			return err
 		}
 
-		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, newEnv, cli.CliErr)
+		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, "["+name+"]", newEnv, cli.CliErr)
 		if err != nil {
 			return err
 		}
