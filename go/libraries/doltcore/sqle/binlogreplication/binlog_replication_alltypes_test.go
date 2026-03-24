@@ -457,8 +457,8 @@ var allTypes = []typeDescription{
 	{
 		TypeDefinition: "time",
 		Assertions: [2]typeDescriptionAssertion{
-			newTypeDescriptionAssertion("TIME('01:02:03')"),
-			newTypeDescriptionAssertion("TIME('01:02:03')"),
+			newTypeDescriptionAssertion("TIME('01:02:03.000000')"),
+			newTypeDescriptionAssertion("TIME('01:02:03.000000')"),
 		},
 	},
 	{
