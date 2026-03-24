@@ -1161,7 +1161,11 @@ func (a *AutoGCBehaviorYAMLConfig) ArchiveLevel() int {
 
 func toAutoGCBehaviorYAML(a AutoGCBehavior) *AutoGCBehaviorYAMLConfig {
 	return &AutoGCBehaviorYAMLConfig{
-		Enable_:       ptr(a.Enable()),
-		ArchiveLevel_: ptr(a.ArchiveLevel()),
+		Enable_:       ptr(false),
+		ArchiveLevel_: ptr(0),
 	}
+	//return &AutoGCBehaviorYAMLConfig{
+	//	Enable_:       ptr(a.Enable()),
+	//	ArchiveLevel_: ptr(a.ArchiveLevel()),
+	//}
 }
