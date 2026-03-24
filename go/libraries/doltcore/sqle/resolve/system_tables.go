@@ -24,61 +24,27 @@ import (
 
 // GetGeneratedSystemTables returns table names of all generated system tables.
 func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]doltdb.TableName, error) {
-	s := doltdb.NewTableNameSet(nil)
-
-	// Depending on whether the search path is used, the generated system tables will either be in the dolt namespace
-	// or the empty (default) namespace.
-	for _, tableName := range doltdb.GeneratedSystemTableNames() {
-		adapter, ok := adapters.DoltTableAdapterRegistry.Adapters[tableName]
-		if ok {
-			tableName = adapter.TableName()
-		}
-
-		tableUnique := doltdb.TableName{Name: tableName}
-		if UseSearchPath {
-			tableUnique.Schema = doltdb.DoltNamespace
-		}
-
-		s.Add(tableUnique)
-	}
+	var systemTables []doltdb.TableName
 
 	schemas, err := root.GetDatabaseSchemas(ctx)
 	if err != nil {
 		return nil, err
 	}
-
+	
 	// For dolt there are no stored schemas, search the default (empty string) schema
 	if len(schemas) == 0 {
 		schemas = append(schemas, schema.DatabaseSchema{Name: doltdb.DefaultSchemaName})
 	}
 
 	for _, schema := range schemas {
-		tableNames, err := root.GetTableNames(ctx, schema.Name, false)
+		newTables, err := GetGeneratedSystemTablesBySchema(ctx, root, schema)
 		if err != nil {
 			return nil, err
 		}
-
-		for _, pre := range doltdb.GeneratedSystemTablePrefixes {
-			for _, tableName := range tableNames {
-				s.Add(doltdb.TableName{
-					Name:   pre + tableName,
-					Schema: schema.Name,
-				})
-			}
-		}
-
-		// For doltgres, we also support the legacy dolt_ table names, addressable in any user schema
-		if UseSearchPath && schema.Name != "pg_catalog" && schema.Name != doltdb.DoltNamespace {
-			for _, name := range doltdb.DoltGeneratedTableNames {
-				s.Add(doltdb.TableName{
-					Name:   name,
-					Schema: schema.Name,
-				})
-			}
-		}
+		systemTables = append(systemTables, newTables...)
 	}
 
-	return s.AsSlice(), nil
+	return systemTables, nil
 }
 
 // GetGeneratedSystemTablesBySchema returns table names of all generated system tables within the specified schema.
