@@ -30,7 +30,7 @@ func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]dol
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// For dolt there are no stored schemas, search the default (empty string) schema
 	if len(schemas) == 0 {
 		schemas = append(schemas, schema.DatabaseSchema{Name: doltdb.DefaultSchemaName})
