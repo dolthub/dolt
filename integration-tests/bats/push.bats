@@ -268,3 +268,26 @@ teardown() {
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "Uploading..." ]] || false
 }
+
+@test "push: push succeeds when file:// remote has ignored tables in working set" {
+    mkdir "$TESTDIRS"/rem2 "$TESTDIRS"/local
+    cd "$TESTDIRS"/local
+    dolt init
+    dolt remote add origin file://../rem2
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY)"
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('ignored_table', true)"
+    dolt add .
+    dolt commit -m "Initial commit"
+    dolt push origin main
+
+    cd "$TESTDIRS"
+    dolt clone file://rem2 local2
+    cd local2
+    dolt sql -q "INSERT INTO t VALUES (1)"
+    dolt add .
+    dolt commit -m "Second commit"
+
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+}
+

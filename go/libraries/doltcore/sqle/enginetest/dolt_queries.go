@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
 
@@ -3694,6 +3695,81 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query:          "call dolt_checkout('--', 'missing', 't1', 'missing2');",
 				ExpectedErrStr: "error: tablespec 'missing' did not match any table(s) known to dolt\nerror: tablespec 'missing2' did not match any table(s) known to dolt",
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout --no-overwrite-ignore aborts when ignored table would be overwritten",
+		SetUpScript: []string{
+			"create table ignored_tbl (pk int primary key, val int);",
+			"insert into ignored_tbl values (1, 100);",
+			"insert into dolt_ignore values ('ignored_tbl', true);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'add ignored table and ignore pattern on main', '--force');",
+			"call dolt_checkout('-b', 'other');",
+			"insert into ignored_tbl values (2, 200);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'modify ignored table on other branch', '--force');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_checkout('--no-overwrite-ignore', 'other');",
+				ExpectedErr: actions.ErrCheckoutWouldOverwriteIgnoredTables,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout --overwrite-ignore allows checkout when ignored table would be overwritten",
+		SetUpScript: []string{
+			"create table ignored_tbl (pk int primary key, val int);",
+			"insert into ignored_tbl values (1, 100);",
+			"insert into dolt_ignore values ('ignored_tbl', true);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'add ignored table and ignore pattern on main', '--force');",
+			"call dolt_checkout('-b', 'other');",
+			"insert into ignored_tbl values (2, 200);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'modify ignored table on other branch', '--force');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_checkout('--overwrite-ignore', 'other');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"other"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout default behavior overwrites ignored tables",
+		SetUpScript: []string{
+			"create table ignored_tbl (pk int primary key, val int);",
+			"insert into ignored_tbl values (1, 100);",
+			"insert into dolt_ignore values ('ignored_tbl', true);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'add ignored table and ignore pattern on main', '--force');",
+			"call dolt_checkout('-b', 'other');",
+			"insert into ignored_tbl values (2, 200);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'modify ignored table on other branch', '--force');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_checkout('other');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"other"}},
 			},
 		},
 	},

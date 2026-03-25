@@ -309,6 +309,76 @@ SQL
     [[ "${lines[5]}" =~ "test,0,new table" ]] || false
 }
 
+@test "sql-checkout: DOLT_CHECKOUT with --no-overwrite-ignore aborts when ignored table would be overwritten" {
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "setup ignored table on main"
+
+    dolt checkout -b other
+    dolt sql -q "INSERT INTO ignored_tbl VALUES (2, 200)"
+    dolt add -A --force
+    dolt commit -m "modify ignored table on other" --force
+
+    dolt checkout main
+
+    run dolt sql -q "CALL DOLT_CHECKOUT('--no-overwrite-ignore', 'other')"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "ignored tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "ignored_tbl" ]] || false
+}
+
+@test "sql-checkout: DOLT_CHECKOUT with --overwrite-ignore succeeds" {
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "setup ignored table on main"
+
+    dolt checkout -b other
+    dolt sql -q "INSERT INTO ignored_tbl VALUES (2, 200)"
+    dolt add -A --force
+    dolt commit -m "modify ignored table on other" --force
+
+    dolt checkout main
+
+    run dolt sql -q "CALL DOLT_CHECKOUT('--overwrite-ignore', 'other')"
+    [ $status -eq 0 ]
+}
+
+@test "sql-checkout: DOLT_CHECKOUT with --move and --no-overwrite-ignore aborts" {
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "setup ignored table on main"
+
+    dolt checkout -b other
+    dolt sql -q "INSERT INTO ignored_tbl VALUES (2, 200)"
+    dolt add -A --force
+    dolt commit -m "modify ignored table on other" --force
+
+    dolt checkout main
+
+    run dolt sql -q "CALL DOLT_CHECKOUT('--move', '--no-overwrite-ignore', 'other')"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "ignored tables would be overwritten by checkout" ]] || false
+}
+
+@test "sql-checkout: DOLT_CHECKOUT --overwrite-ignore and --no-overwrite-ignore are mutually exclusive" {
+    dolt branch other
+    run dolt sql -q "CALL DOLT_CHECKOUT('--overwrite-ignore', '--no-overwrite-ignore', 'other')"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "mutually exclusive" ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | awk '{print $2}'
 }
