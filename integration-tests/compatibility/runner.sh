@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -eo pipefail
+set -x
 
 PLATFORM_TUPLE=""
 DEFAULT_BRANCH=""
