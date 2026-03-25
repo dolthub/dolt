@@ -110,16 +110,6 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 				toSendCh = runCh
 			}
 
-			// Every 5 seconds, check CPU usage. Don't send any work if it's too high
-			percentages, err := cpu.Percent(5, false)
-			if err != nil {
-				c.lgr.Warnf("sqle/auto_gc: Could not get CPU usage: %v", err)
-			}
-			if len(percentages) > 0 && percentages[0] > 90 {
-				c.lgr.Warnf("High CPU usage. Delaying gc...")
-				continue
-			}
-
 			select {
 			case <-ctx.Done():
 				// sql.BackgroundThreads is shutting down.
@@ -153,7 +143,22 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 }
 
 func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF func(context.Context) (*sql.Context, error)) {
+	// Delay GC while the CPU is under heavy load.
+	for {
+		percentages, err := cpu.Percent(5, false)
+		if err != nil {
+			c.lgr.Warnf("sqle/auto_gc: Could not get CPU usage: %v", err)
+		}
+		if len(percentages) > 0 && percentages[0] > 90 {
+			c.lgr.Warnf("High CPU usage. Delaying gc...")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
+	}
+
 	defer close(work.done)
+
 	var err error
 	start := time.Now()
 	defer func() {
