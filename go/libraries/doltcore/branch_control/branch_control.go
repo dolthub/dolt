@@ -149,12 +149,16 @@ func (controller *Controller) LoadData(ctx context.Context, data []byte, isFirst
 	// The Deserialize functions acquire write locks, so we don't acquire them here
 	if err = controller.Access.Deserialize(access); err != nil {
 		// TODO: More principaled rollback. Hopefully this does not fail.
-		controller.LoadData(ctx, *rollback, isFirstLoad)
+		if rollback != nil {
+			_ = controller.LoadData(ctx, *rollback, isFirstLoad)
+		}
 		return err
 	}
 	if err = controller.Namespace.Deserialize(namespace); err != nil {
 		// TODO: More principaled rollback. Hopefully this does not fail.
-		controller.LoadData(ctx, *rollback, isFirstLoad)
+		if rollback != nil {
+			_ = controller.LoadData(ctx, *rollback, isFirstLoad)
+		}
 		return err
 	}
 
