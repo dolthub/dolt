@@ -17,11 +17,11 @@ package sqle
 import (
 	"context"
 	"errors"
-	"github.com/shirou/gopsutil/v4/cpu"
 	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
