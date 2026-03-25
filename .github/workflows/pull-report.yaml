@@ -11,7 +11,7 @@ jobs:
     if: ${{ github.event.client_payload.issue_number != -1 }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -262,7 +262,7 @@ jobs:
     if: ${{ github.event.client_payload.correctness_info.is_regression != 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.client_payload.correctness_info.branch_ref }}
           repository: ${{ github.repository }}
