@@ -18,12 +18,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/prometheus/procfs"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/prometheus/procfs"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
