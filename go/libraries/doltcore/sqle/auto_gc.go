@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"errors"
+	"github.com/shirou/gopsutil/v4/cpu"
 	"sync"
 	"time"
 
@@ -80,6 +81,10 @@ func (c *AutoGCController) RunBackgroundThread(threads *sql.BackgroundThreads, c
 	c.threads = threads
 	c.ctxF = ctxF
 	err := threads.Add("auto_gc_thread", c.gcBgThread)
+	if err != nil {
+		return err
+	}
+	err = threads.Add("auto_gc_monitor", CPUMonitorInstance.thread)
 	if err != nil {
 		return err
 	}
@@ -313,12 +318,9 @@ const size_128mb = (1 << 27)
 const defaultCheckSizeThreshold = size_128mb
 
 func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
-	// TODO: this shit is blocking and not an instant read?? wtf???
-	// Delay GC while the CPU is under heavy load.
-	//percentages, _ := cpu.Percent(0, false)
-	//if len(percentages) > 0 && percentages[0] > 50 {
-	//	return false
-	//}
+	if CPUMonitorInstance.Usage() > 0.9 {
+		return false
+	}
 
 	grew := currSz.TotalBytes > lastSz.TotalBytes
 	growth := currSz.TotalBytes - lastSz.TotalBytes
@@ -391,4 +393,34 @@ func (h *autoGCCommitHook) stop() {
 func (h *autoGCCommitHook) run(threads *sql.BackgroundThreads) error {
 	h.wg.Add(1)
 	return threads.Add("auto_gc_thread["+h.name+"]", h.thread)
+}
+
+type CPUMonitor struct {
+	usage float64
+	mu    sync.RWMutex
+}
+
+var CPUMonitorInstance = &CPUMonitor{}
+
+func (m *CPUMonitor) thread(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			percentages, err := cpu.Percent(5*time.Second, false)
+			if err != nil {
+				// TODO
+			}
+			m.mu.Lock()
+			m.usage = percentages[0]
+			m.mu.Unlock()
+		}
+	}
+}
+
+func (m *CPUMonitor) Usage() float64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.usage
 }
