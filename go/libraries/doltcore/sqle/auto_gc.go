@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -143,20 +142,6 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 }
 
 func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF func(context.Context) (*sql.Context, error)) {
-	// Delay GC while the CPU is under heavy load.
-	for {
-		percentages, err := cpu.Percent(5, false)
-		if err != nil {
-			c.lgr.Warnf("sqle/auto_gc: Could not get CPU usage: %v", err)
-		}
-		if len(percentages) > 0 && percentages[0] > 90 {
-			c.lgr.Warnf("High CPU usage. Delaying gc...")
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		break
-	}
-
 	defer close(work.done)
 
 	var err error
@@ -328,24 +313,29 @@ const size_128mb = (1 << 27)
 const defaultCheckSizeThreshold = size_128mb
 
 func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
+	// TODO: this shit is blocking and not an instant read?? wtf???
+	// Delay GC while the CPU is under heavy load.
+	//percentages, _ := cpu.Percent(0, false)
+	//if len(percentages) > 0 && percentages[0] > 50 {
+	//	return false
+	//}
+
 	grew := currSz.TotalBytes > lastSz.TotalBytes
 	growth := currSz.TotalBytes - lastSz.TotalBytes
 	if lastGcReport == nil || lastGcReport.err != nil {
 		return (currSz.JournalBytes > defaultCheckSizeThreshold) || (grew && growth > defaultCheckSizeThreshold)
-	} else {
-		// Because we have run a GC already, we know how long it took and we know how big the new gen was
-		// (approximately) after we finished it. Here we check that
-		// 1) more time has elapsed since the end of our last GC than it took for that GC to run
-		// 2) the total growth in store size is greater than the size of new gen at the end of our last GC
-		// 3) the new gen is at least defaultCheckSizeThreshold
-		enoughTimeHasPassed := now.Sub(lastGcReport.end) > lastGcReport.end.Sub(lastGcReport.start)
-		storeHasGrownEngouh := grew && currSz.TotalBytes-lastSz.TotalBytes > lastSz.NewGenBytes
-		newGenIsBigEnough := currSz.NewGenBytes > defaultCheckSizeThreshold
-		if enoughTimeHasPassed && storeHasGrownEngouh && newGenIsBigEnough {
-			return true
-		}
 	}
-	return false
+
+	// Because we have run a GC already, we know how long it took and we know how big the new gen was
+	// (approximately) after we finished it. Here we check that
+	// 1) more time has elapsed since the end of our last GC than it took for that GC to run
+	// 2) the total growth in store size is greater than the size of new gen at the end of our last GC
+	// 3) the new gen is at least defaultCheckSizeThreshold
+	enoughTimeHasPassed := now.Sub(lastGcReport.end) > lastGcReport.end.Sub(lastGcReport.start)
+	storeHasGrownEnough := grew && currSz.TotalBytes-lastSz.TotalBytes > lastSz.NewGenBytes
+	newGenIsBigEnough := currSz.NewGenBytes > defaultCheckSizeThreshold
+
+	return enoughTimeHasPassed && storeHasGrownEnough && newGenIsBigEnough
 }
 
 func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {

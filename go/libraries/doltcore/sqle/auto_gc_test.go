@@ -17,6 +17,8 @@ package sqle
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"github.com/prometheus/procfs"
 	"sync"
 	"testing"
 	"time"
@@ -168,4 +170,52 @@ func TestShouldRequestGC(t *testing.T) {
 	currSz.NewGenBytes += 1
 	currSz.TotalBytes += 1
 	assert.True(t, shouldRequestGC(currSz, lastSz, report, now))
+}
+
+func TestCPU(t *testing.T) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Initialize a new FS instance, pointing to the default /proc mount point.
+		// You can specify a different path if your procfs is mounted elsewhere.
+		fs, err := procfs.NewFS("/proc")
+		assert.NoError(t, err)
+
+		for {
+			stat, err := fs.Stat()
+			assert.NoError(t, err)
+			fmt.Printf("%+v\n", stat)
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		size := 100
+		matrixA := make([][]int, size)
+		matrixB := make([][]int, size)
+		result := make([][]int, size)
+		for i := range matrixA {
+			matrixA[i] = make([]int, size)
+			matrixB[i] = make([]int, size)
+			result[i] = make([]int, size)
+		}
+		for i := 0; i < size; i++ {
+			for j := 0; j < size; j++ {
+				matrixA[i][j] = i + j
+				matrixB[i][j] = i - j
+			}
+		}
+		for i := 0; i < size; i++ {
+			for j := 0; j < size; j++ {
+				for k := 0; k < size; k++ {
+					result[i][j] += matrixA[i][k] * matrixB[k][j]
+				}
+			}
+		}
+	}()
+
+	wg.Wait()
 }
