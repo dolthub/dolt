@@ -17,7 +17,6 @@ package sqle
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -169,46 +168,4 @@ func TestShouldRequestGC(t *testing.T) {
 	currSz.NewGenBytes += 1
 	currSz.TotalBytes += 1
 	assert.True(t, shouldRequestGC(currSz, lastSz, report, now))
-}
-
-func TestCPU(t *testing.T) {
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		load, err := fs.LoadAvg()
-		if err == nil {
-			fmt.Printf("%f", load.Load5)
-		}
-		stat, err := fs.Stat()
-		numCPU := len(stat.CPU)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		size := 100
-		matrixA := make([][]int, size)
-		matrixB := make([][]int, size)
-		result := make([][]int, size)
-		for i := range matrixA {
-			matrixA[i] = make([]int, size)
-			matrixB[i] = make([]int, size)
-			result[i] = make([]int, size)
-		}
-		for i := 0; i < size; i++ {
-			for j := 0; j < size; j++ {
-				matrixA[i][j] = i + j
-				matrixB[i][j] = i - j
-			}
-		}
-		for i := 0; i < size; i++ {
-			for j := 0; j < size; j++ {
-				for k := 0; k < size; k++ {
-					result[i][j] += matrixA[i][k] * matrixB[k][j]
-				}
-			}
-		}
-	}()
-
-	wg.Wait()
 }

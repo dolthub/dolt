@@ -331,8 +331,11 @@ func init() {
 }
 
 func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
+	// Delay GC if a CPU is under heavy load
 	if load, err := fs.LoadAvg(); err == nil {
-		if load.Load1 > 90/float64(numCPUs) {
+		// TODO: This check is way too simplistic, especially for CPUs with multiple cores.
+		//  A heavy load on an unrelated core would stop autogc. Well distributed loads would also stop autogc.
+		if load.Load1 > 60/float64(numCPUs) {
 			return false
 		}
 	}
