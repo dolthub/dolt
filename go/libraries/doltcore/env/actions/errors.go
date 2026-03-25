@@ -149,7 +149,7 @@ func CheckoutWouldOverwriteTables(err error) []string {
 var ErrCheckoutWouldOverwriteIgnoredTables = goerrors.NewKind(
 	"The following ignored tables would be overwritten by checkout:\n\t%s\n" +
 		"Please move or remove them before you switch branches.\n" +
-		"Use --overwrite-ignore to force.")
+		"Use --overwrite-ignore to force.\n")
 
 type NothingStaged struct {
 	NotStagedTbls []diff.TableDelta
