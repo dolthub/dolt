@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -108,6 +109,17 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 				toSend = dbs[0]
 				toSendCh = runCh
 			}
+
+			// Every 5 seconds, check CPU usage. Don't send any work if it's too high
+			percentages, err := cpu.Percent(5, false)
+			if err != nil {
+				c.lgr.Warnf("sqle/auto_gc: Could not get CPU usage: %v", err)
+			}
+			if len(percentages) > 0 && percentages[0] > 90 {
+				c.lgr.Warnf("High CPU usage. Delaying gc...")
+				continue
+			}
+
 			select {
 			case <-ctx.Done():
 				// sql.BackgroundThreads is shutting down.
