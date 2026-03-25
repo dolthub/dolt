@@ -179,6 +179,8 @@ func TestCPU(t *testing.T) {
 		if err == nil {
 			fmt.Printf("%f", load.Load5)
 		}
+		stat, err := fs.Stat()
+		numCPU := len(stat.CPU)
 	}()
 
 	wg.Add(1)

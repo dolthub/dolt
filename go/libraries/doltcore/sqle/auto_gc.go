@@ -314,16 +314,28 @@ const size_128mb = (1 << 27)
 const defaultCheckSizeThreshold = size_128mb
 
 var fs procfs.FS
+var numCPUs int
 
 func init() {
 	var err error
 	fs, err = procfs.NewFS("/proc")
 	if err != nil {
 		logrus.Warnf("sqle/auto_gc: Failed to open procfs: %v", err)
+		return
 	}
+	stat, err := fs.Stat()
+	if err != nil {
+		return
+	}
+	numCPUs = len(stat.CPU)
 }
 
 func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
+	if load, err := fs.LoadAvg(); err == nil {
+		if load.Load1 > 90/float64(numCPUs) {
+			return false
+		}
+	}
 
 	grew := currSz.TotalBytes > lastSz.TotalBytes
 	growth := currSz.TotalBytes - lastSz.TotalBytes
