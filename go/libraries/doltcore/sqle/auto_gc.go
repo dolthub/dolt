@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/prometheus/procfs"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -81,10 +81,6 @@ func (c *AutoGCController) RunBackgroundThread(threads *sql.BackgroundThreads, c
 	c.threads = threads
 	c.ctxF = ctxF
 	err := threads.Add("auto_gc_thread", c.gcBgThread)
-	if err != nil {
-		return err
-	}
-	err = threads.Add("auto_gc_monitor", CPUMonitorInstance.thread)
 	if err != nil {
 		return err
 	}
@@ -317,10 +313,17 @@ const checkInterval = 1 * time.Second
 const size_128mb = (1 << 27)
 const defaultCheckSizeThreshold = size_128mb
 
-func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
-	if CPUMonitorInstance.Usage() > 0.9 {
-		return false
+var fs procfs.FS
+
+func init() {
+	var err error
+	fs, err = procfs.NewFS("/proc")
+	if err != nil {
+		logrus.Warnf("sqle/auto_gc: Failed to open procfs: %v", err)
 	}
+}
+
+func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
 
 	grew := currSz.TotalBytes > lastSz.TotalBytes
 	growth := currSz.TotalBytes - lastSz.TotalBytes
@@ -393,34 +396,4 @@ func (h *autoGCCommitHook) stop() {
 func (h *autoGCCommitHook) run(threads *sql.BackgroundThreads) error {
 	h.wg.Add(1)
 	return threads.Add("auto_gc_thread["+h.name+"]", h.thread)
-}
-
-type CPUMonitor struct {
-	usage float64
-	mu    sync.RWMutex
-}
-
-var CPUMonitorInstance = &CPUMonitor{}
-
-func (m *CPUMonitor) thread(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			percentages, err := cpu.Percent(5*time.Second, false)
-			if err != nil {
-				// TODO
-			}
-			m.mu.Lock()
-			m.usage = percentages[0]
-			m.mu.Unlock()
-		}
-	}
-}
-
-func (m *CPUMonitor) Usage() float64 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.usage
 }

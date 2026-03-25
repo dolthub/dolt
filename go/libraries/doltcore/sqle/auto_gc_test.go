@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/prometheus/procfs"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -176,17 +175,9 @@ func TestCPU(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		// Initialize a new FS instance, pointing to the default /proc mount point.
-		// You can specify a different path if your procfs is mounted elsewhere.
-		fs, err := procfs.NewFS("/proc")
-		assert.NoError(t, err)
-
-		for {
-			stat, err := fs.Stat()
-			assert.NoError(t, err)
-			fmt.Printf("%+v\n", stat)
-			time.Sleep(500 * time.Millisecond)
+		load, err := fs.LoadAvg()
+		if err == nil {
+			fmt.Printf("%f", load.Load5)
 		}
 	}()
 
