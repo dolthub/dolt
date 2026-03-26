@@ -313,6 +313,7 @@ const checkInterval = 1 * time.Second
 const size_128mb = (1 << 27)
 const defaultCheckSizeThreshold = size_128mb
 
+var DOLT_NAIVE_GC_SCHEDULER_ENABLED = true
 var fs procfs.FS
 var numCPUs int
 
@@ -332,11 +333,13 @@ func init() {
 
 func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
 	// Delay GC if a CPU is under heavy load
-	if load, err := fs.LoadAvg(); err == nil {
-		// TODO: This check is way too simplistic, especially for CPUs with multiple cores.
-		//  A heavy load on an unrelated core would stop autogc. Well distributed loads would also stop autogc.
-		if load.Load1 > 60/float64(numCPUs) {
-			return false
+	if DOLT_NAIVE_GC_SCHEDULER_ENABLED {
+		if load, err := fs.LoadAvg(); err == nil {
+			// TODO: This check is way too simplistic, especially for CPUs with multiple cores.
+			//  A heavy load on an unrelated core would stop autogc. Well distributed loads would also stop autogc.
+			if load.Load1 > 60/float64(numCPUs) {
+				return false
+			}
 		}
 	}
 

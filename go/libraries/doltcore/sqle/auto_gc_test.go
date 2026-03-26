@@ -120,6 +120,7 @@ func TestAutoGCController(t *testing.T) {
 }
 
 func TestShouldRequestGC(t *testing.T) {
+	DOLT_NAIVE_GC_SCHEDULER_ENABLED = false
 	lastSz := doltdb.StoreSizes{
 		JournalBytes: 0,
 		NewGenBytes:  0,
