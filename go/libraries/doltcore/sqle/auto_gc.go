@@ -328,7 +328,7 @@ func init() {
 	if err != nil {
 		return
 	}
-	LOAD_THRESHOLD = 50 / float64(len(stat.CPU))
+	LOAD_THRESHOLD = 10 / float64(len(stat.CPU))
 }
 
 func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
