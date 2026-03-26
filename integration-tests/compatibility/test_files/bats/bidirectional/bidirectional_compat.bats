@@ -1,19 +1,35 @@
 #!/usr/bin/env bats
-# Bi-directional compatibility tests: HEAD dolt and an older dolt version
-# interleave reads and writes against the same repository across multiple rounds,
-# verifying that each version can always read what the other has written.
+# Bi-directional compatibility tests: HEAD dolt and an older dolt version interleave reads and
+# writes against the same repository across multiple rounds, verifying that each version can always
+# read what the other has written.
 #
-# Each test creates an isolated repository, alternating between old_dolt
-# (the version under test, via DOLT_LEGACY_BIN) and dolt (HEAD build).
-# Tests are skipped when DOLT_LEGACY_BIN is not set.
-load $BATS_TEST_DIRNAME/helper/common.bash
+# Each test creates an isolated repository, alternating between old_dolt and new_dolt. The terms old
+# and new are kind of arbitrary, since we run tests in both directions (swapping DOLT_LEGACY_BIN and
+# DOLT_NEW_BIN).
+#
+# Note that the setup files in |helper| can't be used here because they use relative paths and we
+# are in a subdirectory. So the key pieces of functionality are duplicated in this file.
+
+dolt config --global --add metrics.disabled true > /dev/null 2>&1
 
 setup() {
-    setup_common
+    cp -Rpf $REPO_DIR bats_repo
+    cd bats_repo
 }
 
 teardown() {
-    teardown_common
+    cd ..
+    rm -rf bats_repo
+}
+
+
+# When DOLT_LEGACY_BIN is set, old_dolt runst that binary; otherwise runs dolt.
+old_dolt() {
+  if [ -n "$DOLT_LEGACY_BIN" ]; then
+    "$DOLT_LEGACY_BIN" "$@"
+  else
+    dolt "$@"
+  fi
 }
 
 # When DOLT_NEW_BIN is set, new_dolt runs that binary; otherwise runs dolt.
@@ -29,7 +45,7 @@ new_dolt() {
 # older dolt clients when reading from a db that was written by a modern client. We want to ignore
 # this failure for these tests since it prevents us from finding any other issues.
 clear_branch_control() {
-    rm -f .new_doltcfg/branch_control.db
+    rm -f .doltcfg/branch_control.db
 }
 
 # ---------------------------------------------------------------------------
@@ -40,9 +56,6 @@ clear_branch_control() {
 @test "bidirectional_compat: scalar types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
-    repo="$BATS_TEST_TMPDIR/bidir_scalars_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates schema and seeds two rows
     old_dolt init
@@ -135,9 +148,6 @@ SQL
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
-    repo="$BATS_TEST_TMPDIR/bidir_blobs_$$"
-    mkdir -p "$repo" && cd "$repo"
-
     # Setup: old dolt creates table with text/blob columns and small initial values
     old_dolt init
     old_dolt sql <<SQL
@@ -223,9 +233,6 @@ SQL
 @test "bidirectional_compat: geometry types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
-    repo="$BATS_TEST_TMPDIR/bidir_geom_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates geometry table
     old_dolt init
@@ -317,9 +324,6 @@ SQL
 @test "bidirectional_compat: add columns from both versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
-    repo="$BATS_TEST_TMPDIR/bidir_ddl_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates a minimal base table
     old_dolt init
@@ -416,9 +420,6 @@ SQL
 @test "bidirectional_compat: branch and merge across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
-    repo="$BATS_TEST_TMPDIR/bidir_merge_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates repo with base table and data
     old_dolt init
@@ -533,9 +534,6 @@ SQL
 @test "bidirectional_compat: comprehensive type coverage across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
-    repo="$BATS_TEST_TMPDIR/bidir_types_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates a minimal table
     old_dolt init
@@ -653,9 +651,6 @@ SQL
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
-    repo="$BATS_TEST_TMPDIR/bidir_text_$$"
-    mkdir -p "$repo" && cd "$repo"
-
     # Setup: old dolt creates table with all TEXT variants
     old_dolt init
     old_dolt sql <<SQL
@@ -752,9 +747,6 @@ SQL
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
-    repo="$BATS_TEST_TMPDIR/bidir_blobtype_$$"
-    mkdir -p "$repo" && cd "$repo"
-
     # Setup: old dolt creates table with all BLOB variants and VARBINARY
     old_dolt init
     old_dolt sql <<SQL
@@ -850,9 +842,6 @@ SQL
 @test "bidirectional_compat: json round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
-    repo="$BATS_TEST_TMPDIR/bidir_json_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates table with JSON column
     old_dolt init
