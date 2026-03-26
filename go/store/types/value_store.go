@@ -559,11 +559,6 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 
 type GCMode int
 
-const (
-	GCModeDefault GCMode = iota
-	GCModeFull
-)
-
 type GCSafepointController interface {
 	BeginGC(ctx context.Context, keeper func(h hash.Hash) bool) error
 	EstablishPreFinalizeSafepoint(context.Context) error
