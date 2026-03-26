@@ -23,7 +23,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Go 1.x
       uses: actions/setup-go@v5
       with:
@@ -43,7 +43,7 @@ jobs:
         shell: bash
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Go 1.x
       uses: actions/setup-go@v5
       with:
