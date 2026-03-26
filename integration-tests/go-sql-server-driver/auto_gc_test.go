@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,6 +36,7 @@ import (
 )
 
 func TestAutoGC(t *testing.T) {
+	sqle.DOLT_NAIVE_GC_SCHEDULER_ENABLED = false
 	t.Parallel()
 	var enabled_16, final_16, disabled, final_disabled RepoSize
 	numStatements, numCommits := 512, 16
@@ -405,7 +407,7 @@ func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery i
 		defer wg.Done()
 		select {
 		case <-done:
-		case <-time.After(1*time.Minute):
+		case <-time.After(1 * time.Minute):
 			s.PrimaryServer.Cmd.Process.Signal(syscall.SIGQUIT)
 		}
 	}()
