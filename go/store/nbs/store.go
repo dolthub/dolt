@@ -2301,12 +2301,12 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	var err error
 	var mu sync.Mutex
 
-	// If incremental garbage collection is enabled (IncrementalFileSize > 0),
+	// If incremental garbage collection is enabled (IncrementalFileChunks > 0),
 	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
 	// with a new writer.
 	var incrementalGcc *gcCopier
 	var leafChunksWritten uint64
-	writeIncrementalChunkFiles := i.gcConfig.IncrementalFileSize != chunks.IncrementalTablesDisabled
+	writeIncrementalChunkFiles := i.gcConfig.IncrementalFileChunks != chunks.IncrementalTablesDisabled
 	if writeIncrementalChunkFiles {
 		incrementalGcc, err = newGarbageCollectionCopier(i.gcConfig, i.tfp)
 	}
@@ -2363,7 +2363,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 		// TODO: If we sort the hashes, then we can take a set that are clustered, which should have better
 		// performance characteristics.
 		if writeIncrementalChunkFiles {
-			toVisit, nextToVisit = getHashSubset(toVisit, int(i.gcConfig.IncrementalFileSize))
+			toVisit, nextToVisit = getHashSubset(toVisit, int(i.gcConfig.IncrementalFileChunks))
 		} else {
 			nextToVisit = make(hash.HashSet)
 		}
@@ -2423,7 +2423,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 
 		toVisit = nextToVisit
 
-		if writeIncrementalChunkFiles && leafChunksWritten >= i.gcConfig.IncrementalFileSize {
+		if writeIncrementalChunkFiles && leafChunksWritten >= i.gcConfig.IncrementalFileChunks {
 			err = finalizeIncrementalChunkFile()
 			if err != nil {
 				return err
