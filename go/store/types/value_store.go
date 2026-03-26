@@ -94,6 +94,7 @@ const (
 	gcState_Finalizing
 )
 
+// WalkAddrsFromNomsValue calls a callback function for each of a chunk's children, passing the hash of the child chunk.
 func WalkAddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, cb func(a hash.Hash) error) (err error) {
 	if NomsKind(c.Data()[0]) == SerialMessageKind {
 		err = SerialMessage(c.Data()).WalkAddrs(nbf, cb)
@@ -105,6 +106,7 @@ func WalkAddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, cb func(a hash.H
 	return
 }
 
+// InsertAddrsFromNomsValue inserts the hashes of each of a chunk's children into the provided hash.HashSet
 func InsertAddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) (err error) {
 	if NomsKind(c.Data()[0]) == SerialMessageKind {
 		err = SerialMessage(c.Data()).WalkAddrs(nbf, func(a hash.Hash) error {
