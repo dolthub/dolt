@@ -76,16 +76,15 @@ function test_bidirectional_compatibility() {
 
   DOLT_NEW=`which dolt`
 
-  mkdir forward && cd forward
+  # unlike other tests, these tests don't rely on a shared setup script, they do all their own initialization
+  mkdir "repos/$ver-forward"
   echo "Run the bidirectional tests with current Dolt version and older Dolt version $ver"
-  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW" bats --print-output-on-failure ./test_files/bats/bidirectional
-  cd ..
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW" REPO_DIR="$(pwd)/repos/$ver-forward" bats --print-output-on-failure ./test_files/bats/bidirectional
 
   # same thing, but in the oppposite direction
-  mkdir backward && cd backward
+  mkdir "repos/$ver-backward"
   echo "Run the bidirectional tests with older Dolt version $ver and current Dolt version"
-  DOLT_LEGACY_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" bats --print-output-on-failure ./test_files/bats/bidirectional
-  cd ..
+  DOLT_LEGACY_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/$ver-backward" bats --print-output-on-failure ./test_files/bats/bidirectional
 }
 
 function list_forward_compatible_versions() {
@@ -153,19 +152,19 @@ _main() {
   trap cleanup "EXIT"
 
   # test backward compatibility
-  # list_backward_compatible_versions | while IFS= read -r ver; do
-  #   test_backward_compatibility "$ver"
-  # done
+  list_backward_compatible_versions | while IFS= read -r ver; do
+    test_backward_compatibility "$ver"
+  done
 
   # setup repo for current dolt version
   setup_repo HEAD
 
   # test forward compatibility
-  # if [ -s "test_files/forward_compatible_versions.txt" ]; then
-  #     list_forward_compatible_versions | while IFS= read -r ver; do
-  #       test_forward_compatibility "$ver"
-  #     done
-  # fi
+  if [ -s "test_files/forward_compatible_versions.txt" ]; then
+      list_forward_compatible_versions | while IFS= read -r ver; do
+        test_forward_compatibility "$ver"
+      done
+  fi
 
   # test bidirectional compatibility
   if [ -s "test_files/forward_compatible_versions.txt" ]; then
