@@ -80,6 +80,7 @@ require (
 	github.com/mohae/uvarint v0.0.0-20160208145430-c3f9e62bf2b0
 	github.com/oracle/oci-go-sdk/v65 v65.55.0
 	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/procfs v0.16.1
 	github.com/rs/zerolog v1.28.0
 	github.com/shirou/gopsutil/v4 v4.25.12
 	github.com/tidwall/gjson v1.14.4
@@ -176,7 +177,6 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
-	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/rs/xid v1.4.0 // indirect
 	github.com/sony/gobreaker v0.5.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect

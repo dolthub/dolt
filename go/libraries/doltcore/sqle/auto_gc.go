@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/prometheus/procfs"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -30,6 +31,14 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
+)
+
+// gcSchedulerType indicates the automatic garbage collection behavior
+type gcSchedulerType int
+
+const (
+	NONE gcSchedulerType = iota
+	NAIVE
 )
 
 // Auto GC is the ability of a running SQL server engine to perform
@@ -52,9 +61,34 @@ type AutoGCController struct {
 	threads  *sql.BackgroundThreads
 	arcLevel chunks.GCArchiveLevel
 	mu       sync.Mutex
+
+	gcSchedulerType gcSchedulerType
+	fs              procfs.FS
+	loadThreshold   float64
 }
 
-func NewAutoGCController(arcLevel chunks.GCArchiveLevel, lgr *logrus.Logger) *AutoGCController {
+func NewAutoGCController(arcLevel chunks.GCArchiveLevel, gcSchStr string, lgr *logrus.Logger) *AutoGCController {
+	var gcSch = NAIVE
+	switch gcSchStr {
+	case "NONE":
+		gcSch = NONE
+	default:
+		if fs, err := procfs.NewDefaultFS(); err == nil {
+			var stat procfs.Stat
+			if stat, err = fs.Stat(); err == nil {
+				loadThresh := 10 / float64(len(stat.CPU))
+				return &AutoGCController{
+					workCh:          make(chan autoGCWork),
+					lgr:             lgr,
+					hooks:           make(map[string]*autoGCCommitHook),
+					arcLevel:        arcLevel,
+					fs:              fs,
+					loadThreshold:   loadThresh,
+					gcSchedulerType: gcSch,
+				}
+			}
+		}
+	}
 	return &AutoGCController{
 		workCh:   make(chan autoGCWork),
 		lgr:      lgr,
@@ -108,6 +142,7 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 				toSend = dbs[0]
 				toSendCh = runCh
 			}
+
 			select {
 			case <-ctx.Done():
 				// sql.BackgroundThreads is shutting down.
@@ -128,11 +163,29 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		var tickCh <-chan time.Time
+		var loopWorkCh chan autoGCWork
 		for {
+			// Delay GC if a CPU is under heavy load
+			// TODO: This check is way too simplistic, especially for CPUs with multiple cores.
+			//  A heavy load on an unrelated core would stop autogc. Well distributed loads would also stop autogc.
+			if c.gcSchedulerType == NAIVE {
+				if loadAvg, err := c.fs.LoadAvg(); err == nil && loadAvg.Load1 > c.loadThreshold {
+					tickCh = time.After(1 * time.Minute)
+					loopWorkCh = nil
+				} else {
+					tickCh = nil
+					loopWorkCh = runCh
+				}
+			} else {
+				tickCh = nil
+				loopWorkCh = runCh
+			}
 			select {
 			case <-ctx.Done():
 				return
-			case work := <-runCh:
+			case <-tickCh:
+			case work := <-loopWorkCh:
 				c.doWork(ctx, work, c.ctxF)
 			}
 		}
@@ -142,6 +195,7 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 
 func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF func(context.Context) (*sql.Context, error)) {
 	defer close(work.done)
+
 	var err error
 	start := time.Now()
 	defer func() {
@@ -176,6 +230,7 @@ func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) *autoGC
 	defer c.mu.Unlock()
 	closed := make(chan *gcWorkReport)
 	close(closed)
+
 	ret := &autoGCCommitHook{
 		c:         c,
 		name:      name,
@@ -186,6 +241,7 @@ func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) *autoGC
 		stopCh:    make(chan struct{}),
 		stoppedCh: make(chan struct{}),
 	}
+
 	c.hooks[name] = ret
 	if c.threads != nil {
 		// If this errors, sql.BackgroundThreads is already closed.
@@ -315,20 +371,18 @@ func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkRepor
 	growth := currSz.TotalBytes - lastSz.TotalBytes
 	if lastGcReport == nil || lastGcReport.err != nil {
 		return (currSz.JournalBytes > defaultCheckSizeThreshold) || (grew && growth > defaultCheckSizeThreshold)
-	} else {
-		// Because we have run a GC already, we know how long it took and we know how big the new gen was
-		// (approximately) after we finished it. Here we check that
-		// 1) more time has elapsed since the end of our last GC than it took for that GC to run
-		// 2) the total growth in store size is greater than the size of new gen at the end of our last GC
-		// 3) the new gen is at least defaultCheckSizeThreshold
-		enoughTimeHasPassed := now.Sub(lastGcReport.end) > lastGcReport.end.Sub(lastGcReport.start)
-		storeHasGrownEngouh := grew && currSz.TotalBytes-lastSz.TotalBytes > lastSz.NewGenBytes
-		newGenIsBigEnough := currSz.NewGenBytes > defaultCheckSizeThreshold
-		if enoughTimeHasPassed && storeHasGrownEngouh && newGenIsBigEnough {
-			return true
-		}
 	}
-	return false
+
+	// Because we have run a GC already, we know how long it took and we know how big the new gen was
+	// (approximately) after we finished it. Here we check that
+	// 1) more time has elapsed since the end of our last GC than it took for that GC to run
+	// 2) the total growth in store size is greater than the size of new gen at the end of our last GC
+	// 3) the new gen is at least defaultCheckSizeThreshold
+	enoughTimeHasPassed := now.Sub(lastGcReport.end) > lastGcReport.end.Sub(lastGcReport.start)
+	storeHasGrownEnough := grew && currSz.TotalBytes-lastSz.TotalBytes > lastSz.NewGenBytes
+	newGenIsBigEnough := currSz.NewGenBytes > defaultCheckSizeThreshold
+
+	return enoughTimeHasPassed && storeHasGrownEnough && newGenIsBigEnough
 }
 
 func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
@@ -345,6 +399,7 @@ func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 		if h.lastSz == nil {
 			h.lastSz = &sz
 		}
+
 		if shouldRequestGC(sz, *h.lastSz, h.lastGcWorkReport, time.Now()) {
 			return h.requestGC(ctx)
 		}

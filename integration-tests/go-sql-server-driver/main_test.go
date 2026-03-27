@@ -30,6 +30,7 @@ import (
 // It's good enough for now, and it keeps us from checking in certificates or
 // JWT which will expire at some point in the future.
 func TestMain(m *testing.M) {
+	os.Setenv("DOLT_GC_SCHEDULER", "NONE")
 	old := os.Getenv("TESTGENDIR")
 	defer func() {
 		os.Setenv("TESTGENDIR", old)
@@ -58,7 +59,7 @@ func InitGlobalDynamicPorts() {
 	// tests use at most 6 ports, so this may run out of ports if
 	// we have more than ~40 concurrent processes.
 	for i := 0; i < 256; i++ {
-		GlobalPorts.available = append(GlobalPorts.available, 3306 + i)
+		GlobalPorts.available = append(GlobalPorts.available, 3306+i)
 	}
 }
 

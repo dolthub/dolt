@@ -405,7 +405,7 @@ func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery i
 		defer wg.Done()
 		select {
 		case <-done:
-		case <-time.After(1*time.Minute):
+		case <-time.After(1 * time.Minute):
 			s.PrimaryServer.Cmd.Process.Signal(syscall.SIGQUIT)
 		}
 	}()
