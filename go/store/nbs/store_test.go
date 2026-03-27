@@ -685,8 +685,8 @@ func TestConjoinTableFilesErrors(t *testing.T) {
 	t.Run("async_conjoin_running", func(t *testing.T) {
 		st, _, _ := makeTestLocalStore(t, defaultMaxTables)
 		cleanup := setConjoinOpForTest(t, st)
-		defer st.Close()   // executed last
-		defer cleanup()    // executed first, unblocks Close
+		defer st.Close() // executed last
+		defer cleanup()  // executed first, unblocks Close
 
 		populateLocalStore(t, st, 4)
 		_, err := st.ConjoinTableFiles(ctx, nil)
@@ -714,8 +714,8 @@ func TestPruneTableFilesErrors(t *testing.T) {
 	t.Run("async_conjoin_running", func(t *testing.T) {
 		st, _, _ := makeTestLocalStore(t, defaultMaxTables)
 		cleanup := setConjoinOpForTest(t, st)
-		defer st.Close()   // executed last
-		defer cleanup()    // executed first, unblocks Close
+		defer st.Close() // executed last
+		defer cleanup()  // executed first, unblocks Close
 
 		populateLocalStore(t, st, 4)
 		err := st.PruneTableFiles(ctx)
