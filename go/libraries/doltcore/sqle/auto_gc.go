@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"errors"
+	"os"
 	"sync"
 	"time"
 
@@ -179,15 +180,28 @@ func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) *autoGC
 	defer c.mu.Unlock()
 	closed := make(chan *gcWorkReport)
 	close(closed)
+
+	var gcSch = NAIVE
+	if gcType, ok := os.LookupEnv("DOLT_GC_SCHEDULER"); !ok {
+		switch gcType {
+		case "NONE":
+			gcSch = NONE
+		case "NAIVE":
+			gcSch = NAIVE
+		default:
+		}
+	}
+
 	ret := &autoGCCommitHook{
-		c:         c,
-		name:      name,
-		done:      closed,
-		next:      make(chan *gcWorkReport, 1),
-		db:        db,
-		tickCh:    make(chan struct{}),
-		stopCh:    make(chan struct{}),
-		stoppedCh: make(chan struct{}),
+		c:               c,
+		name:            name,
+		done:            closed,
+		next:            make(chan *gcWorkReport, 1),
+		db:              db,
+		tickCh:          make(chan struct{}),
+		stopCh:          make(chan struct{}),
+		stoppedCh:       make(chan struct{}),
+		gcSchedulerType: gcSch,
 	}
 	c.hooks[name] = ret
 	if c.threads != nil {
@@ -244,6 +258,10 @@ type autoGCCommitHook struct {
 	// the GC condition.
 	tickCh chan struct{}
 	name   string
+
+	// gcSchedulerType determines the strategy used for sending
+	// garbage collection requests
+	gcSchedulerType gcScheduler
 
 	wg sync.WaitGroup
 }
@@ -313,13 +331,12 @@ const checkInterval = 1 * time.Second
 const size_128mb = (1 << 27)
 const defaultCheckSizeThreshold = size_128mb
 
-var DOLT_NAIVE_GC_SCHEDULER_ENABLED = true
 var LOAD_THRESHOLD float64
 var fs procfs.FS
 
 func init() {
 	var err error
-	fs, err = procfs.NewFS("/proc")
+	fs, err = procfs.NewDefaultFS()
 	if err != nil {
 		logrus.Warnf("sqle/auto_gc: Failed to open procfs: %v", err)
 		return
@@ -332,17 +349,6 @@ func init() {
 }
 
 func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
-	// Delay GC if a CPU is under heavy load
-	if DOLT_NAIVE_GC_SCHEDULER_ENABLED {
-		if load, err := fs.LoadAvg(); err == nil {
-			// TODO: This check is way too simplistic, especially for CPUs with multiple cores.
-			//  A heavy load on an unrelated core would stop autogc. Well distributed loads would also stop autogc.
-			if load.Load1 > LOAD_THRESHOLD {
-				return false
-			}
-		}
-	}
-
 	grew := currSz.TotalBytes > lastSz.TotalBytes
 	growth := currSz.TotalBytes - lastSz.TotalBytes
 	if lastGcReport == nil || lastGcReport.err != nil {
@@ -361,6 +367,30 @@ func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkRepor
 	return enoughTimeHasPassed && storeHasGrownEnough && newGenIsBigEnough
 }
 
+type gcScheduler int
+
+const (
+	NONE gcScheduler = iota
+	NAIVE
+)
+
+// canSchedule returns whether this hook can send a request for garbage collection according to gcScheduler
+func (h *autoGCCommitHook) canSchedule() bool {
+	switch h.gcSchedulerType {
+	case NONE:
+	case NAIVE:
+		// Delay GC if a CPU is under heavy load
+		// TODO: This check is way too simplistic, especially for CPUs with multiple cores.
+		//  A heavy load on an unrelated core would stop autogc. Well distributed loads would also stop autogc.
+		if load, err := fs.LoadAvg(); err == nil {
+			if load.Load1 > LOAD_THRESHOLD {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 	select {
 	case report, ok := <-h.done:
@@ -375,7 +405,8 @@ func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 		if h.lastSz == nil {
 			h.lastSz = &sz
 		}
-		if shouldRequestGC(sz, *h.lastSz, h.lastGcWorkReport, time.Now()) {
+
+		if h.canSchedule() && shouldRequestGC(sz, *h.lastSz, h.lastGcWorkReport, time.Now()) {
 			return h.requestGC(ctx)
 		}
 	default:
