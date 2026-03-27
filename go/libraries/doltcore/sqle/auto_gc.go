@@ -163,21 +163,29 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		var tickCh <-chan time.Time
+		var loopWorkCh chan autoGCWork
 		for {
 			// Delay GC if a CPU is under heavy load
 			// TODO: This check is way too simplistic, especially for CPUs with multiple cores.
 			//  A heavy load on an unrelated core would stop autogc. Well distributed loads would also stop autogc.
 			if c.gcSchedulerType == NAIVE {
-				if loadAvg, err := c.fs.LoadAvg(); err == nil {
-					if loadAvg.Load1 > c.loadThreshold {
-						continue
-					}
+				if loadAvg, err := c.fs.LoadAvg(); err == nil && loadAvg.Load1 > c.loadThreshold {
+					tickCh = time.After(1 * time.Minute)
+					loopWorkCh = nil
+				} else {
+					tickCh = nil
+					loopWorkCh = runCh
 				}
+			} else {
+				tickCh = nil
+				loopWorkCh = runCh
 			}
 			select {
 			case <-ctx.Done():
 				return
-			case work := <-runCh:
+			case <-tickCh:
+			case work := <-loopWorkCh:
 				c.doWork(ctx, work, c.ctxF)
 			}
 		}
