@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -214,6 +213,12 @@ type SqlServer struct {
 	Output      *bytes.Buffer
 	DBName      string
 	RecreateCmd func(args ...string) *exec.Cmd
+
+	// Called on every write to the output stream, if it is
+	// non-nil.  This is not often needed. This is O(n^2) because
+	// it makes a new string of the entire output on every write
+	// to the output.
+	OutputVisitor func(string)
 }
 
 type SqlServerOpt func(s *SqlServer)
@@ -239,6 +244,12 @@ func WithEnvs(envs ...string) SqlServerOpt {
 func WithPort(port int) SqlServerOpt {
 	return func(s *SqlServer) {
 		s.Port = port
+	}
+}
+
+func WithOutputVisitor(f func(string)) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.OutputVisitor = f
 	}
 }
 
@@ -278,13 +289,7 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 	}
 	cmd.Stderr = cmd.Stdout
 	output := new(bytes.Buffer)
-	var wg sync.WaitGroup
-	wg.Add(1)
 	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
 
 	server := &SqlServer{
 		Done:   done,
@@ -297,8 +302,9 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 	}
 
 	go func() {
-		defer wg.Done()
-		multiCopyWithNamePrefix(os.Stdout, output, stdout, server.Name)
+		defer close(done)
+		wr := buildVisitorWriter(output, server.OutputVisitor)
+		multiCopyWithNamePrefix(os.Stdout, wr, stdout, server.Name)
 	}()
 
 	server.RecreateCmd = func(args ...string) *exec.Cmd {
@@ -349,6 +355,27 @@ func multiCopyWithNamePrefix(stdout, captured io.Writer, in io.Reader, name stri
 	}
 }
 
+func buildVisitorWriter(buf *bytes.Buffer, visitor func(string)) io.Writer {
+	if visitor == nil {
+		return buf
+	}
+	return &visitorWriter{
+		f:   visitor,
+		buf: buf,
+	}
+}
+
+type visitorWriter struct {
+	f   func(string)
+	buf *bytes.Buffer
+}
+
+func (w *visitorWriter) Write(bs []byte) (int, error) {
+	n, err := w.buf.Write(bs)
+	w.f(w.buf.String())
+	return n, err
+}
+
 func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	err := s.GracefulStop()
 	if err != nil {
@@ -367,16 +394,11 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 		return err
 	}
 	s.Cmd.Stderr = s.Cmd.Stdout
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		multiCopyWithNamePrefix(os.Stdout, s.Output, stdout, s.Name)
-	}()
 	s.Done = make(chan struct{})
 	go func() {
-		wg.Wait()
-		close(s.Done)
+		defer close(s.Done)
+		wr := buildVisitorWriter(s.Output, s.OutputVisitor)
+		multiCopyWithNamePrefix(os.Stdout, wr, stdout, s.Name)
 	}()
 	return s.Cmd.Start()
 }

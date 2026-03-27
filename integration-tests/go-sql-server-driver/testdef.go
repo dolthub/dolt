@@ -235,7 +235,7 @@ func (d *DynamicResources) ApplyTemplate(s string) string {
 	return buf.String()
 }
 
-func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources *DynamicResources) *driver.SqlServer {
+func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources *DynamicResources, manualOps ...driver.SqlServerOpt) *driver.SqlServer {
 	if s == nil {
 		return nil
 	}
@@ -262,6 +262,7 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources
 		t.Fatalf("cannot find dynamic port %s after expanding server config, requested as dynamic server port", s.DynamicPort)
 	}
 	opts = append(opts, driver.WithPort(port))
+	opts = append(opts, manualOps...)
 
 	var server *driver.SqlServer
 	var err error
@@ -275,7 +276,7 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources
 	if len(s.ErrorMatches) > 0 {
 		err := server.ErrorStop()
 		require.Error(t, err)
-		output := string(server.Output.Bytes())
+		output := server.Output.String()
 		for _, a := range s.ErrorMatches {
 			require.Regexp(t, a, output)
 		}
@@ -286,7 +287,7 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources
 			// a Cleanup does not make sense.
 			err := server.GracefulStop()
 			if assert.NoError(t, err) {
-				output := string(server.Output.Bytes())
+				output := server.Output.String()
 				for _, a := range s.LogMatches {
 					assert.Regexp(t, a, output)
 				}
