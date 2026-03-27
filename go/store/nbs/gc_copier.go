@@ -49,16 +49,16 @@ type gcCopier struct {
 	tfp    tableFilePersister
 }
 
-func newGarbageCollectionCopier(cmp chunks.GCArchiveLevel, tfp tableFilePersister) (*gcCopier, error) {
+func newGarbageCollectionCopier(gcConfig chunks.GCConfig, tfp tableFilePersister) (*gcCopier, error) {
 	var writer GenericTableWriter
 	var err error
-	switch cmp {
+	switch gcConfig.ArchiveLevel {
 	case chunks.SimpleArchive:
 		writer, err = NewArchiveStreamWriter("")
 	case chunks.NoArchive:
 		writer, err = NewCmpChunkTableWriter("")
 	default:
-		return nil, fmt.Errorf("invalid archive level: %d", cmp)
+		return nil, fmt.Errorf("invalid archive level: %d", gcConfig.ArchiveLevel)
 	}
 	if err != nil {
 		return nil, err
@@ -168,4 +168,24 @@ func fileNameToAddr(fileName string) (hash.Hash, bool) {
 		}
 	}
 	return hash.Hash{}, false
+}
+
+// writeChunksToDir creates a new chunk file in the destination, containing the provided chunks.
+func writeChunksToDir(ctx context.Context, gcConfig chunks.GCConfig, tfp tableFilePersister, chunks []ToChunker, dest *NomsBlockStore) error {
+	gcc, err := newGarbageCollectionCopier(gcConfig, tfp)
+	if err != nil {
+		return err
+	}
+	for _, tc := range chunks {
+		err := gcc.addChunk(ctx, tc)
+		if err != nil {
+			return err
+		}
+	}
+
+	specs, err := gcc.copyTablesToDir(ctx)
+	if err != nil {
+		return err
+	}
+	return addTableFilesToManifest(ctx, dest, specs)
 }

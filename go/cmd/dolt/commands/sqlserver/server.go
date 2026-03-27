@@ -280,13 +280,14 @@ func ConfigureServices(
 		InitF: func(context.Context) error {
 			// Having AutoGCBehavior == nil means that they are using default behavior, which is enabled.
 			if cfg.ServerConfig.AutoGCBehavior() == nil {
-				config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, lgr)
+				config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, chunks.IncrementalTablesDisabled, lgr)
 			} else if cfg.ServerConfig.AutoGCBehavior().Enable() {
 				cmp := chunks.GCArchiveLevel(cfg.ServerConfig.AutoGCBehavior().ArchiveLevel())
 				if cmp < chunks.NoArchive || cmp > chunks.MaxArchiveLevel {
 					return fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, cmp)
 				}
-				config.AutoGCController = sqle.NewAutoGCController(cmp, lgr)
+				incrementalArchiveSize := cfg.ServerConfig.AutoGCBehavior().IncrementalFileChunks()
+				config.AutoGCController = sqle.NewAutoGCController(cmp, incrementalArchiveSize, lgr)
 			}
 			return nil
 		},

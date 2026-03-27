@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Auto GC is the ability of a running SQL server engine to perform
@@ -45,21 +44,23 @@ import (
 // database as wanting a GC.
 
 type AutoGCController struct {
-	workCh   chan autoGCWork
-	lgr      *logrus.Logger
-	hooks    map[string]*autoGCCommitHook
-	ctxF     func(context.Context) (*sql.Context, error)
-	threads  *sql.BackgroundThreads
-	arcLevel chunks.GCArchiveLevel
-	mu       sync.Mutex
+	workCh                chan autoGCWork
+	lgr                   *logrus.Logger
+	hooks                 map[string]*autoGCCommitHook
+	ctxF                  func(context.Context) (*sql.Context, error)
+	threads               *sql.BackgroundThreads
+	arcLevel              chunks.GCArchiveLevel
+	incrementalFileChunks uint64
+	mu                    sync.Mutex
 }
 
-func NewAutoGCController(arcLevel chunks.GCArchiveLevel, lgr *logrus.Logger) *AutoGCController {
+func NewAutoGCController(arcLevel chunks.GCArchiveLevel, incrementalArchiveSize uint64, lgr *logrus.Logger) *AutoGCController {
 	return &AutoGCController{
-		workCh:   make(chan autoGCWork),
-		lgr:      lgr,
-		hooks:    make(map[string]*autoGCCommitHook),
-		arcLevel: arcLevel,
+		workCh:                make(chan autoGCWork),
+		lgr:                   lgr,
+		hooks:                 make(map[string]*autoGCCommitHook),
+		arcLevel:              arcLevel,
+		incrementalFileChunks: incrementalArchiveSize,
 	}
 }
 
@@ -160,7 +161,7 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
-	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, c.arcLevel, work.name)
+	err = dprocedures.RunDoltGC(sqlCtx, work.db, chunks.NewGCConfig(chunks.GCMode_Default, c.arcLevel, c.incrementalFileChunks), work.name)
 	if err != nil {
 		if !errors.Is(err, chunks.ErrNothingToCollect) {
 			c.lgr.Warnf("sqle/auto_gc: Attempt to auto GC database %s failed with error: %v", work.name, err)

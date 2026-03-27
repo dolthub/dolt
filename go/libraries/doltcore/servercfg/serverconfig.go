@@ -564,4 +564,6 @@ func CheckForUnixSocket(config ServerConfig) (string, bool, error) {
 type AutoGCBehavior interface {
 	Enable() bool
 	ArchiveLevel() int
+	// IncrementalFileChunks > 0 means that chunk files will be periodically written during GC, containing the specified number of chunks.
+	IncrementalFileChunks() uint64
 }

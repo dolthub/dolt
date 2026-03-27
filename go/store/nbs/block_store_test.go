@@ -122,6 +122,10 @@ func noopGetAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 	}
 }
 
+func noopWalkAddrs(c chunks.Chunk, cb func(hash.Hash) error) error {
+	return nil
+}
+
 func (suite *BlockStoreSuite) TestChunkStorePut() {
 	input := []byte("abc")
 	c := chunks.NewChunk(input)
