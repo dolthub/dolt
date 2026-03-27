@@ -35,10 +35,6 @@ import (
 )
 
 func TestAutoGC(t *testing.T) {
-	os.Setenv("DOLT_GC_SCHEDULER", "NONE")
-	defer func() {
-		os.Setenv("DOLT_GC_SCHEDULER", "")
-	}()
 	t.Parallel()
 	var enabled_16, final_16, disabled, final_disabled RepoSize
 	numStatements, numCommits := 512, 16
