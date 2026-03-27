@@ -17,6 +17,7 @@ package sqle
 import (
 	"bytes"
 	"context"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -120,6 +121,10 @@ func TestAutoGCController(t *testing.T) {
 }
 
 func TestShouldRequestGC(t *testing.T) {
+	os.Setenv("DOLT_GC_SCHEDULER", "NONE")
+	defer func() {
+		os.Setenv("DOLT_GC_SCHEDULER", "")
+	}()
 	lastSz := doltdb.StoreSizes{
 		JournalBytes: 0,
 		NewGenBytes:  0,
