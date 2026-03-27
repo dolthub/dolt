@@ -15,6 +15,7 @@
 package main
 
 import (
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -28,19 +29,6 @@ import (
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/dolthub/dolt/go/store/hash"
 )
-
-// After this, we expect a conjoin.
-// This test is tightly coupled with /go/store/nbs/store.go and
-// how its inline conjoiner is configured. This test could be
-// robust against that if it knew when conjoin was running or
-// could sniff log lines from when it started, but we don't do
-// that currently.
-//
-// This is defaultMaxTables + 2 because starting a conjoin on a new
-// add is checked before the add itself and needs to be strictly >
-// defaultMaxTables. So there is one more file already in the manifest
-// and one which is about to be.
-const ExpectedTableFilesHighWaterMark = 258
 
 // This test asserts that running a full gc into the old gen at the
 // point that it is at its conjoin limit will not generate a conjoin
@@ -92,8 +80,15 @@ func TestFullGCNoOldgenConjoin(t *testing.T) {
 		DynamicPort: "server",
 	}
 	var conjoinStarted, conjoinFinished atomic.Bool
+	upstreamLenOnConjoin := 0
 	server := MakeServer(t, repo, srvSettings, &ports, driver.WithOutputVisitor(func(out string) {
-		if strings.Contains(out, "beginning conjoin of database") {
+		if upstreamLenOnConjoin <= 0 && strings.Contains(out, "beginning conjoin of database") {
+			if i := strings.Index(out, "upstream_len="); i != -1 {
+				i += len("upstream_len=")
+				if _, err := fmt.Sscanf(out[i:], "%d", &upstreamLenOnConjoin); err != nil {
+					upstreamLenOnConjoin = -1
+				}
+			}
 			conjoinStarted.Store(true)
 		}
 		if strings.Contains(out, "conjoin completed successfully") {
@@ -104,14 +99,13 @@ func TestFullGCNoOldgenConjoin(t *testing.T) {
 
 	oldgendir := filepath.Join(filepath.Join(rs.Dir, dbname), "/.dolt/noms/oldgen")
 
-	hwm := GetOldGenTableFilesHighWaterMark(t, server, &conjoinStarted, oldgendir)
-	t.Logf("found high water mark of %v files", hwm)
-	require.Equal(t, ExpectedTableFilesHighWaterMark, hwm)
+	CommitAndGCUntilConjoin(t, server, &conjoinStarted, oldgendir)
+	require.Greater(t, upstreamLenOnConjoin, 0)
 	require.Eventually(t, func() bool {
 		return conjoinFinished.Load()
 	}, 5 * time.Second, 32 * time.Millisecond)
 
-	CreateToJustBelowHighWaterMark(t, server, oldgendir, hwm)
+	CreateUpToNumFiles(t, server, oldgendir, upstreamLenOnConjoin)
 	cnt := CountTableFiles(t, oldgendir)
 	t.Logf("now there are %d", cnt)
 
@@ -150,8 +144,7 @@ func CountTableFiles(t *testing.T, dir string) int {
 	return count
 }
 
-func GetOldGenTableFilesHighWaterMark(t *testing.T, srv *driver.SqlServer, conjoinStarted *atomic.Bool, path string) int {
-	var hwm int
+func CommitAndGCUntilConjoin(t *testing.T, srv *driver.SqlServer, conjoinStarted *atomic.Bool, path string) {
 	ctx := t.Context()
 	db, err := srv.DB(driver.Connection{User: "root"})
 	require.NoError(t, err)
@@ -165,19 +158,13 @@ func GetOldGenTableFilesHighWaterMark(t *testing.T, srv *driver.SqlServer, conjo
 		require.NoError(t, err)
 		_, err = conn.ExecContext(ctx, "CALL DOLT_GC()")
 		require.NoError(t, err)
-		cnt := CountTableFiles(t, path)
-		if cnt > hwm {
-			hwm = cnt
-		} else if cnt < hwm {
-			return hwm
-		}
 		if conjoinStarted.Load() {
-			return hwm
+			return
 		}
 	}
 }
 
-func CreateToJustBelowHighWaterMark(t *testing.T, srv *driver.SqlServer, path string, hwm int) {
+func CreateUpToNumFiles(t *testing.T, srv *driver.SqlServer, path string, numFiles int) {
 	ctx := t.Context()
 	db, err := srv.DB(driver.Connection{User: "root"})
 	require.NoError(t, err)
@@ -186,15 +173,16 @@ func CreateToJustBelowHighWaterMark(t *testing.T, srv *driver.SqlServer, path st
 	conn, err := db.Conn(ctx)
 	require.NoError(t, err)
 	defer conn.Close()
-	cnt := CountTableFiles(t, path)
-	for range (hwm-cnt-1) {
+	for {
+		cnt := CountTableFiles(t, path)
+		if cnt == numFiles {
+			return
+		}
 		_, err = conn.ExecContext(ctx, "CALL DOLT_COMMIT('-A', '--allow-empty', '-m', 'creating a new commit')")
 		require.NoError(t, err)
 		_, err = conn.ExecContext(ctx, "CALL DOLT_GC()")
 		require.NoError(t, err)
 	}
-	cnt = CountTableFiles(t, path)
-	require.Equal(t, hwm-1, cnt)
 }
 
 func RunGCFull(t *testing.T, srv *driver.SqlServer, path string) {
