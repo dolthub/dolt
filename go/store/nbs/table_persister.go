@@ -65,7 +65,7 @@ type tablePersister interface {
 	// PruneTableFiles deletes table files which the persister would normally be responsible for and
 	// which are not in the included |keeper| set and have not be written or modified more recently
 	// than the provided |mtime|.
-	PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, mtime time.Time) error
+	PruneTableFiles(ctx context.Context, keeper func() ([]hash.Hash, error), mtime time.Time) error
 
 	AccessMode() chunks.ExclusiveAccessMode
 

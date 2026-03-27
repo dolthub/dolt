@@ -134,7 +134,7 @@ func (bsp *singleBlobBSPersister) Exists(ctx context.Context, name string, _ uin
 	return bsp.bs.Exists(ctx, name)
 }
 
-func (bsp *singleBlobBSPersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {
+func (bsp *singleBlobBSPersister) PruneTableFiles(ctx context.Context, keeper func() ([]hash.Hash, error), t time.Time) error {
 	return nil
 }
 

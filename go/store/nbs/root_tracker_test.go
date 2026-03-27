@@ -654,7 +654,7 @@ func (ftp fakeTablePersister) Exists(ctx context.Context, name string, chunkCoun
 	return true, nil
 }
 
-func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ func() []hash.Hash, _ time.Time) error {
+func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ func() ([]hash.Hash, error), _ time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }
 

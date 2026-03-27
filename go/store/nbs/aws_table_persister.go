@@ -547,7 +547,7 @@ func (s3p awsTablePersister) uploadPart(ctx context.Context, data io.Reader, key
 	return
 }
 
-func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {
+func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, keeper func() ([]hash.Hash, error), t time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }
 

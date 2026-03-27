@@ -2074,16 +2074,22 @@ func (nbs *NomsBlockStore) openChunkSourcesForAddTableFiles(ctx context.Context,
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
-func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
+func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) error {
 	valctx.ValidateContext(ctx)
 	return nbs.pruneTableFiles(ctx)
 }
 
-func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
+func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) error {
 	mtime := time.Now()
-	return nbs.persister.PruneTableFiles(ctx, func() []hash.Hash {
+	return nbs.persister.PruneTableFiles(ctx, func() ([]hash.Hash, error) {
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
+		if nbs.conjoinOp != nil {
+			return nil, errors.New("cannot prune table files currently: conjoin ongoing.")
+		}
+		if nbs.conjoinDynamicallyDisabled() {
+			return nil, errors.New("cannot prune table files currently: conjoin is dynamically disabled.")
+		}
 		keepers := make([]hash.Hash, 0, len(nbs.tables.novel)+len(nbs.tables.upstream))
 		for a, _ := range nbs.tables.novel {
 			keepers = append(keepers, a)
@@ -2091,7 +2097,7 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 		for a, _ := range nbs.tables.upstream {
 			keepers = append(keepers, a)
 		}
-		return keepers
+		return keepers, nil
 	}, mtime)
 }
 
@@ -2515,6 +2521,13 @@ func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keepe
 func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []hash.Hash) (hash.Hash, error) {
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
+
+	if nbs.conjoinOp != nil {
+		return hash.Hash{}, errors.New("cannot conjoin. an async conjoin is already running.")
+	}
+	if nbs.conjoinDynamicallyDisabled() {
+		return hash.Hash{}, errors.New("cannot conjoin. conjoin is dynamically disabled.")
+	}
 
 	// If no storageIds provided, collect all table files from the current table set
 	if len(storageIds) == 0 {

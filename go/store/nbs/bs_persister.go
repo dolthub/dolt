@@ -230,7 +230,7 @@ func (bsp *blobstorePersister) Exists(ctx context.Context, name string, _ uint32
 	return bsp.bs.Exists(ctx, name)
 }
 
-func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {
+func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, keeper func() ([]hash.Hash, error), t time.Time) error {
 	return nil
 }
 

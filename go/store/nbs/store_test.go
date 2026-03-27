@@ -666,6 +666,77 @@ func TestGuessPrefixOrdinal(t *testing.T) {
 	}
 }
 
+func setConjoinOpForTest(t *testing.T, st *NomsBlockStore) (cleanup func()) {
+	t.Helper()
+	st.mu.Lock()
+	st.conjoinOp = &conjoinOperation{}
+	st.mu.Unlock()
+	return func() {
+		st.mu.Lock()
+		st.conjoinOp = nil
+		st.conjoinOpCond.Broadcast()
+		st.mu.Unlock()
+	}
+}
+
+func TestConjoinTableFilesErrors(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("async_conjoin_running", func(t *testing.T) {
+		st, _, _ := makeTestLocalStore(t, defaultMaxTables)
+		cleanup := setConjoinOpForTest(t, st)
+		defer st.Close()   // executed last
+		defer cleanup()    // executed first, unblocks Close
+
+		populateLocalStore(t, st, 4)
+		_, err := st.ConjoinTableFiles(ctx, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "async conjoin is already running")
+	})
+
+	t.Run("conjoin_dynamically_disabled", func(t *testing.T) {
+		st, _, _ := makeTestLocalStore(t, defaultMaxTables)
+		defer st.Close()
+
+		st.DisableConjoin()
+		defer st.RestoreDefaultConjoinBehavior()
+
+		populateLocalStore(t, st, 4)
+		_, err := st.ConjoinTableFiles(ctx, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "conjoin is dynamically disabled")
+	})
+}
+
+func TestPruneTableFilesErrors(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("async_conjoin_running", func(t *testing.T) {
+		st, _, _ := makeTestLocalStore(t, defaultMaxTables)
+		cleanup := setConjoinOpForTest(t, st)
+		defer st.Close()   // executed last
+		defer cleanup()    // executed first, unblocks Close
+
+		populateLocalStore(t, st, 4)
+		err := st.PruneTableFiles(ctx)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "conjoin ongoing")
+	})
+
+	t.Run("conjoin_dynamically_disabled", func(t *testing.T) {
+		st, _, _ := makeTestLocalStore(t, defaultMaxTables)
+		defer st.Close()
+
+		st.DisableConjoin()
+		defer st.RestoreDefaultConjoinBehavior()
+
+		populateLocalStore(t, st, 4)
+		err := st.PruneTableFiles(ctx)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "conjoin is dynamically disabled")
+	})
+}
+
 func TestWaitForGC(t *testing.T) {
 	// Wait for GC should always return when the context is canceled...
 	nbs := &NomsBlockStore{}

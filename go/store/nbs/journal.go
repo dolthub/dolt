@@ -315,13 +315,17 @@ func (j *ChunkJournal) Exists(ctx context.Context, name string, chunkCount uint3
 }
 
 // PruneTableFiles implements tablePersister.
-func (j *ChunkJournal) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, mtime time.Time) error {
+func (j *ChunkJournal) PruneTableFiles(ctx context.Context, keeper func() ([]hash.Hash, error), mtime time.Time) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
 	}
 	// sanity check that we're not deleting the journal
 	var keepJournal bool
-	for _, a := range keeper() {
+	keepers, err := keeper()
+	if err != nil {
+		return err
+	}
+	for _, a := range keepers {
 		if a == journalAddr {
 			keepJournal = true
 		}

@@ -82,7 +82,7 @@ func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name string,
 	return bsp.bs.Exists(ctx, name)
 }
 
-func (bsp *noConjoinBlobstorePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {
+func (bsp *noConjoinBlobstorePersister) PruneTableFiles(ctx context.Context, keeper func() ([]hash.Hash, error), t time.Time) error {
 	return nil
 }
 

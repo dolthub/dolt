@@ -335,7 +335,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 	}, nil
 }
 
-func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, mtime time.Time) error {
+func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() ([]hash.Hash, error), mtime time.Time) error {
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {
 		ftp.removeMu.Unlock()
@@ -351,7 +351,11 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 	}()
 
 	toKeep := make(map[string]struct{})
-	for _, k := range keeper() {
+	keepers, err := keeper()
+	if err != nil {
+		return err
+	}
+	for _, k := range keepers {
 		toKeep[filepath.Clean(filepath.Join(ftp.dir, k.String()))] = struct{}{}
 	}
 
