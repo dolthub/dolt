@@ -217,6 +217,8 @@ func CreateFetchArgParser() *argparser.ArgParser {
 func CreateRevertArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("revert")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
+	ap.SupportsFlag(AbortParam, "", "Abort the current revert operation and return the working set to the pre-revert state.")
+	ap.SupportsFlag(ContinueFlag, "", "Continue the current revert operation after resolving conflicts.")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"revision",
 		"The commit revisions. If multiple revisions are given, they're applied in the order given."})
 

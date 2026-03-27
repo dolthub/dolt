@@ -217,6 +217,7 @@ type MergeState struct {
 	fromCommitSpec      string
 	unmergableTables    []string
 	isCherryPick        bool
+	isRevert            bool
 }
 
 func (ms *MergeState) PreMergeWorkingAddr() (hash.Hash, error) {
@@ -233,6 +234,10 @@ func (ms *MergeState) FromCommitSpec() (string, error) {
 
 func (ms *MergeState) IsCherryPick() (bool, error) {
 	return ms.isCherryPick, nil
+}
+
+func (ms *MergeState) IsRevert() (bool, error) {
+	return ms.isRevert, nil
 }
 
 func (ms *MergeState) UnmergableTables() ([]string, error) {
@@ -348,6 +353,7 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 			ret.MergeState.unmergableTables[i] = string(mergeState.UnmergableTables(i))
 		}
 		ret.MergeState.isCherryPick = mergeState.IsCherryPick()
+		ret.MergeState.isRevert = mergeState.IsRevert()
 	}
 
 	rebaseState, err := h.msg.TryRebaseState(nil)
