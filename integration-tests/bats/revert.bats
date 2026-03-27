@@ -69,7 +69,9 @@ teardown() {
     dolt commit -m "Updated 4"
     run dolt revert HEAD~1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict" ]] || false
+    [[ "$output" =~ "Automatic revert failed" ]] || false
+    [[ "$output" =~ "data conflicts" ]] || false
+    [[ "$output" =~ "dolt revert --continue" ]] || false
 }
 
 @test "revert: constraint violations" {
@@ -89,7 +91,88 @@ SQL
     dolt commit -m "MC3"
     run dolt revert HEAD~1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "constraint violation" ]] || false
+    [[ "$output" =~ "Automatic revert failed" ]] || false
+    [[ "$output" =~ "constraint violations" ]] || false
+    [[ "$output" =~ "dolt revert --continue" ]] || false
+}
+
+@test "revert: --abort after conflict restores state" {
+    dolt sql -q "INSERT INTO test VALUES (4, 4)"
+    dolt commit -Am "Inserted 4"
+    dolt sql -q "REPLACE INTO test VALUES (4, 5)"
+    dolt commit -Am "Updated 4"
+    run dolt revert HEAD~1
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Automatic revert failed" ]] || false
+
+    run dolt revert --abort
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert aborted" ]] || false
+
+    # Conflicts should be gone and working set should be clean
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "0" ]] || false
+
+    run dolt status
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "nothing to commit" ]] || false
+}
+
+@test "revert: --continue after resolving conflict" {
+    dolt sql -q "INSERT INTO test VALUES (4, 4)"
+    dolt add -A
+    dolt commit -m "Inserted 4"
+    dolt sql -q "REPLACE INTO test VALUES (4, 5)"
+    dolt add -A
+    dolt commit -m "Updated 4"
+    run dolt revert HEAD~1
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Automatic revert failed" ]] || false
+
+    # Resolve the conflict by deleting the conflicting row
+    dolt conflicts resolve --ours test
+    dolt add test
+
+    run dolt revert --continue
+    [ "$status" -eq "0" ]
+
+    # Verify a new revert commit was created
+    run dolt log -n 1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert" ]] || false
+}
+
+@test "revert: --abort with no revert in progress" {
+    run dolt revert --abort
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "no revert in progress" ]] || false
+}
+
+@test "revert: --continue with no revert in progress" {
+    run dolt revert --continue
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "no revert in progress" ]] || false
+}
+
+@test "revert: multi-commit stops at first conflict" {
+    dolt sql -q "INSERT INTO test VALUES (4, 4);"
+    dolt commit -am "Inserted 4"
+    dolt sql -q "UPDATE test SET v1=5 where pk=4;"
+    dolt commit -am "Updated 4"
+    dolt sql -q "UPDATE test SET v1=6 where pk=4;"
+    dolt commit -am "Updated 4 (again)"
+
+    # HEAD (Updated 4 (again)) reverts cleanly, but HEAD~2 (Inserted 4) conflicts, because that row
+    # is now (4,5) instead of (4,4), so a conflict is generated that must be manually resolved.
+    run dolt revert HEAD HEAD~2
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Automatic revert failed" ]] || false
+
+    # HEAD was already reverted cleanly before the conflict
+    run dolt log -n 2 --oneline
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert" ]] || false
 }
 
 @test "revert: too far back" {
@@ -213,9 +296,12 @@ SQL
     dolt sql -q "REPLACE INTO test VALUES (4, 5)"
     dolt add -A
     dolt commit -m "Updated 4"
-    run dolt sql -q "call dolt_revert('HEAD~1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict" ]] || false
+    # SQL procedure returns status 0 with conflict counts in the result row
+    run dolt sql -q "call dolt_revert('HEAD~1')" -r=csv
+    [ "$status" -eq "0" ]
+    # Result row: hash, data_conflicts, schema_conflicts, constraint_violations
+    # data_conflicts should be 1
+    [[ "$output" =~ ",1,0,0" ]] || false
 }
 
 @test "revert: SQL constraint violations" {
@@ -225,17 +311,78 @@ CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN
 INSERT INTO parent VALUES (10, 1), (20, 2);
 INSERT INTO child VALUES (1, 1), (2, 2);
 SQL
-    dolt add -A
-    dolt commit -m "MC1"
+    dolt commit -Am "MC1"
     dolt sql -q "DELETE FROM child WHERE pk = 2"
-    dolt add -A
-    dolt commit -m "MC2"
+    dolt commit -am "MC2"
     dolt sql -q "DELETE FROM parent WHERE pk = 20"
+    dolt commit -am "MC3"
+    # SQL procedure returns status 0 with constraint violation count in the result row
+    run dolt sql -q "call dolt_revert('HEAD~1')" -r=csv
+    [ "$status" -eq "0" ]
+    # constraint_violations should be 1
+    [[ "$output" =~ ",0,0,1" ]] || false
+}
+
+@test "revert: SQL --abort and --continue workflow" {
+    dolt sql -q "INSERT INTO test VALUES (4, 4)"
     dolt add -A
-    dolt commit -m "MC3"
-    run dolt sql -q "call dolt_revert('HEAD~1')"
+    dolt commit -m "Inserted 4"
+    dolt sql -q "REPLACE INTO test VALUES (4, 5)"
+    dolt add -A
+    dolt commit -m "Updated 4"
+
+    # Start revert that will conflict
+    run dolt sql -q "call dolt_revert('HEAD~1')" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ ",1,0,0" ]] || false
+
+    # Abort to restore clean state
+    run dolt sql -q "call dolt_revert('--abort')" -r=csv
+    [ "$status" -eq "0" ]
+
+    # Verify no conflicts remain
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "revert: SQL --continue after resolving conflict" {
+    dolt sql -q "INSERT INTO test VALUES (4, 4)"
+    dolt add -A
+    dolt commit -m "Inserted 4"
+    dolt sql -q "REPLACE INTO test VALUES (4, 5)"
+    dolt add -A
+    dolt commit -m "Updated 4"
+
+    # Start revert that will conflict
+    run dolt sql -q "call dolt_revert('HEAD~1')" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ ",1,0,0" ]] || false
+
+    # Resolve conflict by taking ours
+    dolt conflicts resolve --ours test
+    dolt add test
+
+    # Continue the revert
+    run dolt sql -q "call dolt_revert('--continue')" -r=csv
+    [ "$status" -eq "0" ]
+
+    # Verify revert commit was created
+    run dolt log -n 1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert" ]] || false
+}
+
+@test "revert: SQL --abort with no revert in progress" {
+    run dolt sql -q "call dolt_revert('--abort')"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "constraint violation" ]] || false
+    [[ "$output" =~ "no revert in progress" ]] || false
+}
+
+@test "revert: SQL --continue with no revert in progress" {
+    run dolt sql -q "call dolt_revert('--continue')"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "no revert in progress" ]] || false
 }
 
 @test "revert: SQL too far back" {
@@ -281,3 +428,31 @@ SQL
     [[ "$output" =~ "Author: john doe <johndoe@gmail.com>" ]] || false
 }
 
+@test "revert: --continue with ignored table in working set" {
+    # Commit the ignore pattern first so reverting later commits doesn't remove it.
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('ignored_*', 1)"
+    dolt sql -q "CREATE TABLE ignored_1 (id INT PRIMARY KEY);"
+    dolt commit -Am "Add ignore pattern"
+    dolt sql -q "INSERT INTO test VALUES (4, 4)"
+    dolt commit -am "Inserted 4"
+    dolt sql -q "REPLACE INTO test VALUES (4, 5)"
+    dolt commit -am "Updated 4"
+    run dolt revert HEAD~1
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Automatic revert failed" ]] || false
+
+    # Resolve the conflict
+    dolt conflicts resolve --ours test
+    dolt add test
+
+    # Create another ignored table in the working set
+    dolt sql -q "CREATE TABLE ignored_2 (id INT PRIMARY KEY)"
+
+    # --continue should succeed despite the ignored table in the working set
+    run dolt revert --continue
+    [ "$status" -eq "0" ]
+
+    run dolt log -n 1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert" ]] || false
+}

@@ -41,6 +41,11 @@ table MergeState {
   unmergable_tables:[string];
 
   is_cherry_pick:bool;
+
+  // is_revert is set to true when the in-progress merge is a revert operation.
+  // This distinguishes it from cherry-pick so that --continue and --abort can
+  // route to the correct operation.
+  is_revert:bool;
 }
 
 table RebaseState {

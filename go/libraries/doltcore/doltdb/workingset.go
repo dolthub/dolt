@@ -137,6 +137,9 @@ type MergeState struct {
 	// isCherryPick is set to true when the in-progress merge is a cherry-pick. This is needed so that
 	// commit knows to NOT create a commit with multiple parents when creating a commit for a cherry-pick.
 	isCherryPick bool
+	// isRevert is set to true when the in-progress merge is a revert operation. Like cherry-pick, a
+	// revert should only create a single-parent commit, not a merge commit with two parents.
+	isRevert bool
 }
 
 // todo(andy): this might make more sense in pkg merge
@@ -181,6 +184,12 @@ func (m MergeState) CommitSpecStr() string {
 // code as merge, but need slightly different behavior (e.g. only recording one commit parent, instead of two).
 func (m MergeState) IsCherryPick() bool {
 	return m.isCherryPick
+}
+
+// IsRevert returns true if the current merge state is for a revert operation. Like cherry-picks, reverts
+// create a single-parent commit rather than a two-parent merge commit.
+func (m MergeState) IsRevert() bool {
+	return m.isRevert
 }
 
 func (m MergeState) PreMergeWorkingRoot() RootValue {
@@ -362,6 +371,20 @@ func (ws WorkingSet) StartCherryPick(commit *Commit, commitSpecStr string) *Work
 	return &ws
 }
 
+// StartRevert creates and returns a new working set based off of the current |ws| with the specified |commit|
+// and |commitSpecStr| referring to the commit being reverted. The returned WorkingSet records that a revert
+// operation is in progress (i.e. conflicts being resolved). Note that this function does not update the current
+// session – the returned WorkingSet must still be set using DoltSession.SetWorkingSet().
+func (ws WorkingSet) StartRevert(commit *Commit, commitSpecStr string) *WorkingSet {
+	ws.mergeState = &MergeState{
+		commit:          commit,
+		commitSpecStr:   commitSpecStr,
+		preMergeWorking: ws.workingRoot,
+		isRevert:        true,
+	}
+	return &ws
+}
+
 func (ws WorkingSet) AbortMerge() *WorkingSet {
 	ws.workingRoot = ws.mergeState.PreMergeWorkingRoot()
 	ws.stagedRoot = ws.workingRoot
@@ -419,7 +442,8 @@ func (ws *WorkingSet) MergeCommitParents() bool {
 	if !ws.MergeActive() {
 		return false
 	}
-	return ws.MergeState().IsCherryPick() == false
+	ms := ws.MergeState()
+	return !ms.IsCherryPick() && !ms.IsRevert()
 }
 
 func (ws WorkingSet) Meta() *datas.WorkingSetMeta {
@@ -510,6 +534,11 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
+		isRevert, err := dsws.MergeState.IsRevert()
+		if err != nil {
+			return nil, err
+		}
+
 		unmergableTableNames := ToTableNames(unmergableTables, DefaultSchemaName)
 
 		mergeState = &MergeState{
@@ -518,6 +547,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			preMergeWorking:  preMergeWorkingRoot,
 			unmergableTables: unmergableTableNames,
 			isCherryPick:     isCherryPick,
+			isRevert:         isRevert,
 		}
 	}
 
@@ -629,7 +659,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 		}
 
 		// TODO: Serialize the full TableName
-		mergeState, err = datas.NewMergeState(preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick)
+		mergeState, err = datas.NewMergeState(preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick, ws.mergeState.isRevert)
 		if err != nil {
 			return nil, err
 		}
