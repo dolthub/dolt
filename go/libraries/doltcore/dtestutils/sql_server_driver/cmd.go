@@ -214,6 +214,10 @@ type SqlServer struct {
 	DBName      string
 	RecreateCmd func(args ...string) *exec.Cmd
 
+	// Where to write server log output for display. If nil,
+	// defaults to os.Stdout.
+	LogWriter io.Writer
+
 	// Called on every write to the output stream, if it is
 	// non-nil.  This is not often needed. This is O(n^2) because
 	// it makes a new string of the entire output on every write
@@ -250,6 +254,12 @@ func WithPort(port int) SqlServerOpt {
 func WithOutputVisitor(f func(string)) SqlServerOpt {
 	return func(s *SqlServer) {
 		s.OutputVisitor = f
+	}
+}
+
+func WithLogWriter(w io.Writer) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.LogWriter = w
 	}
 }
 
@@ -304,7 +314,11 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 	go func() {
 		defer close(done)
 		wr := buildVisitorWriter(output, server.OutputVisitor)
-		multiCopyWithNamePrefix(os.Stdout, wr, stdout, server.Name)
+		logw := server.LogWriter
+		if logw == nil {
+			logw = os.Stdout
+		}
+		multiCopyWithNamePrefix(logw, wr, stdout, server.Name)
 	}()
 
 	server.RecreateCmd = func(args ...string) *exec.Cmd {
@@ -398,7 +412,11 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	go func() {
 		defer close(s.Done)
 		wr := buildVisitorWriter(s.Output, s.OutputVisitor)
-		multiCopyWithNamePrefix(os.Stdout, wr, stdout, s.Name)
+		logw := s.LogWriter
+		if logw == nil {
+			logw = os.Stdout
+		}
+		multiCopyWithNamePrefix(logw, wr, stdout, s.Name)
 	}()
 	return s.Cmd.Start()
 }

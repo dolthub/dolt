@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"database/sql"
+	"io"
 
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
@@ -235,6 +236,42 @@ func (d *DynamicResources) ApplyTemplate(s string) string {
 	return buf.String()
 }
 
+// testLogWriter is an io.Writer that sends each line to t.Log.
+// It buffers partial lines until a newline is received.
+type testLogWriter struct {
+	t   *testing.T
+	buf []byte
+}
+
+func (w *testLogWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	for {
+		i := bytes.IndexByte(w.buf, '\n')
+		if i < 0 {
+			break
+		}
+		w.t.Helper()
+		w.t.Log(string(w.buf[:i]))
+		w.buf = w.buf[i+1:]
+	}
+	return len(p), nil
+}
+
+// Flush any remaining partial line.
+func (w *testLogWriter) Flush() {
+	if len(w.buf) > 0 {
+		w.t.Helper()
+		w.t.Log(string(w.buf))
+		w.buf = w.buf[:0]
+	}
+}
+
+func newTestLogWriter(t *testing.T) io.Writer {
+	w := &testLogWriter{t: t}
+	t.Cleanup(w.Flush)
+	return w
+}
+
 func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources *DynamicResources, manualOps ...driver.SqlServerOpt) *driver.SqlServer {
 	if s == nil {
 		return nil
@@ -250,6 +287,7 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources
 			"DOLT_ENABLE_DYNAMIC_ASSERTS=true",
 		}, s.Envs...)...),
 		driver.WithName(s.Name),
+		driver.WithLogWriter(newTestLogWriter(t)),
 	}
 	if s.Port != 0 {
 		t.Fatal("cannot specify s.Port on these tests; please use {{get_port ...}} and dynamic_port: to specify a dynamic port.")
