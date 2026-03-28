@@ -39,5 +39,5 @@ jobs:
       - name: Test all
         run: |
           export DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt"
-          go test . -v
+          go test .
         working-directory: ./integration-tests/go-sql-server-driver
