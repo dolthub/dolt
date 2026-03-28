@@ -330,10 +330,11 @@ func (nbs *NomsBlockStore) startConjoinIfRequired(ctx context.Context) error {
 	if nbs.conjoinOp != nil {
 		return nil
 	}
-	if nbs.conjoinDynamicallyDisabled() {
-		return nil
-	}
 	if nbs.conjoiner.conjoinRequired(nbs.tables) {
+		if nbs.conjoinDynamicallyDisabled() {
+			nbs.logger.Info("conjoin dynamically disabled. not conjoining.")
+			return nil
+		}
 		nbs.logger.WithField("upstream_len", len(nbs.tables.upstream)).Info("beginning conjoin of database")
 		var op = &conjoinOperation{}
 		err := op.prepareConjoin(ctx, nbs.conjoiner, nbs.upstream)
@@ -2098,6 +2099,7 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+
 	// Block until there is no ongoing conjoin...
 	for nbs.conjoinOp != nil {
 		nbs.conjoinOpCond.Wait()
@@ -2105,6 +2107,30 @@ func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode)
 	if nbs.gcInProgress {
 		return errors.New("gc already in progress")
 	}
+
+	// Disable conjoin during GC. The GC process can land new
+	// table files in the store, can continue to reference them by
+	// their file id, and can later ask the store to swap
+	// exclusively to them. In order for all of that to work
+	// without too much complication, it is simplest to prevent
+	// conjoin while GC is ongoing.
+	//
+	// Doing this here does _not_ prevent conjoin from running
+	// against the OldGen during a normal generation collection,
+	// because the OldGen is not in |gcInProgress| during that
+	// operation. That's because nothing is actually being
+	// collected from the old gen - things are only being added.
+	// In that case, we don't need to refer to any specific files
+	// that have been added to the store later in the process,
+	// either in HasMany filters or in SwapTables.
+	//
+	// The end result is that BeginGC/EndGC gets called on
+	// NomsBlockStore only when we are getting ready to build a
+	// table file and swap to it. In such a case, conjoin is
+	// likely to be wasted work anyway. Most table files are about
+	// to be deleted.
+	nbs.DisableConjoin()
+
 	nbs.gcInProgress = true
 	nbs.keeperFunc = keeper
 	nbs.gcCond.Broadcast()
@@ -2120,6 +2146,7 @@ func (nbs *NomsBlockStore) EndGC(_ chunks.GCMode) {
 	for nbs.gcOutstandingReads > 0 {
 		nbs.gcCond.Wait()
 	}
+	nbs.RestoreDefaultConjoinBehavior()
 	nbs.gcInProgress = false
 	nbs.keeperFunc = nil
 	nbs.gcCond.Broadcast()
@@ -2538,6 +2565,7 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 	// record the original manifest for comparison below.
 	originalUpstream := nbs.upstream
 
+	nbs.logger.Info("ConjoinTableFiles was called")
 	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
 	newUpstream, finalCleanup, err := conjoin(ctx, nbs.fatalBehavior, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
 	if err != nil {
