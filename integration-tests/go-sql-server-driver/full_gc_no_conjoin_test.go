@@ -82,6 +82,11 @@ func TestFullGCNoOldgenConjoin(t *testing.T) {
 	var conjoinStarted, conjoinFinished atomic.Bool
 	upstreamLenOnConjoin := 0
 	server := MakeServer(t, repo, srvSettings, &ports, driver.WithOutputVisitor(func(out string) {
+		// Matching a line like:
+		// time="2026-03-28T11:57:31-07:00" level=info msg="beginning conjoin of database" database=full_gc_no_oldgen_conjoin_test generation=old pkg=store.noms upstream_len=257
+		// Extracting its upstream_len to see exactly when the conjoin was triggered.
+		// This line is logged as part of the conjoin strategy deciding to do the conjoin,
+		// and so reflects the state of the tableSet which triggers the conjoin.
 		if upstreamLenOnConjoin <= 0 && strings.Contains(out, "beginning conjoin of database") {
 			if i := strings.Index(out, "upstream_len="); i != -1 {
 				i += len("upstream_len=")
@@ -91,13 +96,16 @@ func TestFullGCNoOldgenConjoin(t *testing.T) {
 			}
 			conjoinStarted.Store(true)
 		}
+		// Matching the line:
+		// time="2026-03-28T11:57:32-07:00" level=info msg="conjoin completed successfully" database=full_gc_no_oldgen_conjoin_test generation=old new_upstream_len=2 pkg=store.noms
+		// So we can block on further operations until conjoin is done.
 		if strings.Contains(out, "conjoin completed successfully") {
 			conjoinFinished.Store(true)
 		}
 	}))
 	server.DBName = dbname
 
-	oldgendir := filepath.Join(filepath.Join(rs.Dir, dbname), "/.dolt/noms/oldgen")
+	oldgendir := filepath.Join(repo.Dir, "/.dolt/noms/oldgen")
 
 	CommitAndGCUntilConjoin(t, server, &conjoinStarted, oldgendir)
 	require.Greater(t, upstreamLenOnConjoin, 0)
@@ -114,6 +122,9 @@ func TestFullGCNoOldgenConjoin(t *testing.T) {
 	require.NoError(t, server.GracefulStop())
 	output := server.Output.String()
 	assert.Equal(t, 1, strings.Count(output, "beginning conjoin of database"))
+	// The line for triggering a conjoin on policy but not proceeding because
+	// conjoin is dynamically disabled looks like:
+	// time="2026-03-28T12:01:48-07:00" level=info msg="conjoin dynamically disabled. not conjoining." database=full_gc_no_oldgen_conjoin_test generation=old pkg=store.noms
 	assert.Equal(t, 1, strings.Count(output, "conjoin dynamically disabled"))
 	cnt = CountTableFiles(t, oldgendir)
 	assert.Equal(t, 1, cnt)
