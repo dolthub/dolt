@@ -354,10 +354,12 @@ func (nbs *NomsBlockStore) startConjoinIfRequired(ctx context.Context) error {
 	return nil
 }
 
-// Called in an asynchronous context from the goroutine that |startConjoinIfRequired| kicks off.
+// Called in an asynchronous context from the goroutine that |startConjoinIfRequired| kicks off,
+// and synchronously by ConjoinTableFiles.
 //
-// Responsible for calling conjoinOp.updateManifest under lock and dealing with its results.
-func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
+// Responsible for calling conjoinOp.apply under lock and dealing with its results.
+// Returns true if the conjoin was applied (manifest and in-memory state were updated).
+func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) (applied bool) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
@@ -373,34 +375,44 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 
 	nbs.manifestMgr.LockForUpdate()
 	defer func() {
-		err := nbs.manifestMgr.UnlockForUpdate()
-		if err != nil {
-			nbs.logger.WithError(err).Warn("during conjoin, unlocking manifest manager for update failed with error")
+		unlockErr := nbs.manifestMgr.UnlockForUpdate()
+		if unlockErr != nil {
+			nbs.logger.WithError(unlockErr).Warn("during conjoin, unlocking manifest manager for update failed with error")
 		}
 	}()
 
-	newUpstream, cleanup, err := nbs.conjoinOp.updateManifest(ctx, nbs.fatalBehavior, nbs.upstream, nbs.manifestMgr, nbs.stats)
-	if err != nil {
-		nbs.logger.WithError(err).Warn("during conjoin, updating database manifest with new table files failed")
+	// conjoinedSrc is non-nil whenever op.conjoin succeeded; close it once
+	// apply has cloned it into the new tableSet (or on any early exit).
+	if nbs.conjoinOp.conjoinedSrc != nil {
+		defer nbs.conjoinOp.conjoinedSrc.close()
 	}
 
-	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
-	if err != nil {
-		nbs.logger.WithError(err).Warn("during conjoin, updating database with new table files failed")
+	newUpstream, newTables, applyErr := nbs.conjoinOp.apply(ctx, nbs.fatalBehavior, nbs.upstream, nbs.tables, nbs.manifestMgr, nbs.stats)
+	if applyErr != nil {
+		nbs.logger.WithError(applyErr).Warn("during conjoin, applying conjoin operation failed")
 		return
+	}
+	if newTables == nil {
+		return // conjoin was not applicable
 	}
 
 	nbs.upstream = newUpstream
 	oldTables := nbs.tables
 	nbs.tables = newTables
+	// Mark as applied now: the manifest and in-memory state are updated.
+	// Even if oldTables.close() subsequently fails, the conjoin has landed.
+	applied = true
 	nbs.logger.WithField("new_upstream_len", len(nbs.tables.upstream)).Info("conjoin completed successfully")
 	err = oldTables.close()
 	if err != nil {
 		nbs.logger.WithError(err).Warn("during conjoin, closing old table files failed with error")
-		return
 	}
 
-	cleanup()
+	// Run cleanup (e.g. delete original source files) regardless of whether
+	// oldTables.close() succeeded. The conjoin has landed in the manifest and
+	// in-memory state; the old files are no longer referenced.
+	nbs.conjoinOp.cleanup()
+	return
 }
 
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
@@ -431,6 +443,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 	}
 
 	var updatedContents manifestContents
+	var newTables *tableSet
 	for {
 		ok, contents, _, ferr := nbs.manifestMgr.Fetch(ctx, nbs.stats)
 		if ferr != nil {
@@ -518,20 +531,26 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 
 		contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix, nil)
 
+		newTables, err = nbs.tables.rebase(ctx, contents.specs, sources, nbs.stats)
+		if err != nil {
+			return manifestContents{}, false, err
+		}
+
 		updatedContents, err = nbs.manifestMgr.Update(ctx, nbs.fatalBehavior, originalLock, contents, nbs.stats, nil)
 		if err != nil {
+			_ = newTables.close()
 			return manifestContents{}, false, err
 		}
 
 		if updatedContents.lock == contents.lock {
 			break
 		}
-	}
 
-	var newTables *tableSet
-	newTables, err = nbs.tables.rebase(ctx, updatedContents.specs, sources, nbs.stats)
-	if err != nil {
-		return manifestContents{}, false, err
+		// Optimistic lock failed: discard the rebase result and retry.
+		if closeErr := newTables.close(); closeErr != nil {
+			return manifestContents{}, false, closeErr
+		}
+		newTables = nil
 	}
 
 	nbs.upstream = updatedContents
@@ -2469,12 +2488,20 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 		specs:   specs,
 	}
 
+	// replace nbs.tables.upstream with gc compacted tables
+	ts, err := nbs.tables.rebase(ctx, newContents.specs, nil, nbs.stats)
+	if err != nil {
+		return fmt.Errorf("swapTables, rebase: %w", err)
+	}
+
 	upstream, err := nbs.manifestMgr.UpdateGCGen(ctx, nbs.fatalBehavior, nbs.upstream.lock, newContents, nbs.stats, nil)
 	if err != nil {
+		_ = ts.close()
 		return err
 	}
 
 	if upstream.lock != newContents.lock {
+		_ = ts.close()
 		return errors.New("concurrent manifest edit during GC, before swapTables. GC failed.")
 	}
 
@@ -2484,11 +2511,6 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	// replacing table files in it with a file into which they were conjoined.
 	nbs.hasCache.Purge()
 
-	// replace nbs.tables.upstream with gc compacted tables
-	ts, err := nbs.tables.rebase(ctx, upstream.specs, nil, nbs.stats)
-	if err != nil {
-		return fmt.Errorf("swapTables, rebase: %w", err)
-	}
 	oldTables := nbs.tables
 	nbs.tables, nbs.upstream = ts, upstream
 	err = oldTables.close()
@@ -2540,67 +2562,77 @@ func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keepe
 // files in oldgen are conjoined together.
 // Returns the hash of the newly created conjoined table file.
 func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []hash.Hash) (hash.Hash, error) {
-	nbs.mu.RLock()
-	defer nbs.mu.RUnlock()
+	// Phase 1: validate input and prepare the conjoin plan under the write lock.
+	// Mirrors startConjoinIfRequired: respect the disable flag, wait for any
+	// in-progress conjoin, then register our own operation before releasing.
+	op, err := nbs.prepareConjoinTableFiles(ctx, storageIds)
+	if err != nil || op == nil {
+		return hash.Hash{}, err
+	}
 
-	// If no storageIds provided, collect all table files from the current table set
+	// Phase 2: write the conjoined file — no lock held.
+	conjoinErr := op.conjoin(ctx, nbs.fatalBehavior, nbs.persister, nbs.stats)
+
+	// Phase 3: apply under lock via the same path used by the background conjoin.
+	// finalizeConjoin acquires the lock, calls op.apply, updates state, and
+	// clears nbs.conjoinOp (so Close() unblocks and the next conjoin can start).
+	applied := nbs.finalizeConjoin(ctx, conjoinErr)
+
+	if conjoinErr != nil {
+		return hash.Hash{}, conjoinErr
+	}
+	if !applied {
+		// Conjoin was not applicable: conjoinees were removed by a concurrent
+		// writer, or an internal error occurred (already logged by finalizeConjoin).
+		return hash.Hash{}, nil
+	}
+	return op.conjoined.name, nil
+}
+
+// prepareConjoinTableFiles validates input and sets up a conjoinOperation under
+// the write lock. Returns (op, nil) on success, or (nil, nil) when conjoining
+// is disabled or there is nothing to do.
+func (nbs *NomsBlockStore) prepareConjoinTableFiles(ctx context.Context, storageIds []hash.Hash) (*conjoinOperation, error) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	if nbs.conjoinDynamicallyDisabled() {
+		return nil, nil
+	}
+
+	// Only one conjoin may run at a time. Wait for any concurrent one to finish.
+	for nbs.conjoinOp != nil {
+		nbs.conjoinOpCond.Wait()
+	}
+	if nbs.closed {
+		return nil, errors.New("*NomsBlockStore is closed")
+	}
+
 	if len(storageIds) == 0 {
 		for _, tf := range nbs.tables.upstream {
 			storageIds = append(storageIds, tf.hash())
 		}
-
 		if len(storageIds) == 0 {
-			return hash.Hash{}, errors.New("no table files to conjoin")
+			return nil, errors.New("no table files to conjoin")
 		}
 	} else {
-		// Validate user input
 		for _, storageId := range storageIds {
 			_, found := nbs.findTableSpec(storageId)
 			if !found {
-				return hash.Hash{}, errors.New("storage file not found: " + storageId.String())
+				return nil, errors.New("storage file not found: " + storageId.String())
 			}
 		}
 	}
 
-	// record the original manifest for comparison below.
-	originalUpstream := nbs.upstream
-
-	nbs.logger.Info("ConjoinTableFiles was called")
 	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
-	newUpstream, finalCleanup, err := conjoin(ctx, nbs.fatalBehavior, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
-	if err != nil {
-		return hash.Hash{}, err
+	op := &conjoinOperation{}
+	if err := op.prepareConjoin(ctx, strategy, nbs.upstream); err != nil {
+		return nil, err
 	}
 
-	// Update the in-memory state
-	nbs.upstream = newUpstream
-	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	nbs.tables = newTables
-
-	// Cleanup of original files. This is destructive, so we only do it when the rebase doesn't error.
-	// Also note that nothing below here actually makes any changes to the db, so we can do the cleanup now.
-	finalCleanup()
-
-	// Find the new conjoined table file hash from the updated manifest
-	// Since we removed the old files and added one new file, we need to find which one is new
-	// Create a set of original spec names for comparison
-	originalSpecSet := make(map[hash.Hash]bool)
-	for _, spec := range originalUpstream.specs {
-		originalSpecSet[spec.name] = true
-	}
-
-	var conjoinedHash hash.Hash
-	for _, spec := range newUpstream.specs {
-		if !originalSpecSet[spec.name] {
-			conjoinedHash = spec.name
-			break
-		}
-	}
-
-	return conjoinedHash, nil
+	// Register the operation so that Close() and other callers block on it.
+	nbs.conjoinOp = op
+	return op, nil
 }
 
 // findTableSpec finds a table spec by hash in the current manifest. This will ignore novel tables, as it's not

@@ -39,7 +39,7 @@ type conjoinStrategy interface {
 	conjoinRequired(ts *tableSet) bool
 
 	// chooseConjoinees chooses which chunkSources to conjoin from |sources|
-	chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error)
+	chooseConjoinees(specs []tableSpec) (conjoinees []tableSpec, err error)
 }
 
 type inlineConjoiner struct {
@@ -55,9 +55,9 @@ func (c inlineConjoiner) conjoinRequired(ts *tableSet) bool {
 // chooseConjoinees implements conjoinStrategy. Current approach is to choose the smallest N tables which,
 // when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
 // We also keep taking table files until we get below maxTables.
-func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []tableSpec, err error) {
 	if c.maxTables < 2 {
-		return nil, upstream, fmt.Errorf("runtime error: cannot conjoin with maxTables set to %d", c.maxTables)
+		return nil, fmt.Errorf("runtime error: cannot conjoin with maxTables set to %d", c.maxTables)
 	}
 	sorted := make([]tableSpec, len(upstream))
 	copy(sorted, upstream)
@@ -78,7 +78,7 @@ func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, kee
 		sum += next
 		i++
 	}
-	return sorted[:i], sorted[i:], nil
+	return sorted[:i], nil
 }
 
 type noopConjoiner struct{}
@@ -89,8 +89,7 @@ func (c noopConjoiner) conjoinRequired(ts *tableSet) bool {
 	return false
 }
 
-func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees, keepers []tableSpec, err error) {
-	keepers = sources
+func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees []tableSpec, err error) {
 	return
 }
 
@@ -105,23 +104,17 @@ func (s *specificFilesConjoiner) conjoinRequired(ts *tableSet) bool {
 	return len(s.targetStorageIds) > 0
 }
 
-func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
-	// Convert target storage IDs to a set for efficient lookup
+func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees []tableSpec, err error) {
 	targetSet := make(map[hash.Hash]bool)
 	for _, id := range s.targetStorageIds {
 		targetSet[id] = true
 	}
-
-	// Separate specs into conjoinees and keepers
 	for _, spec := range specs {
 		if targetSet[spec.name] {
 			conjoinees = append(conjoinees, spec)
-		} else {
-			keepers = append(keepers, spec)
 		}
 	}
-
-	return conjoinees, keepers, nil
+	return conjoinees, nil
 }
 
 // A conjoinOperation is a multi-step process that a NomsBlockStore runs to
@@ -156,6 +149,11 @@ type conjoinOperation struct {
 	conjoinees []tableSpec
 	// The tableSpec for the conjoined file.
 	conjoined tableSpec
+	// An open chunkSource for the conjoined file. Held open so that
+	// finalizeConjoin can pass it directly to the tableSet rebase as a
+	// pre-opened source, avoiding a redundant round-trip through the
+	// table persister. The caller of |conjoin| is responsible for closing it.
+	conjoinedSrc chunkSource
 }
 
 // Compute what we will conjoin and prepare to do it. This should be
@@ -165,7 +163,7 @@ func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStr
 		upstream, _ = upstream.removeAppendixSpecs()
 	}
 	var err error
-	op.conjoinees, _, err = strat.chooseConjoinees(upstream.specs)
+	op.conjoinees, err = strat.chooseConjoinees(upstream.specs)
 	if err != nil {
 		return err
 	}
@@ -175,111 +173,111 @@ func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStr
 // Actually runs persister.ConjoinAll, after conjoinees are chosen by
 // |prepareConjoin|.  This should be done asynchronously by
 // NomsBlockStore.
+//
+// On success, op.conjoinedSrc is set to an open chunkSource for the
+// conjoined file. The caller is responsible for closing it.
 func (op *conjoinOperation) conjoin(ctx context.Context, behavior dherrors.FatalBehavior, persister tablePersister, stats *Stats) error {
 	var err error
-	op.conjoined, op.cleanup, err = conjoinTables(ctx, behavior, op.conjoinees, persister, stats)
+	op.conjoined, op.conjoinedSrc, op.cleanup, err = conjoinTables(ctx, behavior, op.conjoinees, persister, stats)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// Land the update in the conjoin result in the manifest as an update
-// which removes the conjoinees and adds the conjoined. Only updates
-// the manifest by adding the conjoined file if all conjoinees are
-// still present in the manifest.
-//
-// Whether the conjoined file lands or not, this returns a nil error
-// if it runs to completion successfully and it returns a cleanupFunc
-// which should be run.
-func (op *conjoinOperation) updateManifest(ctx context.Context, behavior dherrors.FatalBehavior, upstream manifestContents, mm manifestUpdater, stats *Stats) (manifestContents, cleanupFunc, error) {
+// computeNewContents returns the manifest contents that would result from applying
+// this conjoin operation to |upstream|. Returns (newContents, true) if the conjoin
+// can be applied — all conjoinees are present in upstream. Returns (upstream, false)
+// if the conjoin cannot be applied (conjoinees are missing or already replaced).
+func (op *conjoinOperation) computeNewContents(upstream manifestContents) (manifestContents, bool) {
+	if len(op.conjoinees) == 0 {
+		return upstream, false
+	}
 	conjoineeSet := toSpecSet(op.conjoinees)
+	upstreamSet := toSpecSet(upstream.specs)
+	for h := range conjoineeSet {
+		if _, ok := upstreamSet[h]; !ok {
+			return upstream, false
+		}
+	}
+	newSpecs := make([]tableSpec, len(upstream.specs)-len(conjoineeSet)+1)
+	ins := 0
+	for i, s := range upstream.specs {
+		if _, ok := conjoineeSet[s.name]; !ok {
+			newSpecs[ins] = s
+			ins++
+		}
+		if i == len(upstream.appendix) {
+			newSpecs[ins] = op.conjoined
+			ins++
+		}
+	}
+	return manifestContents{
+		nbfVers:  upstream.nbfVers,
+		root:     upstream.root,
+		lock:     generateLockHash(upstream.root, newSpecs, upstream.appendix, nil),
+		gcGen:    upstream.gcGen,
+		specs:    newSpecs,
+		appendix: upstream.appendix,
+	}, true
+}
+
+// apply atomically builds a new tableSet and updates the manifest to replace the
+// conjoinees with the conjoined file. It retries on optimistic lock failures,
+// re-building the tableSet each time.
+//
+// Returns (newUpstream, newTables, nil) when the conjoin was applied successfully.
+// The caller must call op.cleanup() after assigning the returned newTables to
+// nbs.tables and closing the replaced *tableSet.
+//
+// Returns (upstream, nil, nil) when the conjoin is not applicable — the conjoinees
+// are no longer all present in the manifest (e.g. a concurrent writer already
+// handled them). No manifest or table-set changes are made.
+//
+// Returns (manifestContents{}, nil, err) on any other error.
+func (op *conjoinOperation) apply(ctx context.Context, behavior dherrors.FatalBehavior, upstream manifestContents, ts *tableSet, mm manifestUpdater, stats *Stats) (newUpstream manifestContents, newTables *tableSet, err error) {
+	// If op.conjoin succeeded, conjoinedSrc is an open handle for the new file.
+	// Pass it as a pre-opened source so the rebase can clone it rather than
+	// calling p.Open() again. The nil guard handles the case where apply is
+	// invoked without going through op.conjoin (e.g. from the test harness).
+	var sources chunkSourceSet
+	if op.conjoinedSrc != nil {
+		sources = chunkSourceSet{op.conjoined.name: op.conjoinedSrc}
+	}
+
 	for {
-		upstreamSet := toSpecSet(upstream.specs)
-		canApply := true
-		alreadyApplied := false
-		for h := range conjoineeSet {
-			if _, ok := upstreamSet[h]; !ok {
-				canApply = false
-				break
-			}
+		newContents, canApply := op.computeNewContents(upstream)
+		if !canApply {
+			return upstream, nil, nil
 		}
-		if canApply {
-			newSpecs := make([]tableSpec, len(upstream.specs)-len(conjoineeSet)+1)
-			ins := 0
-			for i, s := range upstream.specs {
-				if _, ok := conjoineeSet[s.name]; !ok {
-					newSpecs[ins] = s
-					ins += 1
-				}
-				if i == len(upstream.appendix) {
-					newSpecs[ins] = op.conjoined
-					ins += 1
-				}
-			}
-			newContents := manifestContents{
-				nbfVers:  upstream.nbfVers,
-				root:     upstream.root,
-				lock:     generateLockHash(upstream.root, newSpecs, upstream.appendix, nil),
-				gcGen:    upstream.gcGen,
-				specs:    newSpecs,
-				appendix: upstream.appendix,
-			}
 
-			updated, err := mm.Update(ctx, behavior, upstream.lock, newContents, stats, nil)
-			if err != nil {
-				return manifestContents{}, func() {}, err
-			}
-
-			if newContents.lock == updated.lock {
-				return updated, op.cleanup, nil
-			}
-
-			// Go back around the loop, trying to apply against the new upstream.
-			upstream = updated
-		} else {
-			if _, ok := upstreamSet[op.conjoined.name]; ok {
-				alreadyApplied = true
-			}
-			if !alreadyApplied {
-				// In theory we could delete the conjoined
-				// table file here, since its conjoinees are
-				// no longer in the manifest and it itself is
-				// not in the manifest either.
-				//
-				// tablePersister does not expose a
-				// functionality to prune it, and it will get
-				// picked up by GC anyway, so we do not do
-				// that here.
-				return upstream, func() {}, nil
-			} else {
-				return upstream, func() {}, nil
-			}
+		newTables, err = ts.rebase(ctx, newContents.specs, sources, stats)
+		if err != nil {
+			return manifestContents{}, nil, err
 		}
+
+		var updatedContents manifestContents
+		updatedContents, err = mm.Update(ctx, behavior, upstream.lock, newContents, stats, nil)
+		if err != nil {
+			_ = newTables.close()
+			return manifestContents{}, nil, err
+		}
+
+		if newContents.lock == updatedContents.lock {
+			return updatedContents, newTables, nil
+		}
+
+		// Optimistic lock failed: the manifest was moved by a concurrent writer.
+		// Discard the tableSet we just built and retry against the new upstream.
+		if closeErr := newTables.close(); closeErr != nil {
+			return manifestContents{}, nil, closeErr
+		}
+		newTables = nil
+		upstream = updatedContents
 	}
 }
 
-// conjoin attempts to use |p| to conjoin some number of tables referenced
-// by |upstream|, allowing it to update |mm| with a new, smaller, set of tables
-// that references precisely the same set of chunks. Conjoin() may not
-// actually conjoin any upstream tables, usually because some out-of-
-// process actor has already landed a conjoin of its own. Callers must
-// handle this, likely by rebasing against upstream and re-evaluating the
-// situation.
-func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, cleanupFunc, error) {
-	var op conjoinOperation
-	err := op.prepareConjoin(ctx, s, upstream)
-	if err != nil {
-		return manifestContents{}, nil, err
-	}
-	err = op.conjoin(ctx, behavior, p, stats)
-	if err != nil {
-		return manifestContents{}, nil, err
-	}
-	return op.updateManifest(ctx, behavior, upstream, mm, stats)
-}
-
-func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, cleanup cleanupFunc, err error) {
+func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, conjoinedSrc chunkSource, cleanup cleanupFunc, err error) {
 	eg, ectx := errgroup.WithContext(ctx)
 	toConjoin := make(chunkSources, len(conjoinees))
 
@@ -298,23 +296,25 @@ func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoin
 		}
 	}()
 	if err = eg.Wait(); err != nil {
-		return tableSpec{}, nil, err
+		return tableSpec{}, nil, nil, err
 	}
 
 	t1 := time.Now()
 
-	conjoinedSrc, cleanup, err := p.ConjoinAll(ctx, behavior, toConjoin, stats)
+	conjoinedSrc, cleanup, err = p.ConjoinAll(ctx, behavior, toConjoin, stats)
 	if err != nil {
-		return tableSpec{}, nil, err
+		return tableSpec{}, nil, nil, err
 	}
-	defer conjoinedSrc.close()
+	// conjoinedSrc is returned open; the caller is responsible for closing it
+	// after the table set rebase has cloned from it.
 
 	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))
 
 	cnt, err := conjoinedSrc.count()
 	if err != nil {
-		return tableSpec{}, nil, err
+		conjoinedSrc.close()
+		return tableSpec{}, nil, nil, err
 	}
 
 	stats.ChunksPerConjoin.Sample(uint64(cnt))
@@ -322,9 +322,10 @@ func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoin
 	h := conjoinedSrc.hash()
 	cnt, err = conjoinedSrc.count()
 	if err != nil {
-		return tableSpec{}, nil, err
+		conjoinedSrc.close()
+		return tableSpec{}, nil, nil, err
 	}
-	return tableSpec{h, cnt}, cleanup, nil
+	return tableSpec{h, cnt}, conjoinedSrc, cleanup, nil
 }
 
 func toSpecs(srcs chunkSources) ([]tableSpec, error) {

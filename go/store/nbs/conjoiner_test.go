@@ -179,6 +179,32 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 		return
 	}
 
+	// runConjoin is the test-internal replacement for the removed conjoin()
+	// free function. It prepares and executes the conjoin operation, applying
+	// the result against an empty tableSet backed by |p|.
+	runConjoin := func(strategy conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tableFilePersister) error {
+		ctx := context.Background()
+		var op conjoinOperation
+		if err := op.prepareConjoin(ctx, strategy, upstream); err != nil {
+			return err
+		}
+		if err := op.conjoin(ctx, dherrors.FatalBehaviorError, p, stats); err != nil {
+			return err
+		}
+		defer op.conjoinedSrc.close()
+		ts := newTableSet(p, &UnlimitedQuotaProvider{})
+		defer ts.close()
+		_, newTables, err := op.apply(ctx, dherrors.FatalBehaviorError, upstream, ts, mm, stats)
+		if err != nil {
+			return err
+		}
+		if newTables != nil {
+			defer newTables.close()
+			op.cleanup()
+		}
+		return nil
+	}
+
 	// Returns the chunk counts of the tables in ts.compacted & ts.upstream in ascending order
 	getSortedSizes := func(specs []tableSpec) (sorted []uint32) {
 		all := append([]tableSpec{}, specs...)
@@ -265,7 +291,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
-				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
+				err := runConjoin(inlineConjoiner{c.maxTables}, upstream, fm, p)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -286,7 +312,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
 				}}
-				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				err := runConjoin(inlineConjoiner{c.maxTables}, upstream, u, p)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -306,7 +332,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
 				}}
-				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				err := runConjoin(inlineConjoiner{c.maxTables}, upstream, u, p)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -349,7 +375,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
 
-				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
+				err := runConjoin(inlineConjoiner{c.maxTables}, upstream, fm, p)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -373,7 +399,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
 				}}
 
-				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				err := runConjoin(inlineConjoiner{c.maxTables}, upstream, u, p)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -398,7 +424,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
 				}}
 
-				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				err := runConjoin(inlineConjoiner{c.maxTables}, upstream, u, p)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -422,7 +448,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
 				}}
-				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				err := runConjoin(inlineConjoiner{c.maxTables}, upstream, u, p)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -446,7 +472,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
 				}}
 
-				_, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				err := runConjoin(inlineConjoiner{c.maxTables}, upstream, u, p)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
