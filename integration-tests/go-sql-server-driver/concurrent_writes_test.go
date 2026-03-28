@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -107,7 +108,12 @@ func TestConcurrentWrites(t *testing.T) {
 				}
 				atomic.AddUint32(&nextInt, 1)
 				_, err = conn.ExecContext(ctx, fmt.Sprintf("CALL DOLT_COMMIT('-Am', 'insert %s')", key))
-				if err != nil {
+				if err != nil && !strings.Contains(err.Error(), "nothing to commit") {
+					// Technically we can get "nothing to commit" because of how DOLT_COMMIT works.
+					// It first commits this transaction to the working set and then commits the
+					// merged working set as a dolt commit.
+					//
+					// If we ever fix DOLT_COMMIT, we should fix this exception here as well.
 					return err
 				}
 				j += 1
