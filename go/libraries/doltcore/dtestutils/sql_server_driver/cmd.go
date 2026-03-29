@@ -218,10 +218,7 @@ type SqlServer struct {
 	// defaults to os.Stdout.
 	LogWriter io.Writer
 
-	// Called on every write to the output stream, if it is
-	// non-nil.  This is not often needed. This is O(n^2) because
-	// it makes a new string of the entire output on every write
-	// to the output.
+	// If non-nil, called with each complete line of server output.
 	OutputVisitor func(string)
 }
 
@@ -313,12 +310,11 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 
 	go func() {
 		defer close(done)
-		wr := buildVisitorWriter(output, server.OutputVisitor)
 		logw := server.LogWriter
 		if logw == nil {
 			logw = os.Stdout
 		}
-		multiCopyWithNamePrefix(logw, wr, stdout, server.Name)
+		multiCopyWithNamePrefix(logw, output, stdout, server.Name, server.OutputVisitor)
 	}()
 
 	server.RecreateCmd = func(args ...string) *exec.Cmd {
@@ -345,9 +341,10 @@ func (s *SqlServer) ErrorStop() error {
 	return s.Cmd.Wait()
 }
 
-func multiCopyWithNamePrefix(stdout, captured io.Writer, in io.Reader, name string) {
+func multiCopyWithNamePrefix(stdout, captured io.Writer, in io.Reader, name string, visitor func(string)) {
 	reader := bufio.NewReader(in)
 	multiOut := io.MultiWriter(stdout, captured)
+	var lineBuf []byte
 	wantsPrefix := true
 	for {
 		line, isPrefix, err := reader.ReadLine()
@@ -361,33 +358,24 @@ func multiCopyWithNamePrefix(stdout, captured io.Writer, in io.Reader, name stri
 		}
 		multiOut.Write(line)
 		if isPrefix {
+			if visitor != nil {
+				lineBuf = append(lineBuf, line...)
+			}
 			wantsPrefix = false
 		} else {
 			multiOut.Write([]byte("\n"))
+			if visitor != nil {
+				if lineBuf != nil {
+					lineBuf = append(lineBuf, line...)
+					visitor(string(lineBuf))
+					lineBuf = nil
+				} else {
+					visitor(string(line))
+				}
+			}
 			wantsPrefix = true
 		}
 	}
-}
-
-func buildVisitorWriter(buf *bytes.Buffer, visitor func(string)) io.Writer {
-	if visitor == nil {
-		return buf
-	}
-	return &visitorWriter{
-		f:   visitor,
-		buf: buf,
-	}
-}
-
-type visitorWriter struct {
-	f   func(string)
-	buf *bytes.Buffer
-}
-
-func (w *visitorWriter) Write(bs []byte) (int, error) {
-	n, err := w.buf.Write(bs)
-	w.f(w.buf.String())
-	return n, err
 }
 
 func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
@@ -411,12 +399,11 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	s.Done = make(chan struct{})
 	go func() {
 		defer close(s.Done)
-		wr := buildVisitorWriter(s.Output, s.OutputVisitor)
 		logw := s.LogWriter
 		if logw == nil {
 			logw = os.Stdout
 		}
-		multiCopyWithNamePrefix(logw, wr, stdout, s.Name)
+		multiCopyWithNamePrefix(logw, s.Output, stdout, s.Name, s.OutputVisitor)
 	}()
 	return s.Cmd.Start()
 }

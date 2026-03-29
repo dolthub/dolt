@@ -23,10 +23,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
-	"syscall"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,10 +52,11 @@ func TestAutoGC(t *testing.T) {
 					s.Enable = true
 					s.Archive = sa.archive
 					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, numCommits)
-					assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
-					assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "dangling references requested during GC")
+					assert.Contains(t, s.PrimaryServer.Output.String(), "Successfully completed auto GC")
+					assert.NotContains(t, s.PrimaryServer.Output.String(), "dangling references requested during GC")
 					t.Logf("repo size before final gc: %v", enabled_16)
 					t.Logf("repo size after final gc: %v", final_16)
+					t.Logf("primary auto GC count: %d", strings.Count(s.PrimaryServer.Output.String(), "Successfully completed auto GC"))
 				})
 				t.Run("ClusterReplication", func(t *testing.T) {
 					t.Parallel()
@@ -67,15 +65,17 @@ func TestAutoGC(t *testing.T) {
 					s.Replicate = true
 					s.Archive = sa.archive
 					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, numCommits)
-					assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
-					assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
-					assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "dangling references requested during GC")
-					assert.NotContains(t, string(s.StandbyServer.Output.Bytes()), "dangling references requested during GC")
+					assert.Contains(t, s.PrimaryServer.Output.String(), "Successfully completed auto GC")
+					assert.Contains(t, s.StandbyServer.Output.String(), "Successfully completed auto GC")
+					assert.NotContains(t, s.PrimaryServer.Output.String(), "dangling references requested during GC")
+					assert.NotContains(t, s.StandbyServer.Output.String(), "dangling references requested during GC")
 					t.Logf("repo size before final gc: %v", enabled_16)
 					t.Logf("repo size after final gc: %v", final_16)
 					rs, err := GetRepoSize(s.StandbyDir)
 					require.NoError(t, err)
 					t.Logf("standby size: %v", rs)
+					t.Logf("primary auto GC count: %d", strings.Count(s.PrimaryServer.Output.String(), "Successfully completed auto GC"))
+					t.Logf("standby auto GC count: %d", strings.Count(s.StandbyServer.Output.String(), "Successfully completed auto GC"))
 				})
 				t.Run("PushToRemotesAPI", func(t *testing.T) {
 					t.Parallel()
@@ -84,10 +84,12 @@ func TestAutoGC(t *testing.T) {
 					s.EnableRemotesAPI = true
 					s.Archive = sa.archive
 					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, 2)
-					assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
-					assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
-					assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "dangling references requested during GC")
-					assert.NotContains(t, string(s.StandbyServer.Output.Bytes()), "dangling references requested during GC")
+					assert.Contains(t, s.PrimaryServer.Output.String(), "Successfully completed auto GC")
+					assert.Contains(t, s.StandbyServer.Output.String(), "Successfully completed auto GC")
+					assert.NotContains(t, s.PrimaryServer.Output.String(), "dangling references requested during GC")
+					assert.NotContains(t, s.StandbyServer.Output.String(), "dangling references requested during GC")
+					t.Logf("primary auto GC count: %d", strings.Count(s.PrimaryServer.Output.String(), "Successfully completed auto GC"))
+					t.Logf("standby auto GC count: %d", strings.Count(s.StandbyServer.Output.String(), "Successfully completed auto GC"))
 				})
 			})
 		}
@@ -96,7 +98,7 @@ func TestAutoGC(t *testing.T) {
 		t.Parallel()
 		var s AutoGCTest
 		disabled, final_disabled = runAutoGCTest(t, &s, numStatements, 128)
-		assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
+		assert.NotContains(t, s.PrimaryServer.Output.String(), "Successfully completed auto GC")
 		t.Logf("repo size before final gc: %v", disabled)
 		t.Logf("repo size after final gc: %v", final_disabled)
 	})
@@ -196,6 +198,7 @@ cluster:
 	require.NoError(t, err)
 
 	server := MakeServer(t, repo, &driver.Server{
+		Name:        "primary",
 		Args:        []string{"--config", "server.yaml"},
 		DynamicPort: "primary_server_port",
 		Envs:        []string{"DOLT_REMOTE_PASSWORD=insecurepassword"},
@@ -266,6 +269,7 @@ cluster:
 	require.NoError(t, err)
 
 	server := MakeServer(t, repo, &driver.Server{
+		Name:        "standby",
 		Args:        []string{"--config", "server.yaml"},
 		DynamicPort: "standby_server_port",
 	}, s.Ports)
@@ -356,17 +360,17 @@ func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery i
 	// operations on an auto GC server and
 	// ensure that the database is getting
 	// collected.
-	ctx := context.Background()
+	ctx := t.Context()
 	s.Setup(ctx, t)
 
 	var pushAttempts, pushSuccesses int
 
-	for i := 0; i < numStatements; i++ {
+	for i := range numStatements {
 		stmt := autoGCInsertStatement(i)
 		conn, err := s.PrimaryDB.Conn(ctx)
 		_, err = conn.ExecContext(ctx, stmt)
 		require.NoError(t, err)
-		if i%commitEvery == 0 {
+		if (i+1)%commitEvery == 0 {
 			_, err = conn.ExecContext(ctx, "call dolt_commit('-am', 'insert from "+strconv.Itoa(i*1024)+"')")
 			require.NoError(t, err)
 			if s.EnableRemotesAPI {
@@ -392,24 +396,7 @@ func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery i
 	require.NoError(t, err)
 	conn, err := s.PrimaryDB.Conn(ctx)
 	require.NoError(t, err)
-
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer close(done)
-		defer wg.Done()
-		_, err = conn.ExecContext(ctx, "call dolt_gc('--full')")
-	}()
-	go func() {
-		defer wg.Done()
-		select {
-		case <-done:
-		case <-time.After(1 * time.Minute):
-			s.PrimaryServer.Cmd.Process.Signal(syscall.SIGQUIT)
-		}
-	}()
-	wg.Wait()
+	_, err = conn.ExecContext(ctx, "call dolt_gc('--full')")
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 	after, err := GetRepoSize(s.PrimaryDir)
