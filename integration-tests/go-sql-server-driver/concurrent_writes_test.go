@@ -71,19 +71,12 @@ func TestConcurrentWrites(t *testing.T) {
 	}()
 
 	eg, ctx := errgroup.WithContext(ctx)
-	start := time.Now()
-
 	nextInt := uint32(0)
 	const numWriters = 32
-	const testDuration = 8 * time.Second
 	startCh := make(chan struct{})
+	readyCh := make(chan struct{})
 	for i := range numWriters {
 		eg.Go(func() error {
-			select {
-			case <-startCh:
-			case <-ctx.Done():
-				return nil
-			}
 			db, err := server.DB(driver.Connection{User: "root"})
 			require.NoError(t, err)
 			defer db.Close()
@@ -93,11 +86,18 @@ func TestConcurrentWrites(t *testing.T) {
 				return err
 			}
 			defer conn.Close()
-			j := 0
-			for {
-				if time.Since(start) > testDuration {
-					return nil
-				}
+			select {
+			case readyCh <- struct{}{}:
+			case <-ctx.Done():
+				return nil
+			}
+			select {
+			case <-startCh:
+			case <-ctx.Done():
+				return nil
+			}
+			// Each thread writes 16.
+			for j := range 16 {
 				if ctx.Err() != nil {
 					return nil
 				}
@@ -116,13 +116,22 @@ func TestConcurrentWrites(t *testing.T) {
 					// If we ever fix DOLT_COMMIT, we should fix this exception here as well.
 					return err
 				}
-				j += 1
 			}
+			return nil
 		})
 	}
-	time.Sleep(500 * time.Millisecond)
+	for range numWriters {
+		select {
+		case <-readyCh:
+		case <-ctx.Done():
+			// This will fail.
+			require.NoError(t, eg.Wait())
+			t.FailNow()
+		}
+	}
 	close(startCh)
 	require.NoError(t, eg.Wait())
+	require.Equal(t, 512, int(nextInt))
 	t.Logf("wrote %d", nextInt)
 	ctx = t.Context()
 	conn, err := db.Conn(ctx)
@@ -133,8 +142,8 @@ func TestConcurrentWrites(t *testing.T) {
 	var i int
 	err = conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM data").Scan(&i)
 	require.NoError(t, err)
-	t.Logf("read %d", i)
+	require.Equal(t, int(nextInt), i)
 	err = conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM dolt_log").Scan(&i)
 	require.NoError(t, err)
-	t.Logf("created %d commits", i)
+	t.Logf("ended with %d commits", i)
 }
