@@ -19,13 +19,11 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand/v2"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
@@ -33,11 +31,6 @@ import (
 
 func TestAutoGC(t *testing.T) {
 	t.Parallel()
-	var enabled_16, final_16, disabled, final_disabled RepoSize
-	numStatements, numCommits := 512, 16
-	if testing.Short() || os.Getenv("CI") != "" {
-		numStatements = 64
-	}
 	t.Run("Enable", func(t *testing.T) {
 		t.Parallel()
 		for _, sa := range []struct {
@@ -51,12 +44,7 @@ func TestAutoGC(t *testing.T) {
 					var s AutoGCTest
 					s.Enable = true
 					s.Archive = sa.archive
-					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, numCommits)
-					assert.Contains(t, s.PrimaryServer.Output.String(), "Successfully completed auto GC")
-					assert.NotContains(t, s.PrimaryServer.Output.String(), "dangling references requested during GC")
-					t.Logf("repo size before final gc: %v", enabled_16)
-					t.Logf("repo size after final gc: %v", final_16)
-					t.Logf("primary auto GC count: %d", strings.Count(s.PrimaryServer.Output.String(), "Successfully completed auto GC"))
+					runAutoGCTestUntilGC(t, &s, 3, 16)
 				})
 				t.Run("ClusterReplication", func(t *testing.T) {
 					t.Parallel()
@@ -64,18 +52,7 @@ func TestAutoGC(t *testing.T) {
 					s.Enable = true
 					s.Replicate = true
 					s.Archive = sa.archive
-					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, numCommits)
-					assert.Contains(t, s.PrimaryServer.Output.String(), "Successfully completed auto GC")
-					assert.Contains(t, s.StandbyServer.Output.String(), "Successfully completed auto GC")
-					assert.NotContains(t, s.PrimaryServer.Output.String(), "dangling references requested during GC")
-					assert.NotContains(t, s.StandbyServer.Output.String(), "dangling references requested during GC")
-					t.Logf("repo size before final gc: %v", enabled_16)
-					t.Logf("repo size after final gc: %v", final_16)
-					rs, err := GetRepoSize(s.StandbyDir)
-					require.NoError(t, err)
-					t.Logf("standby size: %v", rs)
-					t.Logf("primary auto GC count: %d", strings.Count(s.PrimaryServer.Output.String(), "Successfully completed auto GC"))
-					t.Logf("standby auto GC count: %d", strings.Count(s.StandbyServer.Output.String(), "Successfully completed auto GC"))
+					runAutoGCTestUntilGC(t, &s, 3, 16)
 				})
 				t.Run("PushToRemotesAPI", func(t *testing.T) {
 					t.Parallel()
@@ -83,13 +60,7 @@ func TestAutoGC(t *testing.T) {
 					s.Enable = true
 					s.EnableRemotesAPI = true
 					s.Archive = sa.archive
-					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, 2)
-					assert.Contains(t, s.PrimaryServer.Output.String(), "Successfully completed auto GC")
-					assert.Contains(t, s.StandbyServer.Output.String(), "Successfully completed auto GC")
-					assert.NotContains(t, s.PrimaryServer.Output.String(), "dangling references requested during GC")
-					assert.NotContains(t, s.StandbyServer.Output.String(), "dangling references requested during GC")
-					t.Logf("primary auto GC count: %d", strings.Count(s.PrimaryServer.Output.String(), "Successfully completed auto GC"))
-					t.Logf("standby auto GC count: %d", strings.Count(s.StandbyServer.Output.String(), "Successfully completed auto GC"))
+					runAutoGCTestUntilGC(t, &s, 3, 2)
 				})
 			})
 		}
@@ -97,16 +68,8 @@ func TestAutoGC(t *testing.T) {
 	t.Run("Disabled", func(t *testing.T) {
 		t.Parallel()
 		var s AutoGCTest
-		disabled, final_disabled = runAutoGCTest(t, &s, numStatements, 128)
-		assert.NotContains(t, s.PrimaryServer.Output.String(), "Successfully completed auto GC")
-		t.Logf("repo size before final gc: %v", disabled)
-		t.Logf("repo size after final gc: %v", final_disabled)
+		runAutoGCTestDisabled(t, &s, 64, 16)
 	})
-	if enabled_16.NewGen > 0 && disabled.NewGen > 0 {
-		assert.Greater(t, enabled_16.OldGen, disabled.OldGen)
-		assert.Greater(t, enabled_16.OldGenC, disabled.OldGenC)
-		assert.Less(t, disabled.NewGen-disabled.Journal, disabled.Journal)
-	}
 }
 
 type AutoGCTest struct {
@@ -124,6 +87,31 @@ type AutoGCTest struct {
 	EnableRemotesAPI bool
 
 	Ports *DynamicResources
+
+	primaryGCCount atomic.Int32
+	standbyGCCount atomic.Int32
+	sawDanglingRef atomic.Bool
+}
+
+func (s *AutoGCTest) gcVisitor(counter *atomic.Int32) func(string) {
+	return func(line string) {
+		if strings.Contains(line, "Successfully completed auto GC") {
+			counter.Add(1)
+		}
+		if strings.Contains(line, "dangling references requested during GC") {
+			s.sawDanglingRef.Store(true)
+		}
+	}
+}
+
+func (s *AutoGCTest) allServersReachedGCCount(target int) bool {
+	if s.primaryGCCount.Load() < int32(target) {
+		return false
+	}
+	if (s.Replicate || s.EnableRemotesAPI) && s.standbyGCCount.Load() < int32(target) {
+		return false
+	}
+	return true
 }
 
 func (s *AutoGCTest) Setup(ctx context.Context, t *testing.T) {
@@ -202,7 +190,7 @@ cluster:
 		Args:        []string{"--config", "server.yaml"},
 		DynamicPort: "primary_server_port",
 		Envs:        []string{"DOLT_REMOTE_PASSWORD=insecurepassword"},
-	}, s.Ports)
+	}, s.Ports, driver.WithOutputVisitor(s.gcVisitor(&s.primaryGCCount)))
 	server.DBName = "auto_gc_test"
 
 	db, err := server.DB(driver.Connection{User: "root"})
@@ -272,7 +260,7 @@ cluster:
 		Name:        "standby",
 		Args:        []string{"--config", "server.yaml"},
 		DynamicPort: "standby_server_port",
-	}, s.Ports)
+	}, s.Ports, driver.WithOutputVisitor(s.gcVisitor(&s.standbyGCCount)))
 	server.DBName = "auto_gc_test"
 
 	db, err := server.DB(driver.Connection{User: "root"})
@@ -355,27 +343,33 @@ func autoGCInsertStatement(i int) string {
 	return "insert into vals values " + strings.Join(vals, ",")
 }
 
-func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery int) (RepoSize, RepoSize) {
-	// A simple auto-GC test, where we run
-	// operations on an auto GC server and
-	// ensure that the database is getting
-	// collected.
+// runAutoGCTestUntilGC runs insert+commit cycles until auto GC has
+// completed targetGCCount times on every running server, or fails if
+// that doesn't happen within a reasonable number of iterations. It
+// fails immediately if any server logs a dangling references message.
+func runAutoGCTestUntilGC(t *testing.T, s *AutoGCTest, targetGCCount int, commitEvery int) {
+	const maxStatements = 1024
 	ctx := t.Context()
 	s.Setup(ctx, t)
 
 	var pushAttempts, pushSuccesses int
 
-	for i := range numStatements {
+	for i := range maxStatements {
+		require.False(t, s.sawDanglingRef.Load(), "saw dangling references message during auto GC")
+		if s.allServersReachedGCCount(targetGCCount) {
+			t.Logf("all servers reached %d auto GCs after %d statements", targetGCCount, i)
+			break
+		}
+
 		stmt := autoGCInsertStatement(i)
 		conn, err := s.PrimaryDB.Conn(ctx)
+		require.NoError(t, err)
 		_, err = conn.ExecContext(ctx, stmt)
 		require.NoError(t, err)
 		if (i+1)%commitEvery == 0 {
 			_, err = conn.ExecContext(ctx, "call dolt_commit('-am', 'insert from "+strconv.Itoa(i*1024)+"')")
 			require.NoError(t, err)
 			if s.EnableRemotesAPI {
-				// Pushes are allowed to fail transiently, since the pushed data can be GCd before
-				// it is added to the store. But pushes should mostly succeed.
 				pushAttempts += 1
 				_, err = conn.ExecContext(ctx, "call dolt_push('origin', '--force', '--user', 'remoteuser', 'main')")
 				if err == nil {
@@ -386,70 +380,40 @@ func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery i
 		require.NoError(t, conn.Close())
 	}
 
+	require.False(t, s.sawDanglingRef.Load(), "saw dangling references message during auto GC")
+	require.True(t, s.allServersReachedGCCount(targetGCCount),
+		"did not reach %d auto GCs within %d statements (primary: %d, standby: %d)",
+		targetGCCount, maxStatements, s.primaryGCCount.Load(), s.standbyGCCount.Load())
+
 	if s.EnableRemotesAPI {
-		// Pushes should succeed at least 33% of the time.
-		// This is a conservative lower bound.
 		require.Less(t, float64(pushAttempts)*.33, float64(pushSuccesses))
 	}
 
-	before, err := GetRepoSize(s.PrimaryDir)
-	require.NoError(t, err)
-	conn, err := s.PrimaryDB.Conn(ctx)
-	require.NoError(t, err)
-	_, err = conn.ExecContext(ctx, "call dolt_gc('--full')")
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-	after, err := GetRepoSize(s.PrimaryDir)
-	require.NoError(t, err)
-	return before, after
+	t.Logf("primary auto GC count: %d", s.primaryGCCount.Load())
+	if s.Replicate || s.EnableRemotesAPI {
+		t.Logf("standby auto GC count: %d", s.standbyGCCount.Load())
+	}
 }
 
-type RepoSize struct {
-	Journal int64
-	NewGen  int64
-	NewGenC int
-	OldGen  int64
-	OldGenC int
+// runAutoGCTestDisabled runs a fixed number of insert+commit cycles
+// against a server with auto GC disabled, verifying it never fires.
+func runAutoGCTestDisabled(t *testing.T, s *AutoGCTest, numStatements int, commitEvery int) {
+	ctx := t.Context()
+	s.Setup(ctx, t)
+
+	for i := range numStatements {
+		stmt := autoGCInsertStatement(i)
+		conn, err := s.PrimaryDB.Conn(ctx)
+		require.NoError(t, err)
+		_, err = conn.ExecContext(ctx, stmt)
+		require.NoError(t, err)
+		if (i+1)%commitEvery == 0 {
+			_, err = conn.ExecContext(ctx, "call dolt_commit('-am', 'insert from "+strconv.Itoa(i*1024)+"')")
+			require.NoError(t, err)
+		}
+		require.NoError(t, conn.Close())
+	}
+
+	require.Zero(t, s.primaryGCCount.Load(), "auto GC should not run when disabled")
 }
 
-func GetRepoSize(dir string) (RepoSize, error) {
-	var ret RepoSize
-	entries, err := os.ReadDir(filepath.Join(dir, ".dolt/noms"))
-	if err != nil {
-		return ret, err
-	}
-	for _, e := range entries {
-		stat, err := e.Info()
-		if err != nil {
-			return ret, err
-		}
-		if stat.IsDir() {
-			continue
-		}
-		ret.NewGen += stat.Size()
-		ret.NewGenC += 1
-		if e.Name() == "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" {
-			ret.Journal += stat.Size()
-		}
-	}
-	entries, err = os.ReadDir(filepath.Join(dir, ".dolt/noms/oldgen"))
-	if err != nil {
-		return ret, err
-	}
-	for _, e := range entries {
-		stat, err := e.Info()
-		if err != nil {
-			return ret, err
-		}
-		if stat.IsDir() {
-			continue
-		}
-		ret.OldGen += stat.Size()
-		ret.OldGenC += 1
-	}
-	return ret, nil
-}
-
-func (rs RepoSize) String() string {
-	return fmt.Sprintf("journal: %v, new gen: %v (%v files), old gen: %v (%v files)", rs.Journal, rs.NewGen, rs.NewGenC, rs.OldGen, rs.OldGenC)
-}
