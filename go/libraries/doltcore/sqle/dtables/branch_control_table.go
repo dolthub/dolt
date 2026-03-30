@@ -33,7 +33,7 @@ const (
 
 // PermissionsStrings is a slice of strings representing the available branch_control.branch_control.Permissions. The order of the
 // strings should exactly match the order of the branch_control.Permissions according to their flag value.
-var PermissionsStrings = []string{"admin", "write", "read"}
+var PermissionsStrings = []string{"admin", "write", "merge", "read"}
 
 // accessSchema is the schema for the "dolt_branch_control" table.
 var accessSchema = sql.Schema{

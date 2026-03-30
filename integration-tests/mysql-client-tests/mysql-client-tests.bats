@@ -12,6 +12,9 @@ load helpers.bash
 
 setup() {
     setup_dolt_repo
+
+    export MYSQL_TCP_PORT=$PORT
+    export MYSQL_HOST=127.0.0.1
 }
 
 teardown() {
@@ -23,6 +26,42 @@ teardown() {
     if echo "$active" | grep "online"; then
         service postgresql stop
     fi
+}
+
+switch_mariadb_version() {
+    local version="$1"
+    run ln -vsfn "/usr/local/mariadb-$version" /usr/local/mariadb
+}
+
+mariadb() {
+    /usr/local/mariadb/bin/mariadb --protocol=tcp -vvv --show-warnings "$@"
+}
+
+assert_mariadb_version_auth_and_db_selection() {
+    local version="$1"
+
+    switch_mariadb_version "$version"
+
+    run mariadb --version
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$version" ]] || false
+
+    run mariadb -e "SELECT 1;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
+
+    run mariadb --user="$USER" "$REPO_NAME" -e "SELECT 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    run mariadb --user="$USER" "$REPO_NAME" -e "SELECT DATABASE();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$REPO_NAME" ]] || false
+}
+
+@test "mariadb auth" {
+    assert_mariadb_version_auth_and_db_selection "10.11"
+    assert_mariadb_version_auth_and_db_selection "11.8"
 }
 
 @test "go go-sql-driver/mysql" {

@@ -19,10 +19,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
@@ -37,11 +38,14 @@ type subtreeCounts []uint64
 // Elements in a Node are generic Items. Interpreting Item
 // contents is deferred to higher layers (see prolly.Map).
 type Node struct {
+	// nodeHash contains the calculated hash.Hash
+	// for this node
+	nodeHash atomic.Value
 	// subtrees contains the key cardinality
 	// of each child tree of a non-leaf Node.
 	// this field is lazily decoded from msg
 	// because it requires a malloc.
-	subtrees *subtreeCounts
+	subtrees atomic.Pointer[subtreeCounts]
 	// keys and values cache offset metadata
 	// to accelerate Item lookups into msg.
 	keys   *message.ItemAccess
@@ -127,8 +131,39 @@ func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 	}, fileId, err
 }
 
+func NodeFromBytesWithHash(msg []byte, hash hash.Hash) (node *Node, fileId string, err error) {
+	fileId, keys, values, level, count, err := message.UnpackFields(msg)
+	node = &Node{
+		keys:   keys,
+		values: values,
+		count:  count,
+		level:  level,
+		msg:    msg,
+	}
+	node.nodeHash.Store(hash)
+	return node, fileId, err
+}
+
+func NodeFromChunk(chunk *chunks.Chunk) (node *Node, fieldId string, err error) {
+	fieldId, keys, values, level, count, err := message.UnpackFields(chunk.Data())
+	node = &Node{
+		keys:   keys,
+		values: values,
+		count:  count,
+		level:  level,
+		msg:    chunk.Data(),
+	}
+	node.nodeHash.Store(chunk.Hash())
+	return node, fieldId, err
+}
+
 func (nd *Node) HashOf() hash.Hash {
-	return hash.Of(nd.bytes())
+	h := nd.nodeHash.Load()
+	if h == nil {
+		h = hash.Of(nd.bytes())
+		nd.nodeHash.Store(h)
+	}
+	return h.(hash.Hash)
 }
 
 func (nd *Node) Count() int {
@@ -170,17 +205,18 @@ func (nd *Node) GetValue(i int) Item {
 }
 
 func (nd *Node) LoadSubtrees() (*Node, error) {
-	var err error
-	if nd.subtrees == nil {
-		// deserializing subtree counts requires a malloc,
-		// we don't load them unless explicitly requested
-		sc, err := message.GetSubtrees(nd.msg)
-		if err != nil {
-			return nil, err
-		}
-		nd.subtrees = (*subtreeCounts)(&sc)
+	if nd.subtrees.Load() != nil {
+		return nd, nil
 	}
-	return nd, err
+	// deserializing subtree counts requires a malloc,
+	// we don't load them unless explicitly requested
+	sc, err := message.GetSubtrees(nd.msg)
+	if err != nil {
+		return nil, err
+	}
+	stc := subtreeCounts(sc)
+	nd.subtrees.CompareAndSwap(nil, &stc)
+	return nd, nil
 }
 
 func (nd *Node) GetSubtreeCount(i int) uint64 {
@@ -188,7 +224,7 @@ func (nd *Node) GetSubtreeCount(i int) uint64 {
 		return 1
 	}
 	// this will panic unless subtrees were loaded.
-	return (*nd.subtrees)[i]
+	return (*nd.subtrees.Load())[i]
 }
 
 // getAddress returns the |ith| address of this node.

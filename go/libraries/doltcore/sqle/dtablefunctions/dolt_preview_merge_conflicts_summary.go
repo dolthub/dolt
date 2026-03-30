@@ -128,6 +128,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) WithChildren(children ...sq
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (pm *PreviewMergeConflictsSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	baseDB, _ := doltdb.SplitRevisionDbName(pm.database.Name())
 	tblNames, err := pm.database.GetTableNames(ctx)
 	if err != nil {
 		return false
@@ -135,7 +136,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) CheckAuth(ctx *sql.Context,
 
 	var operations []sql.PrivilegedOperation
 	for _, tblName := range tblNames {
-		subject := sql.PrivilegeCheckSubject{Database: pm.database.Name(), Table: tblName}
+		subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tblName}
 		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 

@@ -90,7 +90,7 @@ teardown() {
 @test "cli-hosted: bogus user rejected" {
   run dolt $TLS --host $HST --port $PRT --user bogus sql -q "create database bats_test_cli_hosted"
   [ "$status" -eq 1 ]
-  [[ $output =~ "No authentication" ]] || false
+  [[ $output =~ "Access denied for user 'bogus'" ]] || false
 }
 
 # This test will not work if you change DOLT_CLI_USER above. Be aware if you run against a hosted instance.

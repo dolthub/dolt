@@ -180,45 +180,24 @@ var NewRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.
 
 // EmptyRootValue returns an empty RootValue. This is a variable as it's changed in Doltgres.
 var EmptyRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (RootValue, error) {
-	if vrw.Format().UsesFlatbuffers() {
-		builder := flatbuffers.NewBuilder(80)
+	builder := flatbuffers.NewBuilder(80)
 
-		emptyam, err := prolly.NewEmptyAddressMap(ns)
-		if err != nil {
-			return nil, err
-		}
-		ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
-		tablesoff := builder.CreateByteVector(ambytes)
-
-		var empty hash.Hash
-		fkoff := builder.CreateByteVector(empty[:])
-		serial.RootValueStart(builder)
-		serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
-		serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
-		serial.RootValueAddTables(builder, tablesoff)
-		serial.RootValueAddForeignKeyAddr(builder, fkoff)
-		bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
-		return NewRootValue(ctx, vrw, ns, types.SerialMessage(bs))
-	}
-
-	empty, err := types.NewMap(ctx, vrw)
+	emptyam, err := prolly.NewEmptyAddressMap(ns)
 	if err != nil {
 		return nil, err
 	}
+	ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.SerialMessage))
+	tablesoff := builder.CreateByteVector(ambytes)
 
-	sd := types.StructData{
-		tablesKey:       empty,
-		superSchemasKey: empty,
-		foreignKeyKey:   empty,
-		featureVersKey:  types.Int(DoltFeatureVersion),
-	}
-
-	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewRootValue(ctx, vrw, ns, st)
+	var empty hash.Hash
+	fkoff := builder.CreateByteVector(empty[:])
+	serial.RootValueStart(builder)
+	serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
+	serial.RootValueAddCollation(builder, serial.Collationutf8mb4_0900_bin)
+	serial.RootValueAddTables(builder, tablesoff)
+	serial.RootValueAddForeignKeyAddr(builder, fkoff)
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	return NewRootValue(ctx, vrw, ns, types.SerialMessage(bs))
 }
 
 // LoadRootValueFromRootIshAddr takes the hash of the commit or the hash of a
@@ -906,11 +885,6 @@ var DefaultSchemaName = ""
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func (root *rootValue) PutTable(ctx context.Context, tName TableName, table *Table) (RootValue, error) {
-	err := ValidateTagUniqueness(ctx, root, tName.Name, table)
-	if err != nil {
-		return nil, err
-	}
-
 	tableRef, err := RefFromNomsTable(ctx, table)
 	if err != nil {
 		return nil, err
@@ -1369,49 +1343,6 @@ func GetSchemaHash(ctx context.Context, root RootValue, name TableName, override
 		return tab.GetSchemaHash(ctx)
 	}
 	return root.GetTableSchemaHash(ctx, name)
-}
-
-// ValidateTagUniqueness checks for tag collisions between columns in the given table.
-func ValidateTagUniqueness(ctx context.Context, root RootValue, tableName string, table *Table) error {
-	prevTName := TableName{Name: tableName}
-	prevHash, err := GetSchemaHash(ctx, root, prevTName, table.overriddenSchema)
-	if err != nil {
-		return err
-	}
-	if !prevHash.IsEmpty() {
-		if err != nil {
-			return err
-		}
-
-		newHash, err := table.GetSchemaHash(ctx)
-		if err != nil {
-			return err
-		}
-
-		// short-circuit if schema unchanged
-		if prevHash == newHash {
-			return nil
-		}
-	}
-
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-
-	tagsSeen := make(map[uint64]struct{})
-	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if _, ok := tagsSeen[tag]; ok {
-			return true, schema.NewErrTagPrevUsed(tag, col.Name, tableName, tableName)
-		}
-
-		tagsSeen[tag] = struct{}{}
-		return false, nil
-	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // DebugString returns a human readable string with the contents of this root. If |transitive| is true, row data from

@@ -22,19 +22,21 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type intType struct {
 	sqlIntType sql.NumberType
+	enc        val.Encoding
 }
 
 var _ TypeInfo = (*intType)(nil)
 var (
-	Int8Type  = &intType{gmstypes.Int8}
-	Int16Type = &intType{gmstypes.Int16}
-	Int24Type = &intType{gmstypes.Int24}
-	Int32Type = &intType{gmstypes.Int32}
-	Int64Type = &intType{gmstypes.Int64}
+	Int8Type  = &intType{sqlIntType: gmstypes.Int8}
+	Int16Type = &intType{sqlIntType: gmstypes.Int16}
+	Int24Type = &intType{sqlIntType: gmstypes.Int24}
+	Int32Type = &intType{sqlIntType: gmstypes.Int32}
+	Int64Type = &intType{sqlIntType: gmstypes.Int64}
 )
 
 // Equals implements TypeInfo interface.
@@ -44,7 +46,8 @@ func (ti *intType) Equals(other TypeInfo) bool {
 	}
 	if ti2, ok := other.(*intType); ok {
 		return ti.sqlIntType.Type() == ti2.sqlIntType.Type() &&
-			ti.sqlIntType.DisplayWidth() == ti2.sqlIntType.DisplayWidth()
+			ti.sqlIntType.DisplayWidth() == ti2.sqlIntType.DisplayWidth() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }
@@ -70,6 +73,33 @@ func (ti *intType) String() string {
 	default:
 		panic(fmt.Errorf(`unknown int type info sql type "%v"`, ti.sqlIntType.Type().String()))
 	}
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *intType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	switch ti.sqlIntType.Type() {
+	case sqltypes.Int8:
+		return val.Int8Enc
+	case sqltypes.Int16:
+		return val.Int16Enc
+	case sqltypes.Int24, sqltypes.Int32:
+		return val.Int32Enc
+	case sqltypes.Int64:
+		return val.Int64Enc
+	default:
+		panic(fmt.Errorf(`unknown int type info sql type "%v"`, ti.sqlIntType.Type().String()))
+	}
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *intType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != (&intType{sqlIntType: ti.sqlIntType}).Encoding() {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &intType{sqlIntType: ti.sqlIntType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

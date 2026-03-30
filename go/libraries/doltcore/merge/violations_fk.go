@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -184,11 +183,6 @@ func (f *foreignKeyViolationTracker) StartFK(ctx *sql.Context, fk doltdb.Foreign
 }
 
 func (f *foreignKeyViolationTracker) EndCurrFK(ctx context.Context) error {
-	return nil
-}
-
-func (f *foreignKeyViolationTracker) NomsFKViolationFound(ctx context.Context, rowKey, rowValue types.Tuple) error {
-	f.tableSet.Add(f.currFk.TableName)
 	return nil
 }
 
@@ -436,36 +430,6 @@ func newConstraintViolationsLoadedTable(
 		IndexSchema: idx.Schema(),
 		IndexData:   indexData,
 	}, true, nil
-}
-
-// toConstraintViolationRow converts the given key and value tuples into ones suitable to add to a constraint violation map.
-func toConstraintViolationRow(ctx context.Context, vType CvType, vInfo types.JSON, k, v types.Tuple) (types.Tuple, types.Tuple, error) {
-	constraintViolationKeyVals := []types.Value{types.Uint(schema.DoltConstraintViolationsTypeTag), types.Uint(vType)}
-	keySlice, err := k.AsSlice()
-	if err != nil {
-		emptyTuple := types.EmptyTuple(k.Format())
-		return emptyTuple, emptyTuple, err
-	}
-	constraintViolationKeyVals = append(constraintViolationKeyVals, keySlice...)
-	constraintViolationKey, err := types.NewTuple(k.Format(), constraintViolationKeyVals...)
-	if err != nil {
-		emptyTuple := types.EmptyTuple(k.Format())
-		return emptyTuple, emptyTuple, err
-	}
-
-	constraintViolationValVals, err := v.AsSlice()
-	if err != nil {
-		emptyTuple := types.EmptyTuple(k.Format())
-		return emptyTuple, emptyTuple, err
-	}
-	constraintViolationValVals = append(constraintViolationValVals, types.Uint(schema.DoltConstraintViolationsInfoTag), vInfo)
-	constraintViolationVal, err := types.NewTuple(v.Format(), constraintViolationValVals...)
-	if err != nil {
-		emptyTuple := types.EmptyTuple(k.Format())
-		return emptyTuple, emptyTuple, err
-	}
-
-	return constraintViolationKey, constraintViolationVal, nil
 }
 
 // foreignKeyCVJson converts a foreign key to JSON data for use as the info field in a constraint violations map.

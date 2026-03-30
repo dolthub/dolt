@@ -3209,6 +3209,54 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/10676
+		Name: "Merge does not panic when FK is dropped and re-added on one branch and child has composite PK with mixed types",
+		SetUpScript: []string{
+			`CREATE TABLE parent (pk VARCHAR(20) PRIMARY KEY);`,
+			`CREATE TABLE child (
+                pk1    INT,
+                pk2    BIGINT,
+                fk_col VARCHAR(20),
+                PRIMARY KEY (pk1, pk2),
+                CONSTRAINT fk1 FOREIGN KEY (fk_col) REFERENCES parent (pk)
+            );`,
+			`INSERT INTO parent VALUES ('a');`,
+			`INSERT INTO child VALUES (1, 1, 'a');`,
+			`CALL DOLT_COMMIT('-Am', 'initial setup');`,
+			`CALL DOLT_BRANCH('other_branch');`,
+			// Drop FK then drop its backing index so re-adding creates a fresh index with a new name.
+			// If we only drop the FK (not the index), re-adding reuses the old index name, which still
+			// exists in the merge ancestor and avoids the bug.
+			`ALTER TABLE child DROP FOREIGN KEY fk1;`,
+			`ALTER TABLE child DROP INDEX fk1;`,
+			`CALL DOLT_COMMIT('-Am', 'drop fk and its backing index');`,
+			`ALTER TABLE child ADD CONSTRAINT fk2 FOREIGN KEY (fk_col) REFERENCES parent (pk);`,
+			`CALL DOLT_COMMIT('-Am', 're-add fk, creates new backing index fk2');`,
+			`CALL DOLT_CHECKOUT('other_branch');`,
+			`INSERT INTO child VALUES (1, 2, 'a');`,
+			`CALL DOLT_COMMIT('-Am', 'add child row on other branch');`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('main')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT pk FROM parent ORDER BY pk;",
+				Expected: []sql.Row{{"a"}},
+			},
+			{
+				Query:    "SELECT pk1, pk2, fk_col FROM child ORDER BY pk1, pk2;",
+				Expected: []sql.Row{{1, 1, "a"}, {1, 2, "a"}},
+			},
+			{
+				Query: "INSERT INTO child VALUES (2, 1, 'z');",
+				// The re-added FK constraint (fk2) must still be enforced after the merge.
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{

@@ -15,21 +15,25 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type pointType struct {
 	sqlPointType gmstypes.PointType
+	enc          val.Encoding
 }
 
 var _ TypeInfo = (*pointType)(nil)
 
-var PointType = &pointType{gmstypes.PointType{}}
+var PointType = &pointType{sqlPointType: gmstypes.PointType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *pointType) Equals(other TypeInfo) bool {
@@ -38,7 +42,8 @@ func (ti *pointType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*pointType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlPointType.DefinedSRID && !o.sqlPointType.DefinedSRID) || ti.sqlPointType.SRID == o.sqlPointType.SRID
+		return ((!ti.sqlPointType.DefinedSRID && !o.sqlPointType.DefinedSRID) || ti.sqlPointType.SRID == o.sqlPointType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }
@@ -51,6 +56,22 @@ func (ti *pointType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *pointType) String() string {
 	return "Point"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *pointType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *pointType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.GeomAddrEnc && enc != val.GeometryEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &pointType{sqlPointType: ti.sqlPointType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

@@ -33,7 +33,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
@@ -105,8 +105,8 @@ func TestSchemaOverrides(t *testing.T) {
 // Provide additional test coverage for adaptive types by running Schema Override tests
 // using adaptive types instead of address types.
 func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
-	defer func() { schema.UseAdaptiveEncoding = false }()
-	schema.UseAdaptiveEncoding = true
+	defer func() { typeinfo.UseAdaptiveEncoding = false }()
+	typeinfo.UseAdaptiveEncoding = true
 	harness := newDoltEnginetestHarness(t)
 	RunSchemaOverridesTest(t, harness)
 }
@@ -883,8 +883,8 @@ func TestBigBlobs(t *testing.T) {
 }
 
 func TestAdaptiveEncoding(t *testing.T) {
-	defer func() { schema.UseAdaptiveEncoding = false }()
-	schema.UseAdaptiveEncoding = true
+	defer func() { typeinfo.UseAdaptiveEncoding = false }()
+	typeinfo.UseAdaptiveEncoding = true
 
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Representation)
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Correctness)
@@ -1184,6 +1184,38 @@ func TestConcurrentTransactions(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestConcurrentTransactions(t, h)
+}
+
+func TestConcurrentCreateDatabaseIfNotExists(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	engine := mustNewEngine(t, harness)
+	defer engine.Close()
+
+	concurrency := 10
+	wg := sync.WaitGroup{}
+	wg.Add(concurrency)
+	errs := make([]error, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		go func(id int) {
+			defer wg.Done()
+			ctx := enginetest.NewSession(harness)
+			_, iter, _, err := engine.Query(ctx, "CREATE DATABASE IF NOT EXISTS newdb")
+			if err != nil {
+				errs[id] = err
+				return
+			}
+			_, err = sql.RowIterToRows(ctx, iter)
+			errs[id] = err
+		}(i)
+	}
+
+	wg.Wait()
+	for i, err := range errs {
+		require.NoError(t, err, "goroutine %d returned error", i)
+	}
 }
 
 func TestLegacySelectScripts(t *testing.T) {

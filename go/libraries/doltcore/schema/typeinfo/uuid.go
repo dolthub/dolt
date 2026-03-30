@@ -15,28 +15,34 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type uuidType struct {
 	sqlCharType sql.StringType
+	enc         val.Encoding
 }
 
 var _ TypeInfo = (*uuidType)(nil)
 
-var UuidType = &uuidType{gmstypes.MustCreateString(sqltypes.Char, 36, sql.Collation_ascii_bin)}
+var UuidType = &uuidType{sqlCharType: gmstypes.MustCreateString(sqltypes.Char, 36, sql.Collation_ascii_bin)}
 
 // Equals implements TypeInfo interface.
 func (ti *uuidType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*uuidType)
-	return ok
+	if ti2, ok := other.(*uuidType); ok {
+		return ti.Encoding() == ti2.Encoding()
+	}
+	return false
 }
 
 // NomsKind implements TypeInfo interface.
@@ -47,6 +53,22 @@ func (ti *uuidType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *uuidType) String() string {
 	return "Uuid"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *uuidType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.StringEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *uuidType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.StringEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &uuidType{sqlCharType: ti.sqlCharType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

@@ -16,24 +16,14 @@ package schema
 
 import (
 	"testing"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type TestConstraint struct {
 	params map[string]string
 }
 
-func (tc TestConstraint) SatisfiesConstraint(value types.Value) bool {
-	return true
-}
-
 func (tc TestConstraint) GetConstraintType() string {
 	return "test"
-}
-
-func (tc TestConstraint) GetConstraintParams() map[string]string {
-	return tc.params
 }
 
 func (tc TestConstraint) String() string {
@@ -51,8 +41,6 @@ func TestColConstraintsAreEqual(t *testing.T) {
 		{[]ColConstraint{}, []ColConstraint{}, true},
 		{[]ColConstraint{NotNullConstraint{}}, []ColConstraint{NotNullConstraint{}}, true},
 		{[]ColConstraint{NotNullConstraint{}}, []ColConstraint{TestConstraint{}}, false},
-		{[]ColConstraint{TestConstraint{map[string]string{"a": "1", "b": "2"}}}, []ColConstraint{TestConstraint{}}, false},
-		{[]ColConstraint{TestConstraint{map[string]string{"a": "1", "b": "2"}}}, []ColConstraint{TestConstraint{map[string]string{"a": "1", "b": "2"}}}, true},
 		{[]ColConstraint{}, []ColConstraint{NotNullConstraint{}}, false},
 		{nil, []ColConstraint{NotNullConstraint{}}, false},
 	}

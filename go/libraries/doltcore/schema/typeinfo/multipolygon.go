@@ -15,21 +15,25 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type multipolygonType struct {
 	sqlMultiPolygonType gmstypes.MultiPolygonType
+	enc                 val.Encoding
 }
 
 var _ TypeInfo = (*multipolygonType)(nil)
 
-var MultiPolygonType = &multipolygonType{gmstypes.MultiPolygonType{}}
+var MultiPolygonType = &multipolygonType{sqlMultiPolygonType: gmstypes.MultiPolygonType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *multipolygonType) Equals(other TypeInfo) bool {
@@ -38,7 +42,8 @@ func (ti *multipolygonType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*multipolygonType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlMultiPolygonType.DefinedSRID && !o.sqlMultiPolygonType.DefinedSRID) || ti.sqlMultiPolygonType.SRID == o.sqlMultiPolygonType.SRID
+		return ((!ti.sqlMultiPolygonType.DefinedSRID && !o.sqlMultiPolygonType.DefinedSRID) || ti.sqlMultiPolygonType.SRID == o.sqlMultiPolygonType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }
@@ -51,6 +56,22 @@ func (ti *multipolygonType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *multipolygonType) String() string {
 	return "MultiPolygon"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *multipolygonType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *multipolygonType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.GeomAddrEnc && enc != val.GeometryEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &multipolygonType{sqlMultiPolygonType: ti.sqlMultiPolygonType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

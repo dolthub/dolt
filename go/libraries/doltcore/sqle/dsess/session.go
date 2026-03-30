@@ -562,6 +562,8 @@ var ErrDirtyWorkingSets = errors.New("Cannot commit changes on more than one bra
 
 // dirtyWorkingSets returns all dirty working sets for this session
 func (d *DoltSession) dirtyWorkingSets() []*branchState {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	var dirtyStates []*branchState
 	for _, state := range d.dbStates {
 		for _, branchState := range state.heads {
@@ -577,6 +579,8 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 // DirtyDatabases returns the names of databases who have outstanding changes in this session and need to be committed
 // in a SQL transaction before they are visible to other sessions.
 func (d *DoltSession) DirtyDatabases() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	var dbNames []string
 	for _, dbState := range d.dbStates {
 		for _, branchState := range dbState.heads {

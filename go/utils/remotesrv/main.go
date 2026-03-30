@@ -83,7 +83,7 @@ func main() {
 		if !dEnv.Valid() {
 			log.Fatalln("repo-mode failed to load repository")
 		}
-		db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB(ctx))
+		db := doltdb.ExposeDatabaseFromDoltDB(dEnv.DoltDB(ctx))
 		cs := datas.ChunkStoreFromDatabase(db)
 		dbCache = SingletonCSCache{cs.(remotesrv.RemoteSrvStore)}
 	} else {

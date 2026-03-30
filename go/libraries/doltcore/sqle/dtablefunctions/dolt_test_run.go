@@ -143,7 +143,8 @@ func (trtf *TestsRunTableFunction) WithChildren(node ...sql.Node) (sql.Node, err
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode
 func (trtf *TestsRunTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	subject := sql.PrivilegeCheckSubject{Database: trtf.database.Name()}
+	baseDB, _ := doltdb.SplitRevisionDbName(trtf.database.Name())
+	subject := sql.PrivilegeCheckSubject{Database: baseDB}
 	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }
 

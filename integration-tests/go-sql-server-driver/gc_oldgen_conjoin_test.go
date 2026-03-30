@@ -17,7 +17,6 @@ package main
 import (
 	"context"
 	sqldriver "database/sql/driver"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -129,11 +128,10 @@ func TestGCConjoinsOldgen(t *testing.T) {
 				}(i)
 			}
 
-			entries, err := os.ReadDir(filepath.Join(repo.Dir, ".dolt/noms/oldgen"))
-			require.NoError(t, err)
-			require.Greater(t, len(entries), 2)
-			// defaultMaxTables == 256, plus a few files extra like |manifest| and |LOCK|.
-			require.Less(t, len(entries), 272)
+			count := CountTableFiles(t, filepath.Join(repo.Dir, ".dolt/noms/oldgen"))
+			require.Greater(t, count, 2)
+			// defaultMaxTables == 256, conjoin is triggered on trying to land the 258.
+			require.Less(t, count, 258)
 		})
 	}
 }

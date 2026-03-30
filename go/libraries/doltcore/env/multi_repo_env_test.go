@@ -176,6 +176,24 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func TestMultiRepoEnvClose(t *testing.T) {
+	rootPath, err := test.ChangeToTestDir("TestMultiRepoEnvClose")
+	require.NoError(t, err)
+
+	hdp := func() (string, error) { return rootPath, nil }
+	envPath := filepath.Join(rootPath, "main_db")
+	dEnv := initRepoWithRelativePath(t, envPath, hdp)
+	_ = initRepoWithRelativePath(t, filepath.Join(envPath, "sub_db"), hdp)
+
+	ctx := context.Background()
+	mrEnv, err := MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	require.NoError(t, err)
+	assert.Len(t, mrEnv.envs, 2)
+
+	err = mrEnv.Close(ctx)
+	require.NoError(t, err)
+}
+
 func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDirProvider, map[string]*DoltEnv) {
 	rootPath, err := test.ChangeToTestDir(testName)
 	require.NoError(t, err)

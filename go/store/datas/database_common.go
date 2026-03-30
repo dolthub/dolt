@@ -83,24 +83,6 @@ func (db *database) StatsSummary() string {
 	return db.ChunkStore().StatsSummary()
 }
 
-// DatasetsInRoot returns the Map of datasets in the root represented by the |rootHash| given
-func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash) (types.Map, error) {
-	if rootHash.IsEmpty() {
-		return types.NewMap(ctx, db)
-	}
-
-	val, err := db.ReadValue(ctx, rootHash)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	if val == nil {
-		return types.EmptyMap, fmt.Errorf("root hash doesn't exist: %s", rootHash)
-	}
-
-	return val.(types.Map), nil
-}
-
 func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (prolly.AddressMap, error) {
 	if rootHash.IsEmpty() {
 		return prolly.NewEmptyAddressMap(db.ns)
@@ -115,7 +97,7 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 		return prolly.AddressMap{}, fmt.Errorf("root hash doesn't exist: %s", rootHash)
 	}
 
-	return parse_storeroot([]byte(val.(types.SerialMessage)), db.nodeStore())
+	return parse_storeroot(val.(types.SerialMessage), db.nodeStore())
 }
 
 type refmapDatasetsMap struct {
@@ -297,7 +279,12 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
-			// If the current root has a working set, update it. Do nothing if it doesn't exist.
+			cmtRtHsh, err := GetCommitRootHash(newVal)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			// If the current root has a working set, assert it isn't dirty and then update it.
+			// If this branch does not have a working set yet, create it to match the commit contents.
 			if hasWS {
 				currWSHash, err := am.Get(ctx, workingSetPath)
 				if err != nil {
@@ -310,11 +297,6 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 				}
 
 				if _, ok := targetCmt.(types.SerialMessage); ok {
-					cmtRtHsh, err := GetCommitRootHash(newVal)
-					if err != nil {
-						return prolly.AddressMap{}, err
-					}
-
 					// TODO - construct new meta instance rather than using the default
 					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
 					ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
@@ -327,6 +309,14 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 					// modern storage.
 					return prolly.AddressMap{}, errors.New("Modern Dolt Database required.")
 				}
+			} else {
+				// TODO - construct new meta instance rather than using the default
+				updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
+				ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
+				if err != nil {
+					return prolly.AddressMap{}, err
+				}
+				newWSHash = ref.TargetHash()
 			}
 		}
 
@@ -419,7 +409,12 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
-			// If the current root has a working set, update it. Do nothing if it doesn't exist.
+			cmtRtHsh, err := GetCommitRootHash(cmtValue)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			// If the current root has a working set, assert it isn't dirty before updating it.
+			// Otherwise, create a new working set with the incoming root hash.
 			if hasWS {
 				currWSHash, err := am.Get(ctx, workingSetPath)
 				if err != nil {
@@ -456,11 +451,6 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 						return prolly.AddressMap{}, ErrDirtyWorkspace
 					}
 
-					cmtRtHsh, err := GetCommitRootHash(cmtValue)
-					if err != nil {
-						return prolly.AddressMap{}, err
-					}
-
 					// TODO - construct new meta instance rather than using the default
 					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
 					ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
@@ -473,6 +463,13 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 					// modern storage.
 					return prolly.AddressMap{}, errors.New("Modern Dolt Database required.")
 				}
+			} else {
+				updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
+				ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
+				if err != nil {
+					return prolly.AddressMap{}, err
+				}
+				newWSHash = ref.TargetHash()
 			}
 		}
 
@@ -953,34 +950,6 @@ func (db *database) tryCommitChunks(ctx context.Context, newRootHash hash.Hash, 
 		return ErrOptimisticLockFailed
 	}
 	return nil
-}
-
-func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types.Struct, error) {
-	rHead, err := db.readHead(ctx, r.TargetHash())
-	if err != nil {
-		return types.Struct{}, err
-	}
-	if rHead == nil {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
-	}
-	if rHead.TypeName() != commitName {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred values is not a commit")
-	}
-
-	var v types.Value
-	v = rHead.(nomsHead).st
-
-	is, err := IsCommit(v)
-
-	if err != nil {
-		return types.Struct{}, err
-	}
-
-	if !is {
-		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred values is not a commit")
-	}
-
-	return v.(types.Struct), nil
 }
 
 func hasParentHash(opts CommitOptions, curr hash.Hash) bool {

@@ -32,6 +32,10 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// prollyParentSecDiffFkConstraintViolations emits FK violations for rows removed from the
+// parent table. It diffs |preParentSecIdx| against |postParent|'s secondary index. For each
+// removed or modified row, it checks whether an equivalent parent value still exists, then
+// scans the child's secondary index for child rows that reference the removed value.
 func prollyParentSecDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
@@ -42,26 +46,22 @@ func prollyParentSecDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	postParentSecIdx, err := durable.ProllyMapFromIndex(postParent.IndexData)
+	postParentSecIdx, _, parentIdxPrefixDesc, err := fkIdxKeyDescs(postParent.IndexData, len(foreignKey.TableColumns))
 	if err != nil {
 		return err
 	}
-	childSecIdx, err := durable.ProllyMapFromIndex(postChild.IndexData)
-	if err != nil {
-		return err
-	}
-
-	parentSecIdxDesc, _ := postParentSecIdx.Descriptors()
-	parentIdxPrefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	parentIdxKb := val.NewTupleBuilder(parentIdxPrefixDesc, postParentRowData.NodeStore())
 
 	childPriIdx, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
 		return err
 	}
-
 	childPriIdxDesc, _ := childPriIdx.Descriptors()
-	childSecIdxDesc, _ := childSecIdx.Descriptors()
+
+	childSecIdx, childSecIdxDesc, childSecIdxPrefixDesc, err := fkIdxKeyDescs(postChild.IndexData, len(foreignKey.TableColumns))
+	if err != nil {
+		return err
+	}
 
 	childPrimary := &indexAndKeyDescriptor{
 		index:   childPriIdx,
@@ -76,7 +76,7 @@ func prollyParentSecDiffFkConstraintViolations(
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeysAreCompatibleTypes(parentIdxPrefixDesc, childSecIdxDesc)
+	compatibleTypes := fkHandlersAreSerializationCompatible(parentIdxPrefixDesc, childSecIdxPrefixDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -127,6 +127,10 @@ func prollyParentSecDiffFkConstraintViolations(
 	return nil
 }
 
+// prollyParentPriDiffFkConstraintViolations emits FK violations for rows removed from the
+// parent table when the parent's secondary index was not present in the merge ancestor. It
+// diffs |preParentRowData| against |postParent|'s primary index and applies the same
+// checks as prollyParentSecDiffFkConstraintViolations.
 func prollyParentPriDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
@@ -137,26 +141,22 @@ func prollyParentPriDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	postParentIndexData, err := durable.ProllyMapFromIndex(postParent.IndexData)
+	postParentIndexData, _, partialDesc, err := fkIdxKeyDescs(postParent.IndexData, len(foreignKey.TableColumns))
 	if err != nil {
 		return err
 	}
-
-	idxDesc, _ := postParentIndexData.Descriptors()
-	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc, postParentRowData.NodeStore())
 
 	childPriIdx, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
 		return err
 	}
-	childScndryIdx, err := durable.ProllyMapFromIndex(postChild.IndexData)
+	childPriIdxDesc, _ := childPriIdx.Descriptors()
+
+	childSecIdx, childSecIdxDesc, childSecIdxPrefixDesc, err := fkIdxKeyDescs(postChild.IndexData, len(foreignKey.TableColumns))
 	if err != nil {
 		return err
 	}
-
-	childPriIdxDesc, _ := childPriIdx.Descriptors()
-	childSecIdxDesc, _ := childScndryIdx.Descriptors()
 
 	childPrimary := &indexAndKeyDescriptor{
 		index:   childPriIdx,
@@ -164,14 +164,14 @@ func prollyParentPriDiffFkConstraintViolations(
 		schema:  postChild.Schema,
 	}
 	childSecondary := &indexAndKeyDescriptor{
-		index:   childScndryIdx,
+		index:   childSecIdx,
 		keyDesc: childSecIdxDesc,
 		schema:  postChild.IndexSchema,
 	}
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeysAreCompatibleTypes(partialDesc, childSecIdxDesc)
+	compatibleTypes := fkHandlersAreSerializationCompatible(partialDesc, childSecIdxPrefixDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -231,6 +231,11 @@ func prollyParentPriDiffFkConstraintViolations(
 	return nil
 }
 
+// prollyChildPriDiffFkConstraintViolations emits FK violations for rows added to or modified
+// in the child table when the child's secondary index was not present in the merge ancestor.
+// It diffs |preChildRowData| against |postChild|'s primary index. For each new or changed
+// row, it builds a parent lookup key from the FK columns and verifies that a matching parent
+// row exists.
 func prollyChildPriDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
@@ -241,19 +246,20 @@ func prollyChildPriDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	parentSecondaryIdx, err := durable.ProllyMapFromIndex(postParent.IndexData)
+	parentSecondaryIdx, _, parentIdxPrefixDesc, err := fkIdxKeyDescs(postParent.IndexData, len(foreignKey.TableColumns))
+	if err != nil {
+		return err
+	}
+	partialKB := val.NewTupleBuilder(parentIdxPrefixDesc, postChildRowData.NodeStore())
+
+	_, _, childFkColsDesc, err := fkIdxKeyDescs(postChild.IndexData, len(foreignKey.TableColumns))
 	if err != nil {
 		return err
 	}
 
-	childPriIdxDesc, _ := postChildRowData.Descriptors()
-	parentIdxDesc, _ := parentSecondaryIdx.Descriptors()
-	parentIdxPrefixDesc := parentIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(parentIdxPrefixDesc, postChildRowData.NodeStore())
-
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeysAreCompatibleTypes(childPriIdxDesc, parentIdxPrefixDesc)
+	compatibleTypes := fkHandlersAreSerializationCompatible(childFkColsDesc, parentIdxPrefixDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -277,7 +283,7 @@ func prollyChildPriDiffFkConstraintViolations(
 			}
 
 			if !compatibleTypes {
-				parentLookupKey, err = convertKeyBetweenTypes(ctx, parentLookupKey, childPriIdxDesc, parentIdxPrefixDesc, parentSecondaryIdx.NodeStore(), parentSecondaryIdx.Pool())
+				parentLookupKey, err = convertKeyBetweenTypes(ctx, parentLookupKey, childFkColsDesc, parentIdxPrefixDesc, parentSecondaryIdx.NodeStore(), parentSecondaryIdx.Pool())
 				if err != nil {
 					return err
 				}
@@ -300,6 +306,9 @@ func prollyChildPriDiffFkConstraintViolations(
 	return nil
 }
 
+// prollyChildSecDiffFkConstraintViolations emits FK violations for rows added to or modified
+// in the child table. It diffs |preChildSecIdx| against |postChild|'s secondary index. For
+// each new or changed row, it verifies that a matching parent row exists.
 func prollyChildSecDiffFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
@@ -311,24 +320,19 @@ func prollyChildSecDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	postChildSecIdx, err := durable.ProllyMapFromIndex(postChild.IndexData)
+	postChildSecIdx, _, childIdxPrefixDesc, err := fkIdxKeyDescs(postChild.IndexData, len(foreignKey.TableColumns))
 	if err != nil {
 		return err
 	}
-	parentSecIdx, err := durable.ProllyMapFromIndex(postParent.IndexData)
+	parentSecIdx, _, parentIdxPrefixDesc, err := fkIdxKeyDescs(postParent.IndexData, len(foreignKey.TableColumns))
 	if err != nil {
 		return err
 	}
-
-	parentSecIdxDesc, _ := parentSecIdx.Descriptors()
-	parentIdxPrefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	childPriKD, _ := postChildRowData.Descriptors()
-	childIdxDesc, _ := postChildSecIdx.Descriptors()
-	childIdxPrefixDesc := childIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
 	// in some contexts. If this lookup is one of those, we need to convert the child key to the parent key format.
-	compatibleTypes := foreignKeysAreCompatibleTypes(childIdxPrefixDesc, parentIdxPrefixDesc)
+	compatibleTypes := fkHandlersAreSerializationCompatible(childIdxPrefixDesc, parentIdxPrefixDesc)
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -372,17 +376,36 @@ func prollyChildSecDiffFkConstraintViolations(
 	return nil
 }
 
-// foreignKeysAreCompatibleTypes returns whether the serializations for two tuple descriptors are binary compatible
-func foreignKeysAreCompatibleTypes(keyDescA, keyDescB *val.TupleDesc) bool {
-	compatibleTypes := true
+// fkIdxKeyDescs loads |idx| as a prolly map and returns the map, its full key descriptor,
+// and a prefix descriptor covering the first |n| columns.
+//
+// The full descriptor is used when constructing indexAndKeyDescriptor values. The prefix
+// descriptor is used for tuple builder construction and for serialization compatibility
+// checks via fkHandlersAreSerializationCompatible.
+func fkIdxKeyDescs(idx durable.Index, n int) (prolly.Map, *val.TupleDesc, *val.TupleDesc, error) {
+	prollyMap, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return prolly.Map{}, nil, nil, err
+	}
+	kd, _ := prollyMap.Descriptors()
+	return prollyMap, kd, kd.PrefixDesc(n), nil
+}
+
+// fkHandlersAreSerializationCompatible reports whether |keyDescA| and |keyDescB| have
+// compatible type handlers at every position. Both descriptors must have equal length and
+// their handlers must be in FK column order. Callers are responsible for trimming descriptors
+// to the FK column count before calling this function.
+//
+// When any non-nil handler pair is incompatible, the child key must be converted to the
+// parent key format before the parent index lookup. See convertKeyBetweenTypes.
+func fkHandlersAreSerializationCompatible(keyDescA, keyDescB *val.TupleDesc) bool {
 	for i, handlerA := range keyDescA.Handlers {
 		handlerB := keyDescB.Handlers[i]
 		if handlerA != nil && handlerB != nil && !handlerA.SerializationCompatible(handlerB) {
-			compatibleTypes = false
-			break
+			return false
 		}
 	}
-	return compatibleTypes
+	return true
 }
 
 // convertSerializedFkField converts a serialized foreign key value from one type handler to another.

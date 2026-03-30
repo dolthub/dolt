@@ -22,7 +22,13 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
+
+// UseAdaptiveEncoding indicates whether to use adaptive encoding for large/unbounded fields instead of address
+// encoding. Tests can set this variable to true in order to force Dolt to use adaptive encoding for TEXT and BLOB
+// columns. Extended types will always use adaptive encoding for TEXT and BLOB types regardless of this value.
+var UseAdaptiveEncoding = false
 
 // TypeInfo is an interface used for encoding type information.
 type TypeInfo interface {
@@ -35,6 +41,14 @@ type TypeInfo interface {
 	// ToSqlType returns the TypeInfo as a sql.Type. If an exact match is able to be made then that is
 	// the one returned, otherwise the sql.Type is the closest match possible.
 	ToSqlType() sql.Type
+
+	// Encoding returns the val.Encoding to use for serializing values of this type.
+	Encoding() val.Encoding
+
+	// WithEncoding returns a TypeInfo that serializes values using the given encoding. For most types,
+	// the encoding is fixed and this returns the receiver unchanged. For types with variable encodings
+	// (e.g. TEXT, BLOB), this returns a new TypeInfo that uses the given encoding.
+	WithEncoding(enc val.Encoding) TypeInfo
 
 	// Stringer results are used to inform users of the constraint's properties.
 	fmt.Stringer
@@ -61,7 +75,7 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf("expected sql.NumberType, but received: %T", sqlType)
 		}
-		return &intType{numberType}, nil
+		return &intType{sqlIntType: numberType}, nil
 	case sqltypes.Int16:
 		return Int16Type, nil
 	case sqltypes.Int24:
@@ -95,19 +109,19 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Geometry:
 		switch sqlType.String() {
 		case gmstypes.PointType{}.String():
-			return &pointType{sqlType.(gmstypes.PointType)}, nil
+			return &pointType{sqlPointType: sqlType.(gmstypes.PointType)}, nil
 		case gmstypes.LineStringType{}.String():
-			return &linestringType{sqlType.(gmstypes.LineStringType)}, nil
+			return &linestringType{sqlLineStringType: sqlType.(gmstypes.LineStringType)}, nil
 		case gmstypes.PolygonType{}.String():
-			return &polygonType{sqlType.(gmstypes.PolygonType)}, nil
+			return &polygonType{sqlPolygonType: sqlType.(gmstypes.PolygonType)}, nil
 		case gmstypes.MultiPointType{}.String():
-			return &multipointType{sqlType.(gmstypes.MultiPointType)}, nil
+			return &multipointType{sqlMultiPointType: sqlType.(gmstypes.MultiPointType)}, nil
 		case gmstypes.MultiLineStringType{}.String():
-			return &multilinestringType{sqlType.(gmstypes.MultiLineStringType)}, nil
+			return &multilinestringType{sqlMultiLineStringType: sqlType.(gmstypes.MultiLineStringType)}, nil
 		case gmstypes.MultiPolygonType{}.String():
-			return &multipolygonType{sqlType.(gmstypes.MultiPolygonType)}, nil
+			return &multipolygonType{sqlMultiPolygonType: sqlType.(gmstypes.MultiPolygonType)}, nil
 		case gmstypes.GeomCollType{}.String():
-			return &geomcollType{sqlType.(gmstypes.GeomCollType)}, nil
+			return &geomcollType{sqlGeomCollType: sqlType.(gmstypes.GeomCollType)}, nil
 		case gmstypes.GeometryType{}.String():
 			return &geometryType{sqlGeometryType: sqlType.(gmstypes.GeometryType)}, nil
 		default:
@@ -118,73 +132,73 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf(`expected "DecimalTypeIdentifier" from SQL basetype "Decimal"`)
 		}
-		return &decimalType{decimalSQLType}, nil
+		return &decimalType{sqlDecimalType: decimalSQLType}, nil
 	case sqltypes.Text:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Text"`)
 		}
-		return &blobStringType{stringType}, nil
+		return &blobStringType{sqlStringType: stringType}, nil
 	case sqltypes.Blob:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Blob"`)
 		}
-		return &varBinaryType{stringType}, nil
+		return &varBinaryType{sqlBinaryType: stringType}, nil
 	case sqltypes.VarChar:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarChar"`)
 		}
-		return &varStringType{stringType}, nil
+		return &varStringType{sqlStringType: stringType}, nil
 	case sqltypes.VarBinary:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarBinary"`)
 		}
-		return &inlineBlobType{stringType}, nil
+		return &inlineBlobType{sqlBinaryType: stringType}, nil
 	case sqltypes.Char:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Char"`)
 		}
-		return &varStringType{stringType}, nil
+		return &varStringType{sqlStringType: stringType}, nil
 	case sqltypes.Binary:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Binary"`)
 		}
-		return &inlineBlobType{stringType}, nil
+		return &inlineBlobType{sqlBinaryType: stringType}, nil
 	case sqltypes.Bit:
 		bitSQLType, ok := sqlType.(gmstypes.BitType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "BitTypeIdentifier" from SQL basetype "Bit"`)
 		}
-		return &bitType{bitSQLType}, nil
+		return &bitType{sqlBitType: bitSQLType}, nil
 	case sqltypes.TypeJSON:
 		js, ok := sqlType.(gmstypes.JsonType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "JsonType" from SQL basetype "TypeJSON"`)
 		}
-		return &jsonType{js}, nil
+		return &jsonType{jsonType: js}, nil
 	case sqltypes.Enum:
 		enumSQLType, ok := sqlType.(sql.EnumType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "EnumTypeIdentifier" from SQL basetype "Enum"`)
 		}
-		return &enumType{enumSQLType}, nil
+		return &enumType{sqlEnumType: enumSQLType}, nil
 	case sqltypes.Set:
 		setSQLType, ok := sqlType.(sql.SetType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "SetTypeIdentifier" from SQL basetype "Set"`)
 		}
-		return &setType{setSQLType}, nil
+		return &setType{sqlSetType: setSQLType}, nil
 	case sqltypes.Vector:
 		vectorSQLType, ok := sqlType.(gmstypes.VectorType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "VectorTypeIdentifier" from SQL basetype "Vector"`)
 		}
-		return &vectorType{vectorSQLType}, nil
+		return &vectorType{sqlVectorType: vectorSQLType}, nil
 	default:
 		return nil, fmt.Errorf(`no type info can be created from SQL base type "%v"`, sqlType.String())
 	}
@@ -201,10 +215,11 @@ func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
 }
 
 // FromKind returns the default TypeInfo for a given types.Value.
+// Deprecated. Use FromSqlType instead.
 func FromKind(kind types.NomsKind) TypeInfo {
 	switch kind {
 	case types.BlobKind:
-		return &varBinaryType{gmstypes.LongBlob}
+		return &varBinaryType{sqlBinaryType: gmstypes.LongBlob}
 	case types.BoolKind:
 		return BoolType
 	case types.ExtendedKind:
@@ -212,7 +227,7 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	case types.FloatKind:
 		return Float64Type
 	case types.InlineBlobKind:
-		return &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.VarBinary, MaxVarcharLength/16)}
+		return &inlineBlobType{sqlBinaryType: gmstypes.MustCreateBinary(sqltypes.VarBinary, MaxVarcharLength/16)}
 	case types.IntKind:
 		return Int64Type
 	case types.JSONKind:
@@ -231,14 +246,12 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return StringDefaultType
 	case types.TimestampKind:
 		return DatetimeType
-	case types.TupleKind:
-		return TupleType
 	case types.UintKind:
 		return Uint64Type
 	case types.UUIDKind:
 		return UuidType
 	case types.DecimalKind:
-		return &decimalType{gmstypes.MustCreateDecimalType(65, 30)}
+		return &decimalType{sqlDecimalType: gmstypes.MustCreateDecimalType(65, 30)}
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}

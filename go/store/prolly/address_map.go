@@ -30,6 +30,7 @@ type AddressMap struct {
 }
 
 func NewEmptyAddressMap(ns tree.NodeStore) (AddressMap, error) {
+	// TODO: since this constant, we should make a constant for it
 	serializer := message.NewAddressMapSerializer(ns.Pool())
 	msg := serializer.Serialize(nil, nil, nil, 0)
 	n, _, err := tree.NodeFromBytes(msg)

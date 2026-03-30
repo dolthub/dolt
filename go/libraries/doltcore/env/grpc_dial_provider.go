@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 )
 
 var defaultDialer = &net.Dialer{
@@ -117,7 +118,7 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 		opts = append(opts, grpc.WithTransportCredentials(tc))
 	}
 
-	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128*1024*1024)))
+	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(remotesrv.MaxGRPCMessageSize)))
 	opts = append(opts, grpc.WithUserAgent(p.getUserAgentString()))
 
 	if config.Creds != nil {

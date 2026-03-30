@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -259,7 +260,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		// schema.Schema determines display order
 		serial.ColumnAddDisplayOrder(b, int16(i))
 		serial.ColumnAddTag(b, col.Tag)
-		serial.ColumnAddEncoding(b, encodingFromTypeinfo(col.TypeInfo))
+		serial.ColumnAddEncoding(b, serial.Encoding(col.TypeInfo.Encoding()))
 		serial.ColumnAddPrimaryKey(b, col.IsPartOfPK)
 		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
 		serial.ColumnAddNullable(b, col.IsNullable())
@@ -344,6 +345,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 		if err != nil {
 			return nil, err
 		}
+		sqlType = sqlType.WithEncoding(val.Encoding(c.Encoding()))
 
 		var defVal, generatedVal, onUpdateVal string
 		if c.DefaultValue() != nil {
@@ -704,10 +706,6 @@ func typeinfoFromSqlType(s string) (typeinfo.TypeInfo, error) {
 		return nil, err
 	}
 	return typeinfo.FromSqlType(sqlType)
-}
-
-func encodingFromTypeinfo(t typeinfo.TypeInfo) serial.Encoding {
-	return schema.EncodingFromSqlType(t.ToSqlType())
 }
 
 func constraintsFromSerialColumn(col *serial.Column) (cc []schema.ColConstraint) {

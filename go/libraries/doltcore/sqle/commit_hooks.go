@@ -72,7 +72,7 @@ func pushDataset(ctx context.Context, destDB, srcDB *doltdb.DoltDB, ds datas.Dat
 	addr, ok := ds.MaybeHeadAddr()
 	if !ok {
 		// TODO: fix up hack usage.
-		_, err := doltdb.HackDatasDatabaseFromDoltDB(destDB).Delete(ctx, ds, "")
+		_, err := doltdb.ExposeDatabaseFromDoltDB(destDB).Delete(ctx, ds, "")
 		return err
 	}
 
@@ -117,10 +117,10 @@ const (
 var _ doltdb.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
-func NewAsyncPushOnWriteHook(tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, RunAsyncThreads) {
+func NewAsyncPushOnWriteHook(nameSuffix string, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, RunAsyncThreads) {
 	ch := make(chan PushArg, asyncPushBufferSize)
-	runThreads := func(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
-		return RunAsyncReplicationThreads(bThreads, ctxF, ch, tmpDir, logger)
+	runThreads := func(bThreads BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
+		return RunAsyncReplicationThreads(bThreads, nameSuffix, ctxF, ch, tmpDir, logger)
 	}
 	return &AsyncPushOnWriteHook{ch: ch}, runThreads
 }
@@ -173,7 +173,7 @@ func (*LogHook) ExecuteForWorkingSets() bool {
 	return false
 }
 
-func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error), ch chan PushArg, tmpDir string, logger io.Writer) error {
+func RunAsyncReplicationThreads(bThreads BackgroundThreads, nameSuffix string, ctxF func(context.Context) (*sql.Context, error), ch chan PushArg, tmpDir string, logger io.Writer) error {
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
@@ -193,7 +193,7 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(conte
 	// We do not track sequential commits because push follows historical
 	// dependencies. This does not account for reset --force, which
 	// breaks historical dependence.
-	err := bThreads.Add(asyncPushProcessCommit, func(ctx context.Context) {
+	err := bThreads.Add(asyncPushProcessCommit+nameSuffix, func(ctx context.Context) {
 		for {
 			select {
 			case p, ok := <-ch:
@@ -258,7 +258,7 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(conte
 	// The second goroutine pushes updates to a remote chunkstore.
 	// This goroutine waits for first goroutine to drain before closing
 	// the channel and exiting.
-	err = bThreads.Add(asyncPushSyncReplica, func(ctx context.Context) {
+	err = bThreads.Add(asyncPushSyncReplica+nameSuffix, func(ctx context.Context) {
 		defer close(ch)
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
 		ticker := time.NewTicker(asyncPushInterval)
@@ -304,7 +304,7 @@ var _ doltdb.CommitHook = (*DynamicPushOnWriteHook)(nil)
 // NewDynamicPushOnWriteHook creates a DynamicPushOnWriteHook, parameterized by the environment and a logger. The configuration
 // options at this time can result in errors, for example if the provided remote does not exist. This is not the case
 // when the process is up and running. If bad configuration is detected at execution time, the error is logged and replication is skipped.
-func NewDynamicPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
+func NewDynamicPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
 	remote, async, err := getReplicationVals()
 	if err != nil {
 		return nil, nil, err
@@ -315,7 +315,7 @@ func NewDynamicPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io
 		return nil, nil, err
 	}
 
-	a, newThreads := NewAsyncPushOnWriteHook(tmpDir, logger)
+	a, newThreads := NewAsyncPushOnWriteHook(nameSuffix, tmpDir, logger)
 	p := NewPushOnWriteHook(tmpDir, logger)
 
 	if remote != "" {

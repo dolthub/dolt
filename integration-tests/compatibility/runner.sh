@@ -25,19 +25,20 @@ get_platform_tuple() {
     echo "tests only support linux or macOS." 1>&2
     exit 1
   fi
-  if [ "$ARCH" != x86_64 -a "$ARCH" != i386 -a "$ARCH" != i686 ]; then
-    echo "tests only support x86_64 or x86." 1>&2
-    exit 1
-  fi
+
   if [ "$OS" == Linux ]; then
     PLATFORM_TUPLE=linux
   else
     PLATFORM_TUPLE=darwin
   fi
+
+  
   if [ "$ARCH" == x86_64 ]; then
-    PLATFORM_TUPLE="$PLATFORM_TUPLE"-amd64
+      PLATFORM_TUPLE="$PLATFORM_TUPLE"-amd64
+  elif [ "$ARCH" == arm64 ]; then
+      PLATFORM_TUPLE="$PLATFORM_TUPLE"-arm64
   else
-    PLATFORM_TUPLE="$PLATFORM_TUPLE"-386
+      PLATFORM_TUPLE="$PLATFORM_TUPLE"-386
   fi
   echo "$PLATFORM_TUPLE"
 }
@@ -65,7 +66,7 @@ function test_backward_compatibility() {
   PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
   echo "Run the bats tests with current Dolt version hitting repositories from older Dolt version $ver"
-  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats ./test_files/bats
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats --print-output-on-failure ./test_files/bats
 }
 
 function list_forward_compatible_versions() {
@@ -90,6 +91,7 @@ function test_forward_compatibility() {
       dolt push file-remote init
       dolt push file-remote no-data
       dolt push file-remote other
+      dolt push file-remote check_merge
       cd ../../
   fi
   REMOTE="`pwd`"/repos/HEAD/file-remote
@@ -111,6 +113,8 @@ function test_forward_compatibility() {
   PATH="$relpath" dolt branch no-data origin/no-data
   PATH="$relpath" dolt branch init origin/init
   PATH="$relpath" dolt branch other origin/other
+  PATH="$relpath" dolt branch check_merge origin/check_merge
+
   # Also copy the files exported by setup_repo
   cp ../../repos/HEAD/*.csv ./
   cp ../../repos/HEAD/*.json ./
@@ -118,8 +122,8 @@ function test_forward_compatibility() {
 
   # Run the bats tests
   PATH="`pwd`"/"$bin":"$PATH" dolt version
-  echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
-  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
+  echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
+  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
 }
 
 _main() {
@@ -131,22 +135,20 @@ _main() {
 
   # test backward compatibility
   list_backward_compatible_versions | while IFS= read -r ver; do
-    test_backward_compatibility "$ver"
+      test_backward_compatibility "$ver"
   done
 
   # setup repo for current dolt version
   setup_repo HEAD
 
   # test forward compatibility
-  if [ -s "test_files/forward_compatible_versions.txt" ]; then
-      list_forward_compatible_versions | while IFS= read -r ver; do
-        test_forward_compatibility "$ver"
-      done
-  fi
+  list_forward_compatible_versions | while IFS= read -r ver; do
+      test_forward_compatibility "$ver"
+  done
 
   # sanity check: run tests against current version
   echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
-  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats ./test_files/bats
+  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats --print-output-on-failure ./test_files/bats
 }
 
 _main

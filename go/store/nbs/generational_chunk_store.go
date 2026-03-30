@@ -383,27 +383,28 @@ func (p prefixedTableFile) LocationPrefix() string {
 
 // Sources retrieves the current root hash, a list of all the table files (which may include appendix table files),
 // and a second list containing only appendix table files for both the old gen and new gen stores.
-func (gcs *GenerationalNBS) Sources(ctx context.Context) (hash.Hash, []chunks.TableFile, []chunks.TableFile, error) {
-	root, tFiles, appFiles, err := gcs.newGen.Sources(ctx)
+func (gcs *GenerationalNBS) Sources(ctx context.Context) (chunks.TableFileSources, error) {
+	newgensources, err := gcs.newGen.Sources(ctx)
 	if err != nil {
-		return hash.Hash{}, nil, nil, err
+		return chunks.TableFileSources{}, err
+	}
+	oldgensources, err := gcs.oldGen.Sources(ctx)
+	if err != nil {
+		return chunks.TableFileSources{}, err
 	}
 
-	_, oldTFiles, oldAppFiles, err := gcs.oldGen.Sources(ctx)
-	if err != nil {
-		return hash.Hash{}, nil, nil, err
-	}
-
+	var ret chunks.TableFileSources
+	ret.Root = newgensources.Root
+	ret.TableFiles = append([]chunks.TableFile{}, newgensources.TableFiles...)
+	ret.AppendixTableFiles = append([]chunks.TableFile{}, newgensources.AppendixTableFiles...)
 	prefix := gcs.RelativeOldGenPath()
-
-	for _, tf := range oldTFiles {
-		tFiles = append(tFiles, prefixedTableFile{tf, prefix})
+	for _, tf := range oldgensources.TableFiles {
+		ret.TableFiles = append(ret.TableFiles, prefixedTableFile{tf, prefix})
 	}
-	for _, tf := range oldAppFiles {
-		appFiles = append(appFiles, prefixedTableFile{tf, prefix})
+	for _, tf := range oldgensources.AppendixTableFiles {
+		ret.AppendixTableFiles = append(ret.AppendixTableFiles, prefixedTableFile{tf, prefix})
 	}
-
-	return root, tFiles, appFiles, nil
+	return ret, nil
 }
 
 // Size  returns the total size, in bytes, of the table files in the new and old gen stores combined
@@ -562,4 +563,14 @@ func (gcs *GenerationalNBS) Count() (uint32, error) {
 		return 0, err
 	}
 	return newGenCnt + oldGenCnt, nil
+}
+
+func (gcs *GenerationalNBS) DisableConjoin() {
+	gcs.newGen.DisableConjoin()
+	gcs.oldGen.DisableConjoin()
+}
+
+func (gcs *GenerationalNBS) RestoreDefaultConjoinBehavior() {
+	gcs.newGen.RestoreDefaultConjoinBehavior()
+	gcs.oldGen.RestoreDefaultConjoinBehavior()
 }

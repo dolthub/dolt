@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 var ErrEmptyCherryPick = errors.New("cannot cherry-pick empty string")
@@ -64,6 +65,7 @@ func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 // doDoltCherryPick attempts to perform a cherry-pick merge based on the arguments specified in |args| and returns
 // the new, created commit hash (if it was successful created), a count of the number of tables with data conflicts,
 // a count of the number of tables with schema conflicts, and a count of the number of tables with constraint violations.
+// Verification failures are returned as errors.
 func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
@@ -119,6 +121,15 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, e
 	}
 
 	if mergeResult != nil {
+		if mergeResult.CommitVerificationErr != nil {
+			// Commit the transaction to persist the dirty working set to the staged working set.
+			// This allows the user to address the verification failure and then `--continue` the cherry-pick.
+			doltSession := dsess.DSessFromSess(ctx.Session)
+			if txErr := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); txErr != nil {
+				return "", 0, 0, 0, txErr
+			}
+			return "", 0, 0, 0, mergeResult.CommitVerificationErr
+		}
 		return "",
 			mergeResult.CountOfTablesWithDataConflicts(),
 			mergeResult.CountOfTablesWithSchemaConflicts(),

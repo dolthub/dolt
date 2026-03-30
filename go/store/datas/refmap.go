@@ -42,6 +42,7 @@ func parse_storeroot(bs []byte, ns tree.NodeStore) (prolly.AddressMap, error) {
 	if err != nil {
 		return prolly.AddressMap{}, err
 	}
+
 	mapbytes := sr.AddressMapBytes()
 	node, fileId, err := tree.NodeFromBytes(mapbytes)
 	if err != nil {

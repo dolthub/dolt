@@ -455,10 +455,11 @@ var allTypes = []typeDescription{
 		},
 	},
 	{
+		// TIME is currently treated as TIME(6) (https://github.com/dolthub/dolt/issues/10661)
 		TypeDefinition: "time",
 		Assertions: [2]typeDescriptionAssertion{
-			newTypeDescriptionAssertion("TIME('01:02:03')"),
-			newTypeDescriptionAssertion("TIME('01:02:03')"),
+			newTypeDescriptionAssertion("TIME('01:02:03.000000')"),
+			newTypeDescriptionAssertion("TIME('01:02:03.000000')"),
 		},
 	},
 	{

@@ -12,8 +12,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set timezone for Unix
+        uses: szenius/set-timezone@v2.0
+        with:
+          timezoneLinux: "America/Los_Angeles"
       - name: Checkout Dolt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 

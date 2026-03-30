@@ -81,11 +81,6 @@ type Schema interface {
 	// that column will get converted to equivalent types that can. (Example: text -> varchar)
 	GetKeyDescriptor(vs val.ValueStore) *val.TupleDesc
 
-	// GetKeyDescriptorWithNoConversion returns the a descriptor for the columns used in the key.
-	// Unlike `GetKeyDescriptor`, it doesn't attempt to convert columns if they can't appear in a key,
-	// and returns them as they are.
-	GetKeyDescriptorWithNoConversion(vs val.ValueStore) *val.TupleDesc
-
 	// GetValueDescriptor returns the value tuple descriptor for this schema.
 	GetValueDescriptor(vs val.ValueStore) *val.TupleDesc
 

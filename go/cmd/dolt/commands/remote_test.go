@@ -156,7 +156,7 @@ func TestRemoteAdd_StoresNormalizedGitUrl(t *testing.T) {
 	normalized, ok, err := env.NormalizeGitRemoteUrl(original)
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	assert.Equal(t, "git+ssh://git@github.com/timsehn/dolt-in-git.git", normalized)
+	assert.Equal(t, "git+ssh://git@github.com/./timsehn/dolt-in-git.git", normalized)
 
 	urlToStore := original
 	if strings.HasPrefix(strings.ToLower(scheme), "git+") {

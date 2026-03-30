@@ -149,12 +149,16 @@ func (controller *Controller) LoadData(ctx context.Context, data []byte, isFirst
 	// The Deserialize functions acquire write locks, so we don't acquire them here
 	if err = controller.Access.Deserialize(access); err != nil {
 		// TODO: More principaled rollback. Hopefully this does not fail.
-		controller.LoadData(ctx, *rollback, isFirstLoad)
+		if rollback != nil {
+			_ = controller.LoadData(ctx, *rollback, isFirstLoad)
+		}
 		return err
 	}
 	if err = controller.Namespace.Deserialize(namespace); err != nil {
 		// TODO: More principaled rollback. Hopefully this does not fail.
-		controller.LoadData(ctx, *rollback, isFirstLoad)
+		if rollback != nil {
+			_ = controller.LoadData(ctx, *rollback, isFirstLoad)
+		}
 		return err
 	}
 
@@ -251,8 +255,7 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 	}
 	// Get the permissions for the branch, user, and host combination
 	_, perms := controller.Access.Match(database, branch, user, host)
-	// If either the flags match or the user is an admin for this branch, then we allow access
-	if (perms&flags == flags) || (perms&Permissions_Admin == Permissions_Admin) {
+	if perms&flags == flags {
 		return nil
 	}
 	return ErrIncorrectPermissions.New(user, host, branch)

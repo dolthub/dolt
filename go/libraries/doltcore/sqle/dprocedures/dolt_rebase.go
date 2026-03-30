@@ -144,6 +144,13 @@ var ErrRebaseDataConflict = goerrors.NewKind(RebaseDataConflictPrefix + " %s (%s
 	"Resolve the conflicts and remove them from the dolt_conflicts_<table> tables, " +
 	"then continue the rebase by calling dolt_rebase('--continue')")
 
+const RebaseVerificationFailedPrefix = "commit verification failed while rebasing commit"
+
+// ErrRebaseVerificationFailed is used when commit verification tests fail while rebasing a commit.
+// The workspace is left dirty so the user can fix the failing tests and retry using --continue.
+var ErrRebaseVerificationFailed = goerrors.NewKind(RebaseVerificationFailedPrefix + " %s (%s): %s\n\n" +
+	"Fix the failing tests and stage your changes, then continue the rebase by calling dolt_rebase('--continue')")
+
 var EditPausePrefix = "edit action paused at commit"
 
 // createEditPauseMessage creates a pause message for edit actions
@@ -387,26 +394,36 @@ func validateRebaseBranchHasntChanged(ctx *sql.Context, branch string, rebaseSta
 	if !ok {
 		return fmt.Errorf("unable to access doltDB for database %s", ctx.GetCurrentDatabase())
 	}
-
-	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branch))
+	roots, err := doltDb.ResolveBranchRoots(ctx, ref.NewBranchRef(branch))
 	if err != nil {
 		return err
 	}
 
-	resolvedWorkingSet, err := doltDb.ResolveWorkingSet(ctx, wsRef)
+	// Diff the changes between the branch's working set and the pre-rebase working set
+	deltas, err := diff.GetTableDeltas(ctx, rebaseState.PreRebaseWorkingRoot(), roots.Working)
 	if err != nil {
 		return err
 	}
-	hash2, err := resolvedWorkingSet.StagedRoot().HashOf()
+	schemas := diff.GetUniqueSchemaNamesFromTableDeltas(deltas)
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
 	if err != nil {
 		return err
 	}
-	hash1, err := rebaseState.PreRebaseWorkingRoot().HashOf()
-	if err != nil {
-		return err
-	}
-	if hash1 != hash2 {
-		return fmt.Errorf("rebase aborted due to changes in branch %s", branch)
+	for _, delta := range deltas {
+		tableName := delta.ToName
+		if delta.ToTable == nil {
+			tableName = delta.FromName
+		}
+
+		// If any table with a diff isn't an ignored table, then return an error
+		patterns := ignorePatternMap[tableName.Schema]
+		ignoreResult, err := (&patterns).IsTableNameIgnored(tableName)
+		if err != nil {
+			return err
+		}
+		if ignoreResult != doltdb.Ignore {
+			return fmt.Errorf("rebase aborted due to changes in branch %s", branch)
+		}
 	}
 
 	return nil
@@ -983,6 +1000,19 @@ func handleRebaseCherryPick(
 
 		// Return error for data conflict - this is a failure state that requires resolution
 		return newRebaseError(ErrRebaseDataConflict.New(planStep.CommitHash, planStep.CommitMsg))
+	}
+
+	if mergeResult != nil && mergeResult.CommitVerificationErr != nil {
+		if doltSession.GetTransaction() == nil {
+			_, txErr := doltSession.StartTransaction(ctx, sql.ReadWrite)
+			if txErr != nil {
+				return newRebaseError(txErr)
+			}
+		}
+		if txErr := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); txErr != nil {
+			return newRebaseError(txErr)
+		}
+		return newRebaseError(mergeResult.CommitVerificationErr)
 	}
 
 	// If this is an edit action and no conflicts occurred, pause the rebase to allow user modifications

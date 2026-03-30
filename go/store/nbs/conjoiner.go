@@ -36,7 +36,7 @@ import (
 
 type conjoinStrategy interface {
 	// conjoinRequired returns true if |conjoin| should be called.
-	conjoinRequired(ts tableSet) bool
+	conjoinRequired(ts *tableSet) bool
 
 	// chooseConjoinees chooses which chunkSources to conjoin from |sources|
 	chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error)
@@ -48,7 +48,7 @@ type inlineConjoiner struct {
 
 var _ conjoinStrategy = inlineConjoiner{}
 
-func (c inlineConjoiner) conjoinRequired(ts tableSet) bool {
+func (c inlineConjoiner) conjoinRequired(ts *tableSet) bool {
 	return ts.Size() > c.maxTables && len(ts.upstream) >= 2
 }
 
@@ -85,7 +85,7 @@ type noopConjoiner struct{}
 
 var _ conjoinStrategy = noopConjoiner{}
 
-func (c noopConjoiner) conjoinRequired(ts tableSet) bool {
+func (c noopConjoiner) conjoinRequired(ts *tableSet) bool {
 	return false
 }
 
@@ -101,7 +101,7 @@ type specificFilesConjoiner struct {
 
 var _ conjoinStrategy = &specificFilesConjoiner{}
 
-func (s *specificFilesConjoiner) conjoinRequired(ts tableSet) bool {
+func (s *specificFilesConjoiner) conjoinRequired(ts *tableSet) bool {
 	return len(s.targetStorageIds) > 0
 }
 

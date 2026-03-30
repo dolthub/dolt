@@ -1409,7 +1409,8 @@ DELIM
 
     run dolt sql -r csv -q "select * from t;"
     [ $status -eq 0 ]
-    [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00,0000-00-00 00:00:00,0000-00-00 00:00:00,0,"",""' ]] || false
+    # TIME is currently treated as TIME(6) (https://github.com/dolthub/dolt/issues/10661)
+    [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00.000000,0000-00-00 00:00:00,0000-00-00 00:00:00,0,"",""' ]] || false
 }
 
 @test "import-update-tables: import table with absent auto-increment column" {
@@ -1487,7 +1488,7 @@ DELIM
     [[ "$output" =~ "fatal: --all-text is only supported for create operations" ]] || false
 }
 
-#https://github.com/dolthub/dolt/issues/10589
+# https://github.com/dolthub/dolt/issues/10589
 @test "import-update-tables: table has more columns than flat file warns and continues for CSV and Parquet" {
     dolt sql <<SQL
 CREATE TABLE with_created_at_csv (
@@ -1614,3 +1615,50 @@ SQL
     [[ "$output" =~ "1" ]] || false
 }
 
+# https://github.com/dolthub/dolt/issues/10627
+# https://github.com/dolthub/dolt/issues/10657
+@test "import-update-tables: ON UPDATE columns are updated" {
+    # create table
+    dolt sql -q "CREATE TABLE table1(pk int primary key, val int, updated_at datetime(6) not null default current_timestamp(6) on update current_timestamp(6))"
+
+    # create csv
+    cat <<DELIM > table1.csv
+pk,val
+1,1
+2,2
+DELIM
+
+    # import table
+    dolt table import -u table1 table1.csv
+
+    # store reference time
+    dolt sql -q "create table times(label varchar(20) primary key, t datetime(6) not null default current_timestamp(6))"
+    dolt sql -q "insert into times(label) values ('reference_time')"
+
+    # verify that all rows have timestamps before reference time
+    run dolt sql -r csv -q "SELECT pk, val from table1 JOIN times ON table1.updated_at < times.t WHERE times.label = 'reference_time' ORDER BY pk"
+    [ "${#lines[@]}" -eq 3 ]
+    [ "${lines[1]}" = "1,1" ]
+    [ "${lines[2]}" = "2,2" ]
+
+    # update csv
+    cat <<DELIM > table1_update.csv
+pk,val
+1,6
+2,2
+DELIM
+
+    # import table with updated csv
+    dolt table import -u table1 table1_update.csv
+
+    # verify only updated row has timestamp after reference time
+    run dolt sql -r csv -q "SELECT pk, val from table1 JOIN times ON table1.updated_at > times.t WHERE times.label = 'reference_time' ORDER BY pk"
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[1]}" = "1,6" ]
+
+    # verify table still only has 2 rows
+    run dolt sql -r csv -q "SELECT pk, val from table1"
+    [ "${#lines[@]}" -eq 3 ]
+    [ "${lines[1]}" = "1,6" ]
+    [ "${lines[2]}" = "2,2" ]
+}

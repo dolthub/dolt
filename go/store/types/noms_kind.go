@@ -29,7 +29,9 @@ import (
 type NomsKind uint8
 
 // All supported kinds of Noms types are enumerated here.
-// The ordering of these (especially Bool, Float and String) is important for ordering of values.
+// DO NOT REORDER THIS LIST OR DELETE ELEMENTS. ADD NEW ELEMENTS AT THE END ONLY.
+// The integer value of these constants is used when creating column tags, so changing these values will break
+// compatibility with existing versions of Dolt.
 const (
 	BoolKind NomsKind = iota
 	FloatKind
@@ -81,25 +83,18 @@ var KindToType = make([]Value, 255)
 var SupportedKinds = make([]bool, 255)
 
 func init() {
-	KindToType[BlobKind] = Blob{}
 	KindToType[BoolKind] = Bool(false)
-	KindToType[ListKind] = List{}
-	KindToType[MapKind] = Map{}
 	KindToType[FloatKind] = Float(0)
 	KindToType[RefKind] = Ref{}
-	KindToType[SetKind] = Set{}
-	KindToType[StructKind] = Struct{}
 	KindToType[StringKind] = String("")
 	KindToType[TypeKind] = &Type{}
 	KindToType[UUIDKind] = UUID{}
 	KindToType[IntKind] = Int(0)
 	KindToType[UintKind] = Uint(0)
 	KindToType[NullKind] = NullValue
-	KindToType[TupleKind] = Tuple{}
 	KindToType[InlineBlobKind] = InlineBlob{}
 	KindToType[TimestampKind] = Timestamp{}
 	KindToType[DecimalKind] = Decimal{}
-	KindToType[JSONKind] = JSON{}
 	KindToType[GeometryKind] = Geometry{}
 	KindToType[PointKind] = Point{}
 	KindToType[LineStringKind] = LineString{}
@@ -128,11 +123,9 @@ func init() {
 	SupportedKinds[IntKind] = true
 	SupportedKinds[UintKind] = true
 	SupportedKinds[NullKind] = true
-	SupportedKinds[TupleKind] = true
 	SupportedKinds[InlineBlobKind] = true
 	SupportedKinds[TimestampKind] = true
 	SupportedKinds[DecimalKind] = true
-	SupportedKinds[JSONKind] = true
 	SupportedKinds[GeometryKind] = true
 	SupportedKinds[PointKind] = true
 	SupportedKinds[LineStringKind] = true

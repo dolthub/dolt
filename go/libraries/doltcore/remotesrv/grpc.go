@@ -428,8 +428,9 @@ func (rs *RemoteChunkStore) getUploadUrl(md metadata.MD, repoPath string, tfd *r
 	params.Add("split_offset", strconv.Itoa(int(tfd.SplitOffset)))
 	params.Add("content_length", strconv.Itoa(int(tfd.ContentLength)))
 	params.Add("content_hash", base64.RawURLEncoding.EncodeToString(tfd.ContentHash))
+	scheme := rs.getScheme(md)
 	return &url.URL{
-		Scheme:   rs.httpScheme,
+		Scheme:   scheme,
 		Host:     rs.getHost(md),
 		Path:     fmt.Sprintf("%s/%s", repoPath, fileID),
 		RawQuery: params.Encode(),
@@ -569,11 +570,12 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 		return nil, err
 	}
 
-	root, tables, appendixTables, err := cs.Sources(ctx)
+	tfsources, err := cs.Sources(ctx)
 	if err != nil {
 		logger.WithError(err).Error("error getting chunk store Sources")
 		return nil, status.Error(codes.Internal, "failed to get sources")
 	}
+	root, tables, appendixTables := tfsources.Root, tfsources.TableFiles, tfsources.AppendixTableFiles
 
 	md, _ := metadata.FromIncomingContext(ctx)
 

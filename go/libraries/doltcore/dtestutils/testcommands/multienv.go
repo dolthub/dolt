@@ -178,7 +178,7 @@ func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
 	if err != nil {
 		mr.Errhand(err)
 	}
-	err = dprocedures.MoveWorkingSetToBranch(queryist.Context, branchName, false, false)
+	err = dprocedures.MoveWorkingSetToBranch(queryist.Context, branchName, false, false, true)
 	if err != nil {
 		mr.Errhand(err)
 	}

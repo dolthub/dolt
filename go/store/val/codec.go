@@ -134,17 +134,6 @@ func IsReferenceEncoding(enc Encoding) bool {
 	return IsAdaptiveEncoding(enc) || IsAddrEncoding(enc)
 }
 
-func IsExtendedEncoding(enc Encoding) bool {
-	switch enc {
-	case ExtendedEnc,
-		ExtendedAddrEnc,
-		ExtendedAdaptiveEnc:
-		return true
-	default:
-		return false
-	}
-}
-
 // Variable Width Encodings
 const (
 	StringEnc           = Encoding(serial.EncodingString)

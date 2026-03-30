@@ -23,6 +23,7 @@ package types
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,8 +55,6 @@ type CodecReader interface {
 	ReadMultiLineString() (MultiLineString, error)
 	ReadMultiPolygon() (MultiPolygon, error)
 	ReadGeomColl() (GeomColl, error)
-	ReadBlob() (Blob, error)
-	ReadJSON() (JSON, error)
 }
 
 var _ CodecReader = (*valueDecoder)(nil)
@@ -78,14 +77,6 @@ func newValueDecoder(buff []byte, vrw ValueReadWriter) valueDecoder {
 
 func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) valueDecoder {
 	return valueDecoder{vrw, typedBinaryNomsReader{nr, true}}
-}
-
-func (r *valueDecoder) ReadBlob() (Blob, error) {
-	seq, err := r.readBlobSequence(r.vrw.Format())
-	if err != nil {
-		return Blob{}, err
-	}
-	return newBlob(seq), nil
 }
 
 func (r *valueDecoder) ReadGeometry() (Geometry, error) {
@@ -120,10 +111,6 @@ func (r *valueDecoder) ReadGeomColl() (GeomColl, error) {
 	return readGeomColl(nil, r)
 }
 
-func (r *valueDecoder) ReadJSON() (JSON, error) {
-	return readJSON(r.vrw.Format(), r)
-}
-
 func (r *valueDecoder) readRef(nbf *NomsBinFormat) (Ref, error) {
 	return readRef(nbf, &(r.typedBinaryNomsReader))
 }
@@ -133,220 +120,11 @@ func (r *valueDecoder) skipRef() error {
 	return err
 }
 
-func (r *valueDecoder) skipBlobLeafSequence(nbf *NomsBinFormat) ([]uint32, uint64, error) {
-	size := r.readCount()
-	valuesPos := r.pos()
-	r.offset += uint32(size)
-	return []uint32{valuesPos, r.pos()}, size, nil
-}
-
-func (r *valueDecoder) skipValueSequence(nbf *NomsBinFormat, elementsPerIndex int) ([]uint32, uint64, error) {
-	count := r.readCount()
-	offsets := make([]uint32, count+1)
-	offsets[0] = r.pos()
-	for i := uint64(0); i < count; i++ {
-		for j := 0; j < elementsPerIndex; j++ {
-			err := r.SkipValue(nbf)
-
-			if err != nil {
-				return nil, 0, err
-			}
-		}
-		offsets[i+1] = r.pos()
-	}
-	return offsets, count, nil
-}
-
-func (r *valueDecoder) skipListLeafSequence(nbf *NomsBinFormat) ([]uint32, uint64, error) {
-	return r.skipValueSequence(nbf, getValuesPerIdx(ListKind))
-}
-
-func (r *valueDecoder) skipSetLeafSequence(nbf *NomsBinFormat) ([]uint32, uint64, error) {
-	return r.skipValueSequence(nbf, getValuesPerIdx(SetKind))
-}
-
-func (r *valueDecoder) skipMapLeafSequence(nbf *NomsBinFormat) ([]uint32, uint64, error) {
-	return r.skipValueSequence(nbf, getValuesPerIdx(MapKind))
-}
-
-func (r *valueDecoder) readSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipper func(nbf *NomsBinFormat) ([]uint32, uint64, error)) (sequence, error) {
-	start := r.pos()
-	offsets := []uint32{start}
-	r.skipKind()
-	offsets = append(offsets, r.pos())
-	level := r.readCount()
-	offsets = append(offsets, r.pos())
-	var seqOffsets []uint32
-	var length uint64
-	if level > 0 {
-		var err error
-		seqOffsets, length, err = r.skipMetaSequence(nbf, kind, level)
-
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		var err error
-		seqOffsets, length, err = leafSkipper(nbf)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	offsets = append(offsets, seqOffsets...)
-	end := r.pos()
-
-	if level > 0 {
-		return newMetaSequence(nbf, r.vrw, r.byteSlice(start, end), offsets, length), nil
-	}
-
-	return newLeafSequence(nbf, r.vrw, r.byteSlice(start, end), offsets, length), nil
-}
-
-func (r *valueDecoder) readBlobSequence(nbf *NomsBinFormat) (sequence, error) {
-	seq, err := r.readSequence(nbf, BlobKind, r.skipBlobLeafSequence)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if seq.isLeaf() {
-		return blobLeafSequence{seq.(leafSequence)}, nil
-	}
-
-	return seq, nil
-}
-
-func (r *valueDecoder) readListSequence(nbf *NomsBinFormat) (sequence, error) {
-	seq, err := r.readSequence(nbf, ListKind, r.skipListLeafSequence)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if seq.isLeaf() {
-		return listLeafSequence{seq.(leafSequence)}, nil
-	}
-	return seq, nil
-}
-
-func (r *valueDecoder) readSetSequence(nbf *NomsBinFormat) (orderedSequence, error) {
-	seq, err := r.readSequence(nbf, SetKind, r.skipSetLeafSequence)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if seq.isLeaf() {
-		return setLeafSequence{seq.(leafSequence)}, nil
-	}
-
-	return seq.(orderedSequence), nil
-}
-
-func (r *valueDecoder) readMapSequence(nbf *NomsBinFormat) (orderedSequence, error) {
-	seq, err := r.readSequence(nbf, MapKind, r.skipMapLeafSequence)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if seq.isLeaf() {
-		return mapLeafSequence{seq.(leafSequence)}, nil
-	}
-
-	return seq.(orderedSequence), nil
-}
-
-func (r *valueDecoder) skipList(nbf *NomsBinFormat) error {
-	return r.skipSequence(nbf, ListKind, r.skipListLeafSequence)
-}
-
-func (r *valueDecoder) skipSet(nbf *NomsBinFormat) error {
-	return r.skipSequence(nbf, SetKind, r.skipSetLeafSequence)
-}
-
-func (r *valueDecoder) skipMap(nbf *NomsBinFormat) error {
-	return r.skipSequence(nbf, MapKind, r.skipMapLeafSequence)
-}
-
-func (r *valueDecoder) skipBlob(nbf *NomsBinFormat) error {
-	return r.skipSequence(nbf, BlobKind, r.skipBlobLeafSequence)
-}
-
-func (r *valueDecoder) skipJSON(nbf *NomsBinFormat) error {
-	return skipJSON(nbf, r)
-}
-
-func (r *valueDecoder) skipSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipper func(nbf *NomsBinFormat) ([]uint32, uint64, error)) error {
-	r.skipKind()
-	level := r.readCount()
-	if level > 0 {
-		_, _, err := r.skipMetaSequence(nbf, kind, level)
-
-		if err != nil {
-			return err
-		}
-	} else {
-		_, _, err := leafSkipper(nbf)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *valueDecoder) skipOrderedKey(nbf *NomsBinFormat) error {
-	switch r.PeekKind() {
-	case hashKind:
-		r.skipKind()
-		r.skipHash()
-	default:
-		err := r.SkipValue(nbf)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *valueDecoder) skipMetaSequence(nbf *NomsBinFormat, k NomsKind, level uint64) ([]uint32, uint64, error) {
-	count := r.readCount()
-	offsets := make([]uint32, count+1)
-	offsets[0] = r.pos()
-	length := uint64(0)
-	for i := uint64(0); i < count; i++ {
-		err := r.skipRef()
-
-		if err != nil {
-			return nil, 0, err
-		}
-
-		err = r.skipOrderedKey(nbf)
-
-		if err != nil {
-			return nil, 0, err
-		}
-
-		length += r.readCount()
-		offsets[i+1] = r.pos()
-	}
-	return offsets, length, nil
-}
-
 func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	k := r.PeekKind()
 	switch k {
-	case BlobKind:
-		seq, err := r.readBlobSequence(nbf)
-		if err != nil {
-			return nil, err
-		}
-		return newBlob(seq), nil
+	case BlobKind, ListKind, MapKind, SetKind:
+		return nil, fmt.Errorf("unsupported collection kind: %s", k)
 	// The following primitive kinds, through StringKind, are also
 	// able to be processed by the IsPrimitiveKind branch below.
 	// But we include them here for efficiency, since it is about
@@ -370,32 +148,12 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	case StringKind:
 		r.skipKind()
 		return String(r.ReadString()), nil
-	case ListKind:
-		seq, err := r.readListSequence(nbf)
-		if err != nil {
-			return nil, err
-		}
-		return newList(seq), nil
-	case MapKind:
-		seq, err := r.readMapSequence(nbf)
-		if err != nil {
-			return nil, err
-		}
-		return newMap(seq), nil
 	case RefKind:
 		return r.readRef(nbf)
-	case SetKind:
-		seq, err := r.readSetSequence(nbf)
-		if err != nil {
-			return nil, err
-		}
-		return newSet(seq), nil
 	case StructKind:
-		return r.readStruct(nbf)
-	case TupleKind:
-		return r.readTuple(nbf)
-	case JSONKind:
-		return r.ReadJSON()
+		return nil, fmt.Errorf("unsupported kind: %s", k)
+	case TupleKind, JSONKind:
+		return nil, fmt.Errorf("unsupported kind: %s", k)
 	case GeometryKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
@@ -510,11 +268,8 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 	k := r.PeekKind()
 	switch k {
-	case BlobKind:
-		err := r.skipBlob(nbf)
-		if err != nil {
-			return err
-		}
+	case BlobKind, ListKind, MapKind, SetKind, StructKind, TupleKind, JSONKind:
+		return fmt.Errorf("unsupported kind: %s", k)
 	// The following primitive kinds, through StringKind, are also
 	// able to be processed by the IsPrimitiveKind branch below.
 	// But we include them here for efficiency, since it is about
@@ -558,38 +313,8 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 	case MultiPolygonKind:
 		r.skipKind()
 		r.skipString()
-	case ListKind:
-		err := r.skipList(nbf)
-		if err != nil {
-			return err
-		}
-	case MapKind:
-		err := r.skipMap(nbf)
-		if err != nil {
-			return err
-		}
 	case RefKind:
 		err := r.skipRef()
-		if err != nil {
-			return err
-		}
-	case SetKind:
-		err := r.skipSet(nbf)
-		if err != nil {
-			return err
-		}
-	case StructKind:
-		err := r.skipStruct(nbf)
-		if err != nil {
-			return err
-		}
-	case TupleKind:
-		err := r.skipTuple(nbf)
-		if err != nil {
-			return err
-		}
-	case JSONKind:
-		err := r.skipJSON(nbf)
 		if err != nil {
 			return err
 		}
@@ -618,152 +343,6 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 	return nil
 }
 
-// readTypeOfValue is basically readValue().typeOf() but it ensures that we do
-// not allocate values where we do not need to.
-func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
-	k := r.PeekKind()
-	switch k {
-	case BlobKind:
-		err := r.skipBlob(nbf)
-		if err != nil {
-			return nil, err
-		}
-		return PrimitiveTypeMap[BlobKind], nil
-	case ListKind, MapKind, RefKind, SetKind:
-		// These do not decode the actual values anyway.
-		val, err := r.readValue(nbf)
-		if err != nil {
-			return nil, err
-		}
-		d.Chk.True(val != nil)
-		return val.typeOf()
-	case StructKind:
-		return readStructTypeOfValue(nbf, r)
-	case TupleKind:
-		val, err := r.readValue(nbf)
-		if err != nil {
-			return nil, err
-		}
-		d.Chk.True(val != nil)
-		return val.typeOf()
-	case JSONKind:
-		val, err := r.readValue(nbf)
-		if err != nil {
-			return nil, err
-		}
-		d.Chk.True(val != nil)
-		return val.typeOf()
-	case TypeKind:
-		r.skipKind()
-		err := r.skipType()
-		if err != nil {
-			return nil, err
-		}
-		return PrimitiveTypeMap[TypeKind], nil
-	case CycleKind, UnionKind, ValueKind:
-		d.Panic("A value instance can never have type %s", k)
-	}
-
-	if IsPrimitiveKind(k) {
-		if emptyVal := KindToType[k]; emptyVal != nil {
-			r.skipKind()
-			emptyVal.skip(nbf, &r.binaryNomsReader)
-			return PrimitiveTypeMap[k], nil
-		}
-	}
-
-	return nil, ErrUnknownType
-}
-
-// isValueSameTypeForSure may return false even though the type of the value is
-// equal. We do that in cases where it would be too expensive to compute the
-// type.
-// If this returns false the decoder might not have visited the whole value and
-// its offset is no longer valid.
-func (r *valueDecoder) isValueSameTypeForSure(nbf *NomsBinFormat, t *Type) (bool, error) {
-	k := r.PeekKind()
-	if k != t.TargetKind() {
-		return false, nil
-	}
-
-	switch k {
-	case ListKind, MapKind, RefKind, SetKind, TupleKind:
-		// TODO: Maybe do some simple cases here too. Performance metrics should determine
-		// what is going to be worth doing.
-		// https://github.com/attic-labs/noms/issues/3776
-		return false, nil
-	case StructKind:
-		return isStructSameTypeForSure(nbf, r, t)
-	case TypeKind:
-		return false, nil
-	case CycleKind, UnionKind, ValueKind:
-		d.Panic("A value instance can never have type %s", k)
-	}
-
-	// Captures all other types that are not the above special cases
-	if IsPrimitiveKind(k) {
-		err := r.SkipValue(nbf)
-		if err != nil {
-			return false, err
-		}
-
-		return true, nil
-	}
-
-	panic("non-primitive type not special cased")
-}
-
-// isStringSame checks if the next string in the decoder matches string. It
-// moves the decoder to after the string in all cases.
-func (r *valueDecoder) isStringSame(s string) bool {
-	count := r.readCount()
-	start := uint64(r.offset)
-	r.offset += uint32(count)
-	if uint64(len(s)) != count {
-		return false
-	}
-
-	for i := uint64(0); i < count; i++ {
-		if s[i] != r.buff[start+i] {
-			return false
-		}
-	}
-	return true
-}
-
-func (r *valueDecoder) readStruct(nbf *NomsBinFormat) (Value, error) {
-	return readStruct(nbf, r)
-}
-
-func (r *valueDecoder) readTuple(nbf *NomsBinFormat) (Tuple, error) {
-	return readTuple(nbf, r)
-}
-
-func (r *valueDecoder) skipStruct(nbf *NomsBinFormat) error {
-	return skipStruct(nbf, r)
-}
-
-func (r *valueDecoder) skipTuple(nbf *NomsBinFormat) error {
-	return skipTuple(nbf, r)
-}
-
-func (r *valueDecoder) readOrderedKey(nbf *NomsBinFormat) (orderedKey, error) {
-	switch r.PeekKind() {
-	case hashKind:
-		r.skipKind()
-		h := r.readHash()
-		return orderedKeyFromHash(h), nil
-	default:
-		v, err := r.readValue(nbf)
-
-		if err != nil {
-			return orderedKey{}, err
-		}
-
-		return newOrderedKey(v, nbf)
-	}
-}
-
 func (r *typedBinaryNomsReader) readType() (*Type, error) {
 	t, err := r.readTypeInner(map[string]*Type{})
 
@@ -771,9 +350,6 @@ func (r *typedBinaryNomsReader) readType() (*Type, error) {
 		return nil, err
 	}
 
-	if r.validating {
-		validateType(t)
-	}
 	return t, nil
 }
 
@@ -837,22 +413,6 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 		return makeCompoundType(SetKind, t)
 	case StructKind:
 		return r.readStructType(seenStructs)
-	case TupleKind:
-		t, err := r.readTypeInner(seenStructs)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return makeCompoundType(TupleKind, t)
-	case JSONKind:
-		t, err := r.readTypeInner(seenStructs)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return makeCompoundType(JSONKind, t)
 	case UnionKind:
 		t, err := r.readUnionType(seenStructs)
 
@@ -876,7 +436,7 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 func (r *typedBinaryNomsReader) skipTypeInner() {
 	k := r.ReadKind()
 	switch k {
-	case ListKind, RefKind, SetKind, TupleKind, JSONKind:
+	case ListKind, RefKind, SetKind:
 		r.skipTypeInner()
 	case MapKind:
 		r.skipTypeInner()

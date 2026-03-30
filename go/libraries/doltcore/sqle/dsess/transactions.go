@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -161,8 +160,6 @@ func (tx DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
 	startPoint, ok := tx.dbStartPoints[strings.ToLower(dbName)]
 	return startPoint.rootHash, ok
 }
-
-var txLocks = keymutex.NewMapped()
 
 // Commit attempts to merge the working set given into the current working set.
 // Uses the same algorithm as merge.RootMerger:
@@ -413,11 +410,11 @@ func (tx *DoltTransaction) doCommit(
 	for i := 0; i < maxTxCommitRetries; i++ {
 		updatedWs, newCommit, err := func() (*doltdb.WorkingSet, *doltdb.Commit, error) {
 			// Serialize commits, since only one can possibly succeed at a time anyway
-			err := txLocks.Lock(ctx, lockID)
+			err := sess.Provider().TxLocks().Lock(ctx, lockID)
 			if err != nil {
 				return nil, nil, err
 			}
-			defer txLocks.Unlock(lockID)
+			defer sess.Provider().TxLocks().Unlock(lockID)
 
 			newWorkingSet := false
 

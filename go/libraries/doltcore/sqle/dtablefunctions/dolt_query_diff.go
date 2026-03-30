@@ -19,6 +19,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -320,7 +321,8 @@ func (tf *QueryDiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, erro
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (tf *QueryDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	subject := sql.PrivilegeCheckSubject{Database: tf.database.Name()}
+	baseDB, _ := doltdb.SplitRevisionDbName(tf.database.Name())
+	subject := sql.PrivilegeCheckSubject{Database: baseDB}
 	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }
 

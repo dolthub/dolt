@@ -15,21 +15,25 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type linestringType struct {
 	sqlLineStringType gmstypes.LineStringType
+	enc               val.Encoding
 }
 
 var _ TypeInfo = (*linestringType)(nil)
 
-var LineStringType = &linestringType{gmstypes.LineStringType{}}
+var LineStringType = &linestringType{sqlLineStringType: gmstypes.LineStringType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *linestringType) Equals(other TypeInfo) bool {
@@ -38,7 +42,8 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*linestringType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise, return false
-		return (!ti.sqlLineStringType.DefinedSRID && !o.sqlLineStringType.DefinedSRID) || ti.sqlLineStringType.SRID == o.sqlLineStringType.SRID
+		return ((!ti.sqlLineStringType.DefinedSRID && !o.sqlLineStringType.DefinedSRID) || ti.sqlLineStringType.SRID == o.sqlLineStringType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }
@@ -51,6 +56,22 @@ func (ti *linestringType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *linestringType) String() string {
 	return "LineString"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *linestringType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *linestringType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.GeomAddrEnc && enc != val.GeometryEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &linestringType{sqlLineStringType: ti.sqlLineStringType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

@@ -15,21 +15,25 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type polygonType struct {
 	sqlPolygonType gmstypes.PolygonType
+	enc            val.Encoding
 }
 
 var _ TypeInfo = (*polygonType)(nil)
 
-var PolygonType = &polygonType{gmstypes.PolygonType{}}
+var PolygonType = &polygonType{sqlPolygonType: gmstypes.PolygonType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *polygonType) Equals(other TypeInfo) bool {
@@ -38,7 +42,8 @@ func (ti *polygonType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*polygonType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlPolygonType.DefinedSRID && !o.sqlPolygonType.DefinedSRID) || ti.sqlPolygonType.SRID == o.sqlPolygonType.SRID
+		return ((!ti.sqlPolygonType.DefinedSRID && !o.sqlPolygonType.DefinedSRID) || ti.sqlPolygonType.SRID == o.sqlPolygonType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }
@@ -51,6 +56,22 @@ func (ti *polygonType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *polygonType) String() string {
 	return "Polygon"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *polygonType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *polygonType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.GeomAddrEnc && enc != val.GeometryEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &polygonType{sqlPolygonType: ti.sqlPolygonType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.
