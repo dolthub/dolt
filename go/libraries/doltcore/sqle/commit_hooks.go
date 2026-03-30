@@ -189,10 +189,20 @@ func RunAsyncReplicationThreads(bThreads BackgroundThreads, nameSuffix string, c
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
+	// wake is a buffered signal channel used to notify the push
+	// goroutine that new work is available. Size 1 ensures signals
+	// are not lost but the sender never blocks.
+	wake := make(chan struct{}, 1)
+
 	updateHead := func(p PushArg) {
 		mu.Lock()
 		newHeads[p.ds.ID()] = p
 		mu.Unlock()
+		// Non-blocking send to wake the push goroutine.
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
 	}
 
 	// newCtx lets first goroutine drain before the second goroutine finalizes
@@ -268,19 +278,32 @@ func RunAsyncReplicationThreads(bThreads BackgroundThreads, nameSuffix string, c
 	}
 
 	// The second goroutine pushes updates to a remote chunkstore.
+	// It quiesces when there is no work, waking only when the first
+	// goroutine signals via the wake channel.
 	// This goroutine waits for first goroutine to drain before closing
 	// the channel and exiting.
 	err = bThreads.Add(asyncPushSyncReplica+nameSuffix, func(ctx context.Context) {
 		defer close(ch)
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
 		ticker := time.NewTicker(asyncPushInterval)
+		canPoll := false
 		for {
+			wakeCh := wake
+			// Only allow polling wakeCh if ticker has fired.
+			if !canPoll {
+				wakeCh = nil
+			}
 			select {
 			case <-newCtx.Done():
 				flush(newHeads, latestHeads)
 				return
-			case <-ticker.C:
+			case <-wakeCh:
+				canPoll = false
+				ticker.Reset(asyncPushInterval)
 				flush(newHeads, latestHeads)
+			case <-ticker.C:
+				ticker.Stop()
+				canPoll = true
 			}
 		}
 	})

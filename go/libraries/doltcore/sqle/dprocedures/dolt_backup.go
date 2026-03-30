@@ -282,7 +282,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	})
 	wg.Go(func() {
 		defer close(statsCh)
-		err = actions.SyncRoots(ctx, remoteDb, newDb.DbData().Ddb, fileSys.TempDir(), statsCh)
+		err = actions.SyncRoots(ctx, remoteDb, newDb.DbData().Ddb, fileSys.TempDir(), actions.SyncRootsDBRelationshipUnrelated, statsCh)
 	})
 	wg.Wait()
 	if err == nil {
@@ -331,7 +331,7 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	})
 	wg.Go(func() {
 		defer close(statsCh)
-		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), statsCh)
+		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), actions.SyncRootsDBRelationshipUnknown, statsCh)
 	})
 	wg.Wait()
 	if err == nil {

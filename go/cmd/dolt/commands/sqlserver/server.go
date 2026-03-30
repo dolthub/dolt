@@ -537,7 +537,8 @@ func ConfigureServices(
 				path = ""
 			}
 
-			metListener, err = newMetricsListener(labels, cfg.Version, path, clusterController)
+			metricsExposed := cfg.ServerConfig.MetricsHost() != "" && cfg.ServerConfig.MetricsPort() > 0
+			metListener, err = newMetricsListener(labels, cfg.Version, path, clusterController, metricsExposed)
 			return err
 		},
 		StopF: func() error {
