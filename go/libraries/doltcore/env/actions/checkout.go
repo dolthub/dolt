@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -336,6 +337,55 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltd
 	}
 
 	return resultMap, nil
+}
+
+// CheckOverwrittenIgnoredTables returns an error if |overwriteIgnore| is false and any ignored
+// tables in |roots.Working| would be overwritten by checking out |branchRoot|.
+func CheckOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue, overwriteIgnore bool) error {
+	if overwriteIgnore {
+		return nil
+	}
+
+	workingTables, err := doltdb.UnionTableNames(ctx, roots.Working)
+	if err != nil {
+		return err
+	}
+
+	ignoredTables, err := doltdb.IdentifyIgnoredTables(ctx, roots, workingTables)
+	if err != nil {
+		return err
+	}
+
+	if len(ignoredTables) == 0 {
+		return nil
+	}
+
+	var overwritten []string
+	for _, tbl := range ignoredTables {
+		currentHash, _, err := roots.Working.GetTableHash(ctx, tbl)
+		if err != nil {
+			return err
+		}
+
+		newHash, _, err := branchRoot.GetTableHash(ctx, tbl)
+		if err != nil {
+			return err
+		}
+
+		// Only flag an overwrite when the target branch has the table
+		// with different content. Per Git's docs, --no-overwrite-ignore
+		// aborts "when the new branch contains ignored files," so if
+		// the target branch does not have the table (empty hash) there
+		// is nothing to overwrite the local copy.
+		if currentHash != newHash && !newHash.IsEmpty() {
+			overwritten = append(overwritten, tbl.String())
+		}
+	}
+
+	if len(overwritten) > 0 {
+		return ErrCheckoutWouldOverwriteIgnoredTables.New(strings.Join(overwritten, "\n\t"))
+	}
+	return nil
 }
 
 // moveForeignKeys returns the foreign key collection that should be used for the new working set.

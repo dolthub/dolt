@@ -1409,7 +1409,8 @@ DELIM
 
     run dolt sql -r csv -q "select * from t;"
     [ $status -eq 0 ]
-    [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00,0000-00-00 00:00:00,0000-00-00 00:00:00,0,"",""' ]] || false
+    # TIME is currently treated as TIME(6) (https://github.com/dolthub/dolt/issues/10661)
+    [[ "$output" =~ '1,0,0,0,0,0,0,0,0,0,0,0000-00-00,00:00:00.000000,0000-00-00 00:00:00,0000-00-00 00:00:00,0,"",""' ]] || false
 }
 
 @test "import-update-tables: import table with absent auto-increment column" {

@@ -108,6 +108,13 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return 1
 	}
 
+	if apr.ContainsAll(cli.OverwriteIgnoreFlag, cli.NoOverwriteIgnoreFlag) {
+		return HandleVErrAndExitCode(
+			errhand.BuildDError("error: --%s and --%s are mutually exclusive", cli.OverwriteIgnoreFlag, cli.NoOverwriteIgnoreFlag).Build(),
+			usage,
+		)
+	}
+
 	// Argument validation in the CLI is strictly nice to have. The stored procedure will do the same, but the errors
 	// won't be as nice.
 	branchOrTrack := apr.Contains(cli.CheckoutCreateBranch) || apr.Contains(cli.CreateResetBranch) || apr.Contains(cli.TrackFlag)
@@ -224,6 +231,8 @@ func handleErrors(branchName string, err error) errhand.VerboseError {
 	} else if doltdb.IsRootValUnreachable(err) {
 		return errhand.VerboseErrorFromError(err)
 	} else if actions.IsCheckoutWouldOverwrite(err) {
+		return errhand.VerboseErrorFromError(err)
+	} else if actions.ErrCheckoutWouldOverwriteIgnoredTables.Is(err) {
 		return errhand.VerboseErrorFromError(err)
 	} else if err.Error() == actions.ErrWorkingSetsOnBothBranches.Error() {
 		str := fmt.Sprintf("error: There are uncommitted changes already on branch '%s'.", branchName) +

@@ -124,9 +124,14 @@ teardown() {
 }
 
 @test "types_compatibility: date and time columns readable from old dolt" {
-    run dolt sql -q "SELECT pk, c_date, c_time, c_year FROM all_types WHERE pk=1;" -r csv
+    run dolt sql -q "SELECT pk, c_date, c_year FROM all_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,2024-01-15,13:30:45,2024" ]] || false
+    [[ "${lines[1]}" =~ "1,2024-01-15,2024" ]] || false
+    # Older versions of Dolt truncated precision on time types,
+    # leading to different output.
+    run dolt sql -q "SELECT c_time FROM all_types WHERE pk=1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "13:30:45" ]] || false
 }
 
 @test "types_compatibility: datetime column readable from old dolt" {

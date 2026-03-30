@@ -25,6 +25,7 @@ import (
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -88,7 +89,18 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		}
 		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	case ref.FastForwardOnly:
-		err = destDB.FastForwardWithWorkspaceCheck(ctx, destRef, commit)
+		// ResolveBranchRoots fails for remotes that don't maintain a working set (e.g. file://),
+		// in which case FastForwardWithWorkspaceCheck handles it correctly without the ignored-table check.
+		onlyIgnored := false
+		roots, err := destDB.ResolveBranchRoots(ctx, destRef)
+		if err == nil {
+			onlyIgnored, _ = diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+		}
+		if onlyIgnored {
+			err = destDB.FastForward(ctx, destRef, commit)
+		} else {
+			err = destDB.FastForwardWithWorkspaceCheck(ctx, destRef, commit)
+		}
 		if err != nil {
 			return err
 		}
