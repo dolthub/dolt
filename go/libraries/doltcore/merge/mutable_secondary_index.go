@@ -68,6 +68,11 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ns tree.NodeStore, our
 			continue
 		}
 
+		ourIndex := ourSch.Indexes().GetByName(index.Name())
+		if ourIndex == nil || !ourIndex.Equals(index) {
+			continue
+		}
+
 		idx, err := indexes.GetIndex(ctx, sch, nil, index.Name())
 		if err != nil {
 			return nil, err
@@ -81,15 +86,11 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ns tree.NodeStore, our
 		// TODO: This isn't technically required, but correctly handling updating secondary indexes when only some
 		// of the table's rows have been updated is difficult to get right.
 		// Dropping the index is potentially slower but guaranteed to be correct.
-		ourIndex := ourSch.Indexes().GetByName(index.Name())
-		if ourIndex == nil || !ourIndex.Equals(index) {
-			continue
-		}
-
 		idxKeyDesc := m.KeyDesc()
 		if schema.IsKeyless(sch) {
 			idxKeyDesc = idxKeyDesc.PrefixDesc(idxKeyDesc.Count() - 1)
 		}
+
 		if !idxKeyDesc.Equals(index.Schema().GetKeyDescriptor(ns)) {
 			continue
 		}
