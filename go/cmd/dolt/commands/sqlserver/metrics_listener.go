@@ -70,7 +70,7 @@ type metricsListener struct {
 	clusterSeenDbs map[string]struct{}
 }
 
-func newMetricsListener(labels prometheus.Labels, versionStr, storagePath string, clusterStatus clusterdb.ClusterStatusProvider) (*metricsListener, error) {
+func newMetricsListener(labels prometheus.Labels, versionStr, storagePath string, clusterStatus clusterdb.ClusterStatusProvider, metricsExposed bool) (*metricsListener, error) {
 	mountPoint := ""
 
 	if storagePath != "" {
@@ -185,11 +185,13 @@ func newMetricsListener(labels prometheus.Labels, versionStr, storagePath string
 	prometheus.MustRegister(ml.diskUsage)
 	prometheus.MustRegister(ml.memUsage)
 
-	go func() {
-		for ml.pollMetrics() {
-			time.Sleep(metricsUpdateInterval)
-		}
-	}()
+	if metricsExposed {
+		go func() {
+			for ml.pollMetrics() {
+				time.Sleep(metricsUpdateInterval)
+			}
+		}()
+	}
 
 	ml.gaugeVersion.Set(f64Version)
 	return ml, nil
