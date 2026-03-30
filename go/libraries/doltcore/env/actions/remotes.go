@@ -764,9 +764,11 @@ func pruneBranches[C doltdb.Context](ctx context.Context, dbData env.DbData[C], 
 //
 // Either way, both dest and source need to be table file stores,
 // since otherwise we need to pull chunks individually.
-func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, destDbRoot hash.Hash) (bool, error) {
-	if !destDbRoot.IsEmpty() {
-		return false, nil
+func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, destDbRoot hash.Hash, relationship SyncRootsDBRelationship) (bool, error) {
+	if relationship != SyncRootsDBRelationshipUnrelated {
+		if !destDbRoot.IsEmpty() {
+			return false, nil
+		}
 	}
 	if !srcDb.IsTableFileStore() {
 		return false, nil
@@ -792,12 +794,19 @@ func canSyncRootsWithClone(ctx context.Context, srcDb, destDb *doltdb.DoltDB, de
 	return true, nil
 }
 
+type SyncRootsDBRelationship int
+
+const (
+	SyncRootsDBRelationshipUnknown = iota
+	SyncRootsDBRelationshipUnrelated
+)
+
 // SyncRoots copies the entire chunkstore from srcDb to destDb and rewrites the remote manifest. Used to
 // streamline database backup and restores.
 // TODO: this should read/write a backup lock file specific to the client who created the backup
 // TODO     to prevent "restoring a remote", "cloning a backup", "syncing a remote" and "pushing
 // TODO     a backup." SyncRoots has more destructive potential than push right now.
-func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, statsCh chan pull.Stats) error {
+func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, relationship SyncRootsDBRelationship, statsCh chan pull.Stats) error {
 	srcRoot, err := srcDb.NomsRoot(ctx)
 	if err != nil {
 		return nil
@@ -812,7 +821,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		return pull.ErrDBUpToDate
 	}
 
-	canClone, err := canSyncRootsWithClone(ctx, srcDb, destDb, destRoot)
+	canClone, err := canSyncRootsWithClone(ctx, srcDb, destDb, destRoot, relationship)
 	if err != nil {
 		return err
 	}

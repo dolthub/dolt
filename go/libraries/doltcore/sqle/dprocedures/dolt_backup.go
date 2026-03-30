@@ -274,7 +274,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 
 	// Unlike CloneDatabaseFromRemote which clones tracking branches (remote refs), we need all local changes.
 	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
-		err = actions.SyncRoots(ctx, remoteDb, newDb.DbData().Ddb, fileSys.TempDir(), statsCh)
+		err = actions.SyncRoots(ctx, remoteDb, newDb.DbData().Ddb, fileSys.TempDir(), actions.SyncRootsDBRelationshipUnrelated, statsCh)
 	})
 	if err == nil {
 		// XXX: Old SyncRoots ProgStarter behavior.
@@ -315,7 +315,7 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	defer destDb.Close()
 
 	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
-		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), statsCh)
+		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), actions.SyncRootsDBRelationshipUnknown, statsCh)
 	})
 	if err == nil {
 		// XXX: Old SyncRoots ProgStarter behavior.
