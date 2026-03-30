@@ -44,6 +44,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
 	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
 	"github.com/dolthub/dolt/go/libraries/utils/valctx"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -81,6 +82,8 @@ type DoltDatabaseProvider struct {
 	// to the same remote reuse the store (and its already-opened table chunk sources)
 	// instead of re-opening every table file from the blobstore each time.
 	remoteDbs map[string]*doltdb.DoltDB
+
+	txLocks keymutex.Keymutex
 
 	defaultBranch     string
 	dbFactoryUrl      string
@@ -194,6 +197,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 		overrides:              overrides,
 		remoteDbs:              make(map[string]*doltdb.DoltDB),
+		txLocks:                keymutex.NewMapped(),
 	}, nil
 }
 
@@ -885,7 +889,7 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 			return err
 		}
 
-		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, newEnv, cli.CliErr)
+		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, "["+name+"]", newEnv, cli.CliErr)
 		if err != nil {
 			return err
 		}
@@ -1699,6 +1703,10 @@ func (p *DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch 
 // EngineOverrides returns the overrides that were given during the creation of the provider.
 func (p *DoltDatabaseProvider) EngineOverrides() sql.EngineOverrides {
 	return p.overrides
+}
+
+func (p *DoltDatabaseProvider) TxLocks() keymutex.Keymutex {
+	return p.txLocks
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given

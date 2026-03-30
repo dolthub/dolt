@@ -29,17 +29,21 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
-func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer) (doltdb.CommitHook, RunAsyncThreads, error) {
-	return NewDynamicPushOnWriteHook(ctx, dEnv, logger)
+func getPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) (doltdb.CommitHook, RunAsyncThreads, error) {
+	return NewDynamicPushOnWriteHook(ctx, nameSuffix, dEnv, logger)
 }
 
-type RunAsyncThreads func(*sql.BackgroundThreads, func(context.Context) (*sql.Context, error)) error
+type BackgroundThreads interface {
+	Add(string, func(context.Context)) error
+}
+
+type RunAsyncThreads func(BackgroundThreads, func(context.Context) (*sql.Context, error)) error
 
 // GetCommitHooks creates a list of hooks to execute on database commit. Hooks that cannot be created because of an
 // error in configuration will not prevent the server from starting, and will instead log errors.
-func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer) ([]doltdb.CommitHook, RunAsyncThreads, error) {
+func GetCommitHooks(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) ([]doltdb.CommitHook, RunAsyncThreads, error) {
 	postCommitHooks := make([]doltdb.CommitHook, 0)
-	hook, runThreads, err := getPushOnWriteHook(ctx, dEnv, logger)
+	hook, runThreads, err := getPushOnWriteHook(ctx, nameSuffix, dEnv, logger)
 	if err != nil {
 		path, _ := dEnv.FS.Abs(".")
 		logrus.Errorf("error loading replication for database at %s, replication disabled: %v", path, err)
@@ -103,7 +107,8 @@ func ApplyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, logger
 			outputDbs[i] = db
 			continue
 		}
-		postCommitHooks, runAsyncThreads, err := GetCommitHooks(ctx, dEnv, logger)
+		nameSuffix := "[" + db.Name() + "]"
+		postCommitHooks, runAsyncThreads, err := GetCommitHooks(ctx, nameSuffix, dEnv, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -116,7 +121,7 @@ func ApplyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, logger
 
 		asyncRunners[i] = runAsyncThreads
 	}
-	runAsyncThreads := func(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
+	runAsyncThreads := func(bThreads BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
 		var err error
 		for _, f := range asyncRunners {
 			if f != nil {

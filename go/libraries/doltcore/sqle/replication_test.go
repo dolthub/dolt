@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -23,7 +24,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/buffer"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -36,7 +39,7 @@ func TestCommitHooksNoErrors(t *testing.T) {
 
 	sql.SystemVariables.SetGlobal(ctx, dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(ctx, dsess.ReplicateToRemote, "unknown")
-	hooks, _, err := GetCommitHooks(context.Background(), dEnv, &buffer.Buffer{})
+	hooks, _, err := GetCommitHooks(context.Background(), "", dEnv, &buffer.Buffer{})
 	assert.NoError(t, err)
 	if len(hooks) < 1 {
 		t.Error("failed to produce noop hook")
@@ -47,6 +50,46 @@ func TestCommitHooksNoErrors(t *testing.T) {
 			t.Errorf("expected LogHook, found: %s", h)
 		}
 	}
+}
+
+func TestCommitHooksBackgroundThreadsUniqueNames(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	dEnv, err := CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer dEnv.DoltDB(ctx).Close()
+
+	dest := t.TempDir()
+	t.Cleanup(func() {
+		dbfactory.DeleteFromSingletonCache(dest, true)
+	})
+
+	err = dEnv.AddRemote(env.NewRemote("origin", "file://"+dest, map[string]string{
+		dbfactory.DisableSingletonCacheParam: "true",
+	}))
+	require.NoError(t, err)
+
+	sql.SystemVariables.SetGlobal(ctx, dsess.ReplicateToRemote, "origin")
+	sql.SystemVariables.SetGlobal(ctx, dsess.AsyncReplication, "true")
+	_, runThreads, err := GetCommitHooks(context.Background(), "[dbname]", dEnv, &buffer.Buffer{})
+	require.NoError(t, err)
+	require.NotNil(t, runThreads)
+	bt := &testBackgroundThreads{make(map[string]func(context.Context))}
+	runThreads(bt, func(ctx context.Context) (*sql.Context, error) {
+		return sql.NewEmptyContext(), nil
+	})
+	assert.Len(t, bt.threads, 2)
+	for k := range bt.threads {
+		assert.True(t, strings.HasSuffix(k, "[dbname]"), "the requested suffix appears in the registered thread name")
+	}
+}
+
+type testBackgroundThreads struct {
+	threads map[string]func(context.Context)
+}
+
+func (t *testBackgroundThreads) Add(name string, f func(context.Context)) error {
+	t.threads[name] = f
+	return nil
 }
 
 func TestReplicationBranches(t *testing.T) {
