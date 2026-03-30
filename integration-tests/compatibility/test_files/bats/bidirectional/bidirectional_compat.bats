@@ -1,19 +1,43 @@
 #!/usr/bin/env bats
-# Bi-directional compatibility tests: HEAD dolt and an older dolt version
-# interleave reads and writes against the same repository across multiple rounds,
-# verifying that each version can always read what the other has written.
+# Bi-directional compatibility tests: HEAD dolt and an older dolt version interleave reads and
+# writes against the same repository across multiple rounds, verifying that each version can always
+# read what the other has written.
 #
-# Each test creates an isolated repository, alternating between old_dolt
-# (the version under test, via DOLT_LEGACY_BIN) and dolt (HEAD build).
-# Tests are skipped when DOLT_LEGACY_BIN is not set.
-load $BATS_TEST_DIRNAME/helper/common.bash
+# Each test creates an isolated repository, alternating between old_dolt and new_dolt. The terms old
+# and new are kind of arbitrary, since we run tests in both directions (swapping DOLT_LEGACY_BIN and
+# DOLT_NEW_BIN).
+#
+# Note that the setup files in |helper| can't be used here because they use relative paths and we
+# are in a subdirectory. So the key pieces of functionality are duplicated in this file.
+
+dolt config --global --add metrics.disabled true > /dev/null 2>&1
 
 setup() {
-    setup_common
+    cp -Rpf $REPO_DIR bats_repo
+    cd bats_repo
 }
 
 teardown() {
-    teardown_common
+    cd ..
+    rm -rf bats_repo
+}
+
+# When DOLT_LEGACY_BIN is set, old_dolt runst that binary; otherwise runs dolt.
+old_dolt() {
+  if [ -n "$DOLT_LEGACY_BIN" ]; then
+    "$DOLT_LEGACY_BIN" "$@"
+  else
+    dolt "$@"
+  fi
+}
+
+# When DOLT_NEW_BIN is set, new_dolt runs that binary; otherwise runs dolt.
+new_dolt() {
+  if [ -n "$DOLT_NEW_BIN" ]; then
+    "$DOLT_NEW_BIN" "$@"
+  else
+    dolt "$@"
+  fi
 }
 
 # We made a forwards-incompatible change to branch control serialization that causes a panic in
@@ -24,26 +48,12 @@ clear_branch_control() {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: detect the default branch of a freshly-inited dolt repo.
-# ---------------------------------------------------------------------------
-get_main_branch() {
-    dolt branch | sed 's/^\* //'
-}
-
-get_old_main_branch() {
-    old_dolt branch | sed 's/^\* //'
-}
-
-# ---------------------------------------------------------------------------
 # Test 1: Scalar types DML — INT, VARCHAR, DECIMAL, DATETIME round-trip.
 # Four rounds: old → HEAD → old → HEAD, verifying state at each step.
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: scalar types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
-
-    repo="$BATS_TEST_TMPDIR/bidir_scalars_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates schema and seeds two rows
     old_dolt init
@@ -65,18 +75,18 @@ SQL
     clear_branch_control
 
     # Round 1: HEAD reads old's rows, inserts its own
-    run dolt sql -q "SELECT pk, c_varchar, c_decimal FROM scalars WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, c_varchar, c_decimal FROM scalars WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,old-row-1,10.50" ]] || false
 
-    run dolt sql -q "SELECT count(*) FROM scalars;" -r csv
+    run new_dolt sql -q "SELECT count(*) FROM scalars;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "2" ]] || false
 
-    dolt sql -q "INSERT INTO scalars VALUES (3, 300, 'head-row-3', 30.25, '2025-01-15 08:00:00');"
-    dolt sql -q "UPDATE scalars SET c_varchar='head-updated-1' WHERE pk=1;"
-    dolt add .
-    dolt commit -m "head: insert row 3, update row 1"
+    new_dolt sql -q "INSERT INTO scalars VALUES (3, 300, 'head-row-3', 30.25, '2025-01-15 08:00:00');"
+    new_dolt sql -q "UPDATE scalars SET c_varchar='head-updated-1' WHERE pk=1;"
+    new_dolt add .
+    new_dolt commit -m "head: insert row 3, update row 1"
 
     clear_branch_control
 
@@ -97,18 +107,18 @@ SQL
     clear_branch_control
 
     # Round 3: HEAD reads old's changes
-    run dolt sql -q "SELECT pk, c_varchar, c_decimal FROM scalars WHERE pk=4;" -r csv
+    run new_dolt sql -q "SELECT pk, c_varchar, c_decimal FROM scalars WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "4,old-row-4,40.00" ]] || false
 
-    run dolt sql -q "SELECT pk FROM scalars WHERE pk=2;" -r csv
+    run new_dolt sql -q "SELECT pk FROM scalars WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
     [[ "${#lines[@]}" -eq 1 ]] || false  # only header, row 2 deleted
 
-    dolt sql -q "INSERT INTO scalars VALUES (5, 500, 'head-row-5', 50.50, '2025-06-01 14:00:00');"
-    dolt sql -q "UPDATE scalars SET c_decimal=99.99 WHERE pk=4;"
-    dolt add .
-    dolt commit -m "head: insert row 5, update row 4 decimal"
+    new_dolt sql -q "INSERT INTO scalars VALUES (5, 500, 'head-row-5', 50.50, '2025-06-01 14:00:00');"
+    new_dolt sql -q "UPDATE scalars SET c_decimal=99.99 WHERE pk=4;"
+    new_dolt add .
+    new_dolt commit -m "head: insert row 5, update row 4 decimal"
 
     clear_branch_control
 
@@ -135,9 +145,6 @@ SQL
 @test "bidirectional_compat: large text and blob values round-trip" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
 
-    repo="$BATS_TEST_TMPDIR/bidir_blobs_$$"
-    mkdir -p "$repo" && cd "$repo"
-
     # Setup: old dolt creates table with text/blob columns and small initial values
     old_dolt init
     old_dolt sql <<SQL
@@ -157,16 +164,16 @@ SQL
     clear_branch_control
 
     # Round 1: HEAD reads small value, inserts large values
-    run dolt sql -q "SELECT pk, c_text FROM blobs WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, c_text FROM blobs WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,old-small-text" ]] || false
 
-    dolt sql -q "INSERT INTO blobs (pk, c_text, c_mtext, c_ltext, c_blob, c_lblob)
+    new_dolt sql -q "INSERT INTO blobs (pk, c_text, c_mtext, c_ltext, c_blob, c_lblob)
       VALUES (2,
         REPEAT('H', 1000), REPEAT('M', 2000), REPEAT('L', 3000),
         REPEAT('B', 1000), REPEAT('Z', 3000));"
-    dolt add .
-    dolt commit -m "head: insert large values"
+    new_dolt add .
+    new_dolt commit -m "head: insert large values"
 
     clear_branch_control
 
@@ -191,18 +198,18 @@ SQL
     clear_branch_control
 
     # Round 3: HEAD reads old's large values
-    run dolt sql -q "SELECT pk, LENGTH(c_text), LENGTH(c_mtext), LENGTH(c_ltext) FROM blobs WHERE pk=3;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(c_text), LENGTH(c_mtext), LENGTH(c_ltext) FROM blobs WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "3,1500,2500,4000" ]] || false
 
-    run dolt sql -q "SELECT pk, LENGTH(c_text), LENGTH(c_blob) FROM blobs WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(c_text), LENGTH(c_blob) FROM blobs WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,800,800" ]] || false
 
     # HEAD updates row 2's large values in-place
-    dolt sql -q "UPDATE blobs SET c_ltext=REPEAT('N', 5000), c_lblob=REPEAT('W', 5000) WHERE pk=2;"
-    dolt add .
-    dolt commit -m "head: update row 2 to even larger values"
+    new_dolt sql -q "UPDATE blobs SET c_ltext=REPEAT('N', 5000), c_lblob=REPEAT('W', 5000) WHERE pk=2;"
+    new_dolt add .
+    new_dolt commit -m "head: update row 2 to even larger values"
 
     clear_branch_control
 
@@ -223,9 +230,6 @@ SQL
 @test "bidirectional_compat: geometry types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
     [[ "$DOLT_VERSION" =~ 0\.50 ]] && skip "geometry not tested against Dolt version 0.50"
-
-    repo="$BATS_TEST_TMPDIR/bidir_geom_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates geometry table
     old_dolt init
@@ -251,23 +255,23 @@ SQL
     clear_branch_control
 
     # Round 1: HEAD reads old's geometry, inserts more
-    run dolt sql -q "SELECT pk, ST_X(c_point), ST_Y(c_point) FROM geoms WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, ST_X(c_point), ST_Y(c_point) FROM geoms WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,1,2" ]] || false
 
-    run dolt sql -q "SELECT pk, ST_AsText(c_line) FROM geoms WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, ST_AsText(c_line) FROM geoms WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "LINESTRING" ]] || false
 
-    dolt sql -q "INSERT INTO geoms VALUES (
+    new_dolt sql -q "INSERT INTO geoms VALUES (
       2,
       ST_GeomFromText('POINT(10 20)'),
       ST_GeomFromText('LINESTRING(0 0,5 5)'),
       ST_GeomFromText('POLYGON((0 0,3 0,3 3,0 3,0 0))'),
       ST_GeomFromText('LINESTRING(1 1,9 9)')
     );"
-    dolt add .
-    dolt commit -m "head: insert geometry row 2"
+    new_dolt add .
+    new_dolt commit -m "head: insert geometry row 2"
 
     clear_branch_control
 
@@ -285,17 +289,17 @@ SQL
     clear_branch_control
 
     # Round 3: HEAD reads old's changes
-    run dolt sql -q "SELECT pk, ST_X(c_point), ST_Y(c_point) FROM geoms WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, ST_X(c_point), ST_Y(c_point) FROM geoms WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,99,88" ]] || false
 
-    run dolt sql -q "SELECT pk, ST_X(c_point), ST_Y(c_point) FROM geoms WHERE pk=3;" -r csv
+    run new_dolt sql -q "SELECT pk, ST_X(c_point), ST_Y(c_point) FROM geoms WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "3,30,40" ]] || false
 
-    dolt sql -q "UPDATE geoms SET c_geometry=ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0))') WHERE pk=2;"
-    dolt add .
-    dolt commit -m "head: update row 2 geometry to polygon"
+    new_dolt sql -q "UPDATE geoms SET c_geometry=ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0))') WHERE pk=2;"
+    new_dolt add .
+    new_dolt commit -m "head: update row 2 geometry to polygon"
 
     clear_branch_control
 
@@ -317,9 +321,6 @@ SQL
 @test "bidirectional_compat: add columns from both versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
 
-    repo="$BATS_TEST_TMPDIR/bidir_ddl_$$"
-    mkdir -p "$repo" && cd "$repo"
-
     # Setup: old dolt creates a minimal base table
     old_dolt init
     old_dolt sql <<SQL
@@ -335,12 +336,12 @@ SQL
     clear_branch_control
 
     # Round 1: HEAD adds TEXT and DATE columns, populates them
-    dolt sql -q "ALTER TABLE evolving ADD COLUMN c_text TEXT;"
-    dolt sql -q "ALTER TABLE evolving ADD COLUMN c_date DATE;"
-    dolt sql -q "UPDATE evolving SET c_text=CONCAT('text-', pk), c_date='2025-01-01';"
-    dolt sql -q "INSERT INTO evolving VALUES (4, 40, 'text-4', '2025-02-01');"
-    dolt add .
-    dolt commit -m "head: add text and date columns"
+    new_dolt sql -q "ALTER TABLE evolving ADD COLUMN c_text TEXT;"
+    new_dolt sql -q "ALTER TABLE evolving ADD COLUMN c_date DATE;"
+    new_dolt sql -q "UPDATE evolving SET c_text=CONCAT('text-', pk), c_date='2025-01-01';"
+    new_dolt sql -q "INSERT INTO evolving VALUES (4, 40, 'text-4', '2025-02-01');"
+    new_dolt add .
+    new_dolt commit -m "head: add text and date columns"
 
     clear_branch_control
 
@@ -364,20 +365,20 @@ SQL
     clear_branch_control
 
     # Round 3: HEAD reads old's new columns — all 4 added columns now visible
-    run dolt sql -q "SELECT pk, c_text, c_date, c_int2, c_decimal FROM evolving WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, c_text, c_date, c_int2, c_decimal FROM evolving WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,text-1,2025-01-01,100,1.50" ]] || false
 
-    run dolt sql -q "SELECT pk, c_text, c_int2, c_decimal FROM evolving WHERE pk=5;" -r csv
+    run new_dolt sql -q "SELECT pk, c_text, c_int2, c_decimal FROM evolving WHERE pk=5;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "5,text-5,500,7.50" ]] || false
 
     # HEAD adds a geometry column
-    dolt sql -q "ALTER TABLE evolving ADD COLUMN c_point POINT;"
-    dolt sql -q "UPDATE evolving SET c_point=ST_GeomFromText(CONCAT('POINT(', pk, ' ', pk, ')'));"
-    dolt sql -q "INSERT INTO evolving VALUES (6, 60, 'text-6', '2025-04-01', 600, 9.00, ST_GeomFromText('POINT(6 6)'));"
-    dolt add .
-    dolt commit -m "head: add point column"
+    new_dolt sql -q "ALTER TABLE evolving ADD COLUMN c_point POINT;"
+    new_dolt sql -q "UPDATE evolving SET c_point=ST_GeomFromText(CONCAT('POINT(', pk, ' ', pk, ')'));"
+    new_dolt sql -q "INSERT INTO evolving VALUES (6, 60, 'text-6', '2025-04-01', 600, 9.00, ST_GeomFromText('POINT(6 6)'));"
+    new_dolt add .
+    new_dolt commit -m "head: add point column"
 
     clear_branch_control
 
@@ -398,11 +399,11 @@ SQL
     clear_branch_control
 
     # Round 5: HEAD reads old's insert with geometry
-    run dolt sql -q "SELECT pk, c_text, c_decimal, ST_X(c_point) FROM evolving WHERE pk=7;" -r csv
+    run new_dolt sql -q "SELECT pk, c_text, c_decimal, ST_X(c_point) FROM evolving WHERE pk=7;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "7,text-7,10.50,7" ]] || false
 
-    run dolt sql -q "SELECT count(*) FROM evolving;" -r csv
+    run new_dolt sql -q "SELECT count(*) FROM evolving;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "7" ]] || false
 }
@@ -414,9 +415,6 @@ SQL
 
 @test "bidirectional_compat: branch and merge across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
-
-    repo="$BATS_TEST_TMPDIR/bidir_merge_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates repo with base table and data
     old_dolt init
@@ -435,12 +433,12 @@ SQL
     clear_branch_control
 
     # Round 1: HEAD creates a feature branch and commits changes to it
-    dolt checkout -b head_feature
-    dolt sql -q "INSERT INTO t_shared VALUES (10, 'head-feature-10', 'head');"
-    dolt sql -q "INSERT INTO t_shared VALUES (11, 'head-feature-11', 'head');"
-    dolt add .
-    dolt commit -m "head: feature branch inserts"
-    dolt checkout "$MAIN"
+    new_dolt checkout -b head_feature
+    new_dolt sql -q "INSERT INTO t_shared VALUES (10, 'head-feature-10', 'head');"
+    new_dolt sql -q "INSERT INTO t_shared VALUES (11, 'head-feature-11', 'head');"
+    new_dolt add .
+    new_dolt commit -m "head: feature branch inserts"
+    new_dolt checkout "$MAIN"
 
     clear_branch_control
 
@@ -467,32 +465,32 @@ SQL
     clear_branch_control
 
     # Round 3: HEAD reads merged result, merges old_branch too
-    run dolt sql -q "SELECT count(*) FROM t_shared;" -r csv
+    run new_dolt sql -q "SELECT count(*) FROM t_shared;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "5" ]] || false
 
-    run dolt sql -q "SELECT pk, val FROM t_shared WHERE pk=3;" -r csv
+    run new_dolt sql -q "SELECT pk, val FROM t_shared WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "3,base-3" ]] || false
 
     # HEAD merges old's branch (row 20)
-    dolt merge old_branch
-    run dolt sql -q "SELECT count(*) FROM t_shared;" -r csv
+    new_dolt merge old_branch
+    run new_dolt sql -q "SELECT count(*) FROM t_shared;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "6" ]] || false  # 1,2,3,10,11,20
 
-    run dolt sql -q "SELECT pk, val FROM t_shared WHERE pk=20;" -r csv
+    run new_dolt sql -q "SELECT pk, val FROM t_shared WHERE pk=20;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "20,old-branch-20" ]] || false
 
     # HEAD creates another branch, makes a DDL change, commits
-    dolt checkout -b head_schema_change
-    dolt sql -q "ALTER TABLE t_shared ADD COLUMN extra INT;"
-    dolt sql -q "UPDATE t_shared SET extra=pk*10;"
-    dolt add .
-    dolt commit -m "head: add extra column on schema_change branch"
-    dolt checkout "$MAIN"
-    dolt merge head_schema_change
+    new_dolt checkout -b head_schema_change
+    new_dolt sql -q "ALTER TABLE t_shared ADD COLUMN extra INT;"
+    new_dolt sql -q "UPDATE t_shared SET extra=pk*10;"
+    new_dolt add .
+    new_dolt commit -m "head: add extra column on schema_change branch"
+    new_dolt checkout "$MAIN"
+    new_dolt merge head_schema_change
 
     clear_branch_control
 
@@ -513,11 +511,11 @@ SQL
     clear_branch_control
 
     # Round 5: HEAD reads old's final insert
-    run dolt sql -q "SELECT pk, val, extra FROM t_shared WHERE pk=30;" -r csv
+    run new_dolt sql -q "SELECT pk, val, extra FROM t_shared WHERE pk=30;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "30,old-final-30,300" ]] || false
 
-    run dolt sql -q "SELECT count(*) FROM t_shared;" -r csv
+    run new_dolt sql -q "SELECT count(*) FROM t_shared;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "7" ]] || false
 }
@@ -530,9 +528,6 @@ SQL
 
 @test "bidirectional_compat: comprehensive type coverage across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
-
-    repo="$BATS_TEST_TMPDIR/bidir_types_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates a minimal table
     old_dolt init
@@ -548,14 +543,14 @@ SQL
     clear_branch_control
 
     # Round 1: HEAD adds integer and floating-point columns
-    dolt sql -q "ALTER TABLE typed ADD COLUMN c_tinyint TINYINT;"
-    dolt sql -q "ALTER TABLE typed ADD COLUMN c_bigint BIGINT;"
-    dolt sql -q "ALTER TABLE typed ADD COLUMN c_float FLOAT;"
-    dolt sql -q "ALTER TABLE typed ADD COLUMN c_double DOUBLE;"
-    dolt sql -q "UPDATE typed SET c_tinyint=pk*10, c_bigint=pk*1000000, c_float=pk*1.5, c_double=pk*2.5;"
-    dolt sql -q "INSERT INTO typed (pk, c_tinyint, c_bigint, c_float, c_double) VALUES (4, 40, 4000000, 6.0, 10.0);"
-    dolt add .
-    dolt commit -m "head: add numeric columns"
+    new_dolt sql -q "ALTER TABLE typed ADD COLUMN c_tinyint TINYINT;"
+    new_dolt sql -q "ALTER TABLE typed ADD COLUMN c_bigint BIGINT;"
+    new_dolt sql -q "ALTER TABLE typed ADD COLUMN c_float FLOAT;"
+    new_dolt sql -q "ALTER TABLE typed ADD COLUMN c_double DOUBLE;"
+    new_dolt sql -q "UPDATE typed SET c_tinyint=pk*10, c_bigint=pk*1000000, c_float=pk*1.5, c_double=pk*2.5;"
+    new_dolt sql -q "INSERT INTO typed (pk, c_tinyint, c_bigint, c_float, c_double) VALUES (4, 40, 4000000, 6.0, 10.0);"
+    new_dolt add .
+    new_dolt commit -m "head: add numeric columns"
 
     clear_branch_control
 
@@ -576,21 +571,21 @@ SQL
     clear_branch_control
 
     # Round 3: HEAD reads old's string columns
-    run dolt sql -q "SELECT pk, c_varchar, c_char, c_varbinary FROM typed WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, c_varchar, c_char, c_varbinary FROM typed WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,varchar-1,ch-1,bin-1" ]] || false
 
-    run dolt sql -q "SELECT pk, c_varchar FROM typed WHERE pk=5;" -r csv
+    run new_dolt sql -q "SELECT pk, c_varchar FROM typed WHERE pk=5;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "5,varchar-5" ]] || false
 
     # HEAD adds temporal and decimal columns
-    dolt sql -q "ALTER TABLE typed ADD COLUMN c_date DATE;"
-    dolt sql -q "ALTER TABLE typed ADD COLUMN c_datetime DATETIME;"
-    dolt sql -q "ALTER TABLE typed ADD COLUMN c_decimal DECIMAL(10,3);"
-    dolt sql -q "UPDATE typed SET c_date='2025-01-01', c_datetime='2025-01-01 12:00:00', c_decimal=pk*3.141;"
-    dolt add .
-    dolt commit -m "head: add temporal and decimal columns"
+    new_dolt sql -q "ALTER TABLE typed ADD COLUMN c_date DATE;"
+    new_dolt sql -q "ALTER TABLE typed ADD COLUMN c_datetime DATETIME;"
+    new_dolt sql -q "ALTER TABLE typed ADD COLUMN c_decimal DECIMAL(10,3);"
+    new_dolt sql -q "UPDATE typed SET c_date='2025-01-01', c_datetime='2025-01-01 12:00:00', c_decimal=pk*3.141;"
+    new_dolt add .
+    new_dolt commit -m "head: add temporal and decimal columns"
 
     clear_branch_control
 
@@ -612,22 +607,22 @@ SQL
     clear_branch_control
 
     # Round 5: HEAD reads old's enum/set columns, does a final insert using everything
-    run dolt sql -q "SELECT pk, c_enum, c_set FROM typed WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, c_enum, c_set FROM typed WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,a,x" ]] || false
 
-    run dolt sql -q "SELECT pk, c_enum, c_set FROM typed WHERE pk=2;" -r csv
+    run new_dolt sql -q "SELECT pk, c_enum, c_set FROM typed WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ '2,b,"x,y"' ]] || false
 
-    run dolt sql -q "SELECT pk, c_enum, c_set, c_varchar, c_decimal FROM typed WHERE pk=6;" -r csv
+    run new_dolt sql -q "SELECT pk, c_enum, c_set, c_varchar, c_decimal FROM typed WHERE pk=6;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ '6,c,"x,y,z",varchar-6,18.847' ]] || false
 
-    dolt sql -q "INSERT INTO typed (pk, c_tinyint, c_bigint, c_varchar, c_date, c_decimal, c_enum, c_set)
+    new_dolt sql -q "INSERT INTO typed (pk, c_tinyint, c_bigint, c_varchar, c_date, c_decimal, c_enum, c_set)
       VALUES (7, 70, 7000000, 'varchar-7', '2025-07-01', 21.988, 'c', 'y,z');"
-    dolt add .
-    dolt commit -m "head: final insert using all columns"
+    new_dolt add .
+    new_dolt commit -m "head: final insert using all columns"
 
     clear_branch_control
 
@@ -653,9 +648,6 @@ SQL
 @test "bidirectional_compat: text types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
 
-    repo="$BATS_TEST_TMPDIR/bidir_text_$$"
-    mkdir -p "$repo" && cd "$repo"
-
     # Setup: old dolt creates table with all TEXT variants.
     # Row 1: all inline (small values).
     # Row 2: c_text inline (60000 < 65536), c_medtext out-of-band (70000 > 65536),
@@ -679,24 +671,24 @@ SQL
     clear_branch_control
 
     # Round 1: HEAD reads old's rows (inline and out-of-band), then inserts more.
-    run dolt sql -q "SELECT pk, c_tinytext, c_text FROM texts WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, c_tinytext, c_text FROM texts WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,tiny-old-1,text-old-1" ]] || false
 
     # Verify row 2: c_text inline (60000), c_medtext/c_longtext out-of-band
-    run dolt sql -q "SELECT pk, LENGTH(c_text), LENGTH(c_medtext), LENGTH(c_longtext) FROM texts WHERE pk=2;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(c_text), LENGTH(c_medtext), LENGTH(c_longtext) FROM texts WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "2,60000,70000,90000" ]] || false
 
     # Row 3: c_text inline (50000), c_medtext out-of-band (68000), c_longtext out-of-band (75000)
     # Row 4: all inline (small values)
-    dolt sql -q "INSERT INTO texts VALUES
+    new_dolt sql -q "INSERT INTO texts VALUES
       (3, REPEAT('a', 200), REPEAT('e', 50000), REPEAT('m', 68000), REPEAT('l', 75000)),
       (4, 'tiny-head-4', 'text-head-4', 'med-head-4', 'long-head-4');"
     # Update row 1: promote c_medtext from inline to out-of-band
-    dolt sql -q "UPDATE texts SET c_medtext=REPEAT('U', 70000) WHERE pk=1;"
-    dolt add .
-    dolt commit -m "head: rows 3/4, row 1 c_medtext inline->out-of-band"
+    new_dolt sql -q "UPDATE texts SET c_medtext=REPEAT('U', 70000) WHERE pk=1;"
+    new_dolt add .
+    new_dolt commit -m "head: rows 3/4, row 1 c_medtext inline->out-of-band"
 
     clear_branch_control
 
@@ -726,18 +718,18 @@ SQL
     clear_branch_control
 
     # Round 3: HEAD reads old's new rows including mixed encodings.
-    run dolt sql -q "SELECT pk, LENGTH(c_tinytext), LENGTH(c_text), LENGTH(c_medtext), LENGTH(c_longtext) FROM texts WHERE pk=5;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(c_tinytext), LENGTH(c_text), LENGTH(c_medtext), LENGTH(c_longtext) FROM texts WHERE pk=5;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "5,150,55000,72000,9" ]] || false  # 'long-old-5' = 9 chars
 
-    run dolt sql -q "SELECT pk, LENGTH(c_longtext) FROM texts WHERE pk=4;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(c_longtext) FROM texts WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "4,80000" ]] || false
 
     # Update row 3: demote c_medtext and c_longtext from out-of-band back to inline
-    dolt sql -q "UPDATE texts SET c_medtext='med-head-upd', c_longtext='long-head-upd' WHERE pk=3;"
-    dolt add .
-    dolt commit -m "head: row 3 c_medtext/c_longtext out-of-band->inline"
+    new_dolt sql -q "UPDATE texts SET c_medtext='med-head-upd', c_longtext='long-head-upd' WHERE pk=3;"
+    new_dolt add .
+    new_dolt commit -m "head: row 3 c_medtext/c_longtext out-of-band->inline"
 
     clear_branch_control
 
@@ -766,9 +758,6 @@ SQL
 @test "bidirectional_compat: blob types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
 
-    repo="$BATS_TEST_TMPDIR/bidir_blobtype_$$"
-    mkdir -p "$repo" && cd "$repo"
-
     # Setup: old dolt creates table with all BLOB variants and VARBINARY.
     # Row 1: all inline (small values).
     # Row 2: c_blob inline (60000 < 65536), c_medblob out-of-band (70000 > 65536),
@@ -793,24 +782,24 @@ SQL
     clear_branch_control
 
     # Round 1: HEAD reads old's rows (inline and out-of-band), then inserts more.
-    run dolt sql -q "SELECT pk, c_varbinary, c_tinyblob FROM blobdata WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, c_varbinary, c_tinyblob FROM blobdata WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,varbin-old-1,tiny-old-1" ]] || false
 
     # Verify row 2: c_blob inline (60000), c_medblob/c_longblob out-of-band
-    run dolt sql -q "SELECT pk, LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata WHERE pk=2;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "2,60000,70000,90000" ]] || false
 
     # Row 3: c_blob inline (50000), c_medblob out-of-band (68000), c_longblob out-of-band (75000)
     # Row 4: all inline (small values)
-    dolt sql -q "INSERT INTO blobdata VALUES
+    new_dolt sql -q "INSERT INTO blobdata VALUES
       (3, REPEAT('v', 200), REPEAT('t', 200), REPEAT('b', 50000), REPEAT('m', 68000), REPEAT('l', 75000)),
       (4, 'varbin-head-4', 'tiny-head-4', 'blob-head-4', 'med-head-4', 'long-head-4');"
     # Update row 1: promote c_medblob from inline to out-of-band
-    dolt sql -q "UPDATE blobdata SET c_medblob=REPEAT('U', 70000) WHERE pk=1;"
-    dolt add .
-    dolt commit -m "head: rows 3/4, row 1 c_medblob inline->out-of-band"
+    new_dolt sql -q "UPDATE blobdata SET c_medblob=REPEAT('U', 70000) WHERE pk=1;"
+    new_dolt add .
+    new_dolt commit -m "head: rows 3/4, row 1 c_medblob inline->out-of-band"
 
     clear_branch_control
 
@@ -840,18 +829,18 @@ SQL
     clear_branch_control
 
     # Round 3: HEAD reads old's new rows including mixed encodings.
-    run dolt sql -q "SELECT pk, LENGTH(c_varbinary), LENGTH(c_tinyblob), LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata WHERE pk=5;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(c_varbinary), LENGTH(c_tinyblob), LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata WHERE pk=5;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "5,150,150,55000,72000,10" ]] || false  # 'long-old-5' = 10 chars
 
-    run dolt sql -q "SELECT pk, LENGTH(c_longblob) FROM blobdata WHERE pk=4;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(c_longblob) FROM blobdata WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "4,80000" ]] || false
 
     # Update row 3: demote c_medblob and c_longblob from out-of-band back to inline
-    dolt sql -q "UPDATE blobdata SET c_medblob='mb-upd', c_longblob='lb-upd' WHERE pk=3;"
-    dolt add .
-    dolt commit -m "head: row 3 c_medblob/c_longblob out-of-band->inline"
+    new_dolt sql -q "UPDATE blobdata SET c_medblob='mb-upd', c_longblob='lb-upd' WHERE pk=3;"
+    new_dolt add .
+    new_dolt commit -m "head: row 3 c_medblob/c_longblob out-of-band->inline"
 
     clear_branch_control
 
@@ -876,10 +865,6 @@ SQL
 
 @test "bidirectional_compat: json round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
-    [[ "$DOLT_VERSION" =~ 0\.50 ]] && skip "json not tested against Dolt version 0.50"
-
-    repo="$BATS_TEST_TMPDIR/bidir_json_$$"
-    mkdir -p "$repo" && cd "$repo"
 
     # Setup: old dolt creates table with two JSON columns.
     # Row 1: both c_json and c_json2 inline (small docs).
@@ -904,30 +889,30 @@ SQL
 
     # Round 1: HEAD reads old's rows and verifies inline vs out-of-band content.
     # Row 1: both inline
-    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.key'), JSON_EXTRACT(c_json2, '$.meta') FROM jsondocs WHERE pk=1;" -r csv
+    run new_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.key'), JSON_EXTRACT(c_json2, '$.meta') FROM jsondocs WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "val1" ]] || false
     [[ "$output" =~ "small" ]] || false
 
     # Row 2: c_json inline, c_json2 out-of-band — verify large value length
-    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.key'), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.big'))) FROM jsondocs WHERE pk=2;" -r csv
+    run new_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.key'), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.big'))) FROM jsondocs WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "val2" ]] || false
     [[ "$output" =~ "70000" ]] || false
 
     # Row 3: both out-of-band — verify both large value lengths
-    run dolt sql -q "SELECT pk, LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json, '$.pad'))), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.pad2'))) FROM jsondocs WHERE pk=3;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json, '$.pad'))), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.pad2'))) FROM jsondocs WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "3,70000,70000" ]] || false
 
     # Insert row 4 (both inline), row 5 (c_json inline, c_json2 out-of-band)
-    dolt sql -q "INSERT INTO jsondocs VALUES
+    new_dolt sql -q "INSERT INTO jsondocs VALUES
       (4, '{\"head\":true,\"count\":42}', '{\"meta2\":\"inline\"}'),
       (5, '{\"head\":true,\"seq\":5}', CONCAT('{\"bighead\":\"', REPEAT('H', 70000), '\"}'));"
     # Update row 1: promote c_json2 from inline to out-of-band
-    dolt sql -q "UPDATE jsondocs SET c_json2=CONCAT('{\"promoted\":\"', REPEAT('P', 70000), '\"}') WHERE pk=1;"
-    dolt add .
-    dolt commit -m "head: rows 4/5, row 1 c_json2 inline->out-of-band"
+    new_dolt sql -q "UPDATE jsondocs SET c_json2=CONCAT('{\"promoted\":\"', REPEAT('P', 70000), '\"}') WHERE pk=1;"
+    new_dolt add .
+    new_dolt commit -m "head: rows 4/5, row 1 c_json2 inline->out-of-band"
 
     clear_branch_control
 
@@ -962,27 +947,27 @@ SQL
 
     # Round 3: HEAD reads old's changes.
     # Verify row 6: c_json inline, c_json2 out-of-band
-    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.old'), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.oldpad'))) FROM jsondocs WHERE pk=6;" -r csv
+    run new_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.old'), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.oldpad'))) FROM jsondocs WHERE pk=6;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "true" ]] || false
     [[ "$output" =~ "70000" ]] || false
 
     # Verify row 7 both inline
-    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.small'), JSON_EXTRACT(c_json2, '$.also') FROM jsondocs WHERE pk=7;" -r csv
+    run new_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.small'), JSON_EXTRACT(c_json2, '$.also') FROM jsondocs WHERE pk=7;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
     [[ "$output" =~ "small" ]] || false
 
     # Verify row 4 c_json2 is now out-of-band
-    run dolt sql -q "SELECT pk, LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.oldpromote'))) FROM jsondocs WHERE pk=4;" -r csv
+    run new_dolt sql -q "SELECT pk, LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.oldpromote'))) FROM jsondocs WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "70000" ]] || false
 
     # Demote row 3 c_json2 from out-of-band to inline, and update row 2 c_json
-    dolt sql -q "UPDATE jsondocs SET c_json2='{\"demoted\":true}' WHERE pk=3;"
-    dolt sql -q "UPDATE jsondocs SET c_json=JSON_SET(c_json, '$.updated', true) WHERE pk=2;"
-    dolt add .
-    dolt commit -m "head: row 3 c_json2 out-of-band->inline, row 2 c_json updated"
+    new_dolt sql -q "UPDATE jsondocs SET c_json2='{\"demoted\":true}' WHERE pk=3;"
+    new_dolt sql -q "UPDATE jsondocs SET c_json=JSON_SET(c_json, '$.updated', true) WHERE pk=2;"
+    new_dolt add .
+    new_dolt commit -m "head: row 3 c_json2 out-of-band->inline, row 2 c_json updated"
 
     clear_branch_control
 
