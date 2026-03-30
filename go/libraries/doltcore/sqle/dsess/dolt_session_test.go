@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -321,4 +322,8 @@ func (e emptyRevisionDatabaseProvider) RevisionDbState(_ *sql.Context, revDB str
 
 func (e emptyRevisionDatabaseProvider) EngineOverrides() sql.EngineOverrides {
 	return sql.EngineOverrides{}
+}
+
+func (e emptyRevisionDatabaseProvider) TxLocks() keymutex.Keymutex {
+	return keymutex.NewMapped()
 }
