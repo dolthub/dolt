@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/local-remote.bash
 
 setup() {
     setup_common
@@ -136,6 +137,39 @@ SQL
     [[ "$output" =~ "Author: john <johndoe@gmail.com>" ]] || false
 }
 
+@test "revert: PK tag changes but name and type match" {
+    # don't run this test in remote-engine mode, since we have
+    # calls to dolt schema update-tag that will directly
+    skip_if_remote
+
+    dolt sql <<"SQL"
+CREATE TABLE pk_tag_test (pk BIGINT PRIMARY KEY, v1 BIGINT);
+INSERT INTO pk_tag_test VALUES (1, 1), (2, 2);
+SQL
+    dolt commit -Am "created pk_tag_test with two rows"
+
+    dolt sql -q "INSERT INTO pk_tag_test VALUES (3, 3)"
+    dolt commit -am "inserted row 3"
+
+    # Manually change the tag of the primary key column to simulate a tag mismatch
+    # between historical commits and the current schema
+    dolt schema update-tag pk_tag_test pk 99999
+    dolt commit -am "changed pk column tag"
+
+    # Revert the commit that inserted row 3; the PK tag in that commit differs
+    # from the current schema tag, so mapping must fall back to name+type matching
+    run dolt revert HEAD~1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SELECT * FROM pk_tag_test ORDER BY pk" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
 @test "revert: SQL HEAD" {
     dolt sql -q "call dolt_revert('HEAD')"
     run dolt sql -q "SELECT * FROM test" -r=csv
@@ -246,3 +280,4 @@ SQL
     run dolt log -n 1
     [[ "$output" =~ "Author: john doe <johndoe@gmail.com>" ]] || false
 }
+
