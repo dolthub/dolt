@@ -362,7 +362,6 @@ func (h *autoGCCommitHook) ExecuteForWorkingSets() bool {
 	return true
 }
 
-const checkInterval = 1 * time.Second
 const size_128mb = (1 << 27)
 const defaultCheckSizeThreshold = size_128mb
 
@@ -412,8 +411,6 @@ func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 func (h *autoGCCommitHook) thread(ctx context.Context) {
 	defer h.wg.Done()
 	defer close(h.stoppedCh)
-	timer := time.NewTimer(checkInterval)
-	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -424,9 +421,6 @@ func (h *autoGCCommitHook) thread(ctx context.Context) {
 			// We ignore an error here, which just means we didn't kick
 			// off a GC when we might have wanted to.
 			_ = h.checkForGC(ctx)
-		case <-timer.C:
-			_ = h.checkForGC(ctx)
-			timer.Reset(checkInterval)
 		}
 	}
 }
