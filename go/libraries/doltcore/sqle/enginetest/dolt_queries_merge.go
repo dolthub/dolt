@@ -2934,7 +2934,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// When the primary key's column tags don't match across a merge, the merge errors out
+		// When the primary key's column tags don't match across a merge, the merge will fall back to matching
+		// the PK column by name and type.
 		Name: "merge with nonmatching column tags on primary key",
 		// NOTE: Because we don't want to expose the dolt_update_column_tag() stored procedure in Doltgres yet,
 		//       this is marked as a mysql-only test.
@@ -2951,6 +2952,40 @@ var MergeScripts = []queries.ScriptTest{
 			// Check out branch b1 and change the column tag for the pk
 			"CALL dolt_checkout('b1');",
 			"CALL dolt_update_column_tag('t1', 'pk', 101);",
+			"INSERT INTO t1 VALUES (101, 'blah', 3);",
+			"CALL dolt_commit('-Am', 'changing t1.pk column tag on b1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_checkout('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				Query:    "CALL dolt_merge('b1');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+		},
+	},
+	{
+		// When the primary key's column tags don't match across a merge, the merge will fall back to matching
+		// the PK column by name and type. In this test, the type doesn't match, so the merge errors out.
+		Name: "merge with nonmatching column tags and types on primary key",
+		// NOTE: Because we don't want to expose the dolt_update_column_tag() stored procedure in Doltgres yet,
+		//       this is marked as a mysql-only test.
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"CREATE TABLE t1(pk int primary key, c1 varchar(100), c2 int);",
+			"INSERT INTO t1 VALUES (1, 'one', 1), (2, 'two', 2);",
+			"CALL dolt_update_column_tag('t1', 'pk', 1);",
+
+			"CALL dolt_commit('-Am', 'initial tables');",
+			"CALL dolt_branch('b1');",
+			"CALL dolt_commit('--allow-empty', '-m', 'empty commit');",
+
+			// Check out branch b1 and change the column tag and type for the pk
+			"CALL dolt_checkout('b1');",
+			"CALL dolt_update_column_tag('t1', 'pk', 101);",
+			"ALTER TABLE t1 MODIFY COLUMN pk float",
 			"INSERT INTO t1 VALUES (101, 'blah', 3);",
 			"CALL dolt_commit('-Am', 'changing t1.pk column tag on b1');",
 		},
