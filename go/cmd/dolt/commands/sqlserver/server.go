@@ -740,7 +740,7 @@ func ConfigureServices(
 			}
 			var err error
 			args.FS = sqlEngine.FileSystem()
-			args.DBCache, err = sqle.RemoteSrvDBCache(sqle.GetInterceptorSqlContext, sqle.DoNotCreateUnknownDatabases)
+			args.DBCache, err = sqle.RemoteSrvDBCache(sqle.GetInterceptorSqlContext, sqle.DoNotCreateUnknownDatabases, sqle.IsNotReplicaWrite)
 			if err != nil {
 				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 				return err

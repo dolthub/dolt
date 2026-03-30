@@ -670,6 +670,10 @@ func (h commithook) ExecuteForWorkingSets() bool {
 	return true
 }
 
+func (h commithook) ExecuteForReplicaWrite() bool {
+	return true
+}
+
 func (sc *StatsController) wakeStatsOnNewWrite() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

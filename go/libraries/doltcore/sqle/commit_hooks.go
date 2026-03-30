@@ -93,6 +93,10 @@ func (*PushOnWriteHook) ExecuteForWorkingSets() bool {
 	return false
 }
 
+func (*PushOnWriteHook) ExecuteForReplicaWrite() bool {
+	return false
+}
+
 type PushArg struct {
 	ds     datas.Dataset
 	srcDb  *doltdb.DoltDB
@@ -126,6 +130,10 @@ func NewAsyncPushOnWriteHook(tmpDir string, logger io.Writer) (*AsyncPushOnWrite
 }
 
 func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {
+	return false
+}
+
+func (*AsyncPushOnWriteHook) ExecuteForReplicaWrite() bool {
 	return false
 }
 
@@ -170,6 +178,10 @@ func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.Dol
 }
 
 func (*LogHook) ExecuteForWorkingSets() bool {
+	return false
+}
+
+func (*LogHook) ExecuteForReplicaWrite() bool {
 	return false
 }
 
@@ -438,5 +450,9 @@ func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, 
 }
 
 func (m *DynamicPushOnWriteHook) ExecuteForWorkingSets() bool {
+	return false
+}
+
+func (m *DynamicPushOnWriteHook) ExecuteForReplicaWrite() bool {
 	return false
 }

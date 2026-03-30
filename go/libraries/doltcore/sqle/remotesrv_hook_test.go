@@ -45,6 +45,7 @@ func (h *recordingCommitHook) Execute(_ context.Context, ds datas.Dataset, _ *do
 }
 
 func (h *recordingCommitHook) ExecuteForWorkingSets() bool { return false }
+func (h *recordingCommitHook) ExecuteForReplicaWrite() bool { return false }
 
 func (h *recordingCommitHook) calledFor(datasetID string) bool {
 	h.mu.Lock()
@@ -120,7 +121,7 @@ func TestHooksFiredOnRemoteSrvStoreCommit(t *testing.T) {
 	rss, ok := cs.(remotesrv.RemoteSrvStore)
 	require.True(t, ok, "in-memory NBS must implement RemoteSrvStore")
 
-	store := hooksFiringRemoteSrvStore{rss, ddb}
+	store := hooksFiringRemoteSrvStore{RemoteSrvStore: rss, ddb: ddb}
 	committed, err := store.Commit(ctx, newRoot, oldRoot)
 	require.NoError(t, err)
 	require.True(t, committed)
@@ -148,7 +149,7 @@ func TestHooksNotFiredOnFailedRemoteSrvCommit(t *testing.T) {
 	rss, ok := cs.(remotesrv.RemoteSrvStore)
 	require.True(t, ok)
 
-	store := hooksFiringRemoteSrvStore{rss, ddb}
+	store := hooksFiringRemoteSrvStore{RemoteSrvStore: rss, ddb: ddb}
 
 	// Pass a wrong last hash (zero hash is never a valid noms root for an
 	// initialised repo). The NBS CAS check will reject this because the
@@ -208,7 +209,7 @@ func TestHooksFiredOnDeletedDataset(t *testing.T) {
 	rss, ok := cs.(remotesrv.RemoteSrvStore)
 	require.True(t, ok)
 
-	store := hooksFiringRemoteSrvStore{rss, ddb}
+	store := hooksFiringRemoteSrvStore{RemoteSrvStore: rss, ddb: ddb}
 	committed, err := store.Commit(ctx, newRoot, oldRoot)
 	require.NoError(t, err)
 	require.True(t, committed)
@@ -245,7 +246,7 @@ func TestOnlyChangedDatasetsFireHooks(t *testing.T) {
 	rss, ok := cs.(remotesrv.RemoteSrvStore)
 	require.True(t, ok)
 
-	store := hooksFiringRemoteSrvStore{rss, ddb}
+	store := hooksFiringRemoteSrvStore{RemoteSrvStore: rss, ddb: ddb}
 	committed, err := store.Commit(ctx, newRoot, oldRoot)
 	require.NoError(t, err)
 	require.True(t, committed)
@@ -254,4 +255,45 @@ func TestOnlyChangedDatasetsFireHooks(t *testing.T) {
 		"hook must fire for the branch whose head changed")
 	assert.False(t, hook.calledFor("refs/heads/feature"),
 		"hook must not fire for a branch whose head did not change")
+}
+
+// replicaWriteRecordingCommitHook is like recordingCommitHook but returns true
+// from ExecuteForReplicaWrite, so it fires on replica writes.
+type replicaWriteRecordingCommitHook struct {
+	recordingCommitHook
+}
+
+func (h *replicaWriteRecordingCommitHook) ExecuteForReplicaWrite() bool { return true }
+
+var _ doltdb.CommitHook = (*replicaWriteRecordingCommitHook)(nil)
+
+// TestReplicaWriteFiltersHooks verifies that when replicaWrite is true, only
+// hooks that return true from ExecuteForReplicaWrite() are fired.
+func TestReplicaWriteFiltersHooks(t *testing.T) {
+	ctx := t.Context()
+	dEnv := CreateTestEnv()
+	defer dEnv.DoltDB(ctx).Close()
+
+	ddb := dEnv.DoltDB(ctx)
+	oldRoot, newRoot := makeTestCommit(t, ctx, ddb)
+
+	// Install two hooks: one that opts out of replica writes, one that opts in.
+	skippedHook := &recordingCommitHook{}
+	firedHook := &replicaWriteRecordingCommitHook{}
+	ddb.PrependCommitHooks(ctx, skippedHook, firedHook)
+
+	rawDB := doltdb.ExposeDatabaseFromDoltDB(ddb)
+	cs := datas.ChunkStoreFromDatabase(rawDB)
+	rss, ok := cs.(remotesrv.RemoteSrvStore)
+	require.True(t, ok)
+
+	store := hooksFiringRemoteSrvStore{RemoteSrvStore: rss, ddb: ddb, replicaWrite: true}
+	committed, err := store.Commit(ctx, newRoot, oldRoot)
+	require.NoError(t, err)
+	require.True(t, committed)
+
+	assert.Equal(t, 0, skippedHook.numCalls(),
+		"hook with ExecuteForReplicaWrite()=false must not fire on replica writes")
+	assert.True(t, firedHook.calledFor("refs/heads/main"),
+		"hook with ExecuteForReplicaWrite()=true must fire on replica writes")
 }

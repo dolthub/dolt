@@ -31,8 +31,9 @@ import (
 )
 
 type remotesrvStore struct {
-	ctxFactory func(context.Context) (*sql.Context, error)
-	createDBs  bool
+	ctxFactory   func(context.Context) (*sql.Context, error)
+	createDBs    bool
+	replicaWrite bool
 }
 
 var _ remotesrv.DBCache = remotesrvStore{}
@@ -70,7 +71,7 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 	if !ok {
 		return nil, remotesrv.ErrUnimplemented
 	}
-	return hooksFiringRemoteSrvStore{rss, ddb}, nil
+	return hooksFiringRemoteSrvStore{RemoteSrvStore: rss, ddb: ddb, replicaWrite: s.replicaWrite}, nil
 }
 
 // hooksFiringRemoteSrvStore wraps a RemoteSrvStore and fires CommitHooks
@@ -78,9 +79,14 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 // when sql-server exposes a remotesapi endpoint so that pushes from remote
 // clients trigger the same hooks (replication, stats, etc.) as writes through
 // the SQL engine.
+//
+// When replicaWrite is true, only hooks that return true from
+// ExecuteForReplicaWrite() are fired. This is used for cluster replication
+// writes on a standby replica, where replication hooks should not fire.
 type hooksFiringRemoteSrvStore struct {
 	remotesrv.RemoteSrvStore
-	ddb *doltdb.DoltDB
+	ddb          *doltdb.DoltDB
+	replicaWrite bool
 }
 
 // Commit implements remotesrv.RemoteSrvStore. After a successful commit it
@@ -116,13 +122,18 @@ func (s hooksFiringRemoteSrvStore) Commit(ctx context.Context, current, last has
 		return nil
 	})
 
+	executeHooks := s.ddb.ExecuteCommitHooks
+	if s.replicaWrite {
+		executeHooks = s.ddb.ExecuteReplicaCommitHooks
+	}
+
 	// Fire hooks for each ref-typed dataset that was added or changed.
 	for id, newAddr := range newAddrs {
 		if !ref.IsRef(id) {
 			continue
 		}
 		if oldAddr, existed := oldAddrs[id]; !existed || oldAddr != newAddr {
-			_ = s.ddb.ExecuteCommitHooks(ctx, id)
+			_ = executeHooks(ctx, id)
 		}
 	}
 
@@ -132,7 +143,7 @@ func (s hooksFiringRemoteSrvStore) Commit(ctx context.Context, current, last has
 			continue
 		}
 		if _, exists := newAddrs[id]; !exists {
-			_ = s.ddb.ExecuteCommitHooks(ctx, id)
+			_ = executeHooks(ctx, id)
 		}
 	}
 
@@ -152,11 +163,17 @@ type CreateUnknownDatabasesSetting bool
 const CreateUnknownDatabases CreateUnknownDatabasesSetting = true
 const DoNotCreateUnknownDatabases CreateUnknownDatabasesSetting = false
 
+type ReplicaWriteSetting bool
+
+const IsReplicaWrite ReplicaWriteSetting = true
+const IsNotReplicaWrite ReplicaWriteSetting = false
+
 // Returns a remotesrv.DBCache instance which will use the *sql.Context
 // returned from |ctxFactory| to access a database in the session
-// DatabaseProvider.
-func RemoteSrvDBCache(ctxFactory func(context.Context) (*sql.Context, error), createSetting CreateUnknownDatabasesSetting) (remotesrv.DBCache, error) {
-	dbcache := remotesrvStore{ctxFactory, bool(createSetting)}
+// DatabaseProvider. When |replicaWriteSetting| is IsReplicaWrite, only hooks
+// that return true from ExecuteForReplicaWrite() are fired on commits.
+func RemoteSrvDBCache(ctxFactory func(context.Context) (*sql.Context, error), createSetting CreateUnknownDatabasesSetting, replicaWriteSetting ReplicaWriteSetting) (remotesrv.DBCache, error) {
+	dbcache := remotesrvStore{ctxFactory: ctxFactory, createDBs: bool(createSetting), replicaWrite: bool(replicaWriteSetting)}
 	return dbcache, nil
 }
 

@@ -362,6 +362,10 @@ func (h *autoGCCommitHook) ExecuteForWorkingSets() bool {
 	return true
 }
 
+func (h *autoGCCommitHook) ExecuteForReplicaWrite() bool {
+	return true
+}
+
 const checkInterval = 1 * time.Second
 const size_128mb = (1 << 27)
 const defaultCheckSizeThreshold = size_128mb
