@@ -291,6 +291,9 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources
 				for _, a := range s.LogMatches {
 					assert.Regexp(t, a, output)
 				}
+				for _, a := range s.LogNotMatches {
+					assert.NotRegexp(t, a, output)
+				}
 			}
 		})
 

@@ -339,6 +339,10 @@ func (c *countingCommitHook) ExecuteForWorkingSets() bool {
 	return false
 }
 
+func (c *countingCommitHook) ExecuteForReplicaWrite() bool {
+	return false
+}
+
 const (
 	idTag        = 0
 	firstTag     = 1

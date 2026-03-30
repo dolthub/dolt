@@ -242,6 +242,8 @@ tests:
     server:
       args: ["--config", "server.yaml"]
       dynamic_port: server2
+      log_not_matches:
+      - "cluster/commithook received commit callback for a commit on .*, but we are not role primary"
   connections:
   - on: server1
     queries:

@@ -41,6 +41,12 @@ type CommitHook interface {
 	Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error)
 	// ExecuteForWorkingSets returns whether or not the hook should be executed for working set updates
 	ExecuteForWorkingSets() bool
+	// ExecuteForReplicaWrite returns whether or not the hook should be executed
+	// for writes received through the remotesapi endpoint as a cluster standby
+	// replica. Hooks like auto GC and stats should return true, while replication
+	// hooks (cluster replication, push-on-write) should return false to avoid
+	// replication loops.
+	ExecuteForReplicaWrite() bool
 }
 
 // NotifyWaitFailedCommitHook is an optional interface that can be implemented by CommitHooks.
@@ -68,7 +74,7 @@ func (db hooksDatabase) PostCommitHooks() []CommitHook {
 	return toret
 }
 
-func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset, onlyWS bool) {
+func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset, onlyWS bool, replicaWrite bool) {
 	var wg sync.WaitGroup
 	rsc := db.rsc
 	var ioff int
@@ -78,7 +84,7 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 		rsc.NotifyWaitFailed = append(rsc.NotifyWaitFailed, make([]func(), len(db.hooks))...)
 	}
 	for il, hook := range db.hooks {
-		if !onlyWS || hook.ExecuteForWorkingSets() {
+		if (!onlyWS || hook.ExecuteForWorkingSets()) && (!replicaWrite || hook.ExecuteForReplicaWrite()) {
 			i := il
 			hook := hook
 			wg.Add(1)
@@ -129,7 +135,7 @@ func (db hooksDatabase) CommitWithWorkingSet(
 		prevWsHash,
 		opts)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, commitDS, false)
+		db.ExecuteCommitHooks(ctx, commitDS, false, false)
 	}
 	return commitDS, workingSetDS, err
 }
@@ -137,7 +143,7 @@ func (db hooksDatabase) CommitWithWorkingSet(
 func (db hooksDatabase) Commit(ctx context.Context, ds datas.Dataset, v types.Value, opts datas.CommitOptions) (datas.Dataset, error) {
 	ds, err := db.Database.Commit(ctx, ds, v, opts)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds, false)
+		db.ExecuteCommitHooks(ctx, ds, false, false)
 	}
 	return ds, err
 }
@@ -145,7 +151,7 @@ func (db hooksDatabase) Commit(ctx context.Context, ds datas.Dataset, v types.Va
 func (db hooksDatabase) WriteCommit(ctx context.Context, ds datas.Dataset, commit *datas.Commit) (datas.Dataset, error) {
 	ds, err := db.Database.WriteCommit(ctx, ds, commit)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds, false)
+		db.ExecuteCommitHooks(ctx, ds, false, false)
 	}
 	return ds, err
 }
@@ -153,7 +159,7 @@ func (db hooksDatabase) WriteCommit(ctx context.Context, ds datas.Dataset, commi
 func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash, ws string) (datas.Dataset, error) {
 	ds, err := db.Database.SetHead(ctx, ds, newHeadAddr, ws)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds, false)
+		db.ExecuteCommitHooks(ctx, ds, false, false)
 	}
 	return ds, err
 }
@@ -161,7 +167,7 @@ func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAd
 func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash, workingSetPath string) (datas.Dataset, error) {
 	ds, err := db.Database.FastForward(ctx, ds, newHeadAddr, workingSetPath)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds, false)
+		db.ExecuteCommitHooks(ctx, ds, false, false)
 	}
 	return ds, err
 }
@@ -169,7 +175,7 @@ func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHe
 func (db hooksDatabase) Delete(ctx context.Context, ds datas.Dataset, workingSetPath string) (datas.Dataset, error) {
 	ds, err := db.Database.Delete(ctx, ds, workingSetPath)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, datas.NewHeadlessDataset(ds.Database(), ds.ID()), false)
+		db.ExecuteCommitHooks(ctx, datas.NewHeadlessDataset(ds.Database(), ds.ID()), false, false)
 	}
 	return ds, err
 }
@@ -177,7 +183,7 @@ func (db hooksDatabase) Delete(ctx context.Context, ds datas.Dataset, workingSet
 func (db hooksDatabase) UpdateWorkingSet(ctx context.Context, ds datas.Dataset, workingSet datas.WorkingSetSpec, prevHash hash.Hash) (datas.Dataset, error) {
 	ds, err := db.Database.UpdateWorkingSet(ctx, ds, workingSet, prevHash)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds, true)
+		db.ExecuteCommitHooks(ctx, ds, true, false)
 	}
 	return ds, err
 }
@@ -185,7 +191,7 @@ func (db hooksDatabase) UpdateWorkingSet(ctx context.Context, ds datas.Dataset, 
 func (db hooksDatabase) Tag(ctx context.Context, ds datas.Dataset, commitAddr hash.Hash, opts datas.TagOptions) (datas.Dataset, error) {
 	ds, err := db.Database.Tag(ctx, ds, commitAddr, opts)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds, false)
+		db.ExecuteCommitHooks(ctx, ds, false, false)
 	}
 	return ds, err
 }
@@ -193,7 +199,7 @@ func (db hooksDatabase) Tag(ctx context.Context, ds datas.Dataset, commitAddr ha
 func (db hooksDatabase) SetTuple(ctx context.Context, ds datas.Dataset, val []byte) (datas.Dataset, error) {
 	ds, err := db.Database.SetTuple(ctx, ds, val)
 	if err == nil {
-		db.ExecuteCommitHooks(ctx, ds, false)
+		db.ExecuteCommitHooks(ctx, ds, false, false)
 	}
 	return ds, err
 }

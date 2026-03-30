@@ -2208,7 +2208,21 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	if err != nil {
 		return err
 	}
-	ddb.db.ExecuteCommitHooks(ctx, ds, false)
+	ddb.db.ExecuteCommitHooks(ctx, ds, false, false)
+	return nil
+}
+
+// ExecuteReplicaCommitHooks is like ExecuteCommitHooks but only fires hooks
+// that return true from ExecuteForReplicaWrite(). This is used when the write
+// comes through the cluster replication endpoint on a standby replica, where
+// replication hooks should not fire to avoid loops, but maintenance hooks like
+// auto GC and stats should still run.
+func (ddb *DoltDB) ExecuteReplicaCommitHooks(ctx context.Context, datasetId string) error {
+	ds, err := ddb.db.GetDataset(ctx, datasetId)
+	if err != nil {
+		return err
+	}
+	ddb.db.ExecuteCommitHooks(ctx, ds, false, true)
 	return nil
 }
 

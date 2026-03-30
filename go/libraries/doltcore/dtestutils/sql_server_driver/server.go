@@ -203,6 +203,11 @@ type Server struct {
 	LogMatches []string `yaml:"log_matches"`
 
 	// Assertions to be run against the log output of the server process
+	// after the server process successfully terminates. Each entry is a
+	// regex that must NOT match. The test fails if any pattern matches.
+	LogNotMatches []string `yaml:"log_not_matches"`
+
+	// Assertions to be run against the log output of the server process
 	// after the server process exits with an error. If |ErrorMatches| is
 	// defined, then the server process must exit with a non-0 exit code
 	// after it is launched. This will be asserted before any |Connections|
