@@ -47,9 +47,10 @@ func GetMutableSecondaryIdxs(ctx *sql.Context, ourSch, sch schema.Schema, tableN
 	return mods, nil
 }
 
-// GetMutableSecondaryIdxsWithPending returns a MutableSecondaryIdx for each secondary index in |indexes|. If an index
-// is listed in the given |sch|, but does not exist in the given |indexes|, then it is skipped. This is useful when
-// merging a schema that has a new index, but the index does not exist on the index set being modified.
+// GetMutableSecondaryIdxsWithPending returns a [MutableSecondaryIdx] for each secondary index in |indexes|
+// whose definition in |ourSch| matches the corresponding definition in |sch|. Indexes present in |sch| but
+// absent from |indexes|, or whose definition has changed between |ourSch| and |sch|, are skipped. The
+// caller is responsible for rebuilding those indexes from scratch after the merge completes.
 func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ns tree.NodeStore, ourSch, sch schema.Schema, tableName string, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, 0, sch.Indexes().Count())
 	for _, index := range sch.Indexes().AllIndexes() {
@@ -80,11 +81,15 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ns tree.NodeStore, our
 		// TODO: This isn't technically required, but correctly handling updating secondary indexes when only some
 		// of the table's rows have been updated is difficult to get right.
 		// Dropping the index is potentially slower but guaranteed to be correct.
+		ourIndex := ourSch.Indexes().GetByName(index.Name())
+		if ourIndex == nil || !ourIndex.Equals(index) {
+			continue
+		}
+
 		idxKeyDesc := m.KeyDesc()
 		if schema.IsKeyless(sch) {
 			idxKeyDesc = idxKeyDesc.PrefixDesc(idxKeyDesc.Count() - 1)
 		}
-
 		if !idxKeyDesc.Equals(index.Schema().GetKeyDescriptor(ns)) {
 			continue
 		}
