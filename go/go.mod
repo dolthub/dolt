@@ -12,7 +12,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/fslock v0.0.0-20251215194149-ef20baba2318
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
-	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
+	github.com/dolthub/sqllogictest/go v0.0.0-20240618184124-ca47f9354216
 	github.com/dolthub/vitess v0.0.0-20260309181228-a99af9c518ab
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
