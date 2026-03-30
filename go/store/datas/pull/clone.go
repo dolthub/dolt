@@ -319,6 +319,9 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 		if err != nil {
 			return err
 		}
+		if success {
+			return nil
+		}
 		last, err = sinkCS.Root(ctx)
 		if err != nil {
 			return err
@@ -326,7 +329,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 		numRetries += 1
 	}
 
-	return err
+	return errors.New("clone left in indeterminate state: unexpected concurrent writes against the destination store prevented clone from setting the root of the database to be the same as source's root")
 }
 
 func convertJournalToTableFile(ctx context.Context, readCloser io.ReadCloser, off int64, tmpDir string) (*nbs.ArchiveStreamWriter, string, error) {
