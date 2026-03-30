@@ -44,7 +44,7 @@ func (h *recordingCommitHook) Execute(_ context.Context, ds datas.Dataset, _ *do
 	return nil, nil
 }
 
-func (h *recordingCommitHook) ExecuteForWorkingSets() bool { return false }
+func (h *recordingCommitHook) ExecuteForWorkingSets() bool  { return false }
 func (h *recordingCommitHook) ExecuteForReplicaWrite() bool { return false }
 
 func (h *recordingCommitHook) calledFor(datasetID string) bool {
