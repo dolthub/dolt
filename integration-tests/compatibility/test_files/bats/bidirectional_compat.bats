@@ -643,7 +643,11 @@ SQL
 
 # ---------------------------------------------------------------------------
 # Test 7: TEXT types — all TEXT variants (TINYTEXT/TEXT/MEDIUMTEXT/LONGTEXT)
-# exercise value correctness across version boundaries.
+# exercise value correctness across version boundaries, including values that
+# trigger adaptive encoding:
+#   - TINYTEXT/TEXT are always inline (max 65535 bytes < 64KB threshold)
+#   - MEDIUMTEXT/LONGTEXT values >= 64KB are stored out of band
+# Each round includes rows with mixed inline and out-of-band columns.
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: text types round-trip across versions" {
@@ -652,7 +656,10 @@ SQL
     repo="$BATS_TEST_TMPDIR/bidir_text_$$"
     mkdir -p "$repo" && cd "$repo"
 
-    # Setup: old dolt creates table with all TEXT variants
+    # Setup: old dolt creates table with all TEXT variants.
+    # Row 1: all inline (small values).
+    # Row 2: c_text inline (60000 < 65536), c_medtext out-of-band (70000 > 65536),
+    #         c_longtext out-of-band (90000). Mixed inline/out-of-band in same row.
     old_dolt init
     old_dolt sql <<SQL
 CREATE TABLE texts (
@@ -664,75 +671,82 @@ CREATE TABLE texts (
 );
 INSERT INTO texts VALUES
   (1, 'tiny-old-1', 'text-old-1', 'med-old-1', 'long-old-1'),
-  (2, 'tiny-old-2', 'text-old-2', 'med-old-2', 'long-old-2');
+  (2, 'tiny-old-2', REPEAT('t', 60000), REPEAT('m', 70000), REPEAT('l', 90000));
 SQL
     old_dolt add .
-    old_dolt commit -m "old: initial text data"
+    old_dolt commit -m "old: row 1 all-inline, row 2 mixed inline/out-of-band"
 
     clear_branch_control
 
-    # Round 1: HEAD reads old's text values, inserts large values
+    # Round 1: HEAD reads old's rows (inline and out-of-band), then inserts more.
     run dolt sql -q "SELECT pk, c_tinytext, c_text FROM texts WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1,tiny-old-1,text-old-1" ]] || false
 
-    run dolt sql -q "SELECT pk, c_medtext, c_longtext FROM texts WHERE pk=2;" -r csv
+    # Verify row 2: c_text inline (60000), c_medtext/c_longtext out-of-band
+    run dolt sql -q "SELECT pk, LENGTH(c_text), LENGTH(c_medtext), LENGTH(c_longtext) FROM texts WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "2,med-old-2,long-old-2" ]] || false
+    [[ "${lines[1]}" =~ "2,60000,70000,90000" ]] || false
 
-    # Insert rows with large text values (above inline threshold)
+    # Row 3: c_text inline (50000), c_medtext out-of-band (68000), c_longtext out-of-band (75000)
+    # Row 4: all inline (small values)
     dolt sql -q "INSERT INTO texts VALUES
-      (3, REPEAT('t', 200), REPEAT('e', 1000), REPEAT('m', 5000), REPEAT('l', 10000)),
+      (3, REPEAT('a', 200), REPEAT('e', 50000), REPEAT('m', 68000), REPEAT('l', 75000)),
       (4, 'tiny-head-4', 'text-head-4', 'med-head-4', 'long-head-4');"
-    dolt sql -q "UPDATE texts SET c_text=REPEAT('U', 2000) WHERE pk=1;"
+    # Update row 1: promote c_medtext from inline to out-of-band
+    dolt sql -q "UPDATE texts SET c_medtext=REPEAT('U', 70000) WHERE pk=1;"
     dolt add .
-    dolt commit -m "head: insert large text rows, update row 1"
+    dolt commit -m "head: rows 3/4, row 1 c_medtext inline->out-of-band"
 
     clear_branch_control
 
-    # Round 2: old reads HEAD's large text values
+    # Round 2: old reads HEAD's rows (including newly out-of-band columns), then inserts more.
+    # Verify row 3 mixed encoding
     run old_dolt sql -q "SELECT pk, LENGTH(c_tinytext), LENGTH(c_text), LENGTH(c_medtext), LENGTH(c_longtext) FROM texts WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "3,200,1000,5000,10000" ]] || false
+    [[ "${lines[1]}" =~ "3,200,50000,68000,75000" ]] || false
 
-    run old_dolt sql -q "SELECT pk, LENGTH(c_text) FROM texts WHERE pk=1;" -r csv
+    # Verify row 1 c_medtext is now out-of-band
+    run old_dolt sql -q "SELECT pk, LENGTH(c_medtext) FROM texts WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,2000" ]] || false
+    [[ "${lines[1]}" =~ "1,70000" ]] || false
 
     run old_dolt sql -q "SELECT pk, c_tinytext, c_text FROM texts WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "4,tiny-head-4,text-head-4" ]] || false
 
-    # Old inserts its own large text row and updates row 2
+    # Row 5: c_text inline (55000), c_medtext out-of-band (72000), c_longtext inline (small)
     old_dolt sql -q "INSERT INTO texts VALUES
-      (5, REPEAT('o', 150), REPEAT('p', 800), REPEAT('q', 4000), REPEAT('r', 8000));"
-    old_dolt sql -q "UPDATE texts SET c_longtext=REPEAT('X', 12000) WHERE pk=2;"
+      (5, REPEAT('o', 150), REPEAT('p', 55000), REPEAT('q', 72000), 'long-old-5');"
+    # Update row 4: promote c_longtext from small to out-of-band
+    old_dolt sql -q "UPDATE texts SET c_longtext=REPEAT('X', 80000) WHERE pk=4;"
     old_dolt add .
-    old_dolt commit -m "old: insert large row 5, update row 2 longtext"
+    old_dolt commit -m "old: row 5 mixed, row 4 c_longtext inline->out-of-band"
 
     clear_branch_control
 
-    # Round 3: HEAD reads old's large text row and verifies lengths
+    # Round 3: HEAD reads old's new rows including mixed encodings.
     run dolt sql -q "SELECT pk, LENGTH(c_tinytext), LENGTH(c_text), LENGTH(c_medtext), LENGTH(c_longtext) FROM texts WHERE pk=5;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "5,150,800,4000,8000" ]] || false
+    [[ "${lines[1]}" =~ "5,150,55000,72000,9" ]] || false  # 'long-old-5' = 9 chars
 
-    run dolt sql -q "SELECT pk, LENGTH(c_longtext) FROM texts WHERE pk=2;" -r csv
+    run dolt sql -q "SELECT pk, LENGTH(c_longtext) FROM texts WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "2,12000" ]] || false
+    [[ "${lines[1]}" =~ "4,80000" ]] || false
 
-    # HEAD updates all text columns of row 3 in-place
-    dolt sql -q "UPDATE texts SET c_tinytext='tiny-head-upd', c_text='text-head-upd',
-      c_medtext='med-head-upd', c_longtext='long-head-upd' WHERE pk=3;"
+    # Update row 3: demote c_medtext and c_longtext from out-of-band back to inline
+    dolt sql -q "UPDATE texts SET c_medtext='med-head-upd', c_longtext='long-head-upd' WHERE pk=3;"
     dolt add .
-    dolt commit -m "head: update row 3 text columns to small values"
+    dolt commit -m "head: row 3 c_medtext/c_longtext out-of-band->inline"
 
     clear_branch_control
 
-    # Round 4: old reads HEAD's final update and verifies full table state
+    # Round 4: old reads HEAD's demotion and verifies full table state.
     run old_dolt sql -q "SELECT pk, c_tinytext, c_text, c_medtext, c_longtext FROM texts WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "3,tiny-head-upd,text-head-upd,med-head-upd,long-head-upd" ]] || false
+    [[ "${lines[1]}" =~ "3" ]] || false
+    [[ "$output" =~ "med-head-upd" ]] || false
+    [[ "$output" =~ "long-head-upd" ]] || false
 
     run old_dolt sql -q "SELECT count(*) FROM texts;" -r csv
     [ "$status" -eq 0 ]
@@ -741,7 +755,12 @@ SQL
 
 # ---------------------------------------------------------------------------
 # Test 8: BLOB types — all BLOB variants (TINYBLOB/BLOB/MEDIUMBLOB/LONGBLOB)
-# plus VARBINARY exercise value correctness across version boundaries.
+# plus VARBINARY exercise value correctness across version boundaries, including
+# values that trigger adaptive encoding:
+#   - VARBINARY(255)/TINYBLOB are always inline (max 255 bytes)
+#   - BLOB is always inline (max 65535 bytes < 64KB threshold)
+#   - MEDIUMBLOB/LONGBLOB values >= 64KB are stored out of band
+# Each round includes rows with mixed inline and out-of-band columns.
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: blob types round-trip across versions" {
@@ -750,7 +769,10 @@ SQL
     repo="$BATS_TEST_TMPDIR/bidir_blobtype_$$"
     mkdir -p "$repo" && cd "$repo"
 
-    # Setup: old dolt creates table with all BLOB variants and VARBINARY
+    # Setup: old dolt creates table with all BLOB variants and VARBINARY.
+    # Row 1: all inline (small values).
+    # Row 2: c_blob inline (60000 < 65536), c_medblob out-of-band (70000 > 65536),
+    #         c_longblob out-of-band (90000). Mixed inline/out-of-band in same row.
     old_dolt init
     old_dolt sql <<SQL
 CREATE TABLE blobdata (
@@ -763,75 +785,81 @@ CREATE TABLE blobdata (
 );
 INSERT INTO blobdata VALUES
   (1, 'varbin-old-1', 'tiny-old-1', 'blob-old-1', 'med-old-1', 'long-old-1'),
-  (2, 'varbin-old-2', 'tiny-old-2', 'blob-old-2', 'med-old-2', 'long-old-2');
+  (2, 'varbin-old-2', 'tiny-old-2', REPEAT('b', 60000), REPEAT('m', 70000), REPEAT('l', 90000));
 SQL
     old_dolt add .
-    old_dolt commit -m "old: initial blob data"
+    old_dolt commit -m "old: row 1 all-inline, row 2 mixed inline/out-of-band"
 
     clear_branch_control
 
-    # Round 1: HEAD reads old's blob values, verifies exact content and inserts
-    run dolt sql -q "SELECT pk, c_varbinary, c_tinyblob, c_blob FROM blobdata WHERE pk=1;" -r csv
+    # Round 1: HEAD reads old's rows (inline and out-of-band), then inserts more.
+    run dolt sql -q "SELECT pk, c_varbinary, c_tinyblob FROM blobdata WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,varbin-old-1,tiny-old-1,blob-old-1" ]] || false
+    [[ "${lines[1]}" =~ "1,varbin-old-1,tiny-old-1" ]] || false
 
-    run dolt sql -q "SELECT pk, c_medblob, c_longblob FROM blobdata WHERE pk=2;" -r csv
+    # Verify row 2: c_blob inline (60000), c_medblob/c_longblob out-of-band
+    run dolt sql -q "SELECT pk, LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "2,med-old-2,long-old-2" ]] || false
+    [[ "${lines[1]}" =~ "2,60000,70000,90000" ]] || false
 
-    # Insert rows with large binary values (above inline threshold)
+    # Row 3: c_blob inline (50000), c_medblob out-of-band (68000), c_longblob out-of-band (75000)
+    # Row 4: all inline (small values)
     dolt sql -q "INSERT INTO blobdata VALUES
-      (3, REPEAT('v', 200), REPEAT('t', 200), REPEAT('b', 1000), REPEAT('m', 5000), REPEAT('l', 10000)),
+      (3, REPEAT('v', 200), REPEAT('t', 200), REPEAT('b', 50000), REPEAT('m', 68000), REPEAT('l', 75000)),
       (4, 'varbin-head-4', 'tiny-head-4', 'blob-head-4', 'med-head-4', 'long-head-4');"
-    dolt sql -q "UPDATE blobdata SET c_blob=REPEAT('U', 2000) WHERE pk=1;"
+    # Update row 1: promote c_medblob from inline to out-of-band
+    dolt sql -q "UPDATE blobdata SET c_medblob=REPEAT('U', 70000) WHERE pk=1;"
     dolt add .
-    dolt commit -m "head: insert large blob rows, update row 1"
+    dolt commit -m "head: rows 3/4, row 1 c_medblob inline->out-of-band"
 
     clear_branch_control
 
-    # Round 2: old reads HEAD's large blob values and verifies lengths
+    # Round 2: old reads HEAD's rows (including newly out-of-band columns), then inserts more.
+    # Verify row 3 mixed encoding
     run old_dolt sql -q "SELECT pk, LENGTH(c_varbinary), LENGTH(c_tinyblob), LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "3,200,200,1000,5000,10000" ]] || false
+    [[ "${lines[1]}" =~ "3,200,200,50000,68000,75000" ]] || false
 
-    run old_dolt sql -q "SELECT pk, LENGTH(c_blob) FROM blobdata WHERE pk=1;" -r csv
+    # Verify row 1 c_medblob is now out-of-band
+    run old_dolt sql -q "SELECT pk, LENGTH(c_medblob) FROM blobdata WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "1,2000" ]] || false
+    [[ "${lines[1]}" =~ "1,70000" ]] || false
 
     run old_dolt sql -q "SELECT pk, c_varbinary, c_tinyblob FROM blobdata WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "4,varbin-head-4,tiny-head-4" ]] || false
 
-    # Old inserts its own large blob row and updates row 2
+    # Row 5: c_blob inline (55000), c_medblob out-of-band (72000), c_longblob inline (small)
     old_dolt sql -q "INSERT INTO blobdata VALUES
-      (5, REPEAT('o', 150), REPEAT('p', 150), REPEAT('q', 800), REPEAT('r', 4000), REPEAT('s', 8000));"
-    old_dolt sql -q "UPDATE blobdata SET c_longblob=REPEAT('X', 12000) WHERE pk=2;"
+      (5, REPEAT('o', 150), REPEAT('p', 150), REPEAT('q', 55000), REPEAT('r', 72000), 'long-old-5');"
+    # Update row 4: promote c_longblob from small to out-of-band
+    old_dolt sql -q "UPDATE blobdata SET c_longblob=REPEAT('X', 80000) WHERE pk=4;"
     old_dolt add .
-    old_dolt commit -m "old: insert large row 5, update row 2 longblob"
+    old_dolt commit -m "old: row 5 mixed, row 4 c_longblob inline->out-of-band"
 
     clear_branch_control
 
-    # Round 3: HEAD reads old's large blob row and verifies lengths
+    # Round 3: HEAD reads old's new rows including mixed encodings.
     run dolt sql -q "SELECT pk, LENGTH(c_varbinary), LENGTH(c_tinyblob), LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata WHERE pk=5;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "5,150,150,800,4000,8000" ]] || false
+    [[ "${lines[1]}" =~ "5,150,150,55000,72000,10" ]] || false  # 'long-old-5' = 10 chars
 
-    run dolt sql -q "SELECT pk, LENGTH(c_longblob) FROM blobdata WHERE pk=2;" -r csv
+    run dolt sql -q "SELECT pk, LENGTH(c_longblob) FROM blobdata WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "2,12000" ]] || false
+    [[ "${lines[1]}" =~ "4,80000" ]] || false
 
-    # HEAD updates row 3 blobs to small values
-    dolt sql -q "UPDATE blobdata SET c_varbinary='vb-upd', c_tinyblob='tb-upd',
-      c_blob='bl-upd', c_medblob='mb-upd', c_longblob='lb-upd' WHERE pk=3;"
+    # Update row 3: demote c_medblob and c_longblob from out-of-band back to inline
+    dolt sql -q "UPDATE blobdata SET c_medblob='mb-upd', c_longblob='lb-upd' WHERE pk=3;"
     dolt add .
-    dolt commit -m "head: update row 3 blobs to small values"
+    dolt commit -m "head: row 3 c_medblob/c_longblob out-of-band->inline"
 
     clear_branch_control
 
-    # Round 4: old reads HEAD's final update and verifies full table state
-    run old_dolt sql -q "SELECT pk, c_varbinary, c_tinyblob, c_blob, c_medblob, c_longblob FROM blobdata WHERE pk=3;" -r csv
+    # Round 4: old reads HEAD's demotion and verifies full table state.
+    run old_dolt sql -q "SELECT pk, c_medblob, c_longblob FROM blobdata WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "3,vb-upd,tb-upd,bl-upd,mb-upd,lb-upd" ]] || false
+    [[ "$output" =~ "mb-upd" ]] || false
+    [[ "$output" =~ "lb-upd" ]] || false
 
     run old_dolt sql -q "SELECT count(*) FROM blobdata;" -r csv
     [ "$status" -eq 0 ]
@@ -839,7 +867,11 @@ SQL
 }
 
 # ---------------------------------------------------------------------------
-# Test 9: JSON type — JSON insert/read/JSON_EXTRACT across version boundaries.
+# Test 9: JSON type — two JSON columns exercise both inline (small docs) and
+# out-of-band (large docs > 64KB) storage across version boundaries.
+# The table has c_json (always small, always inline) and c_json2 (varies: small
+# inline rows and large out-of-band rows). Each round includes rows where c_json
+# is inline while c_json2 is out-of-band, ensuring mixed encoding within a row.
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: json round-trip across versions" {
@@ -849,99 +881,123 @@ SQL
     repo="$BATS_TEST_TMPDIR/bidir_json_$$"
     mkdir -p "$repo" && cd "$repo"
 
-    # Setup: old dolt creates table with JSON column
+    # Setup: old dolt creates table with two JSON columns.
+    # Row 1: both c_json and c_json2 inline (small docs).
+    # Row 2: c_json inline (small), c_json2 out-of-band (large string > 64KB).
+    # Row 3: both c_json and c_json2 out-of-band (both > 64KB).
     old_dolt init
     old_dolt sql <<SQL
 CREATE TABLE jsondocs (
   pk     INT NOT NULL PRIMARY KEY,
-  c_json JSON
+  c_json  JSON,
+  c_json2 JSON
 );
 INSERT INTO jsondocs VALUES
-  (1, '{"key":"val1","num":100}'),
-  (2, '[1,2,3]'),
-  (3, '{"nested":{"a":1,"b":2},"arr":[10,20,30]}');
+  (1, '{"key":"val1","num":100}', '{"meta":"small"}'),
+  (2, '{"key":"val2","arr":[1,2,3]}', CONCAT('{"big":"', REPEAT('x', 70000), '"}')),
+  (3, CONCAT('{"src":"old","pad":"', REPEAT('a', 70000), '"}'), CONCAT('{"src2":"old","pad2":"', REPEAT('b', 70000), '"}'));
 SQL
     old_dolt add .
-    old_dolt commit -m "old: initial json data"
+    old_dolt commit -m "old: row 1 both-inline, row 2 mixed, row 3 both-out-of-band"
 
     clear_branch_control
 
-    # Round 1: HEAD reads old's JSON values, verifies JSON_EXTRACT, inserts more
-    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.key') FROM jsondocs WHERE pk=1;" -r csv
+    # Round 1: HEAD reads old's rows and verifies inline vs out-of-band content.
+    # Row 1: both inline
+    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.key'), JSON_EXTRACT(c_json2, '$.meta') FROM jsondocs WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "val1" ]] || false
+    [[ "$output" =~ "small" ]] || false
 
-    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.nested.a') FROM jsondocs WHERE pk=3;" -r csv
+    # Row 2: c_json inline, c_json2 out-of-band — verify large value length
+    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.key'), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.big'))) FROM jsondocs WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "3,1" ]] || false
+    [[ "$output" =~ "val2" ]] || false
+    [[ "$output" =~ "70000" ]] || false
 
-    run dolt sql -q "SELECT pk, JSON_LENGTH(c_json) FROM jsondocs WHERE pk=2;" -r csv
+    # Row 3: both out-of-band — verify both large value lengths
+    run dolt sql -q "SELECT pk, LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json, '$.pad'))), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.pad2'))) FROM jsondocs WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "2,3" ]] || false
+    [[ "${lines[1]}" =~ "3,70000,70000" ]] || false
 
+    # Insert row 4 (both inline), row 5 (c_json inline, c_json2 out-of-band)
     dolt sql -q "INSERT INTO jsondocs VALUES
-      (4, '{\"head\":true,\"version\":\"HEAD\",\"count\":42}'),
-      (5, '[\"a\",\"b\",\"c\",\"d\"]'),
-      (6, '{\"deep\":{\"level1\":{\"level2\":{\"val\":\"leaf\"}}}}');"
-    dolt sql -q "UPDATE jsondocs SET c_json='{\"key\":\"updated-by-head\",\"num\":999}' WHERE pk=1;"
+      (4, '{\"head\":true,\"count\":42}', '{\"meta2\":\"inline\"}'),
+      (5, '{\"head\":true,\"seq\":5}', CONCAT('{\"bighead\":\"', REPEAT('H', 70000), '\"}'));"
+    # Update row 1: promote c_json2 from inline to out-of-band
+    dolt sql -q "UPDATE jsondocs SET c_json2=CONCAT('{\"promoted\":\"', REPEAT('P', 70000), '\"}') WHERE pk=1;"
     dolt add .
-    dolt commit -m "head: insert json rows 4-6, update row 1"
+    dolt commit -m "head: rows 4/5, row 1 c_json2 inline->out-of-band"
 
     clear_branch_control
 
-    # Round 2: old reads HEAD's JSON values and uses JSON_EXTRACT
-    run old_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.head') FROM jsondocs WHERE pk=4;" -r csv
+    # Round 2: old reads HEAD's changes.
+    # Verify row 4 both inline
+    run old_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.head'), JSON_EXTRACT(c_json2, '$.meta2') FROM jsondocs WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ "inline" ]] || false
 
-    run old_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.count') FROM jsondocs WHERE pk=4;" -r csv
+    # Verify row 5: c_json inline, c_json2 out-of-band
+    run old_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.seq'), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.bighead'))) FROM jsondocs WHERE pk=5;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "4,42" ]] || false
+    [[ "$output" =~ "5" ]] || false
+    [[ "$output" =~ "70000" ]] || false
 
-    run old_dolt sql -q "SELECT pk, JSON_LENGTH(c_json) FROM jsondocs WHERE pk=5;" -r csv
+    # Verify row 1 c_json2 is now out-of-band
+    run old_dolt sql -q "SELECT pk, LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.promoted'))) FROM jsondocs WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "5,4" ]] || false
+    [[ "$output" =~ "70000" ]] || false
 
-    run old_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.key') FROM jsondocs WHERE pk=1;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "updated-by-head" ]] || false
-
-    # Old inserts its own JSON rows
+    # Old inserts row 6 (c_json inline, c_json2 out-of-band) and row 7 (both inline)
     old_dolt sql -q "INSERT INTO jsondocs VALUES
-      (7, '{\"old\":true,\"tags\":[\"x\",\"y\"]}'),
-      (8, '{\"matrix\":[[1,2],[3,4]]}');"
-    old_dolt sql -q "UPDATE jsondocs SET c_json='{\"key\":\"updated-by-old\",\"extra\":\"field\"}' WHERE pk=2;"
+      (6, '{\"old\":true,\"tags\":[\"x\",\"y\"]}', CONCAT('{\"oldpad\":\"', REPEAT('O', 70000), '\"}')),
+      (7, '{\"old\":true,\"small\":1}', '{\"also\":\"small\"}');"
+    # Update row 4: promote c_json2 from inline to out-of-band
+    old_dolt sql -q "UPDATE jsondocs SET c_json2=CONCAT('{\"oldpromote\":\"', REPEAT('Q', 70000), '\"}') WHERE pk=4;"
     old_dolt add .
-    old_dolt commit -m "old: insert json rows 7-8, update row 2"
+    old_dolt commit -m "old: rows 6/7, row 4 c_json2 inline->out-of-band"
 
     clear_branch_control
 
-    # Round 3: HEAD reads old's JSON values
-    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.old') FROM jsondocs WHERE pk=7;" -r csv
+    # Round 3: HEAD reads old's changes.
+    # Verify row 6: c_json inline, c_json2 out-of-band
+    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.old'), LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.oldpad'))) FROM jsondocs WHERE pk=6;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ "70000" ]] || false
+
+    # Verify row 7 both inline
+    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.small'), JSON_EXTRACT(c_json2, '$.also') FROM jsondocs WHERE pk=7;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "small" ]] || false
+
+    # Verify row 4 c_json2 is now out-of-band
+    run dolt sql -q "SELECT pk, LENGTH(JSON_UNQUOTE(JSON_EXTRACT(c_json2, '$.oldpromote'))) FROM jsondocs WHERE pk=4;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "70000" ]] || false
+
+    # Demote row 3 c_json2 from out-of-band to inline, and update row 2 c_json
+    dolt sql -q "UPDATE jsondocs SET c_json2='{\"demoted\":true}' WHERE pk=3;"
+    dolt sql -q "UPDATE jsondocs SET c_json=JSON_SET(c_json, '$.updated', true) WHERE pk=2;"
+    dolt add .
+    dolt commit -m "head: row 3 c_json2 out-of-band->inline, row 2 c_json updated"
+
+    clear_branch_control
+
+    # Round 4: old reads HEAD's final state and verifies full table.
+    # Row 3 c_json2 now inline
+    run old_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json2, '$.demoted') FROM jsondocs WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "true" ]] || false
 
-    run dolt sql -q "SELECT pk, JSON_LENGTH(c_json) FROM jsondocs WHERE pk=7;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "7,2" ]] || false  # {"old":..., "tags":...}
-
-    run dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.extra') FROM jsondocs WHERE pk=2;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "field" ]] || false
-
-    # HEAD does a large JSON update
-    dolt sql -q "UPDATE jsondocs SET c_json=JSON_SET(c_json, '$.updated', true) WHERE pk <= 4;"
-    dolt add .
-    dolt commit -m "head: JSON_SET update on rows 1-4"
-
-    clear_branch_control
-
-    # Round 4: old reads HEAD's JSON_SET results and verifies full state
-    run old_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.updated') FROM jsondocs WHERE pk=1;" -r csv
+    # Row 2 c_json updated
+    run old_dolt sql -q "SELECT pk, JSON_EXTRACT(c_json, '$.updated') FROM jsondocs WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "true" ]] || false
 
     run old_dolt sql -q "SELECT count(*) FROM jsondocs;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "8" ]] || false
+    [[ "${lines[1]}" =~ "7" ]] || false
 }
