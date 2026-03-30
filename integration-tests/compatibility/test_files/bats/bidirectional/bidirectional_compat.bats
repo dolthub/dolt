@@ -54,7 +54,8 @@ clear_branch_control() {
 
 @test "bidirectional_compat: scalar types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
-
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
+    
     # Setup: old dolt creates schema and seeds two rows
     old_dolt init
     old_dolt sql <<SQL
@@ -144,6 +145,7 @@ SQL
 
 @test "bidirectional_compat: large text and blob values round-trip" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
     # Setup: old dolt creates table with text/blob columns and small initial values
     old_dolt init
@@ -229,7 +231,7 @@ SQL
 
 @test "bidirectional_compat: geometry types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
-    [[ "$DOLT_VERSION" =~ 0\.50 ]] && skip "geometry not tested against Dolt version 0.50"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
     # Setup: old dolt creates geometry table
     old_dolt init
@@ -320,6 +322,7 @@ SQL
 
 @test "bidirectional_compat: add columns from both versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
     # Setup: old dolt creates a minimal base table
     old_dolt init
@@ -415,6 +418,7 @@ SQL
 
 @test "bidirectional_compat: branch and merge across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
     # Setup: old dolt creates repo with base table and data
     old_dolt init
@@ -528,6 +532,7 @@ SQL
 
 @test "bidirectional_compat: comprehensive type coverage across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
     # Setup: old dolt creates a minimal table
     old_dolt init
@@ -647,6 +652,7 @@ SQL
 
 @test "bidirectional_compat: text types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
     # Setup: old dolt creates table with all TEXT variants.
     # Row 1: all inline (small values).
@@ -757,6 +763,7 @@ SQL
 
 @test "bidirectional_compat: blob types round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
     # Setup: old dolt creates table with all BLOB variants and VARBINARY.
     # Row 1: all inline (small values).
@@ -865,6 +872,7 @@ SQL
 
 @test "bidirectional_compat: json round-trip across versions" {
     [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
 
     # Setup: old dolt creates table with two JSON columns.
     # Row 1: both c_json and c_json2 inline (small docs).
