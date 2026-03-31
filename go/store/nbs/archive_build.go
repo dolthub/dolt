@@ -130,7 +130,7 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 			}
 		}
 
-		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default, nil)
 		if err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 			}
 		}
 
-		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default, nil)
 		if err != nil {
 			return err
 		}

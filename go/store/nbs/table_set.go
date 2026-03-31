@@ -125,50 +125,6 @@ func (ts *tableSet) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior
 	return f(ts.upstream)
 }
 
-// Updates the records in |addrs| for whether they exist in this table set, but
-// only consults tables whose names appear in |srcs|, ignoring all other tables
-// in the table set. Returns |remaining| as true if all addresses were not
-// found in the consulted tables, and false otherwise.
-//
-// Intended to be exactly like |hasMany|, except filtering for the files
-// consulted. Only used for part of the GC workflow where we want to have
-// access to all chunks in the store but need to check for existing chunk
-// presence in only a subset of its files.
-func (ts *tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
-	var remaining bool
-	var err error
-	var gcb gcBehavior
-	for _, rec := range addrs {
-		if !rec.has {
-			remaining = true
-			break
-		}
-	}
-	if !remaining {
-		return false, gcBehavior_Continue, nil
-	}
-	for _, srcAddr := range srcs {
-		src, ok := ts.novel[srcAddr]
-		if !ok {
-			src, ok = ts.upstream[srcAddr]
-			if !ok {
-				continue
-			}
-		}
-		remaining, gcb, err = src.hasMany(addrs, keeper)
-		if err != nil {
-			return false, gcb, err
-		}
-		if gcb != gcBehavior_Continue {
-			return false, gcb, nil
-		}
-		if !remaining {
-			break
-		}
-	}
-	return remaining, gcBehavior_Continue, nil
-}
-
 func (ts *tableSet) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, gcBehavior_Continue, err
@@ -450,7 +406,7 @@ func (ts *tableSet) flatten(ctx context.Context) (*tableSet, error) {
 // For any files which appear in |novel| or |upstream|, this function
 // will return clones of the chunk sources, instead of opening them
 // anew.
-func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, stats *Stats) (chunkSourceSet, error) {
+func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, existing chunkSourceSet, stats *Stats) (chunkSourceSet, error) {
 	ret := make(chunkSourceSet)
 	cleanup := func() {
 		for _, source := range ret {
@@ -458,7 +414,7 @@ func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, 
 		}
 	}
 	// First add clones of all sources that are already present in
-	// ts.novel or ts.upstream.
+	// ts.novel, ts.upstream, or the pre-opened |existing| set.
 	for h := range files {
 		if s, ok := ts.novel[h]; ok {
 			cloned, err := s.clone()
@@ -468,6 +424,13 @@ func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, 
 			}
 			ret[h] = cloned
 		} else if s, ok := ts.upstream[h]; ok {
+			cloned, err := s.clone()
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			ret[h] = cloned
+		} else if s, ok := existing[h]; ok {
 			cloned, err := s.clone()
 			if err != nil {
 				cleanup()
