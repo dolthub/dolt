@@ -2461,6 +2461,13 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	}
 	newGCGen := generateLockHash(nbs.upstream.root, specs, []tableSpec{}, extra)
 
+	// Rebase the table set before updating the manifest, so that we know the
+	// new table files are open and available before we commit to them.
+	ts, err := nbs.tables.rebase(ctx, specs, nil, nbs.stats)
+	if err != nil {
+		return fmt.Errorf("swapTables, rebase: %w", err)
+	}
+
 	newContents := manifestContents{
 		nbfVers: nbs.upstream.nbfVers,
 		root:    nbs.upstream.root,
@@ -2484,11 +2491,6 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	// replacing table files in it with a file into which they were conjoined.
 	nbs.hasCache.Purge()
 
-	// replace nbs.tables.upstream with gc compacted tables
-	ts, err := nbs.tables.rebase(ctx, upstream.specs, nil, nbs.stats)
-	if err != nil {
-		return fmt.Errorf("swapTables, rebase: %w", err)
-	}
 	oldTables := nbs.tables
 	nbs.tables, nbs.upstream = ts, upstream
 	err = oldTables.close()

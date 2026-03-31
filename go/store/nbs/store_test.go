@@ -95,6 +95,41 @@ func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fil
 	return fileToData
 }
 
+func TestSwapTablesDoesNotUpdateManifestOnRebaseFailure(t *testing.T) {
+	ctx := context.Background()
+
+	fm := &fakeManifest{}
+	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
+	q := NewUnlimitedMemQuotaProvider()
+	p := newFakeTablePersister(q)
+
+	store, err := newNomsBlockStore(ctx, constants.FormatDoltString, mm, p, q, inlineConjoiner{defaultMaxTables}, 0)
+	require.NoError(t, err)
+
+	// Write a chunk so we have a non-empty table file to use in specs.
+	c := chunks.NewChunk([]byte("abc"))
+	store.Put(ctx, c, noopGetAddrs)
+	ok, err := store.Commit(ctx, store.upstream.root, store.upstream.root)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	// Record the manifest contents before swapTables.
+	contentsBefore := fm.contents
+
+	// Build specs that reference a table file that will fail to open.
+	badAddr := hash.Of([]byte("does-not-exist"))
+	p.sourcesToFail[badAddr] = true
+	specs := []tableSpec{{name: badAddr, chunkCount: 1}}
+
+	err = store.swapTables(ctx, specs, chunks.GCMode_Full)
+	require.Error(t, err)
+
+	// The manifest should not have been updated.
+	assert.Equal(t, contentsBefore.lock, fm.contents.lock)
+	assert.Equal(t, contentsBefore.gcGen, fm.contents.gcGen)
+	assert.Equal(t, contentsBefore.specs, fm.contents.specs)
+}
+
 func TestNBSAsTableFileStore(t *testing.T) {
 	ctx := context.Background()
 

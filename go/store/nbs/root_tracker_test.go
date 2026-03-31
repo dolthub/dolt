@@ -477,6 +477,23 @@ func (fm *fakeManifest) Update(ctx context.Context, behavior dherrors.FatalBehav
 	return fm.contents, nil
 }
 
+func (fm *fakeManifest) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	fm.mu.Lock()
+	defer fm.mu.Unlock()
+	if fm.contents.lock == lastLock {
+		fm.contents = manifestContents{
+			manifestVers: StorageVersion,
+			nbfVers:      newContents.nbfVers,
+			lock:         newContents.lock,
+			root:         newContents.root,
+			gcGen:        newContents.gcGen,
+		}
+		fm.contents.specs = make([]tableSpec, len(newContents.specs))
+		copy(fm.contents.specs, newContents.specs)
+	}
+	return fm.contents, nil
+}
+
 func (fm *fakeManifest) set(version string, lock hash.Hash, root hash.Hash, specs, appendix []tableSpec) {
 	fm.contents = manifestContents{
 		manifestVers: StorageVersion,
