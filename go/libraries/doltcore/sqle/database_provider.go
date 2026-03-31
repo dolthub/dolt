@@ -48,6 +48,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
 	"github.com/dolthub/dolt/go/libraries/utils/valctx"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -977,7 +978,9 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 	}
 	p.applyDBLoadParamsToEnv(dEnv)
 
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, depth, dEnv)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, depth, dEnv, statsCh)
+	})
 	if err != nil {
 		return err
 	}
