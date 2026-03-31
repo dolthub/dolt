@@ -726,7 +726,7 @@ SQL
     # Round 3: HEAD reads old's new rows including mixed encodings.
     run new_dolt sql -q "SELECT pk, LENGTH(c_tinytext), LENGTH(c_text), LENGTH(c_medtext), LENGTH(c_longtext) FROM texts WHERE pk=5;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "5,150,55000,72000,9" ]] || false  # 'long-old-5' = 9 chars
+    [[ "${lines[1]}" =~ "5,150,55000,72000,10" ]] || false  # 'long-old-5' = 10 chars
 
     run new_dolt sql -q "SELECT pk, LENGTH(c_longtext) FROM texts WHERE pk=4;" -r csv
     [ "$status" -eq 0 ]
