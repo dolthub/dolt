@@ -783,6 +783,8 @@ func closeWriteSession(ctx *sql.Context, engine *gms.Engine, databaseName string
 	}
 	if privDatabase, ok := database.(mysql_db.PrivilegedDatabase); ok {
 		database = privDatabase.Unwrap()
+	} else if privDatabase, ok := database.(mysql_db.QuiescableEventPrivilegedDatabase); ok {
+		database = privDatabase.Unwrap()
 	}
 	sqlDatabase, ok := database.(sqle.Database)
 	if !ok {
@@ -822,6 +824,8 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 		return nil, nil, err
 	}
 	if privDatabase, ok := database.(mysql_db.PrivilegedDatabase); ok {
+		database = privDatabase.Unwrap()
+	} else if privDatabase, ok := database.(mysql_db.QuiescableEventPrivilegedDatabase); ok {
 		database = privDatabase.Unwrap()
 	}
 	sqlDatabase, ok := database.(sqle.Database)

@@ -39,6 +39,8 @@ func ValidateDatabase(ctx context.Context, db sql.Database) (err error) {
 		return ValidateDoltDatabase(ctx, tdb)
 	case mysql_db.PrivilegedDatabase:
 		return ValidateDatabase(ctx, tdb.Unwrap())
+	case mysql_db.QuiescableEventPrivilegedDatabase:
+		return ValidateDatabase(ctx, tdb.Unwrap())
 	default:
 		return nil
 	}
