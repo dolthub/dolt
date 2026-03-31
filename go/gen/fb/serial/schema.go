@@ -18,6 +18,7 @@ package serial
 
 import (
 	"strconv"
+
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 )
 
@@ -232,6 +233,7 @@ func TableSchemaAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOf
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type Column struct {
 	_tab flatbuffers.Table
 }
@@ -477,6 +479,7 @@ func ColumnAddUsesAdaptiveEncoding(builder *flatbuffers.Builder, usesAdaptiveEnc
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type Index struct {
 	_tab flatbuffers.Table
 }
@@ -795,6 +798,7 @@ func IndexAddVectorInfo(builder *flatbuffers.Builder, vectorInfo flatbuffers.UOf
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type FulltextInfo struct {
 	_tab flatbuffers.Table
 }
@@ -948,6 +952,7 @@ func FulltextInfoStartKeyPositionsVector(builder *flatbuffers.Builder, numElems 
 func FulltextInfoEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type VectorInfo struct {
 	_tab flatbuffers.Table
 }
@@ -1003,6 +1008,7 @@ func VectorInfoAddDistanceType(builder *flatbuffers.Builder, distanceType Distan
 func VectorInfoEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type CheckConstraint struct {
 	_tab flatbuffers.Table
 }
