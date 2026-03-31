@@ -38,10 +38,10 @@ Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
 it so far](https://dolthub.com/blog/2024-10-15-dolt-use-cases/).
 
-Dolt can be [set up as a replica of your existing MySQL](https://www.dolthub.com/blog/2023-02-17-binlog-replication-preview/)
-database using standard MySQL binlog replication. Every write becomes
-a Dolt commit. This is a great way to get the version control benefits 
-of Dolt and keep an existing MySQL database. 
+Dolt powers [Beads](https://github.com/gastownhall/beads) and 
+[Gas Town](https://github.com/steveyegge/gastown). It's the best database 
+for agent memory, especially as you move up the ladder to multi-agent and 
+multi-machine workflows.
 
 # Dolt CLI
 
