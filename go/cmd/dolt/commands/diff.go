@@ -111,10 +111,8 @@ type diffDatasets struct {
 	toRef   string
 }
 
-// involvesWorkingSet reports whether either side of the diff is the working set or staging area.
-// Ignore patterns from the dolt_ignore table apply to the staging of untracked tables, so they
-// are relevant only when the working set is part of the diff.
-func (d *diffDatasets) involvesWorkingSet() bool {
+// hasWorkingSet reports whether either side of the diff references the working set or staging area.
+func (d *diffDatasets) hasWorkingSet() bool {
 	return d.fromRef == doltdb.Working || d.toRef == doltdb.Working ||
 		d.fromRef == doltdb.Staged || d.toRef == doltdb.Staged
 }
@@ -914,10 +912,10 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		return printDiffSummary(sqlCtx, deltas, dArgs)
 	}
 
-	// Load ignore patterns only when the diff includes the working set or staging area.
-	// Ignore patterns apply to the staging of untracked tables, not to committed history.
+	// Ignore patterns govern the staging of untracked tables and do not apply to committed history,
+	// so they are only loaded when the diff references the working set or staging area.
 	var ignoredTablePatterns doltdb.IgnorePatterns
-	if dArgs.involvesWorkingSet() {
+	if dArgs.hasWorkingSet() {
 		ignoredTablePatterns, err = getIgnoredTablePatternsFromSql(queryist, sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get ignored table patterns, cause: %w", err))
@@ -935,8 +933,8 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
-		// Skip tables that were added or dropped if they match an ignore pattern. The dolt_ignore
-		// table governs the staging of new tables and does not apply to existing tracked tables.
+		// Ignore patterns apply only to newly added or dropped tables. Modifications to already
+		// tracked tables are always shown regardless of the current dolt_ignore contents.
 		if delta.IsAdd() {
 			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(delta.ToTableName)
 			if err != nil {
