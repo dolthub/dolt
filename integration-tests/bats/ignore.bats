@@ -515,6 +515,54 @@ SQL
     [[ ! "$output" =~ "will_be_ignored" ]] || false
 }
 
+@test "ignore: dolt show should display committed tables even after they are added to dolt_ignore" {
+    # Stage and commit the_table. It does not match any ignore pattern in the test setup,
+    # so it stages without --force.
+    dolt sql -q "CREATE TABLE the_table (pk INT PRIMARY KEY, name TEXT);"
+    dolt add the_table
+    dolt commit -m "add the_table"
+
+    # Verify the diff appears in the commit before the ignore pattern is added.
+    run dolt show HEAD
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/the_table b/the_table" ]] || false
+
+    # The test setup includes a "*_ignore" pattern that matches "dolt_ignore" itself,
+    # so --force is required to stage dolt_ignore.
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('the_table', true);"
+    dolt add --force dolt_ignore
+    dolt commit -m "ignore the_table"
+
+    # Use --summary to verify the_table is present in the commit.
+    run dolt show --summary HEAD~1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "the_table" ]] || false
+
+    # The commit predates the ignore pattern, so its diff must show the_table.
+    run dolt show HEAD~1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/the_table b/the_table" ]] || false
+}
+
+@test "ignore: dolt diff should display committed tables even after they are added to dolt_ignore" {
+    # Stage and commit the_table. It does not match any ignore pattern in the test setup,
+    # so it stages without --force.
+    dolt sql -q "CREATE TABLE the_table (pk INT PRIMARY KEY, name TEXT);"
+    dolt add the_table
+    dolt commit -m "add the_table"
+
+    # The test setup includes a "*_ignore" pattern that matches "dolt_ignore" itself,
+    # so --force is required to stage dolt_ignore.
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('the_table', true);"
+    dolt add --force dolt_ignore
+    dolt commit -m "ignore the_table"
+
+    # The commit predates the ignore pattern, so the diff between the two commits must show the_table.
+    run dolt diff HEAD~2 HEAD~1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/the_table b/the_table" ]] || false
+}
+
 @test "ignore: dolt_diff_summary specific table query respects ignore patterns" {
     # Create and commit initial table
     dolt sql -q "CREATE TABLE initial_table (pk int primary key)"
