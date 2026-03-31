@@ -2233,7 +2233,7 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
 
-	gcc, err := newGarbageCollectionCopier(gcConfig, tfp)
+	gcc, err := newGarbageCollectionCopier(gcConfig.ArchiveLevel, tfp)
 	if err != nil {
 		return nil, err
 	}
@@ -2304,25 +2304,10 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	// If incremental garbage collection is enabled (IncrementalFileChunks > 0),
 	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
 	// with a new writer.
-	var incrementalGcc *gcCopier
-	var leafChunksWritten uint64
+	var incrementalGcc *rotatingGCCopier
 	writeIncrementalChunkFiles := i.gcConfig.IncrementalFileChunks != chunks.IncrementalTablesDisabled
 	if writeIncrementalChunkFiles {
-		incrementalGcc, err = newGarbageCollectionCopier(i.gcConfig, i.tfp)
-	}
-
-	finalizeIncrementalChunkFile := func() error {
-		specs, err := incrementalGcc.copyTablesToDir(ctx)
-		if err != nil {
-			return err
-		}
-		err = addTableFilesToManifest(ctx, i.dest, specs)
-		if err != nil {
-			return err
-		}
-		leafChunksWritten = 0
-		incrementalGcc, err = newGarbageCollectionCopier(i.gcConfig, i.tfp)
-		return err
+		incrementalGcc, err = newRotatingGCCopier(i.gcConfig.ArchiveLevel, i.tfp, i.dest, i.gcConfig.IncrementalFileChunks)
 	}
 
 	first := true
@@ -2356,17 +2341,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 
 		found := 0
 		var addErr error
-		var nextToVisit hash.HashSet
-		// If incremental GC is enabled, we limit the number of hashes that we pass to each invocation
-		// of getManyCompressed. This ensures that we can regularly flush leaf chunks to disk, since
-		// we can't flush within the getManyCompressed callback function.
-		// TODO: If we sort the hashes, then we can take a set that are clustered, which should have better
-		// performance characteristics.
-		if writeIncrementalChunkFiles {
-			toVisit, nextToVisit = getHashSubset(toVisit, int(i.gcConfig.IncrementalFileChunks))
-		} else {
-			nextToVisit = make(hash.HashSet)
-		}
+		nextToVisit := make(hash.HashSet)
 
 		err = i.src.getManyCompressed(ctx, toVisit, func(ctx context.Context, tc ToChunker) {
 			mu.Lock()
@@ -2394,17 +2369,14 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 				return nil
 			})
 
-			var gcc *gcCopier
 			// To maintain the invariant that the destination only contains references to other chunks in
 			// the destination, we can only safely write leaf chunks into incremental chunk files.
 			if writeIncrementalChunkFiles && isLeaf {
-				gcc = incrementalGcc
-				leafChunksWritten++
+				addErr = incrementalGcc.addChunk(ctx, tc)
 			} else {
-				gcc = i.gcc
+				addErr = i.gcc.addChunk(ctx, tc)
 			}
 
-			addErr = gcc.addChunk(ctx, tc)
 			if addErr != nil {
 				return
 			}
@@ -2423,21 +2395,9 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 
 		toVisit = nextToVisit
 
-		if writeIncrementalChunkFiles && leafChunksWritten >= i.gcConfig.IncrementalFileChunks {
-			err = finalizeIncrementalChunkFile()
-			if err != nil {
-				return err
-			}
-		}
 	}
 
-	if incrementalGcc != nil {
-		err = finalizeIncrementalChunkFile()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return incrementalGcc.finalize(ctx)
 }
 
 func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, error) {

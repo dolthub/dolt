@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -49,17 +50,19 @@ type gcCopier struct {
 	tfp    tableFilePersister
 }
 
-func newGarbageCollectionCopier(gcConfig chunks.GCConfig, tfp tableFilePersister) (*gcCopier, error) {
-	var writer GenericTableWriter
-	var err error
-	switch gcConfig.ArchiveLevel {
+func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel) (GenericTableWriter, error) {
+	switch archiveLevel {
 	case chunks.SimpleArchive:
-		writer, err = NewArchiveStreamWriter("")
+		return NewArchiveStreamWriter("")
 	case chunks.NoArchive:
-		writer, err = NewCmpChunkTableWriter("")
+		return NewCmpChunkTableWriter("")
 	default:
-		return nil, fmt.Errorf("invalid archive level: %d", gcConfig.ArchiveLevel)
+		return nil, fmt.Errorf("invalid archive level: %d", archiveLevel)
 	}
+}
+
+func newGarbageCollectionCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister) (*gcCopier, error) {
+	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -170,22 +173,71 @@ func fileNameToAddr(fileName string) (hash.Hash, bool) {
 	return hash.Hash{}, false
 }
 
-// writeChunksToDir creates a new chunk file in the destination, containing the provided chunks.
-func writeChunksToDir(ctx context.Context, gcConfig chunks.GCConfig, tfp tableFilePersister, chunks []ToChunker, dest *NomsBlockStore) error {
-	gcc, err := newGarbageCollectionCopier(gcConfig, tfp)
+// rotatingGCCopier is a variant of gcCopier that writes to multiple output files. Once an output file exceeds
+// a threshold size, it finalizes the file and begins writing a new one.
+type rotatingGCCopier struct {
+	gcCopier
+	maxFileSize  uint64
+	bytesWritten uint64
+	archiveLevel chunks.GCArchiveLevel
+	dest         *NomsBlockStore
+	eg           errgroup.Group
+}
+
+func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, chunksLimit uint64) (*rotatingGCCopier, error) {
+	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
+	if err != nil {
+		return nil, err
+	}
+	return &rotatingGCCopier{
+		gcCopier:     gcCopier{writer, tfp},
+		maxFileSize:  chunksLimit,
+		bytesWritten: 0,
+		archiveLevel: archiveLevel,
+		dest:         dest,
+		eg:           errgroup.Group{},
+	}, nil
+}
+
+func (gcc *rotatingGCCopier) addChunk(ctx context.Context, c ToChunker) error {
+	_, err := gcc.writer.AddChunk(c)
 	if err != nil {
 		return err
 	}
-	for _, tc := range chunks {
-		err := gcc.addChunk(ctx, tc)
-		if err != nil {
-			return err
-		}
+	gcc.bytesWritten += uint64(c.CompressedSize())
+	if gcc.bytesWritten >= gcc.maxFileSize {
+		return gcc.rotate(ctx)
 	}
+	return nil
+}
 
+func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 	specs, err := gcc.copyTablesToDir(ctx)
 	if err != nil {
 		return err
 	}
-	return addTableFilesToManifest(ctx, dest, specs)
+
+	gcc.eg.Go(func() error {
+		return addTableFilesToManifest(ctx, gcc.dest, specs)
+	})
+
+	var writer GenericTableWriter
+	writer, err = newTableWriterFromArchiveLevel(gcc.archiveLevel)
+
+	gcc.writer = writer
+	gcc.bytesWritten = 0
+	return err
+}
+
+func (gcc *rotatingGCCopier) finalize(ctx context.Context) error {
+	if gcc == nil {
+		return nil
+	}
+
+	_, err := gcc.copyTablesToDir(ctx)
+	if err != nil {
+		return err
+	}
+
+	return gcc.eg.Wait()
 }
