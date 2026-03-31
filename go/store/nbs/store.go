@@ -2478,10 +2478,12 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 
 	upstream, err := nbs.manifestMgr.UpdateGCGen(ctx, nbs.fatalBehavior, nbs.upstream.lock, newContents, nbs.stats, nil)
 	if err != nil {
+		_ = ts.close()
 		return err
 	}
 
 	if upstream.lock != newContents.lock {
+		_ = ts.close()
 		return errors.New("concurrent manifest edit during GC, before swapTables. GC failed.")
 	}
 
@@ -2495,7 +2497,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	nbs.tables, nbs.upstream = ts, upstream
 	err = oldTables.close()
 	if err != nil {
-		return fmt.Errorf("swapTables, oldTables.close(): %w", err)
+		err = fmt.Errorf("swapTables, oldTables.close(): %w", err)
 	}
 
 	// When this is called, we are at a safepoint in the GC process.
@@ -2506,11 +2508,11 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	for _, css := range oldNovel {
 		err = css.close()
 		if err != nil {
-			return fmt.Errorf("swapTables, oldNovel css.close(), err: %w", err)
+			err = errors.Join(err, fmt.Errorf("swapTables, oldNovel css.close(), err: %w", err))
 		}
 	}
 	nbs.memtable = nil
-	return nil
+	return err
 }
 
 // CalcReads computes the number of IO operations necessary to fetch |hashes|.
