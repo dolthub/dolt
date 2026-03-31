@@ -17,6 +17,7 @@
 package serial
 
 import (
+	"strconv"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 )
 

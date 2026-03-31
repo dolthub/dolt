@@ -18,7 +18,6 @@ package serial
 
 import (
 	"strconv"
-
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 )
 
@@ -233,7 +232,6 @@ func TableSchemaAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOf
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type Column struct {
 	_tab flatbuffers.Table
 }
@@ -414,7 +412,19 @@ func (rcv *Column) OnUpdateValue() []byte {
 	return nil
 }
 
-const ColumnNumFields = 14
+func (rcv *Column) UsesAdaptiveEncoding() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(32))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateUsesAdaptiveEncoding(n bool) bool {
+	return rcv._tab.MutateBoolSlot(32, n)
+}
+
+const ColumnNumFields = 15
 
 func ColumnStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ColumnNumFields)
@@ -461,10 +471,12 @@ func ColumnAddVirtual(builder *flatbuffers.Builder, virtual bool) {
 func ColumnAddOnUpdateValue(builder *flatbuffers.Builder, onUpdateValue flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(13, flatbuffers.UOffsetT(onUpdateValue), 0)
 }
+func ColumnAddUsesAdaptiveEncoding(builder *flatbuffers.Builder, usesAdaptiveEncoding bool) {
+	builder.PrependBoolSlot(14, usesAdaptiveEncoding, false)
+}
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type Index struct {
 	_tab flatbuffers.Table
 }
@@ -783,7 +795,6 @@ func IndexAddVectorInfo(builder *flatbuffers.Builder, vectorInfo flatbuffers.UOf
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type FulltextInfo struct {
 	_tab flatbuffers.Table
 }
@@ -937,7 +948,6 @@ func FulltextInfoStartKeyPositionsVector(builder *flatbuffers.Builder, numElems 
 func FulltextInfoEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type VectorInfo struct {
 	_tab flatbuffers.Table
 }
@@ -993,7 +1003,6 @@ func VectorInfoAddDistanceType(builder *flatbuffers.Builder, distanceType Distan
 func VectorInfoEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-
 type CheckConstraint struct {
 	_tab flatbuffers.Table
 }
