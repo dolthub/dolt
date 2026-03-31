@@ -269,6 +269,11 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		if onUpdateVal != "" {
 			serial.ColumnAddOnUpdateValue(b, ou)
 		}
+
+		if col.TypeInfo.Encoding() == val.BytesAdaptiveEnc {
+			serial.columnadd
+		}
+
 		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
