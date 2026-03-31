@@ -1841,9 +1841,9 @@ on a.to_pk = b.to_pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT DISTINCT to_table FROM dolt_diff('HEAD~2', 'HEAD~1', 'the_table');",
+				Query: "SELECT COUNT(*) FROM dolt_diff('HEAD~2', 'HEAD~1', 'the_table');",
 				// the_table was committed before the ignore pattern existed, so it must appear.
-				Expected: []sql.Row{{"the_table"}},
+				Expected: []sql.Row{{2}},
 			},
 		},
 	},
