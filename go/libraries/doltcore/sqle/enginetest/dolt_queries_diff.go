@@ -1828,6 +1828,25 @@ on a.to_pk = b.to_pk;`,
 			},
 		},
 	},
+	{
+		Name: "dolt_diff commit-to-commit shows tables added to dolt_ignore after the commit",
+		SetUpScript: []string{
+			"CREATE TABLE the_table (pk int primary key, c1 int);",
+			"INSERT INTO the_table VALUES (1, 10), (2, 20);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'add the_table');",
+			"INSERT INTO dolt_ignore VALUES ('the_table', true);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'ignore the_table');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT DISTINCT to_table FROM dolt_diff('HEAD~2', 'HEAD~1', 'the_table');",
+				// the_table was committed before the ignore pattern existed, so it must appear.
+				Expected: []sql.Row{{"the_table"}},
+			},
+		},
+	},
 }
 
 var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
@@ -4093,6 +4112,25 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 						"  PRIMARY KEY (`ID`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch commit-to-commit shows tables added to dolt_ignore after the commit",
+		SetUpScript: []string{
+			"CREATE TABLE the_table (pk int primary key, c1 int);",
+			"INSERT INTO the_table VALUES (1, 10), (2, 20);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'add the_table');",
+			"INSERT INTO dolt_ignore VALUES ('the_table', true);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'ignore the_table');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT DISTINCT table_name FROM dolt_patch('HEAD~2', 'HEAD~1', 'the_table');",
+				// the_table was committed before the ignore pattern existed, so it must appear.
+				Expected: []sql.Row{{"the_table"}},
 			},
 		},
 	},
@@ -6932,6 +6970,25 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT from_table_name, diff_type FROM dolt_diff_summary('HEAD', 'WORKING') ORDER BY from_table_name;",
 				Expected: []sql.Row{{"dolt_ignore", "modified"}, {"will_not_be_ignored", "dropped"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_diff_summary commit-to-commit shows tables added to dolt_ignore after the commit",
+		SetUpScript: []string{
+			"CREATE TABLE the_table (pk int primary key, c1 int);",
+			"INSERT INTO the_table VALUES (1, 10), (2, 20);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'add the_table');",
+			"INSERT INTO dolt_ignore VALUES ('the_table', true);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'ignore the_table');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT to_table_name, diff_type FROM dolt_diff_summary('HEAD~2', 'HEAD~1');",
+				// the_table was committed before the ignore pattern existed, so it must appear.
+				Expected: []sql.Row{{"the_table", "added"}},
 			},
 		},
 	},
