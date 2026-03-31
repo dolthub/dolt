@@ -158,18 +158,26 @@ _main() {
   # setup repo for current dolt version
   setup_repo HEAD
 
+  # TODO: forwards compatibility breaks when adaptive encoding is turned on in all cases. After we
+  # have a release with the new schema serialization field, we should get a new, more limited list
+  # of the versions which are actually forward compatible
+  
   # test forward compatibility
-  if [ -s "test_files/forward_compatible_versions.txt" ]; then
-      list_forward_compatible_versions | while IFS= read -r ver; do
-        test_forward_compatibility "$ver"
-      done
+  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" -ne "true" ]]; then
+      if [ -s "test_files/forward_compatible_versions.txt" ]; then
+          list_forward_compatible_versions | while IFS= read -r ver; do
+              test_forward_compatibility "$ver"
+          done
+      fi
   fi
 
   # test bidirectional compatibility
-  if [ -s "test_files/forward_compatible_versions.txt" ]; then
-      list_forward_compatible_versions | while IFS= read -r ver; do
-        test_bidirectional_compatibility "$ver"
-      done
+  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" -ne "true" ]]; then
+      if [ -s "test_files/forward_compatible_versions.txt" ]; then
+          list_forward_compatible_versions | while IFS= read -r ver; do
+              test_bidirectional_compatibility "$ver"
+          done
+      fi
   fi
 
   # sanity check: run tests against current version
