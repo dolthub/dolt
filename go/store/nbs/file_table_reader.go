@@ -40,7 +40,9 @@ var ErrTableFileNotFound = errors.New("table file not found")
 
 type fileTableReader struct {
 	tableReader
-	h hash.Hash
+	h       hash.Hash
+	onClose func()
+	onClone func()
 }
 
 var _ chunkSource = &fileTableReader{}
@@ -165,8 +167,8 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 		return nil, err
 	}
 	return &fileTableReader{
-		tr,
-		h,
+		tableReader: tr,
+		h:           h,
 	}, nil
 }
 
@@ -178,16 +180,32 @@ func (ftr *fileTableReader) suffix() string {
 	return ""
 }
 
+func (ftr *fileTableReader) close() error {
+	err := ftr.tableReader.close()
+	if ftr.onClose != nil {
+		ftr.onClose()
+	}
+	return err
+}
+
 func (ftr *fileTableReader) Close() error {
-	return ftr.tableReader.close()
+	return ftr.close()
 }
 
 func (ftr *fileTableReader) clone() (chunkSource, error) {
 	tr, err := ftr.tableReader.clone()
 	if err != nil {
-		return &fileTableReader{}, err
+		return nil, err
 	}
-	return &fileTableReader{tr, ftr.h}, nil
+	if ftr.onClone != nil {
+		ftr.onClone()
+	}
+	return &fileTableReader{
+		tableReader: tr,
+		h:           ftr.h,
+		onClose:     ftr.onClose,
+		onClone:     ftr.onClone,
+	}, nil
 }
 
 type fileReaderAt struct {

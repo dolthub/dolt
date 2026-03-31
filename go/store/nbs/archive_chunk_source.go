@@ -30,8 +30,10 @@ import (
 )
 
 type archiveChunkSource struct {
-	aRdr archiveReader
-	file string
+	aRdr    archiveReader
+	file    string
+	onClose func()
+	onClone func()
 }
 
 var _ chunkSource = &archiveChunkSource{}
@@ -48,7 +50,7 @@ func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCo
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
-	return archiveChunkSource{aRdr, archiveFile}, nil
+	return archiveChunkSource{aRdr: aRdr, file: archiveFile}, nil
 }
 
 func newAWSArchiveChunkSource(ctx context.Context,
@@ -80,7 +82,7 @@ func newAWSArchiveChunkSource(ctx context.Context,
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return archiveChunkSource{aRdr, ""}, nil
+	return archiveChunkSource{aRdr: aRdr}, nil
 }
 
 func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
@@ -160,7 +162,11 @@ func (acs archiveChunkSource) count() (uint32, error) {
 }
 
 func (acs archiveChunkSource) close() error {
-	return acs.aRdr.close()
+	err := acs.aRdr.close()
+	if acs.onClose != nil {
+		acs.onClose()
+	}
+	return err
 }
 
 func (acs archiveChunkSource) hash() hash.Hash {
@@ -196,7 +202,15 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	return archiveChunkSource{reader, acs.file}, nil
+	if acs.onClone != nil {
+		acs.onClone()
+	}
+	return archiveChunkSource{
+		aRdr:    reader,
+		file:    acs.file,
+		onClose: acs.onClose,
+		onClone: acs.onClone,
+	}, nil
 }
 
 func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
