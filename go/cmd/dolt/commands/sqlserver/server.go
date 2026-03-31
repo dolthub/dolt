@@ -218,6 +218,26 @@ func ConfigureServices(
 	}
 	controller.Register(InitServerLocalCreds)
 
+	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
+	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
+	// in the configuration files for a sql-server, and not global for the whole host.
+	//
+	// This load can set global variables that will be read by services which are started later. Those
+	// services may be running background threads of their own. This load should be done early to
+	// prevent races and to prevent different components seeing different configured variables.
+	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
+			err := dsess.PersistSystemVarDefaults(cfg.DoltEnv)
+			if err != nil {
+				logrus.Errorf("unable to persist system variable defaults: %v", err)
+			}
+			// Always return nil, because we don't want an invalid config value to prevent
+			// the server from starting up.
+			return nil
+		},
+	}
+	controller.Register(PersistNondeterministicSystemVarDefaults)
+
 	var clusterController *cluster.Controller
 	InitClusterController := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
@@ -372,22 +392,6 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(CloseClientConnectionsOnShutdown)
-
-	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
-	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
-	// in the configuration files for a sql-server, and not global for the whole host.
-	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
-		InitF: func(ctx context.Context) error {
-			err := dsess.PersistSystemVarDefaults(cfg.DoltEnv)
-			if err != nil {
-				logrus.Errorf("unable to persist system variable defaults: %v", err)
-			}
-			// Always return nil, because we don't want an invalid config value to prevent
-			// the server from starting up.
-			return nil
-		},
-	}
-	controller.Register(PersistNondeterministicSystemVarDefaults)
 
 	InitStatsController := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
