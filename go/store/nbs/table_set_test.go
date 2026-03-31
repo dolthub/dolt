@@ -223,7 +223,7 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	ts, _, err = ts.append(context.Background(), dherrors.FatalBehaviorError, mt, hasManyHasAll, nil, hasCache, &Stats{})
 	require.NoError(t, err)
 
-	assert.True(mustUint64(ts.physicalLen()) > indexSize(mustUint32(ts.count())))
+	assert.True(mustUint64(ts.physicalLen()) > indexSize(ts.count()))
 }
 
 func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
