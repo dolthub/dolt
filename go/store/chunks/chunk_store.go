@@ -224,19 +224,19 @@ const (
 
 // GCConfig describes the behavior of garbage collection.
 type GCConfig struct {
-	Mode                  GCMode
-	ArchiveLevel          GCArchiveLevel
-	IncrementalFileChunks uint64
+	Mode                GCMode
+	ArchiveLevel        GCArchiveLevel
+	IncrementalFileSize uint64
 }
 
-// A value of 0 for IncrementalFileChunks means that no incremental tables are written during GC.
+// A value of 0 for IncrementalFileSize means that no incremental tables are written during GC.
 var IncrementalTablesDisabled uint64 = 0
 
-func NewGCConfig(mode GCMode, archiveLevel GCArchiveLevel, incrementalFileChunks uint64) GCConfig {
+func NewGCConfig(mode GCMode, archiveLevel GCArchiveLevel, incrementalFileSize uint64) GCConfig {
 	return GCConfig{
-		Mode:                  mode,
-		ArchiveLevel:          archiveLevel,
-		IncrementalFileChunks: incrementalFileChunks,
+		Mode:                mode,
+		ArchiveLevel:        archiveLevel,
+		IncrementalFileSize: incrementalFileSize,
 	}
 }
 

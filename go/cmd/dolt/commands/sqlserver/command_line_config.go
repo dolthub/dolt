@@ -639,4 +639,4 @@ func (stubAutoGCBehavior) Enable() bool {
 
 func (stubAutoGCBehavior) ArchiveLevel() int { return servercfg.DefaultCompressionLevel }
 
-func (stubAutoGCBehavior) IncrementalFileChunks() uint64 { return 0 }
+func (stubAutoGCBehavior) IncrementalFileSize() uint64 { return 0 }

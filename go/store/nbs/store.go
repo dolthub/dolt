@@ -2301,13 +2301,13 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	var err error
 	var mu sync.Mutex
 
-	// If incremental garbage collection is enabled (IncrementalFileChunks > 0),
+	// If incremental garbage collection is enabled (IncrementalFileSize > 0),
 	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
 	// with a new writer.
 	var incrementalGcc *rotatingGCCopier
-	writeIncrementalChunkFiles := i.gcConfig.IncrementalFileChunks != chunks.IncrementalTablesDisabled
+	writeIncrementalChunkFiles := i.gcConfig.IncrementalFileSize != chunks.IncrementalTablesDisabled
 	if writeIncrementalChunkFiles {
-		incrementalGcc, err = newRotatingGCCopier(i.gcConfig.ArchiveLevel, i.tfp, i.dest, i.gcConfig.IncrementalFileChunks)
+		incrementalGcc, err = newRotatingGCCopier(i.gcConfig.ArchiveLevel, i.tfp, i.dest, i.gcConfig.IncrementalFileSize)
 	}
 
 	first := true

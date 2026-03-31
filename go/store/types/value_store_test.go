@@ -180,9 +180,9 @@ func TestGC(t *testing.T) {
 	assert.NotNil(v2)
 
 	gcConfig := chunks.GCConfig{
-		Mode:                  chunks.GCMode_Default,
-		ArchiveLevel:          chunks.NoArchive,
-		IncrementalFileChunks: chunks.IncrementalTablesDisabled,
+		Mode:                chunks.GCMode_Default,
+		ArchiveLevel:        chunks.NoArchive,
+		IncrementalFileSize: chunks.IncrementalTablesDisabled,
 	}
 	err = vs.GC(ctx, gcConfig, hash.HashSet{}, hash.HashSet{}, purgingSafepointController{vs})
 	require.NoError(t, err)

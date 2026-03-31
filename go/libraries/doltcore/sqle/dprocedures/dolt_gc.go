@@ -258,12 +258,12 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			gcConfig.ArchiveLevel = chunks.GCArchiveLevel(lvl)
 		}
 
-		if apr.Contains(cli.IncrementalGCFileChunks) {
-			incrementalFileChunks, ok := apr.GetUint(cli.IncrementalGCFileChunks)
+		if apr.Contains(cli.IncrementalGCFileSize) {
+			incrementalFileSize, ok := apr.GetUint(cli.IncrementalGCFileSize)
 			if !ok {
-				return cmdFailure, fmt.Errorf("parse error for value for %s: %s", cli.IncrementalGCFileChunks, apr.GetValues()[cli.IncrementalGCFileChunks])
+				return cmdFailure, fmt.Errorf("parse error for value for %s: %s", cli.IncrementalGCFileSize, apr.GetValues()[cli.IncrementalGCFileSize])
 			}
-			gcConfig.IncrementalFileChunks = incrementalFileChunks
+			gcConfig.IncrementalFileSize = incrementalFileSize
 		}
 
 		err := RunDoltGC(ctx, ddb, gcConfig, ctx.GetCurrentDatabase())

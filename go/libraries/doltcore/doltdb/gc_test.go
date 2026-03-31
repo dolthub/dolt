@@ -147,9 +147,9 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 
 	ddb := dEnv.DoltDB(ctx)
 	gcConfig := chunks.GCConfig{
-		Mode:                  chunks.GCMode_Default,
-		ArchiveLevel:          chunks.NoArchive,
-		IncrementalFileChunks: chunks.IncrementalTablesDisabled,
+		Mode:                chunks.GCMode_Default,
+		ArchiveLevel:        chunks.NoArchive,
+		IncrementalFileSize: chunks.IncrementalTablesDisabled,
 	}
 	err := ddb.GC(ctx, gcConfig, purgingSafepointController{ddb})
 	require.NoError(t, err)
@@ -221,9 +221,9 @@ func testGarbageCollectionHasCacheDataCorruptionBugFix(t *testing.T) {
 	require.NoError(t, err)
 
 	gcConfig := chunks.GCConfig{
-		Mode:                  chunks.GCMode_Default,
-		ArchiveLevel:          chunks.NoArchive,
-		IncrementalFileChunks: chunks.IncrementalTablesDisabled,
+		Mode:                chunks.GCMode_Default,
+		ArchiveLevel:        chunks.NoArchive,
+		IncrementalFileSize: chunks.IncrementalTablesDisabled,
 	}
 	err = ddb.GC(ctx, gcConfig, purgingSafepointController{ddb})
 	require.NoError(t, err)

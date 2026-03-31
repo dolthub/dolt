@@ -286,7 +286,7 @@ func ConfigureServices(
 				if cmp < chunks.NoArchive || cmp > chunks.MaxArchiveLevel {
 					return fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, cmp)
 				}
-				incrementalArchiveSize := cfg.ServerConfig.AutoGCBehavior().IncrementalFileChunks()
+				incrementalArchiveSize := cfg.ServerConfig.AutoGCBehavior().IncrementalFileSize()
 				config.AutoGCController = sqle.NewAutoGCController(cmp, incrementalArchiveSize, lgr)
 			}
 			return nil
