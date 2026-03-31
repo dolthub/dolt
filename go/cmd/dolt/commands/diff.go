@@ -111,6 +111,14 @@ type diffDatasets struct {
 	toRef   string
 }
 
+// involvesWorkingSet reports whether either side of the diff is the working set or staging area.
+// Ignore patterns from the dolt_ignore table apply to the staging of untracked tables, so they
+// are relevant only when the working set is part of the diff.
+func (d *diffDatasets) involvesWorkingSet() bool {
+	return d.fromRef == doltdb.Working || d.toRef == doltdb.Working ||
+		d.fromRef == doltdb.Staged || d.toRef == doltdb.Staged
+}
+
 type diffArgs struct {
 	*diffDisplaySettings
 	*diffDatasets
@@ -906,14 +914,19 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		return printDiffSummary(sqlCtx, deltas, dArgs)
 	}
 
+	// Load ignore patterns only when the diff includes the working set or staging area.
+	// Ignore patterns apply to the staging of untracked tables, not to committed history.
+	var ignoredTablePatterns doltdb.IgnorePatterns
+	if dArgs.involvesWorkingSet() {
+		ignoredTablePatterns, err = getIgnoredTablePatternsFromSql(queryist, sqlCtx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get ignored table patterns, cause: %w", err))
+		}
+	}
+
 	dw, err := newDiffWriter(dArgs.diffOutput)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
-	}
-
-	ignoredTablePatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get ignored table patterns, cause: %w", err))
 	}
 
 	doltSchemasChanged := false
@@ -922,8 +935,9 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
-		// Don't print tables if one side of the diff is an ignored table in the working set being added.
-		if len(delta.FromTableName.Name) == 0 {
+		// Skip tables that were added or dropped if they match an ignore pattern. The dolt_ignore
+		// table governs the staging of new tables and does not apply to existing tracked tables.
+		if delta.IsAdd() {
 			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(delta.ToTableName)
 			if err != nil {
 				return errhand.VerboseErrorFromError(err)
@@ -933,7 +947,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			}
 		}
 
-		if len(delta.ToTableName.Name) == 0 {
+		if delta.IsDrop() {
 			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(delta.FromTableName)
 			if err != nil {
 				return errhand.VerboseErrorFromError(err)
