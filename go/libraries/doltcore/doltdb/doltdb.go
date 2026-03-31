@@ -48,6 +48,14 @@ const (
 	// we expect to resolve a commit spec, but need working or staged
 	Working = "WORKING"
 	Staged  = "STAGED"
+)
+
+// IsWorkingSetRef reports whether |ref| identifies the working set or staging area rather than a commit.
+func IsWorkingSetRef(ref string) bool {
+	return ref == Working || ref == Staged
+}
+
+const (
 
 	CreationBranch = "create"
 

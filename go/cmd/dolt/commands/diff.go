@@ -113,8 +113,7 @@ type diffDatasets struct {
 
 // hasWorkingSet reports whether either side of the diff references the working set or staging area.
 func (d *diffDatasets) hasWorkingSet() bool {
-	return d.fromRef == doltdb.Working || d.toRef == doltdb.Working ||
-		d.fromRef == doltdb.Staged || d.toRef == doltdb.Staged
+	return doltdb.IsWorkingSetRef(d.fromRef) || doltdb.IsWorkingSetRef(d.toRef)
 }
 
 type diffArgs struct {
@@ -933,26 +932,12 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
-		// Ignore patterns apply only to newly added or dropped tables. Modifications to already
-		// tracked tables are always shown regardless of the current dolt_ignore contents.
-		if delta.IsAdd() {
-			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(delta.ToTableName)
-			if err != nil {
-				return errhand.VerboseErrorFromError(err)
-			}
-			if ignoreResult == doltdb.Ignore {
-				continue
-			}
+		ignore, err := ignoredTablePatterns.ShouldIgnoreDelta(delta.IsAdd(), delta.IsDrop(), delta.ToTableName, delta.FromTableName)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
 		}
-
-		if delta.IsDrop() {
-			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(delta.FromTableName)
-			if err != nil {
-				return errhand.VerboseErrorFromError(err)
-			}
-			if ignoreResult == doltdb.Ignore {
-				continue
-			}
+		if ignore {
+			continue
 		}
 
 		if !shouldPrintTableDelta(dArgs.tableSet, delta.ToTableName.Name, delta.FromTableName.Name) {
