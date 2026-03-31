@@ -20,7 +20,6 @@ import (
 	"sort"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -34,7 +33,7 @@ import (
 // DROP DATABASE during concurrency could cause the DatabaseProvider to
 // deadlock and the server databases to become unavailable.
 func TestConcurrentDropDatabase(t *testing.T) {
-	// Not parallel. Senseitive to timing.
+	t.Parallel()
 	var ports DynamicResources
 	ports.global = &GlobalPorts
 	ports.t = t
@@ -66,25 +65,29 @@ func TestConcurrentDropDatabase(t *testing.T) {
 	ctx := t.Context()
 
 	eg, ctx := errgroup.WithContext(ctx)
-	start := time.Now()
-
 	var numcreates int32 = 0
 	const numWriters = 8
-	const testDuration = 8 * time.Second
+	const numDatabasesPerWriter = 12
+	startCh := make(chan struct{})
+	readyCh := make(chan struct{})
 	for i := range numWriters {
 		eg.Go(func() error {
-			ctx, cancel := context.WithTimeout(ctx, testDuration*4)
-			defer cancel()
 			conn, err := db.Conn(ctx)
 			if err != nil {
 				return err
 			}
 			defer conn.Close()
-			j := 0
-			for {
-				if time.Since(start) > testDuration {
-					return nil
-				}
+			select {
+			case readyCh <- struct{}{}:
+			case <-ctx.Done():
+				return nil
+			}
+			select {
+			case <-startCh:
+			case <-ctx.Done():
+				return nil
+			}
+			for j := range numDatabasesPerWriter {
 				if ctx.Err() != nil {
 					return context.Cause(ctx)
 				}
@@ -99,11 +102,21 @@ func TestConcurrentDropDatabase(t *testing.T) {
 					return err
 				}
 			}
+			return nil
 		})
 	}
+	for range numWriters {
+		select {
+		case <-readyCh:
+		case <-ctx.Done():
+			// This will fail.
+			require.NoError(t, eg.Wait())
+			t.FailNow()
+		}
+	}
+	close(startCh)
 	require.NoError(t, eg.Wait())
-	ctx, cancel := context.WithTimeout(t.Context(), 2 * time.Second)
-	defer cancel()
+	ctx = t.Context()
 	conn, err := db.Conn(ctx)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -120,5 +133,5 @@ func TestConcurrentDropDatabase(t *testing.T) {
 	require.NoError(t, rows.Err())
 	sort.Strings(databases)
 	require.Equal(t, []string{"concurrent_drop_database_test", "information_schema", "mysql"}, databases)
-	t.Logf("created %d databases", numcreates)
+	t.Logf("created and dropped %d databases", numcreates)
 }
