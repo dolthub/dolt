@@ -71,6 +71,7 @@ const (
 	PortFlag               = "port"
 	PruneFlag              = "prune"
 	QuietFlag              = "quiet"
+	RebaseParam            = "rebase"
 	RemoteParam            = "remote"
 	SetUpstreamFlag        = "set-upstream"
 	SetUpstreamToFlag      = "set-upstream-to"

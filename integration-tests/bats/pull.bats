@@ -646,3 +646,705 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "t1" ]] || false
 }
+
+@test "pull: pull --rebase with divergent history produces linear history" {
+    cd repo2
+    dolt pull origin
+
+    # Make a commit on repo1 and push
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 1)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    # Make a different commit on repo2 (divergent)
+    cd ../repo2
+    dolt sql -q "insert into t1 values (2, 2)"
+    dolt commit -am "local commit"
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 0 ]
+
+    # Verify linear history (no merge commits)
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit" ]] || false
+    [[ "$output" =~ "remote commit" ]] || false
+    ! [[ "$output" =~ "Merge" ]] || false
+
+    # Verify the data is correct
+    run dolt sql -q "select * from t1 order by a" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+}
+
+@test "pull: pull --rebase with no local commits fast-forwards" {
+    cd repo2
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    run dolt sql -q "select * from t1" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
+}
+
+@test "pull: pull --rebase when already up-to-date" {
+    cd repo2
+    dolt pull origin
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+}
+
+@test "pull: pull --rebase with data conflict pauses rebase" {
+    skip_if_remote
+    cd repo2
+    dolt pull origin
+
+    # Make a conflicting commit on repo1 and push
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 1)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    # Make a conflicting commit on repo2 (same pk, different value)
+    cd ../repo2
+    dolt sql -q "insert into t1 values (1, 99)"
+    dolt commit -am "local conflicting commit"
+
+    setup_remote_server
+
+    # Pull with rebase should fail with conflict
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+
+    # Resolve conflicts
+    dolt conflicts resolve --theirs t1
+    dolt add t1
+
+    # Continue the rebase
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased" ]] || false
+
+    # Verify linear history
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local conflicting commit" ]] || false
+    [[ "$output" =~ "remote commit" ]] || false
+    ! [[ "$output" =~ "Merge" ]] || false
+}
+
+@test "pull: pull --rebase conflicts with --squash" {
+    cd repo2
+    run dolt pull --rebase --squash origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot be used together" ]] || false
+}
+
+@test "pull: pull --rebase conflicts with --no-ff" {
+    cd repo2
+    run dolt pull --rebase --no-ff origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot be used together" ]] || false
+}
+
+@test "pull: pull --rebase conflicts with --ff-only" {
+    cd repo2
+    run dolt pull --rebase --ff-only origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot be used together" ]] || false
+}
+
+@test "pull: pull --rebase conflicts with --no-commit" {
+    cd repo2
+    run dolt pull --rebase --no-commit origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot be used together" ]] || false
+}
+
+@test "pull: pull -r shorthand works" {
+    cd repo2
+    dolt pull origin
+
+    # Make a commit on repo1 and push
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 1)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    # Make a different commit on repo2 (divergent)
+    cd ../repo2
+    dolt sql -q "insert into t1 values (2, 2)"
+    dolt commit -am "local commit"
+
+    setup_remote_server
+
+    run dolt pull -r origin
+    [ "$status" -eq 0 ]
+
+    # Verify linear history (no merge commits)
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit" ]] || false
+    [[ "$output" =~ "remote commit" ]] || false
+    ! [[ "$output" =~ "Merge" ]] || false
+}
+
+@test "pull: pull --rebase with multiple local commits preserves order" {
+    cd repo2
+    dolt pull origin
+
+    # Make a commit on repo1 and push
+    cd ../repo1
+    dolt sql -q "insert into t1 values (10, 10)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    # Make 3 local commits on repo2
+    cd ../repo2
+    dolt sql -q "insert into t1 values (3, 3)"
+    dolt commit -am "local commit 1"
+    dolt sql -q "insert into t1 values (4, 4)"
+    dolt commit -am "local commit 2"
+    dolt sql -q "insert into t1 values (5, 5)"
+    dolt commit -am "local commit 3"
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 0 ]
+
+    # Verify linear history (no merge commits)
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit 3" ]] || false
+    [[ "$output" =~ "local commit 2" ]] || false
+    [[ "$output" =~ "local commit 1" ]] || false
+    [[ "$output" =~ "remote commit" ]] || false
+    ! [[ "$output" =~ "Merge" ]] || false
+
+    # Verify commit ordering: local commit 3 on top
+    run dolt show HEAD
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit 3" ]] || false
+
+    run dolt show HEAD~1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit 2" ]] || false
+
+    run dolt show HEAD~2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit 1" ]] || false
+
+    run dolt show HEAD~3
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remote commit" ]] || false
+
+    # Verify all data present
+    run dolt sql -q "select * from t1 order by a" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ "$output" =~ "10,10" ]] || false
+}
+
+@test "pull: pull --rebase conflict resolved with --theirs verifies data" {
+    skip_if_remote
+    cd repo2
+    dolt pull origin
+
+    # Make a conflicting commit on repo1 and push
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 1)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    # Make a conflicting commit on repo2 (same pk, different value)
+    cd ../repo2
+    dolt sql -q "insert into t1 values (1, 99)"
+    dolt commit -am "local conflicting commit"
+
+    setup_remote_server
+
+    # Pull with rebase should fail with conflict
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+
+    # Resolve conflicts with --theirs (in rebase, theirs = the local commit being replayed)
+    dolt conflicts resolve --theirs t1
+    dolt add t1
+
+    # Continue the rebase
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased" ]] || false
+
+    # Verify the data: --theirs keeps the local commit's value (1,99)
+    run dolt sql -q "select * from t1 order by a" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,99" ]] || false
+}
+
+@test "pull: pull --rebase conflict resolved with --ours keeps upstream data" {
+    skip_if_remote
+    cd repo2
+    dolt pull origin
+
+    # Make a conflicting commit on repo1 and push
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 1)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    # Make a conflicting commit on repo2 (same pk, different value)
+    cd ../repo2
+    dolt sql -q "insert into t1 values (1, 99)"
+    dolt commit -am "local conflicting commit"
+
+    setup_remote_server
+
+    # Pull with rebase should fail with conflict
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+
+    # Resolve conflicts with --ours (in rebase, ours = upstream/remote base)
+    dolt conflicts resolve --ours t1
+    dolt add t1
+
+    # Continue the rebase
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased" ]] || false
+
+    # Verify the data: --ours keeps the upstream (remote) value (1,1)
+    run dolt sql -q "select b from t1 where a = 1" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+
+    # Verify linear history
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "Merge" ]] || false
+}
+
+@test "pull: pull --rebase with multiple conflicts across multiple commits" {
+    skip_if_remote
+    cd repo2
+    dolt pull origin
+
+    # Make conflicting commits on repo1 and push
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 1)"
+    dolt sql -q "insert into t1 values (2, 2)"
+    dolt commit -am "remote commit with rows 1 and 2"
+    dolt push origin main
+
+    # Make 2 local commits on repo2 that will each conflict
+    cd ../repo2
+    dolt sql -q "insert into t1 values (1, 99)"
+    dolt commit -am "local commit 1 conflicts on pk 1"
+    dolt sql -q "insert into t1 values (2, 99)"
+    dolt commit -am "local commit 2 conflicts on pk 2"
+
+    setup_remote_server
+
+    # Pull with rebase should fail on first conflict
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+    [[ "$output" =~ "local commit 1" ]] || false
+
+    # Resolve first conflict
+    dolt conflicts resolve --theirs t1
+    dolt add t1
+
+    # Continue rebase, should hit second conflict
+    run dolt rebase --continue
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+    [[ "$output" =~ "local commit 2" ]] || false
+
+    # Resolve second conflict
+    dolt conflicts resolve --theirs t1
+    dolt add t1
+
+    # Continue rebase, should succeed
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased" ]] || false
+
+    # Verify linear history
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit 2" ]] || false
+    [[ "$output" =~ "local commit 1" ]] || false
+    [[ "$output" =~ "remote commit" ]] || false
+    ! [[ "$output" =~ "Merge" ]] || false
+
+    # Verify the rebase working branch was cleaned up
+    run dolt branch
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "dolt_rebase_main" ]] || false
+}
+
+@test "pull: pull --rebase with schema conflict auto-aborts" {
+    cd repo2
+    dolt pull origin
+
+    # Make a schema change on repo1: modify column b to varchar
+    cd ../repo1
+    dolt sql -q "ALTER TABLE t1 MODIFY COLUMN b varchar(100)"
+    dolt commit -am "remote schema change: modify b to varchar"
+    dolt push origin main
+
+    # Make a conflicting schema change on repo2: modify column b to bigint
+    cd ../repo2
+    dolt sql -q "ALTER TABLE t1 MODIFY COLUMN b bigint"
+    dolt commit -am "local schema change: modify b to bigint"
+
+    setup_remote_server
+
+    # Pull with rebase should fail with schema conflict and auto-abort
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "schema conflict detected while rebasing commit" ]] || false
+    [[ "$output" =~ "the rebase has been automatically aborted" ]] || false
+
+    # Verify no rebase is in progress
+    run dolt rebase --continue
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no rebase in progress" ]] || false
+
+    # Verify the rebase working branch was cleaned up
+    run dolt branch
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "dolt_rebase_main" ]] || false
+}
+
+@test "pull: pull --rebase with uncommitted changes fails" {
+    cd repo2
+    dolt pull origin
+
+    # Make a commit on repo1 and push to create divergence
+    cd ../repo1
+    dolt sql -q "insert into t1 values (3, 3)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    # Make a committed divergent change and an uncommitted change on repo2
+    cd ../repo2
+    dolt sql -q "insert into t1 values (4, 4)"
+    dolt commit -am "local committed change"
+    dolt sql -q "insert into t1 values (5, 5)"
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot start a rebase with uncommitted changes" ]] || false
+
+    # Verify working set is unchanged
+    run dolt sql -q "select * from t1 where a = 5" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5,5" ]] || false
+}
+
+@test "pull: pull --rebase when local is ahead returns up-to-date" {
+    cd repo2
+    dolt pull origin
+
+    # Make a local commit but do NOT push
+    dolt sql -q "insert into t1 values (7, 7)"
+    dolt commit -am "local only commit"
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+
+    # Verify local commit is still there
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local only commit" ]] || false
+}
+
+@test "pull: pull --rebase with multiple remote commits and one local" {
+    cd repo2
+    dolt pull origin
+
+    # Make 3 commits on repo1 and push
+    cd ../repo1
+    dolt sql -q "insert into t1 values (10, 10)"
+    dolt commit -am "remote commit 1"
+    dolt sql -q "insert into t1 values (11, 11)"
+    dolt commit -am "remote commit 2"
+    dolt sql -q "insert into t1 values (12, 12)"
+    dolt commit -am "remote commit 3"
+    dolt push origin main
+
+    # Make 1 local commit on repo2
+    cd ../repo2
+    dolt sql -q "insert into t1 values (20, 20)"
+    dolt commit -am "local commit"
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 0 ]
+
+    # Verify linear history: local commit on top of all 3 remote commits
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit" ]] || false
+    [[ "$output" =~ "remote commit 3" ]] || false
+    [[ "$output" =~ "remote commit 2" ]] || false
+    [[ "$output" =~ "remote commit 1" ]] || false
+    ! [[ "$output" =~ "Merge" ]] || false
+
+    # Verify local commit is most recent
+    run dolt show HEAD
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit" ]] || false
+
+    # Verify all data correct
+    run dolt sql -q "select * from t1 order by a" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "10,10" ]] || false
+    [[ "$output" =~ "11,11" ]] || false
+    [[ "$output" =~ "12,12" ]] || false
+    [[ "$output" =~ "20,20" ]] || false
+}
+
+@test "pull: pull --rebase with non-conflicting new tables on both sides" {
+    cd repo2
+    dolt pull origin
+
+    # Make a new table on repo1 and push
+    cd ../repo1
+    dolt sql -q "create table t2 (a int primary key, b int)"
+    dolt sql -q "insert into t2 values (1, 1)"
+    dolt commit -Am "remote: create table t2"
+    dolt push origin main
+
+    # Make a different new table on repo2
+    cd ../repo2
+    dolt sql -q "create table t3 (a int primary key, b int)"
+    dolt sql -q "insert into t3 values (1, 1)"
+    dolt commit -Am "local: create table t3"
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 0 ]
+
+    # Verify both tables exist
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
+    [[ "$output" =~ "t3" ]] || false
+
+    # Verify linear history
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local: create table t3" ]] || false
+    [[ "$output" =~ "remote: create table t2" ]] || false
+    ! [[ "$output" =~ "Merge" ]] || false
+}
+
+@test "pull: pull --rebase abort then retry" {
+    skip_if_remote
+    cd repo2
+    dolt pull origin
+
+    # Create conflict scenario
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 1)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    cd ../repo2
+    dolt sql -q "insert into t1 values (1, 99)"
+    dolt commit -am "local conflicting commit"
+
+    setup_remote_server
+
+    # Pull with rebase hits conflict
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+
+    # Abort the rebase
+    run dolt rebase --abort
+    [ "$status" -eq 0 ]
+
+    # Verify clean state, back on main
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* main" ]] || false
+    ! [[ "$output" =~ "dolt_rebase_main" ]] || false
+
+    # Retry pull --rebase, still conflicts
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+
+    # This time resolve and continue
+    dolt conflicts resolve --theirs t1
+    dolt add t1
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased" ]] || false
+
+    # Verify linear history
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "Merge" ]] || false
+
+    # Verify rebase branch cleaned up
+    run dolt branch
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "dolt_rebase_main" ]] || false
+}
+
+@test "pull: pull --rebase fails when dolt_rebase_main branch already exists" {
+    cd repo2
+    dolt pull origin
+
+    # Manually create the rebase working branch
+    dolt branch dolt_rebase_main
+
+    # Create divergent history
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 1)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    cd ../repo2
+    dolt sql -q "insert into t1 values (2, 2)"
+    dolt commit -am "local commit"
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A branch named 'dolt_rebase_main' already exists" ]] || false
+
+    # Verify original branch is still intact
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit" ]] || false
+}
+
+@test "pull: pull --rebase shows conflicts during paused rebase" {
+    skip_if_remote
+    cd repo2
+    dolt pull origin
+
+    # Create conflict scenario
+    cd ../repo1
+    dolt sql -q "insert into t1 values (1, 1)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    cd ../repo2
+    dolt sql -q "insert into t1 values (1, 99)"
+    dolt commit -am "local conflicting commit"
+
+    setup_remote_server
+
+    # Pull with rebase should pause on conflict
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+
+    # Verify we are on the rebase working branch
+    run dolt sql -q "select active_branch()" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_rebase_main" ]] || false
+
+    # Verify dolt_conflicts shows the conflict
+    run dolt sql -q "select * from dolt_conflicts" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    # Verify dolt conflicts cat shows conflict details
+    run dolt conflicts cat .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "ours" ]] || false
+    [[ "$output" =~ "theirs" ]] || false
+
+    # Clean up: abort the rebase
+    run dolt rebase --abort
+    [ "$status" -eq 0 ]
+
+    # Verify back on main
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* main" ]] || false
+    ! [[ "$output" =~ "dolt_rebase_main" ]] || false
+}
+
+@test "pull: pull --rebase with explicit remote and branch args" {
+    cd repo2
+    dolt pull origin main
+
+    # Make a commit on repo1 and push
+    cd ../repo1
+    dolt sql -q "insert into t1 values (10, 10)"
+    dolt commit -am "remote commit"
+    dolt push origin main
+
+    # Make a local commit on repo2
+    cd ../repo2
+    dolt sql -q "insert into t1 values (20, 20)"
+    dolt commit -am "local commit"
+
+    setup_remote_server
+
+    # Use explicit remote and branch args
+    run dolt pull --rebase origin main
+    [ "$status" -eq 0 ]
+
+    # Verify linear history
+    run dolt log --oneline
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local commit" ]] || false
+    [[ "$output" =~ "remote commit" ]] || false
+    ! [[ "$output" =~ "Merge" ]] || false
+
+    # Verify all data
+    run dolt sql -q "select * from t1 order by a" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "10,10" ]] || false
+    [[ "$output" =~ "20,20" ]] || false
+}
