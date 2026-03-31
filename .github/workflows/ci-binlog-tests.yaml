@@ -22,6 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
+        adaptive_encoding: ["false", "true"]
     steps:
     - uses: actions/checkout@v6
     - name: Set up Go 1.x
@@ -36,12 +37,18 @@ jobs:
         go test -vet=off -timeout 60m ./libraries/doltcore/sqle/binlogreplication/...
       env:
         MATRIX_OS: ${{ matrix.os }}
+        DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
   binlog-race-test:
     name: Binlog tests - race
     defaults:
       run:
         shell: bash
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04]
+        adaptive_encoding: ["false", "true"]
     steps:
     - uses: actions/checkout@v6
     - name: Set up Go 1.x
@@ -55,4 +62,5 @@ jobs:
         # Test binlog packages with race detector
         go test -vet=off -timeout 60m -race ./libraries/doltcore/sqle/binlogreplication/...
       env:
-        MATRIX_OS: ubuntu-22.04
+        MATRIX_OS: ${{ matrix.os }}
+        DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
