@@ -156,6 +156,10 @@ type conjoinOperation struct {
 	conjoinees []tableSpec
 	// The tableSpec for the conjoined file.
 	conjoined tableSpec
+	// The open chunkSource for the conjoined file. Kept open so it
+	// can be passed to tables.rebase as an available source, avoiding
+	// a redundant Open call.
+	conjoinedSrc chunkSource
 }
 
 // Compute what we will conjoin and prepare to do it. This should be
@@ -177,7 +181,7 @@ func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStr
 // NomsBlockStore.
 func (op *conjoinOperation) conjoin(ctx context.Context, behavior dherrors.FatalBehavior, persister tablePersister, stats *Stats) error {
 	var err error
-	op.conjoined, op.cleanup, err = conjoinTables(ctx, behavior, op.conjoinees, persister, stats)
+	op.conjoined, op.conjoinedSrc, op.cleanup, err = conjoinTables(ctx, behavior, op.conjoinees, persister, stats)
 	if err != nil {
 		return err
 	}
@@ -266,20 +270,25 @@ func (op *conjoinOperation) updateManifest(ctx context.Context, behavior dherror
 // process actor has already landed a conjoin of its own. Callers must
 // handle this, likely by rebasing against upstream and re-evaluating the
 // situation.
-func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, cleanupFunc, error) {
+func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, chunkSource, cleanupFunc, error) {
 	var op conjoinOperation
 	err := op.prepareConjoin(ctx, s, upstream)
 	if err != nil {
-		return manifestContents{}, nil, err
+		return manifestContents{}, nil, nil, err
 	}
 	err = op.conjoin(ctx, behavior, p, stats)
 	if err != nil {
-		return manifestContents{}, nil, err
+		return manifestContents{}, nil, nil, err
 	}
-	return op.updateManifest(ctx, behavior, upstream, mm, stats)
+	mc, cf, err := op.updateManifest(ctx, behavior, upstream, mm, stats)
+	if err != nil {
+		op.conjoinedSrc.close()
+		return manifestContents{}, nil, nil, err
+	}
+	return mc, op.conjoinedSrc, cf, nil
 }
 
-func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, cleanup cleanupFunc, err error) {
+func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, src chunkSource, cleanup cleanupFunc, err error) {
 	eg, ectx := errgroup.WithContext(ctx)
 	toConjoin := make(chunkSources, len(conjoinees))
 
@@ -298,23 +307,23 @@ func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoin
 		}
 	}()
 	if err = eg.Wait(); err != nil {
-		return tableSpec{}, nil, err
+		return tableSpec{}, nil, nil, err
 	}
 
 	t1 := time.Now()
 
 	conjoinedSrc, cleanup, err := p.ConjoinAll(ctx, behavior, toConjoin, stats)
 	if err != nil {
-		return tableSpec{}, nil, err
+		return tableSpec{}, nil, nil, err
 	}
-	defer conjoinedSrc.close()
 
 	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))
 
 	cnt, err := conjoinedSrc.count()
 	if err != nil {
-		return tableSpec{}, nil, err
+		conjoinedSrc.close()
+		return tableSpec{}, nil, nil, err
 	}
 
 	stats.ChunksPerConjoin.Sample(uint64(cnt))
@@ -322,9 +331,10 @@ func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoin
 	h := conjoinedSrc.hash()
 	cnt, err = conjoinedSrc.count()
 	if err != nil {
-		return tableSpec{}, nil, err
+		conjoinedSrc.close()
+		return tableSpec{}, nil, nil, err
 	}
-	return tableSpec{h, cnt}, cleanup, nil
+	return tableSpec{h, cnt}, conjoinedSrc, cleanup, nil
 }
 
 func toSpecs(srcs chunkSources) ([]tableSpec, error) {
