@@ -2319,10 +2319,21 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 			return context.Cause(ctx)
 		}
 
+		// We must wait here for all pending incremental chunk files to be written
+		// and the tableSet updated. Otherwise, we might not filter out
+		// chunks that have already been written during this walk.
+		err = incrementalGcc.waitForPendingChunkFiles()
+		if err != nil {
+			return err
+		}
+
 		if !first {
 			copy := toVisit.Copy()
 			for h := range toVisit {
 				if _, ok := i.visited[h]; ok {
+					delete(copy, h)
+				}
+				if incrementalGcc.containsChunk(h) {
 					delete(copy, h)
 				}
 			}
@@ -2375,6 +2386,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 				addErr = incrementalGcc.addChunk(ctx, tc)
 			} else {
 				addErr = i.gcc.addChunk(ctx, tc)
+				i.visited.Insert(tc.Hash())
 			}
 
 			if addErr != nil {
@@ -2390,8 +2402,6 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 		if found != len(toVisit) {
 			return fmt.Errorf("dangling references requested during GC. GC not successful. %v", toVisit)
 		}
-
-		i.visited.InsertAll(toVisit)
 
 		toVisit = nextToVisit
 

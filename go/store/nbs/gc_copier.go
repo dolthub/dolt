@@ -211,6 +211,14 @@ func (gcc *rotatingGCCopier) addChunk(ctx context.Context, c ToChunker) error {
 	return nil
 }
 
+// containsChunk checks whether the in-progress table file contains the provided chunk
+func (gcc *rotatingGCCopier) containsChunk(h hash.Hash) bool {
+	if gcc == nil {
+		return false
+	}
+	return gcc.writer.SeenChunk(h)
+}
+
 func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 	specs, err := gcc.copyTablesToDir(ctx)
 	if err != nil {
@@ -239,5 +247,12 @@ func (gcc *rotatingGCCopier) finalize(ctx context.Context) error {
 		return err
 	}
 
+	return gcc.eg.Wait()
+}
+
+func (gcc *rotatingGCCopier) waitForPendingChunkFiles() error {
+	if gcc == nil {
+		return nil
+	}
 	return gcc.eg.Wait()
 }
