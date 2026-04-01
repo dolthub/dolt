@@ -405,7 +405,7 @@ func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery i
 		defer wg.Done()
 		select {
 		case <-done:
-		case <-time.After(1*time.Minute):
+		case <-time.After(1 * time.Minute):
 			s.PrimaryServer.Cmd.Process.Signal(syscall.SIGQUIT)
 		}
 	}()
@@ -426,12 +426,18 @@ type RepoSize struct {
 }
 
 func GetRepoSize(dir string) (RepoSize, error) {
+	skipFile := func(filename string) bool {
+		return filename == "manifest" || filename == "LOCK"
+	}
 	var ret RepoSize
 	entries, err := os.ReadDir(filepath.Join(dir, ".dolt/noms"))
 	if err != nil {
 		return ret, err
 	}
 	for _, e := range entries {
+		if skipFile(e.Name()) {
+			continue
+		}
 		stat, err := e.Info()
 		if err != nil {
 			return ret, err
@@ -450,6 +456,9 @@ func GetRepoSize(dir string) (RepoSize, error) {
 		return ret, err
 	}
 	for _, e := range entries {
+		if skipFile(e.Name()) {
+			continue
+		}
 		stat, err := e.Info()
 		if err != nil {
 			return ret, err
