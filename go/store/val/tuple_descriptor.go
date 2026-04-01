@@ -119,7 +119,7 @@ func IterAddressFields(td *TupleDesc, cb func(int, Type)) {
 func IterAdaptiveFields(td *TupleDesc, cb func(int, Type)) {
 	for i, typ := range td.Types {
 		switch typ.Enc {
-		case BytesAdaptiveEnc, StringAdaptiveEnc, ExtendedAdaptiveEnc:
+		case BytesAdaptiveEnc, StringAdaptiveEnc, ExtendedAdaptiveEnc, GeomAdaptiveEnc:
 			cb(i, typ)
 		}
 	}
@@ -502,6 +502,12 @@ func (td *TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
 	// TODO: we are support both Geometry and GeometryAddr for now, so we can't expect just one
 	// td.expectEncoding(i, GeomAddrEnc)
 	return td.GetAddr(i, tup)
+}
+
+// GetGeomAdaptiveValue reads a geometry value from an adaptive-encoded field.
+func (td *TupleDesc) GetGeomAdaptiveValue(ctx context.Context, i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+	td.ExpectEncoding(i, GeomAdaptiveEnc)
+	return GetBytesAdaptiveValue(ctx, vs, td.GetField(i, tup))
 }
 
 func (td *TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {

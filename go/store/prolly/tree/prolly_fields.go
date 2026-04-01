@@ -112,6 +112,21 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 			}
 			v, err = deserializeGeometry(buf)
 		}
+	case val.GeomAdaptiveEnc:
+		var adaptiveVal interface{}
+		adaptiveVal, ok, err = td.GetGeomAdaptiveValue(ctx, i, ns, tup)
+		if ok && err == nil {
+			switch av := adaptiveVal.(type) {
+			case []byte:
+				v, err = deserializeGeometry(av)
+			case *val.ByteArray:
+				var buf []byte
+				buf, err = av.ToBytes(ctx)
+				if err == nil {
+					v, err = deserializeGeometry(buf)
+				}
+			}
+		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
 	case val.BytesAddrEnc:
@@ -339,6 +354,24 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		v.WrappedVal = val.NewByteArray(ctx, h, ns)
 		return v, err
 
+	case val.GeomAdaptiveEnc:
+		v.Typ = querypb.Type_GEOMETRY
+		b := td.GetField(i, tup)
+		// null value
+		if len(b) == 0 {
+			return v, nil
+		}
+		// inlined
+		if b[0] == 0 {
+			v.Val = b[1:]
+			return v, nil
+		}
+		// out-of-band
+		_, lengthBytes := uvarint.Uvarint(b)
+		h := hash.New(b[lengthBytes:])
+		v.Val, err = ns.ReadBytes(ctx, h)
+		return v, err
+
 	default:
 		panic("unknown val.encoding")
 	}
@@ -439,6 +472,28 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 			return err
 		}
 		tb.PutGeometryAddr(i, h)
+	case val.GeomAdaptiveEnc:
+		switch value := v.(type) {
+		case *val.ByteArray:
+			if value.IsExactLength() {
+				tb.PutAdaptiveGeomFromOutline(i, value)
+			} else {
+				valueBytes, err := value.ToBytes(ctx)
+				if err != nil {
+					return err
+				}
+				err = tb.PutAdaptiveGeomFromInline(ctx, i, valueBytes)
+				if err != nil {
+					return err
+				}
+			}
+		default:
+			geo := serializeGeometry(v)
+			err := tb.PutAdaptiveGeomFromInline(ctx, i, geo)
+			if err != nil {
+				return err
+			}
+		}
 	case val.JSONAddrEnc:
 		h, err := getJSONAddrHash(ctx, ns, v)
 		if err != nil {

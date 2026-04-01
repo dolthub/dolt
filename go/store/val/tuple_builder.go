@@ -550,6 +550,11 @@ func (tb *TupleBuilder) PutAdaptiveStringFromInline(ctx context.Context, i int, 
 	return tb.PutAdaptiveFromInline(ctx, i, []byte(s))
 }
 
+func (tb *TupleBuilder) PutAdaptiveGeomFromInline(ctx context.Context, i int, v []byte) error {
+	tb.Desc.ExpectEncoding(i, GeomAdaptiveEnc)
+	return tb.PutAdaptiveFromInline(ctx, i, v)
+}
+
 func (tb *TupleBuilder) PutAdaptiveExtendedFromInline(ctx context.Context, i int, v []byte) error {
 	tb.Desc.ExpectEncoding(i, ExtendedAdaptiveEnc)
 	return tb.PutAdaptiveFromInline(ctx, i, v)
@@ -610,6 +615,11 @@ func (tb *TupleBuilder) PutAdaptiveValue(ctx context.Context, vs ValueStore, i i
 func (tb *TupleBuilder) PutAdaptiveExtendedFromOutline(i int, v *ExtendedValueWrapper) {
 	tb.Desc.ExpectEncoding(i, ExtendedAdaptiveEnc)
 	tb.PutAdaptiveFromOutline(i, v.outOfBandLength, v.Addr)
+}
+
+func (tb *TupleBuilder) PutAdaptiveGeomFromOutline(i int, v *ByteArray) {
+	tb.Desc.ExpectEncoding(i, GeomAdaptiveEnc)
+	tb.PutAdaptiveFromOutline(i, v.maxByteLength, v.Addr)
 }
 
 func (tb *TupleBuilder) PutAdaptiveBytesFromOutline(i int, v *ByteArray) {
