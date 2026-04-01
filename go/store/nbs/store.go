@@ -2305,7 +2305,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
 	// with a new writer.
 	var incrementalGcc *rotatingGCCopier
-	writeIncrementalChunkFiles := i.gcConfig.IncrementalFileSize != chunks.IncrementalTablesDisabled
+	writeIncrementalChunkFiles := i.gcConfig.IncrementalFileSize != chunks.IncrementalGCTablesDisabled
 	if writeIncrementalChunkFiles {
 		incrementalGcc, err = newRotatingGCCopier(i.gcConfig.ArchiveLevel, i.tfp, i.dest, i.gcConfig.IncrementalFileSize)
 	}

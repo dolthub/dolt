@@ -149,7 +149,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	gcConfig := chunks.GCConfig{
 		Mode:                chunks.GCMode_Default,
 		ArchiveLevel:        chunks.NoArchive,
-		IncrementalFileSize: chunks.IncrementalTablesDisabled,
+		IncrementalFileSize: chunks.IncrementalGCTablesDisabled,
 	}
 	err := ddb.GC(ctx, gcConfig, purgingSafepointController{ddb})
 	require.NoError(t, err)
@@ -223,7 +223,7 @@ func testGarbageCollectionHasCacheDataCorruptionBugFix(t *testing.T) {
 	gcConfig := chunks.GCConfig{
 		Mode:                chunks.GCMode_Default,
 		ArchiveLevel:        chunks.NoArchive,
-		IncrementalFileSize: chunks.IncrementalTablesDisabled,
+		IncrementalFileSize: chunks.IncrementalGCTablesDisabled,
 	}
 	err = ddb.GC(ctx, gcConfig, purgingSafepointController{ddb})
 	require.NoError(t, err)

@@ -230,7 +230,7 @@ type GCConfig struct {
 }
 
 // A value of 0 for IncrementalFileSize means that no incremental tables are written during GC.
-var IncrementalTablesDisabled uint64 = 0
+const IncrementalGCTablesDisabled uint64 = 0
 
 func NewGCConfig(mode GCMode, archiveLevel GCArchiveLevel, incrementalFileSize uint64) GCConfig {
 	return GCConfig{

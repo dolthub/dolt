@@ -182,7 +182,7 @@ func TestGC(t *testing.T) {
 	gcConfig := chunks.GCConfig{
 		Mode:                chunks.GCMode_Default,
 		ArchiveLevel:        chunks.NoArchive,
-		IncrementalFileSize: chunks.IncrementalTablesDisabled,
+		IncrementalFileSize: chunks.IncrementalGCTablesDisabled,
 	}
 	err = vs.GC(ctx, gcConfig, hash.HashSet{}, hash.HashSet{}, purgingSafepointController{vs})
 	require.NoError(t, err)
