@@ -260,7 +260,7 @@ func isDoltRebaseTable(tableName TableName) bool {
 }
 
 // ShouldIgnoreDelta reports whether a table delta should be excluded from a diff.
-// Only newly added or dropped tables are matched against the patterns; modifications to tracked tables are never filtered.
+// Only newly added or dropped tables are matched against the patterns. Changes to already tracked tables are always included.
 func (ip *IgnorePatterns) ShouldIgnoreDelta(isAdd, isDrop bool, toName, fromName TableName) (bool, error) {
 	if isAdd {
 		result, err := ip.IsTableNameIgnored(toName)
