@@ -262,8 +262,8 @@ func (tr tableReader) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavi
 	return remaining, gcBehavior_Continue, nil
 }
 
-func (tr tableReader) count() (uint32, error) {
-	return tr.idx.chunkCount(), nil
+func (tr tableReader) count() uint32 {
+	return tr.idx.chunkCount()
 }
 
 func (tr tableReader) uncompressedLen() (uint64, error) {

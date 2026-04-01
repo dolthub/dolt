@@ -174,8 +174,8 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 	return remaining, gcBehavior_Continue, nil
 }
 
-func (s journalChunkSource) count() (uint32, error) {
-	return s.journal.recordCount(), nil
+func (s journalChunkSource) count() uint32 {
+	return s.journal.recordCount()
 }
 
 func (s journalChunkSource) uncompressedLen() (uint64, error) {

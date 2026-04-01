@@ -308,36 +308,23 @@ func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoin
 	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))
 
-	cnt, err := conjoinedSrc.count()
-	if err != nil {
-		return tableSpec{}, nil, err
-	}
+	cnt := conjoinedSrc.count()
 
 	stats.ChunksPerConjoin.Sample(uint64(cnt))
 
 	h := conjoinedSrc.hash()
-	cnt, err = conjoinedSrc.count()
-	if err != nil {
-		return tableSpec{}, nil, err
-	}
 	return tableSpec{h, cnt}, cleanup, nil
 }
 
 func toSpecs(srcs chunkSources) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(srcs))
 	for i, src := range srcs {
-		cnt, err := src.count()
-		if err != nil {
-			return nil, err
-		} else if cnt <= 0 {
+		cnt := src.count()
+		if cnt <= 0 {
 			return nil, errors.New("invalid table spec has no sources")
 		}
 
 		h := src.hash()
-		cnt, err = src.count()
-		if err != nil {
-			return nil, err
-		}
 		specs[i] = tableSpec{h, cnt}
 	}
 
