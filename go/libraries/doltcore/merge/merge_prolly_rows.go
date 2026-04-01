@@ -746,8 +746,13 @@ func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *
 	for _, def := range sch.Indexes().AllIndexes() {
 		if !def.IsUnique() {
 			continue
-		} else if !tm.leftSch.Indexes().Contains(def.Name()) {
-			continue // todo: how do we validate in this case?
+		}
+
+		leftDef := tm.leftSch.Indexes().GetByName(def.Name())
+		if leftDef == nil || !leftDef.Equals(def) {
+			// mergeProllySecondaryIndexes rebuilds it from the final merged table and
+			// records any violations there.
+			continue
 		}
 
 		idx, err := indexes.GetIndex(ctx, sch, nil, def.Name())

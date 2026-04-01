@@ -1428,6 +1428,98 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/10753.
+		Name: "adding a column to a unique index where merged rows violate the new index",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE TABLE t (pk INT PRIMARY KEY, a INT, b TINYINT, UNIQUE KEY uq (a));",
+			"INSERT INTO t VALUES (1, 10, 1);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t DROP INDEX uq;",
+			"ALTER TABLE t ADD UNIQUE KEY uq (a, b);",
+			"INSERT INTO t VALUES (2, 20, 2);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (3, 20, 2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint(2)}},
+			},
+			{
+				Query: "select violation_type, pk, a, b, violation_info from dolt_constraint_violations_t order by pk;",
+				Expected: []sql.Row{
+					{"unique index", 2, 20, int8(2), merge.UniqCVMeta{Columns: []string{"a", "b"}, Name: "uq"}},
+					{"unique index", 3, 20, int8(2), merge.UniqCVMeta{Columns: []string{"a", "b"}, Name: "uq"}},
+				},
+			},
+			{
+				Query:    "select * from dolt_status;",
+				Expected: []sql.Row{{"t", byte(0), "constraint violation"}},
+			},
+			{
+				Query:    "UPDATE t SET a = 30 WHERE pk = 3;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "DELETE FROM dolt_constraint_violations_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "call dolt_commit('-am', 'merge right, resolve unique index violation');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 10, int8(1)},
+					{2, 20, int8(2)},
+					{3, 30, int8(2)},
+				},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/10753.
+		Name: "adding a column to a unique index and inserting data valid only under the new index",
+		AncSetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, a INT, b TINYINT, UNIQUE KEY uq (a));",
+			"INSERT INTO t VALUES (1, 10, 1);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t DROP INDEX uq;",
+			"ALTER TABLE t ADD UNIQUE KEY uq (a, b);",
+			"INSERT INTO t VALUES (2, 10, 2);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (3, 30, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{
+					{1, 10, int8(1)},
+					{2, 10, int8(2)},
+					{3, 30, int8(3)},
+				},
+			},
+		},
+	},
 }
 
 // SchemaChangeTestsTypeChanges holds test scripts for schema merge where column types have changed. Note that

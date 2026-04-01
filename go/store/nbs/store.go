@@ -372,8 +372,7 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 	}
 
 	conjoinedSrc := nbs.conjoinOp.conjoinedSrc
-	// On succesful rebase, this will be cloned. Either way,
-	// on non-nil error, we own closing it.
+	// On successful rebase, this will be cloned. We own closing this copy of it, regardless of the outcome.
 	defer conjoinedSrc.close()
 	srcs := chunkSourceSet{conjoinedSrc.hash(): conjoinedSrc}
 
@@ -1205,31 +1204,17 @@ func toGetRecords(hashes hash.HashSet) []getRecord {
 }
 
 func (nbs *NomsBlockStore) Count() (uint32, error) {
-	count, tables, err := func() (count uint32, tables chunkReader, err error) {
+	count, tables := func() (count uint32, tables chunkReader) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		if nbs.memtable != nil {
-			count, err = nbs.memtable.count()
+			count = nbs.memtable.count()
 		}
 
-		if err != nil {
-			return 0, nil, err
-		}
-
-		return count, nbs.tables, nil
+		return count, nbs.tables
 	}()
 
-	if err != nil {
-		return 0, err
-	}
-
-	tablesCount, err := tables.count()
-
-	if err != nil {
-		return 0, err
-	}
-
-	return count + tablesCount, nil
+	return count + tables.count(), nil
 }
 
 func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
@@ -1591,11 +1576,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 
 	for {
 		if nbs.memtable != nil {
-			cnt, err := nbs.memtable.count()
-			if err != nil {
-				return err
-			}
-			if cnt > 0 {
+			if nbs.memtable.count() > 0 {
 				ts, gcb, err := nbs.tables.append(ctx, nbs.fatalBehavior, nbs.memtable, checker, nbs.keeperFunc, nbs.hasCache, nbs.stats)
 				if err != nil {
 					nbs.handlePossibleDanglingRefError(err)
@@ -1711,7 +1692,7 @@ func (nbs *NomsBlockStore) Stats() interface{} {
 func (nbs *NomsBlockStore) StatsSummary() string {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	cnt, _ := nbs.tables.count()
+	cnt := nbs.tables.count()
 	physLen, _ := nbs.tables.physicalLen()
 	return fmt.Sprintf("Root: %s; Chunk Count %d; Physical Bytes %s", nbs.upstream.root, cnt, humanize.Bytes(physLen))
 }
@@ -2619,11 +2600,7 @@ func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) 
 	}
 	for _, tf := range nbs.tables.upstream {
 		if tf.hash() == storageId {
-			count, err := tf.count()
-			if err != nil {
-				return tableSpec{name: storageId, chunkCount: 0}, false
-			}
-			return tableSpec{name: storageId, chunkCount: count}, true
+			return tableSpec{name: storageId, chunkCount: tf.count()}, true
 		}
 	}
 	return tableSpec{name: storageId, chunkCount: 0}, false

@@ -1280,7 +1280,7 @@ func (tcs *testChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 	panic("never used")
 }
 
-func (tcs *testChunkSource) count() (uint32, error) {
+func (tcs *testChunkSource) count() uint32 {
 	panic("never used")
 }
 

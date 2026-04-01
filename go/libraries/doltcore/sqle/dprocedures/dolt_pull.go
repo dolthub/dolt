@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -167,7 +166,9 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	}
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, statsCh)
+	})
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fetch failed: %w", err)
 	}
@@ -251,42 +252,12 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", err
 	}
-	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, statsCh)
+	})
 	if err != nil {
 		return conflicts, fastForward, "", err
 	}
 
 	return conflicts, fastForward, message, nil
-}
-
-// TODO: remove this as it does not do anything useful
-func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-statsCh:
-		}
-	}
-}
-
-// TODO: remove this as it does not do anything useful
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
-	statsCh := make(chan pull.Stats)
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pullerProgFunc(ctx, statsCh)
-	}()
-
-	return wg, statsCh
-}
-
-// TODO: remove this as it does not do anything useful
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
-	cancel()
-	close(statsCh)
-	wg.Wait()
 }

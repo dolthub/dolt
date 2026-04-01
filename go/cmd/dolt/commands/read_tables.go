@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"path"
+	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -25,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -185,12 +187,17 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 		return nil, errhand.BuildDError("error: ").AddCause(err).Build()
 	}
 
-	newCtx, cancelFunc := context.WithCancel(ctx)
-	cli.Println("Retrieving", tblName)
-	runProgFunc := buildProgStarter(language)
-	wg, pullerEventCh := runProgFunc(newCtx)
-	err = dEnv.DoltDB(ctx).PullChunks(ctx, tmpDir, srcDB, []hash.Hash{tblHash}, pullerEventCh, nil)
-	stopProgFuncs(cancelFunc, wg, pullerEventCh)
+	var wg sync.WaitGroup
+	statsCh := make(chan pull.Stats, 128)
+	wg.Go(func() {
+		processStats(language, statsCh)
+	})
+	wg.Go(func() {
+		defer close(statsCh)
+		cli.Println("Retrieving", tblName)
+		err = dEnv.DoltDB(ctx).PullChunks(ctx, tmpDir, srcDB, []hash.Hash{tblHash}, statsCh, nil)
+	})
+	wg.Wait()
 	if err != nil {
 		return nil, errhand.BuildDError("Failed reading chunks for remote table '%s' at '%s'", tblName, commitStr).AddCause(err).Build()
 	}

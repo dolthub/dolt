@@ -37,6 +37,7 @@ func TestCommitConcurrency(t *testing.T) {
 // testSQLTransactionWithAmendCommit verifies that two transactions started at the same state will not both be able
 // to commit using --amend. The first transaction will be able to commit, but the second should get an error.
 func testSQLTransactionWithAmendCommit(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
@@ -125,6 +126,7 @@ CREATE TABLE test_table (
 }
 
 func testSQLRacingAmend(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)

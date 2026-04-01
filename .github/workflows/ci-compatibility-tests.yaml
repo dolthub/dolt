@@ -19,6 +19,7 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-22.04 ]
+        adaptive_encoding: [ "false", "true" ]
     steps:
       - uses: actions/checkout@v6
       - name: Setup Go 1.x
@@ -49,3 +50,5 @@ jobs:
       - name: Test all
         run: ./runner.sh
         working-directory: ./integration-tests/compatibility
+        env:
+          DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}

@@ -17,12 +17,10 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -174,36 +172,55 @@ func testMaxConns3BackLog1(t *testing.T) {
 	if t.Failed() {
 		return
 	}
-	eg, ctx := errgroup.WithContext(ctx)
-	done := make(chan struct{})
-	eg.Go(func() error {
-		conn, err := db.Conn(driver.WithConnectRetriesDisabled(ctx))
-		if err != nil {
-			return err
-		}
-		defer func() {
-			// Keep this connection alive until the other function
-			// has a chance to try to connect and fail.
-			<-done
-			conn.Close()
+
+	// 3 connections are open, filling all slots. backlog=1 means one
+	// additional connection can queue in the application-level backlog;
+	// the rest are fast-failed. Spawn 4 goroutines all trying to
+	// connect. Exactly 1 should enter the backlog; the other 3 should
+	// get ErrInvalidConn immediately.
+	const numAttempts = 4
+	type result struct {
+		conn *sql.Conn
+		err  error
+	}
+	results := make(chan result, numAttempts)
+	readyCh := make(chan struct{})
+	startCh := make(chan struct{})
+	for range numAttempts {
+		go func() {
+			readyCh <- struct{}{}
+			<-startCh
+			conn, err := db.Conn(driver.WithConnectRetriesDisabled(ctx))
+			results <- result{conn, err}
 		}()
-		_, err = conn.ExecContext(ctx, "insert into test_table (str) values ('test4223')")
-		return err
-	})
-	eg.Go(func() error {
-		defer close(done)
-		time.Sleep(1 * time.Second)
-		_, err := db.Conn(driver.WithConnectRetriesDisabled(ctx))
-		if !assert.ErrorIs(t, err, mysql.ErrInvalidConn) {
-			return errors.New("unexpected test failure")
-		}
-		return nil
-	})
-	<-done
+	}
+	for range numAttempts {
+		<-readyCh
+	}
+	close(startCh)
+
+	// 3 of 4 should be rejected fast (backlog full). Collect those
+	// before freeing a slot, so we don't open space for a second
+	// connection to sneak through.
+	var rejected int
+	for range numAttempts - 1 {
+		r := <-results
+		require.ErrorIs(t, r.err, mysql.ErrInvalidConn)
+		rejected++
+	}
+
+	// Now free a slot so the one goroutine waiting in the backlog can proceed.
 	conns[0].Close()
 	conns[0] = nil
-	require.NoError(t, eg.Wait())
-	ctx = context.Background()
+
+	r := <-results
+	require.NoError(t, r.err, "expected the backlogged connection to succeed")
+	require.Equal(t, numAttempts-1, rejected)
+
+	_, err := r.conn.ExecContext(ctx, "insert into test_table (str) values ('test4223')")
+	require.NoError(t, err)
+	r.conn.Close()
+
 	rows, err := conns[1].QueryContext(ctx, `SELECT * FROM test_table`)
 	require.NoError(t, err)
 	defer rows.Close()

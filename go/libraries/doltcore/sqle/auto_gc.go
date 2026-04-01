@@ -33,13 +33,41 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// gcSchedulerType indicates the automatic garbage collection behavior
-type gcSchedulerType int
+// GCScheduler controls when auto-GC work is allowed to proceed.
+// WaitForNextRun blocks until conditions are favorable for running a
+// GC, or returns an error if ctx is canceled.
+type GCScheduler interface {
+	WaitForNextRun(ctx context.Context) error
+}
 
-const (
-	NONE gcSchedulerType = iota
-	NAIVE
-)
+// noneGCScheduler allows GC to proceed immediately.
+type noneGCScheduler struct{}
+
+func (noneGCScheduler) WaitForNextRun(context.Context) error {
+	return nil
+}
+
+// loadAvgGCScheduler delays GC until the system load average drops
+// below a per-CPU threshold. Each call to WaitForNextRun checks the
+// current load and backs off in a loop until conditions are favorable.
+type loadAvgGCScheduler struct {
+	fs            procfs.FS
+	loadThreshold float64
+}
+
+func (s *loadAvgGCScheduler) WaitForNextRun(ctx context.Context) error {
+	for {
+		loadAvg, err := s.fs.LoadAvg()
+		if err != nil || loadAvg.Load1 <= s.loadThreshold {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		case <-time.After(1 * time.Minute):
+		}
+	}
+}
 
 // Auto GC is the ability of a running SQL server engine to perform
 // dolt_gc() behaviors periodically. If enabled, it currently works as
@@ -54,46 +82,41 @@ const (
 // database as wanting a GC.
 
 type AutoGCController struct {
-	workCh   chan autoGCWork
-	lgr      *logrus.Logger
-	hooks    map[string]*autoGCCommitHook
-	ctxF     func(context.Context) (*sql.Context, error)
-	threads  *sql.BackgroundThreads
-	arcLevel chunks.GCArchiveLevel
-	mu       sync.Mutex
-
-	gcSchedulerType gcSchedulerType
-	fs              procfs.FS
-	loadThreshold   float64
+	workCh    chan autoGCWork
+	lgr       *logrus.Logger
+	hooks     map[string]*autoGCCommitHook
+	ctxF      func(context.Context) (*sql.Context, error)
+	threads   *sql.BackgroundThreads
+	arcLevel  chunks.GCArchiveLevel
+	scheduler GCScheduler
+	mu        sync.Mutex
 }
 
-func NewAutoGCController(arcLevel chunks.GCArchiveLevel, gcSchStr string, lgr *logrus.Logger) *AutoGCController {
-	var gcSch = NAIVE
+func NewAutoGCController(arcLevel chunks.GCArchiveLevel, scheduler GCScheduler, lgr *logrus.Logger) *AutoGCController {
+	return &AutoGCController{
+		workCh:    make(chan autoGCWork),
+		lgr:       lgr,
+		hooks:     make(map[string]*autoGCCommitHook),
+		arcLevel:  arcLevel,
+		scheduler: scheduler,
+	}
+}
+
+func NewGCScheduler(gcSchStr string) GCScheduler {
 	switch gcSchStr {
 	case "NONE":
-		gcSch = NONE
+		return noneGCScheduler{}
 	default:
 		if fs, err := procfs.NewDefaultFS(); err == nil {
 			var stat procfs.Stat
 			if stat, err = fs.Stat(); err == nil {
-				loadThresh := 10 / float64(len(stat.CPU))
-				return &AutoGCController{
-					workCh:          make(chan autoGCWork),
-					lgr:             lgr,
-					hooks:           make(map[string]*autoGCCommitHook),
-					arcLevel:        arcLevel,
-					fs:              fs,
-					loadThreshold:   loadThresh,
-					gcSchedulerType: gcSch,
+				return &loadAvgGCScheduler{
+					fs:            fs,
+					loadThreshold: 10 / float64(len(stat.CPU)),
 				}
 			}
 		}
-	}
-	return &AutoGCController{
-		workCh:   make(chan autoGCWork),
-		lgr:      lgr,
-		hooks:    make(map[string]*autoGCCommitHook),
-		arcLevel: arcLevel,
+		return noneGCScheduler{}
 	}
 }
 
@@ -163,29 +186,14 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		var tickCh <-chan time.Time
-		var loopWorkCh chan autoGCWork
 		for {
-			// Delay GC if a CPU is under heavy load
-			// TODO: This check is way too simplistic, especially for CPUs with multiple cores.
-			//  A heavy load on an unrelated core would stop autogc. Well distributed loads would also stop autogc.
-			if c.gcSchedulerType == NAIVE {
-				if loadAvg, err := c.fs.LoadAvg(); err == nil && loadAvg.Load1 > c.loadThreshold {
-					tickCh = time.After(1 * time.Minute)
-					loopWorkCh = nil
-				} else {
-					tickCh = nil
-					loopWorkCh = runCh
-				}
-			} else {
-				tickCh = nil
-				loopWorkCh = runCh
-			}
 			select {
 			case <-ctx.Done():
 				return
-			case <-tickCh:
-			case work := <-loopWorkCh:
+			case work := <-runCh:
+				if err := c.scheduler.WaitForNextRun(ctx); err != nil {
+					return
+				}
 				c.doWork(ctx, work, c.ctxF)
 			}
 		}

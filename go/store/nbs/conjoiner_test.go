@@ -105,7 +105,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tableFilePersister, mode 
 // Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
 func makeTestTableSpecs(t *testing.T, tableSizes []uint32, p tableFilePersister, mode testConjoinMode) (specs []tableSpec) {
 	for _, src := range makeTestSrcs(t, tableSizes, p, mode) {
-		specs = append(specs, tableSpec{src.hash(), mustUint32(src.count())})
+		specs = append(specs, tableSpec{src.hash(), src.count()})
 		err := src.close()
 		require.NoError(t, err)
 	}
@@ -241,7 +241,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 		src, _, err := p.Persist(context.Background(), dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		defer src.close()
-		return tableSpec{src.hash(), mustUint32(src.count())}
+		return tableSpec{src.hash(), src.count()}
 	}
 
 	tc := []struct {
