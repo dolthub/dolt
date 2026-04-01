@@ -116,7 +116,7 @@ type sourceWithSize struct {
 }
 
 func newSourceWithSize(src chunkSource) (res sourceWithSize, isArchive bool, err error) {
-	aSrc, ok := src.(archiveChunkSource)
+	aSrc, ok := src.(*archiveChunkSource)
 	if !ok {
 		index, err := src.index()
 		if err != nil {

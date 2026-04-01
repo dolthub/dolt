@@ -78,7 +78,7 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 		sourceSet = blockStore.tables.upstream
 		cs := sourceSet[id]
 
-		arc, ok := cs.(archiveChunkSource)
+		arc, ok := cs.(*archiveChunkSource)
 		if !ok {
 			continue
 		}
@@ -180,7 +180,7 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 		}
 		sourceSet = blockStore.tables.upstream
 		cs := sourceSet[tf]
-		if _, ok := cs.(archiveChunkSource); ok {
+		if _, ok := cs.(*archiveChunkSource); ok {
 			continue
 		}
 

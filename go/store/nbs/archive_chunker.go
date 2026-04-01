@@ -63,17 +63,17 @@ type ArchiveToChunker struct {
 var _ ToChunker = (*ArchiveToChunker)(nil)
 
 func NewArchiveToChunker(h hash.Hash, dict *DecompBundle, chunkData []byte) ToChunker {
-	return ArchiveToChunker{
+	return &ArchiveToChunker{
 		h:         h,
 		dict:      dict,
 		chunkData: chunkData}
 }
 
-func (a ArchiveToChunker) Hash() hash.Hash {
+func (a *ArchiveToChunker) Hash() hash.Hash {
 	return a.h
 }
 
-func (a ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
+func (a *ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
 	dict := a.dict.dDict
 	data := a.chunkData
 	rawChunk, err := gozstd.DecompressDict(nil, data, dict)
@@ -84,16 +84,16 @@ func (a ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
 	return newChunk, err
 }
 
-func (a ArchiveToChunker) IsEmpty() bool {
+func (a *ArchiveToChunker) IsEmpty() bool {
 	return len(a.chunkData) == 0
 }
 
-func (a ArchiveToChunker) IsGhost() bool {
+func (a *ArchiveToChunker) IsGhost() bool {
 	// archives are never ghosts. They are only instantiated when the chunk is found.
 	return false
 }
 
 // CompressedSize returns the size of the compressed chunk data, but does not include the size of the dictionary.
-func (a ArchiveToChunker) CompressedSize() uint32 {
+func (a *ArchiveToChunker) CompressedSize() uint32 {
 	return uint32(len(a.chunkData))
 }
