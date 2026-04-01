@@ -484,4 +484,3 @@ func getIgnorePatternsFromContext(ctx *sql.Context, database sql.Database) (dolt
 	// Return patterns for default schema
 	return ignorePatternMap[""], nil
 }
-
