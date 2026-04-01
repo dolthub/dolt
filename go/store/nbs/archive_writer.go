@@ -589,7 +589,7 @@ func (asw *ArchiveStreamWriter) AddChunk(chunker ToChunker) (uint32, error) {
 	if cc, ok := chunker.(CompressedChunk); ok {
 		return asw.writeCompressedChunk(cc)
 	}
-	if ac, ok := chunker.(ArchiveToChunker); ok {
+	if ac, ok := chunker.(*ArchiveToChunker); ok {
 		return asw.writeArchiveToChunker(ac)
 	}
 	return 0, fmt.Errorf("Unknown chunk type: %T", chunker)
@@ -628,7 +628,7 @@ func (asw *ArchiveStreamWriter) FlushToFile(fullPath string) error {
 	return asw.writer.flushToFile(fullPath)
 }
 
-func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) (uint32, error) {
+func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker *ArchiveToChunker) (uint32, error) {
 	dict := chunker.dict
 
 	bytesWritten := uint32(0)
@@ -774,7 +774,7 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource, 
 
 	// Now that we have the plan, we slam all datablocks into the output stream then write the index last.
 	for _, src := range thePlan.sources.sws {
-		aSrc, ok := src.source.(archiveChunkSource)
+		aSrc, ok := src.source.(*archiveChunkSource)
 		if !ok {
 			return fmt.Errorf("runtime error: source %T is not an archiveChunkSource", src)
 		}
@@ -832,7 +832,7 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 	numChunks := 0
 	for _, src := range orderedSrcs.sws {
 		reader := src.source
-		arcSrc, ok := reader.(archiveChunkSource)
+		arcSrc, ok := reader.(*archiveChunkSource)
 		if !ok {
 			index, err := reader.index()
 			if err != nil {
@@ -872,7 +872,7 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 
 	for _, src := range orderedSrcs.sws {
 		reader := src.source
-		arcSrc, ok := reader.(archiveChunkSource)
+		arcSrc, ok := reader.(*archiveChunkSource)
 		if !ok {
 			// When it's not an archive, we want to use the table index to extract chunk records one at a time.
 			index, err := reader.index()
