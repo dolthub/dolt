@@ -96,6 +96,10 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		fromaddroff := builder.CreateByteVector((*mergeState.fromCommitAddr)[:])
 		fromspecoff := builder.CreateString(mergeState.fromCommitSpec)
 		unmergableoff := SerializeStringVector(builder, mergeState.unmergableTables)
+		var headCommitAddrOff flatbuffers.UOffsetT
+		if mergeState.preMergeHeadCommitAddr != nil {
+			headCommitAddrOff = builder.CreateByteVector((*mergeState.preMergeHeadCommitAddr)[:])
+		}
 		serial.MergeStateStart(builder)
 		serial.MergeStateAddPreWorkingRootAddr(builder, prerootaddroff)
 		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
@@ -103,6 +107,9 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		serial.MergeStateAddUnmergableTables(builder, unmergableoff)
 		serial.MergeStateAddIsCherryPick(builder, mergeState.isCherryPick)
 		serial.MergeStateAddIsRevert(builder, mergeState.isRevert)
+		if headCommitAddrOff != 0 {
+			serial.MergeStateAddPreMergeHeadCommitAddr(builder, headCommitAddrOff)
+		}
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
 
@@ -157,6 +164,7 @@ func NewMergeState(
 	unmergableTables []string,
 	isCherryPick bool,
 	isRevert bool,
+	headCommit *Commit,
 ) (*MergeState, error) {
 	ms := &MergeState{
 		preMergeWorkingAddr: new(hash.Hash),
@@ -168,6 +176,10 @@ func NewMergeState(
 	}
 	*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
 	*ms.fromCommitAddr = commit.Addr()
+	if headCommit != nil {
+		ms.preMergeHeadCommitAddr = new(hash.Hash)
+		*ms.preMergeHeadCommitAddr = headCommit.Addr()
+	}
 	return ms, nil
 }
 

@@ -33,9 +33,13 @@ var ErrRevertUncommittedChanges = fmt.Errorf("error: Your local changes would be
 // new commit if successful. If conflicts are encountered the working set is left with the conflicts and the merge
 // state is saved so the user can resolve them and call ContinueRevert or AbortRevert.
 //
+// |seriesHeadCommit| is the HEAD commit at the start of the entire revert series (before any commits in the
+// series were applied). This is stored in the merge state so that --abort can reset the branch back to the
+// correct commit even if earlier reverts in the series already advanced HEAD. Pass nil to use the current HEAD.
+//
 // Returns the new commit hash on success (empty string if conflicts were encountered), the merge result (non-nil
 // when conflicts exist), and any error.
-func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail string) (string, *merge.Result, error) {
+func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail string, seriesHeadCommit *doltdb.Commit) (string, *merge.Result, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	dbName := ctx.GetCurrentDatabase()
 
@@ -117,7 +121,7 @@ func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail stri
 		if err != nil {
 			return "", nil, err
 		}
-		newWs := preRevertWs.StartRevert(commit, commitSpecStr).
+		newWs := preRevertWs.StartRevert(seriesHeadCommit, commit, commitSpecStr).
 			WithWorkingRoot(ws.WorkingRoot()).
 			WithStagedRoot(ws.StagedRoot())
 
@@ -279,7 +283,7 @@ func ContinueRevert(ctx *sql.Context, dbName string, authorName, authorEmail str
 	return commitHash, 0, 0, 0, nil
 }
 
-// AbortRevert aborts an in-progress revert, restoring the working set to its pre-revert state.
+// AbortRevert aborts an in-progress revert, restoring the working set and branch HEAD to their pre-revert state.
 func AbortRevert(ctx *sql.Context, dbName string) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 
@@ -305,7 +309,29 @@ func AbortRevert(ctx *sql.Context, dbName string) error {
 		return fmt.Errorf("fatal: unable to abort revert: %v", err)
 	}
 
-	return doltSession.SetWorkingSet(ctx, dbName, newWs)
+	if err = doltSession.SetWorkingSet(ctx, dbName, newWs); err != nil {
+		return err
+	}
+
+	// If the revert has created commits before hitting a conflict, the branch HEAD has
+	// advanced beyond its pre-revert starting position. Reset it back to the commit that
+	// was HEAD when the revert began.
+	preMergeHeadCommit := ws.MergeState().PreMergeHeadCommit()
+	if preMergeHeadCommit != nil {
+		ddb, ok := doltSession.GetDoltDB(ctx, dbName)
+		if !ok {
+			return fmt.Errorf("fatal: unable to load database for %s", dbName)
+		}
+		headRef, err := doltSession.CWBHeadRef(ctx, dbName)
+		if err != nil {
+			return err
+		}
+		if err = ddb.SetHeadToCommit(ctx, headRef, preMergeHeadCommit); err != nil {
+			return fmt.Errorf("fatal: unable to reset branch HEAD during abort: %v", err)
+		}
+	}
+
+	return nil
 }
 
 // createRevertCommit commits the current staged root with the given revert message and author info.

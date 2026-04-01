@@ -140,6 +140,10 @@ type MergeState struct {
 	// isRevert is set to true when the in-progress merge is a revert operation. Like cherry-pick, a
 	// revert should only create a single-parent commit, not a merge commit with two parents.
 	isRevert bool
+	// preMergeHeadCommit is the HEAD commit at the time the merge/cherry-pick/revert started.
+	// This is used by --abort to restore the branch HEAD pointer to its pre-operation state
+	// and ensure that any commits made as part of the merge/cherry-pick/revert are not reachable.
+	preMergeHeadCommit *Commit
 }
 
 // todo(andy): this might make more sense in pkg merge
@@ -194,6 +198,10 @@ func (m MergeState) IsRevert() bool {
 
 func (m MergeState) PreMergeWorkingRoot() RootValue {
 	return m.preMergeWorking
+}
+
+func (m MergeState) PreMergeHeadCommit() *Commit {
+	return m.preMergeHeadCommit
 }
 
 type SchemaConflictFn func(table TableName, conflict SchemaConflict) error
@@ -321,11 +329,17 @@ func (ws WorkingSet) WithMergedTables(tables []TableName) *WorkingSet {
 	return &ws
 }
 
-func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSet {
+// StartMerge returns a new, modified WorkingSet, that has MergeState metadata tracking an
+// active merge. |preMergeHeadCommit| is the HEAD commit before the merge is started, and is used
+// to cleanly reset the branch head for merge operations that create multiple commits. |commitToMerge|
+// is the commit indicating the source of the content to be merged, and |commitSpecStr| is a string
+// representation of that resolved commit.
+func (ws WorkingSet) StartMerge(preMergeHeadCommit *Commit, commitToMerge *Commit, commitSpecStr string) *WorkingSet {
 	ws.mergeState = &MergeState{
-		commit:          commit,
-		commitSpecStr:   commitSpecStr,
-		preMergeWorking: ws.workingRoot,
+		commit:             commitToMerge,
+		commitSpecStr:      commitSpecStr,
+		preMergeWorking:    ws.workingRoot,
+		preMergeHeadCommit: preMergeHeadCommit,
 	}
 
 	return &ws
@@ -358,15 +372,18 @@ func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch st
 }
 
 // StartCherryPick creates and returns a new working set based off of the current |ws| with the specified |commit|
-// and |commitSpecStr| referring to the commit being cherry-picked. The returned WorkingSet records that a cherry-pick
+// and |commitSpecStr| referring to the commit being cherry-picked. |headCommit| indicates the current HEAD of the
+// active branch, and may be needed to cleanly roll back an aborted cherry-pick to the original working set state
+// before the cherry-pick was started. The returned WorkingSet records that a cherry-pick
 // operation is in progress (i.e. conflicts being resolved). Note that this function does not update the current
 // session – the returned WorkingSet must still be set using DoltSession.SetWorkingSet().
-func (ws WorkingSet) StartCherryPick(commit *Commit, commitSpecStr string) *WorkingSet {
+func (ws WorkingSet) StartCherryPick(headCommit *Commit, commit *Commit, commitSpecStr string) *WorkingSet {
 	ws.mergeState = &MergeState{
-		commit:          commit,
-		commitSpecStr:   commitSpecStr,
-		preMergeWorking: ws.workingRoot,
-		isCherryPick:    true,
+		commit:             commit,
+		commitSpecStr:      commitSpecStr,
+		preMergeWorking:    ws.workingRoot,
+		preMergeHeadCommit: headCommit,
+		isCherryPick:       true,
 	}
 	return &ws
 }
@@ -375,12 +392,13 @@ func (ws WorkingSet) StartCherryPick(commit *Commit, commitSpecStr string) *Work
 // and |commitSpecStr| referring to the commit being reverted. The returned WorkingSet records that a revert
 // operation is in progress (i.e. conflicts being resolved). Note that this function does not update the current
 // session – the returned WorkingSet must still be set using DoltSession.SetWorkingSet().
-func (ws WorkingSet) StartRevert(commit *Commit, commitSpecStr string) *WorkingSet {
+func (ws WorkingSet) StartRevert(headCommit *Commit, commit *Commit, commitSpecStr string) *WorkingSet {
 	ws.mergeState = &MergeState{
-		commit:          commit,
-		commitSpecStr:   commitSpecStr,
-		preMergeWorking: ws.workingRoot,
-		isRevert:        true,
+		commit:             commit,
+		commitSpecStr:      commitSpecStr,
+		preMergeWorking:    ws.workingRoot,
+		preMergeHeadCommit: headCommit,
+		isRevert:           true,
 	}
 	return &ws
 }
@@ -541,13 +559,24 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 
 		unmergableTableNames := ToTableNames(unmergableTables, DefaultSchemaName)
 
+		var preMergeHeadCommit *Commit
+		if preMergeHeadDCommit, err := dsws.MergeState.PreMergeHeadCommit(ctx, vrw); err != nil {
+			return nil, err
+		} else if preMergeHeadDCommit != nil && !preMergeHeadDCommit.IsGhost() {
+			preMergeHeadCommit, err = NewCommit(ctx, vrw, ns, preMergeHeadDCommit)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		mergeState = &MergeState{
-			commit:           commit,
-			commitSpecStr:    commitSpec,
-			preMergeWorking:  preMergeWorkingRoot,
-			unmergableTables: unmergableTableNames,
-			isCherryPick:     isCherryPick,
-			isRevert:         isRevert,
+			commit:             commit,
+			commitSpecStr:      commitSpec,
+			preMergeWorking:    preMergeWorkingRoot,
+			unmergableTables:   unmergableTableNames,
+			isCherryPick:       isCherryPick,
+			isRevert:           isRevert,
+			preMergeHeadCommit: preMergeHeadCommit,
 		}
 	}
 
@@ -658,8 +687,20 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 			return nil, err
 		}
 
+		var headDCommit *datas.Commit
+		if ws.mergeState.preMergeHeadCommit != nil {
+			headH, err := ws.mergeState.preMergeHeadCommit.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			headDCommit, err = datas.LoadCommitAddr(ctx, db.vrw, headH)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		// TODO: Serialize the full TableName
-		mergeState, err = datas.NewMergeState(preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick, ws.mergeState.isRevert)
+		mergeState, err = datas.NewMergeState(preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick, ws.mergeState.isRevert, headDCommit)
 		if err != nil {
 			return nil, err
 		}
