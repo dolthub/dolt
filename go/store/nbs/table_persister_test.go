@@ -56,7 +56,7 @@ func TestPlanCompaction(t *testing.T) {
 		require.NoError(t, err)
 		src := chunkSourceAdapter{tr, name}
 		t.Cleanup(func() { src.close() })
-		dataLens = append(dataLens, uint64(len(data))-indexSize(mustUint32(src.count()))-footerSize)
+		dataLens = append(dataLens, uint64(len(data))-indexSize(src.count())-footerSize)
 		sources = append(sources, src)
 	}
 
@@ -67,7 +67,7 @@ func TestPlanCompaction(t *testing.T) {
 	var totalChunks uint32
 	for i, src := range sources {
 		assert.Equal(dataLens[i], plan.sources.sws[i].dataLen)
-		totalChunks += mustUint32(src.count())
+		totalChunks += src.count()
 	}
 
 	idx, err := parseTableIndexByCopy(ctx, plan.mergedIndex, q)
