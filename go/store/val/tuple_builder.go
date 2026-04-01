@@ -617,9 +617,9 @@ func (tb *TupleBuilder) PutAdaptiveExtendedFromOutline(i int, v *ExtendedValueWr
 	tb.PutAdaptiveFromOutline(i, v.outOfBandLength, v.Addr)
 }
 
-func (tb *TupleBuilder) PutAdaptiveGeomFromOutline(i int, v *ByteArray) {
+func (tb *TupleBuilder) PutAdaptiveGeomFromOutOfBand(i int, maxByteLength int64, addr hash.Hash) {
 	tb.Desc.ExpectEncoding(i, GeomAdaptiveEnc)
-	tb.PutAdaptiveFromOutline(i, v.maxByteLength, v.Addr)
+	tb.PutAdaptiveFromOutline(i, maxByteLength, addr)
 }
 
 func (tb *TupleBuilder) PutAdaptiveBytesFromOutline(i int, v *ByteArray) {

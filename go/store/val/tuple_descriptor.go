@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mohae/uvarint"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -504,10 +505,26 @@ func (td *TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
 	return td.GetAddr(i, tup)
 }
 
-// GetGeomAdaptiveValue reads a geometry value from an adaptive-encoded field.
-func (td *TupleDesc) GetGeomAdaptiveValue(ctx context.Context, i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+// GetGeomAdaptiveValue reads a geometry value from an adaptive-encoded field, returning a *GeometryStorage
+// that defers deserialization until the value is actually needed.
+func (td *TupleDesc) GetGeomAdaptiveValue(ctx context.Context, i int, vs ValueStore, tup Tuple) (*GeometryStorage, bool, error) {
 	td.ExpectEncoding(i, GeomAdaptiveEnc)
-	return GetBytesAdaptiveValue(ctx, vs, td.GetField(i, tup))
+	return GetGeomAdaptiveValue(ctx, vs, td.GetField(i, tup))
+}
+
+func GetGeomAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (*GeometryStorage, bool, error) {
+	adaptiveValue := AdaptiveValue(val)
+	if len(adaptiveValue) == 0 {
+		return nil, false, nil
+	}
+	if adaptiveValue.isInlined() {
+		// Inline: raw bytes are available directly, wrap without copying
+		return NewGeometryStorageInline(adaptiveValue[1:]), true, nil
+	}
+	// Out-of-band: extract address and length, defer loading
+	length, lengthBytes := uvarint.Uvarint(adaptiveValue)
+	addr := hash.New(adaptiveValue[lengthBytes:])
+	return NewGeometryStorageOutOfBand(ctx, addr, vs, int64(length)), true, nil
 }
 
 func (td *TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
