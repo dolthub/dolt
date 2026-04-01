@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mohae/uvarint"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -518,13 +517,15 @@ func GetGeomAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (*Geom
 		return nil, false, nil
 	}
 	if adaptiveValue.isInlined() {
-		// Inline: raw bytes are available directly, wrap without copying
-		return NewGeometryStorageInline(adaptiveValue[1:]), true, nil
+		bytes, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
+		if err != nil {
+			return nil, false, err
+		}
+		return NewGeometryStorageInline(bytes), true, nil
+	} else {
+		gs, err := adaptiveValue.convertToGeometryStorage(ctx, vs)
+		return gs, true, err
 	}
-	// Out-of-band: extract address and length, defer loading
-	length, lengthBytes := uvarint.Uvarint(adaptiveValue)
-	addr := hash.New(adaptiveValue[lengthBytes:])
-	return NewGeometryStorageOutOfBand(ctx, addr, vs, int64(length)), true, nil
 }
 
 func (td *TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
