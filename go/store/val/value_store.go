@@ -223,6 +223,8 @@ func (b *ByteArray) Value() (driver.Value, error) {
 
 // GeometryStorage wraps serialized geometry bytes and defers deserialization until the value is needed.
 // The geometry bytes may be stored inline or out-of-band via a content address.
+// It implements sql.AnyWrapper; GMS geometry types call sql.UnwrapAny to obtain
+// the underlying types.GeometryValue when evaluation actually requires it.
 type GeometryStorage struct {
 	// inlineBytes holds the serialized geometry bytes when the value is stored inline.
 	// When nil, the value is out-of-band and must be loaded via ImmutableValue.
@@ -258,18 +260,13 @@ func (g *GeometryStorage) GetSerializedBytes(ctx context.Context) ([]byte, error
 	return g.outOfBand.GetBytes(ctx)
 }
 
-// ToGeometry deserializes the stored bytes into a types.GeometryValue.
-func (g *GeometryStorage) ToGeometry(ctx context.Context) (types.GeometryValue, error) {
+// UnwrapAny implements sql.AnyWrapper by loading bytes and deserializing to a types.GeometryValue.
+func (g *GeometryStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
 	buf, err := g.GetSerializedBytes(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return deserializeGeometryBytes(buf)
-}
-
-// UnwrapAny implements sql.AnyWrapper by deserializing the geometry value.
-func (g *GeometryStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
-	return g.ToGeometry(ctx)
 }
 
 // IsExactLength implements sql.AnyWrapper.
