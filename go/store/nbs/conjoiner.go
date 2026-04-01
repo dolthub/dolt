@@ -39,7 +39,7 @@ type conjoinStrategy interface {
 	conjoinRequired(ts *tableSet) bool
 
 	// chooseConjoinees chooses which chunkSources to conjoin from |sources|
-	chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error)
+	chooseConjoinees(specs []tableSpec) (conjoinees []tableSpec, err error)
 }
 
 type inlineConjoiner struct {
@@ -55,9 +55,9 @@ func (c inlineConjoiner) conjoinRequired(ts *tableSet) bool {
 // chooseConjoinees implements conjoinStrategy. Current approach is to choose the smallest N tables which,
 // when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
 // We also keep taking table files until we get below maxTables.
-func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []tableSpec, err error) {
 	if c.maxTables < 2 {
-		return nil, upstream, fmt.Errorf("runtime error: cannot conjoin with maxTables set to %d", c.maxTables)
+		return nil, fmt.Errorf("runtime error: cannot conjoin with maxTables set to %d", c.maxTables)
 	}
 	sorted := make([]tableSpec, len(upstream))
 	copy(sorted, upstream)
@@ -78,7 +78,7 @@ func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, kee
 		sum += next
 		i++
 	}
-	return sorted[:i], sorted[i:], nil
+	return sorted[:i], nil
 }
 
 type noopConjoiner struct{}
@@ -89,8 +89,7 @@ func (c noopConjoiner) conjoinRequired(ts *tableSet) bool {
 	return false
 }
 
-func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees, keepers []tableSpec, err error) {
-	keepers = sources
+func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees []tableSpec, err error) {
 	return
 }
 
@@ -105,23 +104,20 @@ func (s *specificFilesConjoiner) conjoinRequired(ts *tableSet) bool {
 	return len(s.targetStorageIds) > 0
 }
 
-func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees []tableSpec, err error) {
 	// Convert target storage IDs to a set for efficient lookup
 	targetSet := make(map[hash.Hash]bool)
 	for _, id := range s.targetStorageIds {
 		targetSet[id] = true
 	}
 
-	// Separate specs into conjoinees and keepers
 	for _, spec := range specs {
 		if targetSet[spec.name] {
 			conjoinees = append(conjoinees, spec)
-		} else {
-			keepers = append(keepers, spec)
 		}
 	}
 
-	return conjoinees, keepers, nil
+	return conjoinees, nil
 }
 
 // A conjoinOperation is a multi-step process that a NomsBlockStore runs to
@@ -165,7 +161,7 @@ func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStr
 		upstream, _ = upstream.removeAppendixSpecs()
 	}
 	var err error
-	op.conjoinees, _, err = strat.chooseConjoinees(upstream.specs)
+	op.conjoinees, err = strat.chooseConjoinees(upstream.specs)
 	if err != nil {
 		return err
 	}

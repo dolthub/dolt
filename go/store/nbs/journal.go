@@ -531,24 +531,14 @@ func (c journalConjoiner) conjoinRequired(ts *tableSet) bool {
 	return c.child.conjoinRequired(ts)
 }
 
-func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
-	var stash tableSpec // don't conjoin journal
+func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []tableSpec, err error) {
 	pruned := make([]tableSpec, 0, len(upstream))
 	for _, ts := range upstream {
-		if isJournalAddr(ts.name) {
-			stash = ts
-		} else {
+		if !isJournalAddr(ts.name) {
 			pruned = append(pruned, ts)
 		}
 	}
-	conjoinees, keepers, err = c.child.chooseConjoinees(pruned)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !stash.name.IsEmpty() {
-		keepers = append(keepers, stash)
-	}
-	return
+	return c.child.chooseConjoinees(pruned)
 }
 
 // newJournalManifest makes a new file manifest.
