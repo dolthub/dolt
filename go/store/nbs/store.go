@@ -1761,7 +1761,7 @@ func getTableFiles(css map[hash.Hash]chunkSource, behavior dherrors.FatalBehavio
 func newTableFile(cs chunkSource, info tableSpec, behavior dherrors.FatalBehavior) tableFile {
 	sfx := ""
 	dataOffset := uint64(0)
-	if a, ok := cs.(archiveChunkSource); ok {
+	if a, ok := cs.(*archiveChunkSource); ok {
 		sfx = ArchiveFileSuffix
 		dataSpan := a.aRdr.footer.dataSpan()
 		dataOffset = dataSpan.length

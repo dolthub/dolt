@@ -72,7 +72,7 @@ type archiveFooter struct {
 // actualFooterSize returns the footer size, in bytes for a specific archive. Due to the evolution of the archive format,
 // the footer size expanded in format version 3, so we need to calculate the footer size when calculating offsets
 // for this instance.
-func (f archiveFooter) actualFooterSize() uint64 {
+func (f *archiveFooter) actualFooterSize() uint64 {
 	if f.formatVersion < archiveVersionGiantIndexSupport {
 		// Version 1 and 2 archives have a smaller footer.
 		return archiveFooterSize - 4
@@ -81,30 +81,30 @@ func (f archiveFooter) actualFooterSize() uint64 {
 }
 
 // dataSpan returns the span of the data section of the archive. This is used during conjoin.
-func (f archiveFooter) dataSpan() byteSpan {
+func (f *archiveFooter) dataSpan() byteSpan {
 	return byteSpan{offset: 0, length: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize) - uint64(f.indexSize)}
 }
 
 // totalIndexSpan returns the span of the entire index section of the archive.
-func (f archiveFooter) totalIndexSpan() byteSpan {
+func (f *archiveFooter) totalIndexSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize) - uint64(f.indexSize), length: uint64(f.indexSize)}
 }
 
 // indexByteOffsetSpan returns the span of the byte offsets section of the index. This is the first part of the index
-func (f archiveFooter) indexByteOffsetSpan() byteSpan {
+func (f *archiveFooter) indexByteOffsetSpan() byteSpan {
 	totalIdx := f.totalIndexSpan()
 	return byteSpan{offset: totalIdx.offset, length: uint64(f.byteSpanCount) * uint64Size}
 }
 
 // indexPrefixSpan returns the span of the prefix section of the index. This is the second part of the index.
-func (f archiveFooter) indexPrefixSpan() byteSpan {
+func (f *archiveFooter) indexPrefixSpan() byteSpan {
 	// Prefix starts after the byte spans. Length is uint64 * chunk count.
 	offs := f.indexByteOffsetSpan()
 	return byteSpan{offs.offset + offs.length, uint64(f.chunkCount) * uint64Size}
 }
 
 // indexChunkRefSpan returns the span of the chunk reference section of the index. This is the third part of the index.
-func (f archiveFooter) indexChunkRefSpan() byteSpan {
+func (f *archiveFooter) indexChunkRefSpan() byteSpan {
 	// chunk refs starts after the prefix. Length is (uint32 + uint32) * chunk count.
 	prefixes := f.indexPrefixSpan()
 	chLen := uint64(f.chunkCount) * (uint32Size + uint32Size)
@@ -112,14 +112,14 @@ func (f archiveFooter) indexChunkRefSpan() byteSpan {
 }
 
 // indexSuffixSpan returns the span of the suffix section of the index. This is the fourth part of the index.
-func (f archiveFooter) indexSuffixSpan() byteSpan {
+func (f *archiveFooter) indexSuffixSpan() byteSpan {
 	suffixLen := uint64(f.chunkCount) * hash.SuffixLen
 	chunkRefs := f.indexChunkRefSpan()
 	return byteSpan{chunkRefs.offset + chunkRefs.length, suffixLen}
 }
 
 // metadataSpan returns the span of the metadata section of the archive.
-func (f archiveFooter) metadataSpan() byteSpan {
+func (f *archiveFooter) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
@@ -385,7 +385,7 @@ func (f *inMemoryArchiveIndexReader) Close() error {
 
 // clone returns a new archiveReader with a new (provided) reader. All other fields are immutable or thread safe,
 // so they are copied.
-func (ar archiveReader) clone() (archiveReader, error) {
+func (ar *archiveReader) clone() (archiveReader, error) {
 	reader, err := ar.reader.clone()
 	if err != nil {
 		return archiveReader{}, err
@@ -471,7 +471,7 @@ func buildArchiveFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveF
 }
 
 // search returns the index of the hash in the archive. If the hash is not found, -1 is returned.
-func (ar archiveReader) search(hash hash.Hash) int {
+func (ar *archiveReader) search(hash hash.Hash) int {
 	prefix := hash.Prefix()
 	possibleMatch := ar.indexReader.searchPrefix(prefix)
 	targetSfx := hash.Suffix()
@@ -488,12 +488,12 @@ func (ar archiveReader) search(hash hash.Hash) int {
 	return -1
 }
 
-func (ar archiveReader) has(hash hash.Hash) bool {
+func (ar *archiveReader) has(hash hash.Hash) bool {
 	return ar.search(hash) >= 0
 }
 
 // get returns the decompressed data for the given hash. If the hash is not found, nil is returned (not an error)
-func (ar archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) ([]byte, error) {
+func (ar *archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) ([]byte, error) {
 	dict, data, err := ar.getRaw(ctx, hash, stats)
 	if err != nil || data == nil {
 		return nil, err
@@ -525,7 +525,7 @@ func (ar archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) (
 
 // getAsToChunker returns the chunk which is has not been decompressed. Similar to get, but with a different return type.
 // If the hash is not found, a ToChunker instance with IsEmpty() == true is returned (no error)
-func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *Stats) (ToChunker, error) {
+func (ar *archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *Stats) (ToChunker, error) {
 	dict, data, err := ar.getRaw(ctx, h, stats)
 	if err != nil {
 		return nil, err
@@ -546,14 +546,14 @@ func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *
 		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
 	}
 
-	return ArchiveToChunker{dict, data, h}, nil
+	return &ArchiveToChunker{dict, data, h}, nil
 }
 
-func (ar archiveReader) count() uint32 {
+func (ar *archiveReader) count() uint32 {
 	return ar.footer.chunkCount
 }
 
-func (ar archiveReader) close() error {
+func (ar *archiveReader) close() error {
 	err := ar.indexReader.Close()
 	if err != nil {
 		return err
@@ -562,7 +562,7 @@ func (ar archiveReader) close() error {
 }
 
 // readByteSpan reads the byte span from the archive. This allocates a new byte slice and returns it to the caller.
-func (ar archiveReader) readByteSpan(ctx context.Context, bs byteSpan, stats *Stats) ([]byte, error) {
+func (ar *archiveReader) readByteSpan(ctx context.Context, bs byteSpan, stats *Stats) ([]byte, error) {
 	buff := make([]byte, bs.length)
 	_, err := ar.reader.ReadAtWithStats(ctx, buff[:], int64(bs.offset), stats)
 	if err != nil {
@@ -579,7 +579,7 @@ func (ar archiveReader) readByteSpan(ctx context.Context, bs byteSpan, stats *St
 //   - zStd when a dictionary is returned. The data is decompressed with the dictionary.
 //   - Snappy compression when no dictionary is returned. The data has a checksum 32 bit checksum at the end. This
 //     format matches the noms format.
-func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *DecompBundle, data []byte, err error) {
+func (ar *archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *DecompBundle, data []byte, err error) {
 	idx := ar.search(hash)
 	if idx < 0 {
 		return nil, nil, nil
@@ -613,12 +613,12 @@ func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats
 }
 
 // getChunkRef returns the dictionary and data references for the chunk at the given index. Assumes good input!
-func (ar archiveReader) getChunkRef(idx int) (dict, data uint32) {
+func (ar *archiveReader) getChunkRef(idx int) (dict, data uint32) {
 	return ar.indexReader.getChunkRef(uint32(idx))
 }
 
 // getByteSpanByID returns the byte span for the chunk at the given index. Assumes good input!
-func (ar archiveReader) getByteSpanByID(id uint32) byteSpan {
+func (ar *archiveReader) getByteSpanByID(id uint32) byteSpan {
 	if id == 0 {
 		return byteSpan{}
 	}
@@ -629,11 +629,11 @@ func (ar archiveReader) getByteSpanByID(id uint32) byteSpan {
 }
 
 // getSuffixByID returns the suffix for the chunk at the given index. Assumes good input!
-func (ar archiveReader) getSuffixByID(id uint64) suffix {
+func (ar *archiveReader) getSuffixByID(id uint64) suffix {
 	return ar.indexReader.getSuffix(uint32(id))
 }
 
-func (ar archiveReader) getMetadata(ctx context.Context, stats *Stats) ([]byte, error) {
+func (ar *archiveReader) getMetadata(ctx context.Context, stats *Stats) ([]byte, error) {
 	return ar.readByteSpan(ctx, ar.footer.metadataSpan(), stats)
 }
 
@@ -647,7 +647,7 @@ func (r *bridgeReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 	return r.rdr.ReadAtWithStats(r.ctx, p, off, r.stats)
 }
 
-func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
+func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
 	// Build reverse indexes for dictionary and data ByteSpans
 	// dictReverseIndex: Dictionary ByteSpan ID -> struct{} - indicates that we expect that span to be a dictionary.
 	// dataReverseIndex: Data ByteSpan ID -> chunk ref index - indicates that we expect that span to be a data chunk,
