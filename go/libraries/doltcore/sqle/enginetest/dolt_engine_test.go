@@ -84,13 +84,13 @@ func TestSingleQuery(t *testing.T) {
 		Expected: []sql.Row{
 			{"mytable",
 				"CREATE TABLE `mytable` (\n" +
-						"  `i` bigint NOT NULL,\n" +
-						"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
-						"  PRIMARY KEY (`i`),\n" +
-						"  KEY `idx_si` (`s`,`i`),\n" +
-						"  KEY `mytable_i_s` (`i`,`s`),\n" +
-						"  UNIQUE KEY `mytable_s` (`s`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+					"  `i` bigint NOT NULL,\n" +
+					"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
+					"  PRIMARY KEY (`i`),\n" +
+					"  KEY `idx_si` (`s`,`i`),\n" +
+					"  KEY `mytable_i_s` (`i`,`s`),\n" +
+					"  UNIQUE KEY `mytable_s` (`s`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 		},
 	}
 
