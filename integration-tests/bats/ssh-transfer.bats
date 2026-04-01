@@ -555,3 +555,98 @@ MOCK
     [ "$status" -ne 0 ]
     [[ "$output" =~ "database is read only" ]] || false
 }
+@test "ssh-transfer: clone from bare backup repository" {
+    mkdir "repo_bare_src"
+    cd "repo_bare_src"
+    dolt init
+    dolt sql -q "CREATE TABLE items (id INT PRIMARY KEY, name TEXT);"
+    dolt sql -q "INSERT INTO items VALUES (1, 'alpha'), (2, 'beta');"
+    dolt add .
+    dolt commit -m "initial bare test"
+
+    dolt backup add bac1 "file://$BATS_TEST_TMPDIR/bare_backup"
+    dolt backup sync bac1
+
+    cd "$BATS_TEST_TMPDIR"
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/bare_backup" bare_clone
+    [ "$status" -eq 0 ]
+
+    cd "bare_clone"
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM items;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt sql -r csv -q "SELECT name FROM items ORDER BY id;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "alpha" ]] || false
+    [[ "$output" =~ "beta" ]] || false
+}
+
+@test "ssh-transfer: pull from bare backup repository" {
+    mkdir "repo_bare_pull_src"
+    cd "repo_bare_pull_src"
+    dolt init
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, v TEXT);"
+    dolt sql -q "INSERT INTO t VALUES (1, 'first');"
+    dolt add .
+    dolt commit -m "initial"
+
+    dolt backup add bac1 "file://$BATS_TEST_TMPDIR/bare_pull_backup"
+    dolt backup sync bac1
+
+    cd "$BATS_TEST_TMPDIR"
+
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/bare_pull_backup" bare_pull_clone
+
+    # Add more data to source and re-sync to the backup.
+    cd "repo_bare_pull_src"
+    dolt sql -q "INSERT INTO t VALUES (2, 'second');"
+    dolt add .
+    dolt commit -m "add second row"
+    dolt backup sync bac1
+
+    cd "$BATS_TEST_TMPDIR/bare_pull_clone"
+    run dolt pull origin
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM t;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+}
+
+@test "ssh-transfer: push to bare backup repository" {
+    mkdir "repo_bare_push_src"
+    cd "repo_bare_push_src"
+    dolt init
+    dolt sql -q "CREATE TABLE widgets (id INT PRIMARY KEY, color TEXT);"
+    dolt sql -q "INSERT INTO widgets VALUES (1, 'red');"
+    dolt add .
+    dolt commit -m "initial"
+
+    dolt backup add bac1 "file://$BATS_TEST_TMPDIR/bare_push_backup"
+    dolt backup sync bac1
+
+    cd "$BATS_TEST_TMPDIR"
+
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/bare_push_backup" bare_push_clone
+    cd "bare_push_clone"
+    dolt sql -q "INSERT INTO widgets VALUES (2, 'blue');"
+    dolt add .
+    dolt commit -m "add blue widget"
+
+    PUSHED_COMMIT=$(dolt log --oneline -n 1 | awk '{print $1}')
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+
+    cd "$BATS_TEST_TMPDIR"
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/bare_push_backup" bare_push_verify
+    cd "bare_push_verify"
+
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM widgets;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$PUSHED_COMMIT" ]] || false
+}
