@@ -586,8 +586,6 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 			oldGenHasMany = gcs.OldGenGCFilter()
 		case chunks.GCMode_Full:
 			oldGenHasMany = unfilteredHashFunc
-			// Full GC does not benefit from incremental chunk files, so we disable it.
-			gcConfig.IncrementalFileSize = chunks.IncrementalTablesDisabled
 		default:
 			return fmt.Errorf("unsupported GCMode %v", gcConfig.Mode)
 		}
@@ -648,9 +646,6 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 			} else {
 				oldGenHasMany = newFileHasMany
 			}
-
-			// Newgen does not benefit from incremental GC, so we disable it.
-			gcConfig.IncrementalFileSize = chunks.IncrementalTablesDisabled
 
 			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, gcConfig, collector, newGen, safepoint, lvs.transitionToFinalizingGC)
 			if err != nil {
