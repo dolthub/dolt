@@ -48,14 +48,6 @@ const (
 	// we expect to resolve a commit spec, but need working or staged
 	Working = "WORKING"
 	Staged  = "STAGED"
-)
-
-// IsWorkingSetRef reports whether |ref| identifies the working set or staging area rather than a commit.
-func IsWorkingSetRef(ref string) bool {
-	return ref == Working || ref == Staged
-}
-
-const (
 
 	CreationBranch = "create"
 
@@ -145,6 +137,11 @@ type DoltDB struct {
 
 	// Keep a LRU Cache of materialized commits to speed up future commit resolutions
 	commitCache *lru.Cache[hash.Hash, *OptionalCommit]
+}
+
+// IsWorkingSetRef reports whether |ref| identifies the working set or staging area rather than a commit.
+func IsWorkingSetRef(ref string) bool {
+	return ref == Working || ref == Staged
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
