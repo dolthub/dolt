@@ -134,7 +134,7 @@ func TestFSTablePersisterPruneTableFilesKeepsOpenFiles(t *testing.T) {
 	src1, err := persistTableData(ftp, testChunks[0:1]...)
 	require.NoError(t, err)
 	src1Hash := src1.hash()
-	src1Count := mustUint32(src1.count())
+	src1Count := src1.count()
 
 	src2, err := persistTableData(ftp, testChunks[1:2]...)
 	require.NoError(t, err)
