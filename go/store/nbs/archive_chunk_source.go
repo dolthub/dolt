@@ -30,15 +30,14 @@ import (
 )
 
 type archiveChunkSource struct {
-	aRdr    archiveReader
-	file    string
-	onClose func()
-	onClone func()
+	aRdr archiveReader
+	file string
+	refs refCounter
 }
 
 var _ chunkSource = &archiveChunkSource{}
 
-func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, mmapArchiveIndexes bool, stats *Stats) (archiveChunkSource, error) {
+func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, mmapArchiveIndexes bool, refs refCounter, stats *Stats) (archiveChunkSource, error) {
 	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
 	fra, err := newFileReaderAt(archiveFile, mmapArchiveIndexes)
@@ -50,7 +49,7 @@ func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCo
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
-	return archiveChunkSource{aRdr: aRdr, file: archiveFile}, nil
+	return archiveChunkSource{aRdr: aRdr, file: archiveFile, refs: refs}, nil
 }
 
 func newAWSArchiveChunkSource(ctx context.Context,
@@ -82,7 +81,7 @@ func newAWSArchiveChunkSource(ctx context.Context,
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return archiveChunkSource{aRdr: aRdr}, nil
+	return archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}}, nil
 }
 
 func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
@@ -163,9 +162,7 @@ func (acs archiveChunkSource) count() (uint32, error) {
 
 func (acs archiveChunkSource) close() error {
 	err := acs.aRdr.close()
-	if acs.onClose != nil {
-		acs.onClose()
-	}
+	acs.refs.decRef()
 	return err
 }
 
@@ -202,14 +199,11 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	if acs.onClone != nil {
-		acs.onClone()
-	}
+	acs.refs.addRef()
 	return archiveChunkSource{
-		aRdr:    reader,
-		file:    acs.file,
-		onClose: acs.onClose,
-		onClone: acs.onClone,
+		aRdr: reader,
+		file: acs.file,
+		refs: acs.refs,
 	}, nil
 }
 

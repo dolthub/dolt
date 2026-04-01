@@ -358,7 +358,7 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return archiveChunkSource{aRdr: aRdr}, nil
+	return archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}}, nil
 }
 
 func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {

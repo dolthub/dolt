@@ -91,23 +91,36 @@ func (ftp *fsTablePersister) removeOpenFile(h hash.Hash) {
 	}
 }
 
+type refCounter interface {
+	decRef()
+	addRef()
+}
+
+type noopRefCounter struct{}
+
+func (noopRefCounter) decRef() {}
+func (noopRefCounter) addRef() {}
+
+type fsTablePersisterRefCounter struct {
+	ftp  *fsTablePersister
+	name hash.Hash
+}
+
+func (ftplc *fsTablePersisterRefCounter) decRef() {
+	ftplc.ftp.removeOpenFile(ftplc.name)
+}
+
+func (ftplc *fsTablePersisterRefCounter) addRef() {
+	ftplc.ftp.addOpenFile(ftplc.name)
+}
+
 func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	cs, err := newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, stats)
+	rc := fsTablePersisterRefCounter{ftp, name}
+	cs, err := newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, &rc, stats)
 	if err != nil {
 		return nil, err
 	}
 	ftp.addOpenFile(name)
-	onClose := func() { ftp.removeOpenFile(name) }
-	onClone := func() { ftp.addOpenFile(name) }
-	switch src := cs.(type) {
-	case *fileTableReader:
-		src.onClose = onClose
-		src.onClone = onClone
-	case archiveChunkSource:
-		src.onClose = onClose
-		src.onClone = onClone
-		cs = src
-	}
 	return cs, nil
 }
 
