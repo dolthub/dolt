@@ -106,9 +106,18 @@ func doDoltRevert(ctx *sql.Context, args []string) (string, int, int, int, error
 		return "", 0, 0, 0, err
 	}
 
+	// Capture the HEAD commit before any reverts begin. This is stored in the merge state
+	// so that --abort can restore the branch to its pre-series position even if some reverts
+	// in the series already succeeded and advanced HEAD before a conflict was encountered.
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	preRevertHeadCommit, err := doltSession.GetHeadCommit(ctx, dbName)
+	if err != nil {
+		return "", 0, 0, 0, err
+	}
+
 	var lastHash string
 	for _, commitHash := range resolvedHashes {
-		revertHash, mergeResult, err := revertpkg.Revert(ctx, commitHash, authorName, authorEmail)
+		revertHash, mergeResult, err := revertpkg.Revert(ctx, commitHash, authorName, authorEmail, preRevertHeadCommit)
 		if err != nil {
 			return "", 0, 0, 0, err
 		}

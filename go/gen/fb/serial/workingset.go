@@ -376,7 +376,58 @@ func (rcv *MergeState) MutateIsRevert(n bool) bool {
 	return rcv._tab.MutateBoolSlot(14, n)
 }
 
-const MergeStateNumFields = 6
+func (rcv *MergeState) PreMergeHeadCommitAddr(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *MergeState) PreMergeHeadCommitAddrLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *MergeState) PreMergeHeadCommitAddrBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *MergeState) MutatePreMergeHeadCommitAddr(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *MergeState) PendingRevertHashes(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *MergeState) PendingRevertHashesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+const MergeStateNumFields = 8
 
 func MergeStateStart(builder *flatbuffers.Builder) {
 	builder.StartObject(MergeStateNumFields)
@@ -407,6 +458,18 @@ func MergeStateAddIsCherryPick(builder *flatbuffers.Builder, isCherryPick bool) 
 }
 func MergeStateAddIsRevert(builder *flatbuffers.Builder, isRevert bool) {
 	builder.PrependBoolSlot(5, isRevert, false)
+}
+func MergeStateAddPreMergeHeadCommitAddr(builder *flatbuffers.Builder, preMergeHeadCommitAddr flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(preMergeHeadCommitAddr), 0)
+}
+func MergeStateStartPreMergeHeadCommitAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func MergeStateAddPendingRevertHashes(builder *flatbuffers.Builder, pendingRevertHashes flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(pendingRevertHashes), 0)
+}
+func MergeStateStartPendingRevertHashesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
 }
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

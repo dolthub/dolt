@@ -212,12 +212,13 @@ func (rs *RebaseState) SkipVerification(_ context.Context) bool {
 }
 
 type MergeState struct {
-	preMergeWorkingAddr *hash.Hash
-	fromCommitAddr      *hash.Hash
-	fromCommitSpec      string
-	unmergableTables    []string
-	isCherryPick        bool
-	isRevert            bool
+	preMergeWorkingAddr    *hash.Hash // the pre-merge working root hash
+	preMergeHeadCommitAddr *hash.Hash // the pre-merge HEAD commit hash
+	fromCommitAddr         *hash.Hash // the commit hash for the source of the merge
+	fromCommitSpec         string     // the commit string for the source of the merge
+	unmergableTables       []string   // slice of tables that can't be merged
+	isCherryPick           bool       // true if this merge is a chery pick
+	isRevert               bool       // true if this merge is a revert
 }
 
 func (ms *MergeState) PreMergeWorkingAddr() (hash.Hash, error) {
@@ -242,6 +243,13 @@ func (ms *MergeState) IsRevert() (bool, error) {
 
 func (ms *MergeState) UnmergableTables() ([]string, error) {
 	return ms.unmergableTables, nil
+}
+
+func (ms *MergeState) PreMergeHeadCommit(ctx context.Context, vr types.ValueReader) (*Commit, error) {
+	if ms.preMergeHeadCommitAddr == nil {
+		return nil, nil
+	}
+	return LoadCommitAddr(ctx, vr, *ms.preMergeHeadCommitAddr)
 }
 
 type dsHead interface {
@@ -354,6 +362,10 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		}
 		ret.MergeState.isCherryPick = mergeState.IsCherryPick()
 		ret.MergeState.isRevert = mergeState.IsRevert()
+		if addrBytes := mergeState.PreMergeHeadCommitAddrBytes(); len(addrBytes) > 0 {
+			ret.MergeState.preMergeHeadCommitAddr = new(hash.Hash)
+			*ret.MergeState.preMergeHeadCommitAddr = hash.New(addrBytes)
+		}
 	}
 
 	rebaseState, err := h.msg.TryRebaseState(nil)

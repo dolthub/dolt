@@ -6,17 +6,13 @@ setup() {
     setup_common
 
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT)"
-    dolt add -A
-    dolt commit -m "Created table"
+    dolt commit -Am "Created table"
     dolt sql -q "INSERT INTO test VALUES (1, 1)"
-    dolt add -A
-    dolt commit -m "Inserted 1"
+    dolt commit -am "Inserted 1"
     dolt sql -q "INSERT INTO test VALUES (2, 2)"
-    dolt add -A
-    dolt commit -m "Inserted 2"
+    dolt commit -am "Inserted 2"
     dolt sql -q "INSERT INTO test VALUES (3, 3)"
-    dolt add -A
-    dolt commit -m "Inserted 3"
+    dolt commit -am "Inserted 3"
 }
 
 teardown() {
@@ -173,6 +169,41 @@ SQL
     run dolt log -n 2 --oneline
     [ "$status" -eq "0" ]
     [[ "$output" =~ "Revert" ]] || false
+}
+
+@test "revert: --abort after multi-commit revert restores original HEAD" {
+    dolt sql -q "INSERT INTO test VALUES (4, 4);"
+    dolt commit -am "Inserted 4"
+    dolt sql -q "UPDATE test SET v1=5 where pk=4;"
+    dolt commit -am "Updated 4"
+    dolt sql -q "UPDATE test SET v1=6 where pk=4;"
+    dolt commit -am "Updated 4 (again)"
+
+    # Revert two commits: HEAD (Updated 4 (again)) reverts cleanly creating a commit,
+    # then HEAD~2 (Inserted 4) conflicts. After --abort, HEAD should be back to
+    # "Updated 4 (again)" — not the intermediate "Revert" commit.
+    run dolt revert HEAD HEAD~2
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Automatic revert failed" ]] || false
+
+    # HEAD advanced because the first revert (HEAD) succeeded
+    run dolt log -n 1 --oneline
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert" ]] || false
+
+    run dolt revert --abort
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert aborted" ]] || false
+
+    # After abort, HEAD should be back to the pre-series commit
+    run dolt log -n 1 --oneline
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Updated 4 (again)" ]] || false
+
+    # No conflicts should remain
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "0" ]] || false
 }
 
 @test "revert: too far back" {
@@ -371,6 +402,38 @@ SQL
     run dolt log -n 1
     [ "$status" -eq "0" ]
     [[ "$output" =~ "Revert" ]] || false
+}
+
+@test "revert: SQL --abort after multi-commit revert restores original HEAD" {
+    dolt sql -q "INSERT INTO test VALUES (4, 4);"
+    dolt commit -am "Inserted 4"
+    dolt sql -q "UPDATE test SET v1=5 where pk=4;"
+    dolt commit -am "Updated 4"
+    dolt sql -q "UPDATE test SET v1=6 where pk=4;"
+    dolt commit -am "Updated 4 (again)"
+
+    # Revert two commits: HEAD reverts cleanly, HEAD~2 conflicts.
+    run dolt sql -q "call dolt_revert('HEAD', 'HEAD~2')" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ ",1,0,0" ]] || false
+
+    # The first revert (HEAD) succeeded and advanced HEAD
+    run dolt log -n 1 --oneline
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert" ]] || false
+
+    # Abort restores HEAD to the pre-series commit
+    run dolt sql -q "call dolt_revert('--abort')" -r=csv
+    [ "$status" -eq "0" ]
+
+    run dolt log -n 1 --oneline
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Updated 4 (again)" ]] || false
+
+    # No conflicts should remain
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "0" ]] || false
 }
 
 @test "revert: SQL --abort with no revert in progress" {

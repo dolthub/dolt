@@ -137,11 +137,15 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// If a revert is aborted during a conflict, the set should be reset back to
+		// before the revert, i.e. any commits created by revert should NOT be present.
 		Name: "dolt_revert() --abort restores pre-revert state",
 		SetUpScript: []string{
-			"create table test (pk int primary key, c0 int)",
-			"insert into test values (1,1),(2,2),(3,3);",
+			"create table test (pk int primary key, c0 int);",
+			"insert into test values (1,1),(2,2);",
 			"call dolt_commit('-Am', 'seed table');",
+			"insert into test values (3,3);",
+			"call dolt_commit('-am', 'insert 3,3');",
 			"update test set c0 = 42 where pk = 2;",
 			"call dolt_commit('-am', 'first change');",
 			"update test set c0 = 23 where pk = 2;",
@@ -149,12 +153,16 @@ var RevertScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_revert('HEAD~1');",
+				Query:    "call dolt_revert('HEAD~2', 'HEAD~1');",
 				Expected: []sql.Row{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select `table` from dolt_conflicts;",
 				Expected: []sql.Row{{"test"}},
+			},
+			{
+				Query:    "select message from dolt_log limit 1;",
+				Expected: []sql.Row{{"Revert \"insert 3,3\""}},
 			},
 			{
 				Query:    "call dolt_revert('--abort');",
@@ -171,7 +179,8 @@ var RevertScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{23}},
 			},
 			{
-				// No extra commit was created.
+				// When a revert of multiple commits is aborted, NONE of the
+				// successfully reverted commits should be reachable.
 				Query:    "select message from dolt_log limit 1;",
 				Expected: []sql.Row{{"second change"}},
 			},
