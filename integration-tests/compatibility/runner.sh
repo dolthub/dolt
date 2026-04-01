@@ -172,7 +172,7 @@ _main() {
 
   # test backward compatibility
   list_backward_compatible_versions | while IFS= read -r ver; do
-    test_backward_compatibility "$ver"
+      test_backward_compatibility "$ver"
   done
 
   # setup repo for current dolt version
@@ -183,7 +183,7 @@ _main() {
   # of the versions which are actually forward compatible
   
   # test forward compatibility
-  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" -ne "true" ]]; then
+  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
       if [ -s "test_files/forward_compatible_versions.txt" ]; then
           list_forward_compatible_versions | while IFS= read -r ver; do
               test_forward_compatibility "$ver"
@@ -200,7 +200,7 @@ _main() {
 
 
   # test bidirectional compatibility
-  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" -ne "true" ]]; then
+  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
       if [ -s "test_files/forward_compatible_versions.txt" ]; then
           list_forward_compatible_versions | while IFS= read -r ver; do
               test_bidirectional_compatibility "$ver"
