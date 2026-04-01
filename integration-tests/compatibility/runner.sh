@@ -189,7 +189,15 @@ _main() {
               test_forward_compatibility "$ver"
           done
       fi
+  else
+      # For now we only test that we break with an appropriate error message
+      if [ -s "test_files/2_0_breaking_versions.txt" ]; then
+          list_2_0_breaking_versions | while IFS= read -r ver; do
+              test_2_0_breaking_compatibility "$ver"
+          done
+      fi
   fi
+
 
   # test bidirectional compatibility
   if [[ "$DOLT_USE_ADAPTIVE_ENCODING" -ne "true" ]]; then
@@ -198,13 +206,6 @@ _main() {
               test_bidirectional_compatibility "$ver"
           done
       fi
-  fi
-
-  # test 2.0 breaking compatibility (adaptive encoding)
-  if [ -s "test_files/2_0_breaking_versions.txt" ]; then
-      list_2_0_breaking_versions | while IFS= read -r ver; do
-        test_2_0_breaking_compatibility "$ver"
-      done
   fi
 
   # sanity check: run tests against current version

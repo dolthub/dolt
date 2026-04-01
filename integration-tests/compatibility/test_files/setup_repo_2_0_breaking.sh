@@ -6,8 +6,6 @@
 
 set -eo pipefail
 
-export DOLT_USE_ADAPTIVE_ENCODING=true
-
 mkdir "$1"
 cd "$1"
 
