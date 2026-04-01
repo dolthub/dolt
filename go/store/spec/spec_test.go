@@ -470,7 +470,7 @@ func (t *testProtocol) NewDatabase(sp Spec) (datas.Database, error) {
 	return datas.NewDatabase(cs), nil
 }
 
-func noopGetAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+func noopGetAddrs(c chunks.Chunk) chunks.InsertAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
 		return nil
 	}

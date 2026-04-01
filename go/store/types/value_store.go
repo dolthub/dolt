@@ -123,7 +123,7 @@ func InsertAddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.Has
 	return
 }
 
-func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.InsertAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
 		return InsertAddrsFromNomsValue(c, lvs.nbf, addrs)
 	}

@@ -134,7 +134,7 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 
 	// Minimal write: put one chunk and commit its hash as the root.
 	c := chunks.NewChunk([]byte("hello\n"))
-	err = cs.Put(ctx, c, func(chunks.Chunk) chunks.GetAddrsCb {
+	err = cs.Put(ctx, c, func(chunks.Chunk) chunks.InsertAddrsCb {
 		return func(context.Context, hash.HashSet, chunks.PendingRefExists) error { return nil }
 	})
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 	remotePath := filepath.ToSlash(remoteRepo.GitDir)
 	urlStr := "git+file://" + remotePath
 
-	noopGetAddrs := func(chunks.Chunk) chunks.GetAddrsCb {
+	noopGetAddrs := func(chunks.Chunk) chunks.InsertAddrsCb {
 		return func(context.Context, hash.HashSet, chunks.PendingRefExists) error { return nil }
 	}
 

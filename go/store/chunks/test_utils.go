@@ -70,7 +70,7 @@ func (s *TestStoreView) HasMany(ctx context.Context, hashes hash.HashSet) (hash.
 	return s.ChunkStore.HasMany(ctx, hashes)
 }
 
-func (s *TestStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCurry) error {
+func (s *TestStoreView) Put(ctx context.Context, c Chunk, getAddrs InsertAddrsCurry) error {
 	atomic.AddInt32(&s.writes, 1)
 	return s.ChunkStore.Put(ctx, c, getAddrs)
 }

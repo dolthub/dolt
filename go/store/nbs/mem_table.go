@@ -80,7 +80,7 @@ type memTable struct {
 	chunks        map[hash.Hash][]byte
 	order         []hasRecord // Must maintain the invariant that these are sorted by rec.order
 	pendingRefs   []hasRecord
-	getChildAddrs []chunks.GetAddrsCb
+	getChildAddrs []chunks.InsertAddrsCb
 	maxData       uint64
 	totalData     uint64 // size of uncompressed data in chunks
 }
@@ -113,7 +113,7 @@ func (mt *memTable) addChunk(h hash.Hash, data []byte) addChunkResult {
 	return chunkAdded
 }
 
-func (mt *memTable) addGetChildRefs(getAddrs chunks.GetAddrsCb) {
+func (mt *memTable) addGetChildRefs(getAddrs chunks.InsertAddrsCb) {
 	mt.getChildAddrs = append(mt.getChildAddrs, getAddrs)
 }
 

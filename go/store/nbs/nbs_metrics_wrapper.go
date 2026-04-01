@@ -57,7 +57,7 @@ func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string
 }
 
 // AddTableFilesToManifest adds table files to the manifest
-func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
+func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry) error {
 	return nbsMW.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs)
 }
 

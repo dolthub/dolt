@@ -34,7 +34,7 @@ import (
 var ErrNoData = errors.New("no data")
 var ErrCloneUnsupported = errors.New("clone unsupported")
 
-func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
+func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, getAddrs chunks.InsertAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
 	srcTS, srcOK := srcCS.(chunks.TableFileStore)
 
 	if !srcOK {
@@ -95,7 +95,7 @@ func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.Tab
 
 const concurrentTableFileDownloads = 3
 
-func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
+func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chunks.ChunkStore, getAddrs chunks.InsertAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
 	sources, err := srcTS.Sources(ctx)
 	if err != nil {
 		return err

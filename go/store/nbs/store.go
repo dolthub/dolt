@@ -889,12 +889,12 @@ func (nbs *NomsBlockStore) waitForGC(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
+func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry) error {
 	valctx.ValidateContext(ctx)
 	return nbs.putChunk(ctx, c, getAddrs, nbs.refCheck)
 }
 
-func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry, checker refCheck) error {
+func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry, checker refCheck) error {
 	t1 := time.Now()
 
 	success, err := nbs.addChunk(ctx, c, getAddrs, checker)
@@ -940,7 +940,7 @@ func (nbs *NomsBlockStore) addPendingRefsToHasCache() {
 	}
 }
 
-func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAddrs chunks.GetAddrsCurry, checker refCheck) (bool, error) {
+func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAddrs chunks.InsertAddrsCurry, checker refCheck) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -1899,7 +1899,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 }
 
 // AddTableFilesToManifest adds table files to the manifest
-func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
+func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry) error {
 	valctx.ValidateContext(ctx)
 	return nbs.addTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs, nbs.refCheck)
 }
@@ -1942,7 +1942,7 @@ func getRefCheck(nbs *NomsBlockStore, base func([]hasRecord) (hash.HashSet, erro
 }
 
 // For each chunk in sources, walk all its addresses with |getAddrs| and ensure that none are missing from a call to |refCheck|.
-func refCheckAllSources(ctx context.Context, getAddrs chunks.GetAddrsCurry, refCheck func([]hasRecord) (hash.HashSet, error), sources chunkSourceSet, stats *Stats) error {
+func refCheckAllSources(ctx context.Context, getAddrs chunks.InsertAddrsCurry, refCheck func([]hasRecord) (hash.HashSet, error), sources chunkSourceSet, stats *Stats) error {
 	if refCheck == nil {
 		return nil
 	}
@@ -1979,7 +1979,7 @@ func refCheckAllSources(ctx context.Context, getAddrs chunks.GetAddrsCurry, refC
 	return checkErr
 }
 
-func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry, genRefCheck func([]hasRecord) (hash.HashSet, error)) error {
+func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry, genRefCheck func([]hasRecord) (hash.HashSet, error)) error {
 	fileIdHashToNumChunks := make(map[hash.Hash]uint32)
 	for fileId, numChunks := range fileIdToNumChunks {
 		fileIdHash, ok := hash.MaybeParse(fileId)

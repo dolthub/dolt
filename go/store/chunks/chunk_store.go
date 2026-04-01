@@ -55,13 +55,13 @@ const (
 
 var ErrNothingToCollect = errors.New("no changes since last gc")
 
-// GetAddrsCurry returns a function that will add a chunk's child
+// InsertAddrsCurry returns a function that will add a chunk's child
 // references to a HashSet. The intermediary lets us build a single
 // HashSet per memTable.
-type GetAddrsCurry func(c Chunk) GetAddrsCb
+type InsertAddrsCurry func(c Chunk) InsertAddrsCb
 
-// GetAddrsCb adds the refs for a pre-specified chunk to |addrs|
-type GetAddrsCb func(ctx context.Context, addrs hash.HashSet, exists PendingRefExists) error
+// InsertAddrsCb adds the refs for a pre-specified chunk to |addrs|
+type InsertAddrsCb func(ctx context.Context, addrs hash.HashSet, exists PendingRefExists) error
 
 type GetAddrs func(c Chunk, cb func(a hash.Hash) error) error
 
@@ -94,7 +94,7 @@ type ChunkStore interface {
 	// to Flush(). Put may be called concurrently with other calls to Put(),
 	// Get(), GetMany(), Has() and HasMany(). Will return an error if the
 	// addrs returned by `getAddrs` are absent from the chunk store.
-	Put(ctx context.Context, c Chunk, getAddrs GetAddrsCurry) error
+	Put(ctx context.Context, c Chunk, getAddrs InsertAddrsCurry) error
 
 	// Returns the NomsBinFormat with which this ChunkSource is compatible.
 	Version() string

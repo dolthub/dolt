@@ -725,7 +725,7 @@ func (dcs *DoltChunkStore) errorIfDangling(ctx context.Context, addrs hash.HashS
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
+func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry) error {
 	addrs := hash.NewHashSet()
 	err := getAddrs(c)(ctx, addrs, func(h hash.Hash) bool { return false })
 	if err != nil {
@@ -1089,9 +1089,9 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, sp
 
 // AddTableFilesToManifest adds table files to the manifest
 //
-// GetAddrsCurry here is unused, because the remote is responsible for
+// InsertAddrsCurry here is unused, because the remote is responsible for
 // any reference checking, not the remotestorage instance.
-func (dcs *DoltChunkStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, _ chunks.GetAddrsCurry) error {
+func (dcs *DoltChunkStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, _ chunks.InsertAddrsCurry) error {
 	chnkTblInfo := make([]*remotesapi.ChunkTableInfo, 0, len(fileIdToNumChunks))
 
 	debugStr := ""
