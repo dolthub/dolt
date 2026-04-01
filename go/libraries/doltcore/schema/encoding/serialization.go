@@ -293,7 +293,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 func usesAdaptiveEncoding(col schema.Column) bool {
 	switch col.TypeInfo.Encoding() {
 	// val.ExtendedAdaptiveEnc is absent from this list because the extended types have their own ser / deser logic
-	case val.BytesAdaptiveEnc, val.StringAdaptiveEnc:
+	case val.BytesAdaptiveEnc, val.StringAdaptiveEnc, val.GeomAdaptiveEnc:
 		return true
 	default:
 		return false
