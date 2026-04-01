@@ -91,7 +91,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				require.NoError(t, err)
 				defer src.close()
 
-				if assert.True(mustUint32(src.count()) > 0) {
+				if assert.True(src.count() > 0) {
 					if r, err := s3svc.readerForTableWithNamespace(ctx, ns, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 						assertChunksInReader(testChunks, r, assert)
 						r.close()
@@ -108,7 +108,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				src, _, err := s3p.Persist(context.Background(), dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
 				require.NoError(t, err)
 				defer src.close()
-				if assert.True(mustUint32(src.count()) > 0) {
+				if assert.True(src.count() > 0) {
 					if r, err := s3svc.readerForTableWithNamespace(ctx, ns, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 						assertChunksInReader(testChunks, r, assert)
 						r.close()
@@ -133,7 +133,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				src, _, err := s3p.Persist(context.Background(), dherrors.FatalBehaviorError, mt, existingTable, nil, &Stats{})
 				require.NoError(t, err)
 				defer src.close()
-				assert.True(mustUint32(src.count()) == 0)
+				assert.True(src.count() == 0)
 
 				_, present := s3svc.data[src.hash().String()]
 				assert.False(present)
@@ -302,7 +302,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 				s.close()
 			}
 
-			if assert.True(mustUint32(src.count()) > 0) {
+			if assert.True(src.count() > 0) {
 				if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(chunks, r, assert)
 					r.close()
@@ -323,7 +323,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 				s.close()
 			}
 
-			if assert.True(mustUint32(src.count()) > 0) {
+			if assert.True(src.count() > 0) {
 				if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(smallChunks, r, assert)
 					r.close()
@@ -364,7 +364,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			s.close()
 		}
 
-		if assert.True(mustUint32(src.count()) > 0) {
+		if assert.True(src.count() > 0) {
 			if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 				assertChunksInReader(bigUns1, r, assert)
 				assertChunksInReader(bigUns2, r, assert)
@@ -405,7 +405,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			s.close()
 		}
 
-		if assert.True(mustUint32(src.count()) > 0) {
+		if assert.True(src.count() > 0) {
 			if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 				assertChunksInReader(bigUns1, r, assert)
 				assertChunksInReader(medChunks, r, assert)
@@ -460,7 +460,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			s.close()
 		}
 
-		if assert.True(mustUint32(src.count()) > 0) {
+		if assert.True(src.count() > 0) {
 			if r, err := s3svc.readerForTable(ctx, src.hash()); assert.NotNil(r) && assert.NoError(err) {
 				assertChunksInReader(smallChunks, r, assert)
 				assertChunksInReader(bigUns1, r, assert)

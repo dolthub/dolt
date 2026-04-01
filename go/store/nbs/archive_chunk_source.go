@@ -156,8 +156,8 @@ func (acs archiveChunkSource) iterate(ctx context.Context, cb func(chunks.Chunk)
 	return acs.aRdr.iterate(ctx, cb, stats)
 }
 
-func (acs archiveChunkSource) count() (uint32, error) {
-	return acs.aRdr.count(), nil
+func (acs archiveChunkSource) count() uint32 {
+	return acs.aRdr.count()
 }
 
 func (acs archiveChunkSource) close() error {

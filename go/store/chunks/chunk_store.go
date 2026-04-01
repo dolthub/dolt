@@ -199,6 +199,7 @@ type MarkAndSweeper interface {
 type GCFinalizer interface {
 	AddChunksToStore(ctx context.Context) (HasManyFunc, error)
 	SwapChunksInStore(ctx context.Context) error
+	Close() error
 }
 
 type GCMode int

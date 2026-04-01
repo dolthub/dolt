@@ -79,7 +79,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
 	defer src.close()
-	if assert.True(mustUint32(src.count()) > 0) {
+	if assert.True(src.count() > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
@@ -118,7 +118,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 
 	src, _, err := fts.Persist(context.Background(), dherrors.FatalBehaviorError, mt, existingTable, nil, &Stats{})
 	require.NoError(t, err)
-	assert.True(mustUint32(src.count()) == 0)
+	assert.True(src.count() == 0)
 
 	_, err = os.Stat(filepath.Join(dir, src.hash().String()))
 	assert.True(os.IsNotExist(err), "%v", err)
@@ -193,7 +193,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	require.NoError(t, err)
 	defer src.close()
 
-	if assert.True(mustUint32(src.count()) > 0) {
+	if assert.True(src.count() > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
@@ -238,7 +238,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	}
 	cleanup()
 
-	if assert.True(mustUint32(src.count()) > 0) {
+	if assert.True(src.count() > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
@@ -247,6 +247,6 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		require.NoError(t, err)
 		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
-		assert.EqualValues(reps*len(testChunks), mustUint32(tr.count()))
+		assert.EqualValues(reps*len(testChunks), tr.count())
 	}
 }

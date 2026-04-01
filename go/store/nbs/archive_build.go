@@ -83,10 +83,7 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 			continue
 		}
 
-		chkCnt, err := arc.count()
-		if err != nil {
-			return fmt.Errorf("failed to count chunks in archive %s: %w", id.String(), err)
-		}
+		chkCnt := arc.count()
 
 		var newTF hash.Hash
 		classicTable, err := NewCmpChunkTableWriter("")
@@ -130,7 +127,7 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 			}
 		}
 
-		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default, nil)
 		if err != nil {
 			return err
 		}
@@ -238,7 +235,7 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 			}
 		}
 
-		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default, nil)
 		if err != nil {
 			return err
 		}

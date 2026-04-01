@@ -16,6 +16,7 @@ package typeinfo
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -29,6 +30,12 @@ import (
 // encoding. Tests can set this variable to true in order to force Dolt to use adaptive encoding for TEXT and BLOB
 // columns. Extended types will always use adaptive encoding for TEXT and BLOB types regardless of this value.
 var UseAdaptiveEncoding = false
+
+func init() {
+	if envVal, ok := os.LookupEnv("DOLT_USE_ADAPTIVE_ENCODING"); ok && envVal == "true" {
+		UseAdaptiveEncoding = true
+	}
+}
 
 // TypeInfo is an interface used for encoding type information.
 type TypeInfo interface {

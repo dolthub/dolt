@@ -431,7 +431,7 @@ func (gcs *GenerationalNBS) WriteTableFile(ctx context.Context, fileId string, s
 
 // AddTableFilesToManifest adds table files to the manifest of the newgen cs
 func (gcs *GenerationalNBS) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
-	return gcs.newGen.addTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs, gcs.refCheck)
+	return gcs.newGen.addTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs, gcs.refCheck, nil)
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest of the new or old gen chunkstores

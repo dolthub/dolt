@@ -103,6 +103,7 @@ var _ sql.TriggerDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
 var _ sql.EventDatabase = Database{}
+var _ sql.QuiescableEventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
 var _ fulltext.Database = Database{}
 var _ rebase.RebasePlanDatabase = Database{}
@@ -2737,6 +2738,11 @@ func (db Database) GetEvents(ctx *sql.Context) (events []sql.EventDefinition, to
 	}
 
 	return events, tableHash, nil
+}
+
+// QuiescableEvents implements sql.QuiescableEventDatabase.
+func (db Database) QuiescableEvents() bool {
+	return true
 }
 
 // NeedsToReloadEvents implements sql.EventDatabase.
