@@ -371,6 +371,11 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 		return
 	}
 
+	conjoinedSrc := nbs.conjoinOp.conjoinedSrc
+	// On successful rebase, this will be cloned. We own closing this copy of it, regardless of the outcome.
+	defer conjoinedSrc.close()
+	srcs := chunkSourceSet{conjoinedSrc.hash(): conjoinedSrc}
+
 	nbs.manifestMgr.LockForUpdate()
 	defer func() {
 		err := nbs.manifestMgr.UnlockForUpdate()
@@ -382,9 +387,10 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 	newUpstream, cleanup, err := nbs.conjoinOp.updateManifest(ctx, nbs.fatalBehavior, nbs.upstream, nbs.manifestMgr, nbs.stats)
 	if err != nil {
 		nbs.logger.WithError(err).Warn("during conjoin, updating database manifest with new table files failed")
+		return
 	}
 
-	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
+	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, srcs, nbs.stats)
 	if err != nil {
 		nbs.logger.WithError(err).Warn("during conjoin, updating database with new table files failed")
 		return
@@ -2552,45 +2558,44 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 		}
 	}
 
-	// record the original manifest for comparison below.
-	originalUpstream := nbs.upstream
+	nbs.manifestMgr.LockForUpdate()
+	defer func() {
+		err := nbs.manifestMgr.UnlockForUpdate()
+		if err != nil {
+			nbs.logger.WithError(err).Warn("during ConjoinTableFiles, unlocking manifest manager for update failed with error")
+		}
+	}()
 
 	nbs.logger.Info("ConjoinTableFiles was called")
 	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
-	newUpstream, finalCleanup, err := conjoin(ctx, nbs.fatalBehavior, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
+	newUpstream, conjoinedSrc, finalCleanup, err := conjoin(ctx, nbs.fatalBehavior, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
 	if err != nil {
 		return hash.Hash{}, err
 	}
+
+	// Pass the conjoinedSrc as an available chunk source to rebase so it
+	// can clone it rather than re-opening the file.
+	defer conjoinedSrc.close()
+	srcs := chunkSourceSet{conjoinedSrc.hash(): conjoinedSrc}
 
 	// Update the in-memory state
-	nbs.upstream = newUpstream
-	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
+	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, srcs, nbs.stats)
 	if err != nil {
 		return hash.Hash{}, err
 	}
+	oldTables := nbs.tables
+	nbs.upstream = newUpstream
 	nbs.tables = newTables
 
-	// Cleanup of original files. This is destructive, so we only do it when the rebase doesn't error.
-	// Also note that nothing below here actually makes any changes to the db, so we can do the cleanup now.
+	err = oldTables.close()
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	// Cleanup of original files.
 	finalCleanup()
 
-	// Find the new conjoined table file hash from the updated manifest
-	// Since we removed the old files and added one new file, we need to find which one is new
-	// Create a set of original spec names for comparison
-	originalSpecSet := make(map[hash.Hash]bool)
-	for _, spec := range originalUpstream.specs {
-		originalSpecSet[spec.name] = true
-	}
-
-	var conjoinedHash hash.Hash
-	for _, spec := range newUpstream.specs {
-		if !originalSpecSet[spec.name] {
-			conjoinedHash = spec.name
-			break
-		}
-	}
-
-	return conjoinedHash, nil
+	return conjoinedSrc.hash(), nil
 }
 
 // findTableSpec finds a table spec by hash in the current manifest. This will ignore novel tables, as it's not
