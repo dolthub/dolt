@@ -83,10 +83,7 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 			continue
 		}
 
-		chkCnt, err := arc.count()
-		if err != nil {
-			return fmt.Errorf("failed to count chunks in archive %s: %w", id.String(), err)
-		}
+		chkCnt := arc.count()
 
 		var newTF hash.Hash
 		classicTable, err := NewCmpChunkTableWriter("")

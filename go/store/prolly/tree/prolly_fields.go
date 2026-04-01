@@ -113,20 +113,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 			v, err = deserializeGeometry(buf)
 		}
 	case val.GeomAdaptiveEnc:
-		var adaptiveVal interface{}
-		adaptiveVal, ok, err = td.GetGeomAdaptiveValue(ctx, i, ns, tup)
-		if ok && err == nil {
-			switch av := adaptiveVal.(type) {
-			case []byte:
-				v, err = deserializeGeometry(av)
-			case *val.ByteArray:
-				var buf []byte
-				buf, err = av.ToBytes(ctx)
-				if err == nil {
-					v, err = deserializeGeometry(buf)
-				}
-			}
-		}
+		v, ok, err = td.GetGeomAdaptiveValue(ctx, i, ns, tup)
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
 	case val.BytesAddrEnc:
@@ -474,15 +461,17 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		tb.PutGeometryAddr(i, h)
 	case val.GeomAdaptiveEnc:
 		switch value := v.(type) {
-		case *val.ByteArray:
-			if value.IsExactLength() {
-				tb.PutAdaptiveGeomFromOutline(i, value)
+		case *val.GeometryStorage:
+			if !value.IsExactLength() {
+				// Out-of-band: pass through the address without loading
+				tb.PutAdaptiveGeomFromOutOfBand(i, value.MaxByteLength(), value.Addr())
 			} else {
-				valueBytes, err := value.ToBytes(ctx)
+				// Inline: we already have the serialized bytes
+				buf, err := value.GetSerializedBytes(ctx)
 				if err != nil {
 					return err
 				}
-				err = tb.PutAdaptiveGeomFromInline(ctx, i, valueBytes)
+				err = tb.PutAdaptiveGeomFromInline(ctx, i, buf)
 				if err != nil {
 					return err
 				}

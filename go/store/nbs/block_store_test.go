@@ -546,7 +546,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 		fm.set(constants.FormatDoltString, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
-				{conjoinees: upstream[:2], keepers: upstream[2:]},
+				{conjoinees: upstream[:2]},
 			},
 		}
 
@@ -582,8 +582,8 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 		fm.set(constants.FormatDoltString, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
-				{conjoinees: upstream[:2], keepers: upstream[2:]},
-				{conjoinees: upstream[:4], keepers: upstream[4:]},
+				{conjoinees: upstream[:2]},
+				{conjoinees: upstream[:4]},
 			},
 		}
 
@@ -611,7 +611,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 
 type cannedConjoin struct {
 	// Must name tables that are already persisted
-	conjoinees, keepers []tableSpec
+	conjoinees []tableSpec
 }
 
 type fakeConjoiner struct {
@@ -625,11 +625,11 @@ func (fc *fakeConjoiner) conjoinRequired(ts *tableSet) bool {
 	return true
 }
 
-func (fc *fakeConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (fc *fakeConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees []tableSpec, err error) {
 	d.PanicIfTrue(len(fc.canned) == 0)
 	cur := fc.canned[0]
 	fc.canned = fc.canned[1:]
-	conjoinees, keepers = cur.conjoinees, cur.keepers
+	conjoinees = cur.conjoinees
 	return
 }
 

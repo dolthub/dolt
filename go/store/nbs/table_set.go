@@ -265,33 +265,15 @@ func (ts *tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, r
 	return f(ts.upstream)
 }
 
-func (ts *tableSet) count() (uint32, error) {
-	f := func(css chunkSourceSet) (count uint32, err error) {
+func (ts *tableSet) count() uint32 {
+	f := func(css chunkSourceSet) (count uint32) {
 		for _, haver := range css {
-			thisCount, err := haver.count()
-
-			if err != nil {
-				return 0, err
-			}
-
-			count += thisCount
+			count += haver.count()
 		}
 		return
 	}
 
-	novelCount, err := f(ts.novel)
-
-	if err != nil {
-		return 0, err
-	}
-
-	upCount, err := f(ts.upstream)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return novelCount + upCount, nil
+	return f(ts.novel) + f(ts.upstream)
 }
 
 func (ts *tableSet) uncompressedLen() (uint64, error) {
@@ -432,10 +414,7 @@ func (ts *tableSet) flatten(ctx context.Context) (*tableSet, error) {
 	}
 
 	for _, src := range ts.novel {
-		cnt, err := src.count()
-		if err != nil {
-			return nil, err
-		} else if cnt > 0 {
+		if src.count() > 0 {
 			flattened.upstream[src.hash()] = src
 		}
 	}
@@ -533,11 +512,7 @@ func (ts *tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSou
 	// (usually due to de-duping during table compaction)
 	novel := make(chunkSourceSet, len(ts.novel))
 	for _, t := range ts.novel {
-		cnt, err := t.count()
-		if err != nil {
-			closeAll(novel)
-			return nil, err
-		} else if cnt == 0 {
+		if t.count() == 0 {
 			continue
 		}
 		t2, err := t.clone()
@@ -598,19 +573,14 @@ func (ts *tableSet) toSpecs() ([]tableSpec, error) {
 			continue
 		}
 
-		cnt, err := src.count()
-		if err != nil {
-			return nil, err
-		} else if cnt > 0 {
+		if cnt := src.count(); cnt > 0 {
 			h := src.hash()
 			tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 		}
 	}
 	for _, src := range ts.upstream {
-		cnt, err := src.count()
-		if err != nil {
-			return nil, err
-		} else if cnt <= 0 {
+		cnt := src.count()
+		if cnt <= 0 {
 			return nil, errors.New("no upstream chunks")
 		}
 		h := src.hash()

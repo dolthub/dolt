@@ -166,10 +166,7 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 }
 
 func (bsp *blobstorePersister) hotCreateTableRecords(ctx context.Context, cs chunkSource) error {
-	cnt, err := cs.count()
-	if err != nil {
-		return err
-	}
+	cnt := cs.count()
 	off := tableTailOffset(cs.currentSize(), cnt)
 	l := int64(off)
 	rng := blobstore.NewBlobRange(0, l)
