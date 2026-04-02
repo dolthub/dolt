@@ -92,7 +92,7 @@ func TestTableReaderIndexQuota(t *testing.T) {
 		q := NewUnlimitedMemQuotaProvider()
 		assert.Equal(t, uint64(0), q.Usage())
 		// stats := &Stats{}
-		reader, err := nomsFileTableReader(ctx, tableFilePath, h, uint32(count), q)
+		reader, err := nomsFileTableReader(ctx, tableFilePath, h, uint32(count), noopRefCounter{}, q)
 		require.NoError(t, err)
 		// Immediately after opening the quota acocunts for in memory index.
 		expectedQuotaUsage :=
