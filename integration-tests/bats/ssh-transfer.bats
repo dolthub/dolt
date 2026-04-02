@@ -650,3 +650,34 @@ MOCK
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$PUSHED_COMMIT" ]] || false
 }
+
+@test "ssh-transfer: push to empty directory creates bare repository" {
+    mkdir "repo_push_to_empty_src"
+    cd "repo_push_to_empty_src"
+    dolt init
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, v TEXT);"
+    dolt sql -q "INSERT INTO t VALUES (1, 'hello');"
+    dolt add .
+    dolt commit -m "initial"
+
+    # Create an empty target directory and push to it via SSH.
+    mkdir "$BATS_TEST_TMPDIR/empty_bare_target"
+    dolt remote add bare "ssh://localhost$BATS_TEST_TMPDIR/empty_bare_target"
+    run dolt push bare main
+    [ "$status" -eq 0 ]
+
+    # The target should now be a bare repository: NBS files directly in the
+    # directory with no .dolt/ subdirectory.
+    [ -f "$BATS_TEST_TMPDIR/empty_bare_target/manifest" ] || false
+    [ ! -d "$BATS_TEST_TMPDIR/empty_bare_target/.dolt" ] || false
+
+    # Clone from the bare target to verify the data is intact.
+    cd "$BATS_TEST_TMPDIR"
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/empty_bare_target" bare_from_push
+    [ "$status" -eq 0 ]
+
+    cd "bare_from_push"
+    run dolt sql -r csv -q "SELECT v FROM t WHERE id=1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "hello" ]] || false
+}
