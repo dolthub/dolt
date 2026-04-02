@@ -77,6 +77,9 @@ func encodingFromQueryType(typ query.Type) serial.Encoding {
 	case query.Type_VARCHAR:
 		return serial.EncodingString
 	case query.Type_GEOMETRY:
+		if typeinfo.UseAdaptiveEncoding {
+			return serial.EncodingGeomAdaptive
+		}
 		return serial.EncodingGeomAddr
 	case query.Type_JSON:
 		return serial.EncodingJSONAddr

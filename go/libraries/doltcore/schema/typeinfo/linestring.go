@@ -63,12 +63,15 @@ func (ti *linestringType) Encoding() val.Encoding {
 	if ti.enc != 0 {
 		return ti.enc
 	}
+	if UseAdaptiveEncoding {
+		return val.GeomAdaptiveEnc
+	}
 	return val.GeomAddrEnc
 }
 
 // WithEncoding implements TypeInfo interface.
 func (ti *linestringType) WithEncoding(enc val.Encoding) TypeInfo {
-	if enc != val.GeomAddrEnc && enc != val.GeometryEnc {
+	if enc != val.GeomAddrEnc && enc != val.GeometryEnc && enc != val.GeomAdaptiveEnc {
 		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
 	}
 	return &linestringType{sqlLineStringType: ti.sqlLineStringType, enc: enc}

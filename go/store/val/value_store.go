@@ -17,6 +17,7 @@ package val
 import (
 	"context"
 	"database/sql/driver"
+	"fmt"
 	"unsafe"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -218,4 +219,118 @@ func (b *ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
 // Value implements driver.Valuer for interoperability with other go libraries
 func (b *ByteArray) Value() (driver.Value, error) {
 	return b.GetBytes(b.ctx)
+}
+
+// GeometryStorage wraps serialized geometry bytes and defers deserialization until the value is needed.
+// The geometry bytes may be stored inline or out-of-band via a content address.
+// It implements sql.AnyWrapper; GMS geometry types call sql.UnwrapAny to obtain
+// the underlying types.GeometryValue when evaluation actually requires it.
+type GeometryStorage struct {
+	// inlineBytes holds the serialized geometry bytes when the value is stored inline.
+	// When nil, the value is out-of-band and must be loaded via ImmutableValue.
+	inlineBytes []byte
+	// outOfBand holds a lazily-loaded out-of-band value. Only used when inlineBytes is nil.
+	outOfBand     ImmutableValue
+	maxByteLength int64
+}
+
+var _ sql.AnyWrapper = &GeometryStorage{}
+
+// NewGeometryStorageInline creates a GeometryStorage from inline serialized bytes.
+func NewGeometryStorageInline(buf []byte) *GeometryStorage {
+	return &GeometryStorage{
+		inlineBytes:   buf,
+		maxByteLength: int64(len(buf)),
+	}
+}
+
+// NewGeometryStorageOutOfBand creates a GeometryStorage that lazily loads bytes from a content-addressed store.
+func NewGeometryStorageOutOfBand(ctx context.Context, addr hash.Hash, vs ValueStore, maxByteLength int64) *GeometryStorage {
+	return &GeometryStorage{
+		outOfBand:     NewImmutableValue(addr, vs),
+		maxByteLength: maxByteLength,
+	}
+}
+
+// GetSerializedBytes returns the raw serialized geometry bytes, loading from storage if necessary.
+func (g *GeometryStorage) GetSerializedBytes(ctx context.Context) ([]byte, error) {
+	if g.inlineBytes != nil {
+		return g.inlineBytes, nil
+	}
+	return g.outOfBand.GetBytes(ctx)
+}
+
+// UnwrapAny implements sql.AnyWrapper by loading bytes and deserializing to a types.GeometryValue.
+func (g *GeometryStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
+	buf, err := g.GetSerializedBytes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return deserializeGeometryBytes(buf)
+}
+
+// IsExactLength implements sql.AnyWrapper.
+func (g *GeometryStorage) IsExactLength() bool {
+	return g.inlineBytes != nil
+}
+
+// MaxByteLength implements sql.AnyWrapper.
+func (g *GeometryStorage) MaxByteLength() int64 {
+	return g.maxByteLength
+}
+
+// Compare implements sql.AnyWrapper. Two GeometryStorage values with the same out-of-band address are equal.
+func (g *GeometryStorage) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
+	otherGeom, ok := other.(*GeometryStorage)
+	if !ok {
+		return 0, false, nil
+	}
+	if g.inlineBytes == nil && otherGeom.inlineBytes == nil && g.outOfBand.Addr == otherGeom.outOfBand.Addr {
+		return 0, true, nil
+	}
+	return 0, false, nil
+}
+
+// Hash implements sql.AnyWrapper.
+func (g *GeometryStorage) Hash() interface{} {
+	return g.outOfBand.Addr
+}
+
+// Addr returns the content address for out-of-band storage. Only valid when IsExactLength returns false.
+func (g *GeometryStorage) Addr() hash.Hash {
+	return g.outOfBand.Addr
+}
+
+// deserializeGeometryBytes converts raw serialized bytes into a types.GeometryValue.
+func deserializeGeometryBytes(buf []byte) (types.GeometryValue, error) {
+	srid, _, typ, err := types.DeserializeEWKBHeader(buf)
+	if err != nil {
+		return nil, err
+	}
+	buf = buf[types.EWKBHeaderSize:]
+	switch typ {
+	case types.WKBPointID:
+		v, _, err := types.DeserializePoint(buf, false, srid)
+		return v, err
+	case types.WKBLineID:
+		v, _, err := types.DeserializeLine(buf, false, srid)
+		return v, err
+	case types.WKBPolyID:
+		v, _, err := types.DeserializePoly(buf, false, srid)
+		return v, err
+	case types.WKBMultiPointID:
+		v, _, err := types.DeserializeMPoint(buf, false, srid)
+		return v, err
+	case types.WKBMultiLineID:
+		v, _, err := types.DeserializeMLine(buf, false, srid)
+		return v, err
+	case types.WKBMultiPolyID:
+		v, _, err := types.DeserializeMPoly(buf, false, srid)
+		return v, err
+	case types.WKBGeomCollID:
+		v, _, err := types.DeserializeGeomColl(buf, false, srid)
+		return v, err
+	default:
+		return nil, fmt.Errorf("unknown geometry type %d", typ)
+	}
 }
