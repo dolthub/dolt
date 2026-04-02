@@ -680,4 +680,14 @@ MOCK
     run dolt sql -r csv -q "SELECT v FROM t WHERE id=1;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "hello" ]] || false
+
+    # Restore from the bare repository using dolt backup restore.
+    cd "$BATS_TEST_TMPDIR"
+    run dolt backup restore "file://$BATS_TEST_TMPDIR/empty_bare_target" bare_restored
+    [ "$status" -eq 0 ]
+
+    cd "bare_restored"
+    run dolt sql -r csv -q "SELECT v FROM t WHERE id=1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "hello" ]] || false
 }
