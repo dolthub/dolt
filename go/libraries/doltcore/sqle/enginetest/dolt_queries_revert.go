@@ -564,6 +564,114 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// Revert three commits where the first reverts cleanly and the last two each
+		// produce conflicts. --continue must be called twice: once after resolving the
+		// second commit's conflict and again after resolving the third commit's conflict.
+		Name: "dolt_revert() --continue called multiple times for multi-commit series",
+		SetUpScript: []string{
+			"create table test (pk int primary key, c0 int);",
+			"insert into test values (1,1),(2,2),(3,3);",
+			"call dolt_commit('-Am', 'seed table');",
+			// Commit A: change pk=1. Will revert cleanly.
+			"update test set c0 = 10 where pk = 1;",
+			"call dolt_commit('-am', 'change pk1');",
+			// Commit B: change pk=2. Will conflict when reverted because of the clobber commit.
+			"update test set c0 = 20 where pk = 2;",
+			"call dolt_commit('-am', 'change pk2');",
+			// Commit C: change pk=3. Will conflict when reverted because of the clobber commit.
+			"update test set c0 = 30 where pk = 3;",
+			"call dolt_commit('-am', 'change pk3');",
+			// Clobber commit: overwrite pk=2 and pk=3 so reverting B and C will conflict.
+			"update test set c0 = 21 where pk = 2;",
+			"update test set c0 = 31 where pk = 3;",
+			"call dolt_commit('-am', 'clobber pk2 and pk3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "set @@dolt_allow_commit_conflicts = 1;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
+			{
+				// Revert A (HEAD~3), B (HEAD~2), C (HEAD~1).
+				// A reverts cleanly (commit created). B conflicts → stop.
+				Query:    "call dolt_revert('HEAD~3', 'HEAD~2', 'HEAD~1');",
+				Expected: []sql.Row{{"", 1, 0, 0}},
+			},
+			{
+				// A's revert committed: pk=1 restored to 1.
+				Query:    "select c0 from test where pk = 1;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// B's revert left a conflict on the test table.
+				Query:    "select `table` from dolt_conflicts;",
+				Expected: []sql.Row{{"test"}},
+			},
+			{
+				// Resolve B's conflict: keep clobber value for pk=2.
+				Query:            "delete from dolt_conflicts_test;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "update test set c0 = 21 where pk = 2;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_add('test');",
+				SkipResultsCheck: true,
+			},
+			{
+				// First --continue: commits B's revert, then automatically tries C.
+				// C conflicts → stop and return conflict counts.
+				Query:    "call dolt_revert('--continue');",
+				Expected: []sql.Row{{"", 1, 0, 0}},
+			},
+			{
+				// B's revert is now committed.
+				Query:    "select message from dolt_log limit 2;",
+				Expected: []sql.Row{{`Revert "change pk2"`}, {`Revert "change pk1"`}},
+			},
+			{
+				// C's revert left a conflict on the test table.
+				Query:    "select `table` from dolt_conflicts;",
+				Expected: []sql.Row{{"test"}},
+			},
+			{
+				// Resolve C's conflict: keep clobber value for pk=3.
+				Query:            "delete from dolt_conflicts_test;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "update test set c0 = 31 where pk = 3;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_add('test');",
+				SkipResultsCheck: true,
+			},
+			{
+				// Second --continue: commits C's revert, series complete.
+				Query:    "call dolt_revert('--continue');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				// All three revert commits present in log (most recent first).
+				Query:    "select message from dolt_log limit 3;",
+				Expected: []sql.Row{{`Revert "change pk3"`}, {`Revert "change pk2"`}, {`Revert "change pk1"`}},
+			},
+			{
+				// No conflicts remaining.
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				// Final data: pk=1 restored, pk=2 and pk=3 kept at resolved clobber values.
+				Query:    "select pk, c0 from test order by pk;",
+				Expected: []sql.Row{{1, 1}, {2, 21}, {3, 31}},
+			},
+		},
+	},
+	{
 		Name: "dolt_revert() automatically resolves some conflicts",
 		SetUpScript: []string{
 			"create table tableA (id int primary key, col1 varchar(255));",

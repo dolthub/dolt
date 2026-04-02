@@ -176,9 +176,24 @@ func revert(ctx context.Context, apr *argparser.ArgParseResults, cliCtx cli.CliC
 	// Check conflict counts from the result row.
 	if len(rows) > 0 {
 		row := rows[0]
-		dataConflicts, _ := row[1].(int64)
-		schemaConflicts, _ := row[2].(int64)
-		constraintViolations, _ := row[3].(int64)
+		dataConflicts, err := cli.QueryValueAsInt64(row[1])
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+
+		schemaConflicts, err := cli.QueryValueAsInt64(row[2])
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+
+		constraintViolations, err := cli.QueryValueAsInt64(row[3])
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+
 		if dataConflicts > 0 || schemaConflicts > 0 || constraintViolations > 0 {
 			cli.Println("Automatic revert failed; fix conflicts and then commit the result.")
 			if dataConflicts > 0 {

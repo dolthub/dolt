@@ -58,11 +58,9 @@ teardown() {
 
 @test "revert: conflicts" {
     dolt sql -q "INSERT INTO test VALUES (4, 4)"
-    dolt add -A
-    dolt commit -m "Inserted 4"
+    dolt commit -am "Inserted 4"
     dolt sql -q "REPLACE INTO test VALUES (4, 5)"
-    dolt add -A
-    dolt commit -m "Updated 4"
+    dolt commit -am "Updated 4"
     run dolt revert HEAD~1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "Automatic revert failed" ]] || false
@@ -431,6 +429,165 @@ SQL
     [[ "$output" =~ "Updated 4 (again)" ]] || false
 
     # No conflicts should remain
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "revert: --continue called multiple times for multi-commit series" {
+    # Commit A: change pk=1. Will revert cleanly.
+    dolt sql -q "UPDATE test SET v1=10 WHERE pk=1;"
+    dolt commit -am "change pk1"
+    run dolt sql -q "SELECT dolt_hashof('HEAD');" -r=csv
+    HASH_A=${lines[1]}
+    # Commit B: change pk=2. Will conflict because of clobber below.
+    dolt sql -q "UPDATE test SET v1=20 WHERE pk=2;"
+    dolt commit -am "change pk2"
+    run dolt sql -q "SELECT dolt_hashof('HEAD');" -r=csv
+    HASH_B=${lines[1]}
+    # Commit C: change pk=3. Will conflict because of clobber below.
+    dolt sql -q "UPDATE test SET v1=30 WHERE pk=3;"
+    dolt commit -am "change pk3"
+    run dolt sql -q "SELECT dolt_hashof('HEAD');" -r=csv
+    HASH_C=${lines[1]}
+    # Clobber: overwrite pk=2 and pk=3 so reverting B and C will produce conflicts.
+    dolt sql -q "UPDATE test SET v1=21 WHERE pk=2;"
+    dolt sql -q "UPDATE test SET v1=31 WHERE pk=3;"
+    dolt commit -am "clobber pk2 and pk3"
+
+    # A reverts cleanly (commit created). B conflicts → stop.
+    run dolt revert "$HASH_A" "$HASH_B" "$HASH_C"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Automatic revert failed" ]] || false
+
+    # A's revert committed: pk=1 restored to 1.
+    run dolt sql -q "SELECT v1 FROM test WHERE pk=1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "1" ]] || false
+
+    # B's revert left a conflict.
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "1" ]] || false
+
+    # Resolve B's conflict: keep the clobber value for pk=2.
+    dolt conflicts resolve --ours test
+    dolt sql -q "UPDATE test SET v1=21 WHERE pk=2;"
+    dolt add test
+
+    # First --continue: commits B's revert, automatically tries C, C conflicts → stop.
+    run dolt revert --continue
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Automatic revert failed" ]] || false
+
+    # B's revert is now committed.
+    run dolt log -n 2 --oneline
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert \"change pk2\"" ]] || false
+    [[ "$output" =~ "Revert \"change pk1\"" ]] || false
+
+    # C's revert left a conflict.
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "1" ]] || false
+
+    # Resolve C's conflict: keep the clobber value for pk=3.
+    dolt conflicts resolve --ours test
+    dolt sql -q "UPDATE test SET v1=31 WHERE pk=3;"
+    dolt add test
+
+    # Second --continue: commits C's revert, series complete.
+    run dolt revert --continue
+    [ "$status" -eq "0" ]
+
+    # All three revert commits present.
+    run dolt log -n 3 --oneline
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert \"change pk3\"" ]] || false
+    [[ "$output" =~ "Revert \"change pk2\"" ]] || false
+    [[ "$output" =~ "Revert \"change pk1\"" ]] || false
+
+    # No conflicts remaining.
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "revert: SQL --continue called multiple times for multi-commit series" {
+    # Commit A: change pk=1. Will revert cleanly.
+    dolt sql -q "UPDATE test SET v1=10 WHERE pk=1;"
+    dolt commit -am "change pk1"
+    run dolt sql -q "SELECT dolt_hashof('HEAD');" -r=csv
+    HASH_A=${lines[1]}
+    # Commit B: change pk=2. Will conflict because of clobber below.
+    dolt sql -q "UPDATE test SET v1=20 WHERE pk=2;"
+    dolt commit -am "change pk2"
+    run dolt sql -q "SELECT dolt_hashof('HEAD');" -r=csv
+    HASH_B=${lines[1]}
+    # Commit C: change pk=3. Will conflict because of clobber below.
+    dolt sql -q "UPDATE test SET v1=30 WHERE pk=3;"
+    dolt commit -am "change pk3"
+    run dolt sql -q "SELECT dolt_hashof('HEAD');" -r=csv
+    HASH_C=${lines[1]}
+    # Clobber: overwrite pk=2 and pk=3 so reverting B and C will produce conflicts.
+    dolt sql -q "UPDATE test SET v1=21 WHERE pk=2;"
+    dolt sql -q "UPDATE test SET v1=31 WHERE pk=3;"
+    dolt commit -am "clobber pk2 and pk3"
+
+    # A reverts cleanly. B conflicts → stop.
+    run dolt sql -q "call dolt_revert('$HASH_A', '$HASH_B', '$HASH_C')" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ ",1,0,0" ]] || false
+
+    # A's revert committed: pk=1 restored to 1.
+    run dolt sql -q "SELECT v1 FROM test WHERE pk=1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "1" ]] || false
+
+    # B's revert left a conflict.
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "1" ]] || false
+
+    # Resolve B's conflict.
+    dolt conflicts resolve --ours test
+    dolt sql -q "UPDATE test SET v1=21 WHERE pk=2;"
+    dolt add test
+
+    # First --continue: commits B's revert, automatically tries C, C conflicts → stop.
+    run dolt sql -q "call dolt_revert('--continue')" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ ",1,0,0" ]] || false
+
+    # B's revert is now committed.
+    run dolt log -n 2 --oneline
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert \"change pk2\"" ]] || false
+    [[ "$output" =~ "Revert \"change pk1\"" ]] || false
+
+    # C's revert left a conflict.
+    run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "1" ]] || false
+
+    # Resolve C's conflict.
+    dolt conflicts resolve --ours test
+    dolt sql -q "UPDATE test SET v1=31 WHERE pk=3;"
+    dolt add test
+
+    # Second --continue: commits C's revert, series complete.
+    run dolt sql -q "call dolt_revert('--continue')" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ ",0,0,0" ]] || false
+
+    # All three revert commits present.
+    run dolt log -n 3 --oneline
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Revert \"change pk3\"" ]] || false
+    [[ "$output" =~ "Revert \"change pk2\"" ]] || false
+    [[ "$output" =~ "Revert \"change pk1\"" ]] || false
+
+    # No conflicts remaining.
     run dolt sql -q "SELECT count(*) FROM dolt_conflicts" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "0" ]] || false

@@ -50,6 +50,12 @@ table MergeState {
   // The address of the HEAD commit at the time the merge/cherry-pick/revert started.
   // Used by --abort to restore the branch HEAD pointer to its pre-operation state.
   pre_merge_head_commit_addr:[ubyte];
+
+  // pending_revert_hashes holds the remaining commit hashes to be reverted when a
+  // multi-commit revert series (dolt revert A B C) is interrupted by a conflict.
+  // After resolving the conflict and calling --continue, these commits are applied
+  // automatically in order.
+  pending_revert_hashes:[string];
 }
 
 table RebaseState {

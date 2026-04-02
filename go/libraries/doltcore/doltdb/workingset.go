@@ -144,6 +144,10 @@ type MergeState struct {
 	// This is used by --abort to restore the branch HEAD pointer to its pre-operation state
 	// and ensure that any commits made as part of the merge/cherry-pick/revert are not reachable.
 	preMergeHeadCommit *Commit
+	// pendingRevertCommitHashes holds the remaining commit hashes to be reverted after a conflict
+	// is resolved in a multi-commit revert series (dolt revert A B C). When --continue is called,
+	// these commits are applied automatically in order.
+	pendingRevertCommitHashes []string
 }
 
 // todo(andy): this might make more sense in pkg merge
@@ -202,6 +206,10 @@ func (m MergeState) PreMergeWorkingRoot() RootValue {
 
 func (m MergeState) PreMergeHeadCommit() *Commit {
 	return m.preMergeHeadCommit
+}
+
+func (m MergeState) PendingRevertCommitHashes() []string {
+	return m.pendingRevertCommitHashes
 }
 
 type SchemaConflictFn func(table TableName, conflict SchemaConflict) error
@@ -389,16 +397,19 @@ func (ws WorkingSet) StartCherryPick(headCommit *Commit, commit *Commit, commitS
 }
 
 // StartRevert creates and returns a new working set based off of the current |ws| with the specified |commit|
-// and |commitSpecStr| referring to the commit being reverted. The returned WorkingSet records that a revert
-// operation is in progress (i.e. conflicts being resolved). Note that this function does not update the current
-// session – the returned WorkingSet must still be set using DoltSession.SetWorkingSet().
-func (ws WorkingSet) StartRevert(headCommit *Commit, commit *Commit, commitSpecStr string) *WorkingSet {
+// and |commitSpecStr| referring to the commit being reverted. |pendingHashes| holds any remaining commit hashes
+// from a multi-commit revert series that should be applied automatically once this conflict is resolved via
+// --continue. The returned WorkingSet records that a revert operation is in progress (i.e. conflicts being
+// resolved). Note that this function does not update the current session – the returned WorkingSet must still
+// be set using DoltSession.SetWorkingSet().
+func (ws WorkingSet) StartRevert(headCommit *Commit, commit *Commit, commitSpecStr string, pendingHashes []string) *WorkingSet {
 	ws.mergeState = &MergeState{
-		commit:             commit,
-		commitSpecStr:      commitSpecStr,
-		preMergeWorking:    ws.workingRoot,
-		preMergeHeadCommit: headCommit,
-		isRevert:           true,
+		commit:                    commit,
+		commitSpecStr:             commitSpecStr,
+		preMergeWorking:           ws.workingRoot,
+		preMergeHeadCommit:        headCommit,
+		isRevert:                  true,
+		pendingRevertCommitHashes: pendingHashes,
 	}
 	return &ws
 }
@@ -570,13 +581,14 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 
 		mergeState = &MergeState{
-			commit:             commit,
-			commitSpecStr:      commitSpec,
-			preMergeWorking:    preMergeWorkingRoot,
-			unmergableTables:   unmergableTableNames,
-			isCherryPick:       isCherryPick,
-			isRevert:           isRevert,
-			preMergeHeadCommit: preMergeHeadCommit,
+			commit:                    commit,
+			commitSpecStr:             commitSpec,
+			preMergeWorking:           preMergeWorkingRoot,
+			unmergableTables:          unmergableTableNames,
+			isCherryPick:              isCherryPick,
+			isRevert:                  isRevert,
+			preMergeHeadCommit:        preMergeHeadCommit,
+			pendingRevertCommitHashes: dsws.MergeState.PendingRevertHashes(),
 		}
 	}
 
@@ -700,7 +712,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 		}
 
 		// TODO: Serialize the full TableName
-		mergeState, err = datas.NewMergeState(preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick, ws.mergeState.isRevert, headDCommit)
+		mergeState, err = datas.NewMergeState(preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick, ws.mergeState.isRevert, headDCommit, ws.mergeState.pendingRevertCommitHashes)
 		if err != nil {
 			return nil, err
 		}
