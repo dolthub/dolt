@@ -555,3 +555,139 @@ MOCK
     [ "$status" -ne 0 ]
     [[ "$output" =~ "database is read only" ]] || false
 }
+@test "ssh-transfer: clone from bare backup repository" {
+    mkdir "repo_bare_src"
+    cd "repo_bare_src"
+    dolt init
+    dolt sql -q "CREATE TABLE items (id INT PRIMARY KEY, name TEXT);"
+    dolt sql -q "INSERT INTO items VALUES (1, 'alpha'), (2, 'beta');"
+    dolt add .
+    dolt commit -m "initial bare test"
+
+    dolt backup add bac1 "file://$BATS_TEST_TMPDIR/bare_backup"
+    dolt backup sync bac1
+
+    cd "$BATS_TEST_TMPDIR"
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/bare_backup" bare_clone
+    [ "$status" -eq 0 ]
+
+    cd "bare_clone"
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM items;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt sql -r csv -q "SELECT name FROM items ORDER BY id;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "alpha" ]] || false
+    [[ "$output" =~ "beta" ]] || false
+}
+
+@test "ssh-transfer: pull from bare backup repository" {
+    mkdir "repo_bare_pull_src"
+    cd "repo_bare_pull_src"
+    dolt init
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, v TEXT);"
+    dolt sql -q "INSERT INTO t VALUES (1, 'first');"
+    dolt add .
+    dolt commit -m "initial"
+
+    dolt backup add bac1 "file://$BATS_TEST_TMPDIR/bare_pull_backup"
+    dolt backup sync bac1
+
+    cd "$BATS_TEST_TMPDIR"
+
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/bare_pull_backup" bare_pull_clone
+
+    # Add more data to source and re-sync to the backup.
+    cd "repo_bare_pull_src"
+    dolt sql -q "INSERT INTO t VALUES (2, 'second');"
+    dolt add .
+    dolt commit -m "add second row"
+    dolt backup sync bac1
+
+    cd "$BATS_TEST_TMPDIR/bare_pull_clone"
+    run dolt pull origin
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM t;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+}
+
+@test "ssh-transfer: push to bare backup repository" {
+    mkdir "repo_bare_push_src"
+    cd "repo_bare_push_src"
+    dolt init
+    dolt sql -q "CREATE TABLE widgets (id INT PRIMARY KEY, color TEXT);"
+    dolt sql -q "INSERT INTO widgets VALUES (1, 'red');"
+    dolt add .
+    dolt commit -m "initial"
+
+    dolt backup add bac1 "file://$BATS_TEST_TMPDIR/bare_push_backup"
+    dolt backup sync bac1
+
+    cd "$BATS_TEST_TMPDIR"
+
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/bare_push_backup" bare_push_clone
+    cd "bare_push_clone"
+    dolt sql -q "INSERT INTO widgets VALUES (2, 'blue');"
+    dolt add .
+    dolt commit -m "add blue widget"
+
+    PUSHED_COMMIT=$(dolt log --oneline -n 1 | awk '{print $1}')
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+
+    cd "$BATS_TEST_TMPDIR"
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/bare_push_backup" bare_push_verify
+    cd "bare_push_verify"
+
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM widgets;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$PUSHED_COMMIT" ]] || false
+}
+
+@test "ssh-transfer: push to empty directory creates bare repository" {
+    mkdir "repo_push_to_empty_src"
+    cd "repo_push_to_empty_src"
+    dolt init
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, v TEXT);"
+    dolt sql -q "INSERT INTO t VALUES (1, 'hello');"
+    dolt add .
+    dolt commit -m "initial"
+
+    # Create an empty target directory and push to it via SSH.
+    mkdir "$BATS_TEST_TMPDIR/empty_bare_target"
+    dolt remote add bare "ssh://localhost$BATS_TEST_TMPDIR/empty_bare_target"
+    run dolt push bare main
+    [ "$status" -eq 0 ]
+
+    # The target should now be a bare repository: NBS files directly in the
+    # directory with no .dolt/ subdirectory.
+    [ -f "$BATS_TEST_TMPDIR/empty_bare_target/manifest" ] || false
+    [ ! -d "$BATS_TEST_TMPDIR/empty_bare_target/.dolt" ] || false
+
+    # Clone from the bare target to verify the data is intact.
+    cd "$BATS_TEST_TMPDIR"
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/empty_bare_target" bare_from_push
+    [ "$status" -eq 0 ]
+
+    cd "bare_from_push"
+    run dolt sql -r csv -q "SELECT v FROM t WHERE id=1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "hello" ]] || false
+
+    # Restore from the bare repository using dolt backup restore.
+    cd "$BATS_TEST_TMPDIR"
+    run dolt backup restore "file://$BATS_TEST_TMPDIR/empty_bare_target" bare_restored
+    [ "$status" -eq 0 ]
+
+    cd "bare_restored"
+    run dolt sql -r csv -q "SELECT v FROM t WHERE id=1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "hello" ]] || false
+}
