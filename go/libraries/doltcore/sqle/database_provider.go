@@ -1001,8 +1001,10 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	var db dsess.SqlDatabase
+	var derivativeDbs []dsess.SqlDatabase
 	var dbLoc filesys.Filesys
 	var dbKey, dropDbLoc string
+	var closeDoltDBs bool
 	err := func() error {
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -1032,11 +1034,17 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		derivativeNamePrefix := strings.ToLower(dbKey + doltdb.DbRevisionDelimiter)
 		for dbName := range p.databases {
 			if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
+				derivativeDbs = append(derivativeDbs, p.databases[dbName])
 				delete(p.databases, dbName)
 			}
 		}
 		delete(p.databases, dbKey)
 		p.deletingDatabases[dbKey] = struct{}{}
+
+		closeDoltDBs = p.dbLoadParams != nil
+		if closeDoltDBs {
+			_, closeDoltDBs = p.dbLoadParams[dbfactory.DisableSingletonCacheParam]
+		}
 		return nil
 	}()
 	if err != nil {
@@ -1068,16 +1076,26 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		dropHook(ctx, name)
 	}
 
+	// Close the database and any derivative databases.
+	db.Close()
+	for _, ddb := range derivativeDbs {
+		ddb.Close()
+	}
+
+	// In embedded / nocache mode, the underlying DoltDBs are not tracked by the singleton cache, so
+	// the provider is responsible for closing them to release filesystem locks.
+	if closeDoltDBs {
+		for _, ddb := range db.DoltDatabases() {
+			if ddb != nil {
+				_ = ddb.Close()
+			}
+		}
+	}
+
 	// If this database is re-created, we don't want to return any cached results.
 	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/noms"), true)
 	if err != nil {
 		retErr = errors.Join(retErr, err)
-	}
-	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/stats/.dolt/noms"), true)
-	if err != nil {
-		// Swallow the error closing `stats` database.
-		// TODO: Log this.
-		err = nil
 	}
 
 	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)

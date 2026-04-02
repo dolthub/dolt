@@ -166,6 +166,11 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 			}
 			sc.doGc = false
 			sc.gcCnt++
+			// Close the current KV's DoltDB before replacing sc.kv with the
+			// in-memory gcKv. rotateStorage below will open a fresh DoltDB, but
+			// by then sc.kv is already the memStats gcKv whose Close is a no-op,
+			// so the old DoltDB's file descriptors would leak without this.
+			sc.kv.Close()
 			sc.kv = gcKv
 			ok = true
 			if !sc.memOnly {
