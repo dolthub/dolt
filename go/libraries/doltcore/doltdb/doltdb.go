@@ -139,6 +139,11 @@ type DoltDB struct {
 	commitCache *lru.Cache[hash.Hash, *OptionalCommit]
 }
 
+// IsWorkingSetRef reports whether |ref| identifies the working set or staging area rather than a commit.
+func IsWorkingSetRef(ref string) bool {
+	return ref == Working || ref == Staged
+}
+
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
 func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) (*DoltDB, error) {
 	vrw := types.NewValueStore(cs)

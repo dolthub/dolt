@@ -111,6 +111,11 @@ type diffDatasets struct {
 	toRef   string
 }
 
+// hasWorkingSet reports whether either side of the diff references the working set or staging area.
+func (d *diffDatasets) hasWorkingSet() bool {
+	return doltdb.IsWorkingSetRef(d.fromRef) || doltdb.IsWorkingSetRef(d.toRef)
+}
+
 type diffArgs struct {
 	*diffDisplaySettings
 	*diffDatasets
@@ -906,14 +911,19 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		return printDiffSummary(sqlCtx, deltas, dArgs)
 	}
 
+	// Ignore patterns govern the staging of untracked tables and do not apply to committed history,
+	// so they are only loaded when the diff references the working set or staging area.
+	var ignoredTablePatterns doltdb.IgnorePatterns
+	if dArgs.hasWorkingSet() {
+		ignoredTablePatterns, err = getIgnoredTablePatternsFromSql(queryist, sqlCtx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get ignored table patterns, cause: %w", err))
+		}
+	}
+
 	dw, err := newDiffWriter(dArgs.diffOutput)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
-	}
-
-	ignoredTablePatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get ignored table patterns, cause: %w", err))
 	}
 
 	doltSchemasChanged := false
@@ -922,25 +932,12 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
-		// Don't print tables if one side of the diff is an ignored table in the working set being added.
-		if len(delta.FromTableName.Name) == 0 {
-			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(delta.ToTableName)
-			if err != nil {
-				return errhand.VerboseErrorFromError(err)
-			}
-			if ignoreResult == doltdb.Ignore {
-				continue
-			}
+		ignore, err := ignoredTablePatterns.ShouldIgnoreDelta(delta.IsAdd(), delta.IsDrop(), delta.ToTableName, delta.FromTableName)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
 		}
-
-		if len(delta.ToTableName.Name) == 0 {
-			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(delta.FromTableName)
-			if err != nil {
-				return errhand.VerboseErrorFromError(err)
-			}
-			if ignoreResult == doltdb.Ignore {
-				continue
-			}
+		if ignore {
+			continue
 		}
 
 		if !shouldPrintTableDelta(dArgs.tableSet, delta.ToTableName.Name, delta.FromTableName.Name) {

@@ -536,3 +536,76 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
 }
+
+@test "ignore: dolt show should display committed tables even after they are added to dolt_ignore" {
+    dolt sql -q "CREATE TABLE the_table (pk INT PRIMARY KEY, name TEXT);"
+    dolt add the_table
+    dolt commit -m "add the_table"
+
+    # The setup adds a "*_ignore" pattern which matches "dolt_ignore" itself, so staging
+    # dolt_ignore requires --force.
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('the_table', true);"
+    dolt add --force dolt_ignore
+    dolt commit -m "ignore the_table"
+
+    # Untracked tables matching an ignore pattern are excluded from working set diffs.
+    # This matches git, where ignore patterns apply only to untracked files and untracked files never appear in diffs.
+    dolt sql -q "CREATE TABLE new_ignore (pk INT PRIMARY KEY);"
+    run dolt diff HEAD WORKING
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "new_ignore" ]] || false
+
+    # Commit another table to advance history while the ignore pattern remains active.
+    dolt sql -q "CREATE TABLE another_table (pk INT PRIMARY KEY);"
+    dolt add another_table
+    dolt commit -m "add another_table"
+
+    # new_ignore must still be absent after a subsequent commit.
+    run dolt diff HEAD WORKING
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "new_ignore" ]] || false
+
+    # Confirm the_table is recorded in the earlier commit.
+    run dolt show --summary HEAD~2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "the_table" ]] || false
+
+    # the_table was committed before the ignore pattern existed, so its diff must still appear.
+    run dolt show HEAD~2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/the_table b/the_table" ]] || false
+}
+
+@test "ignore: dolt diff should display committed tables even after they are added to dolt_ignore" {
+    dolt sql -q "CREATE TABLE the_table (pk INT PRIMARY KEY, name TEXT);"
+    dolt add the_table
+    dolt commit -m "add the_table"
+
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('the_table', true);"
+    dolt add --force dolt_ignore
+    dolt commit -m "ignore the_table"
+
+    dolt sql -q "CREATE TABLE new_ignore (pk INT PRIMARY KEY);"
+    run dolt diff HEAD WORKING
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "new_ignore" ]] || false
+
+    dolt sql -q "CREATE TABLE another_table (pk INT PRIMARY KEY);"
+    dolt add another_table
+    dolt commit -m "add another_table"
+
+    # new_ignore must still be absent after a subsequent commit.
+    run dolt diff HEAD WORKING
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "new_ignore" ]] || false
+
+    # Confirm the_table is recorded in the earlier commit.
+    run dolt diff --summary HEAD~3 HEAD~2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "the_table" ]] || false
+
+    # the_table was committed before the ignore pattern existed, so its diff must still appear.
+    run dolt diff HEAD~3 HEAD~2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/the_table b/the_table" ]] || false
+}
