@@ -410,7 +410,7 @@ func (rcv *MergeState) MutatePreMergeHeadCommitAddr(j int, n byte) bool {
 	return false
 }
 
-func (rcv *MergeState) PendingRevertHashes(j int) []byte {
+func (rcv *MergeState) PendingCommitHashes(j int) []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -419,7 +419,7 @@ func (rcv *MergeState) PendingRevertHashes(j int) []byte {
 	return nil
 }
 
-func (rcv *MergeState) PendingRevertHashesLength() int {
+func (rcv *MergeState) PendingCommitHashesLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -465,10 +465,10 @@ func MergeStateAddPreMergeHeadCommitAddr(builder *flatbuffers.Builder, preMergeH
 func MergeStateStartPreMergeHeadCommitAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
-func MergeStateAddPendingRevertHashes(builder *flatbuffers.Builder, pendingRevertHashes flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(pendingRevertHashes), 0)
+func MergeStateAddPendingCommitHashes(builder *flatbuffers.Builder, pendingCommitHashes flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(pendingCommitHashes), 0)
 }
-func MergeStateStartPendingRevertHashesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func MergeStateStartPendingCommitHashesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {

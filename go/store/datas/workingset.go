@@ -100,6 +100,10 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		if mergeState.preMergeHeadCommitAddr != nil {
 			headCommitAddrOff = builder.CreateByteVector((*mergeState.preMergeHeadCommitAddr)[:])
 		}
+		var pendingHashesOff flatbuffers.UOffsetT
+		if len(mergeState.pendingRevertHashes) > 0 {
+			pendingHashesOff = SerializeStringVector(builder, mergeState.pendingRevertHashes)
+		}
 		serial.MergeStateStart(builder)
 		serial.MergeStateAddPreWorkingRootAddr(builder, prerootaddroff)
 		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
@@ -109,6 +113,9 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		serial.MergeStateAddIsRevert(builder, mergeState.isRevert)
 		if headCommitAddrOff != 0 {
 			serial.MergeStateAddPreMergeHeadCommitAddr(builder, headCommitAddrOff)
+		}
+		if pendingHashesOff != 0 {
+			serial.MergeStateAddPendingCommitHashes(builder, pendingHashesOff)
 		}
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
@@ -165,6 +172,7 @@ func NewMergeState(
 	isCherryPick bool,
 	isRevert bool,
 	headCommit *Commit,
+	pendingRevertHashes []string,
 ) (*MergeState, error) {
 	ms := &MergeState{
 		preMergeWorkingAddr: new(hash.Hash),
@@ -173,6 +181,7 @@ func NewMergeState(
 		unmergableTables:    unmergableTables,
 		isCherryPick:        isCherryPick,
 		isRevert:            isRevert,
+		pendingRevertHashes: pendingRevertHashes,
 	}
 	*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
 	*ms.fromCommitAddr = commit.Addr()

@@ -116,14 +116,17 @@ func doDoltRevert(ctx *sql.Context, args []string) (string, int, int, int, error
 	}
 
 	var lastHash string
-	for _, commitHash := range resolvedHashes {
-		revertHash, mergeResult, err := revertpkg.Revert(ctx, commitHash, authorName, authorEmail, preRevertHeadCommit)
+	for i, commitHash := range resolvedHashes {
+		pendingHashes := resolvedHashes[i+1:]
+		revertHash, mergeResult, err := revertpkg.Revert(ctx, commitHash, authorName, authorEmail, preRevertHeadCommit, pendingHashes)
 		if err != nil {
 			return "", 0, 0, 0, err
 		}
 
 		if mergeResult != nil {
 			// Conflicts encountered – return counts so the caller can inform the user.
+			// The remaining hashes have already been stored in the merge state by Revert(),
+			// so --continue will pick them up automatically.
 			return "",
 				mergeResult.CountOfTablesWithDataConflicts(),
 				mergeResult.CountOfTablesWithSchemaConflicts(),

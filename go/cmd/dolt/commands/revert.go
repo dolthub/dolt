@@ -82,20 +82,12 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	if apr.Contains(cli.AbortParam) {
-		return revert(ctx, apr, cliCtx)
-	}
-
 	// This command creates a commit, so we need user identity.
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		return 1
 	}
 
-	if apr.Contains(cli.ContinueFlag) {
-		return revert(ctx, apr, cliCtx)
-	}
-
-	if apr.NArg() < 1 {
+	if apr.NArg() < 1 && !(apr.Contains(cli.ContinueFlag) || apr.Contains(cli.AbortParam)) {
 		usage()
 		return 1
 	}
@@ -112,7 +104,6 @@ func revert(ctx context.Context, apr *argparser.ArgParseResults, cliCtx cli.CliC
 
 	var params []interface{}
 	var buffer bytes.Buffer
-
 	if apr.Contains(cli.AbortParam) {
 		buffer.WriteString("CALL DOLT_REVERT('--abort')")
 	} else if apr.Contains(cli.ContinueFlag) {
@@ -176,9 +167,24 @@ func revert(ctx context.Context, apr *argparser.ArgParseResults, cliCtx cli.CliC
 	// Check conflict counts from the result row.
 	if len(rows) > 0 {
 		row := rows[0]
-		dataConflicts, _ := row[1].(int64)
-		schemaConflicts, _ := row[2].(int64)
-		constraintViolations, _ := row[3].(int64)
+		dataConflicts, err := cli.QueryValueAsInt64(row[1])
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+
+		schemaConflicts, err := cli.QueryValueAsInt64(row[2])
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+
+		constraintViolations, err := cli.QueryValueAsInt64(row[3])
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+
 		if dataConflicts > 0 || schemaConflicts > 0 || constraintViolations > 0 {
 			cli.Println("Automatic revert failed; fix conflicts and then commit the result.")
 			if dataConflicts > 0 {
