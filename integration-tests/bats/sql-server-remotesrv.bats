@@ -839,3 +839,46 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     [ "$status" -eq 0 ]
     [[ "$output" =~ "add rows via remotesapi push" ]] || false
 }
+
+# https://github.com/dolthub/dolt/issues/10807
+@test "sql-server-remotesrv: consecutive pushes succeed with ignored tables, but fail when remote has real uncommitted changes" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('tmp_*', true);"
+    dolt sql -q 'create table tmp_scratch (id int primary key);'  # ignored: in working but not staged
+    dolt add names dolt_ignore
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -eq 0 ]] || false
+
+    dolt sql -q 'insert into names values ("eve");'
+    dolt commit -am 'add eve'
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -eq 0 ]] || false
+    [[ ! "$output" =~ "target has uncommitted changes" ]] || false
+
+    # Add a real (non-ignored) uncommitted change to the remote; push must now fail.
+    dolt --port $PORT --host 127.0.0.1 -u $SQL_USER -p rootpass --no-tls --use-db remote sql -q "INSERT INTO names VALUES ('zeek');"
+
+    dolt sql -q 'insert into names values ("frank");'
+    dolt commit -am 'add frank'
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "target has uncommitted changes" ]] || false
+}
