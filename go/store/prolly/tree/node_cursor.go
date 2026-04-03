@@ -244,6 +244,32 @@ func searchForKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
 	}
 }
 
+// searchPastKey returns a SearchFn that finds the first index whose key is
+// strictly greater than |key|. This differs from searchForKey which finds the
+// first index whose key is greater than or equal to |key|.
+func searchPastKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
+	return func(ctx context.Context, nd *Node) (idx int) {
+		if nd.keys.IsEmpty() {
+			return 0
+		}
+		n := int(nd.Count())
+		// Define f(-1) == false and f(n) == true.
+		// Invariant: f(i-1) == false, f(j) == true.
+		i, j := 0, n
+		for i < j {
+			h := int(uint(i+j) >> 1) // avoid overflow when computing h
+			// Use strict less-than: find first index where key < GetKey(h)
+			less := order.Compare(ctx, key, K(nd.GetKey(h))) < 0
+			if !less {
+				i = h + 1
+			} else {
+				j = h
+			}
+		}
+		return i
+	}
+}
+
 type LeafSpan struct {
 	Leaves     []*Node
 	LocalStart int
@@ -332,6 +358,16 @@ func currentCursorItems(cur *cursor) (key, value Item) {
 // If a node does not contain the key, we recurse upwards to the parent cursor. If the
 // node contains a key, we recurse downwards into child nodes.
 func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, order O) (err error) {
+	return seek(ctx, cur, key, order, searchForKey[K, O])
+}
+
+// SeekPast positions the cursor at the first key strictly greater than |key|.
+// This is like Seek but skips past an exact match if one exists.
+func SeekPast[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, order O) (err error) {
+	return seek(ctx, cur, key, order, searchPastKey[K, O])
+}
+
+func seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, order O, searchFn func(K, O) SearchFn) (err error) {
 	inBounds := true
 	if cur.parent != nil {
 		inBounds = inBounds && order.Compare(ctx, key, K(cur.firstKey())) >= 0
@@ -340,7 +376,7 @@ func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, ord
 
 	if !inBounds {
 		// |item| is outside the bounds of |cur.nd|, search up the tree
-		err = Seek(ctx, cur.parent, key, order)
+		err = seek(ctx, cur.parent, key, order, searchFn)
 		if err != nil {
 			return err
 		}
@@ -353,7 +389,7 @@ func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, ord
 		}
 	}
 
-	cur.idx = searchForKey(key, order)(ctx, cur.nd)
+	cur.idx = searchFn(key, order)(ctx, cur.nd)
 
 	return
 }
