@@ -412,6 +412,19 @@ func (m prollySecondaryIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) 
 }
 
 func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
+	// Check if any indexed columns changed
+	changed := false
+	for to := range m.keyMap {
+		from := m.keyMap.MapOrdinal(to)
+		if oldRow[from] != newRow[from] {
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		return nil
+	}
+
 	oldKey, err := m.keyFromRow(ctx, oldRow)
 	if err != nil {
 		return err
