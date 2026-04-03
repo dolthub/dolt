@@ -82,20 +82,12 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	if apr.Contains(cli.AbortParam) {
-		return revert(ctx, apr, cliCtx)
-	}
-
 	// This command creates a commit, so we need user identity.
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		return 1
 	}
 
-	if apr.Contains(cli.ContinueFlag) {
-		return revert(ctx, apr, cliCtx)
-	}
-
-	if apr.NArg() < 1 {
+	if apr.NArg() < 1 && !(apr.Contains(cli.ContinueFlag) || apr.Contains(cli.AbortParam)) {
 		usage()
 		return 1
 	}
@@ -112,7 +104,6 @@ func revert(ctx context.Context, apr *argparser.ArgParseResults, cliCtx cli.CliC
 
 	var params []interface{}
 	var buffer bytes.Buffer
-
 	if apr.Contains(cli.AbortParam) {
 		buffer.WriteString("CALL DOLT_REVERT('--abort')")
 	} else if apr.Contains(cli.ContinueFlag) {

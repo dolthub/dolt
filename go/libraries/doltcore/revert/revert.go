@@ -373,6 +373,10 @@ func applySingleRevert(ctx *sql.Context, dbName string, doltSession *dsess.DoltS
 			WithWorkingRoot(ws.WorkingRoot()).
 			WithStagedRoot(ws.StagedRoot())
 
+		// When reverting multiple commits, this code will create one new
+		// commit for each commit being reverted. If we've already
+		// committed one, the transaction will be cleared out and we need
+		// to start a new one.
 		if doltSession.GetTransaction() == nil {
 			if _, err = doltSession.StartTransaction(ctx, sql.ReadWrite); err != nil {
 				return "", nil, err

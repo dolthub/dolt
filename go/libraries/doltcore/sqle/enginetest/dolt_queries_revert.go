@@ -137,7 +137,7 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// If a revert is aborted during a conflict, the set should be reset back to
+		// If a revert is aborted during a conflict, the branch should be reset back to
 		// before the revert, i.e. any commits created by revert should NOT be present.
 		Name: "dolt_revert() --abort restores pre-revert state",
 		SetUpScript: []string{

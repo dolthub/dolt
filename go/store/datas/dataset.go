@@ -219,7 +219,7 @@ type MergeState struct {
 	unmergableTables       []string   // slice of tables that can't be merged
 	isCherryPick           bool       // true if this merge is a chery pick
 	isRevert               bool       // true if this merge is a revert
-	pendingRevertHashes    []string   // remaining commit hashes to revert after resolving a conflict in a series
+	pendingRevertHashes    []string   // remaining commit hashes to process after resolving a conflict
 }
 
 func (ms *MergeState) PreMergeWorkingAddr() (hash.Hash, error) {
@@ -371,9 +371,9 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 			ret.MergeState.preMergeHeadCommitAddr = new(hash.Hash)
 			*ret.MergeState.preMergeHeadCommitAddr = hash.New(addrBytes)
 		}
-		ret.MergeState.pendingRevertHashes = make([]string, mergeState.PendingRevertHashesLength())
+		ret.MergeState.pendingRevertHashes = make([]string, mergeState.PendingCommitHashesLength())
 		for i := range ret.MergeState.pendingRevertHashes {
-			ret.MergeState.pendingRevertHashes[i] = string(mergeState.PendingRevertHashes(i))
+			ret.MergeState.pendingRevertHashes[i] = string(mergeState.PendingCommitHashes(i))
 		}
 	}
 

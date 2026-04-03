@@ -115,7 +115,7 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 			serial.MergeStateAddPreMergeHeadCommitAddr(builder, headCommitAddrOff)
 		}
 		if pendingHashesOff != 0 {
-			serial.MergeStateAddPendingRevertHashes(builder, pendingHashesOff)
+			serial.MergeStateAddPendingCommitHashes(builder, pendingHashesOff)
 		}
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
