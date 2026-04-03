@@ -103,14 +103,6 @@ func (tc *chunker[S]) processPrefix(ctx context.Context) (err error) {
 			tc.cur.CurrentKey(),
 			tc.cur.currentValue(),
 			sz)
-
-		// todo(andy): seek to correct chunk
-		//  currently when inserting tuples between chunks
-		//  we seek to the end of the previous chunk rather
-		//  than the beginning of the next chunk. This causes
-		//  us to iterate over the entire previous chunk
-		//assertFalse(ok)
-
 		if err != nil {
 			return err
 		}

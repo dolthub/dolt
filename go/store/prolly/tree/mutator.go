@@ -80,7 +80,19 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		return nil, err
 	}
 
-	chkr, err := newChunker(ctx, cur.clone(), 0, ns, serializer)
+	// If the cursor landed past the end of a chunk and there is a
+	// subsequent chunk, advance the clone to the start of that chunk.
+	// This lets processPrefix (in newChunker) handle the skipped chunk
+	// as a subtree reference at the parent level instead of copying
+	// every entry individually at the leaf level.
+	chkrCur := cur.clone()
+	if chkrCur.idx >= chkrCur.nd.Count() && chkrCur.parent != nil && chkrCur.parent.hasNext() {
+		if err = chkrCur.advance(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	chkr, err := newChunker(ctx, chkrCur, 0, ns, serializer)
 	if err != nil {
 		return nil, err
 	}
