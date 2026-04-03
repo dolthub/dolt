@@ -466,9 +466,17 @@ func checkoutNewBranch(
 		}
 	}
 
+	// Capture current roots before commitTransaction, which starts a new transaction and
+	// resets session state, causing GetRoots to return false afterwards.
+	sess := dsess.DSessFromSess(ctx.Session)
+	var currentRoots doltdb.Roots
+	var hasCurrentRoots bool
+	if !overwriteIgnore && !isMove {
+		currentRoots, hasCurrentRoots = sess.GetRoots(ctx, dbName)
+	}
+
 	// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction,
 	// and we are about to switch to it. So set the new branch head for the new transaction, then commit this one
-	sess := dsess.DSessFromSess(ctx.Session)
 	err = commitTransaction(ctx, sess, rsc)
 	if err != nil {
 		return "", "", err
@@ -480,6 +488,19 @@ func checkoutNewBranch(
 
 	if isMove {
 		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, newBranchName, apr.Contains(cli.ForceFlag), true, overwriteIgnore)
+	}
+
+	if !overwriteIgnore && hasCurrentRoots {
+		ddb, ok := sess.GetDoltDB(ctx, dbName)
+		if ok {
+			branchHead, err := actions.BranchHeadRoot(ctx, ddb, newBranchName)
+			if err != nil {
+				return "", "", err
+			}
+			if err := actions.CheckOverwrittenIgnoredTables(ctx, currentRoots, branchHead, overwriteIgnore); err != nil {
+				return "", "", err
+			}
+		}
 	}
 
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
