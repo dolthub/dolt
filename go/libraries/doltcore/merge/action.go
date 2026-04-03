@@ -184,7 +184,7 @@ func AbortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	}
 
 	// Revert the working set back to the pre-merge working root
-	workingSet = workingSet.WithStagedRoot(roots.Head).WithWorkingRoot(preMergeWorkingRoot).WithStagedRoot(roots.Head)
+	workingSet = workingSet.WithStagedRoot(roots.Head).WithWorkingRoot(preMergeWorkingRoot)
 	workingSet = workingSet.ClearMerge()
 
 	// Carry over any ignored tables (which could have been manually modified by a user while a merge was halted)

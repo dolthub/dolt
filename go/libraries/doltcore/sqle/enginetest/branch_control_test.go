@@ -373,7 +373,7 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 	},
 	{
 		Name:        "DOLT_REVERT",
-		Query:       "CALL DOLT_REVERT();",
+		Query:       "CALL DOLT_REVERT('HEAD');",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{

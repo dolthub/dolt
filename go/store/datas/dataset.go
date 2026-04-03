@@ -212,11 +212,14 @@ func (rs *RebaseState) SkipVerification(_ context.Context) bool {
 }
 
 type MergeState struct {
-	preMergeWorkingAddr *hash.Hash
-	fromCommitAddr      *hash.Hash
-	fromCommitSpec      string
-	unmergableTables    []string
-	isCherryPick        bool
+	preMergeWorkingAddr    *hash.Hash // the pre-merge working root hash
+	preMergeHeadCommitAddr *hash.Hash // the pre-merge HEAD commit hash
+	fromCommitAddr         *hash.Hash // the commit hash for the source of the merge
+	fromCommitSpec         string     // the commit string for the source of the merge
+	unmergableTables       []string   // slice of tables that can't be merged
+	isCherryPick           bool       // true if this merge is a chery pick
+	isRevert               bool       // true if this merge is a revert
+	pendingRevertHashes    []string   // remaining commit hashes to process after resolving a conflict
 }
 
 func (ms *MergeState) PreMergeWorkingAddr() (hash.Hash, error) {
@@ -235,8 +238,23 @@ func (ms *MergeState) IsCherryPick() (bool, error) {
 	return ms.isCherryPick, nil
 }
 
+func (ms *MergeState) IsRevert() (bool, error) {
+	return ms.isRevert, nil
+}
+
 func (ms *MergeState) UnmergableTables() ([]string, error) {
 	return ms.unmergableTables, nil
+}
+
+func (ms *MergeState) PreMergeHeadCommit(ctx context.Context, vr types.ValueReader) (*Commit, error) {
+	if ms.preMergeHeadCommitAddr == nil {
+		return nil, nil
+	}
+	return LoadCommitAddr(ctx, vr, *ms.preMergeHeadCommitAddr)
+}
+
+func (ms *MergeState) PendingRevertHashes() []string {
+	return ms.pendingRevertHashes
 }
 
 type dsHead interface {
@@ -348,6 +366,15 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 			ret.MergeState.unmergableTables[i] = string(mergeState.UnmergableTables(i))
 		}
 		ret.MergeState.isCherryPick = mergeState.IsCherryPick()
+		ret.MergeState.isRevert = mergeState.IsRevert()
+		if addrBytes := mergeState.PreMergeHeadCommitAddrBytes(); len(addrBytes) > 0 {
+			ret.MergeState.preMergeHeadCommitAddr = new(hash.Hash)
+			*ret.MergeState.preMergeHeadCommitAddr = hash.New(addrBytes)
+		}
+		ret.MergeState.pendingRevertHashes = make([]string, mergeState.PendingCommitHashesLength())
+		for i := range ret.MergeState.pendingRevertHashes {
+			ret.MergeState.pendingRevertHashes[i] = string(mergeState.PendingCommitHashes(i))
+		}
 	}
 
 	rebaseState, err := h.msg.TryRebaseState(nil)

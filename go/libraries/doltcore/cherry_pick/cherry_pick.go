@@ -73,7 +73,7 @@ func NewCherryPickOptions() CherryPickOptions {
 // was created (for example, when dropping an empty commit), then the first return parameter will be the empty string.
 // If the cherry-pick results in merge conflicts, the merge result is returned. If the operation is not successful for
 // any reason, then the error return parameter will be populated.
-func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (string, *merge.Result, error) {
+func CherryPick(ctx *sql.Context, commitString string, options CherryPickOptions) (string, *merge.Result, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	dbName := ctx.GetCurrentDatabase()
 
@@ -90,7 +90,12 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", nil, wsErr
 	}
 
-	mergeResult, commitMsg, originalCommit, err := cherryPick(ctx, doltSession, roots, dbName, commit, options.EmptyCommitHandling)
+	headCommit, err := doltSession.GetHeadCommit(ctx, dbName)
+	if err != nil {
+		return "", nil, err
+	}
+
+	mergeResult, commitMsg, commitToCherryPick, err := cherryPick(ctx, doltSession, roots, dbName, commitString, options.EmptyCommitHandling)
 	if err != nil {
 		return "", mergeResult, err
 	}
@@ -120,7 +125,7 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", mergeResult, nil
 	}
 
-	commitProps, err := CreateCommitStagedPropsFromCherryPickOptions(ctx, options, originalCommit)
+	commitProps, err := CreateCommitStagedPropsFromCherryPickOptions(ctx, options, commitToCherryPick)
 	if err != nil {
 		return "", nil, err
 	}
@@ -144,7 +149,7 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		// Returning nil error instead lets CommitTransaction persist the staged changes and merge
 		// state, so the user can fix the failing tests and --continue.
 		if actions.ErrCommitVerificationFailed.Is(err) {
-			newWs := preApplyWs.StartCherryPick(originalCommit, commit).
+			newWs := preApplyWs.StartCherryPick(headCommit, commitToCherryPick, commitString).
 				WithWorkingRoot(roots.Working).
 				WithStagedRoot(roots.Staged)
 			if wsErr := doltSession.SetWorkingSet(ctx, dbName, newWs); wsErr != nil {
@@ -523,7 +528,11 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		if err != nil {
 			return nil, "", nil, err
 		}
-		newWorkingSet := ws.StartCherryPick(cherryCommit, cherryStr)
+		headCommit, err := dSess.GetHeadCommit(ctx, dbName)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		newWorkingSet := ws.StartCherryPick(headCommit, cherryCommit, cherryStr)
 		err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
 		if err != nil {
 			return nil, "", nil, err

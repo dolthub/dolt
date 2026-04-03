@@ -35,11 +35,16 @@ var revertDocs = cli.CommandDocumentationContent{
 		"commits the result. This is done by way of a three-way merge. Given a specific commit " +
 		"(e.g. {{.EmphasisLeft}}HEAD~1{{.EmphasisRight}}), this is similar to applying the patch from " +
 		"{{.EmphasisLeft}}HEAD~1..HEAD~2{{.EmphasisRight}}, giving us a patch of what to remove to effectively remove the " +
-		"influence of the specified commit. If multiple commits are specified, then this process is repeated for each " +
-		"commit in the order specified. This requires a clean working set." +
-		"\n\nAny conflicts or constraint violations caused by the merge cause the command to fail.",
+		"influence of the specified commit. If multiple commits are specified, then each is reverted in the order given, " +
+		"creating a separate commit for each revert. This requires a clean working set." +
+		"\n\nIf conflicts or constraint violations are encountered during a revert, the operation pauses and leaves the " +
+		"conflicting state in the working set. Resolve the conflicts, stage the resolved tables with " +
+		"{{.EmphasisLeft}}dolt add{{.EmphasisRight}}, and then run {{.EmphasisLeft}}dolt revert --continue{{.EmphasisRight}} " +
+		"to complete the revert. To abandon the revert entirely, run {{.EmphasisLeft}}dolt revert --abort{{.EmphasisRight}}.",
 	Synopsis: []string{
 		"<revision>...",
+		"--continue",
+		"--abort",
 	},
 }
 
@@ -72,45 +77,70 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, revertDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	// This command creates a commit, so we need user identity
+	if apr.Contains(cli.AbortParam) && apr.Contains(cli.ContinueFlag) {
+		cli.Println("error: --continue and --abort are mutually exclusive")
+		return 1
+	}
+
+	// This command creates a commit, so we need user identity.
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		return 1
 	}
 
-	if apr.NArg() < 1 {
+	if apr.NArg() < 1 && !(apr.Contains(cli.ContinueFlag) || apr.Contains(cli.AbortParam)) {
 		usage()
 		return 1
 	}
 
+	return revert(ctx, apr, cliCtx)
+}
+
+func revert(ctx context.Context, apr *argparser.ArgParseResults, cliCtx cli.CliContext) int {
 	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
 
-	var author string
-	if apr.Contains(cli.AuthorParam) {
-		author, _ = apr.GetValue(cli.AuthorParam)
-	} else {
-		name, email, err := env.GetNameAndEmail(cliCtx.Config())
-		if err != nil {
-			cli.Println(err.Error())
-			return 1
-		}
-		author = fmt.Sprintf("%s <%s>", name, email)
-	}
-
 	var params []interface{}
-	params = append(params, author)
-
 	var buffer bytes.Buffer
-	buffer.WriteString("CALL DOLT_REVERT('--author', ?")
-	// Loop over args and add them to the query
-	for _, input := range apr.Args {
-		buffer.WriteString(", ?")
-		params = append(params, input)
+	if apr.Contains(cli.AbortParam) {
+		buffer.WriteString("CALL DOLT_REVERT('--abort')")
+	} else if apr.Contains(cli.ContinueFlag) {
+		var author string
+		if apr.Contains(cli.AuthorParam) {
+			author, _ = apr.GetValue(cli.AuthorParam)
+		} else {
+			name, email, err := env.GetNameAndEmail(cliCtx.Config())
+			if err != nil {
+				cli.Println(err.Error())
+				return 1
+			}
+			author = fmt.Sprintf("%s <%s>", name, email)
+		}
+		params = append(params, author)
+		buffer.WriteString("CALL DOLT_REVERT('--author', ?, '--continue')")
+	} else {
+		var author string
+		if apr.Contains(cli.AuthorParam) {
+			author, _ = apr.GetValue(cli.AuthorParam)
+		} else {
+			name, email, err := env.GetNameAndEmail(cliCtx.Config())
+			if err != nil {
+				cli.Println(err.Error())
+				return 1
+			}
+			author = fmt.Sprintf("%s <%s>", name, email)
+		}
+		params = append(params, author)
+		buffer.WriteString("CALL DOLT_REVERT('--author', ?")
+		for _, input := range apr.Args {
+			buffer.WriteString(", ?")
+			params = append(params, input)
+		}
+		buffer.WriteString(")")
 	}
-	buffer.WriteString(")")
+
 	query, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
 	if err != nil {
 		cli.Println(err.Error())
@@ -119,13 +149,57 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, query)
 	if err != nil {
-		cli.Printf("Failure to execute '%s': %s\n", query, err.Error())
+		cli.Printf("error: %s\n", err.Error())
 		return 1
 	}
-	_, err = sql.RowIterToRows(queryist.Context, rowIter)
+
+	rows, err := sql.RowIterToRows(queryist.Context, rowIter)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
+	}
+
+	if apr.Contains(cli.AbortParam) {
+		cli.Println("Revert aborted.")
+		return 0
+	}
+
+	// Check conflict counts from the result row.
+	if len(rows) > 0 {
+		row := rows[0]
+		dataConflicts, err := cli.QueryValueAsInt64(row[1])
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+
+		schemaConflicts, err := cli.QueryValueAsInt64(row[2])
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+
+		constraintViolations, err := cli.QueryValueAsInt64(row[3])
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+
+		if dataConflicts > 0 || schemaConflicts > 0 || constraintViolations > 0 {
+			cli.Println("Automatic revert failed; fix conflicts and then commit the result.")
+			if dataConflicts > 0 {
+				cli.Printf("  %d table(s) have data conflicts\n", dataConflicts)
+			}
+			if schemaConflicts > 0 {
+				cli.Printf("  %d table(s) have schema conflicts\n", schemaConflicts)
+			}
+			if constraintViolations > 0 {
+				cli.Printf("  %d table(s) have constraint violations\n", constraintViolations)
+			}
+			cli.Println(`hint: After resolving conflicts, mark them with "dolt add <table>"`)
+			cli.Println(`hint: and run "dolt revert --continue". To abort, run "dolt revert --abort".`)
+			return 1
+		}
 	}
 
 	commit, err := getCommitInfo(queryist.Context, queryist.Queryist, "HEAD")
