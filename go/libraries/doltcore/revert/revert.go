@@ -60,11 +60,6 @@ func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail stri
 		return "", nil, ErrRevertUncommittedChanges
 	}
 
-	tableResolver, err := dsess.GetTableResolver(ctx, dbName)
-	if err != nil {
-		return "", nil, err
-	}
-
 	ddb, ok := doltSession.GetDoltDB(ctx, dbName)
 	if !ok {
 		return "", nil, fmt.Errorf("failed to get dolt database")
@@ -84,77 +79,13 @@ func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail stri
 	if err != nil {
 		return "", nil, err
 	}
+
 	commit, ok := optCmt.ToCommit()
 	if !ok {
 		return "", nil, doltdb.ErrGhostCommitEncountered
 	}
 
-	dbState, ok, err := doltSession.LookupDbState(ctx, dbName)
-	if err != nil {
-		return "", nil, err
-	} else if !ok {
-		return "", nil, fmt.Errorf("could not load database state for %s", dbName)
-	}
-
-	// Capture the pre-revert working set BEFORE making any changes, so that
-	// AbortRevert can restore the correct clean state if the user calls --abort.
-	preRevertWs, err := doltSession.WorkingSet(ctx, dbName)
-	if err != nil {
-		return "", nil, err
-	}
-
-	mergeResult, revertMessage, err := revertCommit(ctx, tableResolver, ddb, roots.Working, commit, dbState.EditOpts())
-	if err != nil {
-		return "", nil, err
-	}
-
-	err = doltSession.SetWorkingRoot(ctx, dbName, mergeResult.Root)
-	if err != nil {
-		return "", nil, err
-	}
-
-	err = stageRevertedTables(ctx, mergeResult.Stats)
-	if err != nil {
-		return "", nil, err
-	}
-
-	if mergeResult.HasMergeArtifacts() {
-		// Get the working set after staging, then rebuild it using the pre-revert
-		// base so that preMergeWorking correctly captures the clean pre-revert root.
-		ws, err := doltSession.WorkingSet(ctx, dbName)
-		if err != nil {
-			return "", nil, err
-		}
-		newWs := preRevertWs.StartRevert(seriesHeadCommit, commit, commitSpecStr, pendingHashes).
-			WithWorkingRoot(ws.WorkingRoot()).
-			WithStagedRoot(ws.StagedRoot())
-
-		// StartTransaction must be called BEFORE SetWorkingSet. StartTransaction
-		// calls d.clear() which wipes in-memory session state, so any working set
-		// changes applied before it would be lost.
-		if doltSession.GetTransaction() == nil {
-			if _, err = doltSession.StartTransaction(ctx, sql.ReadWrite); err != nil {
-				return "", nil, err
-			}
-		}
-
-		if err = doltSession.SetWorkingSet(ctx, dbName, newWs); err != nil {
-			return "", nil, err
-		}
-
-		if err = commitWithConflictsAllowed(ctx, doltSession); err != nil {
-			return "", nil, err
-		}
-
-		return "", mergeResult, nil
-	}
-
-	commitHash, err := createRevertCommit(ctx, dbName, doltSession, revertMessage, authorName, authorEmail)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return commitHash, nil, nil
+	return applySingleRevert(ctx, dbName, doltSession, commit, commitSpecStr, seriesHeadCommit, pendingHashes, authorName, authorEmail)
 }
 
 // ContinueRevert continues an in-progress revert after conflicts have been resolved. It checks that all conflicts
@@ -212,11 +143,11 @@ func ContinueRevert(ctx *sql.Context, dbName string, authorName, authorEmail str
 		return "", 0, 0, 0, fmt.Errorf("error: cannot continue revert with unstaged changes")
 	}
 
-	revertCommit := ws.MergeState().Commit()
-	if revertCommit == nil {
+	revertedCommit := ws.MergeState().Commit()
+	if revertedCommit == nil {
 		return "", 0, 0, 0, fmt.Errorf("error: unable to get original commit from merge state")
 	}
-	revertMeta, err := revertCommit.GetCommitMeta(ctx)
+	revertMeta, err := revertedCommit.GetCommitMeta(ctx)
 	if err != nil {
 		return "", 0, 0, 0, fmt.Errorf("error: unable to get commit metadata: %w", err)
 	}
@@ -275,13 +206,39 @@ func ContinueRevert(ctx *sql.Context, dbName string, authorName, authorEmail str
 		return "", 0, 0, 0, fmt.Errorf("error: failed to get commit hash: %w", err)
 	}
 
-	commitHash := h.String()
+	lastHash := h.String()
 
-	// If there are remaining commits in the series, apply the next one automatically.
-	if len(pendingHashes) > 0 {
+	// Apply any remaining commits in the series, stopping at the first conflict.
+	ddb, ok := doltSession.GetDoltDB(ctx, dbName)
+	if !ok {
+		return "", 0, 0, 0, fmt.Errorf("failed to get dolt database")
+	}
+
+	for len(pendingHashes) > 0 {
 		nextHash := pendingHashes[0]
-		remaining := pendingHashes[1:]
-		nextCommitHash, mergeResult, err := revertNextInSeries(ctx, dbName, doltSession, nextHash, remaining, preMergeHeadCommit, authorName, authorEmail)
+		pendingHashes = pendingHashes[1:]
+
+		commitSpec, err := doltdb.NewCommitSpec(nextHash)
+		if err != nil {
+			return "", 0, 0, 0, err
+		}
+
+		headRef, err := doltSession.CWBHeadRef(ctx, dbName)
+		if err != nil {
+			return "", 0, 0, 0, err
+		}
+
+		optCmt, err := ddb.Resolve(ctx, commitSpec, headRef)
+		if err != nil {
+			return "", 0, 0, 0, err
+		}
+
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return "", 0, 0, 0, doltdb.ErrGhostCommitEncountered
+		}
+
+		nextCommitHash, mergeResult, err := applySingleRevert(ctx, dbName, doltSession, commit, nextHash, preMergeHeadCommit, pendingHashes, authorName, authorEmail)
 		if err != nil {
 			return "", 0, 0, 0, err
 		}
@@ -292,10 +249,10 @@ func ContinueRevert(ctx *sql.Context, dbName string, authorName, authorEmail str
 				mergeResult.CountOfTablesWithConstraintViolations(),
 				nil
 		}
-		return nextCommitHash, 0, 0, 0, nil
+		lastHash = nextCommitHash
 	}
 
-	return commitHash, 0, 0, 0, nil
+	return lastHash, 0, 0, 0, nil
 }
 
 // AbortRevert aborts an in-progress revert, restoring the working set and branch HEAD to their pre-revert state.
@@ -347,6 +304,98 @@ func AbortRevert(ctx *sql.Context, dbName string) error {
 	}
 
 	return nil
+}
+
+// applySingleRevert applies the inverse changes of |commit| to the current working set.
+// On conflict, the merge state is saved (with |commitIdentifier|, |seriesHeadCommit|, and
+// |pendingHashes|) and (empty string, non-nil mergeResult, nil) is returned so the caller
+// can report conflict counts. On success, a new revert commit is created and its hash returned.
+//
+// |commitIdentifier| is stored in the merge state to identify the commit being reverted (the
+// original spec string on the first pass, or the stable hash on subsequent passes).
+// |seriesHeadCommit| is the HEAD at the start of the entire revert series, preserved across
+// --continue calls so --abort can always restore to the correct starting point.
+// |pendingHashes| are the remaining hashes in the series, stored so --continue can resume them.
+func applySingleRevert(ctx *sql.Context, dbName string, doltSession *dsess.DoltSession,
+	commit *doltdb.Commit, commitIdentifier string, seriesHeadCommit *doltdb.Commit,
+	pendingHashes []string, authorName, authorEmail string) (string, *merge.Result, error) {
+
+	tableResolver, err := dsess.GetTableResolver(ctx, dbName)
+	if err != nil {
+		return "", nil, err
+	}
+
+	ddb, ok := doltSession.GetDoltDB(ctx, dbName)
+	if !ok {
+		return "", nil, fmt.Errorf("failed to get dolt database")
+	}
+
+	dbState, ok, err := doltSession.LookupDbState(ctx, dbName)
+	if err != nil {
+		return "", nil, err
+	} else if !ok {
+		return "", nil, fmt.Errorf("could not load database state for %s", dbName)
+	}
+
+	roots, ok := doltSession.GetRoots(ctx, dbName)
+	if !ok {
+		return "", nil, fmt.Errorf("failed to get roots for current session")
+	}
+
+	// Capture the pre-revert working set BEFORE making any changes, so that
+	// StartRevert can record it as preMergeWorking for --abort to restore from.
+	preRevertWs, err := doltSession.WorkingSet(ctx, dbName)
+	if err != nil {
+		return "", nil, err
+	}
+
+	mergeResult, revertMessage, err := revertCommit(ctx, tableResolver, ddb, roots.Working, commit, dbState.EditOpts())
+	if err != nil {
+		return "", nil, err
+	}
+
+	if err = doltSession.SetWorkingRoot(ctx, dbName, mergeResult.Root); err != nil {
+		return "", nil, err
+	}
+
+	if err = stageRevertedTables(ctx, mergeResult.Stats); err != nil {
+		return "", nil, err
+	}
+
+	if mergeResult.HasMergeArtifacts() {
+		// Get the working set after staging, then rebuild it using the pre-revert
+		// base so that preMergeWorking correctly captures the clean pre-revert root.
+		ws, err := doltSession.WorkingSet(ctx, dbName)
+		if err != nil {
+			return "", nil, err
+		}
+		newWs := preRevertWs.StartRevert(seriesHeadCommit, commit, commitIdentifier, pendingHashes).
+			WithWorkingRoot(ws.WorkingRoot()).
+			WithStagedRoot(ws.StagedRoot())
+
+		if doltSession.GetTransaction() == nil {
+			if _, err = doltSession.StartTransaction(ctx, sql.ReadWrite); err != nil {
+				return "", nil, err
+			}
+		}
+
+		if err = doltSession.SetWorkingSet(ctx, dbName, newWs); err != nil {
+			return "", nil, err
+		}
+
+		if err = commitWithConflictsAllowed(ctx, doltSession); err != nil {
+			return "", nil, err
+		}
+
+		return "", mergeResult, nil
+	}
+
+	commitHash, err := createRevertCommit(ctx, dbName, doltSession, revertMessage, authorName, authorEmail)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return commitHash, nil, nil
 }
 
 // createRevertCommit commits the current staged root with the given revert message and author info.
@@ -448,116 +497,6 @@ func commitWithConflictsAllowed(ctx *sql.Context, doltSession *dsess.DoltSession
 	ctx.SetSessionVariable(ctx, dsess.ForceTransactionCommit, oldForceCommit)
 
 	return commitErr
-}
-
-// revertNextInSeries applies the revert for |commitHash| (the next commit in a multi-commit series) after a
-// previous conflict in the series has been resolved via --continue. |remaining| contains any further commits
-// after |commitHash| that still need to be applied. |seriesHeadCommit| is the pre-series HEAD commit carried
-// forward from the original merge state (used so --abort can always restore to the correct starting point).
-//
-// If a conflict is encountered, the merge state is updated with the conflicted commit and the remaining hashes,
-// and a non-nil merge.Result is returned. On success, either the commit hash of this revert is returned, or
-// (if |remaining| is non-empty) the hash of the last clean revert in the chain is returned.
-func revertNextInSeries(ctx *sql.Context, dbName string, doltSession *dsess.DoltSession, commitHash string, remaining []string, seriesHeadCommit *doltdb.Commit, authorName, authorEmail string) (string, *merge.Result, error) {
-	tableResolver, err := dsess.GetTableResolver(ctx, dbName)
-	if err != nil {
-		return "", nil, err
-	}
-
-	ddb, ok := doltSession.GetDoltDB(ctx, dbName)
-	if !ok {
-		return "", nil, fmt.Errorf("failed to get dolt database")
-	}
-
-	commitSpec, err := doltdb.NewCommitSpec(commitHash)
-	if err != nil {
-		return "", nil, err
-	}
-
-	headRef, err := doltSession.CWBHeadRef(ctx, dbName)
-	if err != nil {
-		return "", nil, err
-	}
-
-	optCmt, err := ddb.Resolve(ctx, commitSpec, headRef)
-	if err != nil {
-		return "", nil, err
-	}
-	commit, ok := optCmt.ToCommit()
-	if !ok {
-		return "", nil, doltdb.ErrGhostCommitEncountered
-	}
-
-	dbState, ok, err := doltSession.LookupDbState(ctx, dbName)
-	if err != nil {
-		return "", nil, err
-	} else if !ok {
-		return "", nil, fmt.Errorf("could not load database state for %s", dbName)
-	}
-
-	roots, ok := doltSession.GetRoots(ctx, dbName)
-	if !ok {
-		return "", nil, fmt.Errorf("failed to get roots for current session")
-	}
-
-	// Capture the pre-revert working set so StartRevert can store the clean pre-merge root.
-	preRevertWs, err := doltSession.WorkingSet(ctx, dbName)
-	if err != nil {
-		return "", nil, err
-	}
-
-	mergeResult, revertMessage, err := revertCommit(ctx, tableResolver, ddb, roots.Working, commit, dbState.EditOpts())
-	if err != nil {
-		return "", nil, err
-	}
-
-	if err = doltSession.SetWorkingRoot(ctx, dbName, mergeResult.Root); err != nil {
-		return "", nil, err
-	}
-
-	if err = stageRevertedTables(ctx, mergeResult.Stats); err != nil {
-		return "", nil, err
-	}
-
-	if mergeResult.HasMergeArtifacts() {
-		ws, err := doltSession.WorkingSet(ctx, dbName)
-		if err != nil {
-			return "", nil, err
-		}
-		newWs := preRevertWs.StartRevert(seriesHeadCommit, commit, commitHash, remaining).
-			WithWorkingRoot(ws.WorkingRoot()).
-			WithStagedRoot(ws.StagedRoot())
-
-		if doltSession.GetTransaction() == nil {
-			if _, err = doltSession.StartTransaction(ctx, sql.ReadWrite); err != nil {
-				return "", nil, err
-			}
-		}
-
-		if err = doltSession.SetWorkingSet(ctx, dbName, newWs); err != nil {
-			return "", nil, err
-		}
-
-		if err = commitWithConflictsAllowed(ctx, doltSession); err != nil {
-			return "", nil, err
-		}
-
-		return "", mergeResult, nil
-	}
-
-	commitHashStr, err := createRevertCommit(ctx, dbName, doltSession, revertMessage, authorName, authorEmail)
-	if err != nil {
-		return "", nil, err
-	}
-
-	// Recursively apply the rest of the series.
-	if len(remaining) > 0 {
-		nextHash := remaining[0]
-		nextRemaining := remaining[1:]
-		return revertNextInSeries(ctx, dbName, doltSession, nextHash, nextRemaining, seriesHeadCommit, authorName, authorEmail)
-	}
-
-	return commitHashStr, nil, nil
 }
 
 // revertCommit performs a merge that undoes the changes introduced by |commit|.
