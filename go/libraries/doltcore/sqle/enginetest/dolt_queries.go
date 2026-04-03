@@ -3749,6 +3749,52 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_checkout -b with --no-overwrite-ignore aborts when ignored table differs at start point",
+		SetUpScript: []string{
+			"create table ignored_tbl (pk int primary key, val int);",
+			"insert into ignored_tbl values (1, 100);",
+			"insert into dolt_ignore values ('ignored_tbl', true);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'add ignored table on main', '--force');",
+			"insert into ignored_tbl values (2, 200);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'modify ignored table', '--force');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_checkout('-b', 'newbranch', '--no-overwrite-ignore', 'HEAD~1');",
+				ExpectedErr: actions.ErrCheckoutWouldOverwriteIgnoredTables,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout -b with --overwrite-ignore succeeds when ignored table differs at start point",
+		SetUpScript: []string{
+			"create table ignored_tbl (pk int primary key, val int);",
+			"insert into ignored_tbl values (1, 100);",
+			"insert into dolt_ignore values ('ignored_tbl', true);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'add ignored table on main', '--force');",
+			"insert into ignored_tbl values (2, 200);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'modify ignored table', '--force');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_checkout('-b', 'newbranch', '--overwrite-ignore', 'HEAD~1');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"newbranch"}},
+			},
+		},
+	},
+	{
 		Name: "dolt_checkout default behavior overwrites ignored tables",
 		SetUpScript: []string{
 			"create table ignored_tbl (pk int primary key, val int);",
