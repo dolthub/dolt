@@ -885,10 +885,12 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 	return ddb.CommitWithParentSpecs(ctx, valHash, dref, nil, cm)
 }
 
-// FastForwardWithWorkspaceCheck will perform a fast forward update of the branch given to the commit given, but only
-// if the working set is in sync with the head of the branch given. This is used in the course of pushing to a remote.
-// If the target doesn't currently have the working set ref, then no working set change will be made.
-func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
+// FastForwardWithWorkspaceCheck performs a fast-forward of |branch| to |commit| only if the remote
+// working set is in sync with its HEAD, then updates the working set to match the new HEAD.
+// This is used when pushing to a remote. If the remote does not maintain a working set, no working
+// set update is performed.
+// When |allowDirtyWorking| is true, the working set may have unstaged changes, such as ignored tables.
+func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, commit *Commit, allowDirtyWorking bool) error {
 	ds, err := ddb.db.GetDataset(ctx, branch.String())
 	if err != nil {
 		return err
@@ -909,7 +911,7 @@ func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref
 		ws = wsRef.String()
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, addr, ws)
+	_, err = ddb.db.FastForward(ctx, ds, addr, ws, allowDirtyWorking)
 
 	return err
 }
@@ -931,7 +933,7 @@ func (ddb *DoltDB) FastForwardToHash(ctx context.Context, branch ref.DoltRef, ha
 		return err
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, hash, "")
+	_, err = ddb.db.FastForward(ctx, ds, hash, "", false)
 
 	return err
 }
