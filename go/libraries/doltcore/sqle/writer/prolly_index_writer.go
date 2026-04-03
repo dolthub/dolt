@@ -411,17 +411,19 @@ func (m prollySecondaryIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) 
 	return m.mut.Delete(ctx, k)
 }
 
-func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
-	// Check if any indexed columns changed
-	changed := false
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
+func isNoopUpdate(oldRow, newRow sql.Row, keyMap val.OrdinalMapping) bool {
+	for to := range keyMap {
+		from := keyMap.MapOrdinal(to)
 		if oldRow[from] != newRow[from] {
-			changed = true
-			break
+			return false
 		}
 	}
-	if !changed {
+	return true
+}
+
+func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
+	// If no indexed columns are modified, no need to delete and update
+	if isNoopUpdate(oldRow, newRow, m.keyMap) {
 		return nil
 	}
 
@@ -430,8 +432,6 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 		return err
 	}
 
-	// todo(andy): we can skip building, deleting |oldKey|
-	//  if we know the key fields are unchanged
 	if err := m.mut.Delete(ctx, oldKey); err != nil {
 		return err
 	}
