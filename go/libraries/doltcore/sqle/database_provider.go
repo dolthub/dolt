@@ -150,7 +150,11 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 
 	dbs := make(map[string]dsess.SqlDatabase, len(databases))
 	for _, db := range databases {
-		dbs[strings.ToLower(db.Name())] = db
+		dbNameLower := strings.ToLower(db.Name())
+		if _, exists := dbs[dbNameLower]; exists {
+			cli.Printf("warning: duplicate database name '%s' found. Only one will be accessible. Consider renaming databases to avoid conflicts.\n", db.Name())
+		}
+		dbs[dbNameLower] = db
 	}
 
 	dbLocations := make(map[string]filesys.Filesys, len(locations))
