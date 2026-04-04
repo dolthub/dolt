@@ -230,6 +230,10 @@ func runMain() int {
 
 	start := time.Now()
 
+	// Configure GOMEMLIMIT from DOLT_GOMEMLIMIT env var or cgroup auto-detection.
+	// This must happen early, before significant allocations.
+	configureMemoryLimit()
+
 	// Dolt must never block on interactive git credential prompts. Enforce a
 	// non-interactive git policy for the entire process (CLI + sql-server).
 	gitauth.DisableInteractivePrompts()

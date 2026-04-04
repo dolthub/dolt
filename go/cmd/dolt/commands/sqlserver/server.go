@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -118,6 +119,17 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(ValidateConfigStep)
+
+	if memLimit := cfg.ServerConfig.MaxGoMemory(); memLimit > 0 {
+		ApplyMemoryLimit := &svcs.AnonService{
+			InitF: func(context.Context) error {
+				prev := debug.SetMemoryLimit(memLimit)
+				logrus.Infof("GOMEMLIMIT set to %d bytes via server config max_go_memory (previous: %d)", memLimit, prev)
+				return nil
+			},
+		}
+		controller.Register(ApplyMemoryLimit)
+	}
 
 	lgr := logrus.StandardLogger()
 	lgr.SetOutput(cli.CliErr)

@@ -604,6 +604,10 @@ func (cfg *commandLineServerConfig) AutoGCBehavior() servercfg.AutoGCBehavior {
 	return stubAutoGCBehavior{}
 }
 
+func (cfg *commandLineServerConfig) MaxGoMemory() int64 {
+	return 0
+}
+
 func (cfg *commandLineServerConfig) Overrides() sql.EngineOverrides {
 	return sql.EngineOverrides{}
 }
