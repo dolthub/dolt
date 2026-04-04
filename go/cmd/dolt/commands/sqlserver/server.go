@@ -169,6 +169,21 @@ func ConfigureServices(
 	}
 	controller.Register(InitLogging)
 
+	if cfg.ServerConfig.PprofServer() {
+		pprofService := &svcs.AnonService{
+			InitF: func(context.Context) error {
+				go func() {
+					logrus.Info("Starting pprof server on port 6060")
+					if err := http.ListenAndServe("0.0.0.0:6060", nil); err != nil {
+						logrus.WithError(err).Warn("pprof server exited with error")
+					}
+				}()
+				return nil
+			},
+		}
+		controller.Register(pprofService)
+	}
+
 	controller.Register(newHeartbeatService(cfg.Version, cfg.DoltEnv))
 
 	fs := cfg.DoltEnv.FS

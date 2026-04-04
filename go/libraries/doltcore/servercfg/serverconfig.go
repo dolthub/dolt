@@ -249,6 +249,8 @@ type ServerConfig interface {
 	ValueSet(value string) bool
 	// AutoGCBehavior defines parameters around how auto-GC works for the running server.
 	AutoGCBehavior() AutoGCBehavior
+	// PprofServer returns whether the pprof HTTP server should be started on port 6060.
+	PprofServer() bool
 	// Overrides returns any overrides that are defined. This is primarily used by Doltgres.
 	Overrides() sql.EngineOverrides
 }
@@ -378,6 +380,7 @@ const (
 	RemotesapiReadOnlyKey             = "remotesapi_read_only"
 	ClusterConfigKey                  = "cluster_config"
 	EventSchedulerKey                 = "event_scheduler"
+	PprofServerKey                    = "pprof_server"
 )
 
 type SystemVariableTarget interface {

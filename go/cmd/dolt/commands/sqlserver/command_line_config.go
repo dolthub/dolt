@@ -600,6 +600,10 @@ func (cfg *commandLineServerConfig) ValueSet(value string) bool {
 	return ok
 }
 
+func (cfg *commandLineServerConfig) PprofServer() bool {
+	return false
+}
+
 func (cfg *commandLineServerConfig) AutoGCBehavior() servercfg.AutoGCBehavior {
 	return stubAutoGCBehavior{}
 }

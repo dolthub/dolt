@@ -71,6 +71,8 @@ type BehaviorYAMLConfig struct {
 	AutoGCBehavior *AutoGCBehaviorYAMLConfig `yaml:"auto_gc_behavior,omitempty" minver:"1.50.0"`
 
 	BranchActivityTracking *bool `yaml:"branch_activity_tracking,omitempty" minver:"1.77.0"`
+
+	PprofServer *bool `yaml:"pprof_server,omitempty" minver:"TBD"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -223,6 +225,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			BranchActivityTracking:       ptr(cfg.BranchActivityTracking()),
 			EventSchedulerStatus:         ptr(cfg.EventSchedulerStatus()),
 			AutoGCBehavior:               autoGCBehavior,
+			PprofServer:                  nillableBoolPtr(cfg.PprofServer()),
 		},
 		ListenerConfig: ListenerYAMLConfig{
 			HostStr:                 ptr(cfg.Host()),
@@ -301,6 +304,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			DoltTransactionCommit:        zeroIf(ptr(cfg.DoltTransactionCommit()), !cfg.ValueSet(DoltTransactionCommitKey)),
 			BranchActivityTracking:       zeroIf(ptr(cfg.BranchActivityTracking()), !cfg.ValueSet(BranchActivityTrackingKey)),
 			EventSchedulerStatus:         zeroIf(ptr(cfg.EventSchedulerStatus()), !cfg.ValueSet(EventSchedulerKey)),
+			PprofServer:                  zeroIf(ptr(cfg.PprofServer()), !cfg.ValueSet(PprofServerKey)),
 		},
 		ListenerConfig: ListenerYAMLConfig{
 			HostStr:                 zeroIf(ptr(cfg.Host()), !cfg.ValueSet(HostKey)),
@@ -403,6 +407,9 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 	}
 	if withPlaceholders.BehaviorConfig.EventSchedulerStatus == nil {
 		withPlaceholders.BehaviorConfig.EventSchedulerStatus = ptr("OFF")
+	}
+	if withPlaceholders.BehaviorConfig.PprofServer == nil {
+		withPlaceholders.BehaviorConfig.PprofServer = ptr(false)
 	}
 
 	if withPlaceholders.ListenerConfig.TLSKey == nil {
@@ -709,6 +716,15 @@ func (cfg YAMLConfig) BranchActivityTracking() bool {
 	}
 
 	return *cfg.BehaviorConfig.BranchActivityTracking
+}
+
+// PprofServer returns whether the pprof HTTP server should be started on port 6060.
+func (cfg YAMLConfig) PprofServer() bool {
+	if cfg.BehaviorConfig.PprofServer == nil {
+		return false
+	}
+
+	return *cfg.BehaviorConfig.PprofServer
 }
 
 // LogLevel returns the level of logging that the server will use.
@@ -1136,6 +1152,8 @@ func (cfg YAMLConfig) ValueSet(value string) bool {
 		return cfg.ListenerConfig.MaxConnectionsTimeoutMs != nil
 	case EventSchedulerKey:
 		return cfg.BehaviorConfig.EventSchedulerStatus != nil
+	case PprofServerKey:
+		return cfg.BehaviorConfig.PprofServer != nil
 	}
 	return false
 }
