@@ -17,6 +17,8 @@ package tree
 import (
 	"bytes"
 	"context"
+	"os"
+	"strconv"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -27,9 +29,19 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-const (
+var (
+	// cacheSize is the maximum size in bytes for the prolly tree node cache.
+	// Defaults to 256 MiB; overridable via DOLT_NODE_CACHE_SIZE env var.
 	cacheSize = 256 * 1024 * 1024
 )
+
+func init() {
+	if v := os.Getenv("DOLT_NODE_CACHE_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cacheSize = n
+		}
+	}
+}
 
 // NodeStore reads and writes prolly tree Nodes.
 type NodeStore interface {
