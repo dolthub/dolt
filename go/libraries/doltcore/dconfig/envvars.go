@@ -54,4 +54,7 @@ const (
 	// Used for tests. If set, Dolt will error if it would rebuild a table's row data.
 	EnvAssertNoTableRewrite         = "DOLT_TEST_ASSERT_NO_TABLE_REWRITE"
 	EnvAssertNoInMemoryArchiveIndex = "DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX"
+
+	// EnvMemTableSize overrides the default write buffer (memtable) size in bytes.
+	EnvMemTableSize = "DOLT_MEMTABLE_SIZE"
 )

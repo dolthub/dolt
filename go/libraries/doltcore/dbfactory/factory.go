@@ -18,8 +18,11 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -65,9 +68,18 @@ const (
 	GitHTTPSScheme = "git+https"
 	GitSSHScheme   = "git+ssh"
 
-	defaultScheme       = HTTPSScheme
-	defaultMemTableSize = 256 * 1024 * 1024
+	defaultScheme = HTTPSScheme
 )
+
+var defaultMemTableSize uint64 = 256 * 1024 * 1024
+
+func init() {
+	if v := os.Getenv(dconfig.EnvMemTableSize); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil && n > 0 {
+			defaultMemTableSize = n
+		}
+	}
+}
 
 // DBFactory is an interface for creating concrete datas.Database instances from different backing stores
 type DBFactory interface {
