@@ -109,6 +109,9 @@ type ListenerYAMLConfig struct {
 type PerformanceYAMLConfig struct {
 	// QueryParallelism is deprecated but still present to prevent breaking YAML config that still uses it
 	QueryParallelism *int `yaml:"query_parallelism,omitempty"`
+	// GoMemoryLimitBytes sets GOMEMLIMIT via runtime/debug.SetMemoryLimit at server startup.
+	// Accepts a byte count. When set, this overrides DOLT_GOMEMLIMIT and cgroup auto-detection.
+	GoMemoryLimitBytes *int64 `yaml:"max_go_memory,omitempty" minver:"1.80.0"`
 }
 
 type MetricsYAMLConfig struct {
@@ -210,6 +213,10 @@ func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
 func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 	systemVars := cfg.SystemVars()
 	autoGCBehavior := toAutoGCBehaviorYAML(cfg.AutoGCBehavior())
+	var perfCfg *PerformanceYAMLConfig
+	if m := cfg.MaxGoMemory(); m > 0 {
+		perfCfg = &PerformanceYAMLConfig{GoMemoryLimitBytes: ptr(m)}
+	}
 	return &YAMLConfig{
 		LogLevelStr:       ptr(string(cfg.LogLevel())),
 		LogFormatStr:      ptr(string(cfg.LogFormat())),
@@ -238,8 +245,9 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			AllowCleartextPasswords: nillableBoolPtr(cfg.AllowCleartextPasswords()),
 			Socket:                  nillableStrPtr(cfg.Socket()),
 		},
-		DataDirStr: ptr(cfg.DataDir()),
-		CfgDirStr:  ptr(cfg.CfgDir()),
+		PerformanceConfig: perfCfg,
+		DataDirStr:        ptr(cfg.DataDir()),
+		CfgDirStr:         ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
 			Labels:                  cfg.MetricsLabels(),
 			Host:                    nillableStrPtr(cfg.MetricsHost()),
@@ -1038,6 +1046,13 @@ func (cfg YAMLConfig) EventSchedulerStatus() string {
 	default:
 		return strings.ToUpper(*cfg.BehaviorConfig.EventSchedulerStatus)
 	}
+}
+
+func (cfg YAMLConfig) MaxGoMemory() int64 {
+	if cfg.PerformanceConfig != nil && cfg.PerformanceConfig.GoMemoryLimitBytes != nil {
+		return *cfg.PerformanceConfig.GoMemoryLimitBytes
+	}
+	return 0
 }
 
 func (cfg YAMLConfig) Overrides() sql.EngineOverrides {

@@ -36,6 +36,7 @@ ListenerConfig servercfg.ListenerYAMLConfig 0.0.0 listener,omitempty
 -Socket *string 0.0.0 socket,omitempty
 PerformanceConfig *servercfg.PerformanceYAMLConfig 0.0.0 performance,omitempty
 -QueryParallelism *int 0.0.0 query_parallelism,omitempty
+-GoMemoryLimitBytes *int64 1.80.0 max_go_memory,omitempty
 DataDirStr *string 0.0.0 data_dir,omitempty
 CfgDirStr *string 0.0.0 cfg_dir,omitempty
 RemotesapiConfig servercfg.RemotesapiYAMLConfig 0.0.0 remotesapi,omitempty
