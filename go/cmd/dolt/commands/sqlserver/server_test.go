@@ -642,6 +642,7 @@ func TestGenerateYamlConfig(t *testing.T) {
   # auto_gc_behavior:
     # enable: true
     # archive_level: 1
+  # pprof_server: false
 
 listener:
   # host: localhost
