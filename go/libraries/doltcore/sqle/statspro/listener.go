@@ -282,14 +282,7 @@ func (sc *StatsController) Close() {
 		}
 	}
 
-	// If we're using a prolly-backed stats store, it owns a DoltDB with its own filesystem locks.
-	// Close it best-effort on shutdown so embedded callers can reopen without contention.
-	if ps, ok := kv.(*prollyStats); ok && ps != nil && ps.destDb != nil {
-		for _, ddb := range ps.destDb.DoltDatabases() {
-			if ddb != nil {
-				_ = ddb.Close()
-			}
-		}
-	}
-	return
+	// Close the KV's underlying DoltDB (if any) so embedded callers can reopen
+	// without contention on filesystem locks.
+	kv.Close()
 }
