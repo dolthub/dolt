@@ -177,25 +177,25 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 // transactionWrite is the logic to write an updated working set (and optionally a commit) to the database
 type transactionWrite func(ctx *sql.Context,
 	dbName string,
-	tx *DoltTransaction,           // the transaction being written
-	doltDb *doltdb.DoltDB,         // the database to write to
+	tx *DoltTransaction, // the transaction being written
+	doltDb *doltdb.DoltDB, // the database to write to
 	startState *doltdb.WorkingSet, // the starting working set
-	commit *doltdb.PendingCommit,  // optional
+	commit *doltdb.PendingCommit, // optional
 	workingSet *doltdb.WorkingSet, // must be provided
-	hash hash.Hash,                // hash of the current working set to be written
-	mergeOps editor.Options,       // editor options for merges
+	hash hash.Hash, // hash of the current working set to be written
+	mergeOps editor.Options, // editor options for merges
 ) (*doltdb.WorkingSet, *doltdb.Commit, error)
 
 // doltCommit is a transactionWrite function that updates the working set and commits a pending commit atomically
 func doltCommit(ctx *sql.Context,
 	dbName string,
-	tx *DoltTransaction,           // the transaction being written
-	doltDb *doltdb.DoltDB,         // the database to write to
+	tx *DoltTransaction, // the transaction being written
+	doltDb *doltdb.DoltDB, // the database to write to
 	startState *doltdb.WorkingSet, // the starting working set
-	commit *doltdb.PendingCommit,  // optional
+	commit *doltdb.PendingCommit, // optional
 	workingSet *doltdb.WorkingSet, // must be provided
-	currHash hash.Hash,            // hash of the current working set to be written
-	mergeOpts editor.Options,      // editor options for merges
+	currHash hash.Hash, // hash of the current working set to be written
+	mergeOpts editor.Options, // editor options for merges
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	pending := *commit
 
@@ -280,13 +280,13 @@ func doltCommit(ctx *sql.Context,
 // txCommit is a transactionWrite function that updates the working set
 func txCommit(ctx *sql.Context,
 	dbName string,
-	tx *DoltTransaction,           // the transaction being written
-	doltDb *doltdb.DoltDB,         // the database to write to
-	_ *doltdb.WorkingSet,          // the starting working set
-	_ *doltdb.PendingCommit,       // optional
+	tx *DoltTransaction, // the transaction being written
+	doltDb *doltdb.DoltDB, // the database to write to
+	_ *doltdb.WorkingSet, // the starting working set
+	_ *doltdb.PendingCommit, // optional
 	workingSet *doltdb.WorkingSet, // must be provided
-	hash hash.Hash,                // hash of the current working set to be written
-	_ editor.Options,              // editor options for merges
+	hash hash.Hash, // hash of the current working set to be written
+	_ editor.Options, // editor options for merges
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	var rsc doltdb.ReplicationStatusController
 	err := doltDb.UpdateWorkingSet(ctx, workingSet.Ref(), workingSet, hash, tx.WorkingSetMeta(ctx), &rsc)
