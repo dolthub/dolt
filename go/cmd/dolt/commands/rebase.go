@@ -93,6 +93,11 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	if queryist.IsRemote {
+		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
+		cli.Println(msg)
+		return 1
+	}
 
 	// Set @@dolt_allow_commit_conflicts in case there are data conflicts that need to be resolved by the caller.
 	// Without this, the conflicts can't be committed to the branch working set, and the caller can't access them.
