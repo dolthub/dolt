@@ -86,18 +86,13 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		}
 		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	case ref.FastForwardOnly:
-		// ResolveBranchRoots fails for remotes that don't maintain a working set (e.g. file://),
-		// in which case FastForwardWithWorkspaceCheck handles it correctly without the ignored-table check.
+		// Ignored tables create a staged/working mismatch that blocks fast-forward pushes, so we detect and permit that case.
 		onlyIgnored := false
 		roots, err := destDB.ResolveBranchRoots(ctx, destRef)
 		if err == nil {
 			onlyIgnored, _ = diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
 		}
-		if onlyIgnored {
-			err = destDB.FastForward(ctx, destRef, commit)
-		} else {
-			err = destDB.FastForwardWithWorkspaceCheck(ctx, destRef, commit)
-		}
+		err = destDB.FastForwardWithWorkspaceCheck(ctx, destRef, commit, onlyIgnored)
 		if err != nil {
 			return err
 		}
