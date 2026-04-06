@@ -108,8 +108,45 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// With @@autocommit=1 (the default) and no allow vars set, dolt_revert() returns
+		// an error when it encounters conflicts. The revert is not persisted to disk —
+		// the engine's rollback leaves the repository in its original clean state.
+		// To use --abort or --continue across dolt sql -q invocations, users must set
+		// @@dolt_allow_commit_conflicts=1 or @@autocommit=0 so the merge state isn't rolled back.
+		Name: "dolt_revert() with @@autocommit=1 returns error on conflicts and leaves repo clean",
+		SetUpScript: []string{
+			"create table test (pk int primary key, c0 int)",
+			"insert into test values (1,1),(2,2),(3,3);",
+			"call dolt_commit('-Am', 'seed table');",
+			"update test set c0 = 42 where pk = 2;",
+			"call dolt_commit('-am', 'first change');",
+			"update test set c0 = 23 where pk = 2;",
+			"call dolt_commit('-am', 'second change');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Reverting HEAD~1 creates a conflict: both ours (HEAD) and theirs
+				// (HEAD~2, parent of the reverted commit) modified pk=2.
+				// With @@autocommit=1 and no allow vars, this returns an error.
+				Query:          "call dolt_revert('HEAD~1');",
+				ExpectedErrStr: "Merge conflict detected, @autocommit transaction rolled back. @autocommit must be disabled so that merge conflicts can be resolved using the dolt_conflicts and dolt_schema_conflicts tables before manually committing the transaction. Alternatively, to commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
+			},
+			{
+				// The rollback leaves the repository clean — no conflicts on disk.
+				Query:    "select `table` from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				// No new commit should have been created.
+				Query:    "select message from dolt_log limit 1;",
+				Expected: []sql.Row{{"second change"}},
+			},
+		},
+	},
+	{
 		Name: "dolt_revert() detects conflicts and returns conflict counts",
 		SetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table test (pk int primary key, c0 int)",
 			"insert into test values (1,1),(2,2),(3,3);",
 			"call dolt_commit('-Am', 'seed table');",
@@ -141,6 +178,7 @@ var RevertScripts = []queries.ScriptTest{
 		// before the revert, i.e. any commits created by revert should NOT be present.
 		Name: "dolt_revert() --abort restores pre-revert state",
 		SetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table test (pk int primary key, c0 int);",
 			"insert into test values (1,1),(2,2);",
 			"call dolt_commit('-Am', 'seed table');",
@@ -253,6 +291,7 @@ var RevertScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_revert() --continue: ignored table in working set",
 		SetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table test (pk int primary key, c0 int)",
 			"insert into dolt_ignore values ('ignored_*', 1);",
 			"create table ignored_1 (id int primary key);",
@@ -436,6 +475,7 @@ var RevertScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_revert() multi-commit: stops at first conflict",
 		SetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table test (pk int primary key, c0 int);",
 			"insert into test values (1,1),(2,2),(3,3);",
 			"call dolt_commit('-Am', 'seed table');",
@@ -522,6 +562,7 @@ var RevertScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_revert() detects constraint violations and returns violation counts",
 		SetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table test2 (pk int primary key, c0 int)",
 			"insert into test2 values (1,1),(2,NULL),(3,3);",
 			"call dolt_commit('-Am', 'new table with NULL value');",

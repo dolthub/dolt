@@ -290,6 +290,7 @@ func AbortRevert(ctx *sql.Context, dbName string) error {
 	// was HEAD when the revert began.
 	preMergeHeadCommit := ws.MergeState().PreMergeHeadCommit()
 	if preMergeHeadCommit != nil {
+		// Reset the HEAD commit for this branch
 		ddb, ok := doltSession.GetDoltDB(ctx, dbName)
 		if !ok {
 			return fmt.Errorf("fatal: unable to load database for %s", dbName)
@@ -300,6 +301,29 @@ func AbortRevert(ctx *sql.Context, dbName string) error {
 		}
 		if err = ddb.SetHeadToCommit(ctx, headRef, preMergeHeadCommit); err != nil {
 			return fmt.Errorf("fatal: unable to reset branch HEAD during abort: %v", err)
+		}
+
+		// Reset the working and staged roots in this session to match the pre-revert
+		// HEAD so the working set is clean. Then persist to disk and clear the transaction
+		// so that the next statement re-reads fresh session state (including the reset
+		// branch HEAD ref) rather than seeing the stale in-memory head.
+		preMergeRoot, err := preMergeHeadCommit.GetRootValue(ctx)
+		if err != nil {
+			return fmt.Errorf("fatal: unable to get root for pre-revert commit: %v", err)
+		}
+		newWs = newWs.WithWorkingRoot(preMergeRoot).WithStagedRoot(preMergeRoot)
+		if err = doltSession.SetWorkingSet(ctx, dbName, newWs); err != nil {
+			return err
+		}
+
+		tx := ctx.GetTransaction()
+		if tx == nil {
+			if tx, err = doltSession.StartTransaction(ctx, sql.ReadWrite); err != nil {
+				return fmt.Errorf("fatal: unable to start transaction during abort: %v", err)
+			}
+		}
+		if err = doltSession.CommitWorkingSet(ctx, dbName, tx); err != nil {
+			return fmt.Errorf("fatal: unable to persist working set during abort: %v", err)
 		}
 	}
 
@@ -387,10 +411,6 @@ func applySingleRevert(ctx *sql.Context, dbName string, doltSession *dsess.DoltS
 			return "", nil, err
 		}
 
-		if err = commitWithConflictsAllowed(ctx, doltSession); err != nil {
-			return "", nil, err
-		}
-
 		return "", mergeResult, nil
 	}
 
@@ -472,35 +492,6 @@ func stageRevertedTables(ctx *sql.Context, mergeStats map[doltdb.TableName]*merg
 	}
 
 	return doltSession.SetRoots(ctx, dbName, roots)
-}
-
-// commitWithConflictsAllowed persists the current working set by committing the SQL transaction, temporarily enabling
-// the session variables that allow commits with data conflicts and constraint violations. Both variables are restored
-// to their original values before this function returns, so the caller's session is not permanently modified.
-func commitWithConflictsAllowed(ctx *sql.Context, doltSession *dsess.DoltSession) error {
-	oldAllowConflicts, err := ctx.GetSessionVariable(ctx, dsess.AllowCommitConflicts)
-	if err != nil {
-		return err
-	}
-	oldForceCommit, err := ctx.GetSessionVariable(ctx, dsess.ForceTransactionCommit)
-	if err != nil {
-		return err
-	}
-
-	if err = ctx.SetSessionVariable(ctx, dsess.AllowCommitConflicts, int8(1)); err != nil {
-		return err
-	}
-	if err = ctx.SetSessionVariable(ctx, dsess.ForceTransactionCommit, int8(1)); err != nil {
-		ctx.SetSessionVariable(ctx, dsess.AllowCommitConflicts, oldAllowConflicts)
-		return err
-	}
-
-	commitErr := doltSession.CommitTransaction(ctx, doltSession.GetTransaction())
-
-	ctx.SetSessionVariable(ctx, dsess.AllowCommitConflicts, oldAllowConflicts)
-	ctx.SetSessionVariable(ctx, dsess.ForceTransactionCommit, oldForceCommit)
-
-	return commitErr
 }
 
 // revertCommit performs a merge that undoes the changes introduced by |commit|.

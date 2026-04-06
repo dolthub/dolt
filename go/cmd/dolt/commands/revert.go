@@ -141,6 +141,18 @@ func revert(ctx context.Context, apr *argparser.ArgParseResults, cliCtx cli.CliC
 		buffer.WriteString(")")
 	}
 
+	_, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, "set @@dolt_allow_commit_conflicts = 1")
+	if err != nil {
+		cli.Println(fmt.Errorf("error: failed to set @@dolt_allow_commit_conflicts: %w", err))
+		return 1
+	}
+
+	_, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, "set @@dolt_force_transaction_commit = 1")
+	if err != nil {
+		cli.Println(fmt.Errorf("error: failed to set @@dolt_force_transaction_commit: %w", err))
+		return 1
+	}
+
 	query, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
 	if err != nil {
 		cli.Println(err.Error())

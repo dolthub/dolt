@@ -318,22 +318,37 @@ SQL
     [[ "$output" =~ "changes" ]] || false
 }
 
-@test "revert: SQL conflicts" {
-    dolt sql -q "INSERT INTO test VALUES (4, 4)"
+@test "revert: SQL conflicts, @@autocommit=1" {
+    dolt sql -q "INSERT INTO test VALUES (4, 4);"
     dolt add -A
     dolt commit -m "Inserted 4"
-    dolt sql -q "REPLACE INTO test VALUES (4, 5)"
+    dolt sql -q "REPLACE INTO test VALUES (4, 5);"
+    dolt add -A
+    dolt commit -m "Updated 4"
+    # With @@autocommit=1 and no allow vars, conflicts cause an error.
+    run dolt sql -q "call dolt_revert('HEAD~1')" -r=csv
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Merge conflict detected, @autocommit transaction rolled back." ]] || false
+    [[ "$output" =~ "@autocommit must be disabled so that merge conflicts can be resolved" ]] || false
+}
+
+@test "revert: SQL conflicts, @@autocommit=0" {
+    dolt sql -q "INSERT INTO test VALUES (4, 4);"
+    dolt add -A
+    dolt commit -m "Inserted 4"
+    dolt sql -q "REPLACE INTO test VALUES (4, 5);"
     dolt add -A
     dolt commit -m "Updated 4"
     # SQL procedure returns status 0 with conflict counts in the result row
-    run dolt sql -q "call dolt_revert('HEAD~1')" -r=csv
+    run dolt sql -q "set @@autocommit=0; call dolt_revert('HEAD~1');" -r=csv
     [ "$status" -eq "0" ]
     # Result row: hash, data_conflicts, schema_conflicts, constraint_violations
     # data_conflicts should be 1
     [[ "$output" =~ ",1,0,0" ]] || false
 }
 
-@test "revert: SQL constraint violations" {
+
+@test "revert: SQL constraint violations, @@autocommit=0" {
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
 CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1));
@@ -346,7 +361,7 @@ SQL
     dolt sql -q "DELETE FROM parent WHERE pk = 20"
     dolt commit -am "MC3"
     # SQL procedure returns status 0 with constraint violation count in the result row
-    run dolt sql -q "call dolt_revert('HEAD~1')" -r=csv
+    run dolt sql -q "set @@autocommit=0; call dolt_revert('HEAD~1')" -r=csv
     [ "$status" -eq "0" ]
     # constraint_violations should be 1
     [[ "$output" =~ ",0,0,1" ]] || false
@@ -360,8 +375,9 @@ SQL
     dolt add -A
     dolt commit -m "Updated 4"
 
-    # Start revert that will conflict
-    run dolt sql -q "call dolt_revert('HEAD~1')" -r=csv
+    # Start revert that will conflict. Use dolt_allow_commit_conflicts so the merge state
+    # is persisted to disk and --abort works in the next dolt sql -q invocation.
+    run dolt sql -q "set @@dolt_allow_commit_conflicts=1; call dolt_revert('HEAD~1')" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ ",1,0,0" ]] || false
 
@@ -383,8 +399,9 @@ SQL
     dolt add -A
     dolt commit -m "Updated 4"
 
-    # Start revert that will conflict
-    run dolt sql -q "call dolt_revert('HEAD~1')" -r=csv
+    # Start revert that will conflict. Use dolt_allow_commit_conflicts so the merge state
+    # is persisted to disk and --continue works in a subsequent dolt sql -q invocation.
+    run dolt sql -q "set @@dolt_allow_commit_conflicts=1; call dolt_revert('HEAD~1')" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ ",1,0,0" ]] || false
 
@@ -410,8 +427,9 @@ SQL
     dolt sql -q "UPDATE test SET v1=6 where pk=4;"
     dolt commit -am "Updated 4 (again)"
 
-    # Revert two commits: HEAD reverts cleanly, HEAD~2 conflicts.
-    run dolt sql -q "call dolt_revert('HEAD', 'HEAD~2')" -r=csv
+    # Revert two commits: HEAD reverts cleanly (commit created), HEAD~2 conflicts.
+    # Use dolt_allow_commit_conflicts so the merge state is persisted for --abort.
+    run dolt sql -q "set @@dolt_allow_commit_conflicts=1; call dolt_revert('HEAD', 'HEAD~2')" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ ",1,0,0" ]] || false
 
@@ -534,8 +552,9 @@ SQL
     dolt sql -q "UPDATE test SET v1=31 WHERE pk=3;"
     dolt commit -am "clobber pk2 and pk3"
 
-    # A reverts cleanly. B conflicts → stop.
-    run dolt sql -q "call dolt_revert('$HASH_A', '$HASH_B', '$HASH_C')" -r=csv
+    # A reverts cleanly (commit created). B conflicts → stop.
+    # Use dolt_allow_commit_conflicts so the merge state is persisted for --continue.
+    run dolt sql -q "set @@dolt_allow_commit_conflicts=1; call dolt_revert('$HASH_A', '$HASH_B', '$HASH_C')" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ ",1,0,0" ]] || false
 
@@ -555,7 +574,8 @@ SQL
     dolt add test
 
     # First --continue: commits B's revert, automatically tries C, C conflicts → stop.
-    run dolt sql -q "call dolt_revert('--continue')" -r=csv
+    # Use dolt_allow_commit_conflicts so the merge state is persisted for the next --continue.
+    run dolt sql -q "set @@dolt_allow_commit_conflicts=1; call dolt_revert('--continue')" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ ",1,0,0" ]] || false
 
