@@ -87,7 +87,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	if apr.NArg() < 1 && !(apr.Contains(cli.ContinueFlag) || apr.Contains(cli.AbortParam)) {
+	if apr.NArg() == 0 && !(apr.Contains(cli.ContinueFlag) || apr.Contains(cli.AbortParam)) {
 		usage()
 		return 1
 	}
