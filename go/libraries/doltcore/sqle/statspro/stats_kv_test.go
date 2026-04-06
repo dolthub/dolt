@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
@@ -34,8 +33,7 @@ import (
 )
 
 func TestProllyKv(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	prollyKv := newTestProllyKv(t, threads)
+	prollyKv := newTestProllyKv(t)
 
 	h := hash.Parse(strings.Repeat("a", hash.StringLen))
 	h2 := hash.Parse(strings.Repeat("b", hash.StringLen))
@@ -128,8 +126,7 @@ func TestProllyKv(t *testing.T) {
 	})
 	t.Run("TestGcMarkFlush", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		bthreads := sql.NewBackgroundThreads()
-		defer bthreads.Shutdown()
+
 		prev := NewMemStats()
 		nodes1, bucks1 := testNodes(t, 10, 1)
 		nodes2, bucks2 := testNodes(t, 10, 2)
@@ -154,7 +151,7 @@ func TestProllyKv(t *testing.T) {
 		require.Equal(t, 20, len(to.gcFlusher[tupB]))
 		require.Equal(t, 20, to.Len())
 
-		kv := newTestProllyKv(t, bthreads)
+		kv := newTestProllyKv(t)
 		kv.mem = to
 		cnt, err := kv.Flush(ctx)
 		require.NoError(t, err)
@@ -164,22 +161,11 @@ func TestProllyKv(t *testing.T) {
 	})
 }
 
-func newTestProllyKv(t *testing.T, threads *sql.BackgroundThreads) *prollyStats {
+func newTestProllyKv(t *testing.T) *prollyStats {
 	dEnv := dtestutils.CreateTestEnv()
-
-	sqlEng, ctx := newTestEngine(context.Background(), t, dEnv, threads)
-	ctx.Session.SetClient(sql.Client{
-		User:    "billy boy",
-		Address: "bigbillie@fake.horse",
-	})
-	require.NoError(t, executeQuery(ctx, sqlEng, "create database mydb"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-
-	startDbs := sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx)
-
-	kv, err := NewProllyStats(ctx, startDbs[0].(dsess.SqlDatabase))
+	ctx := context.Background()
+	kv, err := NewProllyStats(ctx, dEnv.DoltDB(ctx))
 	require.NoError(t, err)
-
 	return kv
 }
 
