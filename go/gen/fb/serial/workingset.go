@@ -364,7 +364,70 @@ func (rcv *MergeState) MutateIsCherryPick(n bool) bool {
 	return rcv._tab.MutateBoolSlot(12, n)
 }
 
-const MergeStateNumFields = 5
+func (rcv *MergeState) IsRevert() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *MergeState) MutateIsRevert(n bool) bool {
+	return rcv._tab.MutateBoolSlot(14, n)
+}
+
+func (rcv *MergeState) PreMergeHeadCommitAddr(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *MergeState) PreMergeHeadCommitAddrLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *MergeState) PreMergeHeadCommitAddrBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *MergeState) MutatePreMergeHeadCommitAddr(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *MergeState) PendingCommitHashes(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *MergeState) PendingCommitHashesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+const MergeStateNumFields = 8
 
 func MergeStateStart(builder *flatbuffers.Builder) {
 	builder.StartObject(MergeStateNumFields)
@@ -392,6 +455,21 @@ func MergeStateStartUnmergableTablesVector(builder *flatbuffers.Builder, numElem
 }
 func MergeStateAddIsCherryPick(builder *flatbuffers.Builder, isCherryPick bool) {
 	builder.PrependBoolSlot(4, isCherryPick, false)
+}
+func MergeStateAddIsRevert(builder *flatbuffers.Builder, isRevert bool) {
+	builder.PrependBoolSlot(5, isRevert, false)
+}
+func MergeStateAddPreMergeHeadCommitAddr(builder *flatbuffers.Builder, preMergeHeadCommitAddr flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(preMergeHeadCommitAddr), 0)
+}
+func MergeStateStartPreMergeHeadCommitAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func MergeStateAddPendingCommitHashes(builder *flatbuffers.Builder, pendingCommitHashes flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(pendingCommitHashes), 0)
+}
+func MergeStateStartPendingCommitHashesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
 }
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

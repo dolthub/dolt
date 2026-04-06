@@ -96,12 +96,27 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		fromaddroff := builder.CreateByteVector((*mergeState.fromCommitAddr)[:])
 		fromspecoff := builder.CreateString(mergeState.fromCommitSpec)
 		unmergableoff := SerializeStringVector(builder, mergeState.unmergableTables)
+		var headCommitAddrOff flatbuffers.UOffsetT
+		if mergeState.preMergeHeadCommitAddr != nil {
+			headCommitAddrOff = builder.CreateByteVector((*mergeState.preMergeHeadCommitAddr)[:])
+		}
+		var pendingHashesOff flatbuffers.UOffsetT
+		if len(mergeState.pendingRevertHashes) > 0 {
+			pendingHashesOff = SerializeStringVector(builder, mergeState.pendingRevertHashes)
+		}
 		serial.MergeStateStart(builder)
 		serial.MergeStateAddPreWorkingRootAddr(builder, prerootaddroff)
 		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
 		serial.MergeStateAddFromCommitSpecStr(builder, fromspecoff)
 		serial.MergeStateAddUnmergableTables(builder, unmergableoff)
 		serial.MergeStateAddIsCherryPick(builder, mergeState.isCherryPick)
+		serial.MergeStateAddIsRevert(builder, mergeState.isRevert)
+		if headCommitAddrOff != 0 {
+			serial.MergeStateAddPreMergeHeadCommitAddr(builder, headCommitAddrOff)
+		}
+		if pendingHashesOff != 0 {
+			serial.MergeStateAddPendingCommitHashes(builder, pendingHashesOff)
+		}
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
 
@@ -155,6 +170,9 @@ func NewMergeState(
 	commitSpecStr string,
 	unmergableTables []string,
 	isCherryPick bool,
+	isRevert bool,
+	headCommit *Commit,
+	pendingRevertHashes []string,
 ) (*MergeState, error) {
 	ms := &MergeState{
 		preMergeWorkingAddr: new(hash.Hash),
@@ -162,9 +180,15 @@ func NewMergeState(
 		fromCommitSpec:      commitSpecStr,
 		unmergableTables:    unmergableTables,
 		isCherryPick:        isCherryPick,
+		isRevert:            isRevert,
+		pendingRevertHashes: pendingRevertHashes,
 	}
 	*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
 	*ms.fromCommitAddr = commit.Addr()
+	if headCommit != nil {
+		ms.preMergeHeadCommitAddr = new(hash.Hash)
+		*ms.preMergeHeadCommitAddr = headCommit.Addr()
+	}
 	return ms, nil
 }
 
