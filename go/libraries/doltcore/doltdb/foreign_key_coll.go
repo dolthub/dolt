@@ -273,8 +273,8 @@ func (fkc *ForeignKeyCollection) ResolveColumnTags(ctx context.Context, root Roo
 		if !fk.IsResolved() {
 			continue
 		}
-		// Only resolve if tag arrays are empty (column names are the source of truth)
-		if len(fk.TableColumns) == 0 && len(fk.UnresolvedFKDetails.TableColumns) > 0 {
+		// Always resolve tags from column names (names are the source of truth)
+		if len(fk.UnresolvedFKDetails.TableColumns) > 0 {
 			tbl, ok, err := root.GetTable(ctx, fk.TableName)
 			if err != nil {
 				return err
@@ -295,7 +295,7 @@ func (fkc *ForeignKeyCollection) ResolveColumnTags(ctx context.Context, root Roo
 				fk.TableColumns[i] = col.Tag
 			}
 		}
-		if len(fk.ReferencedTableColumns) == 0 && len(fk.UnresolvedFKDetails.ReferencedTableColumns) > 0 {
+		if len(fk.UnresolvedFKDetails.ReferencedTableColumns) > 0 {
 			refTbl, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
 			if err != nil {
 				return err
