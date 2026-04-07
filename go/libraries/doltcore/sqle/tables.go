@@ -2528,6 +2528,7 @@ func (t *WritableDoltTable) createForeignKey(
 			},
 		}, nil
 	}
+	// Resolve child column names to tags (tags are derived at runtime, not stored)
 	colTags := make([]uint64, len(sqlFk.Columns))
 	for i, col := range sqlFk.Columns {
 		tableCol, ok := t.sch.GetAllCols().GetByNameCaseInsensitive(col)
@@ -2600,6 +2601,7 @@ func (t *WritableDoltTable) createForeignKey(
 		}
 	}
 
+	// Resolve parent column names to tags (tags are derived at runtime, not stored)
 	refColTags := make([]uint64, len(sqlFk.ParentColumns))
 	for i, name := range sqlFk.ParentColumns {
 		refCol, ok := refSch.GetAllCols().GetByNameCaseInsensitive(name)
@@ -2631,10 +2633,10 @@ func (t *WritableDoltTable) createForeignKey(
 		Name:                   sqlFk.Name,
 		TableName:              doltdb.TableName{Name: sqlFk.Table, Schema: t.db.SchemaName()},
 		TableIndex:             tableIndexName,
-		TableColumns:           colTags,
+		TableColumns:           colTags, // Derived from column names at runtime; not persisted
 		ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema},
 		ReferencedTableIndex:   refTableIndexName,
-		ReferencedTableColumns: refColTags,
+		ReferencedTableColumns: refColTags, // Derived from column names at runtime; not persisted
 		OnUpdate:               onUpdateRefAction,
 		OnDelete:               onDeleteRefAction,
 		UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
@@ -2914,12 +2916,8 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 		if fk.ReferencedTableIndex != oldIdx.Name() {
 			continue
 		}
-		// get column names from tags in foreign key
-		fkParentCols := make([]string, len(fk.ReferencedTableColumns))
-		for i, colTag := range fk.ReferencedTableColumns {
-			col, _ := oldIdx.GetColumn(colTag)
-			fkParentCols[i] = col.Name
-		}
+		// get column names from foreign key
+		fkParentCols := fk.UnresolvedFKDetails.ReferencedTableColumns
 		newIdx, ok, err := FindIndexWithPrefix(t.sch, fkParentCols)
 		if err != nil {
 			return nil, nil, err

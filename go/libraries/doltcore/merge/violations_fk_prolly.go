@@ -46,7 +46,7 @@ func prollyParentSecDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	postParentSecIdx, _, parentIdxPrefixDesc, err := fkIdxKeyDescs(postParent.IndexData, len(foreignKey.TableColumns))
+	postParentSecIdx, _, parentIdxPrefixDesc, err := fkIdxKeyDescs(postParent.IndexData, fkColCount(foreignKey))
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func prollyParentSecDiffFkConstraintViolations(
 	}
 	childPriIdxDesc, _ := childPriIdx.Descriptors()
 
-	childSecIdx, childSecIdxDesc, childSecIdxPrefixDesc, err := fkIdxKeyDescs(postChild.IndexData, len(foreignKey.TableColumns))
+	childSecIdx, childSecIdxDesc, childSecIdxPrefixDesc, err := fkIdxKeyDescs(postChild.IndexData, fkColCount(foreignKey))
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func prollyParentSecDiffFkConstraintViolations(
 	err = prolly.DiffMaps(ctx, preParentSecIdx, postParentSecIdx, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
-			k, hadNulls, err := makePartialKey(parentIdxKb, foreignKey.ReferencedTableColumns, postParent.Index, postParent.IndexSchema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentSecIdx.Pool())
+			k, hadNulls, err := makePartialKey(parentIdxKb, fkParentTags(foreignKey, postParent.IndexSchema), postParent.Index, postParent.IndexSchema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentSecIdx.Pool())
 			if err != nil {
 				return err
 			}
@@ -141,7 +141,7 @@ func prollyParentPriDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	postParentIndexData, _, partialDesc, err := fkIdxKeyDescs(postParent.IndexData, len(foreignKey.TableColumns))
+	postParentIndexData, _, partialDesc, err := fkIdxKeyDescs(postParent.IndexData, fkColCount(foreignKey))
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func prollyParentPriDiffFkConstraintViolations(
 	}
 	childPriIdxDesc, _ := childPriIdx.Descriptors()
 
-	childSecIdx, childSecIdxDesc, childSecIdxPrefixDesc, err := fkIdxKeyDescs(postChild.IndexData, len(foreignKey.TableColumns))
+	childSecIdx, childSecIdxDesc, childSecIdxPrefixDesc, err := fkIdxKeyDescs(postChild.IndexData, fkColCount(foreignKey))
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func prollyParentPriDiffFkConstraintViolations(
 	err = prolly.DiffMaps(ctx, preParentRowData, postParentRowData, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
-			partialKey, hadNulls, err := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
+			partialKey, hadNulls, err := makePartialKey(partialKB, fkParentTags(foreignKey, postParent.Schema), postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
 			if err != nil {
 				return err
 			}
@@ -246,13 +246,13 @@ func prollyChildPriDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	parentSecondaryIdx, _, parentIdxPrefixDesc, err := fkIdxKeyDescs(postParent.IndexData, len(foreignKey.TableColumns))
+	parentSecondaryIdx, _, parentIdxPrefixDesc, err := fkIdxKeyDescs(postParent.IndexData, fkColCount(foreignKey))
 	if err != nil {
 		return err
 	}
 	partialKB := val.NewTupleBuilder(parentIdxPrefixDesc, postChildRowData.NodeStore())
 
-	_, _, childFkColsDesc, err := fkIdxKeyDescs(postChild.IndexData, len(foreignKey.TableColumns))
+	_, _, childFkColsDesc, err := fkIdxKeyDescs(postChild.IndexData, fkColCount(foreignKey))
 	if err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func prollyChildPriDiffFkConstraintViolations(
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
 			parentLookupKey, hasNulls, err := makePartialKey(
 				partialKB,
-				foreignKey.TableColumns,
+				fkChildTags(foreignKey, postChild.Schema),
 				postChild.Index,
 				postChild.Schema,
 				k,
@@ -320,11 +320,11 @@ func prollyChildSecDiffFkConstraintViolations(
 	if err != nil {
 		return err
 	}
-	postChildSecIdx, _, childIdxPrefixDesc, err := fkIdxKeyDescs(postChild.IndexData, len(foreignKey.TableColumns))
+	postChildSecIdx, _, childIdxPrefixDesc, err := fkIdxKeyDescs(postChild.IndexData, fkColCount(foreignKey))
 	if err != nil {
 		return err
 	}
-	parentSecIdx, _, parentIdxPrefixDesc, err := fkIdxKeyDescs(postParent.IndexData, len(foreignKey.TableColumns))
+	parentSecIdx, _, parentIdxPrefixDesc, err := fkIdxKeyDescs(postParent.IndexData, fkColCount(foreignKey))
 	if err != nil {
 		return err
 	}
@@ -663,6 +663,37 @@ func convertKeyBetweenTypes(
 		return nil, err
 	}
 	return key, nil
+}
+
+// fkColCount returns the number of columns in a foreign key (using column names as source of truth).
+func fkColCount(fk doltdb.ForeignKey) int {
+	return len(fk.UnresolvedFKDetails.TableColumns)
+}
+
+// fkChildTags resolves the child table's FK column names to tags using the given schema.
+func fkChildTags(fk doltdb.ForeignKey, sch schema.Schema) []uint64 {
+	names := fk.UnresolvedFKDetails.TableColumns
+	tags := make([]uint64, len(names))
+	for i, name := range names {
+		col, ok := sch.GetAllCols().GetByNameCaseInsensitive(name)
+		if ok {
+			tags[i] = col.Tag
+		}
+	}
+	return tags
+}
+
+// fkParentTags resolves the parent table's FK column names to tags using the given schema.
+func fkParentTags(fk doltdb.ForeignKey, sch schema.Schema) []uint64 {
+	names := fk.UnresolvedFKDetails.ReferencedTableColumns
+	tags := make([]uint64, len(names))
+	for i, name := range names {
+		col, ok := sch.GetAllCols().GetByNameCaseInsensitive(name)
+		if ok {
+			tags[i] = col.Tag
+		}
+	}
+	return tags
 }
 
 func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool, error) {

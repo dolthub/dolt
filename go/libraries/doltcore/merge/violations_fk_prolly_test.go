@@ -52,17 +52,18 @@ func TestFkIdxKeyDescs_FkColNotAtFront(t *testing.T) {
 	handlerA := fkTestHandler{id: 1}
 	handlerB := fkTestHandler{id: 2}
 
+	// Tags are assigned sequentially by NewColCollection based on position.
+	// childCols: pk1(0), pk2(1), fk_col(2); parentCols: pk(0).
 	const (
-		pk1Tag   uint64 = 1
-		pk2Tag   uint64 = 2
-		fkColTag uint64 = 3
-		parentPk uint64 = 4
+		pk1Tag   uint64 = 0
+		pk2Tag   uint64 = 1
+		fkColTag uint64 = 2
+		parentPk uint64 = 0
 	)
 	tagToHandler := map[uint64]val.TupleTypeHandler{
 		fkColTag: handlerB,
-		pk1Tag:   handlerA,
+		pk1Tag:   handlerA, // also covers parentPk (same tag value 0)
 		pk2Tag:   handlerA,
-		parentPk: handlerA,
 	}
 
 	// Build child schema: PRIMARY KEY(pk1 INT, pk2 INT), fk_col VARCHAR.

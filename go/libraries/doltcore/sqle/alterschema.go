@@ -338,13 +338,6 @@ func backupFkcIndexesForPkDrop(ctx *sql.Context, tbl string, sch schema.Schema, 
 		}
 		// pk reference by fk definition on |fk.TableName|
 
-		// get column names from tags in foreign key
-		fkParentCols := make([]string, len(fk.ReferencedTableColumns))
-		for i, colTag := range fk.ReferencedTableColumns {
-			col, _ := sch.GetPKCols().GetByTag(colTag)
-			fkParentCols[i] = col.Name
-		}
-
 		// find suitable secondary index
 		newIdx, ok, err := FindIndexWithPrefix(sch, sch.GetPKCols().GetColumnNames())
 		if err != nil {

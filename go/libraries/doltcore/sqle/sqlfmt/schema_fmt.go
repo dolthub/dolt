@@ -235,26 +235,8 @@ func GenerateCreateTableIndexDefinition(formatter sql.SchemaFormatter, index sch
 // GenerateCreateTableForeignKeyDefinition returns foreign key definition for CREATE TABLE statement with indentation of 2 spaces
 func GenerateCreateTableForeignKeyDefinition(formatter sql.SchemaFormatter, fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	// TAGS: Use of tags here is within a single table, so is safe
-	var fkCols []string
-	if fk.IsResolved() {
-		for _, tag := range fk.TableColumns {
-			c, _ := sch.GetAllCols().GetByTag(tag)
-			fkCols = append(fkCols, c.Name)
-		}
-	} else {
-		fkCols = append(fkCols, fk.UnresolvedFKDetails.TableColumns...)
-	}
-
-	var parentCols []string
-	if parentSch != nil && fk.IsResolved() {
-		for _, tag := range fk.ReferencedTableColumns {
-			c, _ := parentSch.GetAllCols().GetByTag(tag)
-			parentCols = append(parentCols, c.Name)
-		}
-	} else {
-		// the referenced table is dropped, so the schema is nil or the foreign key is not resolved
-		parentCols = append(parentCols, fk.UnresolvedFKDetails.ReferencedTableColumns...)
-	}
+	fkCols := fk.UnresolvedFKDetails.TableColumns
+	parentCols := fk.UnresolvedFKDetails.ReferencedTableColumns
 
 	onDelete := ""
 	if fk.OnDelete != doltdb.ForeignKeyReferentialAction_DefaultAction {
@@ -420,16 +402,14 @@ func AlterTableAddForeignKeyStmt(formatter sql.SchemaFormatter, fk doltdb.Foreig
 	b.WriteString(formatter.QuoteIdentifier(fk.Name))
 	b.WriteString(" FOREIGN KEY ")
 	var childCols []string
-	for _, tag := range fk.TableColumns {
-		c, _ := sch.GetAllCols().GetByTag(tag)
-		childCols = append(childCols, formatter.QuoteIdentifier(c.Name))
+	for _, name := range fk.UnresolvedFKDetails.TableColumns {
+		childCols = append(childCols, formatter.QuoteIdentifier(name))
 	}
 	b.WriteString("(" + strings.Join(childCols, ",") + ")")
 	b.WriteString(" REFERENCES ")
 	var parentCols []string
-	for _, tag := range fk.ReferencedTableColumns {
-		c, _ := parentSch.GetAllCols().GetByTag(tag)
-		parentCols = append(parentCols, formatter.QuoteIdentifier(c.Name))
+	for _, name := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+		parentCols = append(parentCols, formatter.QuoteIdentifier(name))
 	}
 	b.WriteString(QuoteTableName(fk.ReferencedTableName))
 	b.WriteString(" (" + strings.Join(parentCols, ",") + ");")

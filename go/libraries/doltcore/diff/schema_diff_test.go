@@ -54,12 +54,11 @@ func TestDiffSchemas(t *testing.T) {
 
 	expected := map[uint64]ColumnDifference{
 		0: {SchDiffNone, 0, &oldCols[0], &newCols[0]},
-		1: {SchDiffRemoved, 1, &oldCols[1], nil},
-		2: {SchDiffModified, 2, &oldCols[2], &newCols[1]},
-		3: {SchDiffModified, 3, &oldCols[3], &newCols[2]},
-		4: {SchDiffModified, 4, &oldCols[4], &newCols[3]},
-		5: {SchDiffModified, 5, &oldCols[5], &newCols[4]},
-		6: {SchDiffAdded, 6, nil, &newCols[5]},
+		1: {SchDiffModified, 1, &oldCols[1], &newCols[1]},
+		2: {SchDiffModified, 2, &oldCols[2], &newCols[2]},
+		3: {SchDiffModified, 3, &oldCols[3], &newCols[3]},
+		4: {SchDiffModified, 4, &oldCols[4], &newCols[4]},
+		5: {SchDiffModified, 5, &oldCols[5], &newCols[5]},
 	}
 
 	if !reflect.DeepEqual(diffs, expected) {

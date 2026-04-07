@@ -330,15 +330,12 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) (val.OrdinalMapping, val.O
 		return keyMapping, make([]int, inSch.GetNonPKCols().Size()), nil
 	}
 
-	// Search for the PK by tag first; if not found, search by name, but ensure the type still matches
+	// Search for PK columns by name (tags are positional and not stable across schema changes)
 	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		i := inSch.GetPKCols().TagToIdx[tag]
-		foundCol, ok := outSch.GetPKCols().GetByTag(tag)
-		if !ok {
-			foundCol, ok = outSch.GetPKCols().GetByNameCaseInsensitive(col.Name)
-			if ok {
-				ok = foundCol.TypeInfo.ToSqlType() == col.TypeInfo.ToSqlType()
-			}
+		foundCol, ok := outSch.GetPKCols().GetByNameCaseInsensitive(col.Name)
+		if ok {
+			ok = foundCol.TypeInfo.ToSqlType() == col.TypeInfo.ToSqlType()
 		}
 
 		if ok {

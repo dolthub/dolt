@@ -67,6 +67,7 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 			return nil, err
 		}
 
+		// Read tag-based column arrays (for backward compat with old data)
 		childCols := make([]uint64, fk.ChildTableColumnsLength())
 		for j := range childCols {
 			childCols[j] = fk.ChildTableColumns(j)
@@ -76,6 +77,7 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 			parentCols[j] = fk.ParentTableColumns(j)
 		}
 
+		// Column names are the source of truth
 		var childUnresolved []string
 		cn := fk.UnresolvedChildColumnsLength()
 		if cn > 0 {
@@ -101,6 +103,15 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 		parentTableName, ok := decodeTableNameFromSerialization(string(fk.ParentTableName()))
 		if !ok {
 			return nil, fmt.Errorf("could not decode table name: %s", string(fk.ParentTableName()))
+		}
+
+		// If column names are present, clear tag arrays — names are the source of truth.
+		// Tags will be derived from names when needed at runtime.
+		if len(childUnresolved) > 0 {
+			childCols = nil
+		}
+		if len(parentUnresolved) > 0 {
+			parentCols = nil
 		}
 
 		err := collection.AddKeys(ForeignKey{
@@ -145,14 +156,17 @@ func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessa
 		)
 
 		fk := foreignKeys[i]
+		// Always write column names (the source of truth for FK columns).
+		// Populate from UnresolvedFKDetails if available.
 		if fk.UnresolvedFKDetails.ReferencedTableColumns != nil {
 			unresolvedParent = datas.SerializeStringVector(b, fk.UnresolvedFKDetails.ReferencedTableColumns)
 		}
 		if fk.UnresolvedFKDetails.TableColumns != nil {
 			unresolvedChild = datas.SerializeStringVector(b, fk.UnresolvedFKDetails.TableColumns)
 		}
-		parentCols = serializeUint64Vector(b, fk.ReferencedTableColumns)
-		childCols = serializeUint64Vector(b, fk.TableColumns)
+		// Tag-based column arrays are no longer written; column names are the source of truth.
+		parentCols = serializeUint64Vector(b, nil)
+		childCols = serializeUint64Vector(b, nil)
 		parentTable = b.CreateString(encodeTableNameForSerialization(fk.ReferencedTableName))
 		parentIndex = b.CreateString(fk.ReferencedTableIndex)
 		childTable = b.CreateString(encodeTableNameForSerialization(fk.TableName))

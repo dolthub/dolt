@@ -1888,15 +1888,10 @@ func findNonPKColumnMappingByName(sch schema.Schema, name string) int {
 	}
 }
 
-// findNonPKColumnMappingByTagOrName returns the index of the column with the given tag in the given schema. If a
-// matching tag is not found, then this function falls back to looking for a matching column by name. If no
-// matching column is found, then this function returns -1.
+// findNonPKColumnMappingByTagOrName returns the storage index of the column with the given name in the given schema.
+// Columns are matched by name since tags are positional and not stable across schema changes.
 func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int {
-	if idx, ok := sch.GetNonPKCols().StoredIndexByTag(col.Tag); ok {
-		return idx
-	} else {
-		return findNonPKColumnMappingByName(sch, col.Name)
-	}
+	return findNonPKColumnMappingByName(sch, col.Name)
 }
 
 // TryMerge performs a cell-wise merge given left, right, and base cell value

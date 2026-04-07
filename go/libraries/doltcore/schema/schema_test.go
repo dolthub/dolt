@@ -87,9 +87,9 @@ func TestNewSchema(t *testing.T) {
 	require.True(t, sch.Checks().Equals(checkCol))
 
 	// Set ordinals explicitly
-	// When ordinals are {1, 0}, SetPkOrdinals rebuilds pkCols via NewColCollection
-	// which assigns sequential tags 0, 1 to the reordered pk columns (fn, ln).
-	indexCol.(*indexCollectionImpl).pks = []uint64{0, 1}
+	// When ordinals are {1, 0}, SetPkOrdinals builds pkCols with tags preserved
+	// from allCols: position 1 = fnCol (tag 1), position 0 = lnCol (tag 0).
+	indexCol.(*indexCollectionImpl).pks = []uint64{1, 0}
 	sch, err = NewSchema(allColColl, []int{1, 0}, Collation_Default, indexCol, checkCol)
 	require.NoError(t, err)
 	require.Equal(t, []int{1, 0}, sch.GetPkOrdinals())
@@ -156,7 +156,10 @@ func TestSetPkOrder(t *testing.T) {
 		err = sch.SetPkOrdinals([]int{1, 0})
 		require.NoError(t, err)
 
-		expectedPkColColl := NewColCollection(pkCols[1], pkCols[0])
+		// Use PreservingTags since SetPkOrdinals builds the pk sub-collection
+		// with tags preserved from allCols, not reassigned
+		reversedPkCols := []Column{allColColl.GetByIndex(1), allColColl.GetByIndex(0)}
+		expectedPkColColl := NewColCollectionPreservingTags(reversedPkCols...)
 		require.Equal(t, expectedPkColColl, sch.GetPKCols())
 		require.Equal(t, allColColl, sch.GetAllCols())
 	})
@@ -423,7 +426,13 @@ func testSchema(method string, sch Schema, t *testing.T) {
 }
 
 func validateCols(t *testing.T, cols []Column, colColl *ColCollection, msg string) {
-	if !reflect.DeepEqual(cols, colColl.cols) {
-		t.Error()
+	if len(cols) != len(colColl.cols) {
+		t.Errorf("%s: expected %d cols, got %d", msg, len(cols), len(colColl.cols))
+		return
+	}
+	for i := range cols {
+		if !cols[i].EqualsWithoutTag(colColl.cols[i]) {
+			t.Errorf("%s: col %d mismatch: expected %s, got %s", msg, i, cols[i].Name, colColl.cols[i].Name)
+		}
 	}
 }

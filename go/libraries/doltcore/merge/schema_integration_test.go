@@ -106,11 +106,11 @@ var mergeSchemaTests = []mergeSchemaTest{
 		setup: []testCommand{},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", 1, typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", 2, typeinfo.Int32Type, false),
+				newColTypeInfo("c3", 3, typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
 	},
 	{
@@ -129,11 +129,11 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c8", uint64(12393), typeinfo.Int32Type, false),
-				newColTypeInfo("c9", uint64(4508), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", 1, typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c8", 2, typeinfo.Int32Type, false),
+				newColTypeInfo("c9", 3, typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
 	},
 	{
@@ -150,11 +150,11 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false),
-				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", 1, typeinfo.Int32Type, false),
+				newColTypeInfo("c2", 2, typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c3", 3, typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
 	},
 	{
@@ -171,11 +171,11 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
-			schema.NewIndex("c3_idx", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", 1, typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", 2, typeinfo.Int32Type, false),
+				newColTypeInfo("c3", 3, typeinfo.Int32Type, false)),
+			schema.NewIndex("c3_idx", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
 	},
 	{
@@ -193,11 +193,11 @@ var mergeSchemaTests = []mergeSchemaTest{
 		// hmmm, we created new columns with a rename?
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c22", uint64(8539), typeinfo.Int32Type, false),
-				newColTypeInfo("c33", uint64(4696), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", 1, typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c22", 2, typeinfo.Int32Type, false),
+				newColTypeInfo("c33", 3, typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
 	},
 	{
@@ -210,11 +210,11 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_index", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", 1, typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", 2, typeinfo.Int32Type, false),
+				newColTypeInfo("c3", 3, typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_index", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
 	},
 	{
@@ -231,12 +231,12 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false),
-				newColTypeInfo("c4", uint64(1716), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", 1, typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", 2, typeinfo.Int32Type, false),
+				newColTypeInfo("c3", 3, typeinfo.Int32Type, false),
+				newColTypeInfo("c4", 4, typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
 	},
 	{
@@ -253,12 +253,12 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
-			schema.NewIndex("c3_idx", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", 1, typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", 2, typeinfo.Int32Type, false),
+				newColTypeInfo("c3", 3, typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
+			schema.NewIndex("c3_idx", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
 	},
 }
@@ -317,8 +317,8 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			IdxConflicts: []merge.IdxConflict{
 				{
 					Kind:   merge.NameCollision,
-					Ours:   schema.NewIndex("both", []uint64{8201, 8539}, []uint64{8201, 8539, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
-					Theirs: schema.NewIndex("both", []uint64{8539, 4696}, []uint64{8539, 4696, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+					Ours:   schema.NewIndex("both", []uint64{1, 2}, []uint64{1, 2, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
+					Theirs: schema.NewIndex("both", []uint64{2, 3}, []uint64{2, 3, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 				},
 			},
 		},
@@ -342,14 +342,9 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			TableName: doltdb.TableName{Name: "test"},
 			ColConflicts: []merge.ColConflict{
 				{
-					Kind:   merge.TagCollision,
-					Ours:   newColTypeInfo("c40", uint64(679), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c44", uint64(679), typeinfo.Int32Type, false),
-				},
-				{
-					Kind:   merge.TagCollision,
-					Ours:   newColTypeInfo("c6", uint64(10774), typeinfo.Int64Type, false),
-					Theirs: newColTypeInfo("c6", uint64(10774), typeinfo.Int8Type, false),
+					Kind:   merge.NameCollision,
+					Ours:   newColTypeInfo("c6", 5, typeinfo.Int64Type, false),
+					Theirs: newColTypeInfo("c6", 5, typeinfo.Int8Type, false),
 				},
 			},
 		},
@@ -371,8 +366,8 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			IdxConflicts: []merge.IdxConflict{
 				{
 					Kind:   merge.TagCollision,
-					Ours:   schema.NewIndex("c3_idx", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
-					Theirs: schema.NewIndex("c3_index", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+					Ours:   schema.NewIndex("c3_idx", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
+					Theirs: schema.NewIndex("c3_index", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 				},
 			},
 		},
@@ -487,10 +482,10 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 			Name:                   "q1_fk",
 			TableName:              doltdb.TableName{Name: "quiz"},
 			TableIndex:             "q1_fk",
-			TableColumns:           []uint64{13001},
+			TableColumns:           []uint64{1},
 			ReferencedTableName:    doltdb.TableName{Name: "test"},
 			ReferencedTableIndex:   "t1_idx",
-			ReferencedTableColumns: []uint64{12111},
+			ReferencedTableColumns: []uint64{1},
 			UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
 				TableColumns:           []string{"q1"},
 				ReferencedTableColumns: []string{"t1"},

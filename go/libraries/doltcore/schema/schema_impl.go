@@ -118,8 +118,8 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 		return nil, ErrNoPrimaryKeyColumns
 	}
 
-	pkColColl := NewColCollection(pkCols...)
-	nonPKColColl := NewColCollection(nonPKCols...)
+	pkColColl := NewColCollectionPreservingTags(pkCols...)
+	nonPKColColl := NewColCollectionPreservingTags(nonPKCols...)
 
 	sch := SchemaFromColCollections(allCols, pkColColl, nonPKColColl)
 	err := sch.SetPkOrdinals(defaultPkOrds)
@@ -335,7 +335,7 @@ func (si *schemaImpl) SetPkOrdinals(o []int) error {
 		newPks[i] = pkCol
 		newPkTags[i] = pkCol.Tag
 	}
-	si.pkCols = NewColCollection(newPks...)
+	si.pkCols = NewColCollectionPreservingTags(newPks...)
 	return si.indexCollection.SetPks(newPkTags)
 }
 
@@ -418,8 +418,8 @@ func (si schemaImpl) AddColumn(newCol Column, order *ColumnOrder) (Schema, error
 
 	collection := NewColCollection(newCols...)
 	si.allCols = collection
-	si.pkCols = NewColCollection(pkCols...)
-	si.nonPKCols = NewColCollection(nonPkCols...)
+	si.pkCols = NewColCollectionPreservingTags(pkCols...)
+	si.nonPKCols = NewColCollectionPreservingTags(nonPkCols...)
 
 	// This must be done after we have set the new column order
 	si.pkOrdinals = primaryKeyOrdinals(&si, keyCols)

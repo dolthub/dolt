@@ -199,7 +199,7 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 	}
 
 	for _, fk := range actualFks {
-		// verify parent index
+		// verify parent index columns match FK referenced columns
 		pt, _, ok, err := doltdb.GetTableInsensitive(ctx, root, fk.ReferencedTableName)
 		require.NoError(t, err)
 		require.True(t, ok)
@@ -207,9 +207,14 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 		require.NoError(t, err)
 		pi, ok := ps.Indexes().GetByNameCaseInsensitive(fk.ReferencedTableIndex)
 		require.True(t, ok)
-		require.Equal(t, fk.ReferencedTableColumns, pi.IndexedColumnTags())
+		// Verify FK columns by name match the index columns
+		for i, colName := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+			col, ok := ps.GetAllCols().GetByNameCaseInsensitive(colName)
+			require.True(t, ok, "parent column %s not found", colName)
+			require.Equal(t, col.Tag, pi.IndexedColumnTags()[i])
+		}
 
-		// verify child index
+		// verify child index columns match FK child columns
 		ct, _, ok, err := doltdb.GetTableInsensitive(ctx, root, fk.TableName)
 		require.NoError(t, err)
 		require.True(t, ok)
@@ -217,7 +222,12 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 		require.NoError(t, err)
 		ci, ok := cs.Indexes().GetByNameCaseInsensitive(fk.TableIndex)
 		require.True(t, ok)
-		require.Equal(t, fk.TableColumns, ci.IndexedColumnTags())
+		// Verify FK columns by name match the index columns
+		for i, colName := range fk.UnresolvedFKDetails.TableColumns {
+			col, ok := cs.GetAllCols().GetByNameCaseInsensitive(colName)
+			require.True(t, ok, "child column %s not found", colName)
+			require.Equal(t, col.Tag, ci.IndexedColumnTags()[i])
+		}
 	}
 }
 

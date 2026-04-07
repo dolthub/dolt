@@ -158,8 +158,8 @@ func DiffForeignKeys(fromFks, toFKs []doltdb.ForeignKey) (diffs []ForeignKeyDiff
 	for _, from := range fromFks {
 		matched := false
 		for _, to := range toFKs {
-			if reflect.DeepEqual(from.ReferencedTableColumns, to.ReferencedTableColumns) &&
-				reflect.DeepEqual(from.TableColumns, to.TableColumns) {
+			if reflect.DeepEqual(from.UnresolvedFKDetails.ReferencedTableColumns, to.UnresolvedFKDetails.ReferencedTableColumns) &&
+				reflect.DeepEqual(from.UnresolvedFKDetails.TableColumns, to.UnresolvedFKDetails.TableColumns) {
 
 				matched = true
 				d := ForeignKeyDifference{

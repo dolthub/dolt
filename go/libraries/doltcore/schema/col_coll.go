@@ -132,6 +132,61 @@ func NewColCollection(cols ...Column) *ColCollection {
 	}
 }
 
+// NewColCollectionPreservingTags creates a ColCollection without reassigning
+// tags. This is used for sub-collections (pkCols, nonPKCols) that must keep
+// the tags already assigned by the parent allCols collection.
+func NewColCollectionPreservingTags(cols ...Column) *ColCollection {
+	var tags []uint64
+	var sortedTags []uint64
+
+	tagToCol := make(map[uint64]Column, len(cols))
+	nameToCol := make(map[string]Column, len(cols))
+	lowerNameToCol := make(map[string]Column, len(cols))
+	tagToIdx := make(map[uint64]int, len(cols))
+	tagToStorageIndex := make(map[uint64]int, len(cols))
+	var virtualColumns []int
+
+	var columns []Column
+	var storedIndexes []int
+	storageIdx := 0
+	for i, col := range cols {
+		columns = append(columns, col)
+		tagToCol[col.Tag] = col
+		tagToIdx[col.Tag] = i
+		tags = append(tags, col.Tag)
+		sortedTags = append(sortedTags, col.Tag)
+		nameToCol[col.Name] = cols[i]
+
+		lowerCaseName := strings.ToLower(col.Name)
+		if _, ok := lowerNameToCol[lowerCaseName]; !ok {
+			lowerNameToCol[lowerCaseName] = cols[i]
+		}
+
+		if col.Virtual {
+			virtualColumns = append(virtualColumns, i)
+		} else {
+			storedIndexes = append(storedIndexes, i)
+			tagToStorageIndex[col.Tag] = storageIdx
+			storageIdx++
+		}
+	}
+
+	sort.Slice(sortedTags, func(i, j int) bool { return sortedTags[i] < sortedTags[j] })
+
+	return &ColCollection{
+		cols:              columns,
+		virtualColumns:    virtualColumns,
+		storedIndexes:     storedIndexes,
+		tagToStorageIndex: tagToStorageIndex,
+		Tags:              tags,
+		SortedTags:        sortedTags,
+		TagToCol:          tagToCol,
+		NameToCol:         nameToCol,
+		LowerNameToCol:    lowerNameToCol,
+		TagToIdx:          tagToIdx,
+	}
+}
+
 // GetColumns returns the underlying list of columns. The list returned is a copy.
 func (cc *ColCollection) GetColumns() []Column {
 	colsCopy := make([]Column, len(cc.cols))

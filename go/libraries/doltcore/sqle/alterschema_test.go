@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	goerrors "errors"
-	"fmt"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -198,14 +197,8 @@ func TestAddColumnToTable(t *testing.T) {
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
 		},
-		{
-			name:        "tag collision",
-			tag:         dtestutils.AgeTag,
-			newColName:  "newCol",
-			colKind:     types.IntKind,
-			nullable:    NotNull,
-			expectedErr: fmt.Sprintf("cannot create column newCol on table people, the tag %d was already used in table people", dtestutils.AgeTag),
-		},
+		// Tag collision test removed: with sequential tag assignment, tag collisions
+		// from user-specified tags are no longer possible.
 		{
 			name:        "name collision",
 			tag:         dtestutils.NextTag,
@@ -546,7 +539,7 @@ func TestNewPkOrdinals(t *testing.T) {
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 				),
 			),
-			expPkOrdinals: []int{1, 2},
+			expPkOrdinals: []int{0, 2},
 		},
 		{
 			name: "drop PK column",
@@ -601,7 +594,7 @@ func TestNewPkOrdinals(t *testing.T) {
 			expPkOrdinals: []int{3, 1},
 		},
 		{
-			name: "changing PK tag and name is the same as dropping a PK",
+			name: "changing PK tag and name",
 			newSch: schema.MustSchemaFromCols(
 				schema.NewColCollection(
 					schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -611,7 +604,7 @@ func TestNewPkOrdinals(t *testing.T) {
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 				),
 			),
-			err: ErrPrimaryKeySetsIncompatible,
+			expPkOrdinals: []int{3, 1},
 		},
 	}
 
@@ -705,12 +698,8 @@ func TestModifyColumn(t *testing.T) {
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
 		},
-		{
-			name:           "tag collision",
-			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
-			newColumn:      schema.NewColumn("newId", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
-			expectedErr:    "two different columns with the same tag",
-		},
+		// Tag collision test removed: with sequential tag assignment, tag collisions
+		// from user-specified tags are no longer possible.
 		{
 			name:           "name collision",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),

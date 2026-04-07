@@ -1099,6 +1099,12 @@ func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKey
 		if err != nil {
 			return nil, err
 		}
+		// Resolve tag arrays from column names for FKs that have names but no tags.
+		// This is needed because tags are no longer stored, but FK enforcement code
+		// still uses tag arrays at runtime.
+		if err := root.fkc.ResolveColumnTags(ctx, root); err != nil {
+			return nil, err
+		}
 	}
 	return root.fkc.Copy(), nil
 }
