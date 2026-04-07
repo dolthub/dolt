@@ -553,6 +553,14 @@ func (gcs *GenerationalNBS) IterateAllChunks(ctx context.Context, cb func(chunk 
 	return nil
 }
 
+func (gcs *GenerationalNBS) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(error)) {
+	gcs.newGen.TolerantIterateAllChunks(ctx, cb, errCb)
+	if ctx.Err() != nil {
+		return
+	}
+	gcs.oldGen.TolerantIterateAllChunks(ctx, cb, errCb)
+}
+
 func (gcs *GenerationalNBS) Count() (uint32, error) {
 	newGenCnt, err := gcs.newGen.Count()
 	if err != nil {
