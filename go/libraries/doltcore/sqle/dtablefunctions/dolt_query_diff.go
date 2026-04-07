@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -321,9 +322,72 @@ func (tf *QueryDiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, erro
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (tf *QueryDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(tf.database.Name())
-	subject := sql.PrivilegeCheckSubject{Database: baseDB}
-	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
+	const (
+		authTargetDB    = 0
+		authTargetTable = 1
+	)
+
+	checkAuthForQueryExpr := func(queryExpr sql.Expression) (bool, error) {
+		val, err := queryExpr.Eval(ctx, nil)
+		if err != nil {
+			return false, err
+		}
+		query, ok := val.(string)
+		if !ok {
+			return false, fmt.Errorf("query must be a string")
+		}
+
+		var tables []string
+		parsed, err := sqlparser.Parse(query)
+		if err != nil {
+			return false, err
+		}
+
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			authNode, ok := node.(sqlparser.AuthNode)
+			if !ok {
+				return true, nil // ret true lets the Walk func continue traversing
+			}
+			info := authNode.GetAuthInformation()
+			if info.AuthType == sqlparser.AuthType_IGNORE {
+				return true, nil
+			}
+			if info.TargetType == sqlparser.AuthTargetType_SingleTableIdentifier {
+				tableName := info.TargetNames[authTargetTable]
+				if tableName != "" {
+					tables = append(tables, tableName)
+				}
+			}
+			return true, nil
+		}, parsed)
+
+		for _, table := range tables {
+			baseDB, _ := doltdb.SplitRevisionDbName(tf.database.Name())
+			subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: table}
+			if hasPrvillege := opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select)); !hasPrvillege {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+
+	query1HasPrivilege, err := checkAuthForQueryExpr(tf.query1)
+	if err != nil {
+		return false
+	}
+	if !query1HasPrivilege {
+		return false
+	}
+
+	query2HasPrivilege, err := checkAuthForQueryExpr(tf.query2)
+	if err != nil {
+		return false
+	}
+	if !query2HasPrivilege {
+		return false
+	}
+
+	return true
 }
 
 // Schema implements the sql.Node interface
