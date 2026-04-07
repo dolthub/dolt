@@ -28,6 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/awsrefreshcreds"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -157,7 +158,7 @@ func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), defaultMemTableSize, q)
+	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), memlimit.MemtableSize(), q)
 }
 
 func validatePath(path string) (string, error) {
