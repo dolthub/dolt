@@ -1,0 +1,50 @@
+name: Collect Coverage
+
+on:
+  workflow_run:
+    workflows:
+      - "Test Go"
+      - "Test Go (Adaptive Encoding)"
+      - "Test Bats Unix"
+      - "Test Bats Unix (Adaptive Encoding)"
+      - "Test Bats Unix Remote"
+      - "Test Binlog"
+      - "Race tests"
+      - "sql-server Integration Tests"
+      - "Check Compatibility"
+    types:
+      - completed
+
+jobs:
+  collect:
+    name: Collect and package coverage data
+    runs-on: ubuntu-22.04
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: all-coverage
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package coverage data
+        run: |
+          if [ -d all-coverage ] && [ "$(ls -A all-coverage 2>/dev/null)" ]; then
+            tar czf coverage-data.tar.gz -C all-coverage .
+            echo "Coverage data packaged from workflow: ${{ github.event.workflow_run.name }}"
+            echo "Workflow run ID: ${{ github.event.workflow_run.id }}"
+            find all-coverage -type f | wc -l | xargs -I{} echo "Total coverage files: {}"
+          else
+            echo "No coverage artifacts found for workflow: ${{ github.event.workflow_run.name }}"
+            mkdir -p all-coverage
+            tar czf coverage-data.tar.gz --files-from /dev/null
+          fi
+
+      - name: Upload combined coverage archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-combined-${{ github.event.workflow_run.name }}-${{ github.event.workflow_run.id }}
+          path: coverage-data.tar.gz
+          retention-days: 30

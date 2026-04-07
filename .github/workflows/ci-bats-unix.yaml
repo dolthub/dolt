@@ -85,10 +85,19 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
+      - name: Generate coverage package list
+        working-directory: ./go/cmd/dolt
+        run: |
+          go list -f '{{if not .Standard}}{{.ImportPath}}{{end}}' -deps . | grep dolthub | paste -sd"," - > "$GITHUB_WORKSPACE/pkgs.txt"
+      - name: Create coverage directory
+        run: |
+          mkdir -p /tmp/coverdata/bats
+          echo "GOCOVERDIR=/tmp/coverdata/bats" >> $GITHUB_ENV
       - name: Install Dolt
         working-directory: ./go
         run: |
-          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+          COV_PKGS=$(cat "$GITHUB_WORKSPACE/pkgs.txt")
+          go build -cover -coverpkg="$COV_PKGS" -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
 
           go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
           go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
@@ -140,3 +149,10 @@ jobs:
         run: |
           bats --print-output-on-failure --tap $BATS_FILTER .
         working-directory: ./integration-tests/bats
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-bats-unix
+          path: /tmp/coverdata
+          retention-days: 5

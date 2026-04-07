@@ -39,10 +39,19 @@ jobs:
           npm i bats
           echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
+      - name: Generate coverage package list
+        working-directory: ./go/cmd/dolt
+        run: |
+          go list -f '{{if not .Standard}}{{.ImportPath}}{{end}}' -deps . | grep dolthub | paste -sd"," - > "$GITHUB_WORKSPACE/pkgs.txt"
+      - name: Create coverage directory
+        run: |
+          mkdir -p /tmp/coverdata/compat
+          echo "GOCOVERDIR=/tmp/coverdata/compat" >> $GITHUB_ENV
       - name: Install Dolt
         working-directory: ./go
         run: |
-          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+          COV_PKGS=$(cat "$GITHUB_WORKSPACE/pkgs.txt")
+          go build -cover -coverpkg="$COV_PKGS" -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
       - name: Setup Dolt Config
         run: |
           dolt config --global --add user.name 'DoltHub Actions'
@@ -52,3 +61,10 @@ jobs:
         working-directory: ./integration-tests/compatibility
         env:
           DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-compat-${{ matrix.adaptive_encoding }}
+          path: /tmp/coverdata
+          retention-days: 5
