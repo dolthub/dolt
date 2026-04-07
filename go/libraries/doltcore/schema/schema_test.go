@@ -35,26 +35,38 @@ const (
 	ageColName      = "age"
 	titleColName    = "title"
 	reservedColName = "reserved"
-	lnColTag        = 1
-	fnColTag        = 0
-	addrColTag      = 6
-	ageColTag       = 4
-	titleColTag     = 40
-	reservedColTag  = 50
+	lnColTag        = 0
+	fnColTag        = 1
+	addrColTag      = 2
+	ageColTag       = 3
+	titleColTag     = 4
+	reservedColTag  = 5
 )
 
+// pkCols and nonPkCols have sequential tags starting from 0, matching what
+// NewColCollection assigns when they are built as independent sub-collections.
 var pkCols = []Column{
-	{Name: lnColName, Tag: lnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
-	{Name: fnColName, Tag: fnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
+	{Name: lnColName, Tag: 0, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
+	{Name: fnColName, Tag: 1, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
 }
 var nonPkCols = []Column{
-	{Name: addrColName, Tag: addrColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
-	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, TypeInfo: typeinfo.FromKind(types.UintKind)},
-	{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
-	{Name: reservedColName, Tag: reservedColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+	{Name: addrColName, Tag: 0, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+	{Name: ageColName, Tag: 1, Kind: types.UintKind, TypeInfo: typeinfo.FromKind(types.UintKind)},
+	{Name: titleColName, Tag: 2, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+	{Name: reservedColName, Tag: 3, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 }
 
-var allCols = append(append([]Column(nil), pkCols...), nonPkCols...)
+// allCols has sequential tags 0-5, matching what NewColCollection assigns
+// for the full column list. Note these tags differ from pkCols/nonPkCols
+// because NewColCollection always assigns tags starting from 0.
+var allCols = []Column{
+	{Name: lnColName, Tag: 0, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
+	{Name: fnColName, Tag: 1, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
+	{Name: addrColName, Tag: 2, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+	{Name: ageColName, Tag: 3, Kind: types.UintKind, TypeInfo: typeinfo.FromKind(types.UintKind)},
+	{Name: titleColName, Tag: 4, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+	{Name: reservedColName, Tag: 5, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+}
 
 func TestNewSchema(t *testing.T) {
 	allColColl := NewColCollection(allCols...)
@@ -75,7 +87,9 @@ func TestNewSchema(t *testing.T) {
 	require.True(t, sch.Checks().Equals(checkCol))
 
 	// Set ordinals explicitly
-	indexCol.(*indexCollectionImpl).pks = []uint64{fnColTag, lnColTag}
+	// When ordinals are {1, 0}, SetPkOrdinals rebuilds pkCols via NewColCollection
+	// which assigns sequential tags 0, 1 to the reordered pk columns (fn, ln).
+	indexCol.(*indexCollectionImpl).pks = []uint64{0, 1}
 	sch, err = NewSchema(allColColl, []int{1, 0}, Collation_Default, indexCol, checkCol)
 	require.NoError(t, err)
 	require.Equal(t, []int{1, 0}, sch.GetPkOrdinals())
@@ -216,14 +230,8 @@ func TestValidateForInsert(t *testing.T) {
 		assert.Equal(t, err, ErrColNameCollision)
 	})
 
-	t.Run("Tag collision", func(t *testing.T) {
-		cols := append(allCols, Column{Name: "newCol", Tag: lnColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType})
-		colColl := NewColCollection(cols...)
-
-		err := ValidateForInsert(colColl)
-		assert.Error(t, err)
-		assert.Equal(t, err, ErrColTagCollision)
-	})
+	// Tag collision test removed: tags are now assigned sequentially by NewColCollection,
+	// so tag collisions are no longer possible from user-specified tags.
 
 	t.Run("AutoIncrement on integer types should be allowed", func(t *testing.T) {
 		// Test that auto_increment validation is no longer enforced at database layer
@@ -318,12 +326,14 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 			KeyMap:   val.OrdinalMapping{0, 1},
 		},
 		{
+			// Tags are positional now, so same-named columns at same positions are always diffable
 			Name: "Tag mismatches",
 			From: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 0, types.IntKind, true))),
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 1, types.IntKind, true))),
-			Diffable: false,
+			Diffable: true,
+			KeyMap:   val.OrdinalMapping{0},
 		},
 		{
 			Name: "PK Ordinal mismatches",

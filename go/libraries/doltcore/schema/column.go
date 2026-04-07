@@ -127,6 +127,14 @@ func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, 
 	return c, nil
 }
 
+// AssignColumnTags assigns sequential tags (0, 1, 2, ...) to a slice of columns based on their position.
+// Tags are no longer stored or generated; they are derived from column order.
+func AssignColumnTags(cols []Column) {
+	for i := range cols {
+		cols[i].Tag = uint64(i)
+	}
+}
+
 // ValidateColumn validates the given column.
 func ValidateColumn(c Column) error {
 	for _, c := range c.Constraints {
@@ -158,10 +166,9 @@ func (c Column) IsNullable() bool {
 	return true
 }
 
-// Equals tests equality between two columns.
+// Equals tests equality between two columns. Tags are not compared since they are positional.
 func (c Column) Equals(other Column) bool {
 	return c.Name == other.Name &&
-		c.Tag == other.Tag &&
 		c.IsPartOfPK == other.IsPartOfPK &&
 		c.TypeInfo.Equals(other.TypeInfo) &&
 		c.Default == other.Default &&

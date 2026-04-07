@@ -281,14 +281,33 @@ func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
 		return false
 	}
 
+	// Try to match PK columns by name first (handles column order changes in the full schema).
+	// If names match at each ordinal, they're diffable. If not, try finding by name in the other set.
 	for i := 0; i < cc1.Size(); i++ {
 		c1 := cc1.GetByIndex(i)
-		c2 := cc2.GetByIndex(i)
-		if (c1.Tag != c2.Tag) || (c1.IsPartOfPK != c2.IsPartOfPK) {
+		// Look for a matching column by name in cc2
+		c2, ok := cc2.GetByNameCaseInsensitive(c1.Name)
+		if !ok {
+			// Column renamed — match by ordinal position instead
+			c2 = cc2.GetByIndex(i)
+		}
+		if c1.IsPartOfPK != c2.IsPartOfPK {
 			return false
 		}
 		if !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
 			return false
+		}
+	}
+	// Verify ordinal positions of PK columns match (reordering PKs is not diffable)
+	for i := 0; i < cc1.Size(); i++ {
+		if cc1.GetByIndex(i).Name != cc2.GetByIndex(i).Name {
+			// Check if this is a rename (same type) vs reorder
+			// If both schemas have columns at this position that are PK and same type, it could be a rename
+			c1 := cc1.GetByIndex(i)
+			// If c1's name exists elsewhere in cc2, this is a reorder, not a rename
+			if _, found := cc2.GetByNameCaseInsensitive(c1.Name); found {
+				return false // c1's name exists in cc2 at a different position — reorder
+			}
 		}
 	}
 

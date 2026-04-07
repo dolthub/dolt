@@ -321,33 +321,14 @@ func (root *rootValue) HasTable(ctx context.Context, tName TableName) (bool, err
 	return !a.IsEmpty(), nil
 }
 
-// GenerateTagsForNewColColl creates a new ColCollection for the specified |tableName|. Note that this function is only
-// intended to be used from Dolt code, and does not support qualifying a table with a schema name, so it will not work
-// correctly for Doltgres.
+// GenerateTagsForNewColColl returns the ColCollection unchanged. Tags are no longer generated;
+// they are assigned sequentially by NewColCollection based on column position.
 func GenerateTagsForNewColColl(ctx context.Context, root RootValue, tableName string, cc *schema.ColCollection) (*schema.ColCollection, error) {
-	newColNames := make([]string, 0, cc.Size())
-	newColKinds := make([]types.NomsKind, 0, cc.Size())
-	_ = cc.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		newColNames = append(newColNames, col.Name)
-		newColKinds = append(newColKinds, col.Kind)
-		return false, nil
-	})
-
-	newTags, err := GenerateTagsForNewColumns(ctx, root, TableName{Name: tableName}, newColNames, newColKinds, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	idx := 0
-	return schema.MapColCollection(cc, func(col schema.Column) schema.Column {
-		col.Tag = newTags[idx]
-		idx++
-		return col
-	}), nil
+	return cc, nil
 }
 
-// GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
-// the new columns are used to see the tag generator.
+// GenerateTagsForNewColumns returns sequential tags (0, 1, 2, ...) for the requested columns.
+// Tags are no longer generated from content hashes; they are purely positional.
 func GenerateTagsForNewColumns(
 	ctx context.Context,
 	root RootValue,
@@ -360,49 +341,9 @@ func GenerateTagsForNewColumns(
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
 	}
 
-	newTags := make([]*uint64, len(newColNames))
-
-	// Get existing columns from the current root, or the head root if the table doesn't exist in the current root. The
-	// latter case is to support reusing table tags in the case of drop / create in the same session, which is common
-	// during import.
-	existingCols, err := GetExistingColumns(ctx, root, headRoot, tableName, newColNames, newColKinds)
-	if err != nil {
-		return nil, err
-	}
-
-	// If we found any existing columns set them in the newTags list.
-	for _, col := range existingCols {
-		for i := range newColNames {
-			// Only re-use tags if the noms kind didn't change
-			// TODO: revisit this when new storage format is further along
-			if strings.EqualFold(newColNames[i], col.Name) &&
-				newColKinds[i] == col.TypeInfo.NomsKind() {
-				newTags[i] = &col.Tag
-				break
-			}
-		}
-	}
-
-	var existingColKinds []types.NomsKind
-	for _, col := range existingCols {
-		existingColKinds = append(existingColKinds, col.Kind)
-	}
-
-	existingTags, err := GetAllTagsForRoots(ctx, headRoot, root)
-	if err != nil {
-		return nil, err
-	}
-
-	outputTags := make([]uint64, len(newTags))
-	for i := range newTags {
-		if newTags[i] != nil {
-			outputTags[i] = *newTags[i]
-			continue
-		}
-
-		outputTags[i] = schema.AutoGenerateTag(existingTags, tableName.Name, existingColKinds, newColNames[i], newColKinds[i])
-		existingColKinds = append(existingColKinds, newColKinds[i])
-		existingTags.Add(outputTags[i], tableName.Name)
+	outputTags := make([]uint64, len(newColNames))
+	for i := range outputTags {
+		outputTags[i] = uint64(i)
 	}
 
 	return outputTags, nil

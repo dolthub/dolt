@@ -185,14 +185,8 @@ func ValidateForInsert(allCols *ColCollection) error {
 	}
 
 	colNames := make(map[string]bool)
-	colTags := make(map[uint64]bool)
 
 	err := allCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		if _, ok := colTags[tag]; ok {
-			return true, ErrColTagCollision
-		}
-		colTags[tag] = true
-
 		if _, ok := colNames[strings.ToLower(col.Name)]; ok {
 			return true, ErrColNameCollision
 		}

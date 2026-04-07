@@ -182,9 +182,23 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	require.NoError(t, err)
 
-	assert.Equal(t, test.fks, fkc.AllKeys())
+	actualFks := fkc.AllKeys()
+	require.Equal(t, len(test.fks), len(actualFks), "foreign key count mismatch")
+	for i, expected := range test.fks {
+		actual := actualFks[i]
+		// Compare FK structure without tag arrays (tags are now positional)
+		assert.Equal(t, expected.Name, actual.Name)
+		assert.Equal(t, expected.TableName, actual.TableName)
+		assert.Equal(t, expected.TableIndex, actual.TableIndex)
+		assert.Equal(t, expected.ReferencedTableName, actual.ReferencedTableName)
+		assert.Equal(t, expected.ReferencedTableIndex, actual.ReferencedTableIndex)
+		assert.Equal(t, expected.OnUpdate, actual.OnUpdate)
+		assert.Equal(t, expected.OnDelete, actual.OnDelete)
+		assert.Equal(t, expected.UnresolvedFKDetails.TableColumns, actual.UnresolvedFKDetails.TableColumns)
+		assert.Equal(t, expected.UnresolvedFKDetails.ReferencedTableColumns, actual.UnresolvedFKDetails.ReferencedTableColumns)
+	}
 
-	for _, fk := range test.fks {
+	for _, fk := range actualFks {
 		// verify parent index
 		pt, _, ok, err := doltdb.GetTableInsensitive(ctx, root, fk.ReferencedTableName)
 		require.NoError(t, err)
