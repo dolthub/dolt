@@ -43,7 +43,7 @@ func TestForeignKeyHashOf(t *testing.T) {
 		}
 		hashOf, err := fk.HashOf()
 		assert.NoError(t, err)
-		assert.Equal(t, "65brfkb3fh6n7kgpv8d38mjb6krrc54r", hashOf.String())
+		assert.Equal(t, "ncpboaiiir2ah410gch0pm9cpibennto", hashOf.String())
 	})
 
 	// Assert that two unresolved Foreign Keys get unique hashes, when only their unresolved FK details are different

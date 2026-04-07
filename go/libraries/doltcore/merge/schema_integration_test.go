@@ -190,13 +190,14 @@ var mergeSchemaTests = []mergeSchemaTest{
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
-		// hmmm, we created new columns with a rename?
+		// Without tags, renames behave as drop old + add new. New columns appear
+		// after existing ones, with "our" additions before "their" additions.
 		sch: schemaFromColsAndIdxs(
 			colCollection(
 				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 				newColTypeInfo("c1", 1, typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c22", 2, typeinfo.Int32Type, false),
-				newColTypeInfo("c33", 3, typeinfo.Int32Type, false)),
+				newColTypeInfo("c33", 2, typeinfo.Int32Type, false),
+				newColTypeInfo("c22", 3, typeinfo.Int32Type, false)),
 			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
 	},
@@ -284,18 +285,15 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
+		// Without tags, renaming c3→c4 on ours and c2→c4 on theirs produces
+		// columns that match by name, so only the C6/c6 case collision remains.
 		expConflict: merge.SchemaConflict{
 			TableName: doltdb.TableName{Name: "test"},
 			ColConflicts: []merge.ColConflict{
 				{
 					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("C6", uint64(13258), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c6", uint64(13258), typeinfo.Int32Type, false),
-				},
-				{
-					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("c4", uint64(4696), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c4", uint64(8539), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("C6", 0, typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c6", 0, typeinfo.Int32Type, false),
 				},
 			},
 		},
@@ -585,7 +583,11 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	sch, err := tbl.GetSchema(ctx)
 	require.NoError(t, err)
 
-	assert.True(t, schema.ColCollsAreEqual(test.sch.GetAllCols(), sch.GetAllCols()))
+	if !schema.ColCollsAreEqual(test.sch.GetAllCols(), sch.GetAllCols()) {
+		t.Errorf("Schema mismatch.\nExpected cols: %v\nActual cols:   %v",
+			test.sch.GetAllCols().GetColumnNames(),
+			sch.GetAllCols().GetColumnNames())
+	}
 	assert.True(t, test.sch.Indexes().Equals(sch.Indexes()))
 }
 

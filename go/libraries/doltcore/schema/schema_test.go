@@ -288,13 +288,13 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 			KeyMap:   val.OrdinalMapping{0},
 		},
 		{
+			// Without tags, PK renames are not diffable (looks like drop old + add new)
 			Name: "PK-Column renames",
 			From: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 1, types.IntKind, true))),
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk2", 1, types.IntKind, true))),
-			Diffable: true,
-			KeyMap:   val.OrdinalMapping{0},
+			Diffable: false,
 		},
 		{
 			Name: "Only pk ordering should matter for diffability",

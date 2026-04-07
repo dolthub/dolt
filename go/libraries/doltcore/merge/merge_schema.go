@@ -707,48 +707,15 @@ func (c columnMappings) DebugString() string {
 // mapColumns returns a columnMappings instance that describes how the columns in |ourCC|, |theirCC|, and |ancCC|
 // map to each other.
 func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, error) {
-	// Track which "their" columns have been matched
+	// Columns are matched purely by name. Without tags, a rename is indistinguishable
+	// from dropping the old column and adding a new one.
 	theirMatched := make(map[string]bool)
 
-	// With sequential/positional tags, we match columns by name. For renames (where the name
-	// changed but the column identity is preserved), we use tag-based matching as a fallback,
-	// but only when we can confirm through the ancestor that it's truly a rename.
 	columnMappings := make(columnMappings, 0)
 	_ = ourCC.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
-		// First try to match by name
-		theirCol, foundByName := theirCC.GetByNameCaseInsensitive(ourCol.Name)
-		if !foundByName {
-			// If name not found in theirs, check if this is a rename by looking at the ancestor.
-			// A rename is detected when: the ancestor has a column at this tag position, AND
-			// theirs also has a column at this tag position with the SAME ancestor name
-			// (meaning theirs kept the column but we renamed it, or vice versa).
-			ancAtTag, ancHasTag := ancCC.GetByTag(ourCol.Tag)
-			if ancHasTag {
-				theirAtTag, theirHasTag := theirCC.GetByTag(ourCol.Tag)
-				// Only match by tag if theirs column at this position has the ancestor's name
-				// (meaning theirs didn't rename/replace it) or if our column has the ancestor's name
-				// (meaning we didn't replace it)
-				if theirHasTag && (strings.EqualFold(theirAtTag.Name, ancAtTag.Name) || strings.EqualFold(ourCol.Name, ancAtTag.Name)) {
-					theirCol = theirAtTag
-				}
-			}
-		}
-
-		// Find the ancestor column
+		// Match columns by name only
+		theirCol, _ := theirCC.GetByNameCaseInsensitive(ourCol.Name)
 		ancCol, _ := ancCC.GetByNameCaseInsensitive(ourCol.Name)
-		if ancCol.Name == "" {
-			// If ancestor not found by name, try by tag (handles renames on our side)
-			ancAtTag, ancHasTag := ancCC.GetByTag(ourCol.Tag)
-			if ancHasTag {
-				// Only use the ancestor at this tag if it's the same column (i.e., theirs also
-				// has this ancestor name, confirming the column identity)
-				_, theirHasAncName := theirCC.GetByNameCaseInsensitive(ancAtTag.Name)
-				theirAtTag, theirHasTag := theirCC.GetByTag(ourCol.Tag)
-				if theirHasAncName || (theirHasTag && strings.EqualFold(theirAtTag.Name, ancAtTag.Name)) {
-					ancCol = ancAtTag
-				}
-			}
-		}
 
 		if theirCol.Name != "" {
 			theirMatched[strings.ToLower(theirCol.Name)] = true
@@ -757,19 +724,12 @@ func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, er
 		return false, nil
 	})
 
-	// Handle any remaining columns on the "their" side (not matched)
+	// Handle remaining columns on the "their" side (not matched by name to any of ours)
 	_ = theirCC.Iter(func(tag uint64, theirCol schema.Column) (stop bool, err error) {
 		if theirMatched[strings.ToLower(theirCol.Name)] {
 			return // already added
 		}
-
 		ancCol, _ := ancCC.GetByNameCaseInsensitive(theirCol.Name)
-		if ancCol.Name == "" {
-			ancAtTag, ancHasTag := ancCC.GetByTag(tag)
-			if ancHasTag && strings.EqualFold(theirCol.Name, ancAtTag.Name) {
-				ancCol = ancAtTag
-			}
-		}
 		columnMappings = append(columnMappings, newColumnMapping(ancCol, schema.InvalidCol, theirCol))
 		return
 	})
@@ -806,12 +766,9 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.IndexCollection) (common schema.IndexCollection, conflicts []IdxConflict) {
 	common = schema.NewIndexCollection(mergedCC, nil)
 	_ = ours.Iter(func(ourIdx schema.Index) (stop bool, err error) {
-		idxTags := ourIdx.IndexedColumnTags()
-		for _, t := range idxTags {
-			// if column doesn't exist anymore, drop index
-			// however, it shouldn't be possible for an index
-			// over a dropped column to exist in the intersection
-			if _, ok := mergedCC.GetByTag(t); !ok {
+		// Check that all indexed columns still exist in the merged schema
+		for _, colName := range ourIdx.ColumnNames() {
+			if !mergedCC.Contains(colName) {
 				return false, nil
 			}
 		}
@@ -837,7 +794,7 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 			return false, nil
 		}
 
-		ancIdx, ok := anc.GetIndexByTags(idxTags...)
+		ancIdx, ok := anc.GetIndexByTags(ourIdx.IndexedColumnTags()...)
 
 		if !ok {
 			// index added on our branch and their branch with different defs, conflict
@@ -922,15 +879,14 @@ func findIndexInCollectionByTags(idx schema.Index, idxColl schema.IndexCollectio
 func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCollection) (d schema.IndexCollection) {
 	d = schema.NewIndexCollection(cc, nil)
 	_ = left.Iter(func(idx schema.Index) (stop bool, err error) {
-		idxTags := idx.IndexedColumnTags()
-		for _, t := range idxTags {
-			// if column doesn't exist anymore, drop index
-			if _, ok := cc.GetByTag(t); !ok {
+		// Check that all indexed columns still exist
+		for _, colName := range idx.ColumnNames() {
+			if !cc.Contains(colName) {
 				return false, nil
 			}
 		}
 
-		_, ok := right.GetIndexByTags(idxTags...)
+		_, ok := right.GetIndexByTags(idx.IndexedColumnTags()...)
 		if !ok {
 			d.AddIndex(idx)
 		}
