@@ -238,6 +238,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
 	ap.SupportsString(UserFlag, "", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	ap.SupportsFlag(PruneFlag, "p", "After fetching, remove any remote-tracking references that don't exist on the remote.")
+	ap.SupportsFlag(RebaseParam, "r", "After fetching, rebase the current branch on top of the upstream branch instead of merging.")
 	ap.SupportsFlag(SilentFlag, "", "Suppress progress information.")
 	ap.SupportsFlag(SkipVerificationFlag, "", "Skip commit verification before merge")
 	return ap
