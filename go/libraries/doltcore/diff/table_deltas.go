@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -357,14 +356,31 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 		delete(to, t.ToName)
 	}
 
-	for _, f := range from {
+	// Match remaining tables by schema overlap. Only match when the match is
+	// unambiguous — i.e., exactly one "from" table matches a given "to" table
+	// and vice versa. This avoids incorrect rename detection when multiple
+	// tables share identical schemas (which is common with positional tags).
+	for changed := true; changed; {
+		changed = false
 		for _, t := range to {
-			// check for overlapping schemas to try and match tables when names don't match
-			if schemasOverlap(f.FromSch, t.ToSch) {
-				matched := match(t, f)
-				deltas = append(deltas, matched)
-				delete(from, f.FromName)
+			var matchedFrom *TableDelta
+			ambiguous := false
+			for _, f := range from {
+				if schemasOverlap(f.FromSch, t.ToSch) {
+					if matchedFrom != nil {
+						ambiguous = true
+						break
+					}
+					fCopy := f
+					matchedFrom = &fCopy
+				}
+			}
+			if matchedFrom != nil && !ambiguous {
+				deltas = append(deltas, match(t, *matchedFrom))
+				delete(from, matchedFrom.FromName)
 				delete(to, t.ToName)
+				changed = true
+				break // restart since maps changed
 			}
 		}
 	}
@@ -380,23 +396,45 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 	return deltas
 }
 
-func schemasOverlap(from, to schema.Schema) bool {
+// schemaOverlapScore returns a score indicating how well two schemas match.
+// Returns 0 if they don't overlap sufficiently. Higher scores indicate better matches.
+// An exact schema match (same columns, same count) scores highest.
+func schemaOverlapScore(from, to schema.Schema) int {
 	fromCols := from.GetAllCols()
 	toCols := to.GetAllCols()
-	fromColSet := set.NewUint64Set(fromCols.Tags)
-	toColSet := set.NewUint64Set(toCols.Tags)
 
-	// TAGS: We use tags here, but only over a single table
-	overlappingTags := fromColSet.Intersection(toColSet)
-	numOverlaps := overlappingTags.Size()
-	for _, tag := range overlappingTags.AsSlice() {
-		fromCol, _ := fromCols.GetByTag(tag)
-		toCol, _ := toCols.GetByTag(tag)
-		if fromCol.Name != toCol.Name {
-			numOverlaps--
+	numOverlaps := 0
+	for _, fromCol := range fromCols.GetColumns() {
+		toCol, ok := toCols.GetByNameCaseInsensitive(fromCol.Name)
+		if ok && fromCol.Kind == toCol.Kind {
+			numOverlaps++
 		}
 	}
-	return numOverlaps > 0
+
+	minCols := fromCols.Size()
+	if toCols.Size() < minCols {
+		minCols = toCols.Size()
+	}
+	if minCols == 0 {
+		return 0
+	}
+
+	// Require that at least half the columns match
+	if numOverlaps*2 < minCols {
+		return 0
+	}
+
+	// Score: base score is the number of overlapping columns.
+	// Bonus for exact column count match (strongly prefer renames over add+drop).
+	score := numOverlaps
+	if fromCols.Size() == toCols.Size() {
+		score += numOverlaps
+	}
+	return score
+}
+
+func schemasOverlap(from, to schema.Schema) bool {
+	return schemaOverlapScore(from, to) > 0
 }
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
