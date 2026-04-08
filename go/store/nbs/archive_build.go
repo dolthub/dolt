@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -338,7 +339,10 @@ func indexFinalizeFlushArchive(arcW *archiveWriter, archivePath string, originTa
 	if err != nil {
 		return err
 	}
-	err = arcW.indexFinalize(originTableFile)
+	err = arcW.indexFinalize(archiveOrigin{
+		ConvertedTableFileName: originTableFile,
+		ConversionTime:         time.Now(),
+	})
 	if err != nil {
 		return err
 	}

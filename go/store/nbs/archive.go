@@ -18,6 +18,9 @@ import (
 	"crypto/md5"
 	"crypto/sha512"
 	"errors"
+	"time"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 /*
@@ -222,9 +225,22 @@ const ( //amdk = Archive Metadata Data Key
 	// The id of the table file that the archive was created from. This value can be used during the reverse process
 	// to quickly get back to the original table file if it is still available.
 	amdkOriginTableFile = "origin_table_file"
+	// The names of the source files that were conjoined to create this archive.
+	amdkConjoinedFileNames = "conjoined_file_names"
 	// The timestamp of when the archive was created.
 	amdkConversionTime = "conversion_time"
 )
+
+// archiveOrigin describes the provenance of an archive file.
+type archiveOrigin struct {
+	// ConvertedTableFileName is set when the archive was created by converting a single table file.
+	ConvertedTableFileName hash.Hash
+	// ConjoinedFileNames is set when the archive was created by conjoining multiple files.
+	ConjoinedFileNames []string
+	// ConversionTime is the timestamp of when the archive was created. Only set for
+	// table-file-to-archive conversions. When zero, the field is omitted from metadata.
+	ConversionTime time.Time
+}
 
 var ErrInvalidChunkRange = errors.New("invalid chunk range")
 var ErrInvalidDictionaryRange = errors.New("invalid dictionary range")
