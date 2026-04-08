@@ -13,14 +13,14 @@ teardown() {
     rm -rf bats_repo
 }
 
-@test "dolt version" {
+@test "compatibility: dolt version" {
     run dolt version
     [ "$status" -eq 0 ]
     regex='dolt version [0-9]+.[0-9]+.[0-9]+'
     [[ "$output" =~ $regex ]] || false
 }
 
-@test "dolt status" {
+@test "compatibility: dolt status" {
     expected="On branch $DEFAULT_BRANCH"
     run dolt status
     [ "$status" -eq 0 ]
@@ -28,23 +28,23 @@ teardown() {
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "dolt ls" {
+@test "compatibility: dolt ls" {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "Tables in working set:" ]] || false
 }
 
-@test "dolt branch" {
+@test "compatibility: dolt branch" {
     run dolt branch
     [ "$status" -eq 0 ]
 }
 
-@test "dolt diff" {
+@test "compatibility: dolt diff" {
     run dolt diff
     [ "$status" -eq 0 ]
 }
 
-@test "dolt schema show on branch init" {
+@test "compatibility: dolt schema show on branch init" {
     dolt checkout init
     run dolt schema show abc
     [ "$status" -eq 0 ]
@@ -59,7 +59,7 @@ teardown() {
     [[ "${output}" =~ "primary key (\`pk\`)" ]] || false
 }
 
-@test "dolt sql 'select * from abc' on branch init" {
+@test "compatibility: dolt sql 'select * from abc' on branch init" {
     dolt checkout init
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
@@ -72,7 +72,7 @@ teardown() {
     [[ "${lines[5]}" =~ "| 2  | asdf | 1.1 | 0 | 0 |" ]] || false
 }
 
-@test "dolt schema show on branch $DEFAULT_BRANCH" {
+@test "compatibility: dolt schema show on branch $DEFAULT_BRANCH" {
     run dolt schema show abc
     [ "$status" -eq 0 ]
     output=`echo $output | tr '[:upper:]' '[:lower:]'` # lowercase the output
@@ -87,7 +87,7 @@ teardown() {
 }
 
 
-@test "dolt sql 'select * from abc' on branch $DEFAULT_BRANCH" {
+@test "compatibility: dolt sql 'select * from abc' on branch $DEFAULT_BRANCH" {
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| pk | a    | b   | x | y   |" ]] || false
@@ -97,7 +97,7 @@ teardown() {
     [[ "${lines[5]}" =~ "| 3  | data | 1.1 | 0 | 121 |" ]] || false
 }
 
-@test "dolt schema show on branch other" {
+@test "compatibility: dolt schema show on branch other" {
     dolt checkout other
     run dolt schema show abc
     [ "$status" -eq 0 ]
@@ -113,7 +113,7 @@ teardown() {
     [[ "${output}" =~ "primary key (\`pk\`)" ]] || false
 }
 
-@test "dolt sql 'select * from abc' on branch other" {
+@test "compatibility: dolt sql 'select * from abc' on branch other" {
     dolt checkout other
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
@@ -132,7 +132,7 @@ teardown() {
     dolt checkout "$DEFAULT_BRANCH"
 }
 
-@test "dolt diff other" {
+@test "compatibility: dolt diff other" {
     dolt diff other
     run dolt diff other
 
@@ -168,7 +168,7 @@ EOF
     [[ "$output" =~ "$EXPECTED_DATA" ]] || false
 }
 
-@test "big table" {
+@test "compatibility: big table" {
     run dolt sql -q "SELECT count(*) FROM big;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "1000" ]] || false
@@ -192,14 +192,14 @@ EOF
     dolt commit -am "inserted, deleted some rows"
 }
 
-@test "dolt merge other into $DEFAULT_BRANCH" {
+@test "compatibility: dolt merge other into $DEFAULT_BRANCH" {
     run dolt merge other
     [ $status -eq 1 ]
     [[ $output =~ "Merge conflict in abc" ]] || false
     [[ $output =~ "Automatic merge failed" ]] || false
 }
 
-@test "dolt table import" {
+@test "compatibility: dolt table import" {
     run dolt table import -c -pk=pk abc2 abc.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -207,12 +207,12 @@ EOF
     dolt sql -q 'drop table abc2'
 }
 
-@test "dolt merge with check constraints" {
+@test "compatibility: dolt merge with check constraints" {
     run dolt merge check_merge
     [ "$status" -eq 0 ]
 }
 
-@test "constraint violation readable and resolvable by current build" {
+@test "compatibility: constraint violation readable and resolvable by current build" {
     [[ "$DOLT_VERSION" =~ 0\.50 ]] && skip "constraint violation test not run for Dolt version 0.50"
     repo="$BATS_TEST_TMPDIR/cv_test_repo_$$"
     mkdir -p "$repo" && cd "$repo"

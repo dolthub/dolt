@@ -15,22 +15,26 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // extendedType is a type that refers to an ExtendedType in GMS. These are only supported in the new format, and have many
 // more limitations than traditional types (for now).
 type extendedType struct {
 	sqlExtendedType sql.ExtendedType
+	enc             val.Encoding // 0 means use default based on MaxSerializedWidth
 }
 
 var _ TypeInfo = (*extendedType)(nil)
 
-// CreateExtendedTypeFromSqlType creates a TypeInfo from the given extended type.
+// CreateExtendedTypeFromSqlType creates a TypeInfo from the given extended type with the default encoding.
 func CreateExtendedTypeFromSqlType(typ sql.ExtendedType) TypeInfo {
-	return &extendedType{typ}
+	return &extendedType{sqlExtendedType: typ}
 }
 
 // Equals implements the TypeInfo interface.
@@ -39,7 +43,8 @@ func (ti *extendedType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if ti2, ok := other.(*extendedType); ok {
-		return ti.sqlExtendedType.Equals(ti2.sqlExtendedType)
+		return ti.sqlExtendedType.Equals(ti2.sqlExtendedType) &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }
@@ -52,6 +57,29 @@ func (ti *extendedType) NomsKind() types.NomsKind {
 // String implements the TypeInfo interface.
 func (ti *extendedType) String() string {
 	return ti.sqlExtendedType.String()
+}
+
+// Encoding implements the TypeInfo interface.
+func (ti *extendedType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	switch ti.sqlExtendedType.MaxSerializedWidth() {
+	case sql.ExtendedTypeSerializedWidth_64K:
+		return val.ExtendedEnc
+	case sql.ExtendedTypeSerializedWidth_Unbounded:
+		return val.ExtendedAdaptiveEnc
+	default:
+		panic(fmt.Errorf("unknown extended type serialization width"))
+	}
+}
+
+// WithEncoding implements the TypeInfo interface.
+func (ti *extendedType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != (&extendedType{sqlExtendedType: ti.sqlExtendedType}).Encoding() {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &extendedType{sqlExtendedType: ti.sqlExtendedType, enc: enc}
 }
 
 // ToSqlType implements the TypeInfo interface.

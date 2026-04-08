@@ -123,7 +123,8 @@ func IsAdaptiveEncoding(enc Encoding) bool {
 	switch enc {
 	case BytesAdaptiveEnc,
 		StringAdaptiveEnc,
-		ExtendedAdaptiveEnc:
+		ExtendedAdaptiveEnc,
+		GeomAdaptiveEnc:
 		return true
 	default:
 		return false
@@ -132,17 +133,6 @@ func IsAdaptiveEncoding(enc Encoding) bool {
 
 func IsReferenceEncoding(enc Encoding) bool {
 	return IsAdaptiveEncoding(enc) || IsAddrEncoding(enc)
-}
-
-func IsExtendedEncoding(enc Encoding) bool {
-	switch enc {
-	case ExtendedEnc,
-		ExtendedAddrEnc,
-		ExtendedAdaptiveEnc:
-		return true
-	default:
-		return false
-	}
 }
 
 // Variable Width Encodings
@@ -156,6 +146,7 @@ const (
 	StringAdaptiveEnc   = Encoding(serial.EncodingStringAdaptive)
 	BytesAdaptiveEnc    = Encoding(serial.EncodingBytesAdaptive)
 	ExtendedAdaptiveEnc = Encoding(serial.EncodingExtendedAdaptive)
+	GeomAdaptiveEnc     = Encoding(serial.EncodingGeomAdaptive)
 )
 
 func sizeFromType(t Type) (ByteSize, bool) {

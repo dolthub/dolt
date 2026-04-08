@@ -187,6 +187,8 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 	ap.SupportsString(CreateResetBranch, "", "branch", "Similar to '-b'. Forcibly resets the branch to {{.LessThan}}start_point{{.GreaterThan}} if it exists.")
 	ap.SupportsFlag(ForceFlag, "f", "If there is any changes in working set, the force flag will wipe out the current changes and checkout the new branch.")
 	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
+	ap.SupportsFlag(OverwriteIgnoreFlag, "", "Silently overwrite ignored tables when switching branches (default behavior).")
+	ap.SupportsFlag(NoOverwriteIgnoreFlag, "", "Abort the operation when ignored tables in the working set would be overwritten by the checkout.")
 	return ap
 }
 
@@ -215,6 +217,8 @@ func CreateFetchArgParser() *argparser.ArgParser {
 func CreateRevertArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("revert")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
+	ap.SupportsFlag(AbortParam, "", "Abort the current revert operation and return the working set to the pre-revert state.")
+	ap.SupportsFlag(ContinueFlag, "", "Continue the current revert operation after resolving conflicts.")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"revision",
 		"The commit revisions. If multiple revisions are given, they're applied in the order given."})
 

@@ -23,14 +23,17 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type remotesrvStore struct {
-	ctxFactory func(context.Context) (*sql.Context, error)
-	createDBs  bool
+	ctxFactory   func(context.Context) (*sql.Context, error)
+	createDBs    bool
+	replicaWrite bool
 }
 
 var _ remotesrv.DBCache = remotesrvStore{}
@@ -61,13 +64,90 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 	if !ok {
 		return nil, remotesrv.ErrUnimplemented
 	}
-	datasdb := doltdb.ExposeDatabaseFromDoltDB(sdb.DbData().Ddb)
+	ddb := sdb.DbData().Ddb
+	datasdb := doltdb.ExposeDatabaseFromDoltDB(ddb)
 	cs := datas.ChunkStoreFromDatabase(datasdb)
 	rss, ok := cs.(remotesrv.RemoteSrvStore)
 	if !ok {
 		return nil, remotesrv.ErrUnimplemented
 	}
-	return rss, nil
+	return hooksFiringRemoteSrvStore{RemoteSrvStore: rss, ddb: ddb, replicaWrite: s.replicaWrite}, nil
+}
+
+// hooksFiringRemoteSrvStore wraps a RemoteSrvStore and fires CommitHooks
+// registered on the associated DoltDB after a successful Commit. This is used
+// when sql-server exposes a remotesapi endpoint so that pushes from remote
+// clients trigger the same hooks (replication, stats, etc.) as writes through
+// the SQL engine.
+//
+// When replicaWrite is true, only hooks that return true from
+// ExecuteForReplicaWrite() are fired. This is used for cluster replication
+// writes on a standby replica, where replication hooks should not fire.
+type hooksFiringRemoteSrvStore struct {
+	remotesrv.RemoteSrvStore
+	ddb          *doltdb.DoltDB
+	replicaWrite bool
+}
+
+// Commit implements remotesrv.RemoteSrvStore. After a successful commit it
+// fires the DoltDB's registered CommitHooks for every ref-typed dataset whose
+// head address changed between |last| and |current|.
+func (s hooksFiringRemoteSrvStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	// Snapshot old dataset head addresses before the commit.
+	oldDatasets, _ := s.ddb.DatasetsByRootHash(ctx, last)
+
+	ok, err := s.RemoteSrvStore.Commit(ctx, current, last)
+	if !ok || err != nil {
+		return ok, err
+	}
+
+	// Snapshot new dataset head addresses after the successful commit.
+	newDatasets, err := s.ddb.DatasetsByRootHash(ctx, current)
+	if err != nil {
+		// Don't fail the commit; hooks are best-effort.
+		return true, nil
+	}
+
+	// Build lookup maps for both old and new dataset head addresses.
+	oldAddrs := make(map[string]hash.Hash)
+	if oldDatasets != nil {
+		_ = oldDatasets.IterAll(ctx, func(id string, addr hash.Hash) error {
+			oldAddrs[id] = addr
+			return nil
+		})
+	}
+	newAddrs := make(map[string]hash.Hash)
+	_ = newDatasets.IterAll(ctx, func(id string, addr hash.Hash) error {
+		newAddrs[id] = addr
+		return nil
+	})
+
+	executeHooks := s.ddb.ExecuteCommitHooks
+	if s.replicaWrite {
+		executeHooks = s.ddb.ExecuteReplicaCommitHooks
+	}
+
+	// Fire hooks for each ref-typed dataset that was added or changed.
+	for id, newAddr := range newAddrs {
+		if !ref.IsRef(id) {
+			continue
+		}
+		if oldAddr, existed := oldAddrs[id]; !existed || oldAddr != newAddr {
+			_ = executeHooks(ctx, id)
+		}
+	}
+
+	// Fire hooks for each ref-typed dataset that was deleted.
+	for id := range oldAddrs {
+		if !ref.IsRef(id) {
+			continue
+		}
+		if _, exists := newAddrs[id]; !exists {
+			_ = executeHooks(ctx, id)
+		}
+	}
+
+	return true, nil
 }
 
 // In the SQL context, the database provider that we use to expose the
@@ -83,11 +163,17 @@ type CreateUnknownDatabasesSetting bool
 const CreateUnknownDatabases CreateUnknownDatabasesSetting = true
 const DoNotCreateUnknownDatabases CreateUnknownDatabasesSetting = false
 
+type ReplicaWriteSetting bool
+
+const IsReplicaWrite ReplicaWriteSetting = true
+const IsNotReplicaWrite ReplicaWriteSetting = false
+
 // Returns a remotesrv.DBCache instance which will use the *sql.Context
 // returned from |ctxFactory| to access a database in the session
-// DatabaseProvider.
-func RemoteSrvDBCache(ctxFactory func(context.Context) (*sql.Context, error), createSetting CreateUnknownDatabasesSetting) (remotesrv.DBCache, error) {
-	dbcache := remotesrvStore{ctxFactory, bool(createSetting)}
+// DatabaseProvider. When |replicaWriteSetting| is IsReplicaWrite, only hooks
+// that return true from ExecuteForReplicaWrite() are fired on commits.
+func RemoteSrvDBCache(ctxFactory func(context.Context) (*sql.Context, error), createSetting CreateUnknownDatabasesSetting, replicaWriteSetting ReplicaWriteSetting) (remotesrv.DBCache, error) {
+	dbcache := remotesrvStore{ctxFactory: ctxFactory, createDBs: bool(createSetting), replicaWrite: bool(replicaWriteSetting)}
 	return dbcache, nil
 }
 

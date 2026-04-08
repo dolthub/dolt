@@ -19,6 +19,7 @@ import (
 	"log"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -39,6 +40,13 @@ type assertion struct {
 }
 
 func TestStatScripts(t *testing.T) {
+	origTimeSource := mockableTimeSource
+	t.Cleanup(func() {
+		mockableTimeSource = origTimeSource
+	})
+	mockableTimeSource = func() time.Time {
+		return time.Time{}
+	}
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 
@@ -257,6 +265,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    1,
 							CachedTemplateCnt: 1,
 							StatCnt:           1,
+							LastUpdate:        time.Time{},
 						}},
 					},
 				},
@@ -285,6 +294,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           1,
+							LastUpdate:        time.Time{},
 						}},
 					},
 				},
@@ -313,6 +323,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    1,
 							CachedTemplateCnt: 1,
 							StatCnt:           1,
+							LastUpdate:        time.Time{},
 						}},
 					},
 				},
@@ -473,6 +484,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
+							LastUpdate:        time.Time{},
 						}},
 					},
 				},
@@ -497,6 +509,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           1,
+							LastUpdate:        time.Time{},
 						},
 						}},
 				},
@@ -521,6 +534,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           1,
+							LastUpdate:        time.Time{},
 						},
 						}},
 				},
@@ -549,6 +563,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
+							LastUpdate:        time.Time{},
 						},
 						}},
 				},
@@ -567,6 +582,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
+							LastUpdate:        time.Time{},
 						},
 						}},
 				},
@@ -585,6 +601,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
+							LastUpdate:        time.Time{},
 						},
 						}},
 				},
@@ -619,6 +636,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    0,
 							CachedTemplateCnt: 0,
 							StatCnt:           0,
+							LastUpdate:        time.Time{},
 						},
 						}},
 				},
@@ -640,6 +658,7 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
+							LastUpdate:        time.Time{},
 						},
 						}},
 				},
@@ -665,6 +684,7 @@ func TestStatScripts(t *testing.T) {
 						CachedTemplateCnt: 4,
 						StatCnt:           2,
 						Backing:           "mydb",
+						LastUpdate:        time.Time{},
 					}}},
 				},
 				{

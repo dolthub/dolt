@@ -93,6 +93,10 @@ func (*PushOnWriteHook) ExecuteForWorkingSets() bool {
 	return false
 }
 
+func (*PushOnWriteHook) ExecuteForReplicaWrite() bool {
+	return false
+}
+
 type PushArg struct {
 	ds     datas.Dataset
 	srcDb  *doltdb.DoltDB
@@ -117,15 +121,19 @@ const (
 var _ doltdb.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
-func NewAsyncPushOnWriteHook(tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, RunAsyncThreads) {
+func NewAsyncPushOnWriteHook(nameSuffix string, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, RunAsyncThreads) {
 	ch := make(chan PushArg, asyncPushBufferSize)
-	runThreads := func(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
-		return RunAsyncReplicationThreads(bThreads, ctxF, ch, tmpDir, logger)
+	runThreads := func(bThreads BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
+		return RunAsyncReplicationThreads(bThreads, nameSuffix, ctxF, ch, tmpDir, logger)
 	}
 	return &AsyncPushOnWriteHook{ch: ch}, runThreads
 }
 
 func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {
+	return false
+}
+
+func (*AsyncPushOnWriteHook) ExecuteForReplicaWrite() bool {
 	return false
 }
 
@@ -173,14 +181,28 @@ func (*LogHook) ExecuteForWorkingSets() bool {
 	return false
 }
 
-func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error), ch chan PushArg, tmpDir string, logger io.Writer) error {
+func (*LogHook) ExecuteForReplicaWrite() bool {
+	return false
+}
+
+func RunAsyncReplicationThreads(bThreads BackgroundThreads, nameSuffix string, ctxF func(context.Context) (*sql.Context, error), ch chan PushArg, tmpDir string, logger io.Writer) error {
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
+
+	// wake is a buffered signal channel used to notify the push
+	// goroutine that new work is available. Size 1 ensures signals
+	// are not lost but the sender never blocks.
+	wake := make(chan struct{}, 1)
 
 	updateHead := func(p PushArg) {
 		mu.Lock()
 		newHeads[p.ds.ID()] = p
 		mu.Unlock()
+		// Non-blocking send to wake the push goroutine.
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
 	}
 
 	// newCtx lets first goroutine drain before the second goroutine finalizes
@@ -193,7 +215,7 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(conte
 	// We do not track sequential commits because push follows historical
 	// dependencies. This does not account for reset --force, which
 	// breaks historical dependence.
-	err := bThreads.Add(asyncPushProcessCommit, func(ctx context.Context) {
+	err := bThreads.Add(asyncPushProcessCommit+nameSuffix, func(ctx context.Context) {
 		for {
 			select {
 			case p, ok := <-ch:
@@ -256,19 +278,32 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(conte
 	}
 
 	// The second goroutine pushes updates to a remote chunkstore.
+	// It quiesces when there is no work, waking only when the first
+	// goroutine signals via the wake channel.
 	// This goroutine waits for first goroutine to drain before closing
 	// the channel and exiting.
-	err = bThreads.Add(asyncPushSyncReplica, func(ctx context.Context) {
+	err = bThreads.Add(asyncPushSyncReplica+nameSuffix, func(ctx context.Context) {
 		defer close(ch)
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
 		ticker := time.NewTicker(asyncPushInterval)
+		canPoll := false
 		for {
+			wakeCh := wake
+			// Only allow polling wakeCh if ticker has fired.
+			if !canPoll {
+				wakeCh = nil
+			}
 			select {
 			case <-newCtx.Done():
 				flush(newHeads, latestHeads)
 				return
-			case <-ticker.C:
+			case <-wakeCh:
+				canPoll = false
+				ticker.Reset(asyncPushInterval)
 				flush(newHeads, latestHeads)
+			case <-ticker.C:
+				ticker.Stop()
+				canPoll = true
 			}
 		}
 	})
@@ -304,7 +339,7 @@ var _ doltdb.CommitHook = (*DynamicPushOnWriteHook)(nil)
 // NewDynamicPushOnWriteHook creates a DynamicPushOnWriteHook, parameterized by the environment and a logger. The configuration
 // options at this time can result in errors, for example if the provided remote does not exist. This is not the case
 // when the process is up and running. If bad configuration is detected at execution time, the error is logged and replication is skipped.
-func NewDynamicPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
+func NewDynamicPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
 	remote, async, err := getReplicationVals()
 	if err != nil {
 		return nil, nil, err
@@ -315,7 +350,7 @@ func NewDynamicPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io
 		return nil, nil, err
 	}
 
-	a, newThreads := NewAsyncPushOnWriteHook(tmpDir, logger)
+	a, newThreads := NewAsyncPushOnWriteHook(nameSuffix, tmpDir, logger)
 	p := NewPushOnWriteHook(tmpDir, logger)
 
 	if remote != "" {
@@ -438,5 +473,9 @@ func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, 
 }
 
 func (m *DynamicPushOnWriteHook) ExecuteForWorkingSets() bool {
+	return false
+}
+
+func (m *DynamicPushOnWriteHook) ExecuteForReplicaWrite() bool {
 	return false
 }

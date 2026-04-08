@@ -94,7 +94,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 			err = json.Unmarshal(buf, &doc.Val)
 			v = doc
 		}
-	// TODO: eventually remove this, and only read GeomAddrEnc
+	// GeometryEnc is no longer written by new columns, but could be used by older databases
 	case val.GeometryEnc:
 		var buf []byte
 		buf, ok = td.GetGeometry(i, tup)
@@ -102,23 +102,18 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 			v, err = deserializeGeometry(buf)
 		}
 	case val.GeomAddrEnc:
-		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
 		var buf []byte
-		buf, ok = td.GetGeometry(i, tup)
+		var h hash.Hash
+		h, ok = td.GetGeometryAddr(i, tup)
 		if ok {
+			buf, err = ns.ReadBytes(ctx, h)
+			if err != nil {
+				return nil, err
+			}
 			v, err = deserializeGeometry(buf)
 		}
-		if !ok || err != nil {
-			var h hash.Hash
-			h, ok = td.GetGeometryAddr(i, tup)
-			if ok {
-				buf, err = ns.ReadBytes(ctx, h)
-				if err != nil {
-					return nil, err
-				}
-				v, err = deserializeGeometry(buf)
-			}
-		}
+	case val.GeomAdaptiveEnc:
+		v, ok, err = td.GetGeomAdaptiveValue(ctx, i, ns, tup)
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
 	case val.BytesAddrEnc:
@@ -346,6 +341,24 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		v.WrappedVal = val.NewByteArray(ctx, h, ns)
 		return v, err
 
+	case val.GeomAdaptiveEnc:
+		v.Typ = querypb.Type_GEOMETRY
+		b := td.GetField(i, tup)
+		// null value
+		if len(b) == 0 {
+			return v, nil
+		}
+		// inlined
+		if b[0] == 0 {
+			v.Val = b[1:]
+			return v, nil
+		}
+		// out-of-band
+		_, lengthBytes := uvarint.Uvarint(b)
+		h := hash.New(b[lengthBytes:])
+		v.Val, err = ns.ReadBytes(ctx, h)
+		return v, err
+
 	default:
 		panic("unknown val.encoding")
 	}
@@ -435,14 +448,10 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		tb.PutByteString(i, v.([]byte))
 	case val.Hash128Enc:
 		tb.PutHash128(i, v.([]byte))
-	// TODO: eventually remove GeometryEnc, but in the meantime write them as GeomAddrEnc
+	// TODO: eventually remove GeometryEnc, some old DBs may still use it
 	case val.GeometryEnc:
 		geo := serializeGeometry(v)
-		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
-		if err != nil {
-			return err
-		}
-		tb.PutGeometryAddr(i, h)
+		tb.PutGeometry(i, geo)
 	case val.GeomAddrEnc:
 		geo := serializeGeometry(v)
 		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
@@ -450,6 +459,30 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 			return err
 		}
 		tb.PutGeometryAddr(i, h)
+	case val.GeomAdaptiveEnc:
+		switch value := v.(type) {
+		case *val.GeometryStorage:
+			if !value.IsExactLength() {
+				// Out-of-band: pass through the address without loading
+				tb.PutAdaptiveGeomFromOutOfBand(i, value.MaxByteLength(), value.Addr())
+			} else {
+				// Inline: we already have the serialized bytes
+				buf, err := value.GetSerializedBytes(ctx)
+				if err != nil {
+					return err
+				}
+				err = tb.PutAdaptiveGeomFromInline(ctx, i, buf)
+				if err != nil {
+					return err
+				}
+			}
+		default:
+			geo := serializeGeometry(v)
+			err := tb.PutAdaptiveGeomFromInline(ctx, i, geo)
+			if err != nil {
+				return err
+			}
+		}
 	case val.JSONAddrEnc:
 		h, err := getJSONAddrHash(ctx, ns, v)
 		if err != nil {
@@ -463,7 +496,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		tb.PutBytesAddr(i, h)
 	case val.StringAddrEnc:
-		//todo: v will be []byte after daylon's changes
+		// todo: v will be []byte after daylon's changes
 		h, err := getStringAddrHash(ctx, ns, v)
 		if err != nil {
 			return err

@@ -25,19 +25,20 @@ get_platform_tuple() {
     echo "tests only support linux or macOS." 1>&2
     exit 1
   fi
-  if [ "$ARCH" != x86_64 -a "$ARCH" != i386 -a "$ARCH" != i686 ]; then
-    echo "tests only support x86_64 or x86." 1>&2
-    exit 1
-  fi
+
   if [ "$OS" == Linux ]; then
     PLATFORM_TUPLE=linux
   else
     PLATFORM_TUPLE=darwin
   fi
+
+  
   if [ "$ARCH" == x86_64 ]; then
-    PLATFORM_TUPLE="$PLATFORM_TUPLE"-amd64
+      PLATFORM_TUPLE="$PLATFORM_TUPLE"-amd64
+  elif [ "$ARCH" == arm64 ]; then
+      PLATFORM_TUPLE="$PLATFORM_TUPLE"-arm64
   else
-    PLATFORM_TUPLE="$PLATFORM_TUPLE"-386
+      PLATFORM_TUPLE="$PLATFORM_TUPLE"-386
   fi
   echo "$PLATFORM_TUPLE"
 }
@@ -53,6 +54,11 @@ function setup_repo() {
   DEFAULT_BRANCH=$(cat "$dir/default_branch.var")
 }
 
+function setup_repo_2_0_breaking() {
+  dir=repos/"$1"
+  ./test_files/setup_repo_2_0_breaking.sh "$dir"
+}
+
 function list_backward_compatible_versions() {
   grep -v '^ *#' < test_files/backward_compatible_versions.txt
 }
@@ -65,7 +71,39 @@ function test_backward_compatibility() {
   PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
   echo "Run the bats tests with current Dolt version hitting repositories from older Dolt version $ver"
-  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats ./test_files/bats
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats --print-output-on-failure ./test_files/bats
+}
+
+function test_bidirectional_compatibility() {
+  ver=$1
+  bin=`download_release "$ver"`
+
+  DOLT_NEW=`which dolt`
+
+  # unlike other tests, these tests don't rely on a shared setup script, they do all their own initialization
+  mkdir "repos/$ver-forward"
+  echo "Run the bidirectional tests with current Dolt version and older Dolt version $ver"
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW" REPO_DIR="$(pwd)/repos/$ver-forward" bats --print-output-on-failure ./test_files/bats/bidirectional
+
+  # same thing, but in the oppposite direction
+  mkdir "repos/$ver-backward"
+  echo "Run the bidirectional tests with older Dolt version $ver and current Dolt version"
+  DOLT_LEGACY_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/$ver-backward" bats --print-output-on-failure ./test_files/bats/bidirectional
+}
+
+function list_2_0_breaking_versions() {
+  grep -v '^ *#' < test_files/2_0_breaking_versions.txt
+}
+
+function test_2_0_breaking_compatibility() {
+  ver=$1
+  bin=`download_release "$ver"`
+
+  # create a repo with adaptive encoding using the current dolt
+  setup_repo_2_0_breaking "2_0_breaking-$ver"
+
+  echo "Run 2.0 breaking tests: verify old Dolt version $ver fails on adaptive-encoded data"
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/2_0_breaking-$ver" bats --print-output-on-failure ./test_files/bats/2_0_breaking
 }
 
 function list_forward_compatible_versions() {
@@ -90,6 +128,7 @@ function test_forward_compatibility() {
       dolt push file-remote init
       dolt push file-remote no-data
       dolt push file-remote other
+      dolt push file-remote check_merge
       cd ../../
   fi
   REMOTE="`pwd`"/repos/HEAD/file-remote
@@ -111,6 +150,8 @@ function test_forward_compatibility() {
   PATH="$relpath" dolt branch no-data origin/no-data
   PATH="$relpath" dolt branch init origin/init
   PATH="$relpath" dolt branch other origin/other
+  PATH="$relpath" dolt branch check_merge origin/check_merge
+
   # Also copy the files exported by setup_repo
   cp ../../repos/HEAD/*.csv ./
   cp ../../repos/HEAD/*.json ./
@@ -118,8 +159,8 @@ function test_forward_compatibility() {
 
   # Run the bats tests
   PATH="`pwd`"/"$bin":"$PATH" dolt version
-  echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
-  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
+  echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
+  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
 }
 
 _main() {
@@ -131,22 +172,45 @@ _main() {
 
   # test backward compatibility
   list_backward_compatible_versions | while IFS= read -r ver; do
-    test_backward_compatibility "$ver"
+      test_backward_compatibility "$ver"
   done
 
   # setup repo for current dolt version
   setup_repo HEAD
 
+  # TODO: forwards compatibility breaks when adaptive encoding is turned on in all cases. After we
+  # have a release with the new schema serialization field, we should get a new, more limited list
+  # of the versions which are actually forward compatible
+  
   # test forward compatibility
-  if [ -s "test_files/forward_compatible_versions.txt" ]; then
-      list_forward_compatible_versions | while IFS= read -r ver; do
-        test_forward_compatibility "$ver"
-      done
+  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
+      if [ -s "test_files/forward_compatible_versions.txt" ]; then
+          list_forward_compatible_versions | while IFS= read -r ver; do
+              test_forward_compatibility "$ver"
+          done
+      fi
+  else
+      # For now we only test that we break with an appropriate error message
+      if [ -s "test_files/2_0_breaking_versions.txt" ]; then
+          list_2_0_breaking_versions | while IFS= read -r ver; do
+              test_2_0_breaking_compatibility "$ver"
+          done
+      fi
+  fi
+
+
+  # test bidirectional compatibility
+  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
+      if [ -s "test_files/forward_compatible_versions.txt" ]; then
+          list_forward_compatible_versions | while IFS= read -r ver; do
+              test_bidirectional_compatibility "$ver"
+          done
+      fi
   fi
 
   # sanity check: run tests against current version
   echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
-  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats ./test_files/bats
+  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats --print-output-on-failure ./test_files/bats
 }
 
 _main

@@ -83,6 +83,44 @@ SELECT 'abcdefg';"
     [[ "$output" =~ "abcdefg" ]] || false
 }
 
+@test "sql-server-remotesrv: pushing a new branch creates a working set" {
+    mkdir -p db/remote
+    cd db/remote
+    dolt init
+    dolt sql-server --remotesapi-port 50051 &
+    srv_pid=$!
+
+    cd ../..
+
+    # By cloning here, we have a near-at-hand way to wait for the server to be ready.
+    dolt clone http://localhost:50051/remote cloned_remote
+    cd cloned_remote
+
+    cd ../db/remote
+    # If stats is running, it might create
+    # a working set before we inspect.
+    # Stop it to ensure the working set
+    # exists as a result of our push.
+    dolt sql -q 'call dolt_stats_stop()'
+    cd ../../cloned_remote
+
+    dolt checkout -b new_branch
+    dolt checkout -b new_forced_branch
+    dolt push origin new_branch
+    dolt push -f origin new_forced_branch
+
+    # Assert that the expected working set exists, in addition to the branch.
+    cd ../db/remote
+    kill $srv_pid
+    wait $srv_pid
+    srv_pid=
+    run dolt admin show-root
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "workingSets/heads/new_branch" ]] || false
+    [[ "$output" =~ "workingSets/heads/new_forced_branch" ]] || false
+}
+
 @test "sql-server-remotesrv: can access a created database from sql-server with --remotesapi-port" {
     mkdir -p db/remote
     cd db/remote
@@ -748,4 +786,99 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     run dolt branch -a
     [[ "$output" =~ "new_branch" ]] || false
     [[ "$output" =~ "main" ]] || false
+}
+
+# Verifies that commit hooks installed on a sql-server DoltDB (e.g. push-on-write
+# replication) are triggered when a push is received via the --remotesapi-port
+# endpoint, not just when writes come through the SQL engine.
+@test "sql-server-remotesrv: push via remotesapi port triggers push-on-write replication" {
+    mkdir server_db replication_remote
+    cd server_db
+    dolt init
+    dolt sql -q 'create table t1 (a int primary key);'
+    dolt add t1
+    dolt commit -m 'initial commit'
+
+    # Set up a file remote as the push-on-write replication target and seed
+    # it with the initial state of the server database.
+    dolt remote add replication_target file://../replication_remote
+    dolt push replication_target main
+
+    # Configure push-on-write replication so that commit hooks push to the
+    # file remote whenever a branch is updated.
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote replication_target
+
+    # Create a SQL user so the remotesapi endpoint requires credentials.
+    dolt sql -q "CREATE USER root@'%' IDENTIFIED BY 'rootpass'; GRANT ALL ON *.* TO root@'%';"
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+
+    APIPORT=$( definePORT )
+    start_sql_server_with_args --remotesapi-port $APIPORT
+
+    # Clone the server database via the remotesapi endpoint.
+    cd ..
+    dolt clone http://localhost:$APIPORT/server_db client_clone -u root
+    cd client_clone
+
+    # Push a new commit from the client back to the sql-server via the
+    # remotesapi endpoint. This exercises the hooksFiringRemoteSrvStore
+    # code path that fires commit hooks after a low-level ChunkStore commit.
+    dolt sql -q 'insert into t1 values (1), (2), (3);'
+    dolt commit -am 'add rows via remotesapi push'
+    run dolt push origin main:main --user root
+    [ "$status" -eq 0 ]
+
+    # The commit hooks on the server's DoltDB should have fired and
+    # replicated the new commit to the file remote. Clone the replication
+    # target and verify the replicated commit is present.
+    cd ..
+    dolt clone file://./replication_remote replication_clone
+    cd replication_clone
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "add rows via remotesapi push" ]] || false
+}
+
+# https://github.com/dolthub/dolt/issues/10807
+@test "sql-server-remotesrv: consecutive pushes succeed with ignored tables, but fail when remote has real uncommitted changes" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('tmp_*', true);"
+    dolt sql -q 'create table tmp_scratch (id int primary key);'  # ignored: in working but not staged
+    dolt add names dolt_ignore
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -eq 0 ]] || false
+
+    dolt sql -q 'insert into names values ("eve");'
+    dolt commit -am 'add eve'
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -eq 0 ]] || false
+    [[ ! "$output" =~ "target has uncommitted changes" ]] || false
+
+    # Add a real (non-ignored) uncommitted change to the remote; push must now fail.
+    dolt --port $PORT --host 127.0.0.1 -u $SQL_USER -p rootpass --no-tls --use-db remote sql -q "INSERT INTO names VALUES ('zeek');"
+
+    dolt sql -q 'insert into names values ("frank");'
+    dolt commit -am 'add frank'
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "target has uncommitted changes" ]] || false
 }

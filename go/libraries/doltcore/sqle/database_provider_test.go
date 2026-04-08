@@ -148,6 +148,10 @@ func (*snoopingCommitHook) ExecuteForWorkingSets() bool {
 	return true
 }
 
+func (*snoopingCommitHook) ExecuteForReplicaWrite() bool {
+	return true
+}
+
 func InstallSnoopingCommitHook(ctx *sql.Context, pro *DoltDatabaseProvider, name string, dEnv *env.DoltEnv, db dsess.SqlDatabase) error {
 	dEnv.DoltDB(ctx).PrependCommitHooks(ctx, &snoopingCommitHook{})
 	return nil

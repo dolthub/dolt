@@ -205,8 +205,15 @@ func startServerWithMetrics(t *testing.T, getConfig getConfigFunc) int {
 	t.Log("Starting server with config:\n" + config)
 	MakeServer(t, repo, srvSettings, &ports)
 
-	// hack to wait for server to start before making metrics call
-	time.Sleep(1 * time.Second)
+	// Wait for the metrics HTTP listener to be ready.
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", metricsPort))
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return true
+	}, 5*time.Second, 50*time.Millisecond)
 
 	return metricsPort
 }

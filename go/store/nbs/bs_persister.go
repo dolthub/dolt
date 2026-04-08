@@ -166,10 +166,7 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 }
 
 func (bsp *blobstorePersister) hotCreateTableRecords(ctx context.Context, cs chunkSource) error {
-	cnt, err := cs.count()
-	if err != nil {
-		return err
-	}
+	cnt := cs.count()
 	off := tableTailOffset(cs.currentSize(), cnt)
 	l := int64(off)
 	rng := blobstore.NewBlobRange(0, l)
@@ -189,7 +186,7 @@ func (bsp *blobstorePersister) hotCreateTableRecords(ctx context.Context, cs chu
 }
 
 func (bsp *blobstorePersister) hotCreateArchiveRecords(ctx context.Context, cs chunkSource) error {
-	arch, ok := cs.(archiveChunkSource)
+	arch, ok := cs.(*archiveChunkSource)
 	if !ok {
 		return errors.New("runtime error: hotCreateArchiveRecords expected archiveChunkSource")
 	}
@@ -358,7 +355,7 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return archiveChunkSource{aRdr, ""}, nil
+	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}}, nil
 }
 
 func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {

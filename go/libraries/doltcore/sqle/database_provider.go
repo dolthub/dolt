@@ -44,9 +44,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
 	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
 	"github.com/dolthub/dolt/go/libraries/utils/valctx"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -81,6 +83,8 @@ type DoltDatabaseProvider struct {
 	// to the same remote reuse the store (and its already-opened table chunk sources)
 	// instead of re-opening every table file from the blobstore each time.
 	remoteDbs map[string]*doltdb.DoltDB
+
+	txLocks keymutex.Keymutex
 
 	defaultBranch     string
 	dbFactoryUrl      string
@@ -194,6 +198,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 		overrides:              overrides,
 		remoteDbs:              make(map[string]*doltdb.DoltDB),
+		txLocks:                keymutex.NewMapped(),
 	}, nil
 }
 
@@ -885,7 +890,7 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 			return err
 		}
 
-		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, newEnv, cli.CliErr)
+		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, "["+name+"]", newEnv, cli.CliErr)
 		if err != nil {
 			return err
 		}
@@ -973,7 +978,9 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 	}
 	p.applyDBLoadParamsToEnv(dEnv)
 
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, depth, dEnv)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, depth, dEnv, statsCh)
+	})
 	if err != nil {
 		return err
 	}
@@ -994,8 +1001,10 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	var db dsess.SqlDatabase
+	var derivativeDbs []dsess.SqlDatabase
 	var dbLoc filesys.Filesys
 	var dbKey, dropDbLoc string
+	var closeDoltDBs bool
 	err := func() error {
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -1025,11 +1034,17 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		derivativeNamePrefix := strings.ToLower(dbKey + doltdb.DbRevisionDelimiter)
 		for dbName := range p.databases {
 			if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
+				derivativeDbs = append(derivativeDbs, p.databases[dbName])
 				delete(p.databases, dbName)
 			}
 		}
 		delete(p.databases, dbKey)
 		p.deletingDatabases[dbKey] = struct{}{}
+
+		closeDoltDBs = p.dbLoadParams != nil
+		if closeDoltDBs {
+			_, closeDoltDBs = p.dbLoadParams[dbfactory.DisableSingletonCacheParam]
+		}
 		return nil
 	}()
 	if err != nil {
@@ -1061,16 +1076,26 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		dropHook(ctx, name)
 	}
 
+	// Close the database and any derivative databases.
+	db.Close()
+	for _, ddb := range derivativeDbs {
+		ddb.Close()
+	}
+
+	// In embedded / nocache mode, the underlying DoltDBs are not tracked by the singleton cache, so
+	// the provider is responsible for closing them to release filesystem locks.
+	if closeDoltDBs {
+		for _, ddb := range db.DoltDatabases() {
+			if ddb != nil {
+				_ = ddb.Close()
+			}
+		}
+	}
+
 	// If this database is re-created, we don't want to return any cached results.
 	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/noms"), true)
 	if err != nil {
 		retErr = errors.Join(retErr, err)
-	}
-	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/stats/.dolt/noms"), true)
-	if err != nil {
-		// Swallow the error closing `stats` database.
-		// TODO: Log this.
-		err = nil
 	}
 
 	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
@@ -1699,6 +1724,10 @@ func (p *DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch 
 // EngineOverrides returns the overrides that were given during the creation of the provider.
 func (p *DoltDatabaseProvider) EngineOverrides() sql.EngineOverrides {
 	return p.overrides
+}
+
+func (p *DoltDatabaseProvider) TxLocks() keymutex.Keymutex {
+	return p.txLocks
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given

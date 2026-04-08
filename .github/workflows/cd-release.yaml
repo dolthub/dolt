@@ -32,7 +32,7 @@ jobs:
     needs: format-version
     name: Trigger Benchmark Profile K8s Workflows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch }}
       - name: Get sha

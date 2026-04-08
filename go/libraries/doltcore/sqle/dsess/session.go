@@ -664,9 +664,24 @@ func (d *DoltSession) commitBranchState(
 		return nil, fmt.Errorf("expected a DoltTransaction")
 	}
 
-	_, newCommit, err := commitFunc(ctx, dtx, branchState.WorkingSet())
+	updatedWs, newCommit, err := commitFunc(ctx, dtx, branchState.WorkingSet())
 	if err != nil {
 		return nil, err
+	}
+
+	// When a dolt commit was created, update the branch state to reflect the new HEAD. Without this, subsequent
+	// operations within the same stored procedure call (e.g. a multi-commit revert loop) would see a stale
+	// headRoot and treat the just-staged changes as uncommitted staged changes.
+	if newCommit != nil {
+		headRoot, err := newCommit.GetRootValue(ctx)
+		if err != nil {
+			return nil, err
+		}
+		branchState.headCommit = newCommit
+		branchState.headRoot = headRoot
+		if updatedWs != nil {
+			branchState.workingSet = updatedWs
+		}
 	}
 
 	// Anything that commits a transaction needs its current transaction state cleared so that the next statement starts

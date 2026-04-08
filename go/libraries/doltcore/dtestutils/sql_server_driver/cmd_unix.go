@@ -27,6 +27,15 @@ func ApplyCmdAttributes(cmd *exec.Cmd) {
 }
 
 func (s *SqlServer) GracefulStop() error {
+	select {
+	case <-s.Done:
+		if s.Cmd.ProcessState.Success() {
+			return nil
+		} else {
+			return &exec.ExitError{ProcessState: s.Cmd.ProcessState}
+		}
+	default:
+	}
 	err := s.Cmd.Process.Signal(syscall.SIGTERM)
 	if err != nil {
 		return err

@@ -15,13 +15,10 @@
 package main
 
 import (
-	"context"
-	sqldriver "database/sql/driver"
-	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,24 +28,16 @@ import (
 func TestGCConjoinsOldgen(t *testing.T) {
 	t.Parallel()
 
-	type gcMode int
-	const (
-		modeNever gcMode = iota
-		modeAlways
-		modeQuarter
-	)
-
 	cases := []struct {
-		name string
-		mode gcMode
+		name   string
+		everyN int
 	}{
-		{"never", modeNever},
-		{"always", modeAlways},
-		{"quarter", modeQuarter},
+		{"never_archive", 1024},
+		{"always_archive", 1},
+		{"half_archive", 2},
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var ports DynamicResources
@@ -62,7 +51,7 @@ func TestGCConjoinsOldgen(t *testing.T) {
 			rs, err := u.MakeRepoStore()
 			require.NoError(t, err)
 
-			repoName := "concurrent_gc_test_" + tc.name
+			repoName := "gc_oldgen_conjoin_test_" + tc.name
 			repo, err := rs.MakeRepo(repoName)
 			require.NoError(t, err)
 
@@ -76,64 +65,46 @@ func TestGCConjoinsOldgen(t *testing.T) {
 			require.NoError(t, err)
 			defer db.Close()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
-			// Create the database...
+			const NumCommits = 288
+
 			func() {
 				conn, err := db.Conn(ctx)
 				require.NoError(t, err)
 				defer conn.Close()
-				_, err = conn.ExecContext(ctx, "create table vals (id bigint primary key, val bigint)")
-				require.NoError(t, err)
-				_, err = conn.ExecContext(ctx, "call dolt_commit('-Am', 'create vals table')")
-				require.NoError(t, err)
-			}()
-
-			// Each 1024 leaf entries is approximately one chunk.
-			// We create 512 commits, each adding the next 1024 rows sequentially.
-			// After each commit we run dolt_gc(), varying the args per test case.
-			for i := 0; i < 512; i++ {
-				var vals []string
-				for j := i * 1024; j < (i+1)*1024; j++ {
-					vals = append(vals, "("+strconv.Itoa(j)+",0)")
-				}
-				func(iter int) {
-					conn, err := db.Conn(ctx)
+				for i := range NumCommits {
+					_, err = conn.ExecContext(ctx, "call dolt_commit('--allow-empty', '-am', 'commit "+strconv.Itoa(i)+"')")
 					require.NoError(t, err)
-					defer func() {
-						// After calling dolt_gc, the connection is bad. Remove it from the connection pool.
-						conn.Raw(func(_ any) error {
-							return sqldriver.ErrBadConn
-						})
-					}()
-
-					_, err = conn.ExecContext(ctx, "insert into vals values "+strings.Join(vals, ","))
-					require.NoError(t, err)
-					_, err = conn.ExecContext(ctx, "call dolt_commit('-am', 'insert from "+strconv.Itoa(iter*1024)+"')")
-					require.NoError(t, err)
-
-					gcSQL := "call dolt_gc()"
-					switch tc.mode {
-					case modeAlways:
-						gcSQL = "call dolt_gc('--archive-level','1')"
-					case modeQuarter:
-						if iter%4 == 0 {
-							gcSQL = "call dolt_gc('--archive-level','1')"
-						}
-					case modeNever:
-						// leave as "call dolt_gc()"
+					gcSQL := "call dolt_gc('--archive-level', '0')"
+					if ((i + 1) % tc.everyN) == 0 {
+						gcSQL = "call dolt_gc('--archive-level', '1')"
 					}
-
 					_, err = conn.ExecContext(ctx, gcSQL)
 					require.NoError(t, err)
-				}(i)
-			}
+				}
+			}()
 
-			entries, err := os.ReadDir(filepath.Join(repo.Dir, ".dolt/noms/oldgen"))
+			count := CountTableFiles(t, filepath.Join(repo.Dir, ".dolt/noms/oldgen"))
+			// The conjoin is triggered on the first 257 table files that are added, as the 258th table file is added.
+			// In our situation, the conjoin always leaves 2 table files over.
+			require.Equal(t, NumCommits-256, count)
+			require.Contains(t, server.Output.String(), "conjoin completed successfully")
+			err = server.Restart(nil, nil)
 			require.NoError(t, err)
-			require.Greater(t, len(entries), 2)
-			// defaultMaxTables == 256, plus a few files extra like |manifest| and |LOCK|.
-			require.Less(t, len(entries), 272)
+			require.Eventually(t, func() bool {
+				return db.PingContext(t.Context()) == nil
+			}, 5*time.Second, 50*time.Millisecond)
+			conn, err := db.Conn(ctx)
+			require.NoError(t, err)
+			defer conn.Close()
+			row := conn.QueryRowContext(ctx, "select count(*) from dolt_log")
+			require.NoError(t, row.Err())
+			var commitCnt int
+			require.NoError(t, row.Scan(&commitCnt))
+			// The + 1 is for the initial commit.
+			require.Equal(t, NumCommits+1, commitCnt)
+
 		})
 	}
 }

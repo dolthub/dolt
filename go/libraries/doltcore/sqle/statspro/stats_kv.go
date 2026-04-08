@@ -27,8 +27,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -47,6 +47,7 @@ type StatsKv interface {
 	GetBound(h hash.Hash, len int) (sql.Row, bool)
 	PutBound(h hash.Hash, r sql.Row, l int)
 	Flush(ctx context.Context) (int, error)
+	Close()
 	Len() int
 	GcGen() uint64
 }
@@ -143,6 +144,8 @@ func (m *memStats) GcMark(from StatsKv, nodes []*tree.Node, buckets []*stats.Buc
 	return true
 }
 
+func (m *memStats) Close() {}
+
 func (m *memStats) GcGen() uint64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -183,11 +186,11 @@ func (m *memStats) Flush(context.Context) (int, error) {
 	return 0, nil
 }
 
-func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats, error) {
+func NewProllyStats(ctx context.Context, ddb *doltdb.DoltDB) (*prollyStats, error) {
 	sch := schema.StatsTableDoltSchema
 	kd, vd := sch.GetMapDescriptors(nil)
 
-	nodeStore := destDb.DbData().Ddb.NodeStore()
+	nodeStore := ddb.NodeStore()
 	keyBuilder := val.NewTupleBuilder(kd, nodeStore)
 	valueBuilder := val.NewTupleBuilder(vd, nodeStore)
 	newMap, err := prolly.NewMapFromTuples(ctx, nodeStore, kd, vd)
@@ -196,23 +199,29 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 	}
 
 	return &prollyStats{
-		mu:     sync.Mutex{},
-		destDb: destDb,
-		kb:     keyBuilder,
-		vb:     valueBuilder,
-		m:      newMap.Mutate().WithMaxPending(defaultMaxStatsPending),
-		mem:    NewMemStats(),
+		mu:  sync.Mutex{},
+		ddb: ddb,
+		kb:  keyBuilder,
+		vb:  valueBuilder,
+		m:   newMap.Mutate().WithMaxPending(defaultMaxStatsPending),
+		mem: NewMemStats(),
 	}, nil
 }
 
 type prollyStats struct {
-	destDb dsess.SqlDatabase
-	kb     *val.TupleBuilder
-	vb     *val.TupleBuilder
-	m      *prolly.MutableMap
-	newM   *prolly.MutableMap
-	mem    *memStats
-	mu     sync.Mutex
+	ddb  *doltdb.DoltDB
+	kb   *val.TupleBuilder
+	vb   *val.TupleBuilder
+	m    *prolly.MutableMap
+	newM *prolly.MutableMap
+	mem  *memStats
+	mu   sync.Mutex
+}
+
+func (p *prollyStats) Close() {
+	if p.ddb != nil {
+		_ = p.ddb.Close()
+	}
 }
 
 func (p *prollyStats) Len() int {
@@ -342,7 +351,7 @@ func (p *prollyStats) Flush(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := p.destDb.DbData().Ddb.SetStatistics(ctx, "main", flushedMap.HashOf()); err != nil {
+	if err := p.ddb.SetStatistics(ctx, "main", flushedMap.HashOf()); err != nil {
 		return 0, err
 	}
 
@@ -464,12 +473,12 @@ func (p *prollyStats) encodeBucket(ctx context.Context, b *stats.Bucket, tupB *v
 
 func (p *prollyStats) NewEmpty(ctx context.Context) (StatsKv, error) {
 	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors(nil)
-	newMap, err := prolly.NewMapFromTuples(ctx, p.destDb.DbData().Ddb.NodeStore(), kd, vd)
+	newMap, err := prolly.NewMapFromTuples(ctx, p.ddb.NodeStore(), kd, vd)
 	if err != nil {
 		return nil, err
 	}
 	m := newMap.Mutate().WithMaxPending(defaultMaxStatsPending)
-	return &prollyStats{m: m, destDb: p.destDb, kb: p.kb, vb: p.vb}, nil
+	return &prollyStats{m: m, ddb: p.ddb, kb: p.kb, vb: p.vb}, nil
 }
 
 func EncodeRow(ctx context.Context, ns tree.NodeStore, r sql.Row, tb *val.TupleBuilder) ([]byte, error) {

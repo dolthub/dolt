@@ -119,7 +119,7 @@ func testTypeInfoToSqlType(t *testing.T, tiArrays [][]TypeInfo) {
 	}
 }
 
-var DefaultInlineBlobType = &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
+var DefaultInlineBlobType = &inlineBlobType{sqlBinaryType: gmstypes.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
 
 // generate unique TypeInfos for each type, and also values that are valid for at least one of the TypeInfos for the matching row
 func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeInfo, [][]types.Value) {
@@ -145,8 +145,8 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			{Uint8Type, Uint16Type, Uint24Type, Uint32Type, Uint64Type},
 			{UuidType},
 			append(generateVarStringTypes(t, 12),
-				&varStringType{gmstypes.CreateTinyText(sql.Collation_Default)}, &varStringType{gmstypes.CreateText(sql.Collation_Default)},
-				&varStringType{gmstypes.CreateMediumText(sql.Collation_Default)}, &varStringType{gmstypes.CreateLongText(sql.Collation_Default)}),
+				&varStringType{sqlStringType: gmstypes.CreateTinyText(sql.Collation_Default)}, &varStringType{sqlStringType: gmstypes.CreateText(sql.Collation_Default)},
+				&varStringType{sqlStringType: gmstypes.CreateMediumText(sql.Collation_Default)}, &varStringType{sqlStringType: gmstypes.CreateLongText(sql.Collation_Default)}),
 			{YearType},
 		},
 		[][]types.Value{

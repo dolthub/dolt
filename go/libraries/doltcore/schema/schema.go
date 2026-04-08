@@ -81,11 +81,6 @@ type Schema interface {
 	// that column will get converted to equivalent types that can. (Example: text -> varchar)
 	GetKeyDescriptor(vs val.ValueStore) *val.TupleDesc
 
-	// GetKeyDescriptorWithNoConversion returns the a descriptor for the columns used in the key.
-	// Unlike `GetKeyDescriptor`, it doesn't attempt to convert columns if they can't appear in a key,
-	// and returns them as they are.
-	GetKeyDescriptorWithNoConversion(vs val.ValueStore) *val.TupleDesc
-
 	// GetValueDescriptor returns the value tuple descriptor for this schema.
 	GetValueDescriptor(vs val.ValueStore) *val.TupleDesc
 
@@ -302,11 +297,12 @@ func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
 
 // MapSchemaBasedOnTagAndName can be used to map column values from one schema
 // to another schema. A primary key column in |inSch| is mapped to |outSch| if
-// they share the same tag. A non-primary key column in |inSch| is mapped to
-// |outSch| purely based on the name. It returns ordinal mappings that can be
-// use to map key, value val.Tuple's of schema |inSch| to |outSch|. The first
-// ordinal map is for keys, and the second is for values. If a column of |inSch|
-// is missing in |outSch| then that column's index in the ordinal map holds -1.
+// they share the same tag, or the same name and same type. A non-primary key
+// column in |inSch| is mapped to |outSch| purely based on the name. It returns
+// ordinal mappings that can be used to map key, value val.Tuple's of schema
+// |inSch| to |outSch|. The first ordinal map is for keys, and the second is
+// for values. If a column of |inSch| is missing in |outSch| then that column's
+// index in the ordinal map holds -1.
 func MapSchemaBasedOnTagAndName(inSch, outSch Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
 	keyMapping := make([]int, inSch.GetPKCols().Size())
 
@@ -315,10 +311,18 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) (val.OrdinalMapping, val.O
 		return keyMapping, make([]int, inSch.GetNonPKCols().Size()), nil
 	}
 
-	// TAGS: Use of tags here is confined to a single table
+	// Search for the PK by tag first; if not found, search by name, but ensure the type still matches
 	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		i := inSch.GetPKCols().TagToIdx[tag]
-		if foundCol, ok := outSch.GetPKCols().GetByTag(tag); ok {
+		foundCol, ok := outSch.GetPKCols().GetByTag(tag)
+		if !ok {
+			foundCol, ok = outSch.GetPKCols().GetByNameCaseInsensitive(col.Name)
+			if ok {
+				ok = foundCol.TypeInfo.ToSqlType() == col.TypeInfo.ToSqlType()
+			}
+		}
+
+		if ok {
 			j := outSch.GetPKCols().TagToIdx[foundCol.Tag]
 			keyMapping[i] = j
 		} else {

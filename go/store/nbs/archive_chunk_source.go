@@ -32,23 +32,24 @@ import (
 type archiveChunkSource struct {
 	aRdr archiveReader
 	file string
+	refs refCounter
 }
 
 var _ chunkSource = &archiveChunkSource{}
 
-func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, mmapArchiveIndexes bool, stats *Stats) (archiveChunkSource, error) {
+func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, mmapArchiveIndexes bool, refs refCounter, stats *Stats) (*archiveChunkSource, error) {
 	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
 	fra, err := newFileReaderAt(archiveFile, mmapArchiveIndexes)
 	if err != nil {
-		return archiveChunkSource{}, err
+		return nil, err
 	}
 
 	aRdr, err := newArchiveReader(ctx, fra, h, uint64(fra.sz), q, stats)
 	if err != nil {
-		return archiveChunkSource{}, err
+		return nil, err
 	}
-	return archiveChunkSource{aRdr, archiveFile}, nil
+	return &archiveChunkSource{aRdr: aRdr, file: archiveFile, refs: refs}, nil
 }
 
 func newAWSArchiveChunkSource(ctx context.Context,
@@ -80,10 +81,10 @@ func newAWSArchiveChunkSource(ctx context.Context,
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return archiveChunkSource{aRdr, ""}, nil
+	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}}, nil
 }
 
-func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
+func (acs *archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
 	res := acs.aRdr.has(h)
 	if res && keeper != nil && keeper(h) {
 		return false, gcBehavior_Block, nil
@@ -91,7 +92,7 @@ func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior
 	return res, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) hasMany(records []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
+func (acs *archiveChunkSource) hasMany(records []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
 	// single threaded first pass.
 	foundAll := true
 	for i, req := range records {
@@ -112,7 +113,7 @@ func (acs archiveChunkSource) hasMany(records []hasRecord, keeper keeperF) (bool
 	return !foundAll, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
+func (acs *archiveChunkSource) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
 	res, err := acs.aRdr.get(ctx, h, stats)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
@@ -123,7 +124,7 @@ func (acs archiveChunkSource) get(ctx context.Context, h hash.Hash, keeper keepe
 	return res, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, records []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (acs *archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, records []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	// single threaded first pass.
 	foundAll := true
 	for i, req := range records {
@@ -151,55 +152,62 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 
 // iterate iterates over the archive chunks. The callback is called for each chunk in the archive. This is not optimized
 // as currently is it only used for un-archiving, which should be uncommon.
-func (acs archiveChunkSource) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
+func (acs *archiveChunkSource) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
 	return acs.aRdr.iterate(ctx, cb, stats)
 }
 
-func (acs archiveChunkSource) count() (uint32, error) {
-	return acs.aRdr.count(), nil
+func (acs *archiveChunkSource) count() uint32 {
+	return acs.aRdr.count()
 }
 
-func (acs archiveChunkSource) close() error {
-	return acs.aRdr.close()
+func (acs *archiveChunkSource) close() error {
+	err := acs.aRdr.close()
+	acs.refs.decRef()
+	return err
 }
 
-func (acs archiveChunkSource) hash() hash.Hash {
+func (acs *archiveChunkSource) hash() hash.Hash {
 	return acs.aRdr.footer.hash
 }
 
-func (acs archiveChunkSource) suffix() string {
+func (acs *archiveChunkSource) suffix() string {
 	return ArchiveFileSuffix
 }
 
-func (acs archiveChunkSource) currentSize() uint64 {
+func (acs *archiveChunkSource) currentSize() uint64 {
 	return acs.aRdr.footer.fileSize
 }
 
 // reader returns a reader for the entire archive file.
-func (acs archiveChunkSource) reader(ctx context.Context, _ dherrors.FatalBehavior) (io.ReadCloser, uint64, error) {
+func (acs *archiveChunkSource) reader(ctx context.Context, _ dherrors.FatalBehavior) (io.ReadCloser, uint64, error) {
 	rd, err := acs.aRdr.reader.Reader(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
 	return rd, acs.currentSize(), nil
 }
-func (acs archiveChunkSource) uncompressedLen() (uint64, error) {
+func (acs *archiveChunkSource) uncompressedLen() (uint64, error) {
 	return 0, errors.New("Archive chunk source does not support uncompressedLen")
 }
 
-func (acs archiveChunkSource) index() (tableIndex, error) {
+func (acs *archiveChunkSource) index() (tableIndex, error) {
 	return nil, errors.New("Archive chunk source does not expose table file indexes")
 }
 
-func (acs archiveChunkSource) clone() (chunkSource, error) {
+func (acs *archiveChunkSource) clone() (chunkSource, error) {
 	reader, err := acs.aRdr.clone()
 	if err != nil {
 		return nil, err
 	}
-	return archiveChunkSource{reader, acs.file}, nil
+	acs.refs.addRef()
+	return &archiveChunkSource{
+		aRdr: reader,
+		file: acs.file,
+		refs: acs.refs,
+	}, nil
 }
 
-func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+func (acs *archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	result := make(map[hash.Hash]Range, len(records))
 	for i, req := range records {
 		if req.found {
@@ -233,7 +241,7 @@ func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.Fata
 	return result, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (acs *archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	foundAll := true
 	for i, req := range reqs {
 		if req.found {
@@ -257,7 +265,7 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 	return !foundAll, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
+func (acs *archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
 	ncb := func(c chunks.Chunk) error {
 		cb(c)
 		return nil

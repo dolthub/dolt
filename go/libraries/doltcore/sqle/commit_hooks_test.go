@@ -216,7 +216,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	t.Run("replicate to remote", func(t *testing.T) {
 		bThreads := sql.NewBackgroundThreads()
 		defer bThreads.Shutdown()
-		hook, runThreads := NewAsyncPushOnWriteHook(tmpDir, &buffer.Buffer{})
+		hook, runThreads := NewAsyncPushOnWriteHook("[TestReplicationDest]", tmpDir, &buffer.Buffer{})
 		hook.destDb = destDB
 		require.NotNil(t, hook)
 		require.NotNil(t, runThreads)
@@ -290,7 +290,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		destDB.PrependCommitHooks(context.Background(), counts)
 
 		bThreads := sql.NewBackgroundThreads()
-		hook, runThreads := NewAsyncPushOnWriteHook(tmpDir, &buffer.Buffer{})
+		hook, runThreads := NewAsyncPushOnWriteHook("[TestReplicationDest]", tmpDir, &buffer.Buffer{})
 		hook.destDb = destDB
 		runThreads(bThreads, func(ctx context.Context) (*sql.Context, error) {
 			return sql.NewContext(ctx), nil
@@ -336,6 +336,10 @@ func (c *countingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *
 }
 
 func (c *countingCommitHook) ExecuteForWorkingSets() bool {
+	return false
+}
+
+func (c *countingCommitHook) ExecuteForReplicaWrite() bool {
 	return false
 }
 

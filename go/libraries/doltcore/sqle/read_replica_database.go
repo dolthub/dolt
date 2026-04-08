@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -237,7 +238,10 @@ func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, bra
 			return nil, nil
 		}
 
-		cm, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, branchRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+		var cm *doltdb.Commit
+		pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+			cm, err = actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, branchRef, statsCh)
+		})
 		if err != nil {
 			return nil, err
 		}

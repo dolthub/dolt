@@ -18,13 +18,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/fatih/color"
-	"github.com/google/uuid"
 	"github.com/vbauerster/mpb/v8/cwriter"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -53,14 +51,9 @@ func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
 }
 
 func InitIO() (restoreIO func()) {
-	outFile := filepath.Join(os.TempDir(), uuid.New().String())
-	return InitIOWithFile(outFile)
-}
-
-func InitIOWithFile(outFile string) (restoreIO func()) {
 	stdOut, stdErr := os.Stdout, os.Stderr
 
-	f, err := os.Create(outFile)
+	f, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 
 	if err == nil {
 		os.Stdout = f

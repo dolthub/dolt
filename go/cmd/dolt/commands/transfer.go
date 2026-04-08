@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -23,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -40,7 +42,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // TransferCmd serves repository data over stdin/stdout for SSH remote operations.
@@ -106,14 +111,9 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	// Ignore SIGPIPE to prevent broken pipe crashes during SSH disconnect.
 	signal.Ignore(syscall.SIGPIPE)
 
-	ddb := dEnv.DoltDB(ctx)
-
-	// Database should already be loaded by the caller. Being very safe since there are some late binding checks.
-	if ddb == nil || dEnv.DBLoadError != nil {
-		if dEnv.DBLoadError != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError("failed to load database").AddCause(dEnv.DBLoadError).Build(), usage)
-		}
-		return HandleVErrAndExitCode(errhand.BuildDError("failed to load database").Build(), usage)
+	cs, serverFS, err := resolveDatabaseChunkStore(ctx, dEnv)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// Create SMUX session (server mode) over stdin/stdout.
@@ -128,15 +128,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 	defer session.Close()
 
-	// Set up gRPC chunk store service backed by this database.
-	db := doltdb.ExposeDatabaseFromDoltDB(ddb)
-	cs := datas.ChunkStoreFromDatabase(db)
-
-	// GenerationalChunkStore implements RemoteSrvStore, so this is going to work for any "normal" Dolt db.
-	if _, ok := cs.(remotesrv.RemoteSrvStore); !ok {
-		return HandleVErrAndExitCode(errhand.BuildDError("chunk store does not implement RemoteSrvStore").Build(), usage)
-	}
-	dbCache := &singletonDBCache{cs: cs.(remotesrv.RemoteSrvStore)}
+	dbCache := &singletonDBCache{cs: cs}
 
 	logger := logrus.New()
 	logger.SetOutput(os.Stderr)
@@ -147,7 +139,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 		logEntry,
 		transferHost,
 		dbCache,
-		dEnv.FS,
+		serverFS,
 		"http",
 		remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED,
 		sealer,
@@ -161,7 +153,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	remotesapi.RegisterChunkStoreServiceServer(grpcServer, chunkStoreService)
 
 	// Http handler for storage file transfers -- reuse remotesrv's filehandler.
-	fileServer := remotesrv.NewFileHandler(logEntry, dbCache, dEnv.FS, false, sealer, true)
+	fileServer := remotesrv.NewFileHandler(logEntry, dbCache, serverFS, false, sealer, true)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
@@ -194,6 +186,63 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	case <-ctx.Done():
 		return 0
 	}
+}
+
+// resolveDatabaseChunkStore inspects the environment loaded from --data-dir and
+// returns the RemoteSrvStore to serve and the filesystem root to use for HTTP
+// file serving.
+//
+// Two on-disk formats are supported:
+//
+//  1. Normal dolt repository (.dolt/noms/ present): dEnv.DoltDB loads successfully.
+//     The FS is already rooted at the repo directory and cs.Path() resolves to
+//     .dolt/noms/ inside it, giving HTTP paths like ".dolt/noms/<hash>".
+//
+//  2. Bare repository (no .dolt/noms/): the --data-dir path is a flat NBS directory
+//     (a NomsBlockStore). This is the format produced by pushing to an empty directory
+//     or by the standalone remotesrv binary.
+//
+//     For bare repos the HTTP filesystem root is set to the *parent* of the bare
+//     directory so that cs.Path() is a named subdirectory of the root. The gRPC
+//     handler computes prefix = filepath.Rel(fsRoot, cs.Path()); with the parent
+//     as root this yields "<dirName>", so HTTP paths are "<dirName>/<hash>". If
+//     the root equalled cs.Path() the prefix would be "." and the file handler
+//     would return HTTP 400 because it requires at least one "/" in the path.
+func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesrv.RemoteSrvStore, filesys.Filesys, error) {
+	ddb := dEnv.DoltDB(ctx)
+	if ddb != nil && dEnv.DBLoadError == nil {
+		// Normal dolt repository.
+		db := doltdb.ExposeDatabaseFromDoltDB(ddb)
+		rawCS := datas.ChunkStoreFromDatabase(db)
+		rss, ok := rawCS.(remotesrv.RemoteSrvStore)
+		if !ok {
+			return nil, nil, fmt.Errorf("chunk store does not implement RemoteSrvStore")
+		}
+		return rss, dEnv.FS, nil
+	}
+
+	if !errors.Is(dEnv.DBLoadError, doltdb.ErrMissingDoltDataDir) {
+		return nil, nil, fmt.Errorf("failed to load database: %w", dEnv.DBLoadError)
+	}
+
+	// Bare repository: a flat NBS directory with no .dolt/ structure.
+	absPath, err := dEnv.FS.Abs(".")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to resolve bare repository path: %w", err)
+	}
+	q := nbs.NewUnlimitedMemQuotaProvider()
+	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), absPath, remotesrv.MaxGRPCMessageSize, q, false)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open bare repository at %s: %w", absPath, err)
+	}
+
+	// Root the HTTP filesystem at the parent so cs.Path() is a named subdirectory.
+	parentPath := filepath.Dir(absPath)
+	serverFS, err := filesys.LocalFilesysWithWorkingDir(parentPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to set up file server root at %s: %w", parentPath, err)
+	}
+	return cs, serverFS, nil
 }
 
 // transferHost is the virtual hostname used for HTTP requests routed through

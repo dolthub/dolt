@@ -68,6 +68,10 @@ table Column {
 
   // sql on update value
   on_update_value:string;
+  
+  // a marker value only written when the column uses adaptive encoding, which will force older clients to upgrade
+  // before reading this data.
+  uses_adaptive_encoding:bool;
 }
 
 table Index {

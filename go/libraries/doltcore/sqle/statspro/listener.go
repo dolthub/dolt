@@ -81,6 +81,10 @@ func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, err
 	}
 	l := listener{target: e, c: make(chan listenerEvent, 1)}
 	sc.listeners = append(sc.listeners, l)
+	if sc.quiescedAwake != nil {
+		close(sc.quiescedAwake)
+		sc.quiescedAwake = nil
+	}
 	return l.c, nil
 }
 
@@ -175,6 +179,7 @@ func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvi
 			if i > 0 || sc.memOnly {
 				continue
 			}
+			db.DbData().Ddb.PrependCommitHooks(ctx, sc.commithook())
 			// attempt to access previously written stats
 			statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
 			if err != nil {
@@ -277,14 +282,7 @@ func (sc *StatsController) Close() {
 		}
 	}
 
-	// If we're using a prolly-backed stats store, it owns a DoltDB with its own filesystem locks.
-	// Close it best-effort on shutdown so embedded callers can reopen without contention.
-	if ps, ok := kv.(*prollyStats); ok && ps != nil && ps.destDb != nil {
-		for _, ddb := range ps.destDb.DoltDatabases() {
-			if ddb != nil {
-				_ = ddb.Close()
-			}
-		}
-	}
-	return
+	// Close the KV's underlying DoltDB (if any) so embedded callers can reopen
+	// without contention on filesystem locks.
+	kv.Close()
 }

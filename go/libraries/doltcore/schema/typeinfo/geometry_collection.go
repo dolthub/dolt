@@ -15,21 +15,25 @@
 package typeinfo
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type geomcollType struct {
 	sqlGeomCollType gmstypes.GeomCollType
+	enc             val.Encoding
 }
 
 var _ TypeInfo = (*geomcollType)(nil)
 
-var GeomCollType = &geomcollType{gmstypes.GeomCollType{}}
+var GeomCollType = &geomcollType{sqlGeomCollType: gmstypes.GeomCollType{}}
 
 // Equals implements TypeInfo interface.
 func (ti *geomcollType) Equals(other TypeInfo) bool {
@@ -38,7 +42,8 @@ func (ti *geomcollType) Equals(other TypeInfo) bool {
 	}
 	if o, ok := other.(*geomcollType); ok {
 		// if either ti or other has defined SRID, then check SRID value; otherwise,
-		return (!ti.sqlGeomCollType.DefinedSRID && !o.sqlGeomCollType.DefinedSRID) || ti.sqlGeomCollType.SRID == o.sqlGeomCollType.SRID
+		return ((!ti.sqlGeomCollType.DefinedSRID && !o.sqlGeomCollType.DefinedSRID) || ti.sqlGeomCollType.SRID == o.sqlGeomCollType.SRID) &&
+			ti.Encoding() == o.Encoding()
 	}
 	return false
 }
@@ -51,6 +56,25 @@ func (ti *geomcollType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *geomcollType) String() string {
 	return "GeometryCollection"
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *geomcollType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	if UseAdaptiveEncoding {
+		return val.GeomAdaptiveEnc
+	}
+	return val.GeomAddrEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *geomcollType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.GeomAddrEnc && enc != val.GeometryEnc && enc != val.GeomAdaptiveEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &geomcollType{sqlGeomCollType: ti.sqlGeomCollType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

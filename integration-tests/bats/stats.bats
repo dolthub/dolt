@@ -48,7 +48,7 @@ teardown() {
 
     run dolt sql -r csv -q "call dolt_stats_once()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '{""dbCnt"":1,""bucketWrites"":2,""tablesProcessed"":2,""tablesSkipped"":0}"' ]] || false
+    [[ "$output" =~ '{""dbCnt"":1,""bucketWrites"":2,""tablesProcessed"":2,""tablesSkipped"":0,"' ]] || false
 }
 
 
@@ -59,7 +59,7 @@ teardown() {
 
     run dolt sql -r csv -q "call dolt_stats_once(); call dolt_stats_once()"
     [ "$status" -eq 0 ]
-    [[ "${lines[3]}" =~ '{""dbCnt"":1,""bucketWrites"":0,""tablesProcessed"":0,""tablesSkipped"":2}"' ]] || false
+    [[ "${lines[3]}" =~ '{""dbCnt"":1,""bucketWrites"":0,""tablesProcessed"":0,""tablesSkipped"":2,"' ]] || false
 }
 
 @test "stats: once after reload does no incremental work" {
@@ -70,7 +70,7 @@ teardown() {
     dolt sql -r csv -q "call dolt_stats_once();"
     run dolt sql -r csv -q "call dolt_stats_once();"
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ '{""dbCnt"":1,""bucketWrites"":0,""tablesProcessed"":2,""tablesSkipped"":0}"' ]] || false
+    [[ "${lines[1]}" =~ '{""dbCnt"":1,""bucketWrites"":0,""tablesProcessed"":2,""tablesSkipped"":0,"' ]] || false
 }
 
 @test "stats: dolt_stats_wait" {
@@ -93,7 +93,7 @@ EOF
 
     run dolt sql -r csv -q "call dolt_stats_once(); call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2"","' ]] || false
 }
 
 @test "stats: dolt_stats_server_wait" {
@@ -137,7 +137,7 @@ EOF
 
     run dolt sql -r csv -q "call dolt_stats_once(); call dolt_stats_purge(); call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "${lines[5]}" =~ '"{""dbCnt"":0,""active"":false,""storageBucketCnt"":0,""cachedBucketCnt"":0,""cachedBoundCnt"":0,""cachedTemplateCnt"":0,""statCnt"":0,""backing"":""repo2""}"' ]] || false
+    [[ "${lines[5]}" =~ '"{""dbCnt"":0,""active"":false,""storageBucketCnt"":0,""cachedBucketCnt"":0,""cachedBoundCnt"":0,""cachedTemplateCnt"":0,""statCnt"":0,""backing"":""repo2"","' ]] || false
 }
 
 @test "stats: dolt_stats_purge server" {
@@ -151,7 +151,7 @@ EOF
     dolt sql -q "call dolt_stats_purge()"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ '"{""dbCnt"":0,""active"":false,""storageBucketCnt"":0,""cachedBucketCnt"":0,""cachedBoundCnt"":0,""cachedTemplateCnt"":0,""statCnt"":0,""backing"":""repo2""}"' ]] || false
+    [[ "${lines[1]}" =~ '"{""dbCnt"":0,""active"":false,""storageBucketCnt"":0,""cachedBucketCnt"":0,""cachedBoundCnt"":0,""cachedTemplateCnt"":0,""statCnt"":0,""backing"":""repo2"","' ]] || false
 }
 
 @test "stats: dolt_stats_gc fails in shell" {
@@ -168,7 +168,7 @@ SQL
 
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":0,""active"":false,""storageBucketCnt"":4,""cachedBucketCnt"":0,""cachedBoundCnt"":0,""cachedTemplateCnt"":0,""statCnt"":0,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":0,""active"":false,""storageBucketCnt"":4,""cachedBucketCnt"":0,""cachedBoundCnt"":0,""cachedTemplateCnt"":0,""statCnt"":0,""backing"":""repo2"","' ]] || false
 }
 
 @test "stats: dolt_stats_gc server" {
@@ -210,14 +210,14 @@ SQL
     # stats: repo2:[xy,ab,toDelete]*3, other:[ot]*1
     run dolt sql -r csv -q "call dolt_stats_info('--short');"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":4,""active"":true,""storageBucketCnt"":6,""cachedBucketCnt"":6,""cachedBoundCnt"":6,""cachedTemplateCnt"":6,""statCnt"":10,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":4,""active"":true,""storageBucketCnt"":6,""cachedBucketCnt"":6,""cachedBoundCnt"":6,""cachedTemplateCnt"":6,""statCnt"":10,""backing"":""repo2"","' ]] || false
 
     # clear invalid xy
     dolt sql -q "call dolt_stats_gc()"
     dolt sql -q "call dolt_stats_info('--short')"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":4,""active"":true,""storageBucketCnt"":4,""cachedBucketCnt"":4,""cachedBoundCnt"":4,""cachedTemplateCnt"":6,""statCnt"":10,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":4,""active"":true,""storageBucketCnt"":4,""cachedBucketCnt"":4,""cachedBoundCnt"":4,""cachedTemplateCnt"":6,""statCnt"":10,""backing"":""repo2"","' ]] || false
 
     # remove toDelete table from 2/3 branches and gc
     dolt sql -q "use repo2; call dolt_checkout('feat1'); drop table toDelete"
@@ -226,7 +226,7 @@ SQL
     dolt sql -q "call dolt_stats_info('--short')"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":4,""active"":true,""storageBucketCnt"":4,""cachedBucketCnt"":4,""cachedBoundCnt"":4,""cachedTemplateCnt"":6,""statCnt"":8,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":4,""active"":true,""storageBucketCnt"":4,""cachedBucketCnt"":4,""cachedBoundCnt"":4,""cachedTemplateCnt"":6,""statCnt"":8,""backing"":""repo2"","' ]] || false
 
     # remove branch stats and gc
     dolt sql -q "use repo2; call dolt_branch('-D', 'feat1', 'feat2')"
@@ -235,7 +235,7 @@ SQL
     dolt sql -q "call dolt_stats_info('--short')"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":2,""active"":true,""storageBucketCnt"":3,""cachedBucketCnt"":3,""cachedBoundCnt"":3,""cachedTemplateCnt"":5,""statCnt"":3,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":2,""active"":true,""storageBucketCnt"":3,""cachedBucketCnt"":3,""cachedBoundCnt"":3,""cachedTemplateCnt"":5,""statCnt"":3,""backing"":""repo2"","' ]] || false
 
     # delete whole db and gc
     dolt sql -q "drop database other;"
@@ -244,7 +244,7 @@ SQL
     dolt sql -r csv -q "call dolt_stats_info('--short')"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2"","' ]] || false
 }
 
 @test "stats: delete database clean swap" {
@@ -276,7 +276,7 @@ SQL
     dolt sql -q "call dolt_stats_info('--short');"
     run dolt sql -r csv -q "call dolt_stats_info('--short');"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":1,""cachedBucketCnt"":1,""cachedBoundCnt"":1,""cachedTemplateCnt"":1,""statCnt"":1,""backing"":""other""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":1,""cachedBucketCnt"":1,""cachedBoundCnt"":1,""cachedTemplateCnt"":1,""statCnt"":1,""backing"":""other"","' ]] || false
 }
 
 @test "stats: multiple stats dbs at start is OK" {
@@ -293,10 +293,9 @@ SQL
     start_sql_server
 
     dolt sql -q "call dolt_stats_wait();"
-    dolt sql -q "call dolt_stats_info('--short');"
     run dolt sql -r csv -q "call dolt_stats_info('--short');"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":2,""active"":true,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":3,""backing"":""repo1""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":2,""active"":true,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":3,""backing"":""repo1"","' ]] || false
 }
 
 @test "stats: dolt_stats_stop_restart" {
@@ -311,14 +310,14 @@ SQL
     dolt sql -q "call dolt_stats_info('--short')"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2"","' ]] || false
 
     # stop turns stats off
     dolt sql -q "call dolt_stats_stop()"
     dolt sql -r csv -q "call dolt_stats_info('--short')"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2"","' ]] || false
 
 
     # don't pick up changes when stopped
@@ -329,14 +328,14 @@ SQL
 
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2"","' ]] || false
 
     dolt sql -r csv -q "call dolt_stats_restart()"
     dolt sql -r csv -q "call dolt_stats_wait()"
     dolt sql -q "call dolt_stats_info('--short')"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":4,""cachedBucketCnt"":4,""cachedBoundCnt"":4,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":4,""cachedBucketCnt"":4,""cachedBoundCnt"":4,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2"","' ]] || false
 }
 
 @test "stats: memory only doesn't write to disk" {
@@ -351,7 +350,7 @@ SQL
     dolt sql -q "call dolt_stats_info('--short')"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":0,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""memory""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":0,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""memory"","' ]] || false
 
     run dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
@@ -361,7 +360,7 @@ SQL
 
     run dolt sql -r csv -q "call dolt_stats_once(); call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":0,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""memory""}"' ]] || false
+    [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":0,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""memory"","' ]] || false
 }
 
 
@@ -474,4 +473,56 @@ EOF
     run dolt sql -r csv -q "call dolt_stats_once(); select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[3]}" = "1" ]
+}
+
+@test "stats: worker thread quiesces and then runs again on new writes" {
+    get_stats_time() {
+        dolt sql -r csv -q 'call dolt_stats_info()' | tail -n 1 | sed -e 's|.*lastUpdate"":""||' -e 's|""}"$||'
+    }
+    newtime=
+    wait_for_new_time() {
+        # We don't use dolt_stats_wait here, because that would
+	# trigger a stats run on its own. Here we want to assert
+	# that an incoming write triggered the run.
+        cnt=0
+        while [[ "$newtime" == "$origtime" ]]; do
+	    newtime=$(get_stats_time)
+            if [ "$cnt" -eq 8 ]; then
+                echo "took too long to run stats after a write" 1>&2
+                exit 1
+            fi
+	    sleep 1
+	done
+    }
+    wait_for_quiesced() {
+        dolt sql -q 'call dolt_stats_wait();'
+        origtime=$(get_stats_time)
+        cnt=0
+        while [[ ! "$cnt" -eq 8 ]]; do
+            newtime=$(get_stats_time)
+            [[ "$newtime" == "$origtime" ]] || false
+            cnt=$((cnt+1))
+        done
+    }
+
+    start_sql_server
+
+    # After it runs, stats quiesces until a new write.
+    wait_for_quiesced
+
+    # Doing a write makes it run again
+    dolt sql -q 'create table vals (id int primary key)'
+    wait_for_new_time
+
+    wait_for_quiesced
+
+    # Creating a new database makes it run again
+    dolt sql -q 'create database newdb'
+    wait_for_new_time
+
+    wait_for_quiesced
+
+    # Writing against the new database makes it run again
+    dolt sql -q 'create table `newdb`.`newtable` (id int primary key)'
+    wait_for_new_time
 }

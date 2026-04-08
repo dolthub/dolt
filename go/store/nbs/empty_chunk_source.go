@@ -55,8 +55,8 @@ func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 	return true, gcBehavior_Continue, nil
 }
 
-func (ecs emptyChunkSource) count() (uint32, error) {
-	return 0, nil
+func (ecs emptyChunkSource) count() uint32 {
+	return 0
 }
 
 func (ecs emptyChunkSource) uncompressedLen() (uint64, error) {

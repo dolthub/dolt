@@ -1280,7 +1280,7 @@ func (tcs *testChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 	panic("never used")
 }
 
-func (tcs *testChunkSource) count() (uint32, error) {
+func (tcs *testChunkSource) count() uint32 {
 	panic("never used")
 }
 
@@ -1419,7 +1419,7 @@ func createMixedCompressionArchive(t *testing.T, chunkData [][]byte, useSnappy m
 func readersToSource(readers []archiveReader) []chunkSource {
 	sources := make([]chunkSource, 0, len(readers))
 	for _, r := range readers {
-		ar := archiveChunkSource{file: "", aRdr: r}
+		ar := &archiveChunkSource{file: "", aRdr: r}
 		sources = append(sources, ar)
 	}
 	return sources

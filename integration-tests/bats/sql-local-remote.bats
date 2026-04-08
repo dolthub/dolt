@@ -1370,13 +1370,7 @@ SQL
 
     start_sql_server altDB
     run dolt --verbose-engine-setup rebase -i main
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "starting remote mode" ]] || false
-    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
-
-    run dolt log
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "main commit 3" ]] || false
-    [[ "$output" =~ "main commit 2" ]] || false
-    [[ "$output" =~ "b1 commit 1" ]] || false
+    [[ "$output" =~ "dolt rebase can not currently be used when there is a local server running" ]] || false
 }

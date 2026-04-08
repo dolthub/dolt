@@ -10,7 +10,7 @@ jobs:
     name: Profile Dolt while Benchmarking
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - uses: azure/setup-kubectl@v4
         with:
           version: 'v1.23.6'

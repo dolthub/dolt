@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -181,7 +180,9 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	}
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, statsCh)
+	})
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fetch failed: %w", err)
 	}
@@ -297,7 +298,9 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", err
 	}
-	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, statsCh)
+	})
 	if err != nil {
 		return conflicts, fastForward, "", err
 	}

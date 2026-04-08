@@ -279,7 +279,12 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
-			// If the current root has a working set, update it. Do nothing if it doesn't exist.
+			cmtRtHsh, err := GetCommitRootHash(newVal)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			// If the current root has a working set, assert it isn't dirty and then update it.
+			// If this branch does not have a working set yet, create it to match the commit contents.
 			if hasWS {
 				currWSHash, err := am.Get(ctx, workingSetPath)
 				if err != nil {
@@ -292,11 +297,6 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 				}
 
 				if _, ok := targetCmt.(types.SerialMessage); ok {
-					cmtRtHsh, err := GetCommitRootHash(newVal)
-					if err != nil {
-						return prolly.AddressMap{}, err
-					}
-
 					// TODO - construct new meta instance rather than using the default
 					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
 					ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
@@ -309,6 +309,14 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 					// modern storage.
 					return prolly.AddressMap{}, errors.New("Modern Dolt Database required.")
 				}
+			} else {
+				// TODO - construct new meta instance rather than using the default
+				updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
+				ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
+				if err != nil {
+					return prolly.AddressMap{}, err
+				}
+				newWSHash = ref.TargetHash()
 			}
 		}
 
@@ -329,13 +337,13 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 	})
 }
 
-func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, wsPath string) (Dataset, error) {
+func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, wsPath string, allowDirtyWorking bool) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
-		return db.doFastForward(ctx, ds, newHeadAddr, wsPath)
+		return db.doFastForward(ctx, ds, newHeadAddr, wsPath, allowDirtyWorking)
 	})
 }
 
-func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) error {
+func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, allowDirtyWorking bool) error {
 	newHead, err := db.readHead(ctx, newHeadAddr)
 	if err != nil {
 		return err
@@ -401,7 +409,12 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
-			// If the current root has a working set, update it. Do nothing if it doesn't exist.
+			cmtRtHsh, err := GetCommitRootHash(cmtValue)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			// If the current root has a working set, assert it isn't dirty before updating it.
+			// Otherwise, create a new working set with the incoming root hash.
 			if hasWS {
 				currWSHash, err := am.Get(ctx, workingSetPath)
 				if err != nil {
@@ -421,7 +434,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 
 					stagedHash := hash.New(msg.StagedRootAddrBytes())
 					workingSetHash := hash.New(msg.WorkingRootAddrBytes())
-					if stagedHash != workingSetHash {
+					if !allowDirtyWorking && stagedHash != workingSetHash {
 						return prolly.AddressMap{}, ErrDirtyWorkspace
 					}
 
@@ -438,11 +451,6 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 						return prolly.AddressMap{}, ErrDirtyWorkspace
 					}
 
-					cmtRtHsh, err := GetCommitRootHash(cmtValue)
-					if err != nil {
-						return prolly.AddressMap{}, err
-					}
-
 					// TODO - construct new meta instance rather than using the default
 					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
 					ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
@@ -455,6 +463,13 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 					// modern storage.
 					return prolly.AddressMap{}, errors.New("Modern Dolt Database required.")
 				}
+			} else {
+				updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
+				ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
+				if err != nil {
+					return prolly.AddressMap{}, err
+				}
+				newWSHash = ref.TargetHash()
 			}
 		}
 

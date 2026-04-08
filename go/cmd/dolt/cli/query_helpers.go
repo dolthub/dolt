@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -110,6 +111,39 @@ func QueryValueAsBool(col interface{}) (bool, error) {
 		}
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting bool, int, or string", v)
+	}
+}
+
+// QueryValueAsInt64 converts a query result cell to int64. Use this when reading
+// integer columns from Queryist results, since the type can differ in-process
+// [engine.SQLEngine] versus over the wire [sqlserver.ConnectionQueryist].
+func QueryValueAsInt64(value any) (int64, error) {
+	if value == nil {
+		return 0, nil
+	}
+	switch v := value.(type) {
+	case int8:
+		return int64(v), nil
+	case int16:
+		return int64(v), nil
+	case int32:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case uint8:
+		return int64(v), nil
+	case uint16:
+		return int64(v), nil
+	case uint32:
+		return int64(v), nil
+	case uint64:
+		return int64(v), nil
+	case string:
+		return strconv.ParseInt(v, 10, 64)
+	case []byte:
+		return strconv.ParseInt(string(v), 10, 64)
+	default:
+		return 0, fmt.Errorf("unexpected type %T, expected integer column value", value)
 	}
 }
 

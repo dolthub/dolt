@@ -39,9 +39,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -102,16 +102,28 @@ type StatsController struct {
 	// as last-writer wins
 	genCnt atomic.Uint64
 	gcCnt  int
+
+	// If non-nil, this will be closed when a new write comes in
+	// and it will be nil'd out. It will also be closed when
+	// addListener adds a new listener.
+	//
+	// In turn, when the worker thread reaches the end of its run
+	// and it sees that the stats it just computed are the same
+	// as the stats it started with, it can quiesce by selecting
+	// against the quiescedAwake channel which it installed at
+	// the beginning of that run.
+	quiescedAwake chan struct{}
 }
 
 type rootStats struct {
 	hash            uint64
 	hashes          map[tableIndexesKey]hash.Hash
 	stats           map[tableIndexesKey][]*stats.Statistic
-	DbCnt           int `json:"dbCnt"`
-	BucketWrites    int `json:"bucketWrites"`
-	TablesProcessed int `json:"tablesProcessed"`
-	TablesSkipped   int `json:"tablesSkipped"`
+	DbCnt           int       `json:"dbCnt"`
+	BucketWrites    int       `json:"bucketWrites"`
+	TablesProcessed int       `json:"tablesProcessed"`
+	TablesSkipped   int       `json:"tablesSkipped"`
+	LastUpdate      time.Time `json:"lastUpdate"`
 }
 
 func newRootStats() *rootStats {
@@ -193,6 +205,10 @@ func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs file
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
+	// Registering the new database wakes stats, just like an incoming write
+	// on an existing registered database.
+	sc.wakeStatsOnNewWriteLocked()
+
 	firstDb := len(sc.dbFs) == 0
 	sc.dbFs[db.AliasedName()] = fs
 	if rotateOk && firstDb {
@@ -236,6 +252,7 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 		GenCnt:            int(sc.genCnt.Load()),
 		GcCnt:             sc.gcCnt,
 		Backing:           filepath.Base(backing),
+		LastUpdate:        sc.Stats.LastUpdate,
 	}, nil
 }
 
@@ -487,10 +504,17 @@ func (sc *StatsController) rotateStorage(ctx context.Context) error {
 	return sc.lockedRotateStorage(sqlCtx)
 }
 
+// lockedRotateStorage closes the current prolly stats DoltDB, removes its on-disk
+// stats directory, and picks a new database from dbFs to host the stats backing
+// store. The stats controller owns the lifecycle of these DoltDB instances (they
+// always bypass the singleton cache), so it is safe to close and rm unconditionally.
 func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	if sc.memOnly {
 		return nil
 	}
+
+	sc.kv.Close()
+
 	if sc.statsBackingDb != nil {
 		if err := sc.rm(sc.statsBackingDb); err != nil {
 			return err
@@ -543,15 +567,6 @@ func (sc *StatsController) rm(fs filesys.Filesys) error {
 		return err
 	}
 
-	dropDbLoc, err := statsFs.Abs("")
-	if err != nil {
-		return err
-	}
-
-	if err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/noms"), true); err != nil {
-		// Swallow this error for now. This only comes from closing the database, and closing is not always successful.
-	}
-
 	if ok, _ := statsFs.Exists(""); ok {
 		if err := statsFs.Delete("", true); err != nil {
 			return err
@@ -581,6 +596,16 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		return nil, err
 	}
 
+	// Build DB load params for the stats DoltDB. Always bypass the singleton cache:
+	// the stats controller owns the lifecycle of its DoltDB instances directly.
+	var dbLoadParams map[string]interface{}
+	if sc.hdpEnv != nil && len(sc.hdpEnv.DBLoadParams) > 0 {
+		dbLoadParams = maps.Clone(sc.hdpEnv.DBLoadParams)
+	} else {
+		dbLoadParams = make(map[string]interface{})
+	}
+	dbLoadParams[dbfactory.DisableSingletonCacheParam] = struct{}{}
+
 	var dEnv *env.DoltEnv
 	exists, isDir := statsFs.Exists("")
 	if !exists {
@@ -591,9 +616,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 
 		// Use LoadWithoutDB so DB load params can be applied before any DB is opened.
 		dEnv = env.LoadWithoutDB(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, urlPath, doltversion.Version)
-		if sc.hdpEnv != nil && len(sc.hdpEnv.DBLoadParams) > 0 {
-			dEnv.DBLoadParams = maps.Clone(sc.hdpEnv.DBLoadParams)
-		}
+		dEnv.DBLoadParams = dbLoadParams
 		err = dEnv.InitRepo(ctx, types.Format_Default, "stats", "stats@stats.com", env.DefaultInitBranch)
 		if err != nil {
 			return nil, err
@@ -602,31 +625,64 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
 	} else {
 		dEnv = env.LoadWithoutDB(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, "", doltversion.Version)
-		if sc.hdpEnv != nil && len(sc.hdpEnv.DBLoadParams) > 0 {
-			dEnv.DBLoadParams = maps.Clone(sc.hdpEnv.DBLoadParams)
-		}
+		dEnv.DBLoadParams = dbLoadParams
 	}
 
 	if err := dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params); err != nil {
 		return nil, err
 	}
 
-	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(ctx), editor.Options{})
-	if err != nil {
-		return nil, err
-	}
-	m, err := dEnv.DbData(ctx).Ddb.GetStatistics(ctx)
+	statsDdb := dEnv.DbData(ctx).Ddb
+	m, err := statsDdb.GetStatistics(ctx)
 	if err == nil {
 		// use preexisting map
 		kd, vd := m.Descriptors()
 		return &prollyStats{
-			mu:     sync.Mutex{},
-			destDb: statsDb,
-			kb:     val.NewTupleBuilder(kd, m.NodeStore()),
-			vb:     val.NewTupleBuilder(vd, m.NodeStore()),
-			m:      m.Mutate(),
-			mem:    NewMemStats(),
+			mu:  sync.Mutex{},
+			ddb: statsDdb,
+			kb:  val.NewTupleBuilder(kd, m.NodeStore()),
+			vb:  val.NewTupleBuilder(vd, m.NodeStore()),
+			m:   m.Mutate(),
+			mem: NewMemStats(),
 		}, nil
 	}
-	return NewProllyStats(ctx, statsDb)
+	return NewProllyStats(ctx, statsDdb)
+}
+
+// A hook to go on all DoltDBs stats watches. It just triggers
+// StatsController.quiescedAwake on any incoming write to the database
+// to ensure that the worker thread wakes up and processes stats after
+// that write.
+func (sc *StatsController) commithook() commithook {
+	return commithook{sc}
+}
+
+type commithook struct {
+	sc *StatsController
+}
+
+func (h commithook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
+	h.sc.wakeStatsOnNewWrite()
+	return nil, nil
+}
+
+func (h commithook) ExecuteForWorkingSets() bool {
+	return true
+}
+
+func (h commithook) ExecuteForReplicaWrite() bool {
+	return true
+}
+
+func (sc *StatsController) wakeStatsOnNewWrite() {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.wakeStatsOnNewWriteLocked()
+}
+
+func (sc *StatsController) wakeStatsOnNewWriteLocked() {
+	if sc.quiescedAwake != nil {
+		close(sc.quiescedAwake)
+		sc.quiescedAwake = nil
+	}
 }

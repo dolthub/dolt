@@ -210,7 +210,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 	// persisted to the working set
 	commit, err := dEnv.DoltDB(ctx).ResolveCommitRef(context.Background(), dEnv.RepoState.CWBHeadRef())
 	require.NoError(t, err)
-	ws.StartMerge(commit, "HEAD")
+	ws.StartMerge(nil, commit, "HEAD")
 
 	workingRoot := ws.WorkingRoot()
 	stagedRoot := ws.StagedRoot()

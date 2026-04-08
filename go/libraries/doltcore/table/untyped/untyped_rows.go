@@ -91,37 +91,3 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 	newSch.SetCollation(sch.GetCollation())
 	return newSch, nil
 }
-
-// UntypedSchemaUnion takes an arbitrary number of schemas and provides the union of all of their key and non-key columns.
-// The columns will all be of type types.StringKind and and IsPartOfPK will be false for every column, and all of the
-// columns will be in the schemas non-key ColumnCollection. Columns that share tags must have compatible types.
-func UntypedSchemaUnion(schemas ...schema.Schema) (schema.Schema, error) {
-	var allCols []schema.Column
-
-	tags := make(map[uint64]schema.Column)
-	for _, sch := range schemas {
-		err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if existingCol, ok := tags[tag]; !ok {
-				tags[tag] = col
-				allCols = append(allCols, col)
-			} else if existingCol.Kind != col.Kind {
-				// TODO: Need to rethink idea of diffability and compatibility
-				return true, schema.ErrColTagCollision
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	allColColl := schema.NewColCollection(allCols...)
-	sch, err := schema.SchemaFromCols(allColColl)
-	if err != nil {
-		return nil, err
-	}
-
-	return UntypeSchema(sch)
-}

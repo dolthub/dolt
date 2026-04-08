@@ -22,6 +22,7 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -33,6 +34,7 @@ const (
 // within is directly reliant on the go-mysql-server implementation.
 type decimalType struct {
 	sqlDecimalType sql.DecimalType
+	enc            val.Encoding
 }
 
 var _ TypeInfo = (*decimalType)(nil)
@@ -62,7 +64,7 @@ func CreateDecimalTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &decimalType{sqlDecimalType}, nil
+	return &decimalType{sqlDecimalType: sqlDecimalType}, nil
 }
 
 // Equals implements TypeInfo interface.
@@ -72,7 +74,8 @@ func (ti *decimalType) Equals(other TypeInfo) bool {
 	}
 	if ti2, ok := other.(*decimalType); ok {
 		return ti.sqlDecimalType.Precision() == ti2.sqlDecimalType.Precision() &&
-			ti.sqlDecimalType.Scale() == ti2.sqlDecimalType.Scale()
+			ti.sqlDecimalType.Scale() == ti2.sqlDecimalType.Scale() &&
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }
@@ -85,6 +88,22 @@ func (ti *decimalType) NomsKind() types.NomsKind {
 // String implements TypeInfo interface.
 func (ti *decimalType) String() string {
 	return fmt.Sprintf("Decimal(%v, %v)", ti.sqlDecimalType.Precision(), ti.sqlDecimalType.Scale())
+}
+
+// Encoding implements TypeInfo interface.
+func (ti *decimalType) Encoding() val.Encoding {
+	if ti.enc != 0 {
+		return ti.enc
+	}
+	return val.DecimalEnc
+}
+
+// WithEncoding implements TypeInfo interface.
+func (ti *decimalType) WithEncoding(enc val.Encoding) TypeInfo {
+	if enc != val.DecimalEnc {
+		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
+	}
+	return &decimalType{sqlDecimalType: ti.sqlDecimalType, enc: enc}
 }
 
 // ToSqlType implements TypeInfo interface.

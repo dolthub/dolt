@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
@@ -78,7 +79,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
 	defer src.close()
-	if assert.True(mustUint32(src.count()) > 0) {
+	if assert.True(src.count() > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
@@ -117,10 +118,50 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 
 	src, _, err := fts.Persist(context.Background(), dherrors.FatalBehaviorError, mt, existingTable, nil, &Stats{})
 	require.NoError(t, err)
-	assert.True(mustUint32(src.count()) == 0)
+	assert.True(src.count() == 0)
 
 	_, err = os.Stat(filepath.Join(dir, src.hash().String()))
 	assert.True(os.IsNotExist(err), "%v", err)
+}
+
+func TestFSTablePersisterPruneTableFilesKeepsOpenFiles(t *testing.T) {
+	ctx := context.Background()
+	dir := makeTempDir(t)
+	defer file.RemoveAll(dir)
+	ftp := newFSTablePersister(dir, &UnlimitedQuotaProvider{}, false)
+
+	// Persist two separate table files.
+	src1, err := persistTableData(ftp, testChunks[0:1]...)
+	require.NoError(t, err)
+	src1Hash := src1.hash()
+	src1Count := src1.count()
+
+	src2, err := persistTableData(ftp, testChunks[1:2]...)
+	require.NoError(t, err)
+	src2Hash := src2.hash()
+
+	// Close both sources returned by Persist so neither is tracked.
+	require.NoError(t, src1.close())
+	require.NoError(t, src2.close())
+
+	// Re-open only src1 through the persister so it's tracked.
+	opened, err := ftp.Open(ctx, src1Hash, src1Count, &Stats{})
+	require.NoError(t, err)
+	defer opened.close()
+
+	// Prune with a keeper set that contains neither file.
+	err = ftp.PruneTableFiles(ctx, func() []hash.Hash {
+		return nil
+	}, time.Now().Add(time.Second))
+	require.NoError(t, err)
+
+	// The opened file should still exist on disk.
+	_, err = os.Stat(filepath.Join(dir, src1Hash.String()))
+	assert.NoError(t, err, "opened table file should not have been pruned")
+
+	// The unopened file should have been deleted.
+	_, err = os.Stat(filepath.Join(dir, src2Hash.String()))
+	assert.True(t, os.IsNotExist(err), "unopened table file should have been pruned")
 }
 
 func TestFSTablePersisterConjoinAll(t *testing.T) {
@@ -152,7 +193,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	require.NoError(t, err)
 	defer src.close()
 
-	if assert.True(mustUint32(src.count()) > 0) {
+	if assert.True(src.count() > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
@@ -197,7 +238,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	}
 	cleanup()
 
-	if assert.True(mustUint32(src.count()) > 0) {
+	if assert.True(src.count() > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
@@ -206,6 +247,6 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		require.NoError(t, err)
 		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
-		assert.EqualValues(reps*len(testChunks), mustUint32(tr.count()))
+		assert.EqualValues(reps*len(testChunks), tr.count())
 	}
 }

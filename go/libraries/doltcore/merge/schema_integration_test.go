@@ -590,8 +590,8 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	sch, err := tbl.GetSchema(ctx)
 	require.NoError(t, err)
 
-	assert.Equal(t, test.sch.GetAllCols(), sch.GetAllCols())
-	assert.Equal(t, test.sch.Indexes(), sch.Indexes())
+	assert.True(t, schema.ColCollsAreEqual(test.sch.GetAllCols(), sch.GetAllCols()))
+	assert.True(t, test.sch.Indexes().Equals(sch.Indexes()))
 }
 
 func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
