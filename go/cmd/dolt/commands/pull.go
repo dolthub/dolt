@@ -168,12 +168,10 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, query)
 		if err != nil {
 			if apr.Contains(cli.RebaseParam) && isRebaseConflictError(err) {
-				// Construct the rebase branch name directly instead of reading from the
-				// SQL session, which may not be a DoltSession in remote-engine mode.
-				currentBranch := dEnv.RepoState.CWBHeadRef().GetPath()
-				rebaseBranch := "dolt_rebase_" + currentBranch
-				if syncErr := saveHeadBranch(dEnv.FS, rebaseBranch); syncErr != nil {
-					cli.Println("warning: failed to sync CLI branch after rebase conflict:", syncErr.Error())
+				if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
+					// The checkout of the dolt_rebase_<> branch failed, we might want to `--abort`, but chances
+					// are that won't work either. We are gonna be in a weird state no matter what, so just print the error.
+					cli.Println("warning: failed to sync CLI branch after rebase conflict:", checkoutErr.Error())
 				}
 			}
 			errChan <- err
