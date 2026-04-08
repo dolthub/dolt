@@ -14,14 +14,18 @@ setup() {
 }
 
 teardown() {
-    stop_sql_server
-    teardown_common
+    stop_sql_server 1
     if [ -n "$srv_pid" ]; then
         kill $srv_pid
+        wait $srv_pid || :
+        srv_pid=
     fi
     if [ -n "$srv_two_pid" ]; then
         kill $srv_two_pid
+        wait $srv_two_pid || :
+        srv_two_pid=
     fi
+    teardown_common
 }
 
 @test "sql-server-remotesrv: can read from sql-server with --remotesapi-port" {
