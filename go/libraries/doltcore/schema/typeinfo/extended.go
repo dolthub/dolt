@@ -23,6 +23,14 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// ExtendedType is an interface to bridge the TypeInfo and sql.ExtendedType interfaces. It allows these types
+// defined in extension packages (e.g. doltgres) to declare a TypeInfo to use.
+type ExtendedType interface {
+	sql.ExtendedType
+	// TypeInfo returns the TypeInfo used by this type.
+	TypeInfo() TypeInfo
+}
+
 // extendedType is a type that refers to an ExtendedType in GMS. These are only supported in the new format, and have many
 // more limitations than traditional types (for now).
 type extendedType struct {
@@ -44,7 +52,7 @@ func (ti *extendedType) Equals(other TypeInfo) bool {
 	}
 	if ti2, ok := other.(*extendedType); ok {
 		return ti.sqlExtendedType.Equals(ti2.sqlExtendedType) &&
-			ti.Encoding() == ti2.Encoding()
+				ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }
