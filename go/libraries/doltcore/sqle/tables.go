@@ -1881,7 +1881,20 @@ func fullTextRewriteEditor(
 func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColumns, oldSch schema.Schema, newSch schema.Schema) (schema.Schema, error) {
 	for _, idx := range oldSch.Indexes().AllIndexes() {
 		if !idx.IsFullText() {
-			newSch.Indexes().AddIndex(idx)
+			// Re-add by column names so tags are resolved in the new schema
+			_, err := newSch.Indexes().AddIndexByColNames(idx.Name(), idx.ColumnNames(), idx.PrefixLengths(),
+				schema.IndexProperties{
+					IsUnique:      idx.IsUnique(),
+					IsSpatial:     idx.IsSpatial(),
+					IsFullText:    idx.IsFullText(),
+					IsVector:      idx.IsVector(),
+					IsUserDefined: idx.IsUserDefined(),
+					Comment:       idx.Comment(),
+				})
+			if err != nil {
+				// Column might not exist in new schema (dropped), skip
+				continue
+			}
 			continue
 		}
 
@@ -1913,6 +1926,8 @@ func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColum
 // dropIndexesOnDroppedColumn removes from the schema any indexes which contain a dropped column.
 func dropIndexesOnDroppedColumn(newSch schema.Schema, oldSch schema.Schema, oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema, err error) (schema.Schema, error) {
 	newSch = schema.CopyIndexes(oldSch, newSch)
+	// Update column collection so new index additions resolve names against the new schema
+	newSch.Indexes().SetColCollection(newSch.GetAllCols())
 	droppedCol := getDroppedColumn(oldSchema, newSchema)
 	for _, index := range newSch.Indexes().IndexesWithColumn(droppedCol.Name) {
 		_, err = newSch.Indexes().RemoveIndex(index.Name())
@@ -2050,21 +2065,51 @@ func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, ol
 		return newSch, err
 	}
 
-	// Modifying a column
+	// Modifying a column — tags are positional, no need to preserve old tags
 	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.TableName(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 	if err != nil {
 		return nil, err
 	}
 
-	oldDoltCol, ok := oldSch.GetAllCols().GetByName(oldColumn.Name)
-	if !ok {
-		return nil, fmt.Errorf("expected column %s to exist in the old schema but did not find it", oldColumn.Name)
+	// Carry over indexes and checks from the old schema to the new one
+	for _, idx := range oldSch.Indexes().AllIndexes() {
+		// Remap column names (handle renames)
+		colNames := make([]string, len(idx.ColumnNames()))
+		for i, name := range idx.ColumnNames() {
+			if oldColumn != nil && strings.EqualFold(name, oldColumn.Name) && newColumn != nil {
+				colNames[i] = newColumn.Name
+			} else {
+				colNames[i] = name
+			}
+		}
+		_, err = newSch.Indexes().AddIndexByColNames(
+			idx.Name(),
+			colNames,
+			idx.PrefixLengths(),
+			schema.IndexProperties{
+				IsUnique:           idx.IsUnique(),
+				IsSpatial:          idx.IsSpatial(),
+				IsFullText:         idx.IsFullText(),
+				IsVector:           idx.IsVector(),
+				IsUserDefined:      idx.IsUserDefined(),
+				Comment:            idx.Comment(),
+				FullTextProperties: idx.FullTextProperties(),
+				VectorProperties:   idx.VectorProperties(),
+			})
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	newColCollection := replaceColumnTagInCollection(newSch.GetAllCols(), oldDoltCol.Name, oldDoltCol.Tag)
-	newPkColCollection := replaceColumnTagInCollection(newSch.GetPKCols(), oldDoltCol.Name, oldDoltCol.Tag)
-	return schema.NewSchema(newColCollection, newSch.GetPkOrdinals(), newSch.GetCollation(),
-		schema.NewIndexCollection(newColCollection, newPkColCollection), newSch.Checks())
+	// Copy over checks
+	for _, check := range oldSch.Checks().AllChecks() {
+		_, err = newSch.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newSch, nil
 }
 
 // replaceColumnTagInCollection returns a new ColCollection, based on |cc|, with the column named |name| updated

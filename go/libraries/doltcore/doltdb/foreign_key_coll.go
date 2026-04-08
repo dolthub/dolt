@@ -235,9 +235,14 @@ func (fk ForeignKey) IsSelfReferential() bool {
 }
 
 // IsResolved returns whether the foreign key has been resolved.
-// A FK is resolved when it has column names identifying its child and parent columns.
+// A FK is resolved when it has column names AND has been fully validated against the
+// referenced table (indicated by having tag arrays or index references populated).
+// An unresolved FK has column names but no tag arrays (waiting for parent table creation).
 func (fk ForeignKey) IsResolved() bool {
-	return len(fk.UnresolvedFKDetails.TableColumns) > 0 && len(fk.UnresolvedFKDetails.ReferencedTableColumns) > 0
+	// A FK is resolved when it has runtime tag arrays populated (from createForeignKey
+	// or ResolveColumnTags). Unresolved FKs only have column names in UnresolvedFKDetails
+	// but empty tag arrays.
+	return len(fk.TableColumns) > 0 && len(fk.ReferencedTableColumns) > 0
 }
 
 // ResolveColumnTags resolves the FK's column names to tags using the given schemas.

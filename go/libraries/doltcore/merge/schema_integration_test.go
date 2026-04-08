@@ -712,9 +712,15 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	assert.Equal(t, test.fkColl.Count(), fkc.Count())
 
 	err = test.fkColl.Iter(func(expFK doltdb.ForeignKey) (stop bool, err error) {
-		actFK, ok := fkc.GetByTags(expFK.TableColumns, expFK.ReferencedTableColumns)
-		assert.True(t, ok)
-		assert.Equal(t, expFK, actFK)
+		actFK, ok := fkc.GetByNameCaseInsensitive(expFK.Name)
+		assert.True(t, ok, "FK %s not found", expFK.Name)
+		if ok {
+			assert.Equal(t, expFK.Name, actFK.Name)
+			assert.Equal(t, expFK.TableName, actFK.TableName)
+			assert.Equal(t, expFK.ReferencedTableName, actFK.ReferencedTableName)
+			assert.Equal(t, expFK.OnUpdate, actFK.OnUpdate)
+			assert.Equal(t, expFK.OnDelete, actFK.OnDelete)
+		}
 		return false, nil
 	})
 	assert.NoError(t, err)

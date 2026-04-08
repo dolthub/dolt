@@ -80,6 +80,8 @@ type IndexCollection interface {
 	// RemapTags updates all index tags when the parent schema's column tags have changed.
 	// It remaps tags from old column names to new column tags.
 	RemapTags(oldCols, newCols *ColCollection)
+	// SetColCollection updates the column collection used for column lookups.
+	SetColCollection(cols *ColCollection)
 }
 
 type IndexProperties struct {
@@ -221,6 +223,10 @@ func (ixc *indexCollectionImpl) RemapTags(oldCols, newCols *ColCollection) {
 			}
 		}
 	}
+}
+
+func (ixc *indexCollectionImpl) SetColCollection(cols *ColCollection) {
+	ixc.colColl = cols
 }
 
 func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {
