@@ -750,12 +750,6 @@ func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) erro
 	return nil
 }
 
-// tolerantIterate is like iterate but routes per-chunk errors through errCb and continues rather than halting.
-// Only stream-level read failures (where the sequential read position is lost) cause early termination.
-// Dictionary load failures are tracked so that chunks referencing a broken dictionary are skipped with an error
-// rather than panicking.
-//
-// INTENDED FOR USE IN FSCK ONLY.
 func (ar *archiveReader) tolerantIterate(ctx context.Context, cb func(chunks.Chunk), errCb func(error), stats *Stats) {
 	dictReverseIndex := make(map[uint32]struct{})
 	dataReverseIndex := make(map[uint32]uint32)
