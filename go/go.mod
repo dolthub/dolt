@@ -52,11 +52,11 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.4
 	github.com/Shopify/toxiproxy/v2 v2.5.0
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.5+incompatible
-	github.com/aws/aws-sdk-go-v2 v1.36.3
+	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.29.8
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.64
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.41.0
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.78.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/creasty/defaults v1.6.0
@@ -122,22 +122,22 @@ require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
 	github.com/apache/thrift v0.13.1-0.20201008052519-daf620915714 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.61 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.21 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.21 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.34 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.6.2 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.22 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.10.15 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.15 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.21 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.21 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.25.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.29.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.16 // indirect
-	github.com/aws/smithy-go v1.22.2 // indirect
+	github.com/aws/smithy-go v1.24.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
