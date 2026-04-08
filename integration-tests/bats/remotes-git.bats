@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/git-ssh-common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     skiponwindows "tests are flaky on Windows"
@@ -584,6 +586,113 @@ seed_git_remote_branch() {
     fi
 }
 
+@test "remotes-git: GIT_SSH_COMMAND set by user is not clobbered" {
+    # See https://github.com/dolthub/dolt/issues/10811.
+    setup_git_repo
+    setup_git_ssh_wrapper
+    hook_git_record_env "GIT_SSH_COMMAND"
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -m "init"
+    dolt remote add origin "git@localhost:${GIT_SVC_DIR}"
+
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND" ]
+
+    teardown_git
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: git credential prompt reaches user terminal" {
+    # See https://github.com/dolthub/dolt/issues/10811.
+    setup_git_repo
+    setup_git_ssh_wrapper
+    hook_git_passphrase_prompt
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt sql -q "create table t(pk int primary key, v int);"
+    dolt sql -q "insert into t values (1, 42);"
+    dolt add .
+    dolt commit -m "seed"
+    dolt remote add origin "git@localhost:${GIT_SVC_DIR}"
+
+    run expect "$BATS_TEST_DIRNAME/remotes-git-prompt.expect"
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TMPDIR/git_ssh_passphrase" ]
+    received=$(cat "$BATS_TMPDIR/git_ssh_passphrase")
+    [[ "$received" == "hunter2" ]] || false
+
+    cd ..
+    run dolt clone "git@localhost:${GIT_SVC_DIR}" verify1
+    [ "$status" -eq 0 ]
+    cd verify1
+    run dolt sql -q "select v from t where pk = 1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+
+    # Reset the hook so the second push also prompts.
+    rm -f "$BATS_TMPDIR/git_ssh_passphrase"
+
+    cd ../repo1
+    dolt sql -q "insert into t values (2, 99);"
+    dolt add .
+    dolt commit -m "second row"
+
+    run expect "$BATS_TEST_DIRNAME/remotes-git-sql-prompt.expect"
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TMPDIR/git_ssh_passphrase" ]
+    received=$(cat "$BATS_TMPDIR/git_ssh_passphrase")
+    [[ "$received" == "hunter2" ]] || false
+
+    cd ../verify1
+    run dolt pull
+    [ "$status" -eq 0 ]
+
+    teardown_git
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: GIT_SSH_COMMAND preserved through dolt sql-server with MySQL client" {
+    if ! command -v docker >/dev/null 2>&1; then
+        skip "docker not installed"
+    fi
+    if [[ "$(uname)" == 'Darwin' ]]; then
+        skip "--network host not supported on macOS Docker"
+    fi
+
+    setup_git_repo
+    setup_git_ssh_wrapper
+    hook_git_record_env "GIT_SSH_COMMAND"
+
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt sql -q "create table t(pk int primary key, v int);"
+    dolt sql -q "insert into t values (1, 42);"
+    dolt add .
+    dolt commit -m "seed"
+    dolt remote add origin "git@localhost:${GIT_SVC_DIR}"
+
+    start_sql_server repo1
+
+    # Push and query in a single connection to verify the session continues normally.
+    run docker run --rm --network host mysql:8.0 \
+        mysql -h 127.0.0.1 -P "$PORT" -u root repo1 \
+        --default-auth=mysql_native_password \
+        -e "CALL DOLT_PUSH('origin', 'main'); SELECT v FROM t WHERE pk = 1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+    [ -f "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND" ]
+    stop_sql_server
+
+    teardown_git
+}
+
 install_fake_git_url_recorder() {
     # Fake git that records the URL passed to `git remote add` so tests can
     # inspect whether SCP-style relative paths survive normalization intact.
@@ -719,3 +828,4 @@ exit 128
 EOF
     chmod +x "$BATS_TMPDIR/fakebin/git"
 }
+
