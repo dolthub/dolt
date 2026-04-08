@@ -326,35 +326,3 @@ func performRebaseAfterPull(ctx *sql.Context, upstreamPoint string, skipVerifica
 
 	return noConflictsOrViolations, threeWayMerge, result.message, nil
 }
-
-// TODO: remove this as it does not do anything useful
-func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-statsCh:
-		}
-	}
-}
-
-// TODO: remove this as it does not do anything useful
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
-	statsCh := make(chan pull.Stats)
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pullerProgFunc(ctx, statsCh)
-	}()
-
-	return wg, statsCh
-}
-
-// TODO: remove this as it does not do anything useful
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
-	cancel()
-	close(statsCh)
-	wg.Wait()
-}
