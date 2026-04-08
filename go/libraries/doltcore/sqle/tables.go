@@ -1925,24 +1925,48 @@ func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColum
 
 // dropIndexesOnDroppedColumn removes from the schema any indexes which contain a dropped column.
 func dropIndexesOnDroppedColumn(newSch schema.Schema, oldSch schema.Schema, oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema, err error) (schema.Schema, error) {
-	newSch = schema.CopyIndexes(oldSch, newSch)
-	// Update column collection so new index additions resolve names against the new schema
-	newSch.Indexes().SetColCollection(newSch.GetAllCols())
 	droppedCol := getDroppedColumn(oldSchema, newSchema)
-	for _, index := range newSch.Indexes().IndexesWithColumn(droppedCol.Name) {
-		_, err = newSch.Indexes().RemoveIndex(index.Name())
+
+	// Iterate over old indexes and add only those that don't reference the dropped column.
+	// We add by column name so that the new schema resolves the correct positional tags.
+	for _, index := range oldSch.Indexes().AllIndexes() {
+		if indexReferencesColumn(index, droppedCol.Name) {
+			// For fulltext indexes, we modify them to contain only the remaining columns
+			if index.IsFullText() {
+				modifyFulltextIndexForColumnDrop(index, newSch, droppedCol)
+			}
+			continue
+		}
+		_, err = newSch.Indexes().AddIndexByColNames(
+			index.Name(),
+			index.ColumnNames(),
+			index.PrefixLengths(),
+			schema.IndexProperties{
+				IsUnique:           index.IsUnique(),
+				IsSpatial:          index.IsSpatial(),
+				IsFullText:         index.IsFullText(),
+				IsVector:           index.IsVector(),
+				IsUserDefined:      index.IsUserDefined(),
+				Comment:            index.Comment(),
+				FullTextProperties: index.FullTextProperties(),
+				VectorProperties:   index.VectorProperties(),
+			})
 		if err != nil {
 			return nil, err
-		}
-
-		// For fulltext indexes, we don't just remove them entirely on a column drop, we modify them to contain only the
-		// remaining columns
-		if index.IsFullText() {
-			modifyFulltextIndexForColumnDrop(index, newSch, droppedCol)
 		}
 	}
 
 	return newSch, nil
+}
+
+// indexReferencesColumn returns true if the given index references the named column.
+func indexReferencesColumn(index schema.Index, colName string) bool {
+	for _, name := range index.ColumnNames() {
+		if strings.EqualFold(name, colName) {
+			return true
+		}
+	}
+	return false
 }
 
 // modifyFulltextIndexForColumnDrop modifies a fulltext index to remove a column that was dropped, adding it to the

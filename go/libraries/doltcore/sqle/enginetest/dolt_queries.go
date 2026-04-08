@@ -566,7 +566,7 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT dolt_hashof_table('t1');",
-				Expected: []sql.Row{{"0lvgnnqah2lj1p6ilvfg0ssaec1v0jgk"}},
+				Expected: []sql.Row{{"36hhj1e2kdffsbus76cn7gmthguc5ucc"}},
 			},
 			{
 				Query:    "INSERT INTO t1 VALUES (1);",
@@ -574,7 +574,7 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT dolt_hashof_table('t1');",
-				Expected: []sql.Row{{"a2vkt9d1mtuhd90opbcseo5gqjae7tv6"}},
+				Expected: []sql.Row{{"1vn41c4b75tdl254fau85nabcbq1vfpj"}},
 			},
 			{
 				Query:          "SELECT dolt_hashof_table('noexist');",
@@ -1348,7 +1348,7 @@ var DoltScripts = []queries.ScriptTest{
 	},
 	{
 		// Assert that tables can have the same tag values without causing any problems.
-		Name: "Overlapping column tags – errors",
+		Name: "Overlapping column tags – no error with positional tags",
 		SetUpScript: []string{
 			"CREATE TABLE t2(pk int primary key, c1 int, c2 float);",
 			"INSERT INTO t2 VALUES (1, -1, 1.11), (2, -2, 2.22);",
@@ -1358,9 +1358,10 @@ var DoltScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// re-using the same column tag in a table is not allowed
-				Query:          "CALL dolt_update_column_tag('t2', 'c2', 2);",
-				ExpectedErrStr: "failed to update table schema: two different columns with the same tag",
+				// With positional tags, custom tag values don't persist through serialization.
+				// Setting a duplicate tag is allowed since tags are ultimately derived from position.
+				Query:    "CALL dolt_update_column_tag('t2', 'c2', 2);",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
@@ -1474,12 +1475,16 @@ var DoltScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				// With positional tags, updating a column tag doesn't permanently change it
+				// since tags are derived from column position during serialization.
 				Query:    "CALL dolt_update_column_tag('t1', 'c2', 3);",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:          "CALL dolt_commit('-Am', 'initial tables');",
-				ExpectedErrStr: "foreign key `fk1` has entered an invalid state, table `t1` has unexpected schema",
+				// Commit succeeds because positional tags restore the correct tag on round-trip,
+				// keeping the FK valid.
+				Query:    "CALL dolt_commit('-Am', 'initial tables');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 		},
 	},

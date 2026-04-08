@@ -236,12 +236,10 @@ func (fk ForeignKey) IsSelfReferential() bool {
 
 // IsResolved returns whether the foreign key has been resolved.
 // A FK is resolved when it has column names AND has been fully validated against the
-// referenced table (indicated by having tag arrays or index references populated).
-// An unresolved FK has column names but no tag arrays (waiting for parent table creation).
+// referenced table (indicated by having tag arrays populated at runtime).
+// An unresolved FK only has column names in UnresolvedFKDetails but empty tag arrays
+// (waiting for parent table creation or for tag resolution after deserialization).
 func (fk ForeignKey) IsResolved() bool {
-	// A FK is resolved when it has runtime tag arrays populated (from createForeignKey
-	// or ResolveColumnTags). Unresolved FKs only have column names in UnresolvedFKDetails
-	// but empty tag arrays.
 	return len(fk.TableColumns) > 0 && len(fk.ReferencedTableColumns) > 0
 }
 
@@ -275,10 +273,13 @@ func (fk ForeignKey) ResolveColumnTags(childSch, parentSch schema.Schema) (child
 // deserialization since tags are no longer persisted.
 func (fkc *ForeignKeyCollection) ResolveColumnTags(ctx context.Context, root RootValue) error {
 	for key, fk := range fkc.foreignKeys {
-		if !fk.IsResolved() {
+		// Skip FKs that already have tag arrays OR have no column names at all.
+		// Only process FKs with column names but no tags (deserialized from new format).
+		hasNames := len(fk.UnresolvedFKDetails.TableColumns) > 0 || len(fk.UnresolvedFKDetails.ReferencedTableColumns) > 0
+		if fk.IsResolved() || !hasNames {
 			continue
 		}
-		// Always resolve tags from column names (names are the source of truth)
+		// Resolve tag arrays from column names.
 		if len(fk.UnresolvedFKDetails.TableColumns) > 0 {
 			tbl, ok, err := root.GetTable(ctx, fk.TableName)
 			if err != nil {
@@ -587,8 +588,11 @@ func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[Ta
 OuterLoopResolved:
 	for _, existingFk := range fkc.foreignKeys {
 		if existingFk.IsResolved() {
-			// When both are resolved, we do a standard tag comparison
-			if len(fk.TableColumns) != len(existingFk.TableColumns) ||
+			// When both are resolved, compare table names and tags.
+			// Table name comparison is required because positional tags are not globally unique.
+			if fk.TableName != existingFk.TableName ||
+				fk.ReferencedTableName != existingFk.ReferencedTableName ||
+				len(fk.TableColumns) != len(existingFk.TableColumns) ||
 				len(fk.ReferencedTableColumns) != len(existingFk.ReferencedTableColumns) {
 				continue
 			}
