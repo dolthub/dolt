@@ -356,31 +356,42 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 		delete(to, t.ToName)
 	}
 
-	// Match remaining tables by schema overlap. Only match when the match is
-	// unambiguous — i.e., exactly one "from" table matches a given "to" table
-	// and vice versa. This avoids incorrect rename detection when multiple
-	// tables share identical schemas (which is common with positional tags).
+	// Detect renames: match unmatched tables that have the same table hash
+	// AND overlapping schemas. The match must be unambiguous in BOTH directions:
+	// - Exactly one "from" matches a given "to", AND
+	// - Exactly one "to" matches that "from"
+	// This prevents false renames when multiple empty tables share the same schema/hash.
 	for changed := true; changed; {
 		changed = false
 		for _, t := range to {
 			var matchedFrom *TableDelta
-			ambiguous := false
+			ambiguousTo := false
 			for _, f := range from {
-				if schemasOverlap(f.FromSch, t.ToSch) {
+				if tablesHaveSameHash(f, t) && schemasOverlap(f.FromSch, t.ToSch) {
 					if matchedFrom != nil {
-						ambiguous = true
+						ambiguousTo = true
 						break
 					}
 					fCopy := f
 					matchedFrom = &fCopy
 				}
 			}
-			if matchedFrom != nil && !ambiguous {
-				deltas = append(deltas, match(t, *matchedFrom))
-				delete(from, matchedFrom.FromName)
-				delete(to, t.ToName)
-				changed = true
-				break // restart since maps changed
+			if matchedFrom != nil && !ambiguousTo {
+				// Also check the reverse: does this "from" match only one "to"?
+				ambiguousFrom := false
+				for _, t2 := range to {
+					if t2.ToName != t.ToName && tablesHaveSameHash(*matchedFrom, t2) && schemasOverlap(matchedFrom.FromSch, t2.ToSch) {
+						ambiguousFrom = true
+						break
+					}
+				}
+				if !ambiguousFrom {
+					deltas = append(deltas, match(t, *matchedFrom))
+					delete(from, matchedFrom.FromName)
+					delete(to, t.ToName)
+					changed = true
+					break // restart since maps changed
+				}
 			}
 		}
 	}
@@ -394,6 +405,36 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 	}
 
 	return deltas
+}
+
+// tablesHaveSameHash returns true if two table deltas represent the same table
+// data (same hash). This is used for rename detection: a renamed table has the
+// same content but a different name.
+func tablesHaveSameHash(f, t TableDelta) bool {
+	if f.FromTable != nil && t.ToTable != nil {
+		fHash, err := f.FromTable.HashOf()
+		if err != nil {
+			return false
+		}
+		tHash, err := t.ToTable.HashOf()
+		if err != nil {
+			return false
+		}
+		return fHash == tHash
+	}
+	if f.FromRootObject != nil && t.ToRootObject != nil {
+		ctx := context.Background()
+		fHash, err := f.FromRootObject.HashOf(ctx)
+		if err != nil {
+			return false
+		}
+		tHash, err := t.ToRootObject.HashOf(ctx)
+		if err != nil {
+			return false
+		}
+		return fHash == tHash
+	}
+	return false
 }
 
 // schemaOverlapScore returns a score indicating how well two schemas match.

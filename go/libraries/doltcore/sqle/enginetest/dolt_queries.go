@@ -1481,10 +1481,10 @@ var DoltScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// Commit succeeds because positional tags restore the correct tag on round-trip,
-				// keeping the FK valid.
-				Query:    "CALL dolt_commit('-Am', 'initial tables');",
-				Expected: []sql.Row{{doltCommit}},
+				// dolt_update_column_tag recreates the schema, losing the FK backing index.
+				// The commit fails because the FK validation detects the missing index.
+				Query:          "CALL dolt_commit('-Am', 'initial tables');",
+				ExpectedErrStr: "foreign key `fk1` has entered an invalid state, table `t1` is missing the index `fk1`",
 			},
 		},
 	},

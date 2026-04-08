@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -598,19 +599,14 @@ type colSchemaDiff struct {
 }
 
 // calculateColSchemaDiff calculates which columns were modified, added, or dropped between to and from schemas and
-// returns a colSchemaDiff to hold the results of the diff
+// returns a colSchemaDiff to hold the results of the diff.
+// Columns are matched by name (case-insensitive) since positional tags are not stable across schema changes.
 func calculateColSchemaDiff(toCols *schema.ColCollection, fromCols *schema.ColCollection) *colSchemaDiff {
-	// put to/from columns into a set
-	toColTags := make(map[uint64]struct{})
-	fromColTags := make(map[uint64]struct{})
-	if toCols != nil {
-		for _, tag := range toCols.Tags {
-			toColTags[tag] = struct{}{}
-		}
-	}
+	// Build name sets for from columns
+	fromColNames := make(map[string]struct{})
 	if fromCols != nil {
-		for _, tag := range fromCols.Tags {
-			fromColTags[tag] = struct{}{}
+		for _, col := range fromCols.GetColumns() {
+			fromColNames[strings.ToLower(col.Name)] = struct{}{}
 		}
 	}
 
@@ -621,28 +617,32 @@ func calculateColSchemaDiff(toCols *schema.ColCollection, fromCols *schema.ColCo
 	var diffTypes []string
 
 	if toCols != nil {
-		for _, tag := range toCols.Tags {
-			if _, ok := fromColTags[tag]; ok {
-				// if the tag is also in fromColumnTags, this column was modified
-				modifiedCols = append(modifiedCols, toCols.TagToCol[tag].Name)
-				allCols = append(allCols, toCols.TagToCol[tag].Name)
+		for _, col := range toCols.GetColumns() {
+			lowerName := strings.ToLower(col.Name)
+			if _, ok := fromColNames[lowerName]; ok {
+				// column exists in both → modified (or unchanged, filtered later)
+				modifiedCols = append(modifiedCols, col.Name)
+				allCols = append(allCols, col.Name)
 				diffTypes = append(diffTypes, diffTypeModified)
-				delete(fromColTags, tag)
+				delete(fromColNames, lowerName)
 			} else {
-				// else if it isn't in fromColumnTags, this column was added
-				addedCols = append(addedCols, toCols.TagToCol[tag].Name)
-				allCols = append(allCols, toCols.TagToCol[tag].Name)
+				// column only in "to" → added
+				addedCols = append(addedCols, col.Name)
+				allCols = append(allCols, col.Name)
 				diffTypes = append(diffTypes, diffTypeAdded)
 			}
 		}
 	}
 
 	if fromCols != nil {
-		for tag := range fromColTags {
-			// all remaining tags are columns not in toColumnTags, i.e. dropped columns
-			droppedCols = append(droppedCols, fromCols.TagToCol[tag].Name)
-			allCols = append(allCols, fromCols.TagToCol[tag].Name)
-			diffTypes = append(diffTypes, diffTypeRemoved)
+		for _, col := range fromCols.GetColumns() {
+			lowerName := strings.ToLower(col.Name)
+			if _, ok := fromColNames[lowerName]; ok {
+				// remaining from columns not matched → dropped
+				droppedCols = append(droppedCols, col.Name)
+				allCols = append(allCols, col.Name)
+				diffTypes = append(diffTypes, diffTypeRemoved)
+			}
 		}
 	}
 
