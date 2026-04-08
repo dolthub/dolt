@@ -253,8 +253,10 @@ func (ix *indexImpl) Schema() Schema {
 			contentHashedFields = append(contentHashedFields, tag)
 		}
 	}
-	allCols := NewColCollection(cols...)
-	nonPkCols := NewColCollection()
+	// Use PreservingTags so index columns keep their tags from the parent table schema.
+	// This is critical for tag-based lookups between the index and the table.
+	allCols := NewColCollectionPreservingTags(cols...)
+	nonPkCols := NewColCollectionPreservingTags()
 	return &schemaImpl{
 		pkCols:              allCols,
 		nonPKCols:           nonPkCols,

@@ -239,15 +239,18 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		return nil, err
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
-		tags := index.IndexedColumnTags()
-		for i := range tags {
-			if tags[i] == oldCol.Tag {
-				tags[i] = newCol.Tag
+		// Rebuild index column names, replacing old column name with new
+		colNames := make([]string, len(index.ColumnNames()))
+		for i, name := range index.ColumnNames() {
+			if strings.EqualFold(name, oldCol.Name) {
+				colNames[i] = newCol.Name
+			} else {
+				colNames[i] = name
 			}
 		}
-		_, err = newSch.Indexes().AddIndexByColTags(
+		_, err = newSch.Indexes().AddIndexByColNames(
 			index.Name(),
-			tags,
+			colNames,
 			index.PrefixLengths(),
 			schema.IndexProperties{
 				IsUnique:           index.IsUnique(),

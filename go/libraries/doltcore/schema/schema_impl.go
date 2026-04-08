@@ -416,6 +416,7 @@ func (si schemaImpl) AddColumn(newCol Column, order *ColumnOrder) (Schema, error
 		nonPkCols = append(nonPkCols, newCol)
 	}
 
+	oldAllCols := si.allCols
 	collection := NewColCollection(newCols...)
 	si.allCols = collection
 	si.pkCols = NewColCollectionPreservingTags(pkCols...)
@@ -423,6 +424,9 @@ func (si schemaImpl) AddColumn(newCol Column, order *ColumnOrder) (Schema, error
 
 	// This must be done after we have set the new column order
 	si.pkOrdinals = primaryKeyOrdinals(&si, keyCols)
+
+	// Remap index tags from old column positions to new column positions
+	si.indexCollection.RemapTags(oldAllCols, collection)
 
 	err := ValidateForInsert(collection)
 	if err != nil {

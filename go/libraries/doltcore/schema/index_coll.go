@@ -77,6 +77,9 @@ type IndexCollection interface {
 	ContainsFullTextIndex() bool
 	// Copy returns a copy of this index collection that can be modified without affecting the original.
 	Copy() IndexCollection
+	// RemapTags updates all index tags when the parent schema's column tags have changed.
+	// It remaps tags from old column names to new column tags.
+	RemapTags(oldCols, newCols *ColCollection)
 }
 
 type IndexProperties struct {
@@ -167,6 +170,57 @@ func (ixc *indexCollectionImpl) Copy() IndexCollection {
 	}
 
 	return nixc
+}
+
+// RemapTags updates all index tags when the parent schema's column tags have changed.
+// It uses column names to find the new tags for each indexed column.
+func (ixc *indexCollectionImpl) RemapTags(oldCols, newCols *ColCollection) {
+	ixc.colColl = newCols
+
+	// Build name-to-new-tag mapping
+	nameToNewTag := make(map[string]uint64, newCols.Size())
+	for _, col := range newCols.GetColumns() {
+		nameToNewTag[strings.ToLower(col.Name)] = col.Tag
+	}
+
+	// Remap each index's tags
+	for _, idx := range ixc.indexes {
+		for i, oldTag := range idx.tags {
+			if oldCol, ok := oldCols.GetByTag(oldTag); ok {
+				if newTag, ok := nameToNewTag[strings.ToLower(oldCol.Name)]; ok {
+					idx.tags[i] = newTag
+				}
+			}
+		}
+		for i, oldTag := range idx.allTags {
+			if oldCol, ok := oldCols.GetByTag(oldTag); ok {
+				if newTag, ok := nameToNewTag[strings.ToLower(oldCol.Name)]; ok {
+					idx.allTags[i] = newTag
+				}
+			}
+		}
+	}
+
+	// Rebuild colTagToIndex map with new tags
+	newColTagToIndex := make(map[uint64][]*indexImpl, len(newCols.GetColumns()))
+	for _, col := range newCols.GetColumns() {
+		newColTagToIndex[col.Tag] = nil
+	}
+	for _, idx := range ixc.indexes {
+		for _, tag := range idx.tags {
+			newColTagToIndex[tag] = append(newColTagToIndex[tag], idx)
+		}
+	}
+	ixc.colTagToIndex = newColTagToIndex
+
+	// Remap PK tags
+	for i, oldTag := range ixc.pks {
+		if oldCol, ok := oldCols.GetByTag(oldTag); ok {
+			if newTag, ok := nameToNewTag[strings.ToLower(oldCol.Name)]; ok {
+				ixc.pks[i] = newTag
+			}
+		}
+	}
 }
 
 func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {

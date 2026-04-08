@@ -179,10 +179,7 @@ func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projecte
 	srcIndexToTargetIndex := make(map[int]int)
 	srcIndexToTargetType := make(map[int]typeinfo.TypeInfo)
 	for i, targetColumn := range targetSchema.GetAllCols().GetColumns() {
-		sourceColumn, found := srcSchema.GetAllCols().GetByTag(targetColumn.Tag)
-		if !found {
-			sourceColumn, found = srcSchema.GetAllCols().GetByName(targetColumn.Name)
-		}
+		sourceColumn, found := srcSchema.GetAllCols().GetByNameCaseInsensitive(targetColumn.Name)
 
 		if found {
 			srcIndex := srcSchema.GetAllCols().IndexOf(sourceColumn.Name)
@@ -193,13 +190,9 @@ func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projecte
 
 	return func(ctx *sql.Context, row sql.Row) (sql.Row, error) {
 		r := make(sql.Row, len(projectedColNames))
-		for i, tag := range projectedTags {
-			// First try to find the column in the src schema with the matching tag
-			// then fallback to a name match, since type changes will change the tag
-			srcColumn, found := srcSchema.GetAllCols().GetByTag(tag)
-			if !found {
-				srcColumn, found = srcSchema.GetAllCols().GetByName(projectedColNames[i])
-			}
+		for i, _ := range projectedTags {
+			// Match source column by name
+			srcColumn, found := srcSchema.GetAllCols().GetByNameCaseInsensitive(projectedColNames[i])
 
 			if found {
 				srcIndex := srcSchema.GetAllCols().IndexOf(srcColumn.Name)

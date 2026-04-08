@@ -346,8 +346,9 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 			},
 			{
+				// Without tags, renamed column c2 doesn't match old name c1, so data is NULL
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.Row{{1, nil}, {2, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -429,8 +430,9 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 			},
 			{
+				// Without tags, renamed column c2 doesn't match old name c1, so data is NULL
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.Row{{1, nil}, {2, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -520,8 +522,9 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 			},
 			{
+				// Without tags, renamed column c2 doesn't match old name c1, so data is NULL
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.Row{{1, nil}, {2, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
