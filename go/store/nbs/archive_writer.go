@@ -78,7 +78,7 @@ type archiveWriter struct {
 	indexLen        uint64
 	chunkDataLength uint64
 	metadataLen     uint32
-	nameCheckSum    sha512Sum
+	nameCheckSum    hash.Hash
 	fullMD5         md5Sum
 }
 
@@ -415,7 +415,8 @@ func (aw *archiveWriter) writeFooter() error {
 	aw.bytesWritten += archiveFileSigSize
 	aw.workflowStage = stageFlush
 
-	aw.nameCheckSum = sha512Sum(aw.output.GetSum())
+	checksum := sha512Sum(aw.output.GetSum())
+	aw.nameCheckSum = hash.New(checksum[:hash.ByteLen])
 	aw.fullMD5 = md5Sum(aw.md5Summer.GetSum())
 
 	return nil
@@ -487,7 +488,7 @@ func (aw *archiveWriter) getName() (hash.Hash, error) {
 		return hash.Hash{}, fmt.Errorf("Runtime error: getName called out of order")
 	}
 
-	return hash.New(aw.nameCheckSum[:hash.ByteLen]), nil
+	return aw.nameCheckSum, nil
 }
 
 // genFileName generates the file name for the archive. The path argument is the directory where the file should be written.
