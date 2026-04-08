@@ -484,8 +484,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 				handler = val.NewExtendedAddressTypeHandler(vs, typeHandler)
 			case val.ExtendedAdaptiveEnc:
 				handler = val.NewAdaptiveTypeHandler(vs, typeHandler)
-			default:
-				// encoding == serial.EncodingExtended
+			case val.ExtendedEnc:
 				handler = typeHandler
 			}
 		} else {
@@ -576,9 +575,10 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 				handlers = append(handlers, val.NewExtendedAddressTypeHandler(vs, typeHandler))
 			case val.ExtendedAdaptiveEnc:
 				handlers = append(handlers, val.NewAdaptiveTypeHandler(vs, typeHandler))
-			default:
-				// encoding == val.ExtendedEnc
+			case val.ExtendedEnc:
 				handlers = append(handlers, typeHandler)
+			default:
+				handlers = append(handlers, nil)
 			}
 		} else {
 			handlers = append(handlers, nil)

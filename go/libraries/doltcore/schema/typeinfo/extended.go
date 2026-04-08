@@ -52,7 +52,7 @@ func (ti *extendedType) Equals(other TypeInfo) bool {
 	}
 	if ti2, ok := other.(*extendedType); ok {
 		return ti.sqlExtendedType.Equals(ti2.sqlExtendedType) &&
-				ti.Encoding() == ti2.Encoding()
+			ti.Encoding() == ti2.Encoding()
 	}
 	return false
 }
