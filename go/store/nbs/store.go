@@ -2425,15 +2425,17 @@ func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk c
 	return nil
 }
 
-func (nbs *NomsBlockStore) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(error)) {
+func (nbs *NomsBlockStore) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) {
 	for _, v := range nbs.tables.novel {
-		v.tolerantIterateAllChunks(ctx, cb, errCb, nbs.stats)
+		fileName := v.hash().String() + v.suffix()
+		v.tolerantIterateAllChunks(ctx, cb, func(err error) { errCb(fileName, err) }, nbs.stats)
 		if ctx.Err() != nil {
 			return
 		}
 	}
 	for _, v := range nbs.tables.upstream {
-		v.tolerantIterateAllChunks(ctx, cb, errCb, nbs.stats)
+		fileName := v.hash().String() + v.suffix()
+		v.tolerantIterateAllChunks(ctx, cb, func(err error) { errCb(fileName, err) }, nbs.stats)
 		if ctx.Err() != nil {
 			return
 		}

@@ -553,7 +553,7 @@ func (gcs *GenerationalNBS) IterateAllChunks(ctx context.Context, cb func(chunk 
 	return nil
 }
 
-func (gcs *GenerationalNBS) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(error)) {
+func (gcs *GenerationalNBS) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) {
 	gcs.newGen.TolerantIterateAllChunks(ctx, cb, errCb)
 	if ctx.Err() != nil {
 		return
