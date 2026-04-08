@@ -670,9 +670,9 @@ func validateCommitTrees(
 type treeScanner struct {
 	vs *types.ValueStore
 	ns tree.NodeStore
-	// history tracks every chunk hash that has been enqueued for processing (or already processed).
+	// visited tracks every chunk hash that has been enqueued for processing (or already processed).
 	// A hash present here means we've already visited it; skip it to avoid redundant validation and duplicate error messages.
-	history         hash.HashSet
+	visited         hash.HashSet
 	errs            *Errs
 	reachableChunks *hash.HashSet
 	progress        chan FsckProgressMessage
@@ -686,7 +686,7 @@ func newTreeScanner(vs *types.ValueStore, ns tree.NodeStore, reachableChunks *ha
 	return &treeScanner{
 		vs:                        vs,
 		ns:                        ns,
-		history:                   make(hash.HashSet),
+		visited:                   make(hash.HashSet),
 		errs:                      errs,
 		reachableChunks:           reachableChunks,
 		progress:                  progress,
@@ -808,10 +808,10 @@ func (ts *treeScanner) validateTreeRoot(
 	treeHash hash.Hash,
 ) error {
 	// Skip if already processed. Root hashes rarely repeat, but possible if you revert to a previous state.
-	if ts.history.Has(treeHash) {
+	if ts.visited.Has(treeHash) {
 		return nil
 	}
-	ts.history.Insert(treeHash)
+	ts.visited.Insert(treeHash)
 
 	treeValue, err := ts.vs.ReadValue(ctx, treeHash)
 	if err != nil || treeValue == nil {
@@ -849,10 +849,10 @@ func (ts *treeScanner) validateTree(
 		workQueue.Remove(elem)
 
 		// Mark visited immediately so re-queued references from sibling nodes are skipped.
-		if ts.history.Has(currentChunkHash) {
+		if ts.visited.Has(currentChunkHash) {
 			continue
 		}
-		ts.history.Insert(currentChunkHash)
+		ts.visited.Insert(currentChunkHash)
 
 		ts.reachableChunks.Insert(currentChunkHash)
 
@@ -864,7 +864,7 @@ func (ts *treeScanner) validateTree(
 
 		if serialMsg, ok := value.(types.SerialMessage); ok {
 			err := serialMsg.WalkAddrs(ts.vs.Format(), func(addr hash.Hash) error {
-				if ts.history.Has(addr) {
+				if ts.visited.Has(addr) {
 					// Already visited; skip.
 					return nil
 				}
