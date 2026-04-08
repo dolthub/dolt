@@ -62,9 +62,10 @@ const (
 	QueryistTLSMode_NoVerify_FallbackToPlaintext
 )
 
-// BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
-// module isn't ideal, but it's the only way to get the server config into the queryist.
-func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, tlsMode QueryistTLSMode, dbRev string) (cli.LateBindQueryist, error) {
+// BuildConnectionStringQueryist returns a Queryist that connects to the server at |host|:|port|.
+// |defaultName| and |defaultEmail| set the initial author and committer identity via session variables.
+// The DOLT_AUTHOR_* and DOLT_COMMITTER_* environment variables override these values when set.
+func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, tlsMode QueryistTLSMode, dbRev string, defaultName, defaultEmail string) (cli.LateBindQueryist, error) {
 	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
 		return nil, err
@@ -103,7 +104,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 		sqlCtx := sql.NewContext(ctx)
 		sqlCtx.SetCurrentDatabase(dbRev)
 
-		if err := engine.InitCommitIdentitySessionConfig(queryist, sqlCtx); err != nil {
+		if err := engine.InitCommitIdentitySessionConfig(queryist, sqlCtx, defaultName, defaultEmail); err != nil {
 			cli.PrintErr(err.Error())
 		}
 

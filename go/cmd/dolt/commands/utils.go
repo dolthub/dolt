@@ -331,9 +331,11 @@ func newLateBindingEngine(
 		// sqlCtx as one big session-in-use window.
 		sql.SessionCommandBegin(sqlCtx.Session)
 
-		// Load DOLT_AUTHOR_* / DOLT_COMMITTER_* env vars into session variables so they take
-		// effect as the highest-priority identity source in [dsess.DoltSession.NewCommitStagedProps].
-		if err := engine.InitCommitIdentitySessionConfig(se, sqlCtx); err != nil {
+		// Committer identity is initialized from the session's dolt config values, then the DOLT_AUTHOR_*
+		// and DOLT_COMMITTER_* environment variables override individual fields. The resulting values are
+		// stored in the session variables read by [dsess.DoltSession.NewCommitStagedProps].
+		dSess := dsess.DSessFromSess(sqlCtx.Session)
+		if err := engine.InitCommitIdentitySessionConfig(se, sqlCtx, dSess.Username(), dSess.Email()); err != nil {
 			cli.PrintErr(err.Error())
 		}
 

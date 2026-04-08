@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -670,7 +671,17 @@ If you're interested in running this command against a remote host, hit us up on
 		if apr.Contains(cli.NoTLSFlag) {
 			tlsMode = sqlserver.QueryistTLSMode_Disabled
 		}
-		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, tlsMode, useDb)
+		// Loopback connections use the dolt config identity. Remote connections use the MySQL credentials
+		// because the server has no access to the client's dolt config.
+		var committerName, committerEmail string
+		if ip := net.ParseIP(host); host == "localhost" || (ip != nil && ip.IsLoopback()) {
+			committerName = rootEnv.Config.GetStringOrDefault(config.UserNameKey, "")
+			committerEmail = rootEnv.Config.GetStringOrDefault(config.UserEmailKey, "")
+		} else {
+			committerName = creds.Username
+			committerEmail = fmt.Sprintf("%s@%s", creds.Username, host)
+		}
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, tlsMode, useDb, committerName, committerEmail)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
 		if hasPort {
@@ -781,7 +792,9 @@ If you're interested in running this command against a remote host, hit us up on
 			if !creds.Specified {
 				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: localCreds.Secret, Specified: false}
 			}
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb)
+			doltConfigName := targetEnv.Config.GetStringOrDefault(config.UserNameKey, "")
+			doltConfigEmail := targetEnv.Config.GetStringOrDefault(config.UserEmailKey, "")
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
 		}
 	}
 

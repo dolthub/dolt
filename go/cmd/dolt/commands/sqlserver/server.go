@@ -1168,27 +1168,26 @@ func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) serv
 			return nil, err
 		}
 
-		dsess, err := se.NewDoltSession(ctx, baseSession)
+		dSess, err := se.NewDoltSession(ctx, baseSession)
 		if err != nil {
 			return nil, err
 		}
 
 		varsForUser := userToSessionVars[conn.User]
 		if len(varsForUser) > 0 {
-			sqlCtx, err := se.NewContext(ctx, dsess)
+			sqlCtx, err := se.NewContext(ctx, dSess)
 			if err != nil {
 				return nil, err
 			}
 
 			for key, val := range varsForUser {
-				err = dsess.InitSessionVariable(sqlCtx, key, val)
-				if err != nil {
+				if err = dSess.InitSessionVariable(sqlCtx, key, val); err != nil {
 					return nil, err
 				}
 			}
 		}
 
-		return dsess, nil
+		return dSess, nil
 	}
 }
 
