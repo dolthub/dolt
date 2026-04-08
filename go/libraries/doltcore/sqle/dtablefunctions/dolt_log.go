@@ -824,8 +824,8 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	if itr.showSignature {
-		if len(meta.GPGSignature) > 0 {
-			out, err := gpg.Verify(ctx, []byte(meta.GPGSignature))
+		if len(meta.Signature) > 0 {
+			out, err := gpg.Verify(ctx, []byte(meta.Signature))
 			if err != nil {
 				return nil, err
 			}
@@ -836,7 +836,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	if !itr.showCommitterOnly {
-		row = append(row, meta.Name, meta.Email, meta.Time())
+		row = append(row, meta.Author.Name, meta.Author.Email, meta.Author.Date.Time())
 	}
 
 	return row, nil

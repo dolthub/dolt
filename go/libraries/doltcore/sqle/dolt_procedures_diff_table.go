@@ -195,7 +195,7 @@ func (dpdp *DoltProceduresDiffPartitionItr) Next(ctx *sql.Context) (sql.Partitio
 				if err != nil {
 					return nil, err
 				}
-				cmCommitDate := types.Timestamp(cmMeta.Time())
+				cmCommitDate := types.Timestamp(cmMeta.Author.Date.Time())
 
 				return &DoltProceduresDiffPartition{
 					toTable:   cmProceduresTable,
@@ -253,13 +253,13 @@ func (dpdp *DoltProceduresDiffPartitionItr) Next(ctx *sql.Context) (sql.Partitio
 			if err != nil {
 				return nil, err
 			}
-			cmCommitDate := types.Timestamp(cmMeta.Time())
+			cmCommitDate := types.Timestamp(cmMeta.Author.Date.Time())
 
 			parentMeta, err := parentCm.GetCommitMeta(ctx)
 			if err != nil {
 				return nil, err
 			}
-			parentCommitDate := types.Timestamp(parentMeta.Time())
+			parentCommitDate := types.Timestamp(parentMeta.Author.Date.Time())
 
 			parentHash, err := parentCm.HashOf()
 			if err != nil {
@@ -297,7 +297,7 @@ func (dpdp *DoltProceduresDiffPartitionItr) createWorkingPartition(ctx *sql.Cont
 	if err != nil {
 		return nil, err
 	}
-	headCommitDate := types.Timestamp(headMeta.Time())
+	headCommitDate := types.Timestamp(headMeta.Author.Date.Time())
 
 	headProceduresTable, _, err := headRoot.GetTable(ctx, doltdb.TableName{Name: doltdb.ProceduresTableName})
 	if err != nil {

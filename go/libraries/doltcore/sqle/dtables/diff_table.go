@@ -470,7 +470,7 @@ func tableInfoForCommit(ctx *sql.Context, tableName doltdb.TableName, cm *doltdb
 		return TblInfoAtCommit{}, err
 	}
 
-	ts := types.Timestamp(meta.Time())
+	ts := types.Timestamp(meta.Author.Date.Time())
 	return NewTblInfoAtCommit(hs.String(), &ts, tbl, tblHash), nil
 }
 
@@ -745,7 +745,7 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 		return nil, err
 	}
 
-	ts := types.Timestamp(meta.Time())
+	ts := types.Timestamp(meta.Author.Date.Time())
 
 	var nextPartition *DiffPartition
 	if tblHash != toInfoForCommit.tblHash {

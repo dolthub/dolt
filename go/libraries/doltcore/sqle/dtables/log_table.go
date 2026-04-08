@@ -124,9 +124,9 @@ func NewLogTableSchema(showCommitterOnly bool) sql.Schema {
 // NewLogTableRow builds a dolt_log row with the option to show author columns.
 func NewLogTableRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, showCommitterOnly bool) sql.Row {
 	rowVals := make([]interface{}, 0, len(LogSchemaCommitterColumns))
-	rowVals = append(rowVals, commitHash.String(), meta.CommitterName, meta.CommitterEmail, meta.CommitterTime(), meta.Description, height)
+	rowVals = append(rowVals, commitHash.String(), meta.Committer.Name, meta.Committer.Email, meta.Committer.Date.Time(), meta.Description, height)
 	if !showCommitterOnly {
-		rowVals = append(rowVals, meta.Name, meta.Email, meta.Time())
+		rowVals = append(rowVals, meta.Author.Name, meta.Author.Email, meta.Author.Date.Time())
 	}
 	return sql.NewRow(rowVals...)
 }

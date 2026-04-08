@@ -80,7 +80,7 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 			return 1, err
 		}
 	} else {
-		name, email, err = dsess.ResolveIdentity(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
+		name, email, err = dsess.ResolveNameEmail(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
 		if err != nil {
 			return 1, err
 		}

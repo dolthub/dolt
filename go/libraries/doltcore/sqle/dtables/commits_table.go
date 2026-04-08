@@ -178,5 +178,5 @@ func (itr CommitsRowItr) Close(*sql.Context) error {
 }
 
 func formatCommitTableRow(h hash.Hash, meta *datas.CommitMeta) sql.Row {
-	return sql.NewRow(h.String(), meta.CommitterName, meta.CommitterEmail, meta.CommitterTime(), meta.Description, meta.Name, meta.Email, meta.Time())
+	return sql.NewRow(h.String(), meta.Committer.Name, meta.Committer.Email, meta.Committer.Date.Time(), meta.Description, meta.Author.Name, meta.Author.Email, meta.Author.Date.Time())
 }

@@ -308,7 +308,7 @@ func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (dol
 			return nil, "", nil, err
 		}
 
-		t := meta.Time()
+		t := meta.Author.Date.Time()
 		commitTime = (*types.Timestamp)(&t)
 	}
 

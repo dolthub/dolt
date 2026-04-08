@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // ErrCherryPickUncommittedChanges is returned when a cherry-pick is attempted without a clean working set.
@@ -191,14 +190,14 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 		return nil, err
 	}
 
-	commitProps, err := dsess.ResolveCommitStagedProps(ctx, "")
+	commitProps, err := dsess.NewCommitStagedProps(ctx, "")
 	if err != nil {
 		return nil, err
 	}
 
-	commitProps.Author.Name = originalMeta.Name
-	commitProps.Author.Email = originalMeta.Email
-	commitProps.Author.Date = datas.CommitDateAt(originalMeta.Time())
+	commitProps.Author.Name = originalMeta.Author.Name
+	commitProps.Author.Email = originalMeta.Author.Email
+	commitProps.Author.Date = originalMeta.Author.Date
 	commitProps.SkipVerification = options.SkipVerification
 
 	if options.CommitMessage != "" {

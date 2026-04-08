@@ -27,23 +27,12 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// NewSignature is a function that signs a message and returns the signature.
-type NewSignature func(ctx context.Context, keyId string, message []byte) ([]byte, error)
-
-// CommitSigner contains all information needed to sign a commit.
-// If this is nil in CommitOptions, the commit will not be signed.
-type CommitSigner struct {
-	// Key is the GPG key ID to use for signing.
-	Key string
-	// Sign is the function to use for signing.
-	Sign NewSignature
-	// DBName is the name of the database being committed to.
-	DBName string
-	// HeadHash is the hash of the current HEAD before the commit.
-	HeadHash hash.Hash
-	// StagedHash is the hash of the staged root value.
-	StagedHash hash.Hash
+// CommitSigner signs a commit payload and returns the signature bytes.
+// A nil CommitSigner in [CommitOptions] means the commit will not be signed.
+type CommitSigner interface {
+	Sign(ctx context.Context, payload []byte) ([]byte, error)
 }
+
 
 // CommitOptions is used to pass options into Commit.
 type CommitOptions struct {
@@ -57,6 +46,13 @@ type CommitOptions struct {
 	// as a parent, in addition to the parent set provided here. When we amend, we want to strictly use the commits
 	// provided in |Parents|, and no others.
 	Amend bool
-	// Signer contains all context needed for signing this commit. If nil, the commit will not be signed.
-	Signer *CommitSigner
+	// Signer, when non-nil, is called to sign the commit payload. DBName, HeadHash, and StagedHash
+	// must also be set when Signer is provided.
+	Signer CommitSigner
+	// DBName is the name of the database, used when constructing the signature payload.
+	DBName string
+	// HeadHash is the hash of the current HEAD, used when constructing the signature payload.
+	HeadHash hash.Hash
+	// StagedHash is the hash of the staged root value, used when constructing the signature payload.
+	StagedHash hash.Hash
 }

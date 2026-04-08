@@ -596,22 +596,18 @@ func doltSessionFactory(
 	}
 }
 
-var ErrFailedToInitCommitIdentity = fmt.Errorf("failed to initialize commit identity session variables from environment")
+var ErrFailedToInitCommitIdent = fmt.Errorf("failed to initialize commit identity session variables from environment")
 
-// InitCommitIdentitySessionConfig initializes the commit identity session variables for the current session.
-// |defaultName| and |defaultEmail| set the base author and committer identity. The DOLT_AUTHOR_* and
+// InitCommitIdentSessionConfig initializes the commit identity session variables for the current session.
+// |name| and |email| provide the base author and committer name and email. The DOLT_AUTHOR_* and
 // DOLT_COMMITTER_* environment variables override individual fields when set. Must be called after
 // [sql.SessionCommandBegin].
-//
-// For loopback connections the caller passes the local dolt config values. For remote connections the
-// caller passes the MySQL credentials, because the server has no access to the client's dolt config.
-func InitCommitIdentitySessionConfig(queryist cli.Queryist, sqlCtx *sql.Context, defaultName, defaultEmail string) error {
-	// Both author and committer start from the provided defaults; environment variables override individual fields below.
+func InitCommitIdentSessionConfig(queryist cli.Queryist, sqlCtx *sql.Context, name, email string) error {
 	sessionVars := map[string]string{
-		dsess.DoltAuthorName:     defaultName,
-		dsess.DoltAuthorEmail:    defaultEmail,
-		dsess.DoltCommitterName:  defaultName,
-		dsess.DoltCommitterEmail: defaultEmail,
+		dsess.DoltAuthorName:     name,
+		dsess.DoltAuthorEmail:    email,
+		dsess.DoltCommitterName:  name,
+		dsess.DoltCommitterEmail: email,
 	}
 
 	envVarOverrides := []struct{ environmentConfigVar, sessionConfigVar string }{
@@ -648,7 +644,7 @@ func InitCommitIdentitySessionConfig(queryist cli.Queryist, sqlCtx *sql.Context,
 	}
 	_, _, _, err := queryist.Query(sqlCtx, sb.String())
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrFailedToInitCommitIdentity, err)
+		return fmt.Errorf("%w: %v", ErrFailedToInitCommitIdent, err)
 	}
 	return nil
 }

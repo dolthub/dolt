@@ -132,7 +132,7 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 	}
 
 	if workingSetExists && hasChanges {
-		name, email, err := dsess.ResolveIdentity(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
+		name, email, err := dsess.ResolveNameEmail(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
 		if err != nil {
 			return err
 		}

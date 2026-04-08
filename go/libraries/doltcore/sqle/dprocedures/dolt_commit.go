@@ -15,6 +15,7 @@
 package dprocedures
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -207,13 +208,10 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 			return "", false, err
 		}
 
-		pendingCommit.CommitOptions.Signer = &datas.CommitSigner{
-			Key:        keyId,
-			Sign:       gpg.Sign,
-			DBName:     dbName,
-			HeadHash:   headHash,
-			StagedHash: stagedHash,
-		}
+		pendingCommit.CommitOptions.Signer = &gpgSigner{keyId: keyId}
+		pendingCommit.CommitOptions.DBName = dbName
+		pendingCommit.CommitOptions.HeadHash = headHash
+		pendingCommit.CommitOptions.StagedHash = stagedHash
 	}
 
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
@@ -248,4 +246,10 @@ func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]st
 	}
 
 	return args, nil
+}
+
+type gpgSigner struct{ keyId string }
+
+func (s *gpgSigner) Sign(ctx context.Context, payload []byte) ([]byte, error) {
+	return gpg.Sign(ctx, s.keyId, payload)
 }

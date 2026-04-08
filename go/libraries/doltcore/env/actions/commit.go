@@ -40,10 +40,21 @@ type CommitStagedProps struct {
 	Amend            bool
 	Force            bool
 	SkipVerification bool
-	// Author is the identity of the person who authored the change (name, email, and optional date).
-	Author datas.CommitSignature
-	// Committer is the identity of the person who applied the change (name, email, and optional date).
-	Committer datas.CommitSignature
+	// Author is the identity of the person who wrote the change.
+	Author datas.CommitIdent
+	// Committer is the identity of the person who applied the change.
+	Committer datas.CommitIdent
+}
+
+// NewCommitStagedProps creates a [CommitStagedProps] with both Author and Committer initialized
+// from |name|, |email|, and |date|.
+func NewCommitStagedProps(name, email string, date datas.CommitDate, message string) CommitStagedProps {
+	sig := datas.CommitIdent{Name: name, Email: email, Date: date}
+	return CommitStagedProps{
+		Message:   message,
+		Author:    sig,
+		Committer: sig,
+	}
 }
 
 const (
@@ -71,17 +82,6 @@ func getCommitRunTestGroups() []string {
 		return groups
 	}
 	return nil
-}
-
-// NewCommitStagedProps creates a new CommitStagedProps with the given author information. Committer is
-// automatically set to mirror the author.
-func NewCommitStagedProps(name, email string, date datas.CommitDate, message string) CommitStagedProps {
-	sig := datas.CommitSignature{Name: name, Email: email, Date: date}
-	return CommitStagedProps{
-		Message:   message,
-		Author:    sig,
-		Committer: sig,
-	}
 }
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.

@@ -373,14 +373,14 @@ func (itr *doltColDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, erro
 		h.String(),
 		tableChange.tableName.String(),
 		col,
-		meta.CommitterName,
-		meta.CommitterEmail,
-		meta.CommitterTime(),
+		meta.Committer.Name,
+		meta.Committer.Email,
+		meta.Committer.Date.Time(),
 		meta.Description,
 		diffType,
-		meta.Name,
-		meta.Email,
-		meta.Time(),
+		meta.Author.Name,
+		meta.Author.Email,
+		meta.Author.Date.Time(),
 	), nil
 }
 

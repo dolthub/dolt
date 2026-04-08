@@ -401,15 +401,15 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 	return sql.NewRow(
 		h.String(),
 		tableChange.TableName.String(),
-		meta.CommitterName,
-		meta.CommitterEmail,
-		meta.CommitterTime(),
+		meta.Committer.Name,
+		meta.Committer.Email,
+		meta.Committer.Date.Time(),
 		meta.Description,
 		tableChange.DataChange,
 		tableChange.SchemaChange,
-		meta.Name,
-		meta.Email,
-		meta.Time(),
+		meta.Author.Name,
+		meta.Author.Email,
+		meta.Author.Date.Time(),
 	), nil
 }
 

@@ -718,7 +718,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	p.applyDBLoadParamsToEnv(newEnv)
 
 	newDbStorageFormat := types.Format_Default
-	committerName, committerEmail, err := dsess.ResolveIdentity(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
+	committerName, committerEmail, err := dsess.ResolveNameEmail(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
 	if err != nil {
 		return err
 	}
@@ -816,7 +816,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 			return fmt.Errorf("unable to get roots for database %s", name)
 		}
 
-		commitStagedProps, err := dsess.ResolveCommitStagedProps(ctx, "CREATE DATABASE")
+		commitStagedProps, err := dsess.NewCommitStagedProps(ctx, "CREATE DATABASE")
 		if err != nil {
 			return err
 		}

@@ -456,7 +456,7 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	commitStagedProps, err := dsess.ResolveCommitStagedProps(ctx, msg)
+	commitStagedProps, err := dsess.NewCommitStagedProps(ctx, msg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -541,7 +541,7 @@ func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, 
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		return cli.ParseAuthor(authorStr)
 	}
-	return dsess.ResolveIdentity(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
+	return dsess.ResolveNameEmail(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
 }
 
 func mergeRootToWorking(

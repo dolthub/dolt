@@ -403,7 +403,7 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 		remoteBranches := itr.table.remote
 		if remoteBranches {
-			return sql.NewRow(name, h.String(), meta.CommitterName, meta.CommitterEmail, meta.CommitterTime(), meta.Description, meta.Name, meta.Email, meta.Time()), nil
+			return sql.NewRow(name, h.String(), meta.Committer.Name, meta.Committer.Email, meta.Committer.Date.Time(), meta.Description, meta.Author.Name, meta.Author.Email, meta.Author.Date.Time()), nil
 		} else {
 			branches, err := itr.table.db.DbData().Rsr.GetBranches()
 			if err != nil {
@@ -417,7 +417,7 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 				remoteName = branch.Remote
 				branchName = branch.Merge.Ref.GetPath()
 			}
-			return sql.NewRow(name, h.String(), meta.CommitterName, meta.CommitterEmail, meta.CommitterTime(), meta.Description, remoteName, branchName, dirty, meta.Name, meta.Email, meta.Time()), nil
+			return sql.NewRow(name, h.String(), meta.Committer.Name, meta.Committer.Email, meta.Committer.Date.Time(), meta.Description, remoteName, branchName, dirty, meta.Author.Name, meta.Author.Email, meta.Author.Date.Time()), nil
 		}
 	}
 }

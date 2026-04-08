@@ -224,14 +224,43 @@ const (
 	SysVarTrue  = int8(1)
 )
 
-// ResolveIdentity reads the name and email session variables for a single author or committer,
-// falling back to the MySQL client user and address when the variables are unset. Unknown system
-// variables are treated as unset rather than errors, for compatibility with older Dolt servers.
-func ResolveIdentity(ctx *sql.Context, nameVar, emailVar string) (string, string, error) {
-	name, err := systemVarString(ctx, nameVar)
-	if sql.ErrUnknownSystemVariable.Is(err) {
-		err = nil
+// NewCommitStagedProps creates an [actions.CommitStagedProps] using session variables for author and committer
+// identity.
+//
+// Identity is resolved in the following order:
+//  1. Session variables ([DoltAuthorName], [DoltCommitterName], etc.), seeded from the dolt config at
+//     session creation and overridable per-connection via InitCommitIdentSessionConfig.
+//  2. The MySQL client name and email from [sql.Client], used when the session variables are not set.
+func NewCommitStagedProps(ctx *sql.Context, message string) (actions.CommitStagedProps, error) {
+	authorName, authorEmail, err := ResolveNameEmail(ctx, DoltAuthorName, DoltAuthorEmail)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
 	}
+	authorDate, err := resolveDate(ctx, DoltAuthorDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+
+	committerName, committerEmail, err := ResolveNameEmail(ctx, DoltCommitterName, DoltCommitterEmail)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	committerDate, err := resolveDate(ctx, DoltCommitterDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+
+	return actions.CommitStagedProps{
+		Message:   message,
+		Author:    datas.CommitIdent{Name: authorName, Email: authorEmail, Date: authorDate},
+		Committer: datas.CommitIdent{Name: committerName, Email: committerEmail, Date: committerDate},
+	}, nil
+}
+
+// ResolveNameEmail reads the name and email session variables for a single author or committer,
+// falling back to the SQL client user and address when the variables are unset.
+func ResolveNameEmail(ctx *sql.Context, nameVar, emailVar string) (string, string, error) {
+	name, err := systemVarString(ctx, nameVar)
 	if err != nil {
 		return "", "", err
 	}
@@ -240,9 +269,6 @@ func ResolveIdentity(ctx *sql.Context, nameVar, emailVar string) (string, string
 	}
 
 	email, err := systemVarString(ctx, emailVar)
-	if sql.ErrUnknownSystemVariable.Is(err) {
-		err = nil
-	}
 	if err != nil {
 		return "", "", err
 	}
@@ -253,51 +279,14 @@ func ResolveIdentity(ctx *sql.Context, nameVar, emailVar string) (string, string
 	return name, email, nil
 }
 
-// ResolveDate reads the date session variable for a single author or committer,
-// returning CommitDateNow when the variable is unset or empty. Unknown system variables
-// are treated as unset rather than errors, for compatibility with older Dolt servers.
-func ResolveDate(ctx *sql.Context, dateVar string) (datas.CommitDate, error) {
+// resolveDate reads the date session variable for a single author or committer,
+// returning [datas.CommitDateNow] when the variable is unset or empty.
+func resolveDate(ctx *sql.Context, dateVar string) (datas.CommitDate, error) {
 	strVal, err := systemVarString(ctx, dateVar)
-	if sql.ErrUnknownSystemVariable.Is(err) {
-		return datas.CommitDateNow(), nil
-	}
 	if err != nil || strVal == "" {
 		return datas.CommitDateNow(), err
 	}
 	return datas.NewCommitDate(strVal)
-}
-
-// ResolveCommitStagedProps creates an [actions.CommitStagedProps] using session variables for author and committer
-// identity.
-//
-// Identity is resolved in the following order:
-//  1. Session variables ([DoltAuthorName], [DoltCommitterName], etc.), seeded from the dolt config at session
-//     creation and optionally overridden per-connection by InitCommitIdentitySessionConfig.
-//  2. The MySQL client identity from [sql.Client], used when the session has no dolt config set.
-func ResolveCommitStagedProps(ctx *sql.Context, message string) (actions.CommitStagedProps, error) {
-	authorName, authorEmail, err := ResolveIdentity(ctx, DoltAuthorName, DoltAuthorEmail)
-	if err != nil {
-		return actions.CommitStagedProps{}, err
-	}
-	authorDate, err := ResolveDate(ctx, DoltAuthorDate)
-	if err != nil {
-		return actions.CommitStagedProps{}, err
-	}
-
-	committerName, committerEmail, err := ResolveIdentity(ctx, DoltCommitterName, DoltCommitterEmail)
-	if err != nil {
-		return actions.CommitStagedProps{}, err
-	}
-	committerDate, err := ResolveDate(ctx, DoltCommitterDate)
-	if err != nil {
-		return actions.CommitStagedProps{}, err
-	}
-
-	return actions.CommitStagedProps{
-		Message:   message,
-		Author:    datas.CommitSignature{Name: authorName, Email: authorEmail, Date: authorDate},
-		Committer: datas.CommitSignature{Name: committerName, Email: committerEmail, Date: committerDate},
-	}, nil
 }
 
 // systemVarString returns the string value of the named system variable, returning an empty string
