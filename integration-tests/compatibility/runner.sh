@@ -66,12 +66,13 @@ function list_backward_compatible_versions() {
 function test_backward_compatibility() {
   ver=$1
   bin=`download_release "$ver"`
+  DOLT_NEW_BIN=`which dolt`   # capture current dolt before PATH is modified
 
   # create a Dolt repository using version "$ver"
   PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
   echo "Run the bats tests with current Dolt version hitting repositories from older Dolt version $ver"
-  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats --print-output-on-failure ./test_files/bats
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW_BIN" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats --print-output-on-failure ./test_files/bats
 }
 
 function test_bidirectional_compatibility() {
@@ -113,9 +114,10 @@ function list_forward_compatible_versions() {
 function test_forward_compatibility() {
   ver=$1
   bin=`download_release "$ver"`
+  DOLT_NEW_BIN=`which dolt`   # capture current dolt before PATH is prepended with old binary
 
   echo "Run the bats tests using older Dolt version $ver hitting repositories from the current Dolt version"
-  
+
   # Push this repo to a file remote in preparation to clone it. This
   # prunes out certain aspects of the storage (certain refs) that may
   # not be compatible with older versions.
@@ -139,7 +141,7 @@ function test_forward_compatibility() {
   then
       rm -rf "repos/$ver"
   fi
-  
+
   cd repos
   # Make sure these clone and setup commands are run with the version of dolt under test
   relpath="`pwd`"/../"$bin":"$PATH"
@@ -159,8 +161,7 @@ function test_forward_compatibility() {
 
   # Run the bats tests
   PATH="`pwd`"/"$bin":"$PATH" dolt version
-  echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
-  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
+  PATH="`pwd`"/"$bin":"$PATH" DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW_BIN" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
 }
 
 _main() {

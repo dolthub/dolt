@@ -289,8 +289,8 @@ func TestSingleScriptPrepared(t *testing.T) {
 			{
 				Query: "select * from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1) order by 1",
 				Expected: []sql.Row{
-					sql.Row{0, 1, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
-					sql.Row{2, 3, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
+					sql.Row{0, 1, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "root", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
+					sql.Row{2, 3, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "root", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
 				},
 			},
 			{

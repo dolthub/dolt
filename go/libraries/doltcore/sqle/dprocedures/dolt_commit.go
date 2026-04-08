@@ -110,7 +110,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
-	commitStagedProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, dSess, msg)
+	commitStagedProps, err := dsess.ResolveCommitStagedProps(ctx, msg)
 	if err != nil {
 		return "", false, err
 	}
@@ -137,7 +137,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	commitStagedProps.SkipVerification = apr.Contains(cli.SkipVerificationFlag)
 
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		commitStagedProps.Name, commitStagedProps.Email, err = cli.ParseAuthor(authorStr)
+		commitStagedProps.Author.Name, commitStagedProps.Author.Email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
 			return "", false, err
 		}
@@ -149,7 +149,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		if err != nil {
 			return "", false, err
 		}
-		commitStagedProps.Date = datas.CommitDateAt(t)
+		commitStagedProps.Author.Date = datas.CommitDateAt(t)
 	}
 
 	if apr.Contains(cli.ForceFlag) {

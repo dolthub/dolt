@@ -456,13 +456,13 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	commitStagedProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, dSess, msg)
+	commitStagedProps, err := dsess.ResolveCommitStagedProps(ctx, msg)
 	if err != nil {
 		return nil, nil, err
 	}
-	commitStagedProps.Name = spec.Name
-	commitStagedProps.Email = spec.Email
-	commitStagedProps.Date = datas.CommitDateAt(spec.Date)
+	commitStagedProps.Author.Name = spec.Name
+	commitStagedProps.Author.Email = spec.Email
+	commitStagedProps.Author.Date = datas.CommitDateAt(spec.Date)
 	commitStagedProps.Force = spec.Force
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, commitStagedProps)
 	commitStagedProps.SkipVerification = skipVerification
@@ -541,12 +541,7 @@ func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, 
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		return cli.ParseAuthor(authorStr)
 	}
-	dSess := dsess.DSessFromSess(ctx.Session)
-	props, err := dsess.CommitStagedPropsFromDoltSess(ctx, dSess, "")
-	if err != nil {
-		return "", "", err
-	}
-	return props.Name, props.Email, nil
+	return dsess.ResolveIdentity(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
 }
 
 func mergeRootToWorking(

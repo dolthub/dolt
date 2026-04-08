@@ -171,16 +171,20 @@ func ContinueRevert(ctx *sql.Context, dbName string, authorName, authorEmail str
 		return "", 0, 0, 0, fmt.Errorf("fatal: unable to load roots for %s", dbName)
 	}
 
-	commitProps := actions.CommitStagedProps{
-		Message: revertMessage,
-		Date:    ctx.QueryTime(),
-		// Allow an empty commit: when a user resolves a conflict by keeping the current
-		// value, staged == HEAD, so there are no net changes — but the revert commit
-		// is still meaningful.
-		AllowEmpty: true,
-		Name:       authorName,
-		Email:      authorEmail,
+	commitProps, err := dsess.NewCommitStagedProps(ctx, revertMessage)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: failed to resolve commit identity: %w", err)
 	}
+	if authorName != "" {
+		commitProps.Author.Name = authorName
+	}
+	if authorEmail != "" {
+		commitProps.Author.Email = authorEmail
+	}
+	// Allow an empty commit: when a user resolves a conflict by keeping the current
+	// value, staged == HEAD and there are no net changes, but the revert commit
+	// is still meaningful.
+	commitProps.AllowEmpty = true
 
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)
 	if err != nil {
@@ -429,12 +433,15 @@ func createRevertCommit(ctx *sql.Context, dbName string, doltSession *dsess.Dolt
 		return "", fmt.Errorf("fatal: unable to load roots for %s", dbName)
 	}
 
-	commitProps := actions.CommitStagedProps{
-		Message:    message,
-		Date:       ctx.QueryTime(),
-		AllowEmpty: false,
-		Name:       authorName,
-		Email:      authorEmail,
+	commitProps, err := dsess.NewCommitStagedProps(ctx, message)
+	if err != nil {
+		return "", fmt.Errorf("error: failed to resolve commit identity: %w", err)
+	}
+	if authorName != "" {
+		commitProps.Author.Name = authorName
+	}
+	if authorEmail != "" {
+		commitProps.Author.Email = authorEmail
 	}
 
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)

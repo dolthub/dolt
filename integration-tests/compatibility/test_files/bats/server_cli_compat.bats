@@ -5,18 +5,17 @@
 # The tests run against a pre-populated repository created by setup_repo.sh. Each test starts a SQL server using one
 # Dolt version and connects with a client using potentially a different Dolt version.
 #
-# The CI pipeline runs these tests in three scenarios:
+# The CI pipeline runs these tests in two scenarios:
 # * old server, current client: starts SQL server with old Dolt version, connects with current client
-# * current server, old client: starts SQL server with current Dolt version, connects with old client
 # * current server, current client: starts SQL server with current Dolt version, connects with current client
 #
 # Environment variables:
 # REPO_DIR contains the test repository path.
 # DEFAULT_BRANCH contains the default branch name.
 # DOLT_VERSION contains the Dolt version used to create the repository.
-# DOLT_SERVER_BIN contains the path to the dolt binary to use for the server.
-# DOLT_CLIENT_BIN contains the path to the dolt binary to use for the client.
-# If DOLT_SERVER_BIN or DOLT_CLIENT_BIN are not set, the dolt in PATH is used.
+# DOLT_LEGACY_BIN contains the path to the dolt binary to use for the server.
+# DOLT_NEW_BIN contains the path to the dolt binary to use for the client.
+# If DOLT_LEGACY_BIN or DOLT_NEW_BIN are not set, the dolt in PATH is used.
 
 load $BATS_TEST_DIRNAME/helper/common.bash
 
@@ -77,8 +76,8 @@ stop_sql_server() {
 }
 
 setup_file() {
-  export dolt_server=${DOLT_SERVER_BIN:-dolt}
-  export dolt_client=${DOLT_CLIENT_BIN:-dolt}
+  export dolt_server=${DOLT_LEGACY_BIN:-dolt}
+  export dolt_client=${DOLT_NEW_BIN:-dolt}
 }
 
 setup() {
@@ -131,13 +130,11 @@ latest_commit() {
     fi
   fi
 
-  # Test dolt log - should display commit info
   run $dolt_client log -n 3
   [ "$status" -eq 0 ]
   [[ "$output" =~ "initialized data" ]] || false
   [[ "$output" =~ "made changes to main" ]] || false
 
-  # Test dolt show - extract commit hash and verify output
   local latest_commit
   latest_commit=$(latest_commit)
   [[ -n "$latest_commit" ]] || false
@@ -146,8 +143,7 @@ latest_commit() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "made changes to main" ]] || false
 
-  # Test dolt commit - create a new commit and verify output
-  # Use 'big' table to avoid conflicts with 'abc' table modifications from other branches
+  # Use the big table to avoid conflicts with modifications to the abc table made on other branches.
   run $dolt_client sql -q "USE $DB_NAME; INSERT INTO big VALUES (10000, 'test commit');"
   [ "$status" -eq 0 ]
 
@@ -160,7 +156,6 @@ latest_commit() {
   [[ "$commit_output" =~ "test commit message" ]] || false
   [[ "$commit_output" =~ "commit " ]] || false
 
-  # Test dolt revert - revert the commit we just created
   commit_to_revert=$(extract_commit_hash "$output")
   [[ -n "$commit_to_revert" ]] || false
 
@@ -169,18 +164,17 @@ latest_commit() {
   revert_output=$(strip_ansi "$output")
   [[ "$revert_output" =~ "commit " ]] || false
 
-  # Note: dolt merge is not tested here because it cannot be used when a SQL server is running.
-  # The dolt merge command requires direct repository access which conflicts with an active server.
+  # dolt merge is not tested here because it requires direct repository access and cannot run against a SQL server.
 
-  # Test dolt cherry-pick - cherry-pick a commit from check_merge branch (only modifies def table, won't conflict)
+  # Use check_merge branch because it only modifies the def table, avoiding conflicts with the big table changes above.
   run $dolt_client log check_merge -n 1
   [ "$status" -eq 0 ]
   cherry_commit=$(extract_commit_hash "$output")
   [[ -n "$cherry_commit" ]] || false
 
   run $dolt_client cherry-pick "$cherry_commit"
-  # If it creates a commit, it shows commit info, otherwise it says "No changes were made"
   [ "$status" -eq 0 ]
   cherry_output=$(strip_ansi "$output")
+  # cherry-pick prints commit info when it creates a commit, or "No changes were made" when the patch is already applied.
   [[ "$cherry_output" =~ "commit " ]] || [[ "$cherry_output" =~ "No changes were made" ]] || false
 }

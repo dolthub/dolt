@@ -26,8 +26,8 @@ export const logTests = [
     res: [
       {
         commit_hash: "",
-        committer: "Dolt",
-        email: "dolt@dolthub.com",
+        committer: "dolt",
+        email: "dolt@%",
         date: "",
         message: "Create table test",
         commit_order: 2,
@@ -55,11 +55,14 @@ export const logTests = [
     res: [
       {
         commit_hash: "",
-        committer: "Dolt",
-        email: "dolt@dolthub.com",
+        committer: "dolt",
+        email: "dolt@%",
         date: "",
         message: "Create table test",
         commit_order: 2,
+        author: "Dolt",
+        author_email: "dolt@dolthub.com",
+        author_date: "",
         parents: [""],
       },
     ],

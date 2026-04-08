@@ -132,7 +132,11 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 	}
 
 	if workingSetExists && hasChanges {
-		err = actions.CleanOldWorkingSet(ctx, dbData, db, dSess.Username(), dSess.Email(), initialRoots, headRef, initialWs)
+		name, email, err := dsess.ResolveIdentity(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
+		if err != nil {
+			return err
+		}
+		err = actions.CleanOldWorkingSet(ctx, dbData, db, name, email, initialRoots, headRef, initialWs)
 		if err != nil {
 			return err
 		}

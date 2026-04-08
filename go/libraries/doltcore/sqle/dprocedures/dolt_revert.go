@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	revertpkg "github.com/dolthub/dolt/go/libraries/doltcore/revert"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 // doltRevertSchema matches the return schema for merge and cherry-pick to report
@@ -88,7 +87,13 @@ func doDoltRevert(ctx *sql.Context, args []string) (string, int, int, int, error
 		return "", 0, 0, 0, revertpkg.AbortRevert(ctx, dbName)
 	}
 
-	authorName, authorEmail := resolveAuthor(ctx, apr)
+	var authorName, authorEmail string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		authorName, authorEmail, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return "", 0, 0, 0, err
+		}
+	}
 
 	if apr.Contains(cli.ContinueFlag) {
 		return revertpkg.ContinueRevert(ctx, dbName, authorName, authorEmail)
@@ -184,15 +189,3 @@ func resolveRevisionSpecs(ctx *sql.Context, dbName string, revisionStrs []string
 	return hashes, nil
 }
 
-// resolveAuthor returns the author name and email from the --author flag, or falls back to the SQL session client.
-func resolveAuthor(ctx *sql.Context, apr *argparser.ArgParseResults) (string, string) {
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err := cli.ParseAuthor(authorStr)
-		if err == nil {
-			return name, email
-		}
-	}
-	name := ctx.Client().User
-	email := fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
-	return name, email
-}

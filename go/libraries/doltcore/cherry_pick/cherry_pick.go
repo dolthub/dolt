@@ -191,15 +191,14 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 		return nil, err
 	}
 
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	commitProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, doltSession, "")
+	commitProps, err := dsess.ResolveCommitStagedProps(ctx, "")
 	if err != nil {
 		return nil, err
 	}
 
-	commitProps.Name = originalMeta.Name
-	commitProps.Email = originalMeta.Email
-	commitProps.Date = datas.CommitDateAt(originalMeta.Time())
+	commitProps.Author.Name = originalMeta.Name
+	commitProps.Author.Email = originalMeta.Email
+	commitProps.Author.Date = datas.CommitDateAt(originalMeta.Time())
 	commitProps.SkipVerification = options.SkipVerification
 
 	if options.CommitMessage != "" {

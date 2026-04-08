@@ -43,7 +43,7 @@ function dateIsValid(date) {
 }
 
 export function branchesMatcher(rows, exp) {
-  const exceptionKeys = ["hash", "latest_commit_date"];
+  const exceptionKeys = ["hash", "latest_commit_date", "latest_author_date"];
 
   function getExceptionIsValid(row, key) {
     const val = row[key];
@@ -51,6 +51,7 @@ export function branchesMatcher(rows, exp) {
       case "hash":
         return commitHashIsValid(val);
       case "latest_commit_date":
+      case "latest_author_date":
         return dateIsValid(val);
       default:
         return false;

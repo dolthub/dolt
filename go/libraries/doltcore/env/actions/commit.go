@@ -34,21 +34,16 @@ var ErrCommitVerificationFailed = goerrors.NewKind(CommitVerificationFailedPrefi
 
 // CommitStagedProps contains the parameters for a staged commit operation.
 type CommitStagedProps struct {
-	Message string
-	// Date is the author date. Use [datas.CommitDateAt] for an explicit date or [datas.CommitDateNow] to resolve at commit time.
-	Date             datas.CommitDate
+	Message          string
 	AllowEmpty       bool
 	SkipEmpty        bool
 	Amend            bool
 	Force            bool
-	Name             string
-	Email            string
 	SkipVerification bool
-
-	// CommitterDate is the committer date. Use [datas.CommitDateAt] for an explicit date or [datas.CommitDateNow] to resolve at commit time.
-	CommitterDate  datas.CommitDate
-	CommitterName  string
-	CommitterEmail string
+	// Author is the identity of the person who authored the change (name, email, and optional date).
+	Author datas.CommitSignature
+	// Committer is the identity of the person who applied the change (name, email, and optional date).
+	Committer datas.CommitSignature
 }
 
 const (
@@ -78,16 +73,14 @@ func getCommitRunTestGroups() []string {
 	return nil
 }
 
-// NewCommitStagedProps creates a new CommitStagedProps with the given author information. Committer fields are
-// automatically populated with the author information.
+// NewCommitStagedProps creates a new CommitStagedProps with the given author information. Committer is
+// automatically set to mirror the author.
 func NewCommitStagedProps(name, email string, date datas.CommitDate, message string) CommitStagedProps {
+	sig := datas.CommitSignature{Name: name, Email: email, Date: date}
 	return CommitStagedProps{
-		Message:        message,
-		Date:           date,
-		Name:           name,
-		Email:          email,
-		CommitterName:  name,
-		CommitterEmail: email,
+		Message:   message,
+		Author:    sig,
+		Committer: sig,
 	}
 }
 
@@ -200,9 +193,7 @@ func GetCommitStaged(
 		}
 	}
 
-	author := datas.CommitIdentity{Name: props.Name, Email: props.Email, Date: props.Date}
-	committer := datas.CommitIdentity{Name: props.CommitterName, Email: props.CommitterEmail, Date: props.CommitterDate}
-	commitMeta, err := datas.NewCommitMetaWithAuthorAndCommitter(author, committer, props.Message)
+	commitMeta, err := datas.NewCommitMetaWithAuthorAndCommitter(props.Author, props.Committer, props.Message)
 	if err != nil {
 		return nil, err
 	}

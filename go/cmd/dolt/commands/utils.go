@@ -324,18 +324,18 @@ func newLateBindingEngine(
 		// database set when you begin using them.
 		sqlCtx.SetCurrentDatabase(database)
 
-		// SetClient must come before InitCommitIdentitySessionConfig since it requires an authenticated client on the context.
+		// SetClient must come before InitCommitIdentSessionConfig since it requires an authenticated client on the context.
 		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
 
 		// For now, we treat the entire lifecycle of this
 		// sqlCtx as one big session-in-use window.
 		sql.SessionCommandBegin(sqlCtx.Session)
 
-		// Committer identity is initialized from the session's dolt config values, then the DOLT_AUTHOR_*
-		// and DOLT_COMMITTER_* environment variables override individual fields. The resulting values are
-		// stored in the session variables read by [dsess.DoltSession.NewCommitStagedProps].
+		// Author and committer name and email are initialized from the session's dolt config values, then
+		// the DOLT_AUTHOR_* and DOLT_COMMITTER_* environment variables override individual fields. The
+		// resulting values are stored in the session variables read by [dsess.NewCommitStagedProps].
 		dSess := dsess.DSessFromSess(sqlCtx.Session)
-		if err := engine.InitCommitIdentitySessionConfig(se, sqlCtx, dSess.Username(), dSess.Email()); err != nil {
+		if err := engine.InitCommitIdentSessionConfig(se, sqlCtx, dSess.Username(), dSess.Email()); err != nil {
 			cli.PrintErr(err.Error())
 		}
 
@@ -636,7 +636,7 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, show
 		}
 	}
 
-	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
+	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Author.Name, comm.commitMeta.Author.Email)))
 
 	timeStr := comm.commitMeta.FormatTS()
 	pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
@@ -709,12 +709,12 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	supportsAuthorColumns, err := cli.HasSystemVariable(queryist, sqlCtx, dsess.DoltLogCommitterOnly)
-	if err != nil {
-		return nil, fmt.Errorf("error checking for author column support: %v", err)
-	}
-	if supportsAuthorColumns {
-		_ = sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0))
+	hasAuthorColumns := true
+	if err = sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0)); err != nil {
+		if !sql.ErrUnknownSystemVariable.Is(err) {
+			return nil, err
+		}
+		hasAuthorColumns = false
 	}
 
 	authorColumnsOffset := 0
@@ -791,11 +791,9 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		signature = row[8].(string)
 	}
 
-	// Older Dolt versions store author metadata in the committer columns so we offer this default.
-	authorName := committerName
-	authorEmail := committerEmail
-	authorDate := int64(committerDate)
-	if supportsAuthorColumns {
+	// Default author to committer identity; servers that expose author columns override these below.
+	authorName, authorEmail, authorDate := committerName, committerEmail, int64(committerDate)
+	if hasAuthorColumns {
 		authorName, ok = row[8+authorColumnsOffset].(string)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColumnsOffset])
@@ -811,14 +809,18 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 	}
 
 	commitMeta := &datas.CommitMeta{
-		Name:           authorName,
-		Email:          authorEmail,
-		Description:    message,
-		Signature:      signature,
-		Timestamp:      datas.CommitDateAt(time.UnixMilli(int64(committerDate))),
-		UserTimestamp:  datas.CommitDateAt(time.UnixMilli(authorDate)),
-		CommitterName:  committerName,
-		CommitterEmail: committerEmail,
+		Author: datas.CommitIdent{
+			Name:  authorName,
+			Email: authorEmail,
+			Date:  datas.CommitDateAt(time.UnixMilli(authorDate)),
+		},
+		Committer: datas.CommitIdent{
+			Name:  committerName,
+			Email: committerEmail,
+			Date:  datas.CommitDateAt(time.UnixMilli(int64(committerDate))),
+		},
+		Description: message,
+		Signature:   signature,
 	}
 
 	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)

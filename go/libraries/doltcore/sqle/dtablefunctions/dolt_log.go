@@ -824,8 +824,8 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	if itr.showSignature {
-		if len(meta.Signature) > 0 {
-			out, err := gpg.Verify(ctx, []byte(meta.Signature))
+		if len(meta.GPGSignature) > 0 {
+			out, err := gpg.Verify(ctx, []byte(meta.GPGSignature))
 			if err != nil {
 				return nil, err
 			}

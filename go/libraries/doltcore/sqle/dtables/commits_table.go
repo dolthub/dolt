@@ -78,6 +78,9 @@ func (ct *CommitsTable) Schema(ctx *sql.Context) sql.Schema {
 		{Name: "email", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
 		{Name: "date", Type: types.Datetime3, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
 		{Name: "message", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "author", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "author_email", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "author_date", Type: types.Datetime3, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
 	}
 }
 
@@ -175,5 +178,5 @@ func (itr CommitsRowItr) Close(*sql.Context) error {
 }
 
 func formatCommitTableRow(h hash.Hash, meta *datas.CommitMeta) sql.Row {
-	return sql.NewRow(h.String(), meta.CommitterName, meta.CommitterEmail, meta.CommitterTime(), meta.Description)
+	return sql.NewRow(h.String(), meta.CommitterName, meta.CommitterEmail, meta.CommitterTime(), meta.Description, meta.Name, meta.Email, meta.Time())
 }

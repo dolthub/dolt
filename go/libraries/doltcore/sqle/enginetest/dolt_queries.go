@@ -4783,7 +4783,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{true, false, "root", "root@localhost", "inserting into t"},
 					{false, true, "root", "root@localhost", "creating table t"},
-					{false, false, "billy bob", "bigbillieb@fake.horse", "Initialize data repository"},
+					{false, false, "root", "root@localhost", "Initialize data repository"},
 				},
 			},
 			{
@@ -5870,7 +5870,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT tag_name, IF(CHAR_LENGTH(tag_hash) < 0, NULL, 'not null'), tagger, email, IF(date IS NULL, NULL, 'not null'), message from dolt_tags",
-				Expected: []sql.Row{{"v1", "not null", "billy bob", "bigbillieb@fake.horse", "not null", ""}},
+				Expected: []sql.Row{{"v1", "not null", "root", "root@localhost", "not null", ""}},
 			},
 			{
 				Query:    "CALL DOLT_TAG('v2', '-m', 'create tag v2')",

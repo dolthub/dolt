@@ -86,9 +86,9 @@ func NewCommitDate(dateStr string) (commitDate CommitDate, err error) {
 	return CommitDateAt(t), nil
 }
 
-// CommitIdentity groups the name, email, and optional date for a single author or committer.
+// CommitSignature groups the name, email, and optional date for a single author or committer.
 // Use [CommitDateAt] for an explicit date or [CommitDateNow] to resolve at commit time.
-type CommitIdentity struct {
+type CommitSignature struct {
 	Name  string
 	Email string
 	Date  CommitDate
@@ -100,7 +100,7 @@ type CommitMeta struct {
 	Name        string
 	Email       string
 	Description string
-	Signature   string
+	GPGSignature string
 	// Timestamp is the committer date. CommitDateNow() is resolved at serialization time by newCommitForValue.
 	Timestamp CommitDate
 	// UserTimestamp is the author date. CommitDateNow() is resolved at serialization time by newCommitForValue.
@@ -122,22 +122,22 @@ func (cm *CommitMeta) UserTimestampMillis() int64 {
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description. Author and committer dates are
 // both resolved to [CommitterDate]().
 func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
-	identity := CommitIdentity{Name: name, Email: email, Date: CommitDateNow()}
+	identity := CommitSignature{Name: name, Email: email, Date: CommitDateNow()}
 	return NewCommitMetaWithAuthorAndCommitter(identity, identity, desc)
 }
 
 // NewCommitMetaWithAuthorDate creates a [CommitMeta] object using only the author identity, description, and an
 // explicit author date. The committer identity mirrors the author, with its date resolved to [CommitterDate]().
 func NewCommitMetaWithAuthorDate(name, email, desc string, authorDate time.Time) (*CommitMeta, error) {
-	author := CommitIdentity{Name: name, Email: email, Date: CommitDateAt(authorDate)}
-	committer := CommitIdentity{Name: name, Email: email, Date: CommitDateNow()}
+	author := CommitSignature{Name: name, Email: email, Date: CommitDateAt(authorDate)}
+	committer := CommitSignature{Name: name, Email: email, Date: CommitDateNow()}
 	return NewCommitMetaWithAuthorAndCommitter(author, committer, desc)
 }
 
 // NewCommitMetaWithAuthorAndCommitter creates a fully-resolved [CommitMeta] object with distinct author and committer
 // identities. [CommitDateNow] for either identity resolves to the same captured timestamp so both are never off by
 // different amounts.
-func NewCommitMetaWithAuthorAndCommitter(author CommitIdentity, committer CommitIdentity, description string) (*CommitMeta, error) {
+func NewCommitMetaWithAuthorAndCommitter(author CommitSignature, committer CommitSignature, description string) (*CommitMeta, error) {
 	if author.Name == "" {
 		return nil, ErrNameNotConfigured.New("author")
 	}
@@ -213,8 +213,8 @@ func (g *simpleCommitMetaGenerator) Next() (*CommitMeta, error) {
 		return nil, fmt.Errorf("Called simpleCommitMetaGenerator.Next twice. This should never happen.")
 	}
 	g.alreadyGenerated = true
-	author := CommitIdentity{Name: g.name, Email: g.email, Date: CommitDateAt(g.timestamp)}
-	committer := CommitIdentity{Name: g.name, Email: g.email, Date: CommitDateNow()}
+	author := CommitSignature{Name: g.name, Email: g.email, Date: CommitDateAt(g.timestamp)}
+	committer := CommitSignature{Name: g.name, Email: g.email, Date: CommitDateNow()}
 	return NewCommitMetaWithAuthorAndCommitter(author, committer, g.message)
 }
 

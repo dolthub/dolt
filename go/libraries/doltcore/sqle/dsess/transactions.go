@@ -811,7 +811,7 @@ func (tx *DoltTransaction) ClearSavepoint(name string) bool {
 
 // WorkingSetMeta returns the metadata to use for a commit of this transaction
 func (tx DoltTransaction) WorkingSetMeta(ctx *sql.Context) *datas.WorkingSetMeta {
-	name, email, err := CommitIdentity(ctx, DoltCommitterName, DoltCommitterEmail)
+	name, email, err := ResolveIdentity(ctx, DoltCommitterName, DoltCommitterEmail)
 	if err != nil {
 		ctx.Session.Warn(&sql.Warning{
 			Level:   "Warning",

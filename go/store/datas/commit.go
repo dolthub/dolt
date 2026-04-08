@@ -123,8 +123,8 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	descoff := builder.CreateString(opts.Meta.Description)
 
 	var sigoff flatbuffers.UOffsetT
-	if len(opts.Meta.Signature) != 0 {
-		sigoff = builder.CreateString(opts.Meta.Signature)
+	if len(opts.Meta.GPGSignature) != 0 {
+		sigoff = builder.CreateString(opts.Meta.GPGSignature)
 	}
 
 	// Author and committer data is normalized in commit meta constructor, i.e. author name and email is used for
@@ -181,7 +181,7 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign commit: %w", err)
 		}
-		opts.Meta.Signature = string(signature)
+		opts.Meta.GPGSignature = string(signature)
 	}
 
 	r, err := vrw.WriteValue(ctx, v)
@@ -460,7 +460,7 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	ret.Description = string(serializedCommit.Description())
 	ret.Timestamp = CommitDateAt(time.UnixMilli(int64(serializedCommit.TimestampMillis())))
 	ret.UserTimestamp = CommitDateAt(time.UnixMilli(serializedCommit.UserTimestampMillis()))
-	ret.Signature = string(serializedCommit.Signature())
+	ret.GPGSignature = string(serializedCommit.Signature())
 	ret.CommitterName = ret.Name
 	if commiterNameBytes := serializedCommit.CommitterName(); commiterNameBytes != nil {
 		ret.CommitterName = string(commiterNameBytes)

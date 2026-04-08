@@ -204,7 +204,7 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 				Query: "SELECT * FROM dolt_test_run('column tests')",
 				Expected: []sql.Row{
 					{"expect integer for columns", "column tests", "select * from dolt_branches;", "FAIL", "cannot run assertion on non integer value: 0.5"},
-					{"should fail columns", "column tests", "select * from dolt_branches;", "FAIL", "Assertion failed: expected_columns equal to 7, got 9"},
+					{"should fail columns", "column tests", "select * from dolt_branches;", "FAIL", "Assertion failed: expected_columns equal to 7, got 12"},
 					{"should pass columns", "column tests", "select * from dolt_branches;", "PASS", ""},
 				},
 			},
