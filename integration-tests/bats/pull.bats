@@ -648,6 +648,7 @@ SQL
 }
 
 @test "pull: pull --rebase with divergent history produces linear history" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -683,6 +684,7 @@ SQL
 }
 
 @test "pull: pull --rebase with no local commits fast-forwards" {
+    skip_if_remote
     cd repo2
 
     setup_remote_server
@@ -705,6 +707,7 @@ SQL
 }
 
 @test "pull: pull --rebase when already up-to-date" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -784,6 +787,7 @@ SQL
 }
 
 @test "pull: pull -r shorthand works" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -812,6 +816,7 @@ SQL
 }
 
 @test "pull: pull --rebase with multiple local commits preserves order" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -1014,6 +1019,7 @@ SQL
 }
 
 @test "pull: pull --rebase with schema conflict auto-aborts" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -1048,6 +1054,7 @@ SQL
 }
 
 @test "pull: pull --rebase with uncommitted changes fails" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -1076,6 +1083,7 @@ SQL
 }
 
 @test "pull: pull --rebase when local is ahead returns up-to-date" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -1096,6 +1104,7 @@ SQL
 }
 
 @test "pull: pull --rebase with multiple remote commits and one local" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -1144,6 +1153,7 @@ SQL
 }
 
 @test "pull: pull --rebase with non-conflicting new tables on both sides" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -1236,6 +1246,7 @@ SQL
 }
 
 @test "pull: pull --rebase fails when dolt_rebase_main branch already exists" {
+    skip_if_remote
     cd repo2
     dolt pull origin
 
@@ -1314,6 +1325,7 @@ SQL
 }
 
 @test "pull: pull --rebase with explicit remote and branch args" {
+    skip_if_remote
     cd repo2
     dolt pull origin main
 
@@ -1347,4 +1359,18 @@ SQL
     [[ "$output" =~ "0,0" ]] || false
     [[ "$output" =~ "10,10" ]] || false
     [[ "$output" =~ "20,20" ]] || false
+}
+
+@test "pull: pull --rebase is unsupported against a running server" {
+    if [ "$SQL_ENGINE" != "remote-engine" ]; then
+        skip "test only applicable in remote-engine mode"
+    fi
+    cd repo2
+    dolt pull origin
+
+    setup_remote_server
+
+    run dolt pull --rebase origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can not currently be used when there is a local server running" ]] || false
 }

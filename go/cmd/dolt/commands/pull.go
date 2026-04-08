@@ -131,6 +131,12 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
+	if apr.Contains(cli.RebaseParam) && queryist.IsRemote {
+		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
+		cli.Println(msg)
+		return 1
+	}
+
 	query, err := constructInterpolatedDoltPullQuery(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
