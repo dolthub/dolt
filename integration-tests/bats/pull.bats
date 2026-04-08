@@ -663,8 +663,6 @@ SQL
     dolt sql -q "insert into t1 values (2, 2)"
     dolt commit -am "local commit"
 
-    setup_remote_server
-
     run dolt pull --rebase origin
     [ "$status" -eq 0 ]
 
@@ -686,8 +684,6 @@ SQL
 @test "pull: pull --rebase with no local commits fast-forwards" {
     skip_if_remote
     cd repo2
-
-    setup_remote_server
 
     run dolt pull --rebase origin
     [ "$status" -eq 0 ]
@@ -711,8 +707,6 @@ SQL
     cd repo2
     dolt pull origin
 
-    setup_remote_server
-
     run dolt pull --rebase origin
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
@@ -733,8 +727,6 @@ SQL
     cd ../repo2
     dolt sql -q "insert into t1 values (1, 99)"
     dolt commit -am "local conflicting commit"
-
-    setup_remote_server
 
     # Pull with rebase should fail with conflict
     run dolt pull --rebase origin
@@ -802,8 +794,6 @@ SQL
     dolt sql -q "insert into t1 values (2, 2)"
     dolt commit -am "local commit"
 
-    setup_remote_server
-
     run dolt pull -r origin
     [ "$status" -eq 0 ]
 
@@ -834,8 +824,6 @@ SQL
     dolt commit -am "local commit 2"
     dolt sql -q "insert into t1 values (5, 5)"
     dolt commit -am "local commit 3"
-
-    setup_remote_server
 
     run dolt pull --rebase origin
     [ "$status" -eq 0 ]
@@ -892,8 +880,6 @@ SQL
     dolt sql -q "insert into t1 values (1, 99)"
     dolt commit -am "local conflicting commit"
 
-    setup_remote_server
-
     # Pull with rebase should fail with conflict
     run dolt pull --rebase origin
     [ "$status" -eq 1 ]
@@ -930,8 +916,6 @@ SQL
     cd ../repo2
     dolt sql -q "insert into t1 values (1, 99)"
     dolt commit -am "local conflicting commit"
-
-    setup_remote_server
 
     # Pull with rebase should fail with conflict
     run dolt pull --rebase origin
@@ -976,8 +960,6 @@ SQL
     dolt commit -am "local commit 1 conflicts on pk 1"
     dolt sql -q "insert into t1 values (2, 99)"
     dolt commit -am "local commit 2 conflicts on pk 2"
-
-    setup_remote_server
 
     # Pull with rebase should fail on first conflict
     run dolt pull --rebase origin
@@ -1034,8 +1016,6 @@ SQL
     dolt sql -q "ALTER TABLE t1 MODIFY COLUMN b bigint"
     dolt commit -am "local schema change: modify b to bigint"
 
-    setup_remote_server
-
     # Pull with rebase should fail with schema conflict and auto-abort
     run dolt pull --rebase origin
     [ "$status" -eq 1 ]
@@ -1070,8 +1050,6 @@ SQL
     dolt commit -am "local committed change"
     dolt sql -q "insert into t1 values (5, 5)"
 
-    setup_remote_server
-
     run dolt pull --rebase origin
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot start a rebase with uncommitted changes" ]] || false
@@ -1090,8 +1068,6 @@ SQL
     # Make a local commit but do NOT push
     dolt sql -q "insert into t1 values (7, 7)"
     dolt commit -am "local only commit"
-
-    setup_remote_server
 
     run dolt pull --rebase origin
     [ "$status" -eq 0 ]
@@ -1122,8 +1098,6 @@ SQL
     cd ../repo2
     dolt sql -q "insert into t1 values (20, 20)"
     dolt commit -am "local commit"
-
-    setup_remote_server
 
     run dolt pull --rebase origin
     [ "$status" -eq 0 ]
@@ -1170,8 +1144,6 @@ SQL
     dolt sql -q "insert into t3 values (1, 1)"
     dolt commit -Am "local: create table t3"
 
-    setup_remote_server
-
     run dolt pull --rebase origin
     [ "$status" -eq 0 ]
 
@@ -1204,8 +1176,6 @@ SQL
     cd ../repo2
     dolt sql -q "insert into t1 values (1, 99)"
     dolt commit -am "local conflicting commit"
-
-    setup_remote_server
 
     # Pull with rebase hits conflict
     run dolt pull --rebase origin
@@ -1263,8 +1233,6 @@ SQL
     dolt sql -q "insert into t1 values (2, 2)"
     dolt commit -am "local commit"
 
-    setup_remote_server
-
     run dolt pull --rebase origin
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A branch named 'dolt_rebase_main' already exists" ]] || false
@@ -1289,8 +1257,6 @@ SQL
     cd ../repo2
     dolt sql -q "insert into t1 values (1, 99)"
     dolt commit -am "local conflicting commit"
-
-    setup_remote_server
 
     # Pull with rebase should pause on conflict
     run dolt pull --rebase origin
@@ -1339,8 +1305,6 @@ SQL
     cd ../repo2
     dolt sql -q "insert into t1 values (20, 20)"
     dolt commit -am "local commit"
-
-    setup_remote_server
 
     # Use explicit remote and branch args
     run dolt pull --rebase origin main
