@@ -78,7 +78,7 @@ type archiveWriter struct {
 	indexLen        uint64
 	chunkDataLength uint64
 	metadataLen     uint32
-	suffixCheckSum  sha512Sum
+	nameCheckSum    sha512Sum
 	fullMD5         md5Sum
 }
 
@@ -120,7 +120,7 @@ func newArchiveWriter(tmpDir string) (*archiveWriter, error) {
 	}, nil
 }
 
-// newArchiveWriter - Create an *archiveWriter with the given output ByteSync.
+// newArchiveWriterWithSink creates an *archiveWriter with the given output ByteSink.
 func newArchiveWriterWithSink(bs ByteSink) *archiveWriter {
 	hbMd5 := NewMD5HashingByteSink(bs)
 	hbSha := NewSHA512HashingByteSink(hbMd5)
@@ -204,18 +204,30 @@ func (aw *archiveWriter) stageSnappyChunk(hash hash.Hash, dataId uint32) error {
 	return nil
 }
 
-func (aw *archiveWriter) indexFinalize(originTableFile hash.Hash) error {
+func (aw *archiveWriter) indexFinalize(origin archiveOrigin) error {
 	err := aw.writeIndex()
 	if err != nil {
 		return err
 	}
 
 	meta := map[string]string{
-		amdkDoltVersion:    doltversion.Version,
-		amdkConversionTime: time.Now().UTC().Format(time.RFC3339),
+		amdkDoltVersion: doltversion.Version,
 	}
-	if !originTableFile.IsEmpty() {
-		meta[amdkOriginTableFile] = originTableFile.String()
+	if !origin.ConversionTime.IsZero() {
+		meta[amdkConversionTime] = origin.ConversionTime.UTC().Format(time.RFC3339)
+	}
+	if !origin.ConvertedTableFileName.IsEmpty() {
+		meta[amdkOriginTableFile] = origin.ConvertedTableFileName.String()
+	}
+	if len(origin.ConjoinedFileNames) > 0 {
+		// Encode the slice as a JSON string value rather than a JSON array so that
+		// the metadata payload stays map[string]string. Older Dolt clients unmarshal
+		// metadata into map[string]string and would fail on a raw JSON array value.
+		joined, err := json.Marshal(origin.ConjoinedFileNames)
+		if err != nil {
+			return err
+		}
+		meta[amdkConjoinedFileNames] = string(joined)
 	}
 
 	jsonData, err := json.Marshal(meta)
@@ -312,8 +324,7 @@ func (aw *archiveWriter) writeIndex() error {
 		}
 	}
 
-	// Suffixes output. This data is used to create the name for this archive.
-	aw.output.ResetHasher()
+	// Suffixes output.
 	for _, scr := range aw.stagedChunks {
 		_, err := aw.output.Write(scr.hash.Suffix())
 		if err != nil {
@@ -323,16 +334,14 @@ func (aw *archiveWriter) writeIndex() error {
 	dataWritten := uint64(len(aw.stagedChunks)) * hash.SuffixLen
 	aw.bytesWritten += dataWritten
 	aw.indexLen = aw.bytesWritten - indexStart
-	aw.suffixCheckSum = sha512Sum(aw.output.GetSum())
 
-	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata
 
 	return nil
 }
 
-// writeMetadata writes the metadataSpan to the archive. Expects the hasher to be reset before be called, and will reset it.
-// It sets the metadataLen and metadataCheckSum fields on the archiveWriter, and updates the bytesWritten field.
+// writeMetadata writes the metadataSpan to the archive.
+// It sets the metadataLen field on the archiveWriter, and updates the bytesWritten field.
 //
 // Empty input is allowed.
 func (aw *archiveWriter) writeMetadata(data []byte) error {
@@ -406,6 +415,7 @@ func (aw *archiveWriter) writeFooter() error {
 	aw.bytesWritten += archiveFileSigSize
 	aw.workflowStage = stageFlush
 
+	aw.nameCheckSum = sha512Sum(aw.output.GetSum())
 	aw.fullMD5 = md5Sum(aw.md5Summer.GetSum())
 
 	return nil
@@ -477,7 +487,7 @@ func (aw *archiveWriter) getName() (hash.Hash, error) {
 		return hash.Hash{}, fmt.Errorf("Runtime error: getName called out of order")
 	}
 
-	return hash.New(aw.suffixCheckSum[:hash.ByteLen]), nil
+	return hash.New(aw.nameCheckSum[:hash.ByteLen]), nil
 }
 
 // genFileName generates the file name for the archive. The path argument is the directory where the file should be written.
@@ -562,7 +572,7 @@ func (asw *ArchiveStreamWriter) Finish() (uint32, string, error) {
 	if err != nil {
 		return 0, "", err
 	}
-	err = asw.writer.indexFinalize(hash.Hash{})
+	err = asw.writer.indexFinalize(archiveOrigin{})
 	if err != nil {
 		return 0, "", err
 	}
@@ -962,6 +972,12 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 		aw.bytesWritten += src.dataLen
 	}
 
+	// Collect the names of the conjoined source files.
+	conjoinedNames := make([]string, 0, len(orderedSrcs.sws))
+	for _, src := range orderedSrcs.sws {
+		conjoinedNames = append(conjoinedNames, src.source.hash().String())
+	}
+
 	// Preserve this for stat reporting as aw.bytesWritten will be updated as we write the index.
 	dataBlocksLen := aw.bytesWritten
 
@@ -972,7 +988,7 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 	// So we set the workflow stage to stageIndex because we skipped the byte span insertion stage.
 	aw.workflowStage = stageIndex
 
-	err = aw.indexFinalize(hash.Hash{})
+	err = aw.indexFinalize(archiveOrigin{ConjoinedFileNames: conjoinedNames})
 	if err != nil {
 		return compactionPlan{}, fmt.Errorf("failed to finalize archive: %w", err)
 	}
