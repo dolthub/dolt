@@ -30,10 +30,10 @@ type NonInteractiveAuthError struct {
 
 func (e *NonInteractiveAuthError) Error() string {
 	var b strings.Builder
-	b.WriteString("git authentication required but interactive prompting is disabled")
+	b.WriteString("remote authentication required but interactive prompting is disabled")
 	b.WriteString("\n\nHints:")
 	b.WriteString("\n- HTTPS: configure git credentials (credential helper, token) ahead of time")
-	b.WriteString("\n- SSH: use ssh-agent / keychain and verify `ssh -o BatchMode=yes <host>` works")
+	b.WriteString("\n- SSH: run `ssh-add <key>` to pre-load your key into a running ssh-agent before invoking dolt")
 	b.WriteString("\n- GCM: ensure non-interactive auth is configured")
 	if strings.TrimSpace(e.Output) != "" {
 		b.WriteString("\n\nGit output:\n")
@@ -48,10 +48,9 @@ func (e *NonInteractiveAuthError) Error() string {
 
 func (e *NonInteractiveAuthError) Unwrap() error { return e.Cause }
 
-// NormalizeError wraps err in a NonInteractiveAuthError when output and/or err indicate
-// a credentials prompt or auth failure that would normally require prompting.
-//
-// output is optional; when empty, NormalizeError falls back to err.Error() for pattern matching.
+// NormalizeError wraps |err| in a [NonInteractiveAuthError] when |output|
+// contains a git authentication prompt or failure message.
+// When |output| does not match, |err| is returned unchanged.
 func NormalizeError(err error, output []byte) error {
 	if err == nil {
 		return nil
@@ -62,17 +61,8 @@ func NormalizeError(err error, output []byte) error {
 	}
 
 	outStr := strings.TrimSpace(string(output))
-	hay := outStr
-	if hay == "" {
-		hay = err.Error()
-	} else {
-		hay = hay + "\n" + err.Error()
-	}
-	if !looksLikeAuthPromptOrFailure(hay) {
+	if !looksLikeAuthPromptOrFailure(outStr) {
 		return err
-	}
-	if outStr == "" {
-		outStr = strings.TrimSpace(err.Error())
 	}
 	return &NonInteractiveAuthError{Output: outStr, Cause: err}
 }

@@ -641,3 +641,4 @@ type TextSpinner struct {
 	seqPos     int
 	lastUpdate time.Time
 }
+

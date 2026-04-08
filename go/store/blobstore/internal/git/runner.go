@@ -121,6 +121,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		cmd.Dir = opts.Dir
 	}
 	cmd.Env = r.env(opts)
+	gitauth.CmdSetsid(cmd)
 
 	if opts.Stdin != nil {
 		cmd.Stdin = opts.Stdin
@@ -177,6 +178,7 @@ func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io
 		cmd.Dir = opts.Dir
 	}
 	cmd.Env = r.env(opts)
+	gitauth.CmdSetsid(cmd)
 	if opts.Stdin != nil {
 		cmd.Stdin = opts.Stdin
 	}

@@ -534,7 +534,7 @@ seed_git_remote_branch() {
 
     [ "$status" -ne 0 ]
     [ "$status" -ne 124 ]
-    [[ "$output" =~ "git authentication required but interactive prompting is disabled" ]] || false
+    [[ "$output" =~ "remote authentication required but interactive prompting is disabled" ]] || false
     [[ "$output" =~ "terminal prompts disabled" ]] || false
 }
 
@@ -586,6 +586,7 @@ seed_git_remote_branch() {
     fi
 }
 
+# bats test_tags=windows
 @test "remotes-git: GIT_SSH_COMMAND set by user is not clobbered" {
     # See https://github.com/dolthub/dolt/issues/10811.
     setup_git_repo
@@ -605,93 +606,48 @@ seed_git_remote_branch() {
     teardown_git
 }
 
-# bats test_tags=no_lambda
-@test "remotes-git: git credential prompt reaches user terminal" {
+@test "remotes-git: ssh passphrase prompt is blocked and returns normalized error" {
     # See https://github.com/dolthub/dolt/issues/10811.
+    # expect allocates a real PTY for the dolt process so the test can verify
+    # that git subprocesses cannot reach it to prompt for a passphrase.
     setup_git_repo
-    setup_git_ssh_wrapper
-    hook_git_passphrase_prompt
+    setup_git_sshd
+    gen_ssh_key "$BATS_TMPDIR/ssh_key_locked" "test_passphrase"
+    export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_locked -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    unset SSH_AUTH_SOCK
 
     mkdir repo1
     cd repo1
     dolt init
-    dolt sql -q "create table t(pk int primary key, v int);"
-    dolt sql -q "insert into t values (1, 42);"
-    dolt add .
-    dolt commit -m "seed"
-    dolt remote add origin "git@localhost:${GIT_SVC_DIR}"
+    dolt commit --allow-empty -m "init"
+    dolt remote add origin "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
 
-    run expect "$BATS_TEST_DIRNAME/remotes-git-prompt.expect"
-    [ "$status" -eq 0 ]
-    [ -f "$BATS_TMPDIR/git_ssh_passphrase" ]
-    received=$(cat "$BATS_TMPDIR/git_ssh_passphrase")
-    [[ "$received" == "hunter2" ]] || false
+    run expect "$BATS_TEST_DIRNAME/remotes-git-passphrase.expect"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "remote authentication required but interactive prompting is disabled" ]] || false
 
-    cd ..
-    run dolt clone "git@localhost:${GIT_SVC_DIR}" verify1
-    [ "$status" -eq 0 ]
-    cd verify1
-    run dolt sql -q "select v from t where pk = 1;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "42" ]] || false
+    teardown_git
+}
 
-    # Reset the hook so the second push also prompts.
-    rm -f "$BATS_TMPDIR/git_ssh_passphrase"
+# bats test_tags=windows
+@test "remotes-git: ssh push without passphrase prompt succeeds" {
+    setup_git_repo
+    setup_git_sshd
+    gen_ssh_key "$BATS_TMPDIR/ssh_key_unlocked" ""
+    export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_unlocked -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
-    cd ../repo1
-    dolt sql -q "insert into t values (2, 99);"
-    dolt add .
-    dolt commit -m "second row"
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -m "init"
+    dolt remote add origin "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
 
-    run expect "$BATS_TEST_DIRNAME/remotes-git-sql-prompt.expect"
-    [ "$status" -eq 0 ]
-    [ -f "$BATS_TMPDIR/git_ssh_passphrase" ]
-    received=$(cat "$BATS_TMPDIR/git_ssh_passphrase")
-    [[ "$received" == "hunter2" ]] || false
-
-    cd ../verify1
-    run dolt pull
+    run dolt push origin main
     [ "$status" -eq 0 ]
 
     teardown_git
 }
 
-# bats test_tags=no_lambda
-@test "remotes-git: GIT_SSH_COMMAND preserved through dolt sql-server with MySQL client" {
-    if ! command -v docker >/dev/null 2>&1; then
-        skip "docker not installed"
-    fi
-    if [[ "$(uname)" == 'Darwin' ]]; then
-        skip "--network host not supported on macOS Docker"
-    fi
-
-    setup_git_repo
-    setup_git_ssh_wrapper
-    hook_git_record_env "GIT_SSH_COMMAND"
-
-    mkdir repo1
-    cd repo1
-    dolt init
-    dolt sql -q "create table t(pk int primary key, v int);"
-    dolt sql -q "insert into t values (1, 42);"
-    dolt add .
-    dolt commit -m "seed"
-    dolt remote add origin "git@localhost:${GIT_SVC_DIR}"
-
-    start_sql_server repo1
-
-    # Push and query in a single connection to verify the session continues normally.
-    run docker run --rm --network host mysql:8.0 \
-        mysql -h 127.0.0.1 -P "$PORT" -u root repo1 \
-        --default-auth=mysql_native_password \
-        -e "CALL DOLT_PUSH('origin', 'main'); SELECT v FROM t WHERE pk = 1;"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "42" ]] || false
-    [ -f "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND" ]
-    stop_sql_server
-
-    teardown_git
-}
 
 install_fake_git_url_recorder() {
     # Fake git that records the URL passed to `git remote add` so tests can

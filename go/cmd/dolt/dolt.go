@@ -61,7 +61,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
@@ -122,9 +121,9 @@ var commandsSkippingDBLoad = []cli.Command{
 	commands.FsckCmd{},
 }
 
-// commands that use stdio directly and must not have it redirected.
-// These commands communicate over stdin/stdout (e.g., gRPC multiplexing) and would
-// break if dolt's normal IO redirection is applied.
+// commandsSkippingIORedirect lists commands that bypass the stdio redirection
+// applied by [cli.InitIO]. [commands.TransferCmd] uses stdin and stdout for
+// gRPC stream multiplexing and requires direct access to those file descriptors.
 var commandsSkippingIORedirect = []cli.Command{
 	commands.TransferCmd{},
 }
@@ -229,10 +228,6 @@ func runMain() int {
 	args := os.Args[1:]
 
 	start := time.Now()
-
-	// Dolt must never block on interactive git credential prompts. Enforce a
-	// non-interactive git policy for the entire process (CLI + sql-server).
-	gitauth.DisableInteractivePrompts()
 
 	if len(args) == 0 {
 		doltCommand.PrintUsage("dolt")

@@ -149,6 +149,9 @@ jobs:
         run: |
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
+      - name: Install OpenSSH Server
+        shell: powershell
+        run: Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
       - name: Test file
         run: bats --tap ${{ matrix.file }}
         working-directory: ./integration-tests/bats

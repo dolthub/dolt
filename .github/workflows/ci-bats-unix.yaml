@@ -102,6 +102,9 @@ jobs:
       - name: Install pcre2grep
         if: matrix.os == 'ubuntu-22.04'
         run: sudo apt-get install -y pcre2-utils
+      - name: Install openssh-server
+        if: matrix.os == 'ubuntu-22.04'
+        run: sudo apt-get install -y openssh-server
       - name: Install Maven
         run: sudo apt-get install -y maven
       - name: Install Hadoop

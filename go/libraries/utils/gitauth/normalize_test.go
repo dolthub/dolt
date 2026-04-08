@@ -33,8 +33,6 @@ func TestNormalizeError_WrapsCommonAuthPromptFailures(t *testing.T) {
 		{"Enter passphrase for key", "Enter passphrase for key '/tmp/fake_key': ", "git failed"},
 		{"Permission denied (publickey)", "Permission denied (publickey).", "git failed"},
 		{"could not read from remote repository", "fatal: could not read from remote repository.", "git failed"},
-		// If output is empty, Normalize should still match patterns in err.Error().
-		{"match from err text", "", "fatal: could not read Username for 'https://example.com': terminal prompts disabled"},
 	}
 
 	for _, tt := range tests {
@@ -76,10 +74,19 @@ func TestNormalizeError_NoMatch_ReturnsOriginalError(t *testing.T) {
 }
 
 func TestNormalizeError_Idempotent(t *testing.T) {
-	base := errors.New("fatal: could not read Username for 'https://example.com': terminal prompts disabled")
-	got1 := NormalizeError(base, nil)
-	got2 := NormalizeError(got1, []byte("different output"))
+	base := errors.New("git failed")
+	authOutput := []byte("Permission denied (publickey).")
+	got1 := NormalizeError(base, authOutput)
+	got2 := NormalizeError(got1, authOutput)
 	if got1 != got2 {
 		t.Fatalf("expected NormalizeError to be idempotent when already normalized")
+	}
+}
+
+func TestNormalizeError_EmptyOutput_ReturnsOriginalError(t *testing.T) {
+	base := errors.New("exit status 128")
+	got := NormalizeError(base, nil)
+	if got != base {
+		t.Fatalf("expected original error when output is empty, got %T: %v", got, got)
 	}
 }
