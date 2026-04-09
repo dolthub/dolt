@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -89,8 +90,9 @@ func TestSignAndVerifyCommit(t *testing.T) {
 			apr, err := cli.CreateCommitArgParser(false).Parse(test.commitArgs)
 			require.NoError(t, err)
 			t.Chdir(dbDir)
+			home := t.TempDir()
 
-			_, err = execCommand(t, CommitCmd{}, test.commitArgs, apr, map[string]string{}, global)
+			_, err = execCommand(t, CommitCmd{}, test.commitArgs, apr, home, global)
 
 			if test.expectErr {
 				require.Error(t, err)
@@ -103,14 +105,14 @@ func TestSignAndVerifyCommit(t *testing.T) {
 			apr, err = cli.CreateLogArgParser(false).Parse(args)
 			require.NoError(t, err)
 
-			logOutput, err := execCommand(t, LogCmd{}, args, apr, map[string]string{}, global)
+			logOutput, err := execCommand(t, LogCmd{}, args, apr, home, global)
 			require.NoError(t, err)
 			require.Contains(t, logOutput, "Good signature from \"Test User <test@dolthub.com>\"")
 		})
 	}
 }
 
-func execCommand(t *testing.T, cmd cli.Command, args []string, apr *argparser.ArgParseResults, local, global map[string]string) (output string, err error) {
+func execCommand(t *testing.T, cmd cli.Command, args []string, apr *argparser.ArgParseResults, home string, global map[string]string) (output string, err error) {
 	var fs filesys.Filesys
 	fs, err = filesys.LocalFilesysWithWorkingDir(".")
 	if err != nil {
@@ -118,23 +120,11 @@ func execCommand(t *testing.T, cmd cli.Command, args []string, apr *argparser.Ar
 		return
 	}
 
-	home := t.TempDir()
-
-	dEnv := env.Load(context.Background(), func() (string, error) { return home, nil }, fs, ".", "test")
-	if dEnv.CfgLoadErr != nil {
-		panic(dEnv.CfgLoadErr.Error())
-	}
+	dEnv := env.Load(context.Background(), func() (string, error) { return home, nil }, fs, doltdb.LocalDirDoltDB, "test")
 	if global != nil {
 		cfg, ok := dEnv.Config.GetConfig(env.GlobalConfig)
-		if !ok {
-			panic("dEnv must have global config")
-		} else {
-			cfg.SetStrings(global)
-		}
-	}
-
-	if local != nil {
-		dEnv.Config.WriteableConfig().SetStrings(local)
+		require.True(t, ok)
+		cfg.SetStrings(global)
 	}
 
 	mr, err := env.MultiEnvForDirectory(t.Context(), fs, dEnv)

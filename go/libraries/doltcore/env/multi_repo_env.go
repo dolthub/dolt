@@ -142,11 +142,9 @@ func MultiEnvForDirectory(
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
 	config := dEnv.Config.WriteableConfig()
-	version := dEnv.Version
 
 	// Load current dataDirFS and put into mr env
 	var dbName string = "dolt"
-	var newDEnv *DoltEnv = dEnv
 
 	// Use the process user's home dir provider for loading local filesystem envs. Some tests use a synthetic
 	// HomeDirProvider for in-memory envs (e.g. "/user/bheni"), which must not leak into LocalFS loads.
@@ -159,7 +157,7 @@ func MultiEnvForDirectory(
 	}
 
 	// InMemFS is used only for testing.
-	// All other FS Types should get a newly created Environment which will serve as the primary env in the MultiRepoEnv
+	// Other FS types should take their dbname, if there is one there, from the path of the loaded rootEnv.
 	if _, ok := dataDirFS.(*filesys.InMemFS); !ok {
 		path, err := dataDirFS.Abs("")
 		if err != nil {
@@ -167,34 +165,21 @@ func MultiEnvForDirectory(
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dbfactory.DirToDBName(envName)
-
-		// Always create a fresh environment rooted at dataDirFS. The invoking dEnv is not guaranteed to be a
-		// local filesystem env (it may be remote), so reusing it can break DB loading and dial provider setup.
-		newDEnv = LoadWithoutDB(ctx, hdp, dataDirFS, doltdb.LocalDirDoltDB, version)
-
-		// Apply any caller-provided DB load params before we load the DB so they affect dbfactory/storage open.
-		if len(dbLoadParams) > 0 {
-			newDEnv.DBLoadParams = maps.Clone(dbLoadParams)
-		}
-
-		// Preserve historical behavior: eagerly load the primary DB here.
-		LoadDoltDB(ctx, newDEnv.FS, newDEnv.urlStr, newDEnv)
 	}
 
 	mrEnv := &MultiRepoEnv{
 		envs:         make([]NamedEnv, 0),
 		fs:           dataDirFS,
 		cfg:          config,
-		dialProvider: NewGRPCDialProviderFromDoltEnv(newDEnv),
+		dialProvider: NewGRPCDialProviderFromDoltEnv(dEnv),
 	}
 
 	envSet := map[string]*DoltEnv{}
 	var openedEnvs []*DoltEnv
-	if newDEnv.Valid() {
-		envSet[dbName] = newDEnv
-		openedEnvs = append(openedEnvs, newDEnv)
-	} else {
-		dbErr := newDEnv.DBLoadError
+	// Anything that looks like it has a dolt database belongs here.
+	if dEnv.CfgLoadErr == nil && dEnv.HasDoltDataDir() {
+		LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+		dbErr := dEnv.DBLoadError
 		if dbErr != nil {
 			if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
 				logrus.Errorf("failed to load database %s with error: %s", dbName, dbErr.Error())
@@ -203,10 +188,10 @@ func MultiEnvForDirectory(
 				logrus.Warnf("failed to load database with error: %s", dbErr.Error())
 			}
 		}
-		cfgErr := newDEnv.CfgLoadErr
-		if cfgErr != nil {
-			logrus.Warnf("failed to load database configuration with error: %s", cfgErr.Error())
-		}
+		envSet[dbName] = dEnv
+		openedEnvs = append(openedEnvs, dEnv)
+	} else if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
+		logrus.Warnf("failed to load database configuration with error: %s", cfgErr.Error())
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
@@ -236,15 +221,6 @@ func MultiEnvForDirectory(
 			envSet[dbfactory.DirToDBName(dir)] = newEnv
 			openedEnvs = append(openedEnvs, newEnv)
 		} else {
-			dbErr := newEnv.DBLoadError
-			if dbErr != nil {
-				if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
-					logrus.Errorf("failed to load database at %s with error: %s", path, dbErr.Error())
-					logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
-				} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
-					logrus.Warnf("failed to load database at %s with error: %s", path, dbErr.Error())
-				}
-			}
 			cfgErr := newEnv.CfgLoadErr
 			if cfgErr != nil {
 				logrus.Warnf("failed to load database configuration at %s with error: %s", path, cfgErr.Error())
