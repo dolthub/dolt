@@ -176,8 +176,9 @@ func MultiEnvForDirectory(
 
 	envSet := map[string]*DoltEnv{}
 	var openedEnvs []*DoltEnv
+
 	// Anything that looks like it has a dolt database belongs here.
-	if dEnv.CfgLoadErr == nil && dEnv.HasDoltDataDir() {
+	if dEnv.HasDoltDataDir() {
 		LoadDoltDB(ctx, dEnv)
 		dbErr := dEnv.DBLoadError
 		if dbErr != nil {
@@ -190,7 +191,9 @@ func MultiEnvForDirectory(
 		}
 		envSet[dbName] = dEnv
 		openedEnvs = append(openedEnvs, dEnv)
-	} else if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
+	}
+
+	if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
 		logrus.Warnf("failed to load database configuration with error: %s", cfgErr.Error())
 	}
 

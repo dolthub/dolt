@@ -131,14 +131,11 @@ func NewSqlEngine(
 	// (For already-loaded envs, these will not affect the existing instance.)
 	if config != nil && len(config.DBLoadParams) > 0 {
 		_ = mrEnv.Iter(func(_ string, dEnv *env.DoltEnv) (stop bool, err error) {
-			if dEnv == nil {
-				return false, nil
-			}
 			if dEnv.DBLoadParams == nil {
 				dEnv.DBLoadParams = maps.Clone(config.DBLoadParams)
-				return false, nil
+			} else {
+				maps.Copy(dEnv.DBLoadParams, config.DBLoadParams)
 			}
-			maps.Copy(dEnv.DBLoadParams, config.DBLoadParams)
 			return false, nil
 		})
 	}
