@@ -2444,28 +2444,8 @@ func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyFunc
 	for _, spec := range gcf.specs {
 		addrs = append(addrs, spec.name)
 	}
-	f := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
-		records := toHasRecords(hashes)
-		for _, src := range gcf.srcs {
-			remaining, _, err := src.hasMany(records, nil)
-			if err != nil {
-				return nil, err
-			}
-			if !remaining {
-				break
-			}
-		}
-		absent := hash.HashSet{}
-		for _, r := range records {
-			if !r.has {
-				absent.Insert(*r.a)
-			}
-		}
-		return absent, nil
-	}
-	// Passing |nil| for getAddrs and |refCheck| means ref checking on
-	// this add is off.
-	return f, addTableFilesToManifest(ctx, gcf.nbs, gcf.specs, gcf.srcs)
+
+	return gcf.srcs.hasMany, addTableFilesToManifest(ctx, gcf.nbs, gcf.specs, gcf.srcs)
 }
 
 func addTableFilesToManifest(ctx context.Context, nbs *NomsBlockStore, specs []tableSpec, srcs chunkSourceSet) error {

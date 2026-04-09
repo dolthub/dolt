@@ -296,3 +296,23 @@ func (css chunkSourceSet) close() {
 		cs.close()
 	}
 }
+
+func (css *chunkSourceSet) hasMany(_ context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+	records := toHasRecords(hashes)
+	for _, src := range *css {
+		remaining, _, err := src.hasMany(records, nil)
+		if err != nil {
+			return nil, err
+		}
+		if !remaining {
+			break
+		}
+	}
+	absent := hash.HashSet{}
+	for _, r := range records {
+		if !r.has {
+			absent.Insert(*r.a)
+		}
+	}
+	return absent, nil
+}
