@@ -2261,6 +2261,8 @@ type markAndSweeper struct {
 	tfp      tableFilePersister
 	gcc      *gcCopier
 	gcConfig chunks.GCConfig
+
+	specs []tableSpec
 }
 
 func getHashSubset(hashes hash.HashSet, subsetSize int) (subset hash.HashSet, remaining hash.HashSet) {
@@ -2304,11 +2306,8 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	// If incremental garbage collection is enabled (IncrementalFileSize > 0),
 	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
 	// with a new writer.
-	var incrementalGcc *rotatingGCCopier
 	writeIncrementalChunkFiles := i.gcConfig.IncrementalFileSize != chunks.IncrementalGCTablesDisabled
-	if writeIncrementalChunkFiles {
-		incrementalGcc, err = newRotatingGCCopier(i.gcConfig.ArchiveLevel, i.tfp, i.dest, i.gcConfig.IncrementalFileSize)
-	}
+	incrementalGcc, err := newRotatingGCCopier(i.gcConfig.ArchiveLevel, i.tfp, i.dest, i.gcConfig.IncrementalFileSize)
 
 	first := true
 	for {
@@ -2340,6 +2339,11 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 			toVisit = copy
 		}
 
+		// TODO: If we defer writing new table files, we'll need to call this on the source instead.
+		toVisit, err = incrementalGcc.specs.hasMany(i.dest, toVisit)
+		if err != nil {
+			return err
+		}
 		toVisit, err = i.filter(ctx, toVisit)
 		if err != nil {
 			return err
@@ -2407,12 +2411,16 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 
 	}
 
+	// we don't need to acquire the mutex on the specs because all other tasks that reference it have completed.
+	i.specs = append(i.specs, incrementalGcc.specs.specs...)
+
 	return incrementalGcc.finalize(ctx)
 }
 
 func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, error) {
 	valctx.ValidateContext(ctx)
 	specs, err := i.gcc.copyTablesToDir(ctx)
+	i.specs = append(i.specs, specs...)
 	if err != nil {
 		return nil, err
 	}
@@ -2420,7 +2428,7 @@ func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, erro
 
 	return gcFinalizer{
 		nbs:   i.dest,
-		specs: specs,
+		specs: i.specs,
 		mode:  i.gcConfig.Mode,
 	}, nil
 }
@@ -2483,10 +2491,6 @@ func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk c
 }
 
 func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mode chunks.GCMode) (err error) {
-	// If we swap chunks, then what previously got flushed gets discarded.
-	// For old gen, this only matters for full gc. Is full gc compatible with incremental?
-	// For new gen, we always swap. Does it make sense to do incremental here?
-	// Visualize what full gc looks like, and what incremental new gen looks like.
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"golang.org/x/sync/errgroup"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -173,6 +174,33 @@ func fileNameToAddr(fileName string) (hash.Hash, bool) {
 	return hash.Hash{}, false
 }
 
+// specsList is a list of tableSpecs and their names.
+// It can be written to by multiple goroutines concurrently,
+// so access is controlled by a mutex
+type specsList struct {
+	// specs stores a list of table files produced by this copier.
+	// specNames stores just their content hashes.
+	// Since these are appended in a goroutine, access is controlled by the mutex specsMu
+	specs []tableSpec
+	names []hash.Hash
+	mu    sync.Mutex
+}
+
+func (sl *specsList) append(specs []tableSpec) {
+	sl.mu.Lock()
+	defer sl.mu.Unlock()
+	sl.specs = append(sl.specs, specs...)
+	for _, spec := range specs {
+		sl.names = append(sl.names, spec.name)
+	}
+}
+
+func (sl *specsList) hasMany(nbs *NomsBlockStore, toVisit hash.HashSet) (filtered hash.HashSet, err error) {
+	sl.mu.Lock()
+	defer sl.mu.Unlock()
+	return nbs.hasManyInSources(sl.names, toVisit)
+}
+
 // rotatingGCCopier is a variant of gcCopier that writes to multiple output files. Once an output file exceeds
 // a threshold size, it finalizes the file and begins writing a new one.
 type rotatingGCCopier struct {
@@ -182,6 +210,8 @@ type rotatingGCCopier struct {
 	archiveLevel chunks.GCArchiveLevel
 	dest         *NomsBlockStore
 	eg           errgroup.Group
+
+	specs specsList
 }
 
 func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, chunksLimit uint64) (*rotatingGCCopier, error) {
@@ -219,20 +249,31 @@ func (gcc *rotatingGCCopier) containsChunk(h hash.Hash) bool {
 	return gcc.writer.SeenChunk(h)
 }
 
+// rotate replaces the table file writer with a new one, and creates an async goroutine to
+// finalize the original writer.
 func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
-	specs, err := gcc.copyTablesToDir(ctx)
-	if err != nil {
-		return err
-	}
-
+	// Copy the state of gcc.gcCopier so that the child goroutine will use the current writer,
+	// even after gcc.gcCopier.writer gets reassigned below.
+	previousCopier := gcc.gcCopier
 	gcc.eg.Go(func() error {
-		return addTableFilesToManifest(ctx, gcc.dest, specs)
+
+		specs, err := previousCopier.copyTablesToDir(ctx)
+		if err != nil {
+			return err
+		}
+		err = addTableFilesToManifest(ctx, gcc.dest, specs)
+		if err != nil {
+			return err
+		}
+
+		gcc.specs.append(specs)
+
+		return nil
 	})
 
-	var writer GenericTableWriter
-	writer, err = newTableWriterFromArchiveLevel(gcc.archiveLevel)
+	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel)
 
-	gcc.writer = writer
+	gcc.gcCopier.writer = writer
 	gcc.bytesWritten = 0
 	return err
 }
@@ -242,11 +283,12 @@ func (gcc *rotatingGCCopier) finalize(ctx context.Context) error {
 		return nil
 	}
 
-	_, err := gcc.copyTablesToDir(ctx)
+	specs, err := gcc.copyTablesToDir(ctx)
 	if err != nil {
 		return err
 	}
 
+	gcc.specs.append(specs)
 	return gcc.eg.Wait()
 }
 
