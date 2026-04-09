@@ -2468,9 +2468,9 @@ func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyFunc
 	return f, addTableFilesToManifest(ctx, gcf.nbs, gcf.specs, gcf.srcs)
 }
 
-func addTableFilesToManifest(ctx context.Context, nbs *NomsBlockStore, specs []tableSpec, srcs) error {
+func addTableFilesToManifest(ctx context.Context, nbs *NomsBlockStore, specs []tableSpec, srcs chunkSourceSet) error {
 	fileIdToNumChunks := tableSpecsToMap(specs)
-	return nbs.addTableFilesToManifest(ctx, fileIdToNumChunks, nil, nil, src)
+	return nbs.addTableFilesToManifest(ctx, fileIdToNumChunks, nil, nil, srcs)
 }
 
 func (gcf gcFinalizer) SwapChunksInStore(ctx context.Context) error {
