@@ -16,6 +16,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -77,4 +79,59 @@ func TestGCIncremental(t *testing.T) {
 	// Both newgen and oldgen should contain multiple chunk files
 	require.Greater(t, repoSize.NewGenC, 1)
 	require.Greater(t, repoSize.OldGenC, 1)
+}
+
+type RepoSize struct {
+	Journal int64
+	NewGen  int64
+	NewGenC int
+	OldGen  int64
+	OldGenC int
+}
+
+func GetRepoSize(dir string) (RepoSize, error) {
+	skipFile := func(filename string) bool {
+		return filename == "manifest" || filename == "LOCK"
+	}
+	var ret RepoSize
+	entries, err := os.ReadDir(filepath.Join(dir, ".dolt/noms"))
+	if err != nil {
+		return ret, err
+	}
+	for _, e := range entries {
+		if skipFile(e.Name()) {
+			continue
+		}
+		stat, err := e.Info()
+		if err != nil {
+			return ret, err
+		}
+		if stat.IsDir() {
+			continue
+		}
+		ret.NewGen += stat.Size()
+		ret.NewGenC += 1
+		if e.Name() == "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" {
+			ret.Journal += stat.Size()
+		}
+	}
+	entries, err = os.ReadDir(filepath.Join(dir, ".dolt/noms/oldgen"))
+	if err != nil {
+		return ret, err
+	}
+	for _, e := range entries {
+		if skipFile(e.Name()) {
+			continue
+		}
+		stat, err := e.Info()
+		if err != nil {
+			return ret, err
+		}
+		if stat.IsDir() {
+			continue
+		}
+		ret.OldGen += stat.Size()
+		ret.OldGenC += 1
+	}
+	return ret, nil
 }
