@@ -24,27 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type gcErrAccum map[string]error
-
-var _ error = gcErrAccum{}
-
-func (ea gcErrAccum) add(path string, err error) {
-	ea[path] = err
-}
-
-func (ea gcErrAccum) isEmpty() bool {
-	return len(ea) == 0
-}
-
-func (ea gcErrAccum) Error() string {
-	var sb strings.Builder
-	sb.WriteString("error garbage collecting the following files:")
-	for filePath, err := range ea {
-		sb.WriteString(fmt.Sprintf("\t%s: %s", filePath, err.Error()))
-	}
-	return sb.String()
-}
-
 type gcCopier struct {
 	writer GenericTableWriter
 	tfp    tableFilePersister

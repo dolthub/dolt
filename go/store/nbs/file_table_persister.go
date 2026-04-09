@@ -344,7 +344,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
 		return err
 	}
 
-	ea := make(gcErrAccum)
+	var errs []error
 
 	parseTableFileHash := func(name string) (hash.Hash, bool) {
 		name = strings.TrimSuffix(name, ArchiveFileSuffix)
@@ -367,7 +367,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
 		if strings.HasPrefix(name, tempTablePrefix) {
 			// Write lock guarantees no temp files are in flight.
 			if err := file.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				ea.add(filePath, fmt.Errorf("error removing temp file: %w", err))
+				errs = append(errs, fmt.Errorf("error removing temp file %s: %w", filePath, err))
 			}
 			continue
 		}
@@ -382,15 +382,11 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
 		}
 
 		if err := file.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			ea.add(filePath, fmt.Errorf("error removing table file: %w", err))
+			errs = append(errs, fmt.Errorf("error removing table file %s: %w", filePath, err))
 		}
 	}
 
-	if !ea.isEmpty() {
-		return ea
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
 func (ftp *fsTablePersister) Close() error {
