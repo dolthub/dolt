@@ -345,7 +345,7 @@ func CreateGCArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	ap.SupportsFlag(FullFlag, "f", "perform a full garbage collection, including the old generation")
 	ap.SupportsInt(ArchiveLevelParam, "", "archive compression level", "Specify the archive compression level garbage collection results. Default is 1, Disable with 0")
-	ap.SupportsUint(IncrementalGCFileSize, "", "number of chunks contained in incremental table files", "")
+	ap.SupportsUint(IncrementalGCFileSize, "", "", "max size in bytes of incremental GC table files")
 	return ap
 }
 
