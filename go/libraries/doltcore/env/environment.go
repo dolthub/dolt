@@ -119,7 +119,7 @@ func NewDoltEnv(version string, config *DoltCliConfig, repoState *RepoState, dol
 // |dEnv.DBLoadError| will be non-nil. The caller is responsible for checking this error.
 func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 	if dEnv.doltDB == nil {
-		LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+		LoadDoltDB(ctx, dEnv)
 	}
 	return dEnv.doltDB
 }
@@ -236,13 +236,12 @@ func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, u
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
 	dEnv := LoadWithoutDB(ctx, hdp, fs, urlStr, version)
-	LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+	LoadDoltDB(ctx, dEnv)
 	return dEnv
 }
 
-func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *DoltEnv) {
+func LoadDoltDB(ctx context.Context, dEnv *DoltEnv) {
 	dEnv.loadDBOnce.Do(func() {
-
 		mmapArchiveIndexes, err := dEnv.Config.GetBool(config.MmapArchiveIndexes, false)
 		if err != nil {
 			dEnv.DBLoadError = err
@@ -263,10 +262,9 @@ func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *Do
 				params[k] = v
 			}
 		}
-		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
+		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, dEnv.urlStr, dEnv.FS, params)
 		dEnv.doltDB = ddb
 		dEnv.DBLoadError = dbLoadErr
-		dEnv.urlStr = urlStr
 
 		if dbLoadErr == nil && dEnv.HasDoltDir() {
 			if !dEnv.HasDoltTempTableDir() {
@@ -285,12 +283,12 @@ func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *Do
 					if err != nil {
 						return
 					}
-					_ = fs.Iter(tmpTableDir, true, func(path string, size int64, isDir bool) (stop bool) {
+					_ = dEnv.FS.Iter(tmpTableDir, true, func(path string, size int64, isDir bool) (stop bool) {
 						if !isDir {
-							lm, exists := fs.LastModified(path)
+							lm, exists := dEnv.FS.LastModified(path)
 
 							if exists && time.Now().Sub(lm) > (time.Hour*24) {
-								_ = fs.DeleteFile(path)
+								_ = dEnv.FS.DeleteFile(path)
 							}
 						}
 

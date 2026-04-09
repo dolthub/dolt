@@ -178,7 +178,7 @@ func MultiEnvForDirectory(
 	var openedEnvs []*DoltEnv
 	// Anything that looks like it has a dolt database belongs here.
 	if dEnv.CfgLoadErr == nil && dEnv.HasDoltDataDir() {
-		LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+		LoadDoltDB(ctx, dEnv)
 		dbErr := dEnv.DBLoadError
 		if dbErr != nil {
 			if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
@@ -256,14 +256,12 @@ func MultiEnvForDirectory(
 	return mrEnv, nil
 }
 
-func (mrEnv *MultiRepoEnv) ReloadDBs(
-	ctx context.Context,
-) {
+func (mrEnv *MultiRepoEnv) ReloadDBs(ctx context.Context) {
 	for _, namedEnv := range mrEnv.envs {
 		dEnv := namedEnv.env
 
 		if dEnv.doltDB == nil {
-			LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+			LoadDoltDB(ctx, dEnv)
 		}
 		if !dEnv.Valid() {
 			dbErr := dEnv.DBLoadError
