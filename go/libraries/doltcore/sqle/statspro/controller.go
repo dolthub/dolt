@@ -599,7 +599,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 	// Build DB load params for the stats DoltDB. Always bypass the singleton cache:
 	// the stats controller owns the lifecycle of its DoltDB instances directly.
 	var dbLoadParams map[string]interface{}
-	if sc.hdpEnv != nil && len(sc.hdpEnv.DBLoadParams) > 0 {
+	if len(sc.hdpEnv.DBLoadParams) > 0 {
 		dbLoadParams = maps.Clone(sc.hdpEnv.DBLoadParams)
 	} else {
 		dbLoadParams = make(map[string]interface{})
@@ -624,12 +624,12 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 	} else if !isDir {
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
 	} else {
-		dEnv = env.LoadWithoutDB(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, "", doltversion.Version)
+		dEnv = env.LoadWithoutDB(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, urlPath, doltversion.Version)
 		dEnv.DBLoadParams = dbLoadParams
-	}
-
-	if err := dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params); err != nil {
-		return nil, err
+		env.LoadDoltDB(ctx, dEnv)
+		if dEnv.DBLoadError != nil {
+			return nil, dEnv.DBLoadError
+		}
 	}
 
 	statsDdb := dEnv.DbData(ctx).Ddb

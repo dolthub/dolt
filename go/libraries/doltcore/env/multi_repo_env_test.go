@@ -101,7 +101,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	require.NoError(t, err)
 
 	urlStr := earl.FileUrlFromPath(filepath.Join(envPath, ".dolt", "noms"), os.PathSeparator)
-	dEnv := Load(context.Background(), hdp, fs, urlStr, "test")
+	dEnv := LoadWithoutDB(context.Background(), hdp, fs, urlStr, "test")
 	cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
 	cfg.SetStrings(map[string]string{
 		config.UserNameKey:  name,

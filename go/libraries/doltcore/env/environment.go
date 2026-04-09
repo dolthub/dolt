@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -122,32 +121,6 @@ func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 		LoadDoltDB(ctx, dEnv)
 	}
 	return dEnv.doltDB
-}
-
-func (dEnv *DoltEnv) LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) error {
-	if dEnv.doltDB == nil {
-		if nbf == nil {
-			nbf = types.Format_Default
-		}
-		// Merge any environment-level DB load params without mutating the caller's map.
-		if len(dEnv.DBLoadParams) > 0 {
-			if params == nil {
-				params = maps.Clone(dEnv.DBLoadParams)
-			} else {
-				params = maps.Clone(params)
-				maps.Copy(params, dEnv.DBLoadParams)
-			}
-		}
-		ddb, err := doltdb.LoadDoltDBWithParams(ctx, nbf, urlStr, fs, params)
-		if err != nil {
-			dEnv.DBLoadError = err
-			return err
-		}
-		dEnv.doltDB = ddb
-		dEnv.urlStr = urlStr
-		dEnv.DBLoadError = nil
-	}
-	return nil
 }
 
 // IncompleteEnv returns a DoltEnv that is incomplete. There are cases where we want to know that the structure
@@ -519,7 +492,8 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinF
 		return err
 	}
 
-	return dEnv.LoadDoltDBWithParams(ctx, nbf, dEnv.urlStr, dEnv.FS, nil)
+	LoadDoltDB(ctx, dEnv)
+	return dEnv.DBLoadError
 }
 
 var ErrCannotCreateDirDoesNotExist = errors.New("dir does not exist")
@@ -659,8 +633,9 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 }
 
 func (dEnv *DoltEnv) InitDBWithCommitMetaGenerator(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
-	if err := dEnv.LoadDoltDBWithParams(ctx, nbf, dEnv.urlStr, dEnv.FS, nil); err != nil {
-		return err
+	LoadDoltDB(ctx, dEnv)
+	if dEnv.DBLoadError != nil {
+		return dEnv.DBLoadError
 	}
 
 	err := dEnv.DoltDB(ctx).WriteEmptyRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
