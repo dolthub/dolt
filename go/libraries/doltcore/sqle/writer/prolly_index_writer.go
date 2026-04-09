@@ -15,6 +15,7 @@
 package writer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -178,6 +179,25 @@ func (m prollyIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
 }
 
 func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
+	if isNoopUpdate(oldRow, newRow, m.keyMap) {
+		newKey, err := m.keyFromRow(ctx, newRow)
+		if err != nil {
+			return err
+		}
+
+		for to := range m.valMap {
+			from := m.valMap.MapOrdinal(to)
+			if err = tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, newRow[from]); err != nil {
+				return err
+			}
+		}
+		v, err := m.valBld.Build(sharePool)
+		if err != nil {
+			return err
+		}
+		return m.mut.Put(ctx, newKey, v)
+	}
+
 	oldKey, err := m.keyFromRow(ctx, oldRow)
 	if err != nil {
 		return err
@@ -186,8 +206,6 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	// If the old row is empty, there is nothing to delete.
 	// This can happen when updating a row in a conflict table if the row did not exist on one branch.
 	if oldKey.Count() != 0 {
-		// todo(andy): we can skip building, deleting |oldKey|
-		//  if we know the key fields are unchanged
 		if err := m.mut.Delete(ctx, oldKey); err != nil {
 			return err
 		}
@@ -201,7 +219,9 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	ok, err := m.mut.Has(ctx, newKey)
 	if err != nil {
 		return err
-	} else if ok {
+	}
+
+	if ok {
 		for to := range m.keyMap {
 			from := m.keyMap.MapOrdinal(to)
 			m.key[to] = newRow[from]
@@ -220,7 +240,6 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	if err != nil {
 		return err
 	}
-
 	return m.mut.Put(ctx, newKey, v)
 }
 
@@ -414,6 +433,17 @@ func (m prollySecondaryIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) 
 func isNoopUpdate(oldRow, newRow sql.Row, keyMap val.OrdinalMapping) bool {
 	for to := range keyMap {
 		from := keyMap.MapOrdinal(to)
+		oldField, oldBytes := oldRow[from].([]byte)
+		newField, newBytes := newRow[from].([]byte)
+		if oldBytes != newBytes {
+			return false
+		}
+		if oldBytes && newBytes {
+			if bytes.Compare(oldField, newField) != 0 {
+				return false
+			}
+			continue
+		}
 		if oldRow[from] != newRow[from] {
 			return false
 		}
