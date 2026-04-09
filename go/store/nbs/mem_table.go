@@ -127,8 +127,8 @@ func (mt *memTable) addChildRefs(addrs hash.HashSet) {
 	}
 }
 
-func (mt *memTable) count() (uint32, error) {
-	return uint32(len(mt.order)), nil
+func (mt *memTable) count() uint32 {
+	return uint32(len(mt.order))
 }
 
 func (mt *memTable) uncompressedLen() (uint64, error) {

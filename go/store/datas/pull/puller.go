@@ -297,6 +297,20 @@ func (s *stats) read() Stats {
 	return ret
 }
 
+func WithDiscardingStatsCh(cb func(statsCh chan Stats)) {
+	statsCh := make(chan Stats)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range statsCh {
+		}
+	})
+	wg.Go(func() {
+		defer close(statsCh)
+		cb(statsCh)
+	})
+	wg.Wait()
+}
+
 // Pull executes the sync operation
 func (p *Puller) Pull(ctx context.Context) error {
 	if p.statsCh != nil {

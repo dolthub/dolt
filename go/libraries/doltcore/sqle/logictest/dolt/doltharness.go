@@ -73,23 +73,31 @@ func (h *DoltHarness) Init() error {
 }
 
 func (h *DoltHarness) ExecuteStatement(statement string) error {
-	ctx := sql.NewContext(
-		context.Background(),
+	return h.ExecuteStatementContext(context.Background(), statement)
+}
+
+func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
+	return h.ExecuteQueryContext(context.Background(), statement)
+}
+
+func (h *DoltHarness) ExecuteStatementContext(ctx context.Context, statement string) error {
+	sqlCtx := sql.NewContext(
+		ctx,
 		sql.WithPid(rand.Uint64()),
 		sql.WithSession(h.sess))
 
-	_, rowIter, _, err := h.engine.Query(ctx, statement)
+	_, rowIter, _, err := h.engine.Query(sqlCtx, statement)
 	if err != nil {
 		return err
 	}
 
-	return drainIterator(ctx, rowIter)
+	return drainIterator(sqlCtx, rowIter)
 }
 
-func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
+func (h *DoltHarness) ExecuteQueryContext(ctx context.Context, statement string) (schema string, results []string, err error) {
 	pid := rand.Uint32()
-	ctx := sql.NewContext(
-		context.Background(),
+	sqlCtx := sql.NewContext(
+		ctx,
 		sql.WithPid(uint64(pid)),
 		sql.WithSession(h.sess))
 
@@ -103,7 +111,7 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 		}
 	}()
 
-	sch, rowIter, _, err = h.engine.Query(ctx, statement)
+	sch, rowIter, _, err = h.engine.Query(sqlCtx, statement)
 	if err != nil {
 		return "", nil, err
 	}
@@ -113,7 +121,7 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 		return "", nil, err
 	}
 
-	results, err = rowsToResultStrings(ctx, rowIter)
+	results, err = rowsToResultStrings(sqlCtx, rowIter)
 	if err != nil {
 		return "", nil, err
 	}

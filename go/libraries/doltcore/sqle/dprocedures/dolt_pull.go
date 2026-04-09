@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -103,6 +102,20 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	if apr.ContainsAll(cli.FFOnlyParam, cli.SquashParam) {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.FFOnlyParam, cli.SquashParam)
 	}
+	if apr.Contains(cli.RebaseParam) {
+		if apr.Contains(cli.SquashParam) {
+			return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.RebaseParam, cli.SquashParam)
+		}
+		if apr.Contains(cli.NoFFParam) {
+			return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.RebaseParam, cli.NoFFParam)
+		}
+		if apr.Contains(cli.FFOnlyParam) {
+			return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.RebaseParam, cli.FFOnlyParam)
+		}
+		if apr.Contains(cli.NoCommitFlag) {
+			return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together", cli.RebaseParam, cli.NoCommitFlag)
+		}
+	}
 
 	var remoteName, remoteRefName string
 	if apr.NArg() == 1 {
@@ -167,7 +180,9 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	}
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, statsCh)
+	})
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fetch failed: %w", err)
 	}
@@ -195,51 +210,83 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 				return noConflictsOrViolations, threeWayMerge, "", err
 			}
 
-			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
+			if apr.Contains(cli.RebaseParam) {
+				// Rebase path: use CanFastForwardTo to determine the right action
+				mergeSpec, err := createMergeSpec(ctx, sess, dbName, apr, remoteTrackRef.String())
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, "", err
+				}
 
-			roots, ok := sess.GetRoots(ctx, dbName)
-			if !ok {
-				return noConflictsOrViolations, threeWayMerge, "", sql.ErrDatabaseNotFound.New(dbName)
-			}
+				canFF, ffErr := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
+				if ffErr != nil {
+					if errors.Is(ffErr, doltdb.ErrUpToDate) || errors.Is(ffErr, doltdb.ErrIsAhead) {
+						return noConflictsOrViolations, threeWayMerge, doltdb.ErrUpToDate.Error(), nil
+					}
+					return noConflictsOrViolations, threeWayMerge, "", ffErr
+				}
 
-			mergeSpec, err := createMergeSpec(ctx, sess, dbName, apr, remoteTrackRef.String())
-			if err != nil {
-				return noConflictsOrViolations, threeWayMerge, "", err
-			}
+				if canFF {
+					// No local commits to rebase; fast-forward
+					ws, err = executeFFMerge(ctx, dbName, false, ws, dbData, mergeSpec.MergeC, mergeSpec)
+					if err != nil {
+						return noConflictsOrViolations, fastForwardMerge, "", err
+					}
+					return noConflictsOrViolations, fastForwardMerge, "merge successful", nil
+				}
 
-			roots, err = actions.ClearFeatureVersion(context.Background(), roots)
-			if err != nil {
-				return noConflictsOrViolations, threeWayMerge, "", err
-			}
+				// Diverged: rebase local commits onto remote tip
+				conflicts, fastForward, message, err = performRebaseAfterPull(ctx, remoteTrackRef.String(), apr.Contains(cli.SkipVerificationFlag))
+				if err != nil {
+					return conflicts, fastForward, message, err
+				}
+			} else {
+				// Merge path
+				msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
 
-			headHash, err := roots.Head.HashOf()
-			if err != nil {
-				return noConflictsOrViolations, threeWayMerge, "", err
-			}
+				roots, ok := sess.GetRoots(ctx, dbName)
+				if !ok {
+					return noConflictsOrViolations, threeWayMerge, "", sql.ErrDatabaseNotFound.New(dbName)
+				}
 
-			stagedHash, err := roots.Staged.HashOf()
-			if err != nil {
-				return noConflictsOrViolations, threeWayMerge, "", err
-			}
+				mergeSpec, err := createMergeSpec(ctx, sess, dbName, apr, remoteTrackRef.String())
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, "", err
+				}
 
-			if headHash != stagedHash {
-				return noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
-			}
+				roots, err = actions.ClearFeatureVersion(context.Background(), roots)
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, "", err
+				}
 
-			// We allow changes to ignored tables. If this causes a conflict because the remote also modified these tables,
-			// we will detect that during the pull.
-			workingSetClean, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
-			if err != nil {
-				return noConflictsOrViolations, threeWayMerge, "", err
-			}
+				headHash, err := roots.Head.HashOf()
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, "", err
+				}
 
-			if !workingSetClean {
-				return noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
-			}
+				stagedHash, err := roots.Staged.HashOf()
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, "", err
+				}
 
-			ws, _, conflicts, fastForward, message, err = performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg, apr.Contains(cli.SkipVerificationFlag))
-			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
-				return conflicts, fastForward, "", err
+				if headHash != stagedHash {
+					return noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
+				}
+
+				// We allow changes to ignored tables. If this causes a conflict because the remote also modified these tables,
+				// we will detect that during the pull.
+				workingSetClean, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, "", err
+				}
+
+				if !workingSetClean {
+					return noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
+				}
+
+				ws, _, conflicts, fastForward, message, err = performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg, apr.Contains(cli.SkipVerificationFlag))
+				if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
+					return conflicts, fastForward, "", err
+				}
 			}
 		}
 		if !rsSeen {
@@ -251,7 +298,9 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", err
 	}
-	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
+	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
+		err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, statsCh)
+	})
 	if err != nil {
 		return conflicts, fastForward, "", err
 	}
@@ -259,34 +308,21 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	return conflicts, fastForward, message, nil
 }
 
-// TODO: remove this as it does not do anything useful
-func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-statsCh:
-		}
+// performRebaseAfterPull runs a non-interactive rebase of the current branch onto
+// the given upstream point. This is used by dolt_pull when --rebase is specified.
+func performRebaseAfterPull(ctx *sql.Context, upstreamPoint string, skipVerification bool) (int, int, string, error) {
+	commitBecomesEmptyHandling := doltdb.EmptyCommitHandling(doltdb.DropEmptyCommit)
+	emptyCommitHandling := doltdb.EmptyCommitHandling(doltdb.KeepEmptyCommit)
+
+	err := startRebase(ctx, upstreamPoint, commitBecomesEmptyHandling, emptyCommitHandling, skipVerification)
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, "", err
 	}
-}
 
-// TODO: remove this as it does not do anything useful
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
-	statsCh := make(chan pull.Stats)
-	wg := &sync.WaitGroup{}
+	result := continueRebase(ctx)
+	if result.err != nil {
+		return hasConflictsOrViolations, threeWayMerge, "", result.err
+	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pullerProgFunc(ctx, statsCh)
-	}()
-
-	return wg, statsCh
-}
-
-// TODO: remove this as it does not do anything useful
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
-	cancel()
-	close(statsCh)
-	wg.Wait()
+	return noConflictsOrViolations, threeWayMerge, result.message, nil
 }

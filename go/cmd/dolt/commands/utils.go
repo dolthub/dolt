@@ -260,12 +260,13 @@ func newLateBindingEngine(
 			opt(queryistConfig)
 		}
 
+		gcSch := os.Getenv("DOLT_GC_SCHEDULER")
 		if queryistConfig.EnableAutoGC {
 			// We use a null logger here, as we do not want `dolt sql` output
 			// to include auto-gc log lines.
 			nullLgr := logrus.New()
 			nullLgr.SetOutput(io.Discard)
-			config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, chunks.IncrementalGCTablesDisabled, nullLgr)
+			config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, chunks.IncrementalGCTablesDisabled, sqle.NewGCScheduler(gcSch), nullLgr)
 		}
 
 		se, err := engine.NewSqlEngine(

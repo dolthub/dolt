@@ -58,6 +58,7 @@ const (
 	EncodingStringAdaptive   Encoding = 135
 	EncodingBytesAdaptive    Encoding = 136
 	EncodingExtendedAdaptive Encoding = 137
+	EncodingGeomAdaptive     Encoding = 138
 )
 
 var EnumNamesEncoding = map[Encoding]string{
@@ -96,6 +97,7 @@ var EnumNamesEncoding = map[Encoding]string{
 	EncodingStringAdaptive:   "StringAdaptive",
 	EncodingBytesAdaptive:    "BytesAdaptive",
 	EncodingExtendedAdaptive: "ExtendedAdaptive",
+	EncodingGeomAdaptive:     "GeomAdaptive",
 }
 
 var EnumValuesEncoding = map[string]Encoding{
@@ -134,6 +136,7 @@ var EnumValuesEncoding = map[string]Encoding{
 	"StringAdaptive":   EncodingStringAdaptive,
 	"BytesAdaptive":    EncodingBytesAdaptive,
 	"ExtendedAdaptive": EncodingExtendedAdaptive,
+	"GeomAdaptive":     EncodingGeomAdaptive,
 }
 
 func (v Encoding) String() string {

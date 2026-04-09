@@ -50,7 +50,7 @@ jobs:
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
           token: ${{ secrets.DOLT_RELEASE_TOKEN }}

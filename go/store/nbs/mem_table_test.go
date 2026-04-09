@@ -319,9 +319,9 @@ func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.
 	return true, gcBehavior_Continue, nil
 }
 
-func (crg chunkReaderGroup) count() (count uint32, err error) {
+func (crg chunkReaderGroup) count() (count uint32) {
 	for _, haver := range crg {
-		count += mustUint32(haver.count())
+		count += haver.count()
 	}
 	return
 }

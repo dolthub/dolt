@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -214,6 +213,13 @@ type SqlServer struct {
 	Output      *bytes.Buffer
 	DBName      string
 	RecreateCmd func(args ...string) *exec.Cmd
+
+	// Where to write server log output for display. If nil,
+	// defaults to os.Stdout.
+	LogWriter io.Writer
+
+	// If non-nil, called with each complete line of server output.
+	OutputVisitor func(string)
 }
 
 type SqlServerOpt func(s *SqlServer)
@@ -239,6 +245,18 @@ func WithEnvs(envs ...string) SqlServerOpt {
 func WithPort(port int) SqlServerOpt {
 	return func(s *SqlServer) {
 		s.Port = port
+	}
+}
+
+func WithOutputVisitor(f func(string)) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.OutputVisitor = f
+	}
+}
+
+func WithLogWriter(w io.Writer) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.LogWriter = w
 	}
 }
 
@@ -278,13 +296,7 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 	}
 	cmd.Stderr = cmd.Stdout
 	output := new(bytes.Buffer)
-	var wg sync.WaitGroup
-	wg.Add(1)
 	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
 
 	server := &SqlServer{
 		Done:   done,
@@ -297,8 +309,12 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 	}
 
 	go func() {
-		defer wg.Done()
-		multiCopyWithNamePrefix(os.Stdout, output, stdout, server.Name)
+		defer close(done)
+		logw := server.LogWriter
+		if logw == nil {
+			logw = os.Stdout
+		}
+		multiCopyWithNamePrefix(logw, output, stdout, server.Name, server.OutputVisitor)
 	}()
 
 	server.RecreateCmd = func(args ...string) *exec.Cmd {
@@ -325,9 +341,10 @@ func (s *SqlServer) ErrorStop() error {
 	return s.Cmd.Wait()
 }
 
-func multiCopyWithNamePrefix(stdout, captured io.Writer, in io.Reader, name string) {
+func multiCopyWithNamePrefix(stdout, captured io.Writer, in io.Reader, name string, visitor func(string)) {
 	reader := bufio.NewReader(in)
 	multiOut := io.MultiWriter(stdout, captured)
+	var lineBuf []byte
 	wantsPrefix := true
 	for {
 		line, isPrefix, err := reader.ReadLine()
@@ -341,9 +358,21 @@ func multiCopyWithNamePrefix(stdout, captured io.Writer, in io.Reader, name stri
 		}
 		multiOut.Write(line)
 		if isPrefix {
+			if visitor != nil {
+				lineBuf = append(lineBuf, line...)
+			}
 			wantsPrefix = false
 		} else {
 			multiOut.Write([]byte("\n"))
+			if visitor != nil {
+				if lineBuf != nil {
+					lineBuf = append(lineBuf, line...)
+					visitor(string(lineBuf))
+					lineBuf = nil
+				} else {
+					visitor(string(line))
+				}
+			}
 			wantsPrefix = true
 		}
 	}
@@ -367,16 +396,14 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 		return err
 	}
 	s.Cmd.Stderr = s.Cmd.Stdout
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		multiCopyWithNamePrefix(os.Stdout, s.Output, stdout, s.Name)
-	}()
 	s.Done = make(chan struct{})
 	go func() {
-		wg.Wait()
-		close(s.Done)
+		defer close(s.Done)
+		logw := s.LogWriter
+		if logw == nil {
+			logw = os.Stdout
+		}
+		multiCopyWithNamePrefix(logw, s.Output, stdout, s.Name, s.OutputVisitor)
 	}()
 	return s.Cmd.Start()
 }

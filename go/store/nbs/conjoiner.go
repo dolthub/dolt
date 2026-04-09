@@ -39,7 +39,7 @@ type conjoinStrategy interface {
 	conjoinRequired(ts *tableSet) bool
 
 	// chooseConjoinees chooses which chunkSources to conjoin from |sources|
-	chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error)
+	chooseConjoinees(specs []tableSpec) (conjoinees []tableSpec, err error)
 }
 
 type inlineConjoiner struct {
@@ -55,9 +55,9 @@ func (c inlineConjoiner) conjoinRequired(ts *tableSet) bool {
 // chooseConjoinees implements conjoinStrategy. Current approach is to choose the smallest N tables which,
 // when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
 // We also keep taking table files until we get below maxTables.
-func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []tableSpec, err error) {
 	if c.maxTables < 2 {
-		return nil, upstream, fmt.Errorf("runtime error: cannot conjoin with maxTables set to %d", c.maxTables)
+		return nil, fmt.Errorf("runtime error: cannot conjoin with maxTables set to %d", c.maxTables)
 	}
 	sorted := make([]tableSpec, len(upstream))
 	copy(sorted, upstream)
@@ -78,7 +78,7 @@ func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, kee
 		sum += next
 		i++
 	}
-	return sorted[:i], sorted[i:], nil
+	return sorted[:i], nil
 }
 
 type noopConjoiner struct{}
@@ -89,8 +89,7 @@ func (c noopConjoiner) conjoinRequired(ts *tableSet) bool {
 	return false
 }
 
-func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees, keepers []tableSpec, err error) {
-	keepers = sources
+func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees []tableSpec, err error) {
 	return
 }
 
@@ -105,23 +104,20 @@ func (s *specificFilesConjoiner) conjoinRequired(ts *tableSet) bool {
 	return len(s.targetStorageIds) > 0
 }
 
-func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees []tableSpec, err error) {
 	// Convert target storage IDs to a set for efficient lookup
 	targetSet := make(map[hash.Hash]bool)
 	for _, id := range s.targetStorageIds {
 		targetSet[id] = true
 	}
 
-	// Separate specs into conjoinees and keepers
 	for _, spec := range specs {
 		if targetSet[spec.name] {
 			conjoinees = append(conjoinees, spec)
-		} else {
-			keepers = append(keepers, spec)
 		}
 	}
 
-	return conjoinees, keepers, nil
+	return conjoinees, nil
 }
 
 // A conjoinOperation is a multi-step process that a NomsBlockStore runs to
@@ -156,6 +152,10 @@ type conjoinOperation struct {
 	conjoinees []tableSpec
 	// The tableSpec for the conjoined file.
 	conjoined tableSpec
+	// The open chunkSource for the conjoined file. Kept open so it
+	// can be passed to tables.rebase as an available source, avoiding
+	// a redundant Open call.
+	conjoinedSrc chunkSource
 }
 
 // Compute what we will conjoin and prepare to do it. This should be
@@ -165,7 +165,7 @@ func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStr
 		upstream, _ = upstream.removeAppendixSpecs()
 	}
 	var err error
-	op.conjoinees, _, err = strat.chooseConjoinees(upstream.specs)
+	op.conjoinees, err = strat.chooseConjoinees(upstream.specs)
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStr
 // NomsBlockStore.
 func (op *conjoinOperation) conjoin(ctx context.Context, behavior dherrors.FatalBehavior, persister tablePersister, stats *Stats) error {
 	var err error
-	op.conjoined, op.cleanup, err = conjoinTables(ctx, behavior, op.conjoinees, persister, stats)
+	op.conjoined, op.conjoinedSrc, op.cleanup, err = conjoinTables(ctx, behavior, op.conjoinees, persister, stats)
 	if err != nil {
 		return err
 	}
@@ -266,20 +266,25 @@ func (op *conjoinOperation) updateManifest(ctx context.Context, behavior dherror
 // process actor has already landed a conjoin of its own. Callers must
 // handle this, likely by rebasing against upstream and re-evaluating the
 // situation.
-func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, cleanupFunc, error) {
+func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, chunkSource, cleanupFunc, error) {
 	var op conjoinOperation
 	err := op.prepareConjoin(ctx, s, upstream)
 	if err != nil {
-		return manifestContents{}, nil, err
+		return manifestContents{}, nil, nil, err
 	}
 	err = op.conjoin(ctx, behavior, p, stats)
 	if err != nil {
-		return manifestContents{}, nil, err
+		return manifestContents{}, nil, nil, err
 	}
-	return op.updateManifest(ctx, behavior, upstream, mm, stats)
+	mc, cf, err := op.updateManifest(ctx, behavior, upstream, mm, stats)
+	if err != nil {
+		op.conjoinedSrc.close()
+		return manifestContents{}, nil, nil, err
+	}
+	return mc, op.conjoinedSrc, cf, nil
 }
 
-func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, cleanup cleanupFunc, err error) {
+func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, src chunkSource, cleanup cleanupFunc, err error) {
 	eg, ectx := errgroup.WithContext(ctx)
 	toConjoin := make(chunkSources, len(conjoinees))
 
@@ -298,50 +303,36 @@ func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoin
 		}
 	}()
 	if err = eg.Wait(); err != nil {
-		return tableSpec{}, nil, err
+		return tableSpec{}, nil, nil, err
 	}
 
 	t1 := time.Now()
 
 	conjoinedSrc, cleanup, err := p.ConjoinAll(ctx, behavior, toConjoin, stats)
 	if err != nil {
-		return tableSpec{}, nil, err
+		return tableSpec{}, nil, nil, err
 	}
-	defer conjoinedSrc.close()
 
 	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))
 
-	cnt, err := conjoinedSrc.count()
-	if err != nil {
-		return tableSpec{}, nil, err
-	}
+	cnt := conjoinedSrc.count()
 
 	stats.ChunksPerConjoin.Sample(uint64(cnt))
 
 	h := conjoinedSrc.hash()
-	cnt, err = conjoinedSrc.count()
-	if err != nil {
-		return tableSpec{}, nil, err
-	}
-	return tableSpec{h, cnt}, cleanup, nil
+	return tableSpec{h, cnt}, conjoinedSrc, cleanup, nil
 }
 
 func toSpecs(srcs chunkSources) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(srcs))
 	for i, src := range srcs {
-		cnt, err := src.count()
-		if err != nil {
-			return nil, err
-		} else if cnt <= 0 {
+		cnt := src.count()
+		if cnt <= 0 {
 			return nil, errors.New("invalid table spec has no sources")
 		}
 
 		h := src.hash()
-		cnt, err = src.count()
-		if err != nil {
-			return nil, err
-		}
 		specs[i] = tableSpec{h, cnt}
 	}
 

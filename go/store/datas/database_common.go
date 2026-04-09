@@ -337,13 +337,13 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 	})
 }
 
-func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, wsPath string) (Dataset, error) {
+func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, wsPath string, allowDirtyWorking bool) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
-		return db.doFastForward(ctx, ds, newHeadAddr, wsPath)
+		return db.doFastForward(ctx, ds, newHeadAddr, wsPath, allowDirtyWorking)
 	})
 }
 
-func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) error {
+func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, allowDirtyWorking bool) error {
 	newHead, err := db.readHead(ctx, newHeadAddr)
 	if err != nil {
 		return err
@@ -434,7 +434,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 
 					stagedHash := hash.New(msg.StagedRootAddrBytes())
 					workingSetHash := hash.New(msg.WorkingRootAddrBytes())
-					if stagedHash != workingSetHash {
+					if !allowDirtyWorking && stagedHash != workingSetHash {
 						return prolly.AddressMap{}, ErrDirtyWorkspace
 					}
 

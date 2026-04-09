@@ -442,7 +442,7 @@ func (suite *DatabaseSuite) TestFastForward() {
 	cCommitAddr := mustHeadAddr(ds) // To use in FastForward() below.
 
 	// FastForward should disallow this, as |a| is not a descendant of |c|
-	_, err = suite.db.FastForward(context.Background(), ds, aCommitAddr, "")
+	_, err = suite.db.FastForward(context.Background(), ds, aCommitAddr, "", false)
 	suite.Error(err)
 
 	// Move Head back to something earlier in the lineage, so we can test FastForward
@@ -451,7 +451,7 @@ func (suite *DatabaseSuite) TestFastForward() {
 	suite.True(mustHeadValue(ds).Equals(a))
 
 	// This should succeed, because while |a| is not a direct parent of |c|, it is an ancestor.
-	ds, err = suite.db.FastForward(context.Background(), ds, cCommitAddr, "")
+	ds, err = suite.db.FastForward(context.Background(), ds, cCommitAddr, "", false)
 	suite.Require().NoError(err)
 	suite.True(mustHeadValue(ds).Equals(c))
 }

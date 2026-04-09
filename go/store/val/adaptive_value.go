@@ -196,6 +196,12 @@ func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, 
 	return NewTextStorage(ctx, address, vs).WithMaxByteLength(int64(length)), nil
 }
 
+func (v AdaptiveValue) convertToGeometryStorage(ctx context.Context, vs ValueStore) (*GeometryStorage, error) {
+	length, lengthBytes := uvarint.Uvarint(v)
+	addr := hash.New(v[lengthBytes:])
+	return NewGeometryStorageOutOfBand(ctx, addr, vs, int64(length)), nil
+}
+
 // AdaptiveEncodingTypeHandler is an implementation of TypeHandler for adaptive encoding types,
 // that is, values that can be either a content-address or an inline value.
 // This TypeHandler converts between the address and the underlying value as needed, allowing these columns

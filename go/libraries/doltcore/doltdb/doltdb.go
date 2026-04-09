@@ -139,6 +139,11 @@ type DoltDB struct {
 	commitCache *lru.Cache[hash.Hash, *OptionalCommit]
 }
 
+// IsWorkingSetRef reports whether |ref| identifies the working set or staging area rather than a commit.
+func IsWorkingSetRef(ref string) bool {
+	return ref == Working || ref == Staged
+}
+
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
 func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) (*DoltDB, error) {
 	vrw := types.NewValueStore(cs)
@@ -880,10 +885,12 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 	return ddb.CommitWithParentSpecs(ctx, valHash, dref, nil, cm)
 }
 
-// FastForwardWithWorkspaceCheck will perform a fast forward update of the branch given to the commit given, but only
-// if the working set is in sync with the head of the branch given. This is used in the course of pushing to a remote.
-// If the target doesn't currently have the working set ref, then no working set change will be made.
-func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
+// FastForwardWithWorkspaceCheck performs a fast-forward of |branch| to |commit| only if the remote
+// working set is in sync with its HEAD, then updates the working set to match the new HEAD.
+// This is used when pushing to a remote. If the remote does not maintain a working set, no working
+// set update is performed.
+// When |allowDirtyWorking| is true, the working set may have unstaged changes, such as ignored tables.
+func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, commit *Commit, allowDirtyWorking bool) error {
 	ds, err := ddb.db.GetDataset(ctx, branch.String())
 	if err != nil {
 		return err
@@ -904,7 +911,7 @@ func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref
 		ws = wsRef.String()
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, addr, ws)
+	_, err = ddb.db.FastForward(ctx, ds, addr, ws, allowDirtyWorking)
 
 	return err
 }
@@ -926,7 +933,7 @@ func (ddb *DoltDB) FastForwardToHash(ctx context.Context, branch ref.DoltRef, ha
 		return err
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, hash, "")
+	_, err = ddb.db.FastForward(ctx, ds, hash, "", false)
 
 	return err
 }
@@ -2208,7 +2215,21 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	if err != nil {
 		return err
 	}
-	ddb.db.ExecuteCommitHooks(ctx, ds, false)
+	ddb.db.ExecuteCommitHooks(ctx, ds, false, false)
+	return nil
+}
+
+// ExecuteReplicaCommitHooks is like ExecuteCommitHooks but only fires hooks
+// that return true from ExecuteForReplicaWrite(). This is used when the write
+// comes through the cluster replication endpoint on a standby replica, where
+// replication hooks should not fire to avoid loops, but maintenance hooks like
+// auto GC and stats should still run.
+func (ddb *DoltDB) ExecuteReplicaCommitHooks(ctx context.Context, datasetId string) error {
+	ds, err := ddb.db.GetDataset(ctx, datasetId)
+	if err != nil {
+		return err
+	}
+	ddb.db.ExecuteCommitHooks(ctx, ds, false, true)
 	return nil
 }
 

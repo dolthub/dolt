@@ -149,14 +149,12 @@ type Database interface {
 	// is not provided, no working set update will be performed.
 	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error)
 
-	// FastForward takes a types.Ref to a Commit object and makes it the new
-	// Head of ds iff it is a descendant of the current Head. Intended to be
-	// used e.g. after a call to Pull(). If the update cannot be performed,
-	// e.g., because another process moved the current Head out from under
-	// you, err will be non-nil.
-	// The workingSetPath is the path to the working set that should be used for updating the working set. If one
-	// is not provided, no working set update will be performed.
-	FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error)
+	// FastForward sets the head of |ds| to the commit at |newHeadAddr| if it is a descendant of
+	// the current head. If the update cannot be performed, for example because another writer has
+	// moved the head concurrently, err will be non-nil.
+	// If |workingSetPath| is non-empty, the working set at that path is updated to match the new head.
+	// When |allowDirtyWorking| is true, the working set may have unstaged changes, such as ignored tables.
+	FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, allowDirtyWorking bool) (Dataset, error)
 
 	// Stats may return some kind of struct that reports statistics about the
 	// ChunkStore that backs this Database instance. The type is

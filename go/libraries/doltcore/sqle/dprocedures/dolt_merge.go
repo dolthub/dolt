@@ -355,7 +355,7 @@ func executeMerge(
 			return nil, err
 		}
 	}
-	return mergeRootToWorking(ctx, sess, dbName, squash, force, ws, result, workingDiffs, cm, cmSpec)
+	return mergeRootToWorking(ctx, sess, dbName, squash, force, ws, result, workingDiffs, cm, cmSpec, head)
 }
 
 func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData[*sql.Context], cm2 *doltdb.Commit, spec *merge.MergeSpec) (*doltdb.WorkingSet, error) {
@@ -424,7 +424,7 @@ func executeNoFFMerge(
 	}
 	result := &merge.Result{Root: mergeRoot, Stats: make(map[doltdb.TableName]*merge.MergeStats)}
 
-	ws, err = mergeRootToWorking(ctx, dSess, dbName, false, spec.Force, ws, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
+	ws, err = mergeRootToWorking(ctx, dSess, dbName, false, spec.Force, ws, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr, spec.HeadC)
 	if err != nil {
 		// This error is recoverable, so we return a working set value along with the error
 		return ws, nil, err
@@ -559,6 +559,7 @@ func mergeRootToWorking(
 	workingDiffs map[doltdb.TableName]hash.Hash,
 	cm2 *doltdb.Commit,
 	cm2Spec string,
+	headCommit *doltdb.Commit,
 ) (*doltdb.WorkingSet, error) {
 	var err error
 	staged, working := merged.Root, merged.Root
@@ -570,7 +571,7 @@ func mergeRootToWorking(
 	}
 
 	if !squash || merged.HasSchemaConflicts() {
-		ws = ws.StartMerge(cm2, cm2Spec)
+		ws = ws.StartMerge(headCommit, cm2, cm2Spec)
 		tt := merge.SchemaConflictTableNames(merged.SchemaConflicts)
 		ws = ws.WithUnmergableTables(tt)
 	}

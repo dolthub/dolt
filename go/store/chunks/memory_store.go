@@ -357,6 +357,10 @@ func (mgcf msvGcFinalizer) SwapChunksInStore(ctx context.Context) error {
 	return nil
 }
 
+func (mgcf msvGcFinalizer) Close() error {
+	return nil
+}
+
 type msvMarkAndSweeper struct {
 	ms *MemoryStoreView
 

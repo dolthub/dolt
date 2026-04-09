@@ -93,6 +93,11 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	if queryist.IsRemote {
+		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
+		cli.Println(msg)
+		return 1
+	}
 
 	// Set @@dolt_allow_commit_conflicts in case there are data conflicts that need to be resolved by the caller.
 	// Without this, the conflicts can't be committed to the branch working set, and the caller can't access them.
@@ -448,9 +453,11 @@ func isRebaseConflictError(err error) bool {
 		return true
 	}
 
-	// For over-the-wire errors that lose their type, match against error message patterns
+	// For over-the-wire errors that lose their type, match against error message patterns.
+	// Use Contains instead of HasPrefix because MySQL wire errors are prefixed with
+	// "Error 1105 (HY000): " by the go-mysql-driver.
 	errMsg := err.Error()
-	return strings.HasPrefix(errMsg, dprocedures.RebaseDataConflictPrefix) ||
-		strings.HasPrefix(errMsg, dprocedures.RebaseVerificationFailedPrefix) ||
-		strings.HasPrefix(errMsg, actions.CommitVerificationFailedPrefix)
+	return strings.Contains(errMsg, dprocedures.RebaseDataConflictPrefix) ||
+		strings.Contains(errMsg, dprocedures.RebaseVerificationFailedPrefix) ||
+		strings.Contains(errMsg, actions.CommitVerificationFailedPrefix)
 }

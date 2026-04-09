@@ -101,7 +101,7 @@ func nonAtomicSwap(ctx context.Context, id hash.Hash, src, dst *NomsBlockStore, 
 	// Add the moved table spec to the destination specs
 	newDstSpecs = append(newDstSpecs, movedTs)
 
-	err = src.swapTables(ctx, newSrcSpecs, chunks.GCMode_Default)
+	err = src.swapTables(ctx, newSrcSpecs, chunks.GCMode_Default, nil)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func nonAtomicSwap(ctx context.Context, id hash.Hash, src, dst *NomsBlockStore, 
 	if err != nil {
 		return err
 	}
-	err = dst.swapTables(ctx, newDstSpecs, chunks.GCMode_Default)
+	err = dst.swapTables(ctx, newDstSpecs, chunks.GCMode_Default, nil)
 	if err != nil {
 		return err
 	}

@@ -230,7 +230,7 @@ type chunkReader interface {
 	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error)
 
 	// count returns the chunk count for this chunkReader.
-	count() (uint32, error)
+	count() uint32
 
 	// uncompressedLen returns the total uncompressed length this chunkReader.
 	uncompressedLen() (uint64, error)

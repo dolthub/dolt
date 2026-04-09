@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -113,6 +114,9 @@ type DoltDatabaseProvider interface {
 	PurgeDroppedDatabases(ctx *sql.Context) error
 	// EngineOverrides returns the overrides that were given during the creation of the provider.
 	EngineOverrides() sql.EngineOverrides
+	// TxLocks returns the per-engine keymutex used to serialize
+	// transaction commits by working-set reference.
+	TxLocks() keymutex.Keymutex
 }
 
 type SessionDatabaseBranchSpec struct {

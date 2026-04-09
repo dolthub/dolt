@@ -137,7 +137,7 @@ func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) (uint32, error) {
 
 	c, ok := tc.(CompressedChunk)
 	if !ok {
-		if arc, ok := tc.(ArchiveToChunker); ok {
+		if arc, ok := tc.(*ArchiveToChunker); ok {
 			// Decompress, and recompress since we can only write snappy compressed objects to this store.
 			chk, err := arc.ToChunk()
 			if err != nil {

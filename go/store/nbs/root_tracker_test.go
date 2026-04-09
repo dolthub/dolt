@@ -509,7 +509,7 @@ type fakeTablePersister struct {
 var _ tablePersister = fakeTablePersister{}
 
 func (ftp fakeTablePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	if mustUint32(mt.count()) == 0 {
+	if mt.count() == 0 {
 		return emptyChunkSource{}, gcBehavior_Continue, nil
 	}
 
@@ -573,7 +573,7 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, _ dherrors.FatalBe
 func compactSourcesToBuffer(sources chunkSources) (name hash.Hash, data []byte, chunkCount uint32, err error) {
 	totalData := uint64(0)
 	for _, src := range sources {
-		chunkCount += mustUint32(src.count())
+		chunkCount += src.count()
 		totalData += mustUint64(src.uncompressedLen())
 	}
 	if chunkCount == 0 {

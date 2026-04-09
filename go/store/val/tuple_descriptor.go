@@ -119,7 +119,7 @@ func IterAddressFields(td *TupleDesc, cb func(int, Type)) {
 func IterAdaptiveFields(td *TupleDesc, cb func(int, Type)) {
 	for i, typ := range td.Types {
 		switch typ.Enc {
-		case BytesAdaptiveEnc, StringAdaptiveEnc, ExtendedAdaptiveEnc:
+		case BytesAdaptiveEnc, StringAdaptiveEnc, ExtendedAdaptiveEnc, GeomAdaptiveEnc:
 			cb(i, typ)
 		}
 	}
@@ -502,6 +502,30 @@ func (td *TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
 	// TODO: we are support both Geometry and GeometryAddr for now, so we can't expect just one
 	// td.expectEncoding(i, GeomAddrEnc)
 	return td.GetAddr(i, tup)
+}
+
+// GetGeomAdaptiveValue reads a geometry value from an adaptive-encoded field, returning a *GeometryStorage
+// that defers deserialization until the value is actually needed.
+func (td *TupleDesc) GetGeomAdaptiveValue(ctx context.Context, i int, vs ValueStore, tup Tuple) (*GeometryStorage, bool, error) {
+	td.ExpectEncoding(i, GeomAdaptiveEnc)
+	return GetGeomAdaptiveValue(ctx, vs, td.GetField(i, tup))
+}
+
+func GetGeomAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (*GeometryStorage, bool, error) {
+	adaptiveValue := AdaptiveValue(val)
+	if len(adaptiveValue) == 0 {
+		return nil, false, nil
+	}
+	if adaptiveValue.isInlined() {
+		bytes, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
+		if err != nil {
+			return nil, false, err
+		}
+		return NewGeometryStorageInline(bytes), true, nil
+	} else {
+		gs, err := adaptiveValue.convertToGeometryStorage(ctx, vs)
+		return gs, true, err
+	}
 }
 
 func (td *TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {

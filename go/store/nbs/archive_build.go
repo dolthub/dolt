@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -78,15 +79,12 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 		sourceSet = blockStore.tables.upstream
 		cs := sourceSet[id]
 
-		arc, ok := cs.(archiveChunkSource)
+		arc, ok := cs.(*archiveChunkSource)
 		if !ok {
 			continue
 		}
 
-		chkCnt, err := arc.count()
-		if err != nil {
-			return fmt.Errorf("failed to count chunks in archive %s: %w", id.String(), err)
-		}
+		chkCnt := arc.count()
 
 		var newTF hash.Hash
 		classicTable, err := NewCmpChunkTableWriter("")
@@ -130,7 +128,7 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 			}
 		}
 
-		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default, nil)
 		if err != nil {
 			return err
 		}
@@ -183,7 +181,7 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 		}
 		sourceSet = blockStore.tables.upstream
 		cs := sourceSet[tf]
-		if _, ok := cs.(archiveChunkSource); ok {
+		if _, ok := cs.(*archiveChunkSource); ok {
 			continue
 		}
 
@@ -238,7 +236,7 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 			}
 		}
 
-		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default, nil)
 		if err != nil {
 			return err
 		}
@@ -341,7 +339,10 @@ func indexFinalizeFlushArchive(arcW *archiveWriter, archivePath string, originTa
 	if err != nil {
 		return err
 	}
-	err = arcW.indexFinalize(originTableFile)
+	err = arcW.indexFinalize(archiveOrigin{
+		ConvertedTableFileName: originTableFile,
+		ConversionTime:         time.Now(),
+	})
 	if err != nil {
 		return err
 	}

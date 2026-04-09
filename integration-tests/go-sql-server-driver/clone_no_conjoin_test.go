@@ -15,16 +15,12 @@
 package main
 
 import (
-	"io/fs"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // TestCloneNoConjoin asserts that a clone (in this case a backup
@@ -147,20 +143,7 @@ func TestCloneNoConjoin(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	numTableFiles := 0
-	filepath.WalkDir(finalDestDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		n := d.Name()
-		n = strings.TrimSuffix(n, ".darc")
-		_, ok := hash.MaybeParse(n)
-		if ok {
-			t.Logf("found table file %s", n)
-			numTableFiles += 1
-		}
-		return nil
-	})
+	numTableFiles := CountTableFiles(t, finalDestDir)
 	t.Logf("found %v table files", numTableFiles)
 	assert.GreaterOrEqual(t, numTableFiles, 384)
 }

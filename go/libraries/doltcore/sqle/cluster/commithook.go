@@ -526,3 +526,7 @@ func (h *commithook) NotifyWaitFailed() {
 func (h *commithook) ExecuteForWorkingSets() bool {
 	return true
 }
+
+func (h *commithook) ExecuteForReplicaWrite() bool {
+	return false
+}

@@ -218,6 +218,26 @@ func ConfigureServices(
 	}
 	controller.Register(InitServerLocalCreds)
 
+	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
+	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
+	// in the configuration files for a sql-server, and not global for the whole host.
+	//
+	// This load can set global variables that will be read by services which are started later. Those
+	// services may be running background threads of their own. This load should be done early to
+	// prevent races and to prevent different components seeing different configured variables.
+	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
+			err := dsess.PersistSystemVarDefaults(cfg.DoltEnv)
+			if err != nil {
+				logrus.Errorf("unable to persist system variable defaults: %v", err)
+			}
+			// Always return nil, because we don't want an invalid config value to prevent
+			// the server from starting up.
+			return nil
+		},
+	}
+	controller.Register(PersistNondeterministicSystemVarDefaults)
+
 	var clusterController *cluster.Controller
 	InitClusterController := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
@@ -276,18 +296,19 @@ func ConfigureServices(
 	}
 	controller.Register(InitEventSchedulerStatus)
 
+	gcSch := os.Getenv(dconfig.EnvDoltGCScheduler)
 	InitAutoGCController := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			// Having AutoGCBehavior == nil means that they are using default behavior, which is enabled.
 			if cfg.ServerConfig.AutoGCBehavior() == nil {
-				config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, chunks.IncrementalGCTablesDisabled, lgr)
+				config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, chunks.IncrementalGCTablesDisabled, sqle.NewGCScheduler(gcSch), lgr)
 			} else if cfg.ServerConfig.AutoGCBehavior().Enable() {
 				cmp := chunks.GCArchiveLevel(cfg.ServerConfig.AutoGCBehavior().ArchiveLevel())
 				if cmp < chunks.NoArchive || cmp > chunks.MaxArchiveLevel {
 					return fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, cmp)
 				}
 				incrementalArchiveSize := cfg.ServerConfig.AutoGCBehavior().IncrementalFileSize()
-				config.AutoGCController = sqle.NewAutoGCController(cmp, incrementalArchiveSize, lgr)
+				config.AutoGCController = sqle.NewAutoGCController(cmp, incrementalArchiveSize, sqle.NewGCScheduler(gcSch), lgr)
 			}
 			return nil
 		},
@@ -372,22 +393,6 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(CloseClientConnectionsOnShutdown)
-
-	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
-	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
-	// in the configuration files for a sql-server, and not global for the whole host.
-	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
-		InitF: func(ctx context.Context) error {
-			err := dsess.PersistSystemVarDefaults(cfg.DoltEnv)
-			if err != nil {
-				logrus.Errorf("unable to persist system variable defaults: %v", err)
-			}
-			// Always return nil, because we don't want an invalid config value to prevent
-			// the server from starting up.
-			return nil
-		},
-	}
-	controller.Register(PersistNondeterministicSystemVarDefaults)
 
 	InitStatsController := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
@@ -537,7 +542,8 @@ func ConfigureServices(
 				path = ""
 			}
 
-			metListener, err = newMetricsListener(labels, cfg.Version, path, clusterController)
+			metricsExposed := cfg.ServerConfig.MetricsHost() != "" && cfg.ServerConfig.MetricsPort() > 0
+			metListener, err = newMetricsListener(labels, cfg.Version, path, clusterController, metricsExposed)
 			return err
 		},
 		StopF: func() error {
@@ -740,7 +746,7 @@ func ConfigureServices(
 			}
 			var err error
 			args.FS = sqlEngine.FileSystem()
-			args.DBCache, err = sqle.RemoteSrvDBCache(sqle.GetInterceptorSqlContext, sqle.DoNotCreateUnknownDatabases)
+			args.DBCache, err = sqle.RemoteSrvDBCache(sqle.GetInterceptorSqlContext, sqle.DoNotCreateUnknownDatabases, sqle.IsNotReplicaWrite)
 			if err != nil {
 				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 				return err

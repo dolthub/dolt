@@ -701,7 +701,7 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 	args.Options = append(args.Options, c.ServerOptions()...)
 	args.HttpInterceptor = ctxInterceptor.HTTP(args.HttpInterceptor)
 	var err error
-	args.DBCache, err = sqle.RemoteSrvDBCache(sqle.GetInterceptorSqlContext, sqle.CreateUnknownDatabases)
+	args.DBCache, err = sqle.RemoteSrvDBCache(sqle.GetInterceptorSqlContext, sqle.CreateUnknownDatabases, sqle.IsReplicaWrite)
 	if err != nil {
 		return remotesrv.ServerArgs{}, err
 	}

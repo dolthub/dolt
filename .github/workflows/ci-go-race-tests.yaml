@@ -19,8 +19,9 @@ jobs:
       matrix:
         os: [ ubuntu-22.04 ]
         dolt_fmt: [ "__DOLT__" ]
+        adaptive_encoding: [ "false", "true" ]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Go 1.x
       uses: actions/setup-go@v5
       with:
@@ -32,7 +33,10 @@ jobs:
         DOLT_SKIP_PREPARED_ENGINETESTS=1 go test -vet=off -v -race -timeout 30m github.com/dolthub/dolt/go/libraries/doltcore/sqle/enginetest
       env:
         DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}
+        DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
     - name: Test concurrentmap
       working-directory: ./go
       run: |
         go test -vet=off -v -race -timeout 1m github.com/dolthub/dolt/go/libraries/utils/concurrentmap
+      env:
+        DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}

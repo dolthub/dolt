@@ -116,7 +116,7 @@ type sourceWithSize struct {
 }
 
 func newSourceWithSize(src chunkSource) (res sourceWithSize, isArchive bool, err error) {
-	aSrc, ok := src.(archiveChunkSource)
+	aSrc, ok := src.(*archiveChunkSource)
 	if !ok {
 		index, err := src.index()
 		if err != nil {
@@ -249,13 +249,7 @@ func planTableConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuo
 			prefixIndexRecs = append(prefixIndexRecs, rec)
 		}
 
-		var cnt uint32
-		cnt, err = sws.source.count()
-		if err != nil {
-			return compactionPlan{}, err
-		}
-
-		ordinalOffset += cnt
+		ordinalOffset += sws.source.count()
 
 		if onHeap, ok := index.(onHeapTableIndex); ok {
 			// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438

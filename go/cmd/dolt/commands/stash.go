@@ -45,16 +45,21 @@ const (
 
 var stashDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Stash the changes in a dirty workspace away.",
-	LongDesc: `Use dolt stash when you want to record the current state of the workspace and the index, but want to go back to a clean workspace. 
+	LongDesc: `Use dolt stash when you want to record the current state of the workspace and the index, but want to go back to a clean workspace.
 
-The command saves your local modifications away and reverts the workspace to match the HEAD commit. The stash entries that are saved away can be listed with 'dolt stash list'.
+The command saves your local modifications away and reverts the workspace to match the HEAD commit. The stash entries that are saved away can be listed with {{.EmphasisLeft}}dolt stash list{{.EmphasisRight}}.
+
+With {{.EmphasisLeft}}pop{{.EmphasisRight}}, the stash entry is applied to the working set and then removed. With {{.EmphasisLeft}}apply{{.EmphasisRight}}, the stash entry is applied but kept. Both default to {{.EmphasisLeft}}stash@{0}{{.EmphasisRight}} if no stash is specified. If there are conflicting local changes, the operation fails and the stash entry is preserved.
+
+Stash entries are shared across branches, so you can stash on one branch and pop or apply on another.
 `,
 	Synopsis: []string{
 		"", // this is for `dolt stash` itself.
 		"list",
-		"pop {{.LessThan}}stash{{.GreaterThan}}",
+		"pop [{{.LessThan}}stash{{.GreaterThan}}]",
+		"apply [{{.LessThan}}stash{{.GreaterThan}}]",
+		"drop [{{.LessThan}}stash{{.GreaterThan}}]",
 		"clear",
-		"drop {{.LessThan}}stash{{.GreaterThan}}",
 	},
 }
 

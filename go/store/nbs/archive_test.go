@@ -1177,6 +1177,58 @@ func assertIntBetween(t *testing.T, actual, min, max int) {
 	}
 }
 
+// TestArchiveDifferentByteSpanOrderProducesDifferentName verifies that two archives containing the same chunks but with
+// different byte span layouts produce different archive names. This is important because the archive name must reflect
+// the data layout, not just the set of chunks. If two archives have the same name but different layouts, a cached index
+// from one will issue wrong byte-range requests against the other.
+func TestArchiveDifferentByteSpanOrderProducesDifferentName(t *testing.T) {
+	// Use deterministic hashes so both archives have the exact same chunks.
+	h1 := hash.Parse("00000000000000000001v5dsk056s012")
+	h2 := hash.Parse("00000000000000000002v5dsk056s012")
+
+	dict := defaultDict
+	data1 := []byte{11, 11, 11, 11, 11, 11, 11, 11, 11, 11}
+	data2 := []byte{22, 22, 22, 22, 22, 22, 22, 22, 22, 22}
+
+	// Archive A: write data1 first, then data2.
+	awA := newArchiveWriterWithSink(NewFixedBufferByteSink(make([]byte, 64*1024)))
+	dictIdA, err := awA.writeByteSpan(dict)
+	require.NoError(t, err)
+	d1IdA, err := awA.writeByteSpan(data1)
+	require.NoError(t, err)
+	d2IdA, err := awA.writeByteSpan(data2)
+	require.NoError(t, err)
+	require.NoError(t, awA.stageZStdChunk(h1, dictIdA, d1IdA))
+	require.NoError(t, awA.stageZStdChunk(h2, dictIdA, d2IdA))
+	require.NoError(t, awA.finalizeByteSpans())
+	require.NoError(t, awA.writeIndex())
+	require.NoError(t, awA.writeMetadata([]byte("")))
+	require.NoError(t, awA.writeFooter())
+	nameA, err := awA.getName()
+	require.NoError(t, err)
+
+	// Archive B: write data2 first, then data1 — same chunks, reversed byte span order.
+	awB := newArchiveWriterWithSink(NewFixedBufferByteSink(make([]byte, 64*1024)))
+	dictIdB, err := awB.writeByteSpan(dict)
+	require.NoError(t, err)
+	d2IdB, err := awB.writeByteSpan(data2)
+	require.NoError(t, err)
+	d1IdB, err := awB.writeByteSpan(data1)
+	require.NoError(t, err)
+	require.NoError(t, awB.stageZStdChunk(h1, dictIdB, d1IdB))
+	require.NoError(t, awB.stageZStdChunk(h2, dictIdB, d2IdB))
+	require.NoError(t, awB.finalizeByteSpans())
+	require.NoError(t, awB.writeIndex())
+	require.NoError(t, awB.writeMetadata([]byte("")))
+	require.NoError(t, awB.writeFooter())
+	nameB, err := awB.getName()
+	require.NoError(t, err)
+
+	// The byte span IDs for h1 and h2 differ between A and B because the data was written in
+	// different order. The archive name must reflect this difference.
+	require.NotEqual(t, nameA, nameB, "archives with same chunks but different byte span layouts must have different names")
+}
+
 // Helper functions to create test data below...
 func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 	randomBytes := make([]byte, 20)
@@ -1280,7 +1332,7 @@ func (tcs *testChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 	panic("never used")
 }
 
-func (tcs *testChunkSource) count() (uint32, error) {
+func (tcs *testChunkSource) count() uint32 {
 	panic("never used")
 }
 
@@ -1419,7 +1471,7 @@ func createMixedCompressionArchive(t *testing.T, chunkData [][]byte, useSnappy m
 func readersToSource(readers []archiveReader) []chunkSource {
 	sources := make([]chunkSource, 0, len(readers))
 	for _, r := range readers {
-		ar := archiveChunkSource{file: "", aRdr: r}
+		ar := &archiveChunkSource{file: "", aRdr: r}
 		sources = append(sources, ar)
 	}
 	return sources

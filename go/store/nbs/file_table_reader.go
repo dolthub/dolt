@@ -40,7 +40,8 @@ var ErrTableFileNotFound = errors.New("table file not found")
 
 type fileTableReader struct {
 	tableReader
-	h hash.Hash
+	h    hash.Hash
+	refs refCounter
 }
 
 var _ chunkSource = &fileTableReader{}
@@ -80,20 +81,20 @@ func archiveFileExists(ctx context.Context, dir string, name string) (bool, erro
 	return err == nil, err
 }
 
-func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, mmapArchiveIndexes bool, stats *Stats) (cs chunkSource, err error) {
+func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, mmapArchiveIndexes bool, refs refCounter, stats *Stats) (cs chunkSource, err error) {
 	// we either have a table file or an archive file
 	tfExists, err := tableFileExists(ctx, dir, h)
 	if err != nil {
 		return nil, err
 	} else if tfExists {
-		return nomsFileTableReader(ctx, filepath.Join(dir, h.String()), h, chunkCount, q)
+		return nomsFileTableReader(ctx, filepath.Join(dir, h.String()), h, chunkCount, refs, q)
 	}
 
 	afExists, err := archiveFileExists(ctx, dir, h.String())
 	if err != nil {
 		return nil, err
 	} else if afExists {
-		return newArchiveChunkSource(ctx, dir, h, chunkCount, q, mmapArchiveIndexes, stats)
+		return newArchiveChunkSource(ctx, dir, h, chunkCount, q, mmapArchiveIndexes, refs, stats)
 	}
 	return nil, fmt.Errorf("error opening table file: %w: %s/%s", ErrTableFileNotFound, dir, h.String())
 }
@@ -116,7 +117,7 @@ func newFileReaderAt(path string, mmapArchiveIndexes bool) (*fileReaderAt, error
 	return &fileReaderAt{f, cnt, path, fi.Size(), mmapArchiveIndexes}, nil
 }
 
-func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
+func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCount uint32, refs refCounter, q MemoryQuotaProvider) (cs chunkSource, err error) {
 	// noms files never support mmapped indexes
 	fra, err := newFileReaderAt(path, false)
 	if err != nil {
@@ -165,8 +166,9 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 		return nil, err
 	}
 	return &fileTableReader{
-		tr,
-		h,
+		tableReader: tr,
+		h:           h,
+		refs:        refs,
 	}, nil
 }
 
@@ -178,16 +180,27 @@ func (ftr *fileTableReader) suffix() string {
 	return ""
 }
 
+func (ftr *fileTableReader) close() error {
+	err := ftr.tableReader.close()
+	ftr.refs.decRef()
+	return err
+}
+
 func (ftr *fileTableReader) Close() error {
-	return ftr.tableReader.close()
+	return ftr.close()
 }
 
 func (ftr *fileTableReader) clone() (chunkSource, error) {
 	tr, err := ftr.tableReader.clone()
 	if err != nil {
-		return &fileTableReader{}, err
+		return nil, err
 	}
-	return &fileTableReader{tr, ftr.h}, nil
+	ftr.refs.addRef()
+	return &fileTableReader{
+		tableReader: tr,
+		h:           ftr.h,
+		refs:        ftr.refs,
+	}, nil
 }
 
 type fileReaderAt struct {

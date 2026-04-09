@@ -513,6 +513,8 @@ func configureBinlogPrimaryController(engine *gms.Engine) error {
 // for creating sessions, and a DoltDatabaseProvider, |pro|.
 func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFactory sql.ContextFactory, sessFactory sessionFactory, pro *sqle.DoltDatabaseProvider) error {
 	// getCtxFunc is used to create new session with a new context for event scheduler.
+	// The session's client is set to the event_scheduler superuser so that the event
+	// executor has access to all databases when privileges are enabled.
 	getCtxFunc := func() (*sql.Context, error) {
 		sess, err := sessFactory(sql.NewBaseSession(), pro)
 		if err != nil {
@@ -522,7 +524,12 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 		rootCtx := context.Background()
 		markedCtx := context.WithValue(rootCtx, doltdb.EventSessionContextKey, true)
 
-		return ctxFactory(markedCtx, sql.WithSession(sess)), nil
+		sqlCtx := ctxFactory(markedCtx, sql.WithSession(sess))
+		sqlCtx.Session.SetClient(sql.Client{
+			User:    "event_scheduler",
+			Address: "localhost",
+		})
+		return sqlCtx, nil
 	}
 
 	// A hidden env var allows overriding the event scheduler period for testing. This option is not
@@ -540,7 +547,19 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 		}
 	}
 
-	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
+	err := engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
+	if err != nil {
+		return err
+	}
+
+	// When a new database is registered (via clone, restore, or undrop), wake the
+	// event executor so it can discover any events in the new database.
+	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, func(ctx *sql.Context, _ *sqle.DoltDatabaseProvider, _ string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
+		engine.EventScheduler.NotifyDatabaseAdded()
+		return nil
+	})
+
+	return nil
 }
 
 // sqlContextFactory returns a contextFactory that creates a new sql.Context with the given session

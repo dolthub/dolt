@@ -41,6 +41,21 @@ table MergeState {
   unmergable_tables:[string];
 
   is_cherry_pick:bool;
+
+  // is_revert is set to true when the in-progress merge is a revert operation.
+  // This distinguishes it from cherry-pick so that --continue and --abort can
+  // route to the correct operation.
+  is_revert:bool;
+
+  // The address of the HEAD commit at the time the merge/cherry-pick/revert started.
+  // Used by --abort to restore the branch HEAD pointer to its pre-operation state.
+  pre_merge_head_commit_addr:[ubyte];
+
+  // pending_commit_hashes holds the remaining commit hashes to be processed when a
+  // multi-commit operation (i.e. revert or cherry-pick) is interrupted by a conflict.
+  // After resolving the conflict and calling --continue, these commits are applied
+  // next, in order.
+  pending_commit_hashes:[string];
 }
 
 table RebaseState {

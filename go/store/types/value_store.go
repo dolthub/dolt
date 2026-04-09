@@ -634,6 +634,7 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 
 				return err
 			}
+			defer oldGenFinalizer.Close()
 
 			var newFileHasMany chunks.HasManyFunc
 			newFileHasMany, err = oldGenFinalizer.AddChunksToStore(ctx)
@@ -651,6 +652,7 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 			if err != nil {
 				return err
 			}
+			defer newGenFinalizer.Close()
 			callCancelSafepoint = false
 
 			err = newGenFinalizer.SwapChunksInStore(ctx)
@@ -711,6 +713,7 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 			if err != nil {
 				return err
 			}
+			defer finalizer.Close()
 			callCancelSafepoint = false
 
 			err = finalizer.SwapChunksInStore(ctx)

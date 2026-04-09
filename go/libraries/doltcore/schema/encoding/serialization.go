@@ -269,6 +269,15 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		if onUpdateVal != "" {
 			serial.ColumnAddOnUpdateValue(b, ou)
 		}
+
+		// Only write the adaptive encoding field if the column uses adaptive encoding. This will force older clients that
+		// don't know about this field to update in order to read it. Older versions of Dolt ignored the serialized
+		// |encoding| field and inferred the encoding based on column type, which means they would try to interpret an
+		// adaptive encoded field as a literal value.
+		if usesAdaptiveEncoding(col) {
+			serial.ColumnAddUsesAdaptiveEncoding(b, true)
+		}
+
 		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
@@ -279,6 +288,16 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		b.PrependUOffsetT(offs[i])
 	}
 	return b.EndVector(len(offs))
+}
+
+func usesAdaptiveEncoding(col schema.Column) bool {
+	switch col.TypeInfo.Encoding() {
+	// val.ExtendedAdaptiveEnc is absent from this list because the extended types have their own ser / deser logic
+	case val.BytesAdaptiveEnc, val.StringAdaptiveEnc, val.GeomAdaptiveEnc:
+		return true
+	default:
+		return false
+	}
 }
 
 func serializeHiddenKeylessColumns(b *fb.Builder) (id, card fb.UOffsetT) {
