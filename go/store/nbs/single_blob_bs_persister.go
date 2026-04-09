@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"

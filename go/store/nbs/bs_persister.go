@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"io"
+
 	"golang.org/x/sync/errgroup"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
