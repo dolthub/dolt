@@ -224,6 +224,22 @@ const (
 	L = targetSize
 )
 
+var weibullThresholds [maxChunkSize + 1]float64
+
+// weibullCDF4K calculates -expm1(-(x/L)^4)
+// It multiplies (x/L) by itself 4 times to avoid math.Exp
+func weibullCDF4K(x uint32) float64 {
+	pow := float64(x) / L
+	return -math.Expm1(-(pow * pow * pow * pow))
+}
+
+func init() {
+	weibullThresholds[0] = 0
+	for i := uint32(1); i <= maxChunkSize; i++ {
+		weibullThresholds[i] = weibullCDF4K(i)
+	}
+}
+
 // weibullCheck returns true if we should split
 // at |hash| for a given record inserted into a
 // chunk of size |size|, where the record's size
@@ -243,20 +259,9 @@ const (
 // treated as a uniform random number between [0,1),
 // is less than this percentage.
 func weibullCheck(size, thisSize, hash uint32) bool {
-	// Instead of using constant K = 4, we just manually multiply to avoid math.Pow call
-	pow := float64(size-thisSize) / L
-	start := -math.Expm1(-(pow * pow * pow * pow))
-
-	pow = float64(size) / L
-	end := -math.Expm1(-(pow * pow * pow * pow))
-
-	p := float64(hash) / maxUint32
-	d := 1 - start
-	if d <= 0 {
-		return true
-	}
-	target := (end - start) / d
-	return p < target
+	start := weibullThresholds[size-thisSize]
+	end := weibullThresholds[size]
+	return float64(hash)*(1-start) < maxUint32*(end-start)
 }
 
 func xxHash32(b []byte, salt uint64) uint32 {
