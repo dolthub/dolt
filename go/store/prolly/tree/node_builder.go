@@ -16,10 +16,9 @@ package tree
 
 import (
 	"context"
-	"fmt"
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"sync"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
@@ -47,11 +46,6 @@ func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *
 		k := getLastKey(node)
 		lastKey = ns.Pool().Get(uint64(len(k)))
 		copy(lastKey, k)
-	}
-
-	otherTreeCnt, err := node.TreeCount()
-	if treeCnt != uint64(otherTreeCnt) {
-		panic(fmt.Sprintf("node tree count mismatch: %d != %d", treeCnt, otherTreeCnt))
 	}
 
 	return novelNode{
