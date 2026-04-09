@@ -340,7 +340,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 		return nil, nil, err
 	}
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	if err != nil {
 		return nil, nil, err
 	}

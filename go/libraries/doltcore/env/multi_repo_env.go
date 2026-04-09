@@ -130,7 +130,7 @@ func GetMultiEnvStorageMetadata(ctx context.Context, dataDirFS filesys.Filesys) 
 
 // NewMultiEnv returns a new MultiRepoEnv instance derived from a root DoltEnv instance.
 func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, error) {
-	return MultiEnvForDirectory(ctx, env.Config.WriteableConfig(), env.FS, env.Version, env)
+	return MultiEnvForDirectory(ctx, env.FS, env)
 }
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
@@ -138,11 +138,12 @@ func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, err
 // be the first database in all iterations.
 func MultiEnvForDirectory(
 	ctx context.Context,
-	config config.ReadWriteConfig,
 	dataDirFS filesys.Filesys,
-	version string,
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
+	config := dEnv.Config.WriteableConfig()
+	version := dEnv.Version
+
 	// Load current dataDirFS and put into mr env
 	var dbName string = "dolt"
 	var newDEnv *DoltEnv = dEnv

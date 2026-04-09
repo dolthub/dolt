@@ -512,7 +512,7 @@ func runMain() int {
 	// part of Dolt config in the first place!).
 	var mrEnv *env.MultiRepoEnv
 	if needsDBLoad(cfg.subCommand) {
-		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), cfg.dataDirFS, dEnv.Version, dEnv)
+		mrEnv, err = env.MultiEnvForDirectory(ctx, cfg.dataDirFS, dEnv)
 		if err != nil {
 			cli.PrintErrln("failed to load database names:", err.Error())
 			return 1

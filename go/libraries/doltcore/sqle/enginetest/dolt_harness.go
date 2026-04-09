@@ -565,7 +565,7 @@ func (d *DoltHarness) newProvider(ctx context.Context) sql.MutableDatabaseProvid
 	store := dEnv.DoltDB(ctx).ValueReadWriter().(*types.ValueStore)
 	store.SetValidateContentAddresses(true)
 
-	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
 
