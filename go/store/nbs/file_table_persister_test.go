@@ -161,6 +161,53 @@ func TestFSTablePersisterPruneTableFilesKeepsOpenFiles(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "unopened table file should have been pruned")
 }
 
+// TestFSTablePersisterConjoinAllPruneRace asserts that no race exists
+// between landing the new table file after ConjoinAll and running
+// PruneTableFiles before it is opened.
+//
+// In a previous version of fileTablePersister, there was a window of
+// time where the newly landed file was subject to removal by
+// PruneTableFiles.
+func TestFSTablePersisterConjoinAllPruneRace(t *testing.T) {
+	ctx := context.Background()
+
+	dir := makeTempDir(t)
+	defer file.RemoveAll(dir)
+	ftp := newFSTablePersister(dir, &UnlimitedQuotaProvider{}, false).(*fsTablePersister)
+
+	// Create two table files with distinct chunks so ConjoinAll has work to do.
+	sources := make(chunkSources, 2)
+	for i := range 2 {
+		randChunk := make([]byte, 64)
+		_, err := rand.Read(randChunk)
+		require.NoError(t, err)
+		name, err := writeTableData(dir, testChunks[i], randChunk)
+		require.NoError(t, err)
+		sources[i], err = ftp.Open(ctx, name, 2, nil)
+		require.NoError(t, err)
+	}
+	defer func() {
+		for _, s := range sources {
+			s.close()
+		}
+	}()
+
+	// The hook fires between ConjoinAll's Rename (file exists on disk) and
+	// its Open (which would add the file to openFiles). We run
+	// PruneTableFiles in this window to ensure the newly landed file does
+	// not disappear.
+	ftp._testFtpConjoinAfterRenameHook = func() {
+		// Run PruneTableFiles synchronously inside the hook so the
+		// interleaving is deterministic.
+		err := ftp.PruneTableFiles(ctx)
+		require.NoError(t, err)
+	}
+
+	src, _, err := ftp.ConjoinAll(ctx, dherrors.FatalBehaviorError, sources, &Stats{})
+	require.NoError(t, err)
+	src.close()
+}
+
 func TestFSTablePersisterConjoinAll(t *testing.T) {
 	ctx := context.Background()
 	assert := assert.New(t)

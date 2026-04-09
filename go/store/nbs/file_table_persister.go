@@ -69,7 +69,11 @@ type fsTablePersister struct {
 	// File-landing methods and Open take the read lock.
 	// PruneTableFiles takes the write lock.
 	pruneMu sync.RWMutex
+
+	// test hook: called in ConjoinAll after Rename but before Open.
+	_testFtpConjoinAfterRenameHook func()
 }
+
 
 func (ftp *fsTablePersister) addProtected(h hash.Hash) {
 	ftp.mu.Lock()
@@ -318,6 +322,9 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 	})
 	if err != nil {
 		return nil, nil, err
+	}
+	if ftp._testFtpConjoinAfterRenameHook != nil {
+		ftp._testFtpConjoinAfterRenameHook()
 	}
 	defer ph.Close()
 
