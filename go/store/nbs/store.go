@@ -1851,7 +1851,15 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 	}
 
 	// CopyTableFile can cope with a 0 splitOffset.
-	return tfp.CopyTableFile(ctx, r, fileName, sz, splitOffset)
+	// TODO: The pending handle should be held until the file is added to the
+	// manifest via AddTableFilesToManifest. For now we close it immediately,
+	// which means the file is unprotected from pruning until it's Open'd.
+	pending, err := tfp.CopyTableFile(ctx, r, fileName, sz, splitOffset)
+	if err != nil {
+		return err
+	}
+	defer pending.Close()
+	return nil
 }
 
 // AddTableFilesToManifest adds table files to the manifest
@@ -2036,19 +2044,7 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 }
 
 func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
-	mtime := time.Now()
-	return nbs.persister.PruneTableFiles(ctx, func() []hash.Hash {
-		nbs.mu.Lock()
-		defer nbs.mu.Unlock()
-		keepers := make([]hash.Hash, 0, len(nbs.tables.novel)+len(nbs.tables.upstream))
-		for a, _ := range nbs.tables.novel {
-			keepers = append(keepers, a)
-		}
-		for a, _ := range nbs.tables.upstream {
-			keepers = append(keepers, a)
-		}
-		return keepers
-	}, mtime)
+	return nbs.persister.PruneTableFiles(ctx)
 }
 
 func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode) error {
@@ -2331,10 +2327,11 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 
 func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, error) {
 	valctx.ValidateContext(ctx)
-	specs, err := i.gcc.copyTablesToDir(ctx)
+	specs, pendingHandle, err := i.gcc.copyTablesToDir(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer pendingHandle.Close()
 	i.gcc = nil
 
 	files := make(map[hash.Hash]uint32, len(specs))

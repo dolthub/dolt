@@ -29,7 +29,6 @@ import (
 	"errors"
 	"io"
 	"sort"
-	"time"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -59,13 +58,16 @@ type tablePersister interface {
 	// Open a table named |name|, containing |chunkCount| chunks.
 	Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error)
 
-	// Exists checks if a table named |name| exists.
-	Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error)
+	// Exists checks if a table named |name| exists. If the file exists, the
+	// returned handle keeps it protected from pruning until closed.
+	Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error)
 
-	// PruneTableFiles deletes table files which the persister would normally be responsible for and
-	// which are not in the included |keeper| set and have not be written or modified more recently
-	// than the provided |mtime|.
-	PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, mtime time.Time) error
+	// PruneTableFiles deletes old table files that are no longer referenced.
+	// For fs-backed persisters, it deletes any file in the directory that is
+	// not currently open (in openFiles) and not pending (recently landed but
+	// not yet opened). Callers must not hold any pending file handles across
+	// a PruneTableFiles call.
+	PruneTableFiles(ctx context.Context) error
 
 	AccessMode() chunks.ExclusiveAccessMode
 
@@ -76,11 +78,13 @@ type tableFilePersister interface {
 	tablePersister
 
 	// CopyTableFile copies the table file with the given fileId from the reader to the TableFileStore.
+	// It returns a handle that keeps the file alive (protected from pruning) until closed.
+	// The caller must keep the handle open until the file has been Open'd or is no longer needed.
 	//
 	// |splitOffset| is the offset in bytes within the file where the file is split between data and the index/footer.
 	// This is only used for the blob store persister, as it stores the data and index/footer in separate blobs. In the
 	// event that splitOffset is 0, the blob store persister will upload the entire file as a single blob.
-	CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, splitOffset uint64) error
+	CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, splitOffset uint64) (io.Closer, error)
 
 	// Path returns the file system path. Use CopyTableFile instead of Path to
 	// copy a file to the TableFileStore. Path cannot be removed because it's used
@@ -89,8 +93,13 @@ type tableFilePersister interface {
 }
 
 type movingTableFilePersister interface {
-	TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w GenericTableWriter) error
+	TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w GenericTableWriter) (io.Closer, error)
 }
+
+// noopPendingHandle is returned by non-fs persisters that don't need file tracking.
+type noopPendingHandle struct{}
+
+func (noopPendingHandle) Close() error { return nil }
 
 type chunkSourcesByDescendingDataSize struct {
 	sws []sourceWithSize

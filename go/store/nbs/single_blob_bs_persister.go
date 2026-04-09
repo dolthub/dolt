@@ -18,8 +18,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"time"
-
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -130,11 +128,18 @@ func (bsp *singleBlobBSPersister) Open(ctx context.Context, name hash.Hash, chun
 	return nil, err
 }
 
-func (bsp *singleBlobBSPersister) Exists(ctx context.Context, name string, _ uint32, _ *Stats) (bool, error) {
-	return bsp.bs.Exists(ctx, name)
+func (bsp *singleBlobBSPersister) Exists(ctx context.Context, name string, _ uint32, _ *Stats) (bool, io.Closer, error) {
+	exists, err := bsp.bs.Exists(ctx, name)
+	if err != nil {
+		return false, nil, err
+	}
+	if exists {
+		return true, noopPendingHandle{}, nil
+	}
+	return false, nil, nil
 }
 
-func (bsp *singleBlobBSPersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {
+func (bsp *singleBlobBSPersister) PruneTableFiles(ctx context.Context) error {
 	return nil
 }
 
@@ -153,7 +158,7 @@ func (bsp *singleBlobBSPersister) Path() string {
 	return ""
 }
 
-func (bsp *singleBlobBSPersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, _ uint64) error {
+func (bsp *singleBlobBSPersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, _ uint64) (io.Closer, error) {
 	_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
-	return err
+	return noopPendingHandle{}, err
 }

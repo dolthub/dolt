@@ -19,8 +19,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"time"
-
 	"golang.org/x/sync/errgroup"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
@@ -223,11 +221,18 @@ func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCo
 	return nil, err
 }
 
-func (bsp *blobstorePersister) Exists(ctx context.Context, name string, _ uint32, _ *Stats) (bool, error) {
-	return bsp.bs.Exists(ctx, name)
+func (bsp *blobstorePersister) Exists(ctx context.Context, name string, _ uint32, _ *Stats) (bool, io.Closer, error) {
+	exists, err := bsp.bs.Exists(ctx, name)
+	if err != nil {
+		return false, nil, err
+	}
+	if exists {
+		return true, noopPendingHandle{}, nil
+	}
+	return false, nil, nil
 }
 
-func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {
+func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context) error {
 	return nil
 }
 
@@ -246,7 +251,7 @@ func (bsp *blobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, splitOffset uint64) error {
+func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, splitOffset uint64) (io.Closer, error) {
 	if splitOffset > 0 {
 		lr := io.LimitReader(r, int64(splitOffset))
 
@@ -259,10 +264,10 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 		if !ok {
 			// sequentially write chunk records then tail
 			if _, err := bsp.bs.Put(ctx, recordsName, int64(splitOffset), lr); err != nil {
-				return err
+				return nil, err
 			}
 			if _, err := bsp.bs.Put(ctx, tailName, indexLen, r); err != nil {
-				return err
+				return nil, err
 			}
 		} else {
 			// on the push path, we expect to Put concurrently
@@ -278,17 +283,23 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 				return err
 			})
 			if err := eg.Wait(); err != nil {
-				return err
+				return nil, err
 			}
 		}
 
 		// finally concatenate into the complete table
 		_, err := bsp.bs.Concatenate(ctx, name, []string{recordsName, tailName})
-		return err
+		if err != nil {
+			return nil, err
+		}
+		return noopPendingHandle{}, nil
 	} else {
 		// no split offset, just copy the whole table. We will create the records object on demand if needed.
 		_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
-		return err
+		if err != nil {
+			return nil, err
+		}
+		return noopPendingHandle{}, nil
 	}
 }
 

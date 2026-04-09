@@ -28,7 +28,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
@@ -149,10 +148,8 @@ func TestFSTablePersisterPruneTableFilesKeepsOpenFiles(t *testing.T) {
 	require.NoError(t, err)
 	defer opened.close()
 
-	// Prune with a keeper set that contains neither file.
-	err = ftp.PruneTableFiles(ctx, func() []hash.Hash {
-		return nil
-	}, time.Now().Add(time.Second))
+	// Prune — neither file is a keeper, but src1 is still open.
+	err = ftp.PruneTableFiles(ctx)
 	require.NoError(t, err)
 
 	// The opened file should still exist on disk.

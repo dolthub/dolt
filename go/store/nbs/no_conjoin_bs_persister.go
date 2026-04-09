@@ -19,8 +19,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
-
 	"golang.org/x/sync/errgroup"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
@@ -78,11 +76,18 @@ func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash
 	return newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
 }
 
-func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
-	return bsp.bs.Exists(ctx, name)
+func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {
+	exists, err := bsp.bs.Exists(ctx, name)
+	if err != nil {
+		return false, nil, err
+	}
+	if exists {
+		return true, noopPendingHandle{}, nil
+	}
+	return false, nil, nil
 }
 
-func (bsp *noConjoinBlobstorePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {
+func (bsp *noConjoinBlobstorePersister) PruneTableFiles(ctx context.Context) error {
 	return nil
 }
 
@@ -101,7 +106,7 @@ func (bsp *noConjoinBlobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *noConjoinBlobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, _ uint64) error {
+func (bsp *noConjoinBlobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, _ uint64) (io.Closer, error) {
 	_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
-	return err
+	return noopPendingHandle{}, err
 }

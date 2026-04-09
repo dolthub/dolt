@@ -106,14 +106,21 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 		stats)
 }
 
-func (s3p awsTablePersister) Exists(ctx context.Context, name string, _ uint32, stats *Stats) (bool, error) {
+func (s3p awsTablePersister) Exists(ctx context.Context, name string, _ uint32, stats *Stats) (bool, io.Closer, error) {
 	s3or := &s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}
 
-	return s3or.objectExistsInChunkSource(ctx, name, stats)
+	exists, err := s3or.objectExistsInChunkSource(ctx, name, stats)
+	if err != nil {
+		return false, nil, err
+	}
+	if exists {
+		return true, noopPendingHandle{}, nil
+	}
+	return false, nil, nil
 }
 
-func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, _ uint64) error {
-	return s3p.multipartUpload(ctx, r, fileSz, fileId)
+func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, _ uint64) (io.Closer, error) {
+	return noopPendingHandle{}, s3p.multipartUpload(ctx, r, fileSz, fileId)
 }
 
 func (s3p awsTablePersister) Path() string {
@@ -547,7 +554,7 @@ func (s3p awsTablePersister) uploadPart(ctx context.Context, data io.Reader, key
 	return
 }
 
-func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {
+func (s3p awsTablePersister) PruneTableFiles(ctx context.Context) error {
 	return chunks.ErrUnsupportedOperation
 }
 

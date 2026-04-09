@@ -28,8 +28,6 @@ import (
 	"io"
 	"sync"
 	"testing"
-	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -538,8 +536,8 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, behavior dherrors.Fat
 	return chunkSourceAdapter{cs, name}, gcBehavior_Continue, nil
 }
 
-func (ftp fakeTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, splitOffset uint64) error {
-	return errors.New("unimplemented fakeTablePersister.CopyTableFile")
+func (ftp fakeTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, splitOffset uint64) (io.Closer, error) {
+	return nil, errors.New("unimplemented fakeTablePersister.CopyTableFile")
 }
 
 func (ftp fakeTablePersister) Path() string {
@@ -642,19 +640,19 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name hash.Hash, chunkCou
 	return chunkSourceAdapter{cs, name}, nil
 }
 
-func (ftp fakeTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
+func (ftp fakeTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {
 	h, ok := hash.MaybeParse(name)
 	if !ok {
 		panic("object store name expected to be a hash in test")
 	}
 
 	if _, ok := ftp.sourcesToFail[h]; ok {
-		return false, errors.New("intentional failure")
+		return false, nil, errors.New("intentional failure")
 	}
-	return true, nil
+	return true, noopPendingHandle{}, nil
 }
 
-func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ func() []hash.Hash, _ time.Time) error {
+func (ftp fakeTablePersister) PruneTableFiles(_ context.Context) error {
 	return chunks.ErrUnsupportedOperation
 }
 
