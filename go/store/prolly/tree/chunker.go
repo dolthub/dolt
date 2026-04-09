@@ -528,7 +528,7 @@ func getCanonicalRoot[S message.Serializer](ctx context.Context, ns NodeStore, b
 	cnt := builder.count()
 	assertTrue(cnt == 1, "in-progress chunk must be non-canonical to call getCanonicalRoot")
 
-	nd, err := builder.build()
+	nd, _, err := builder.build()
 	if err != nil {
 		return nil, err
 	}

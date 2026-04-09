@@ -99,7 +99,7 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 	} else {
 		serial.MergeArtifactsAddAddressArray(b, refArr)
 		serial.MergeArtifactsAddSubtreeCounts(b, cardArr)
-		serial.MergeArtifactsAddTreeCount(b, sumSubtrees(subtrees))
+		serial.MergeArtifactsAddTreeCount(b, SumSubtrees(subtrees))
 	}
 	serial.MergeArtifactsAddTreeLevel(b, uint8(level))
 

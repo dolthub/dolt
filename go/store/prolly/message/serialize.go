@@ -135,7 +135,7 @@ func writeCountArray(b *fb.Builder, counts []uint64) fb.UOffsetT {
 	return b.CreateByteVector(encodeVarints(counts, buf))
 }
 
-func sumSubtrees(subtrees []uint64) (sum uint64) {
+func SumSubtrees(subtrees []uint64) (sum uint64) {
 	for i := range subtrees {
 		sum += subtrees[i]
 	}

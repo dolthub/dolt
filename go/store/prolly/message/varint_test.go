@@ -130,7 +130,7 @@ func testRoundTripVarints(t *testing.T, c codec) {
 			counts[i] = c
 			sum += c
 		}
-		assert.Equal(t, sum, sumSubtrees(counts))
+		assert.Equal(t, sum, SumSubtrees(counts))
 
 		// round trip the array
 		buf := make([]byte, c.maxSize(len(counts)))

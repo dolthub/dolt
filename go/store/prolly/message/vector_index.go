@@ -97,7 +97,7 @@ func (s VectorIndexSerializer) Serialize(keys, values [][]byte, subtrees []uint6
 	} else {
 		serial.VectorIndexNodeAddAddressArray(b, refArr)
 		serial.VectorIndexNodeAddSubtreeCounts(b, cardArr)
-		serial.VectorIndexNodeAddTreeCount(b, sumSubtrees(subtrees))
+		serial.VectorIndexNodeAddTreeCount(b, SumSubtrees(subtrees))
 	}
 	serial.VectorIndexNodeAddTreeLevel(b, uint8(level))
 	serial.VectorIndexNodeAddLogChunkSize(b, s.logChunkSize)
