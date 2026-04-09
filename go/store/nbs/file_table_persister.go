@@ -244,9 +244,12 @@ func (ftp *fsTablePersister) writeAndProtect(finalName string, writeFn func(temp
 	if err != nil {
 		return nil, err
 	}
-	defer temp.Close()
 
 	if err = writeFn(temp); err != nil {
+		_ = temp.Close()
+		return nil, err
+	}
+	if err = temp.Close(); err != nil {
 		return nil, err
 	}
 	if err = file.Rename(temp.Name(), filepath.Join(ftp.dir, finalName)); err != nil {
