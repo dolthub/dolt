@@ -174,31 +174,36 @@ func fileNameToAddr(fileName string) (hash.Hash, bool) {
 	return hash.Hash{}, false
 }
 
-// specsList is a list of tableSpecs and their names.
+// newlyWrittenSources is a set of newly written chunk sources.
 // It can be written to by multiple goroutines concurrently,
 // so access is controlled by a mutex
-type specsList struct {
+type newlyWrittenSources struct {
 	// specs stores a list of table files produced by this copier.
 	// specNames stores just their content hashes.
 	// Since these are appended in a goroutine, access is controlled by the mutex specsMu
-	specs []tableSpec
-	names []hash.Hash
-	mu    sync.Mutex
+	specs     []tableSpec
+	sourceSet chunkSourceSet
+	mu        sync.Mutex
 }
 
-func (sl *specsList) append(specs []tableSpec) {
+func (sl *newlyWrittenSources) append(ctx context.Context, specs []tableSpec, nbs *NomsBlockStore) error {
 	sl.mu.Lock()
 	defer sl.mu.Unlock()
 	sl.specs = append(sl.specs, specs...)
 	for _, spec := range specs {
-		sl.names = append(sl.names, spec.name)
+		err := nbs.tables.insertIntoChunkSourceSet(ctx, sl.sourceSet, spec, nil, nil)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (sl *specsList) hasMany(nbs *NomsBlockStore, toVisit hash.HashSet) (filtered hash.HashSet, err error) {
+func (sl *newlyWrittenSources) hasMany(ctx context.Context, toVisit hash.HashSet) (filtered hash.HashSet, err error) {
 	sl.mu.Lock()
 	defer sl.mu.Unlock()
-	return nbs.hasManyInSources(sl.names, toVisit)
+
+	return sl.sourceSet.hasMany(ctx, toVisit)
 }
 
 // rotatingGCCopier is a variant of gcCopier that writes to multiple output files. Once an output file exceeds
@@ -211,7 +216,7 @@ type rotatingGCCopier struct {
 	dest         *NomsBlockStore
 	eg           errgroup.Group
 
-	specs specsList
+	specs newlyWrittenSources
 }
 
 func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, chunksLimit uint64) (*rotatingGCCopier, error) {
@@ -226,6 +231,9 @@ func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersis
 		archiveLevel: archiveLevel,
 		dest:         dest,
 		eg:           errgroup.Group{},
+		specs: newlyWrittenSources{
+			sourceSet: make(chunkSourceSet),
+		},
 	}, nil
 }
 
@@ -261,14 +269,14 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		err = addTableFilesToManifest(ctx, gcc.dest, specs)
+		// TODO: We only need to add the files to the manifest here if we're appending to a block store (eg oldgen without --full).
+		// That case is the only time we're able to resume GC, and in all cases we update the manifest at the end anyway.
+		err = addTableFilesToManifest(ctx, gcc.dest, specs, nil)
 		if err != nil {
 			return err
 		}
 
-		gcc.specs.append(specs)
-
-		return nil
+		return gcc.specs.append(ctx, specs, gcc.dest)
 	})
 
 	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel)
@@ -288,7 +296,15 @@ func (gcc *rotatingGCCopier) finalize(ctx context.Context) error {
 		return err
 	}
 
-	gcc.specs.append(specs)
+	err = addTableFilesToManifest(ctx, gcc.dest, specs, nil)
+	if err != nil {
+		return err
+	}
+
+	err = gcc.specs.append(ctx, specs, gcc.dest)
+	if err != nil {
+		return err
+	}
 	return gcc.eg.Wait()
 }
 

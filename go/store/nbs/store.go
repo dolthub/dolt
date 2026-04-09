@@ -2321,8 +2321,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 			toVisit = copy
 		}
 
-		// TODO: If we defer writing new table files, we'll need to call this on the source instead.
-		toVisit, err = incrementalGcc.specs.hasMany(i.dest, toVisit)
+		toVisit, err = incrementalGcc.specs.hasMany(ctx, toVisit)
 		if err != nil {
 			return err
 		}
