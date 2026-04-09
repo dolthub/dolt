@@ -278,10 +278,7 @@ type chunkSource interface {
 	// related to the callback - if the callback discovers an error, it must manage that out of band.
 	iterateAllChunks(context.Context, func(chunk chunks.Chunk), *Stats) error
 
-	// tolerantIterateAllChunks is like iterateAllChunks but reports per-chunk errors via errCb
-	// instead of halting. This allows callers to continue past corrupted chunks. Unrecoverable
-	// errors (e.g. stream-level I/O failures where the read position is unknown) still terminate
-	// iteration of the current source after calling errCb. Intended for use by fsck only.
+	// tolerantIterateAllChunks is for [TolerantChunkIterator.TolerantIterateAllChunks]
 	tolerantIterateAllChunks(context.Context, func(chunk chunks.Chunk), func(err error), *Stats)
 }
 
