@@ -1833,16 +1833,16 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, splitOffset uint64, numChunks int, _ []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, splitOffset uint64, numChunks int, _ []byte, getRd func() (io.ReadCloser, uint64, error)) (io.Closer, error) {
 	valctx.ValidateContext(ctx)
 	tfp, ok := nbs.persister.(tableFilePersister)
 	if !ok {
-		return errors.New("runtime error: table file persister required for WriteTableFile")
+		return nil, errors.New("runtime error: table file persister required for WriteTableFile")
 	}
 
 	r, sz, err := getRd()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer r.Close()
 
@@ -1851,15 +1851,11 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 	}
 
 	// CopyTableFile can cope with a 0 splitOffset.
-	// TODO: The pending handle should be held until the file is added to the
-	// manifest via AddTableFilesToManifest. For now we close it immediately,
-	// which means the file is unprotected from pruning until it's Open'd.
 	pending, err := tfp.CopyTableFile(ctx, r, fileName, sz, splitOffset)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer pending.Close()
-	return nil
+	return pending, nil
 }
 
 // AddTableFilesToManifest adds table files to the manifest
