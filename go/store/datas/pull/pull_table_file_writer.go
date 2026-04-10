@@ -79,7 +79,7 @@ type PullTableFileWriterConfig struct {
 }
 
 type DestTableFileStore interface {
-	WriteTableFile(ctx context.Context, id string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error
+	WriteTableFile(ctx context.Context, id string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) (io.Closer, error)
 	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry) error
 }
 
@@ -142,7 +142,7 @@ func (w *PullTableFileWriter) AddToChunker(ctx context.Context, chk nbs.ToChunke
 	}
 }
 
-func (w *PullTableFileWriter) uploadFilesAndAccumulateUpdates(ctx context.Context) (map[string]int, error) {
+func (w *PullTableFileWriter) uploadFilesAndAccumulateUpdates(ctx context.Context) (map[string]int, []io.Closer, error) {
 	// respCh is where upload threads send responses. These
 	// get built into a manifest update which gets sent to
 	// DestStore.AddTableFilesToManifest.
@@ -167,6 +167,7 @@ func (w *PullTableFileWriter) uploadFilesAndAccumulateUpdates(ctx context.Contex
 	// to always be closed after uploadWg is done and we are going to check
 	// for errors later.
 	manifestUpdates := make(map[string]int)
+	var pendingHandles []io.Closer
 	eg.Go(func() error {
 		for ttf := range respCh {
 			id := ttf.id
@@ -175,11 +176,19 @@ func (w *PullTableFileWriter) uploadFilesAndAccumulateUpdates(ctx context.Contex
 			}
 
 			manifestUpdates[id] = ttf.numChunks
+			pendingHandles = append(pendingHandles, ttf.pending)
 		}
 		return nil
 	})
 
-	return manifestUpdates, eg.Wait()
+	err := eg.Wait()
+	if err != nil {
+		for _, c := range pendingHandles {
+			c.Close()
+		}
+		return nil, nil, err
+	}
+	return manifestUpdates, pendingHandles, nil
 }
 
 // Write all completed table files which arrive from |w.newWriterCh|
@@ -189,7 +198,12 @@ func (w *PullTableFileWriter) uploadFilesAndAccumulateUpdates(ctx context.Contex
 // w.cfg.DestStore.AddTableFilesToManifest to add the uploaded files
 // to the dest store.
 func (w *PullTableFileWriter) uploadAndFinalizeThread(ctx context.Context) error {
-	updates, err := w.uploadFilesAndAccumulateUpdates(ctx)
+	updates, pendingHandles, err := w.uploadFilesAndAccumulateUpdates(ctx)
+	defer func() {
+		for _, c := range pendingHandles {
+			c.Close()
+		}
+	}()
 	if err != nil {
 		return err
 	}
@@ -329,7 +343,7 @@ func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan nbs.G
 				contentLen:  wr.FullLength(),
 				contentHash: wr.GetMD5(),
 			}
-			err = w.uploadTempTableFile(ctx, ttf)
+			ttf.pending, err = w.uploadTempTableFile(ctx, ttf)
 
 			// Always remove the file...
 			wr.Remove()
@@ -341,6 +355,7 @@ func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan nbs.G
 			select {
 			case respCh <- ttf:
 			case <-ctx.Done():
+				ttf.pending.Close()
 				return context.Cause(ctx)
 			}
 		case <-ctx.Done():
@@ -349,7 +364,7 @@ func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan nbs.G
 	}
 }
 
-func (w *PullTableFileWriter) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile) error {
+func (w *PullTableFileWriter) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile) (io.Closer, error) {
 	fileSize := tmpTblFile.contentLen
 
 	// So far, we've added all the bytes for the compressed chunk data.

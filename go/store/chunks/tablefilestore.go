@@ -76,7 +76,9 @@ type TableFileStore interface {
 	Size(ctx context.Context) (uint64, error)
 
 	// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore.
-	WriteTableFile(ctx context.Context, fileId string, splitOffSet uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error
+	// The returned io.Closer keeps the written file protected from concurrent pruning. It must be held
+	// open until the file has been added to the manifest via AddTableFilesToManifest.
+	WriteTableFile(ctx context.Context, fileId string, splitOffSet uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) (io.Closer, error)
 
 	// AddTableFilesToManifest adds table files to the manifest
 	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs InsertAddrsCurry) error

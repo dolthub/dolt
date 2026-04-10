@@ -119,6 +119,18 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 
 	report(TableFileEvent{EventType: Listed, TableFiles: tblFiles})
 
+	// Pending handles from WriteTableFile protect written files from
+	// concurrent pruning. They are closed after AddTableFilesToManifest
+	// completes. Indexed in parallel with desiredFiles.
+	pendingHandles := make([]io.Closer, len(desiredFiles))
+	defer func() {
+		for _, c := range pendingHandles {
+			if c != nil {
+				c.Close()
+			}
+		}
+	}()
+
 	download := func(ctx context.Context) error {
 		sem := semaphore.NewWeighted(concurrentTableFileDownloads)
 		eg, ctx := errgroup.WithContext(ctx)
@@ -172,7 +184,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 					if err != nil {
 						return err
 					}
-					err = sinkTS.WriteTableFile(ctx, uploadFileID, splitOff, writer.ChunkCount(), writer.GetMD5(), func() (io.ReadCloser, uint64, error) {
+					pending, err := sinkTS.WriteTableFile(ctx, uploadFileID, splitOff, writer.ChunkCount(), writer.GetMD5(), func() (io.ReadCloser, uint64, error) {
 						rdr, err := writer.Reader()
 						if err != nil {
 							return nil, 0, err
@@ -183,6 +195,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 						report(TableFileEvent{EventType: DownloadFailed, TableFiles: []chunks.TableFile{tblFile}})
 						return err
 					} else {
+						pendingHandles[i] = pending
 						report(TableFileEvent{EventType: DownloadSuccess, TableFiles: []chunks.TableFile{tblFile}})
 						completed[i] = true
 
@@ -202,7 +215,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 					uploadFileID := tblFile.FileID() + tblFile.LocationSuffix()
 					splitOff := tblFile.SplitOffset()
 					numChunks := tblFile.NumChunks()
-					err = sinkTS.WriteTableFile(ctx, uploadFileID, splitOff, numChunks, nil, func() (io.ReadCloser, uint64, error) {
+					pending, err := sinkTS.WriteTableFile(ctx, uploadFileID, splitOff, numChunks, nil, func() (io.ReadCloser, uint64, error) {
 						rd, contentLength, err := tblFile.Open(ctx)
 						if err != nil {
 							return nil, 0, err
@@ -223,6 +236,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 						report(TableFileEvent{EventType: DownloadFailed, TableFiles: []chunks.TableFile{tblFile}})
 						return err
 					} else {
+						pendingHandles[i] = pending
 						report(TableFileEvent{EventType: DownloadSuccess, TableFiles: []chunks.TableFile{tblFile}})
 						completed[i] = true
 						return nil
