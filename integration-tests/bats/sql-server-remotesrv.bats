@@ -320,7 +320,7 @@ call dolt_commit('-am', 'add one val');
 
     dolt sql-server --port 3307 --remotesapi-port 50051 &
     srv_pid=$!
-    wait_for_connection 3307 8500
+    sleep 2
     run dolt sql -q "
 CREATE USER clone_admin_user@'localhost' IDENTIFIED BY 'pass1';
 GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
