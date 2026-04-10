@@ -263,8 +263,7 @@ func (s *StreamScanner) isDelimiterExpr() (error, bool) {
 }
 
 func (s *StreamScanner) seekDelimiter() (error, bool) {
-	for s.i < s.fill {
-		truncate := false
+	for ; s.i < s.fill; s.i++ {
 		i := s.i
 		if !s.state.ignoreNextChar {
 			// this doesn't handle unicode characters correctly and will break on some things, but it's only used for line
@@ -279,6 +278,7 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 				if s.state.numConsecutiveDelimiterMatches == len(s.delimiter) {
 					s.state.end = s.i - len(s.delimiter) + 1
 					s.i++
+					s.state.lastChar = 0
 					return nil, true
 				}
 				s.state.lastChar = s.buf[i]
@@ -289,12 +289,22 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 
 			switch s.buf[i] {
 			case newline:
-				s.state.insideLineComment = false
 				s.lineNum++
+				if s.state.insideLineComment {
+					s.state.insideLineComment = false
+					// if the entire statement is a line comment, truncate and return as empty
+					if s.state.start == s.state.lineCommentStart {
+						s.i++
+						s.truncate()
+						s.state.lastChar = 0
+						return nil, true
+					}
+				}
 			case hyphen:
 				// If inside quote or already inside comment, ignore. Otherwise, if previous character is also a hyphen,
 				// ie "--", begin line comment.
 				if !s.state.ignoreDelimiters() && s.state.lastChar == hyphen {
+					s.state.lineCommentStart = i - 1
 					s.state.insideLineComment = true
 				}
 			case asterisk:
@@ -305,7 +315,7 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 				}
 			case slash:
 				// If previous character is an asterisk, ie "*/", end block comment.
-				if s.state.lastChar == asterisk {
+				if s.state.insideBlockComment && s.state.lastChar == asterisk {
 					s.state.insideBlockComment = false
 				}
 			case backslash:
@@ -363,10 +373,6 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 		}
 
 		s.state.lastChar = s.buf[i]
-		s.i++
-		if truncate {
-			s.truncate()
-		}
 	}
 	return nil, false
 }
