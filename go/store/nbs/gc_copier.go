@@ -17,9 +17,10 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"strings"
 	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"

@@ -81,25 +81,25 @@ func (s *loadAvgGCScheduler) WaitForNextRun(ctx context.Context) error {
 // database as wanting a GC.
 
 type AutoGCController struct {
-	workCh    chan autoGCWork
-	lgr       *logrus.Logger
-	hooks     map[string]*autoGCCommitHook
-	ctxF      func(context.Context) (*sql.Context, error)
-	threads   *sql.BackgroundThreads
-	arcLevel  chunks.GCArchiveLevel
-	scheduler GCScheduler
+	workCh              chan autoGCWork
+	lgr                 *logrus.Logger
+	hooks               map[string]*autoGCCommitHook
+	ctxF                func(context.Context) (*sql.Context, error)
+	threads             *sql.BackgroundThreads
+	arcLevel            chunks.GCArchiveLevel
+	scheduler           GCScheduler
 	incrementalFileSize uint64
-	mu        sync.Mutex
+	mu                  sync.Mutex
 }
 
 func NewAutoGCController(arcLevel chunks.GCArchiveLevel, incrementalArchiveSize uint64, scheduler GCScheduler, lgr *logrus.Logger) *AutoGCController {
 	return &AutoGCController{
-		workCh:    make(chan autoGCWork),
-		lgr:       lgr,
-		hooks:     make(map[string]*autoGCCommitHook),
-		arcLevel:  arcLevel,
+		workCh:              make(chan autoGCWork),
+		lgr:                 lgr,
+		hooks:               make(map[string]*autoGCCommitHook),
+		arcLevel:            arcLevel,
 		incrementalFileSize: incrementalArchiveSize,
-		scheduler: scheduler,
+		scheduler:           scheduler,
 	}
 }
 
