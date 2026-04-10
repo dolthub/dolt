@@ -15,20 +15,11 @@
 package commands
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"unicode"
 )
-
-type statementScanner struct {
-	*bufio.Scanner
-	statementStartLine int // the line number of the first line of the last parsed statement
-	startLineNum       int // the line number we began parsing the most recent token at
-	lineNum            int // the current line number being parsed
-	Delimiter          string
-}
 
 const maxStatementBufferBytes = 100*1024*1024 + 4096
 const pageSize = 2 << 11
@@ -54,15 +45,15 @@ var delimPrefix = []byte("delimiter ")
 // span from the buffer beginning to |state.end|.
 type StreamScanner struct {
 	inp       io.Reader
-	buf       []byte
-	maxSize   int
-	i         int // leading byte
-	fill      int
 	err       error
-	isEOF     bool
-	delimiter []byte
-	lineNum   int
 	state     *qState
+	buf       []byte
+	delimiter []byte
+	maxSize   int
+	i         int // current byte pointer
+	fill      int
+	lineNum   int
+	isEOF     bool
 }
 
 // NewStreamScanner returns a new StreamScanner
@@ -72,14 +63,15 @@ func NewStreamScanner(r io.Reader) *StreamScanner {
 
 type qState struct {
 	start                          int
-	end                            int  // token end, usually i - len(delimiter)
+	end                            int // token end, usually i - len(delimiter)
+	numConsecutiveBackslashes      int // the number of consecutive backslashes encountered
+	numConsecutiveDelimiterMatches int // the consecutive number of characters that have been matched to the delimiter
+	statementStartLine             int
+	lineCommentStart               int
 	quoteChar                      byte // the opening quote character of the current quote being parsed, or 0 if the current parse location isn't inside a quoted string
 	lastChar                       byte // the last character parsed
 	ignoreNextChar                 bool // whether to ignore the next character
-	numConsecutiveBackslashes      int  // the number of consecutive backslashes encountered
 	seenNonWhitespaceChar          bool // whether we have encountered a non-whitespace character since we returned the last token
-	numConsecutiveDelimiterMatches int  // the consecutive number of characters that have been matched to the delimiter
-	statementStartLine             int
 	insideBlockComment             bool
 	insideLineComment              bool
 }
@@ -99,8 +91,6 @@ func (qs qState) ignoreDelimiters() bool {
 }
 
 func (s *StreamScanner) Scan() bool {
-	// truncate last query
-	s.truncate()
 	s.resetState()
 
 	if s.i >= s.fill {
@@ -273,11 +263,8 @@ func (s *StreamScanner) isDelimiterExpr() (error, bool) {
 }
 
 func (s *StreamScanner) seekDelimiter() (error, bool) {
-	if s.i >= s.fill {
-		return nil, false
-	}
-
-	for ; s.i < s.fill; s.i++ {
+	for s.i < s.fill {
+		truncate := false
 		i := s.i
 		if !s.state.ignoreNextChar {
 			// this doesn't handle unicode characters correctly and will break on some things, but it's only used for line
@@ -376,6 +363,10 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 		}
 
 		s.state.lastChar = s.buf[i]
+		s.i++
+		if truncate {
+			s.truncate()
+		}
 	}
 	return nil, false
 }
