@@ -1076,7 +1076,7 @@ func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
 }
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
-func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) (io.Closer, error) {
 	suffix := ""
 	if strings.HasSuffix(fileId, nbs.ArchiveFileSuffix) {
 		suffix = nbs.ArchiveFileSuffix
@@ -1084,7 +1084,11 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, sp
 	}
 
 	fileIdBytes := hash.Parse(fileId)
-	return dcs.uploadTableFileWithRetries(ctx, fileIdBytes, suffix, splitOffset, uint64(numChunks), contentHash, getRd)
+	err := dcs.uploadTableFileWithRetries(ctx, fileIdBytes, suffix, splitOffset, uint64(numChunks), contentHash, getRd)
+	if err != nil {
+		return nil, err
+	}
+	return io.NopCloser(nil), nil
 }
 
 // AddTableFilesToManifest adds table files to the manifest

@@ -79,10 +79,11 @@ func writeLocalTableFiles(t *testing.T, st *NomsBlockStore, numTableFiles, seed 
 		fileID := addr.String()
 		fileToData[fileID] = data
 		fileIDToNumChunks[fileID] = i + 1
-		err = st.WriteTableFile(ctx, fileID, 0, i+1, nil, func() (io.ReadCloser, uint64, error) {
+		pending, err := st.WriteTableFile(ctx, fileID, 0, i+1, nil, func() (io.ReadCloser, uint64, error) {
 			return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil
 		})
 		require.NoError(t, err)
+		defer pending.Close()
 	}
 	return fileIDToNumChunks, fileToData
 }

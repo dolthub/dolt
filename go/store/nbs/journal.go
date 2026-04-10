@@ -310,35 +310,32 @@ func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint
 }
 
 // Exists implements tablePersister.
-func (j *ChunkJournal) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
+func (j *ChunkJournal) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {
 	return j.persister.Exists(ctx, name, chunkCount, stats)
 }
 
 // PruneTableFiles implements tablePersister.
-func (j *ChunkJournal) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, mtime time.Time) error {
+func (j *ChunkJournal) PruneTableFiles(ctx context.Context) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
 	}
-	// sanity check that we're not deleting the journal
-	var keepJournal bool
-	for _, a := range keeper() {
-		if a == journalAddr {
-			keepJournal = true
-		}
+	// If the journal is active, protect its file from pruning by adding
+	// it to pending for the duration of the prune. When the journal is
+	// inactive (j.wr == nil), the file should be prunable.
+	if j.wr != nil {
+		ph := j.persister.addPending(journalAddr)
+		defer ph.Close()
 	}
-	if j.wr != nil && !keepJournal {
-		return errors.New("cannot drop chunk journal through tablePersister.PruneTableFiles()")
-	}
-	return j.persister.PruneTableFiles(ctx, keeper, mtime)
+	return j.persister.PruneTableFiles(ctx)
 }
 
 func (j *ChunkJournal) Path() string {
 	return filepath.Dir(j.path)
 }
 
-func (j *ChunkJournal) CopyTableFile(ctx context.Context, r io.Reader, fileId string, _ uint64, _ uint64) error {
+func (j *ChunkJournal) CopyTableFile(ctx context.Context, r io.Reader, fileId string, _ uint64, _ uint64) (io.Closer, error) {
 	if j.backing.readOnly() {
-		return errReadOnlyManifest
+		return nil, errReadOnlyManifest
 	}
 	// we are always using an fsTablePersister, and know that implementation ignores the fileSz and splitOffset.
 	// Should this ever change in the future, those parameters should be passed through.

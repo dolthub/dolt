@@ -41,6 +41,8 @@ var pullDocs = cli.CommandDocumentationContent{
 	LongDesc: `Incorporates changes from a remote repository into the current branch. In its default mode, {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} is shorthand for {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} followed by {{.EmphasisLeft}}dolt merge <remote>/<branch>{{.EmphasisRight}}.
 
 More precisely, dolt pull runs {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} with the given parameters and calls {{.EmphasisLeft}}dolt merge{{.EmphasisRight}} to merge the retrieved branch {{.EmphasisLeft}}HEAD{{.EmphasisRight}} into the current branch.
+
+With {{.EmphasisLeft}}--rebase{{.EmphasisRight}}, it runs {{.EmphasisLeft}}dolt rebase{{.EmphasisRight}} instead of {{.EmphasisLeft}}dolt merge{{.EmphasisRight}} after fetching. If the rebase encounters data conflicts, it will pause and allow you to resolve them, then continue with {{.EmphasisLeft}}dolt rebase --continue{{.EmphasisRight}}.
 `,
 	Synopsis: []string{
 		`[{{.LessThan}}remote{{.GreaterThan}}, [{{.LessThan}}remoteBranch{{.GreaterThan}}]]`,
@@ -99,6 +101,21 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		verr := errhand.VerboseErrorFromError(errors.New(fmt.Sprintf(ErrConflictingFlags, cli.FFOnlyParam, cli.SquashParam)))
 		return HandleVErrAndExitCode(verr, usage)
 	}
+	if apr.Contains(cli.RebaseParam) && apr.ContainsAny(cli.SquashParam, cli.NoFFParam, cli.FFOnlyParam, cli.NoCommitFlag) {
+		var conflicting string
+		switch {
+		case apr.Contains(cli.SquashParam):
+			conflicting = cli.SquashParam
+		case apr.Contains(cli.NoFFParam):
+			conflicting = cli.NoFFParam
+		case apr.Contains(cli.FFOnlyParam):
+			conflicting = cli.FFOnlyParam
+		case apr.Contains(cli.NoCommitFlag):
+			conflicting = cli.NoCommitFlag
+		}
+		verr := errhand.VerboseErrorFromError(errors.New(fmt.Sprintf(ErrConflictingFlags, cli.RebaseParam, conflicting)))
+		return HandleVErrAndExitCode(verr, usage)
+	}
 	// This command may create a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		bdr := errhand.BuildDError("Could not determine name and/or email.")
@@ -111,6 +128,12 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
+		return 1
+	}
+
+	if apr.Contains(cli.RebaseParam) && queryist.IsRemote {
+		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
+		cli.Println(msg)
 		return 1
 	}
 
@@ -128,6 +151,13 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
+		if apr.Contains(cli.RebaseParam) {
+			_, _, _, err = queryist.Queryist.Query(queryist.Context, "set @@dolt_allow_commit_conflicts = 1")
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
 		// save current head for diff summaries after pull
 		headHash, err := getHashOf(queryist.Queryist, queryist.Context, "HEAD")
 		if err != nil {
@@ -137,6 +167,13 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 		_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, query)
 		if err != nil {
+			if apr.Contains(cli.RebaseParam) && isRebaseConflictError(err) {
+				if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
+					// The checkout of the dolt_rebase_<> branch failed, we might want to `--abort`, but chances
+					// are that won't work either. We are gonna be in a weird state no matter what, so just print the error.
+					cli.Println("warning: failed to sync CLI branch after rebase conflict:", checkoutErr.Error())
+				}
+			}
 			errChan <- err
 			return
 		}
@@ -161,6 +198,18 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if upToDate {
 			if !apr.Contains(cli.SilentFlag) {
 				cli.Println("\nEverything up-to-date")
+			}
+			return
+		}
+
+		if apr.Contains(cli.RebaseParam) {
+			if !apr.Contains(cli.SilentFlag) {
+				if len(row) > 2 && row[2] != nil {
+					msg, ok := row[2].(string)
+					if ok && msg != "" {
+						cli.Println(msg)
+					}
+				}
 			}
 			return
 		}
@@ -275,6 +324,9 @@ func constructInterpolatedDoltPullQuery(apr *argparser.ArgParseResults) (string,
 	}
 	if apr.Contains(cli.NoEditFlag) {
 		args = append(args, "'--no-edit'")
+	}
+	if apr.Contains(cli.RebaseParam) {
+		args = append(args, "'--rebase'")
 	}
 	if apr.Contains(cli.PruneFlag) {
 		args = append(args, "'--prune'")
