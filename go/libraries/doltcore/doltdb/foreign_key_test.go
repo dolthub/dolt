@@ -109,7 +109,7 @@ func TestForeignKeyErrors(t *testing.T) {
 	ctx := t.Context()
 	dEnv := dtestutils.CreateTestEnv()
 	t.Cleanup(func() {
-		dEnv.DoltDB(ctx).Close()
+		dEnv.Close()
 	})
 	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
@@ -159,7 +159,7 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 	ctx := t.Context()
 	dEnv := dtestutils.CreateTestEnv()
 	t.Cleanup(func() {
-		dEnv.DoltDB(ctx).Close()
+		dEnv.Close()
 	})
 
 	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)

@@ -124,6 +124,15 @@ func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 	return dEnv.doltDB
 }
 
+func (dEnv *DoltEnv) Close() error {
+	if dEnv.doltDB != nil {
+		err := dEnv.doltDB.Close()
+		dEnv.doltDB = nil
+		return err
+	}
+	return nil
+}
+
 func (dEnv *DoltEnv) LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) error {
 	if dEnv.doltDB == nil {
 		if nbf == nil {

@@ -106,7 +106,7 @@ func makeTestCommit(t *testing.T, ctx context.Context, ddb *doltdb.DoltDB) (oldR
 func TestHooksFiredOnRemoteSrvStoreCommit(t *testing.T) {
 	ctx := t.Context()
 	dEnv := CreateTestEnv()
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	ddb := dEnv.DoltDB(ctx)
 	oldRoot, newRoot := makeTestCommit(t, ctx, ddb)
@@ -136,7 +136,7 @@ func TestHooksFiredOnRemoteSrvStoreCommit(t *testing.T) {
 func TestHooksNotFiredOnFailedRemoteSrvCommit(t *testing.T) {
 	ctx := t.Context()
 	dEnv := CreateTestEnv()
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	ddb := dEnv.DoltDB(ctx)
 	oldRoot, newRoot := makeTestCommit(t, ctx, ddb)
@@ -174,7 +174,7 @@ func TestHooksNotFiredOnFailedRemoteSrvCommit(t *testing.T) {
 func TestHooksFiredOnDeletedDataset(t *testing.T) {
 	ctx := t.Context()
 	dEnv := CreateTestEnv()
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	ddb := dEnv.DoltDB(ctx)
 
@@ -225,7 +225,7 @@ func TestHooksFiredOnDeletedDataset(t *testing.T) {
 func TestOnlyChangedDatasetsFireHooks(t *testing.T) {
 	ctx := t.Context()
 	dEnv := CreateTestEnv()
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	ddb := dEnv.DoltDB(ctx)
 
@@ -272,7 +272,7 @@ var _ doltdb.CommitHook = (*replicaWriteRecordingCommitHook)(nil)
 func TestReplicaWriteFiltersHooks(t *testing.T) {
 	ctx := t.Context()
 	dEnv := CreateTestEnv()
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	ddb := dEnv.DoltDB(ctx)
 	oldRoot, newRoot := makeTestCommit(t, ctx, ddb)
