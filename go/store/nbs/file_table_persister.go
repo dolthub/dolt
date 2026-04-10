@@ -45,51 +45,77 @@ import (
 const tempTablePrefix = "nbs_table_"
 
 func newFSTablePersister(dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool) tablePersister {
-	return &fsTablePersister{q, nil, make(map[string]struct{}), make(map[hash.Hash]int32), dir, sync.Mutex{}, mmapArchiveIndexes}
+	return &fsTablePersister{
+		q:                  q,
+		protected:          make(map[hash.Hash]int32),
+		dir:                dir,
+		mmapArchiveIndexes: mmapArchiveIndexes,
+	}
 }
 
 type fsTablePersister struct {
-	q MemoryQuotaProvider
-	// While we are running PruneTableFiles, any newly created table files are
-	// added to this map. The file delete loop will never delete anything which
-	// appears in this map. Files should be added to this map before they are
-	// written.
-	toKeep map[string]struct{}
-	// Any temp files we are currently writing are always present in this map.
-	// The logic should be taken before we generate the new temp file, and the
-	// new temp file should be added to this map. Care should be taken to always
-	// remove the entry from this map when we are done processing the temp file
-	// or else this map will grow without bound.
-	curTmps map[string]struct{}
-	// openFiles tracks currently open table files by hash. Ref-counted
-	// because the same file can be opened multiple times (or cloned).
-	// Protected by removeMu.
-	openFiles map[hash.Hash]int32
-	dir       string
-	// Protects the toKeep, curTmps, and openFiles maps.
-	removeMu           sync.Mutex
+	q                  MemoryQuotaProvider
+	dir                string
 	mmapArchiveIndexes bool
+	// protected is a ref-counted set of file hashes that must not be
+	// pruned. Refs are added by Open (and clone/addRef) and by
+	// file-landing methods (CopyTableFile, writeAndProtect, Exists). Refs
+	// are removed by close/decRef and by closing the handle returned
+	// from file-landing methods.
+	protected map[hash.Hash]int32
+	// mu protects the protected map from concurrent access.
+	mu sync.Mutex
+	// pruneMu serializes file operations with PruneTableFiles.
+	// File-landing methods and Open take the read lock.
+	// PruneTableFiles takes the write lock.
+	pruneMu sync.RWMutex
+
+	// test hook: called in ConjoinAll after Rename but before Open.
+	_testFtpConjoinAfterRenameHook func()
+}
+
+func (ftp *fsTablePersister) addProtected(h hash.Hash) {
+	ftp.mu.Lock()
+	defer ftp.mu.Unlock()
+	ftp.protected[h]++
+}
+
+func (ftp *fsTablePersister) removeProtected(h hash.Hash) {
+	ftp.mu.Lock()
+	defer ftp.mu.Unlock()
+	if ftp.protected[h] <= 1 {
+		delete(ftp.protected, h)
+	} else {
+		ftp.protected[h]--
+	}
+}
+
+// pendingHandle is returned by file-landing methods. Closing it removes a
+// ref from the protected set, allowing the file to be pruned once all refs
+// are gone. Safe to double-close.
+type pendingHandle struct {
+	once sync.Once
+	ftp  *fsTablePersister
+	h    hash.Hash
+}
+
+func (ph *pendingHandle) Close() error {
+	ph.once.Do(func() {
+		ph.ftp.pruneMu.RLock()
+		defer ph.ftp.pruneMu.RUnlock()
+		ph.ftp.removeProtected(ph.h)
+	})
+	return nil
+}
+
+func (ftp *fsTablePersister) addPending(h hash.Hash) *pendingHandle {
+	ftp.addProtected(h)
+	return &pendingHandle{ftp: ftp, h: h}
 }
 
 var _ tablePersister = &fsTablePersister{}
 var _ tableFilePersister = &fsTablePersister{}
 var _ movingTableFilePersister = &fsTablePersister{}
-
-func (ftp *fsTablePersister) addOpenFile(h hash.Hash) {
-	ftp.removeMu.Lock()
-	defer ftp.removeMu.Unlock()
-	ftp.openFiles[h]++
-}
-
-func (ftp *fsTablePersister) removeOpenFile(h hash.Hash) {
-	ftp.removeMu.Lock()
-	defer ftp.removeMu.Unlock()
-	if ftp.openFiles[h] <= 1 {
-		delete(ftp.openFiles, h)
-	} else {
-		ftp.openFiles[h]--
-	}
-}
 
 type refCounter interface {
 	decRef()
@@ -107,39 +133,55 @@ type fsTablePersisterRefCounter struct {
 }
 
 func (ftplc *fsTablePersisterRefCounter) decRef() {
-	ftplc.ftp.removeOpenFile(ftplc.name)
+	ftplc.ftp.pruneMu.RLock()
+	defer ftplc.ftp.pruneMu.RUnlock()
+	ftplc.ftp.removeProtected(ftplc.name)
 }
 
 func (ftplc *fsTablePersisterRefCounter) addRef() {
-	ftplc.ftp.addOpenFile(ftplc.name)
+	ftplc.ftp.pruneMu.RLock()
+	defer ftplc.ftp.pruneMu.RUnlock()
+	ftplc.ftp.addProtected(ftplc.name)
 }
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+	ftp.pruneMu.RLock()
+	defer ftp.pruneMu.RUnlock()
 	rc := fsTablePersisterRefCounter{ftp, name}
 	cs, err := newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, &rc, stats)
 	if err != nil {
 		return nil, err
 	}
-	ftp.addOpenFile(name)
+	ftp.addProtected(name)
 	return cs, nil
 }
 
-func (ftp *fsTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
-	ftp.removeMu.Lock()
-	defer ftp.removeMu.Unlock()
-	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Join(ftp.dir, name)] = struct{}{}
-	}
+func (ftp *fsTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {
+	ftp.pruneMu.RLock()
+	defer ftp.pruneMu.RUnlock()
 
 	if h, ok := hash.MaybeParse(name); ok {
 		exists, err := tableFileExists(ctx, ftp.dir, h)
-		if exists || err != nil {
-			return exists, err
+		if err != nil {
+			return false, nil, err
 		}
-
+		if exists {
+			return true, ftp.addPending(h), nil
+		}
 	}
 
-	return archiveFileExists(ctx, ftp.dir, name)
+	exists, err := archiveFileExists(ctx, ftp.dir, name)
+	if err != nil {
+		return false, nil, err
+	}
+	if exists {
+		h, ok := fileNameToAddr(name)
+		if !ok {
+			return false, nil, fmt.Errorf("invalid file name: %s", name)
+		}
+		return true, ftp.addPending(h), nil
+	}
+	return false, nil, nil
 }
 
 func (ftp *fsTablePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
@@ -165,65 +207,58 @@ func (ftp *fsTablePersister) Path() string {
 	return ftp.dir
 }
 
-func (ftp *fsTablePersister) CopyTableFile(_ context.Context, r io.Reader, fileId string, _ uint64, _ uint64) error {
-	tn, f, err := func() (n string, cleanup func(), err error) {
-		ftp.removeMu.Lock()
-		var temp *os.File
-		temp, err = tempfiles.MovableTempFileProvider.NewFile(ftp.dir, tempTablePrefix)
-		if err != nil {
-			ftp.removeMu.Unlock()
-			return "", func() {}, err
+func (ftp *fsTablePersister) CopyTableFile(_ context.Context, r io.Reader, fileId string, _ uint64, _ uint64) (io.Closer, error) {
+	return ftp.writeAndProtect(fileId, func(temp *os.File) error {
+		if _, err := io.Copy(temp, r); err != nil {
+			return err
 		}
-		ftp.curTmps[filepath.Clean(temp.Name())] = struct{}{}
-		ftp.removeMu.Unlock()
-
-		cleanup = func() {
-			ftp.removeMu.Lock()
-			delete(ftp.curTmps, filepath.Clean(temp.Name()))
-			ftp.removeMu.Unlock()
-		}
-
-		defer func() {
-			cerr := temp.Close()
-			if cerr != nil {
-				err = errors.Join(err, fmt.Errorf("error Closing temp in CopyTableFile: %w", cerr))
-			}
-		}()
-
-		_, err = io.Copy(temp, r)
-		if err != nil {
-			return "", cleanup, err
-		}
-
-		err = temp.Sync()
-		if err != nil {
-			return "", cleanup, err
-		}
-
-		return temp.Name(), cleanup, nil
-	}()
-	defer f()
-	if err != nil {
-		return err
-	}
-
-	path := filepath.Join(ftp.dir, fileId)
-	ftp.removeMu.Lock()
-	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Clean(path)] = struct{}{}
-	}
-	defer ftp.removeMu.Unlock()
-	return file.Rename(tn, path)
+		return temp.Sync()
+	})
 }
 
-func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w GenericTableWriter) error {
-	path := filepath.Join(ftp.dir, filename)
-	ftp.removeMu.Lock()
-	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Clean(path)] = struct{}{}
+func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w GenericTableWriter) (io.Closer, error) {
+	addr, ok := fileNameToAddr(filename)
+	if !ok {
+		return nil, fmt.Errorf("invalid filename for TryMoveCmpChunkTableWriter: %s", filename)
 	}
-	defer ftp.removeMu.Unlock()
-	return w.FlushToFile(path)
+
+	ftp.pruneMu.RLock()
+	defer ftp.pruneMu.RUnlock()
+	if err := w.FlushToFile(filepath.Join(ftp.dir, filename)); err != nil {
+		return nil, err
+	}
+	return ftp.addPending(addr), nil
+}
+
+// writeAndProtect creates a temp file in ftp.dir, calls writeFn to populate it,
+// renames it to its final name, and adds it to the pending set. The returned
+// handle must be closed after the file has been Open'd or is no longer needed.
+// The pruneMu read lock is held for the entire operation.
+func (ftp *fsTablePersister) writeAndProtect(finalName string, writeFn func(temp *os.File) error) (*pendingHandle, error) {
+	addr, ok := fileNameToAddr(finalName)
+	if !ok {
+		return nil, fmt.Errorf("invalid filename: %s", finalName)
+	}
+
+	ftp.pruneMu.RLock()
+	defer ftp.pruneMu.RUnlock()
+
+	temp, err := tempfiles.MovableTempFileProvider.NewFile(ftp.dir, tempTablePrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = writeFn(temp); err != nil {
+		_ = temp.Close()
+		return nil, err
+	}
+	if err = temp.Close(); err != nil {
+		return nil, err
+	}
+	if err = file.Rename(temp.Name(), filepath.Join(ftp.dir, finalName)); err != nil {
+		return nil, err
+	}
+	return ftp.addPending(addr), nil
 }
 
 func (ftp *fsTablePersister) persistTable(ctx context.Context, behavior dherrors.FatalBehavior, name hash.Hash, data []byte, chunkCount uint32, stats *Stats) (cs chunkSource, err error) {
@@ -231,57 +266,16 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, behavior dherrors
 		return emptyChunkSource{}, nil
 	}
 
-	tempName, f, err := func() (tempName string, cleanup func(), ferr error) {
-		ftp.removeMu.Lock()
-		var temp *os.File
-		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(ftp.dir, tempTablePrefix)
-		if ferr != nil {
-			ftp.removeMu.Unlock()
-			return "", func() {}, ferr
+	ph, err := ftp.writeAndProtect(name.String(), func(temp *os.File) error {
+		if _, err := io.Copy(temp, bytes.NewReader(data)); err != nil {
+			return err
 		}
-		ftp.curTmps[filepath.Clean(temp.Name())] = struct{}{}
-		ftp.removeMu.Unlock()
-
-		cleanup = func() {
-			ftp.removeMu.Lock()
-			delete(ftp.curTmps, filepath.Clean(temp.Name()))
-			ftp.removeMu.Unlock()
-		}
-
-		defer func() {
-			cerr := temp.Close()
-			if cerr != nil {
-				ferr = errors.Join(ferr, fmt.Errorf("error Closing temp in persistTable: %w", cerr))
-			}
-		}()
-
-		_, ferr = io.Copy(temp, bytes.NewReader(data))
-		if ferr != nil {
-			return "", cleanup, ferr
-		}
-
-		ferr = temp.Sync()
-		if ferr != nil {
-			return "", cleanup, ferr
-		}
-
-		return temp.Name(), cleanup, nil
-	}()
-	defer f()
+		return temp.Sync()
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	newName := filepath.Join(ftp.dir, name.String())
-	ftp.removeMu.Lock()
-	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Clean(newName)] = struct{}{}
-	}
-	err = file.Rename(tempName, newName)
-	ftp.removeMu.Unlock()
-	if err != nil {
-		return nil, err
-	}
+	defer ph.Close()
 
 	return ftp.Open(ctx, name, chunkCount, stats)
 }
@@ -297,205 +291,111 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 		return emptyChunkSource{}, func() {}, nil
 	}
 
-	tempName, f, err := func() (tempName string, cleanup func(), ferr error) {
-		ftp.removeMu.Lock()
-		var temp *os.File
-		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(ftp.dir, tempTablePrefix)
-		if ferr != nil {
-			ftp.removeMu.Unlock()
-			return "", func() {}, ferr
-		}
-		ftp.curTmps[filepath.Clean(temp.Name())] = struct{}{}
-		ftp.removeMu.Unlock()
-
-		cleanup = func() {
-			ftp.removeMu.Lock()
-			delete(ftp.curTmps, filepath.Clean(temp.Name()))
-			ftp.removeMu.Unlock()
-		}
-
-		defer func() {
-			closeErr := temp.Close()
-			if ferr == nil {
-				ferr = closeErr
-			}
-		}()
-
+	ph, err := ftp.writeAndProtect(plan.name.String()+plan.suffix, func(temp *os.File) error {
 		for _, sws := range plan.sources.sws {
-			var r io.ReadCloser
-			r, _, ferr = sws.source.reader(ctx, behavior)
-			if ferr != nil {
-				return "", cleanup, ferr
+			r, _, err := sws.source.reader(ctx, behavior)
+			if err != nil {
+				return err
 			}
 
-			n, ferr := io.CopyN(temp, r, int64(sws.dataLen))
-			if ferr != nil {
+			n, err := io.CopyN(temp, r, int64(sws.dataLen))
+			if err != nil {
 				r.Close()
-				return "", cleanup, ferr
+				return err
 			}
 
 			if uint64(n) != sws.dataLen {
 				r.Close()
-				return "", cleanup, errors.New("failed to copy all data")
+				return errors.New("failed to copy all data")
 			}
 
-			err := r.Close()
-			if err != nil {
-				return "", cleanup, err
+			if err := r.Close(); err != nil {
+				return err
 			}
 		}
 
-		_, ferr = temp.Write(plan.mergedIndex)
-
-		if ferr != nil {
-			return "", cleanup, ferr
+		if _, err := temp.Write(plan.mergedIndex); err != nil {
+			return err
 		}
-
-		ferr = temp.Sync()
-		if ferr != nil {
-			return "", cleanup, ferr
-		}
-
-		return temp.Name(), cleanup, nil
-	}()
-	defer f()
+		return temp.Sync()
+	})
 	if err != nil {
 		return nil, nil, err
 	}
+	if ftp._testFtpConjoinAfterRenameHook != nil {
+		ftp._testFtpConjoinAfterRenameHook()
+	}
+	defer ph.Close()
 
-	path := filepath.Join(ftp.dir, plan.name.String()+plan.suffix)
-	ftp.removeMu.Lock()
-	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Clean(path)] = struct{}{}
-	}
-	err = file.Rename(tempName, path)
-	ftp.removeMu.Unlock()
-	if err != nil {
-		return nil, nil, err
-	}
 	cs, err := ftp.Open(ctx, plan.name, plan.chunkCount, stats)
 	if err != nil {
 		return nil, nil, err
 	}
 	return cs, func() {
+		ftp.pruneMu.Lock()
+		defer ftp.pruneMu.Unlock()
 		for _, s := range sources {
-			file.Remove(filepath.Join(ftp.dir, s.hash().String()+s.suffix()))
+			h := s.hash()
+			if ftp.protected[h] > 0 {
+				continue
+			}
+			file.Remove(filepath.Join(ftp.dir, h.String()+s.suffix()))
 		}
 	}, nil
 }
 
-func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, mtime time.Time) error {
-	ftp.removeMu.Lock()
-	if ftp.toKeep != nil {
-		ftp.removeMu.Unlock()
-		return errors.New("shallow gc already in progress")
-	}
-	ftp.toKeep = make(map[string]struct{})
-	ftp.removeMu.Unlock()
-
-	defer func() {
-		ftp.removeMu.Lock()
-		ftp.toKeep = nil
-		ftp.removeMu.Unlock()
-	}()
-
-	toKeep := make(map[string]struct{})
-	for _, k := range keeper() {
-		toKeep[filepath.Clean(filepath.Join(ftp.dir, k.String()))] = struct{}{}
-	}
-
-	ftp.removeMu.Lock()
-	for f := range toKeep {
-		ftp.toKeep[f] = struct{}{}
-	}
-	for h := range ftp.openFiles {
-		ftp.toKeep[filepath.Clean(filepath.Join(ftp.dir, h.String()))] = struct{}{}
-	}
-	ftp.removeMu.Unlock()
+func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
+	ftp.pruneMu.Lock()
+	defer ftp.pruneMu.Unlock()
 
 	fileInfos, err := os.ReadDir(ftp.dir)
 	if err != nil {
 		return err
 	}
 
-	ea := make(gcErrAccum)
+	var errs []error
 
-	unfilteredTableFiles := make([]string, 0)
-	unfilteredTempFiles := make([]string, 0)
-
-	isTableFileName := func(name string) bool {
-		if strings.HasSuffix(name, ArchiveFileSuffix) {
-			name = strings.TrimSuffix(name, ArchiveFileSuffix)
-		}
+	parseTableFileHash := func(name string) (hash.Hash, bool) {
+		name = strings.TrimSuffix(name, ArchiveFileSuffix)
 		if len(name) != 32 {
-			return false
+			return hash.Hash{}, false
 		}
-		_, ok := hash.MaybeParse(name)
-		return ok
+		return hash.MaybeParse(name)
 	}
 
+	// pruneMu write lock guarantees no concurrent file-landing or Open,
+	// so openFiles and pending cannot be modified while we iterate.
 	for _, info := range fileInfos {
 		if info.IsDir() {
 			continue
 		}
 
-		filePath := path.Join(ftp.dir, info.Name())
+		name := info.Name()
+		filePath := path.Join(ftp.dir, name)
 
-		if strings.HasPrefix(info.Name(), tempTablePrefix) {
-			unfilteredTempFiles = append(unfilteredTempFiles, filePath)
-			continue
-		}
-
-		if !isTableFileName(info.Name()) {
-			continue
-		}
-
-		i, err := info.Info()
-		if err != nil {
-			if !errors.Is(err, fs.ErrNotExist) {
-				ea.add(filePath, err)
+		if strings.HasPrefix(name, tempTablePrefix) {
+			// Write lock guarantees no temp files are in flight.
+			if err := file.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				errs = append(errs, fmt.Errorf("error removing temp file %s: %w", filePath, err))
 			}
 			continue
 		}
 
-		ctime := i.ModTime()
-		if ctime.After(mtime) {
-			continue // file has been updated more recently than our cutoff time
+		h, ok := parseTableFileHash(name)
+		if !ok {
+			continue
 		}
 
-		unfilteredTableFiles = append(unfilteredTableFiles, filePath)
-	}
-
-	for _, p := range unfilteredTempFiles {
-		ftp.removeMu.Lock()
-		if _, ok := ftp.curTmps[filepath.Clean(p)]; !ok {
-			err := file.Remove(p)
-			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				ea.add(p, fmt.Errorf("error file.Remove unfilteredTempFiles: %w", err))
-			}
+		if ftp.protected[h] > 0 {
+			continue
 		}
-		ftp.removeMu.Unlock()
-	}
 
-	for _, p := range unfilteredTableFiles {
-		ftp.removeMu.Lock()
-		_, exists := ftp.toKeep[filepath.Clean(p)]
-		_, archiveExists := ftp.toKeep[filepath.Clean(p+ArchiveFileSuffix)]
-		_, trimmedExists := ftp.toKeep[filepath.Clean(strings.TrimSuffix(p, ArchiveFileSuffix))]
-		if !exists && !archiveExists && !trimmedExists {
-			err := file.Remove(p)
-			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				ea.add(p, fmt.Errorf("error file.Remove unfilteredTableFiles: %w", err))
-			}
+		if err := file.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("error removing table file %s: %w", filePath, err))
 		}
-		ftp.removeMu.Unlock()
 	}
 
-	if !ea.isEmpty() {
-		return ea
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
 func (ftp *fsTablePersister) Close() error {
