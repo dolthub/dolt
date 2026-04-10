@@ -74,7 +74,6 @@ type fsTablePersister struct {
 	_testFtpConjoinAfterRenameHook func()
 }
 
-
 func (ftp *fsTablePersister) addProtected(h hash.Hash) {
 	ftp.mu.Lock()
 	defer ftp.mu.Unlock()
