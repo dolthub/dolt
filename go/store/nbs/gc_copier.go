@@ -239,12 +239,16 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 	previousCopier := gcc.gcCopier
 	gcc.eg.Go(func() error {
 
-		specs, err := previousCopier.copyTablesToDir(ctx)
+		specs, pending, err := previousCopier.copyTablesToDir(ctx)
+		defer pending.Close()
+
 		if err != nil {
 			return err
 		}
-		// TODO: We only need to add the files to the manifest here if we're appending to a block store (eg oldgen without --full).
-		// That case is the only time we're able to resume GC, and in all cases we update the manifest at the end anyway.
+
+		// TODO: We only need to add the files to the manifest here if we're appending to a block store without swapping (eg oldgen without --full).
+		// If we add files to the manifest in other situations, we result in a manifest with redundant table files.
+		// These will be removed during the swap at the end of GC, but will stick around if GC is interrupted.
 		err = addTableFilesToManifest(ctx, gcc.dest, specs, nil)
 		if err != nil {
 			return err
@@ -265,7 +269,8 @@ func (gcc *rotatingGCCopier) finalize(ctx context.Context) error {
 		return nil
 	}
 
-	specs, err := gcc.copyTablesToDir(ctx)
+	specs, pending, err := gcc.copyTablesToDir(ctx)
+	defer pending.Close()
 	if err != nil {
 		return err
 	}
