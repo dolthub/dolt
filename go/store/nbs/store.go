@@ -495,6 +495,12 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 			if contents.lock != nbs.upstream.lock {
 				newTables, rebErr := nbs.tables.rebase(ctx, contents.specs, sources, nbs.stats)
 				if rebErr != nil {
+					if isTableFileNotFound(rebErr) {
+						// A concurrent conjoin deleted files
+						// between our manifest read and open.
+						// Retry from the manifest read.
+						continue
+					}
 					return manifestContents{}, false, rebErr
 				}
 				nbs.upstream = contents
@@ -534,21 +540,36 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		}
 	}
 
-	var newTables *tableSet
-	newTables, err = nbs.tables.rebase(ctx, updatedContents.specs, sources, nbs.stats)
-	if err != nil {
-		return manifestContents{}, false, err
+	// Rebase to the updated manifest contents. If a concurrent
+	// conjoin in another process deleted files between our manifest
+	// update and this rebase, re-read the manifest and retry.
+	rebaseContents := updatedContents
+	const maxRetries = 5
+	for i := 0; ; i++ {
+		var newTables *tableSet
+		newTables, err = nbs.tables.rebase(ctx, rebaseContents.specs, sources, nbs.stats)
+		if err != nil {
+			if isTableFileNotFound(err) && i < maxRetries {
+				ok, latest, _, ferr := nbs.manifestMgr.Fetch(ctx, nbs.stats)
+				if ferr != nil {
+					return manifestContents{}, false, ferr
+				}
+				if ok {
+					rebaseContents = latest
+				}
+				continue
+			}
+			return manifestContents{}, false, err
+		}
+		nbs.upstream = rebaseContents
+		oldTables := nbs.tables
+		nbs.tables = newTables
+		err = oldTables.close()
+		if err != nil {
+			return manifestContents{}, false, err
+		}
+		return rebaseContents, false, nil
 	}
-
-	nbs.upstream = updatedContents
-	oldTables := nbs.tables
-	nbs.tables = newTables
-	err = oldTables.close()
-	if err != nil {
-		return manifestContents{}, false, err
-	}
-
-	return updatedContents, false, nil
 }
 
 func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (ManifestInfo, error) {
@@ -843,27 +864,20 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
 
-	exists, contents, _, err := nbs.manifestMgr.Fetch(ctx, nbs.stats)
-	if err != nil {
+	if err = nbs.rebase(ctx); err != nil {
 		return nil, err
 	}
 
-	if exists {
-		newTables, err := nbs.tables.rebase(ctx, contents.specs, nil, nbs.stats)
-		if err != nil {
-			return nil, err
-		}
-
-		nbs.upstream = contents
-		oldTables := nbs.tables
-		nbs.tables = newTables
-		err = oldTables.close()
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return nbs, nil
+}
+
+// isTableFileNotFound returns true if the error indicates a table file
+// could not be opened because it no longer exists on disk. This can
+// happen when a concurrent process (e.g. a push to a file remote)
+// conjoins and cleans up table files between our manifest read and
+// our attempt to open them.
+func isTableFileNotFound(err error) bool {
+	return errors.Is(err, ErrTableFileNotFound) || os.IsNotExist(err)
 }
 
 // Sets logging fields for the logger used by this store.
@@ -1415,32 +1429,31 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 }
 
 func (nbs *NomsBlockStore) rebase(ctx context.Context) error {
-	exists, contents, _, err := nbs.manifestMgr.Fetch(ctx, nbs.stats)
-	if err != nil {
-		return err
-	}
-
-	if exists {
+	const maxRetries = 5
+	for i := 0; ; i++ {
+		exists, contents, _, err := nbs.manifestMgr.Fetch(ctx, nbs.stats)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return nil
+		}
 		if contents.lock == nbs.upstream.lock {
 			// short-circuit if manifest is unchanged
 			return nil
 		}
-
 		newTables, err := nbs.tables.rebase(ctx, contents.specs, nil, nbs.stats)
 		if err != nil {
+			if isTableFileNotFound(err) && i < maxRetries {
+				continue
+			}
 			return err
 		}
-
 		nbs.upstream = contents
 		oldTables := nbs.tables
 		nbs.tables = newTables
-		err = oldTables.close()
-		if err != nil {
-			return err
-		}
+		return oldTables.close()
 	}
-
-	return nil
 }
 
 func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
