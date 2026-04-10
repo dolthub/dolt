@@ -16,6 +16,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,57 +30,64 @@ import (
 func TestGCIncremental(t *testing.T) {
 	t.Parallel()
 
-	var ports DynamicResources
-	ports.global = &GlobalPorts
-	ports.t = t
+	archive_levels := []chunks.GCArchiveLevel{chunks.NoArchive, chunks.SimpleArchive}
 
-	u, err := driver.NewDoltUser()
-	require.NoError(t, err)
-	t.Cleanup(func() { u.Cleanup() })
+	for _, archive_level := range archive_levels {
+		t.Run(fmt.Sprintf("archive_level_%d", archive_level), func(t *testing.T) {
+			t.Parallel()
+			var ports DynamicResources
+			ports.global = &GlobalPorts
+			ports.t = t
 
-	rs, err := u.MakeRepoStore()
-	require.NoError(t, err)
+			u, err := driver.NewDoltUser()
+			require.NoError(t, err)
+			t.Cleanup(func() { u.Cleanup() })
 
-	repoName := "incremental_gc_test"
-	repo, err := rs.MakeRepo(repoName)
-	require.NoError(t, err)
+			rs, err := u.MakeRepoStore()
+			require.NoError(t, err)
 
-	server := MakeServer(t, repo, &driver.Server{
-		Args:        []string{"--port", `{{get_port "server"}}`},
-		DynamicPort: "server",
-	}, &ports)
-	server.DBName = repoName
+			repoName := "incremental_gc_test"
+			repo, err := rs.MakeRepo(repoName)
+			require.NoError(t, err)
 
-	db, err := server.DB(driver.Connection{User: "root"})
-	require.NoError(t, err)
-	defer db.Close()
+			server := MakeServer(t, repo, &driver.Server{
+				Args:        []string{"--port", `{{get_port "server"}}`},
+				DynamicPort: "server",
+			}, &ports)
+			server.DBName = repoName
 
-	ctx := context.Background()
+			db, err := server.DB(driver.Connection{User: "root"})
+			require.NoError(t, err)
+			defer db.Close()
 
-	// Create the database...
-	func() {
-		conn, err := db.Conn(ctx)
-		require.NoError(t, err)
-		defer conn.Close()
-		// Create some chunks that will be collected into oldgen because they're referenced by a commit
-		_, err = conn.ExecContext(ctx, "create table vals (id bigint primary key, val bigint)")
-		require.NoError(t, err)
-		_, err = conn.ExecContext(ctx, "call dolt_commit('-Am', 'create vals table')")
-		require.NoError(t, err)
-		// Create some chunks that will be collected into newgen because they aren't referenced by a commit
-		_, err = conn.ExecContext(ctx, "create table vals2 (id bigint primary key, val bigint)")
-		require.NoError(t, err)
-		// An incremental file size of 1 means that every leaf node will receive its own chunk file
-		gcSQL := "call dolt_gc('--archive-level','1','--incremental-file-size','1');"
-		_, err = conn.ExecContext(ctx, gcSQL)
-		require.NoError(t, err)
-	}()
+			ctx := context.Background()
 
-	repoSize, err := GetRepoSize(repo.Dir)
-	require.NoError(t, err)
-	// Both newgen and oldgen should contain multiple chunk files
-	require.Greater(t, repoSize.NewGenC, 1)
-	require.Greater(t, repoSize.OldGenC, 1)
+			// Create the database and run GC
+			func() {
+				conn, err := db.Conn(ctx)
+				require.NoError(t, err)
+				defer conn.Close()
+				// Create some chunks that will be collected into oldgen because they're referenced by a commit
+				_, err = conn.ExecContext(ctx, "create table vals (id bigint primary key, val bigint)")
+				require.NoError(t, err)
+				_, err = conn.ExecContext(ctx, "call dolt_commit('-Am', 'create vals table')")
+				require.NoError(t, err)
+				// Create some chunks that will be collected into newgen because they aren't referenced by a commit
+				_, err = conn.ExecContext(ctx, "create table vals2 (id bigint primary key, val bigint)")
+				require.NoError(t, err)
+				// An incremental file size of 1 means that every leaf node will receive its own chunk file
+				gcSQL := "call dolt_gc('--archive-level',?,'--incremental-file-size','1');"
+				_, err = conn.ExecContext(ctx, gcSQL, archive_level)
+				require.NoError(t, err)
+			}()
+
+			repoSize, err := GetRepoSize(repo.Dir)
+			require.NoError(t, err)
+			// Both newgen and oldgen should contain multiple chunk files
+			require.Greater(t, repoSize.NewGenC, 1)
+			require.Greater(t, repoSize.OldGenC, 1)
+		})
+	}
 }
 
 type RepoSize struct {
