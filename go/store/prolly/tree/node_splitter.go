@@ -224,6 +224,7 @@ const (
 	L = targetSize
 )
 
+// This consumes 128MBs of space
 var weibullThresholds [maxChunkSize + 1]float64
 
 // weibullCDF4K calculates -expm1(-(x/L)^4)
