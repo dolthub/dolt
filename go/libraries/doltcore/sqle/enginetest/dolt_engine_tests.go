@@ -515,12 +515,12 @@ func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 	scripts := append(DoltProcedureTests, DoltCleanProcedureScripts...)
 	scripts = append(scripts, DoltBackupProcedureScripts...)
 	for _, script := range scripts {
-		t.Run(script.Name, func(t *testing.T) {
+		func() {
 			h := h.NewHarness(t)
 			h.UseLocalFileSystem()
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
-		})
+		}()
 	}
 }
 
@@ -528,12 +528,12 @@ func RunDoltStoredProceduresPreparedTest(t *testing.T, h DoltEnginetestHarness) 
 	scripts := append(DoltProcedureTests, DoltCleanProcedureScripts...)
 	scripts = append(scripts, DoltBackupProcedureScripts...)
 	for _, script := range scripts {
-		t.Run(script.Name, func(t *testing.T) {
+		func() {
 			h := h.NewHarness(t)
 			h.UseLocalFileSystem()
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
-		})
+		}()
 	}
 }
 
