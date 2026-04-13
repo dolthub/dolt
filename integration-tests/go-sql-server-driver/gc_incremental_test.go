@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,65 +29,115 @@ import (
 )
 
 func TestGCIncremental(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
-	archive_levels := []chunks.GCArchiveLevel{chunks.NoArchive, chunks.SimpleArchive}
+	archiveLevels := []chunks.GCArchiveLevel{chunks.NoArchive, chunks.SimpleArchive}
 
-	for _, archive_level := range archive_levels {
-		t.Run(fmt.Sprintf("archive_level_%d", archive_level), func(t *testing.T) {
-			t.Parallel()
-			var ports DynamicResources
-			ports.global = &GlobalPorts
-			ports.t = t
+	// small_file_size is chosen so that every leaf chunk gets put in its own table file. In this test, we know
+	// exactly how many table files to expect after GC.
+	smallFileSize := 1
 
-			u, err := driver.NewDoltUser()
-			require.NoError(t, err)
-			t.Cleanup(func() { u.Cleanup() })
+	// medium_file_size is chosen so that multiple chunks are put into each table file, and ensures that we correctly handle
+	// an in-progress table file at the end of the mark-and-sweep.
+	mediumFileSize := 10_000
 
-			rs, err := u.MakeRepoStore()
-			require.NoError(t, err)
+	// large_file_size is arbitrarily large and tests the case where all leaf chunks fit in a single table file.
+	largeFileSize := 1_000_0000
 
-			repoName := "incremental_gc_test"
-			repo, err := rs.MakeRepo(repoName)
-			require.NoError(t, err)
+	fileSizes := []int{smallFileSize, mediumFileSize, largeFileSize}
 
-			server := MakeServer(t, repo, &driver.Server{
-				Args:        []string{"--port", `{{get_port "server"}}`},
-				DynamicPort: "server",
-			}, &ports)
-			server.DBName = repoName
+	for _, archiveLevel := range archiveLevels {
+		for _, fileSize := range fileSizes {
+			t.Run(fmt.Sprintf("archiveLevel=%d,fileSize=%d", archiveLevel, fileSize), func(t *testing.T) {
+				//t.Parallel()
+				var ports DynamicResources
+				ports.global = &GlobalPorts
+				ports.t = t
 
-			db, err := server.DB(driver.Connection{User: "root"})
-			require.NoError(t, err)
-			defer db.Close()
-
-			ctx := context.Background()
-
-			// Create the database and run GC
-			func() {
-				conn, err := db.Conn(ctx)
+				u, err := driver.NewDoltUser()
 				require.NoError(t, err)
-				defer conn.Close()
-				// Create some chunks that will be collected into oldgen because they're referenced by a commit
-				_, err = conn.ExecContext(ctx, "create table vals (id bigint primary key, val bigint)")
-				require.NoError(t, err)
-				_, err = conn.ExecContext(ctx, "call dolt_commit('-Am', 'create vals table')")
-				require.NoError(t, err)
-				// Create some chunks that will be collected into newgen because they aren't referenced by a commit
-				_, err = conn.ExecContext(ctx, "create table vals2 (id bigint primary key, val bigint)")
-				require.NoError(t, err)
-				// An incremental file size of 1 means that every leaf node will receive its own chunk file
-				gcSQL := "call dolt_gc('--archive-level',?,'--incremental-file-size','1');"
-				_, err = conn.ExecContext(ctx, gcSQL, archive_level)
-				require.NoError(t, err)
-			}()
+				t.Cleanup(func() { u.Cleanup() })
 
-			repoSize, err := GetRepoSize(repo.Dir)
-			require.NoError(t, err)
-			// Both newgen and oldgen should contain multiple chunk files
-			require.Greater(t, repoSize.NewGenC, 1)
-			require.Greater(t, repoSize.OldGenC, 1)
-		})
+				rs, err := u.MakeRepoStore()
+				require.NoError(t, err)
+
+				repoName := "incremental_gc_test"
+				repo, err := rs.MakeRepo(repoName)
+				require.NoError(t, err)
+
+				ctx := context.Background()
+
+				server := MakeServer(t, repo, &driver.Server{
+					Args:        []string{"--port", `{{get_port "server"}}`},
+					DynamicPort: "server",
+				}, &ports)
+				server.DBName = repoName
+
+				// Create the database and run GC
+				func() {
+
+					db, err := server.DB(driver.Connection{User: "root"})
+					require.NoError(t, err)
+					defer db.Close()
+
+					conn, err := db.Conn(ctx)
+					require.NoError(t, err)
+					defer conn.Close()
+					// Create some chunks that will be collected into oldgen because they're referenced by a commit
+					_, err = conn.ExecContext(ctx, "create table vals (id bigint primary key, val bigint)")
+					require.NoError(t, err)
+					vals := []string{}
+					for i := 0; i <= 1024; i++ {
+						vals = append(vals, fmt.Sprintf("(%d,0)", i))
+					}
+					_, err = conn.ExecContext(ctx, "insert into vals values "+strings.Join(vals, ","))
+					require.NoError(t, err)
+					_, err = conn.ExecContext(ctx, "call dolt_commit('-Am', 'create vals table')")
+					require.NoError(t, err)
+					// Create some chunks that will be collected into newgen because they aren't referenced by a commit
+					_, err = conn.ExecContext(ctx, "create table vals2 (id bigint primary key, val bigint)")
+					require.NoError(t, err)
+					_, err = conn.ExecContext(ctx, "insert into vals2 values "+strings.Join(vals, ","))
+					require.NoError(t, err)
+					gcSQL := "call dolt_gc('--archive-level',?,'--incremental-file-size','1','--full');"
+					_, err = conn.ExecContext(ctx, gcSQL, archiveLevel)
+					require.NoError(t, err)
+				}()
+
+				// Ensure that the server can start and that all data is present
+				func() {
+
+					db, err := server.DB(driver.Connection{User: "root"})
+					require.NoError(t, err)
+					defer db.Close()
+
+					conn, err := db.Conn(ctx)
+					require.NoError(t, err)
+					defer conn.Close()
+					res, err := conn.QueryContext(ctx, "select sum(id) from vals;")
+					var i int
+					require.True(t, res.Next())
+					err = res.Scan(&i)
+					require.NoError(t, err)
+					err = res.Close()
+					require.NoError(t, err)
+					res, err = conn.QueryContext(ctx, "select sum(id) from vals2;")
+					require.NoError(t, err)
+					require.True(t, res.Next())
+					err = res.Scan(&i)
+					require.NoError(t, err)
+					err = res.Close()
+					require.NoError(t, err)
+
+				}()
+
+				repoSize, err := GetRepoSize(repo.Dir)
+				require.NoError(t, err)
+				// Both newgen and oldgen should contain multiple chunk files
+				require.Greater(t, repoSize.NewGenC, 1)
+				require.Greater(t, repoSize.OldGenC, 1)
+			})
+		}
 	}
 }
 
