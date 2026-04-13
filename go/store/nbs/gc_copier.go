@@ -188,6 +188,8 @@ type rotatingGCCopier struct {
 	eg           errgroup.Group
 
 	specs newlyWrittenSources
+	// seenChunks is the set of chunks already written to the in-progress table
+	seenChunks hash.HashSet
 }
 
 func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, chunksLimit uint64) (*rotatingGCCopier, error) {
@@ -205,6 +207,7 @@ func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersis
 		specs: newlyWrittenSources{
 			sourceSet: make(chunkSourceSet),
 		},
+		seenChunks: hash.HashSet{},
 	}, nil
 }
 
@@ -213,6 +216,7 @@ func (gcc *rotatingGCCopier) addChunk(ctx context.Context, c ToChunker) error {
 	if err != nil {
 		return err
 	}
+	gcc.seenChunks.Insert(c.Hash())
 	gcc.bytesWritten += uint64(c.CompressedSize())
 	if gcc.bytesWritten >= gcc.maxFileSize {
 		return gcc.rotate(ctx)
@@ -225,7 +229,7 @@ func (gcc *rotatingGCCopier) containsChunk(h hash.Hash) bool {
 	if gcc == nil {
 		return false
 	}
-	return gcc.writer.SeenChunk(h)
+	return gcc.seenChunks.Has(h)
 }
 
 // rotate replaces the table file writer with a new one, and creates an async goroutine to
@@ -255,33 +259,38 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 	})
 
 	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel)
+	if err != nil {
+		return err
+	}
 
 	gcc.gcCopier.writer = writer
+	gcc.seenChunks = hash.HashSet{}
 	gcc.bytesWritten = 0
-	return err
+	return nil
 }
 
-func (gcc *rotatingGCCopier) finalize(ctx context.Context) error {
+func (gcc *rotatingGCCopier) finalize(ctx context.Context) ([]tableSpec, error) {
 	if gcc == nil {
-		return nil
+		return nil, nil
 	}
 
 	specs, pending, err := gcc.copyTablesToDir(ctx)
-	defer pending.Close()
 	if err != nil {
-		return err
+		return nil, err
 	}
+	defer pending.Close()
 
 	err = addTableFilesToManifest(ctx, gcc.dest, specs, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = gcc.specs.append(ctx, specs, gcc.dest)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return gcc.eg.Wait()
+	err = gcc.eg.Wait()
+	return gcc.specs.specs, err
 }
 
 func (gcc *rotatingGCCopier) waitForPendingChunkFiles() error {

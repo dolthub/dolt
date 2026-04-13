@@ -63,9 +63,6 @@ type GenericTableWriter interface {
 	Cancel() error
 	// FlushToFile writes the archive to disk. The input is the directory where the file should be written.
 	FlushToFile(fullPath string) error
-
-	// SeenChunk returns whether this writer has already written a certain chunk.
-	SeenChunk(h hash.Hash) bool
 }
 
 const defaultTableSinkBlockSize = 2 * 1024 * 1024
@@ -172,18 +169,6 @@ func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) (uint32, error) {
 	})
 
 	return fullLen, nil
-}
-
-// SeenChunk returns whether this writer has already written a certain chunk.
-// Since chunks are stored in insertion order and not sorted until Finish() is called,
-// this is slow for large table files.
-func (tw *CmpChunkTableWriter) SeenChunk(h hash.Hash) bool {
-	for _, prefix := range tw.prefixes {
-		if prefix.addr.Equal(h) {
-			return true
-		}
-	}
-	return false
 }
 
 // Finish will write the index and footer of the table file and return the id of the file.

@@ -2358,12 +2358,12 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	}
 
 	// we don't need to acquire the mutex on the specs because all other tasks that reference it have completed.
-	err = incrementalGcc.finalize(ctx)
+	specs, err := incrementalGcc.finalize(ctx)
 	if err != nil {
 		return err
 	}
 
-	i.specs = append(i.specs, incrementalGcc.specs.specs...)
+	i.specs = append(i.specs, specs...)
 
 	return nil
 }
