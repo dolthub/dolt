@@ -2239,33 +2239,6 @@ type markAndSweeper struct {
 	specs []tableSpec
 }
 
-func getHashSubset(hashes hash.HashSet, subsetSize int) (subset hash.HashSet, remaining hash.HashSet) {
-	newSet := make(hash.HashSet)
-	if len(hashes) < subsetSize {
-		return hashes, newSet
-	}
-	var pulls int
-	if len(hashes) < 2*subsetSize {
-		subset = hashes
-		remaining = newSet
-		pulls = len(hashes) - subsetSize
-	} else {
-		subset = newSet
-		remaining = hashes
-		pulls = subsetSize
-	}
-	for h := range hashes {
-		if len(newSet) >= pulls {
-			break
-		}
-		newSet.Insert(h)
-	}
-	for h := range newSet {
-		hashes.Remove(h)
-	}
-	return subset, remaining
-}
-
 func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) error {
 	valctx.ValidateContext(ctx)
 	toVisit := make(hash.HashSet, len(hashes))
@@ -2385,9 +2358,14 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	}
 
 	// we don't need to acquire the mutex on the specs because all other tasks that reference it have completed.
+	err = incrementalGcc.finalize(ctx)
+	if err != nil {
+		return err
+	}
+
 	i.specs = append(i.specs, incrementalGcc.specs.specs...)
 
-	return incrementalGcc.finalize(ctx)
+	return nil
 }
 
 func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, error) {

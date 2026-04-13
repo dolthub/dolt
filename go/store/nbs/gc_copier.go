@@ -152,9 +152,6 @@ func fileNameToAddr(fileName string) (hash.Hash, bool) {
 // It can be written to by multiple goroutines concurrently,
 // so access is controlled by a mutex
 type newlyWrittenSources struct {
-	// specs stores a list of table files produced by this copier.
-	// specNames stores just their content hashes.
-	// Since these are appended in a goroutine, access is controlled by the mutex specsMu
 	specs     []tableSpec
 	sourceSet chunkSourceSet
 	mu        sync.Mutex
