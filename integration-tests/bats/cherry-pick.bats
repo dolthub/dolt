@@ -575,10 +575,6 @@ teardown() {
 }
 
 @test "cherry-pick: author and timestamp preserved during cherry-pick" {
-#    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-#      skip "see: https://github.com/dolthub/dolt/issues/10116"
-#    fi
-
     dolt --branch branch1 sql -q "INSERT INTO test VALUES (99, 'auth')"
     dolt --branch branch1 add .
     
