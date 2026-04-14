@@ -133,6 +133,12 @@ func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, err
 	return MultiEnvForDirectory(ctx, env.FS, env)
 }
 
+// Only used by Driver, which currently doesn't have a *DoltEnv it is working with
+// when it opens a MultiEnv.
+func MultiEnvForConfigAndDirectory(ctx context.Context, config config.ReadWriteConfig, fs filesys.Filesys) (*MultiRepoEnv, error) {
+	return multiEnvForConfigDirectoryEnv(ctx, config, fs, nil)
+}
+
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
 // invoking context is included. If it's non-nil and valid, it will be included in the returned MultiRepoEnv, and will
 // be the first database in all iterations.
@@ -142,7 +148,10 @@ func MultiEnvForDirectory(
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
 	config := dEnv.Config.WriteableConfig()
+	return multiEnvForConfigDirectoryEnv(ctx, config, dataDirFS, dEnv)
+}
 
+func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteConfig, dataDirFS filesys.Filesys, dEnv *DoltEnv) (*MultiRepoEnv, error) {
 	// Load current dataDirFS and put into mr env
 	var dbName string = "dolt"
 
@@ -193,8 +202,10 @@ func MultiEnvForDirectory(
 		openedEnvs = append(openedEnvs, dEnv)
 	}
 
-	if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
-		logrus.Warnf("failed to load database configuration with error: %s", cfgErr.Error())
+	if dEnv != nil {
+		if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
+			logrus.Warnf("failed to load database configuration with error: %s", cfgErr.Error())
+		}
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases

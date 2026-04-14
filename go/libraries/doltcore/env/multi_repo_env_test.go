@@ -194,6 +194,16 @@ func TestMultiRepoEnvClose(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestMultiEnvForConfigAndDirectory_EmptyFS(t *testing.T) {
+	ctx := context.Background()
+	fs := filesys.EmptyInMemFS("/")
+	cfg := config.NewMapConfig(map[string]string{})
+
+	mrEnv, err := MultiEnvForConfigAndDirectory(ctx, cfg, fs)
+	require.NoError(t, err)
+	assert.Empty(t, mrEnv.envs)
+}
+
 func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDirProvider, map[string]*DoltEnv) {
 	rootPath, err := test.ChangeToTestDir(testName)
 	require.NoError(t, err)
