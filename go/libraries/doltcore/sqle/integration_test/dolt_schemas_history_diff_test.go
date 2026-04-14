@@ -30,9 +30,8 @@ import (
 
 func TestDoltSchemasHistoryTable(t *testing.T) {
 	SkipByDefaultInCI(t)
-	ctx := context.Background()
 	dEnv := setupDoltSchemasHistoryTests(t)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 	for _, test := range doltSchemasHistoryTableTests() {
 		t.Run(test.name, func(t *testing.T) {
 			testDoltSchemasHistoryTable(t, test, dEnv)
@@ -42,9 +41,8 @@ func TestDoltSchemasHistoryTable(t *testing.T) {
 
 func TestDoltSchemasDiffTable(t *testing.T) {
 	SkipByDefaultInCI(t)
-	ctx := context.Background()
 	dEnv := setupDoltSchemasDiffTests(t)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 	for _, test := range doltSchemasDiffTableTests() {
 		t.Run(test.name, func(t *testing.T) {
 			testDoltSchemasDiffTable(t, test, dEnv)
@@ -336,9 +334,8 @@ func testDoltSchemasDiffTable(t *testing.T, test doltSchemasTableTest, dEnv *env
 
 func TestDoltProceduresDiffTable(t *testing.T) {
 	SkipByDefaultInCI(t)
-	ctx := context.Background()
 	dEnv := setupDoltProceduresDiffTests(t)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 	for _, test := range doltProceduresDiffTableTests() {
 		t.Run(test.name, func(t *testing.T) {
 			testDoltProceduresDiffTable(t, test, dEnv)

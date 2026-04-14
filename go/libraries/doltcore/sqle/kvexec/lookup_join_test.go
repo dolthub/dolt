@@ -153,7 +153,7 @@ func TestLookupJoin(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB(ctx).Close()
+			defer dEnv.Close()
 
 			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), editor.Options{})
 			require.NoError(t, err)

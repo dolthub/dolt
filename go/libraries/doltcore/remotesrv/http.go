@@ -328,7 +328,7 @@ func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, 
 		return logger, http.StatusInternalServerError, err
 	}
 
-	err = cs.WriteTableFile(ctx, fileId, splitOffset, numChunks, contentHash, func() (io.ReadCloser, uint64, error) {
+	pending, err := cs.WriteTableFile(ctx, fileId, splitOffset, numChunks, contentHash, func() (io.ReadCloser, uint64, error) {
 		reader := body
 		size := contentLength
 		return &uploadreader{
@@ -355,6 +355,11 @@ func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, 
 		logger.WithError(err).Error("failed to write upload to table file")
 		return logger, http.StatusInternalServerError, err
 	}
+	// TODO: The pending handle protects the written file from pruning until
+	// it is added to the manifest. In remotesrv, AddTableFilesToManifest
+	// happens in a separate gRPC request, so we cannot hold it across
+	// requests. Close it here for now.
+	pending.Close()
 
 	return logger, http.StatusOK, nil
 }

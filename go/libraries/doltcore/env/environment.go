@@ -123,6 +123,18 @@ func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 	return dEnv.doltDB
 }
 
+// Close closes the *DoltEnv, and in particular the *DoltDB instance, if it has been loaded.
+// After calling this, DoltDB(ctx) will return `nil`. Close does not reset the sync.Once which
+// loading the database is gated behind.
+func (dEnv *DoltEnv) Close() error {
+	if dEnv != nil && dEnv.doltDB != nil {
+		err := dEnv.doltDB.Close()
+		dEnv.doltDB = nil
+		return err
+	}
+	return nil
+}
+
 // IncompleteEnv returns a DoltEnv that is incomplete. There are cases where we want to know that the structure
 // of and database is correct on disk, but don't want to actually load the database.
 //

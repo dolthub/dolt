@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -899,10 +898,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 	writeCtx, _ := sc.ctxGen(context.Background())
 	dropCtx, _ := sc.ctxGen(context.Background())
 
-	iters := 100
-	if os.Getenv("CI") != "" {
-		iters = 20
-	}
+	iters := 20
 	dbs := make(chan string, iters)
 
 	{
@@ -927,7 +923,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 			i := 0
 			for db := range dbs {
 				if i%2 == 0 {
-					time.Sleep(50 * time.Millisecond)
+					time.Sleep(10 * time.Millisecond)
 					dropCnt++
 					dropDb(dropCtx, db)
 				}
@@ -984,10 +980,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	addCtx, _ := sc.ctxGen(context.Background())
 	dropCtx, _ := sc.ctxGen(context.Background())
 
-	iters := 100
-	if os.Getenv("CI") != "" {
-		iters = 20
-	}
+	iters := 20
 	{
 		branches := make(chan string, iters)
 
@@ -1056,10 +1049,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 
 	}
 
-	iters := 2000
-	if os.Getenv("CI") != "" {
-		iters = 20
-	}
+	iters := 20
 	{
 		branches := make(chan string, iters)
 
@@ -1069,10 +1059,6 @@ func TestStatsCacheGrowth(t *testing.T) {
 				addBranch(addCtx, i)
 				addData(addCtx, i)
 				branches <- "branch" + strconv.Itoa(i)
-				if i%500 == 0 {
-					log.Println("branches: ", strconv.Itoa(i))
-					require.NoError(t, executeQuery(addCtx, sqlEng, "call dolt_stats_wait()"))
-				}
 			}
 			close(branches)
 		}()

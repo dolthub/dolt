@@ -169,6 +169,7 @@ type tempTblFile struct {
 	numChunks   int
 	chunksLen   uint64
 	contentLen  uint64
+	pending     io.Closer
 }
 
 type countingReader struct {

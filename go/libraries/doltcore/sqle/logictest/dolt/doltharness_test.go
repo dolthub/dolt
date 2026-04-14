@@ -99,9 +99,8 @@ func TestDoltHarness(t *testing.T) {
 	}
 
 	fs := filesys.NewInMemFS([]string{}, nil, tmp)
-	ctx := context.Background()
 	dEnv := createTestEnvWithFS(fs, wd)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	// We run this several times in a row to make sure that the same dolt env can be used in multiple setup / teardown
 	// cycles

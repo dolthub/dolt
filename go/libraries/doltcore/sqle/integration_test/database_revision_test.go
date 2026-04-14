@@ -150,7 +150,7 @@ func TestDbRevision(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB(ctx).Close()
+			defer dEnv.Close()
 
 			var err error
 			cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)

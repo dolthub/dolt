@@ -87,7 +87,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := sql.NewEmptyContext()
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB(ctx).Close()
+			defer dEnv.Close()
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 

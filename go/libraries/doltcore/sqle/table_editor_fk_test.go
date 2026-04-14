@@ -152,7 +152,7 @@ func TestTableEditorForeignKeyCascade(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := setupEditorFkTest(ctx, t)
-			defer dEnv.DoltDB(ctx).Close()
+			defer dEnv.Close()
 
 			testRoot, err := ExecuteSql(ctx, dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -203,7 +203,7 @@ func TestTableEditorForeignKeySetNull(t *testing.T) {
 		t.Run(test.sqlStatement, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := setupEditorFkTest(ctx, t)
-			defer dEnv.DoltDB(ctx).Close()
+			defer dEnv.Close()
 
 			testRoot, err := ExecuteSql(ctx, dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UPDATE SET NULL;`)
@@ -287,7 +287,7 @@ func TestTableEditorForeignKeyRestrict(t *testing.T) {
 				t.Run(test.setup+test.trigger, func(t *testing.T) {
 					ctx := context.Background()
 					dEnv := setupEditorFkTest(ctx, t)
-					defer dEnv.DoltDB(ctx).Close()
+					defer dEnv.Close()
 
 					_, err := ExecuteSql(ctx, dEnv, fmt.Sprintf(`
 			ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) %s;
@@ -359,7 +359,7 @@ func TestTableEditorForeignKeyViolations(t *testing.T) {
 		t.Run(test.setup+test.trigger, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := setupEditorFkTest(ctx, t)
-			defer dEnv.DoltDB(ctx).Close()
+			defer dEnv.Close()
 
 			_, err := ExecuteSql(ctx, dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -381,7 +381,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
 	ctx := context.Background()
 	dEnv := setupEditorFkTest(ctx, t)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	sequentialTests := []struct {
 		statement   string
@@ -449,7 +449,7 @@ func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
 func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
 	ctx := context.Background()
 	dEnv := setupEditorFkTest(ctx, t)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	sequentialTests := []struct {
 		statement   string
@@ -547,7 +547,7 @@ func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
 func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
 	ctx := context.Background()
 	dEnv := setupEditorFkTest(ctx, t)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	sequentialTests := []struct {
 		statement   string
@@ -853,7 +853,7 @@ func TestTableEditorKeylessFKCascade(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := setupEditorKeylessFkTest(ctx, t)
-			defer dEnv.DoltDB(ctx).Close()
+			defer dEnv.Close()
 
 			testRoot, err := ExecuteSql(ctx, dEnv, `
 ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;

@@ -122,7 +122,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	ctx := t.Context()
 	dEnv := dtestutils.CreateTestEnv()
 	t.Cleanup(func() {
-		dEnv.DoltDB(ctx).Close()
+		dEnv.Close()
 	})
 
 	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)

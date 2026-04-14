@@ -17,32 +17,12 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
-
-type gcErrAccum map[string]error
-
-var _ error = gcErrAccum{}
-
-func (ea gcErrAccum) add(path string, err error) {
-	ea[path] = err
-}
-
-func (ea gcErrAccum) isEmpty() bool {
-	return len(ea) == 0
-}
-
-func (ea gcErrAccum) Error() string {
-	var sb strings.Builder
-	sb.WriteString("error garbage collecting the following files:")
-	for filePath, err := range ea {
-		sb.WriteString(fmt.Sprintf("\t%s: %s", filePath, err.Error()))
-	}
-	return sb.String()
-}
 
 type gcCopier struct {
 	writer GenericTableWriter
@@ -81,11 +61,14 @@ func (gcc *gcCopier) cancel(_ context.Context) error {
 	return nil
 }
 
-func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err error) {
+// copyTablesToDir writes the GC copier's output to the persister's directory.
+// It returns the table specs and a pending handle that must be kept open until
+// the files are Open'd (added to openFiles). The caller must close the handle.
+func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, pending io.Closer, err error) {
 	var filename string
 	_, filename, err = gcc.writer.Finish()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	defer func() {
@@ -93,65 +76,55 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err e
 	}()
 
 	if gcc.writer.ChunkCount() == 0 {
-		return []tableSpec{}, nil
+		return []tableSpec{}, noopPendingHandle{}, nil
 	}
 
 	addr, ok := fileNameToAddr(filename)
 	if !ok {
-		return nil, fmt.Errorf("invalid filename: %s", filename)
+		return nil, nil, fmt.Errorf("invalid filename: %s", filename)
 	}
 
-	exists, err := gcc.tfp.Exists(ctx, filename, uint32(gcc.writer.ChunkCount()), nil)
+	exists, closer, err := gcc.tfp.Exists(ctx, filename, uint32(gcc.writer.ChunkCount()), nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	spec := tableSpec{
+		name:       addr,
+		chunkCount: uint32(gcc.writer.ChunkCount()),
 	}
 
 	if exists {
-		return []tableSpec{
-			{
-				name:       addr,
-				chunkCount: uint32(gcc.writer.ChunkCount()),
-			},
-		}, nil
+		return []tableSpec{spec}, closer, nil
 	}
 
 	// Attempt to rename the file to the destination if we are working with a fsTablePersister...
 	if mover, ok := gcc.tfp.(movingTableFilePersister); ok {
-		err = mover.TryMoveCmpChunkTableWriter(ctx, filename, gcc.writer)
+		pending, err = mover.TryMoveCmpChunkTableWriter(ctx, filename, gcc.writer)
 		if err == nil {
-			return []tableSpec{
-				{
-					name:       addr,
-					chunkCount: uint32(gcc.writer.ChunkCount()),
-				},
-			}, nil
+			return []tableSpec{spec}, pending, nil
 		}
 	}
 
 	// Otherwise, write the file through CopyTableFile.
 	r, err := gcc.writer.Reader()
 	if err != nil {
-		return nil, fmt.Errorf("gc_copier, Reader() error: %w", err)
+		return nil, nil, fmt.Errorf("gc_copier, Reader() error: %w", err)
 	}
 	defer r.Close()
 	sz := gcc.writer.FullLength()
 
 	dataSplit, err := gcc.writer.ChunkDataLength()
 	if err != nil {
-		return nil, fmt.Errorf("gc_copier, ChunkDataLength() error: %w", err)
+		return nil, nil, fmt.Errorf("gc_copier, ChunkDataLength() error: %w", err)
 	}
 
-	err = gcc.tfp.CopyTableFile(ctx, r, filename, sz, dataSplit)
+	pending, err = gcc.tfp.CopyTableFile(ctx, r, filename, sz, dataSplit)
 	if err != nil {
-		return nil, fmt.Errorf("gc_copier, CopyTableFile error: %w", err)
+		return nil, nil, fmt.Errorf("gc_copier, CopyTableFile error: %w", err)
 	}
 
-	return []tableSpec{
-		{
-			name:       addr,
-			chunkCount: uint32(gcc.writer.ChunkCount()),
-		},
-	}, nil
+	return []tableSpec{spec}, pending, nil
 }
 
 func fileNameToAddr(fileName string) (hash.Hash, bool) {
