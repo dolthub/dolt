@@ -15,7 +15,6 @@
 package dprocedures
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -111,14 +110,9 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
-	commitStagedProps, err := dsess.ResolveCommitStagedProps(ctx, msg)
-	if err != nil {
-		return "", false, err
-	}
-
-	commitStagedProps.Amend = apr.Contains(cli.AmendFlag)
+	amend := apr.Contains(cli.AmendFlag)
 	if !msgOk {
-		if commitStagedProps.Amend {
+		if amend {
 			commit, err := dSess.GetHeadCommit(ctx, dbName)
 			if err != nil {
 				return "", false, err
@@ -132,6 +126,12 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 			return "", false, fmt.Errorf("Must provide commit message.")
 		}
 	}
+
+	commitStagedProps, err := dsess.NewCommitStagedProps(ctx, msg)
+	if err != nil {
+		return "", false, err
+	}
+	commitStagedProps.Amend = amend
 
 	commitStagedProps.AllowEmpty = apr.Contains(cli.AllowEmptyFlag)
 	commitStagedProps.SkipEmpty = apr.Contains(cli.SkipEmptyFlag)
@@ -186,7 +186,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		return "", false, errors.New("nothing to commit")
 	}
 
-	// Set up signing context if signing is requested.
 	if apr.Contains(cli.SignFlag) || shouldSign {
 		keyId := apr.GetValueOrDefault(cli.SignFlag, "")
 
@@ -208,7 +207,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 			return "", false, err
 		}
 
-		pendingCommit.CommitOptions.Signer = &gpgSigner{keyId: keyId}
+		pendingCommit.CommitOptions.Signer = &gpg.Signer{KeyId: keyId}
 		pendingCommit.CommitOptions.DBName = dbName
 		pendingCommit.CommitOptions.HeadHash = headHash
 		pendingCommit.CommitOptions.StagedHash = stagedHash
@@ -246,10 +245,4 @@ func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]st
 	}
 
 	return args, nil
-}
-
-type gpgSigner struct{ keyId string }
-
-func (s *gpgSigner) Sign(ctx context.Context, payload []byte) ([]byte, error) {
-	return gpg.Sign(ctx, s.keyId, payload)
 }
