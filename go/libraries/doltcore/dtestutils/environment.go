@@ -98,7 +98,7 @@ func createTestEnvWithNameAndFilesystem(envName string, fs filesys.Filesys, home
 		urlStr = doltdb.LocalDirDoltDB
 	}
 
-	dEnv := env.Load(context.Background(), homeDirFunc, fs, urlStr, "test")
+	dEnv := env.LoadWithoutDB(context.Background(), homeDirFunc, fs, urlStr, "test")
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	cfg.SetStrings(map[string]string{
 		config.UserNameKey:  name,

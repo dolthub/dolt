@@ -183,7 +183,7 @@ func ConfigureServices(
 	var mrEnv *env.MultiRepoEnv
 	InitMultiEnv := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
-			mrEnv, err = env.MultiEnvForDirectory(ctx, cfg.DoltEnv.Config.WriteableConfig(), fs, cfg.DoltEnv.Version, cfg.DoltEnv)
+			mrEnv, err = env.MultiEnvForDirectory(ctx, fs, cfg.DoltEnv)
 			return err
 		},
 	}

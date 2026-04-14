@@ -808,7 +808,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 		panic(err)
 	}
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	if err != nil {
 		panic(err)
 	}

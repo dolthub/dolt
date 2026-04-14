@@ -47,22 +47,23 @@ func TestCreateDatabase_ReleasesLockOnEngineClose(t *testing.T) {
 	fs, err := filesys.LocalFS.WithWorkingDir(root)
 	require.NoError(t, err)
 
-	cfg := config.NewMapConfig(map[string]string{
-		config.UserNameKey:  "test",
-		config.UserEmailKey: "test@example.com",
-	})
-
 	dbLoadParams := map[string]interface{}{
 		dbfactory.DisableSingletonCacheParam:    struct{}{},
 		dbfactory.FailOnJournalLockTimeoutParam: struct{}{},
 	}
 
-	rootEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "test")
+	home := t.TempDir()
+
+	rootEnv := env.LoadWithoutDB(ctx, func() (string, error) { return home, nil }, fs, doltdb.LocalDirDoltDB, "test")
 	rootEnv.DBLoadParams = map[string]interface{}{
 		dbfactory.DisableSingletonCacheParam:    struct{}{},
 		dbfactory.FailOnJournalLockTimeoutParam: struct{}{},
 	}
-	mrEnv, err := env.MultiEnvForDirectory(ctx, cfg, fs, "test", rootEnv)
+	rootEnv.Config.WriteableConfig().SetStrings(map[string]string{
+		config.UserNameKey:  "test",
+		config.UserEmailKey: "test@example.com",
+	})
+	mrEnv, err := env.MultiEnvForDirectory(ctx, fs, rootEnv)
 	require.NoError(t, err)
 
 	seCfg := &SqlEngineConfig{

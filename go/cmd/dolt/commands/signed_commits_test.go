@@ -24,9 +24,9 @@ import (
 	"testing"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 
@@ -89,8 +89,10 @@ func TestSignAndVerifyCommit(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			apr, err := cli.CreateCommitArgParser(false).Parse(test.commitArgs)
 			require.NoError(t, err)
+			t.Chdir(dbDir)
+			home := t.TempDir()
 
-			_, err = execCommand(ctx, dbDir, CommitCmd{}, test.commitArgs, apr, map[string]string{}, global)
+			_, err = execCommand(t, CommitCmd{}, test.commitArgs, apr, home, global)
 
 			if test.expectErr {
 				require.Error(t, err)
@@ -103,53 +105,41 @@ func TestSignAndVerifyCommit(t *testing.T) {
 			apr, err = cli.CreateLogArgParser(false).Parse(args)
 			require.NoError(t, err)
 
-			logOutput, err := execCommand(ctx, dbDir, LogCmd{}, args, apr, map[string]string{}, global)
+			logOutput, err := execCommand(t, LogCmd{}, args, apr, home, global)
 			require.NoError(t, err)
 			require.Contains(t, logOutput, "Good signature from \"Test User <test@dolthub.com>\"")
 		})
 	}
 }
 
-func execCommand(ctx context.Context, wd string, cmd cli.Command, args []string, apr *argparser.ArgParseResults, local, global map[string]string) (output string, err error) {
-	err = os.Chdir(wd)
-	if err != nil {
-		err = fmt.Errorf("error changing directory to %s: %w", wd, err)
-		return
-	}
-
+func execCommand(t *testing.T, cmd cli.Command, args []string, apr *argparser.ArgParseResults, home string, global map[string]string) (output string, err error) {
 	var fs filesys.Filesys
-	fs, err = filesys.LocalFilesysWithWorkingDir(wd)
+	fs, err = filesys.LocalFilesysWithWorkingDir(".")
 	if err != nil {
-		err = fmt.Errorf("error creating local filesystem with working directory %s: %w", wd, err)
+		err = fmt.Errorf("error creating local filesystem with working directory %s: %w", ".", err)
 		return
 	}
 
-	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, ".", "test")
-
-	ch := config.NewConfigHierarchy()
+	dEnv := env.Load(context.Background(), func() (string, error) { return home, nil }, fs, doltdb.LocalDirDoltDB, "test")
 	if global != nil {
-		ch.AddConfig("global", config.NewMapConfig(global))
+		cfg, ok := dEnv.Config.GetConfig(env.GlobalConfig)
+		require.True(t, ok)
+		cfg.SetStrings(global)
 	}
 
-	if local != nil {
-		ch.AddConfig("local", config.NewMapConfig(local))
-	}
-
-	cfg := env.NewTestDoltCliConfigFromHierarchy(ch, fs)
-
-	mr, err := env.MultiEnvForDirectory(ctx, ch, fs, dEnv.Version, dEnv)
+	mr, err := env.MultiEnvForDirectory(t.Context(), fs, dEnv)
 	if err != nil {
 		err = fmt.Errorf("error creating multi repo: %w", err)
 		return
 	}
 
-	latebind, verr := BuildSqlEngineQueryist(ctx, dEnv.FS, mr, &cli.UserPassword{}, apr)
+	latebind, verr := BuildSqlEngineQueryist(t.Context(), dEnv.FS, mr, &cli.UserPassword{}, apr)
 	if verr != nil {
 		err = fmt.Errorf("error building sql engine: %w", verr)
 		return
 	}
 
-	cliCtx, err := cli.NewCliContext(apr, cfg, dEnv.FS, latebind)
+	cliCtx, err := cli.NewCliContext(apr, dEnv.Config, dEnv.FS, latebind)
 	if err != nil {
 		err = fmt.Errorf("error creating cli context: %w", err)
 		return
@@ -187,7 +177,7 @@ func execCommand(ctx context.Context, wd string, cmd cli.Command, args []string,
 		output = string(outputBytes)
 	}()
 
-	n := cmd.Exec(ctx, cmd.Name(), args, dEnv, cliCtx)
+	n := cmd.Exec(t.Context(), cmd.Name(), args, dEnv, cliCtx)
 	if n != 0 {
 		err = fmt.Errorf("command %s %s exited with code %d", cmd.Name(), strings.Join(args, " "), n)
 		return
