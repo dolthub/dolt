@@ -20,6 +20,7 @@ import (
 	sql2 "database/sql"
 	"fmt"
 	"io"
+	"net"
 	"regexp"
 	"strings"
 
@@ -62,10 +63,33 @@ const (
 	QueryistTLSMode_NoVerify_FallbackToPlaintext
 )
 
-// BuildConnectionStringQueryist returns a Queryist that connects to the server at |host|:|port|.
-// |defaultName| and |defaultEmail| set the initial author and committer identity via session variables.
-// The DOLT_AUTHOR_* and DOLT_COMMITTER_* environment variables override these values when set.
-func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, tlsMode QueryistTLSMode, dbRev string, defaultName, defaultEmail string) (cli.LateBindQueryist, error) {
+// nameEmailFromCurrentUser queries CURRENT_USER() and returns the username as the name and
+// the full user@host grant string as the email.
+func nameEmailFromCurrentUser(queryist cli.Queryist, sqlCtx *sql.Context) (name, email string) {
+	_, rowIter, _, err := queryist.Query(sqlCtx, "SELECT CURRENT_USER()")
+	if err != nil {
+		return "", ""
+	}
+	defer rowIter.Close(sqlCtx)
+	row, err := rowIter.Next(sqlCtx)
+	if err != nil || len(row) == 0 || row[0] == nil {
+		return "", ""
+	}
+	currentUser, ok := row[0].(string)
+	if !ok {
+		return "", ""
+	}
+	if idx := strings.LastIndex(currentUser, "@"); idx >= 0 {
+		return currentUser[:idx], currentUser
+	}
+	return currentUser, currentUser
+}
+
+// BuildConnectionStringQueryist returns a [cli.LateBindQueryist] that connects to the server at |host|:|port|.
+// |configName| and |configEmail| are the author and committer name and email from the local dolt config,
+// applied when connecting to a loopback address. For all other connections the name and email are read
+// from CURRENT_USER() after the connection is established.
+func BuildConnectionStringQueryist(_ context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, tlsMode QueryistTLSMode, dbRev string, configName, configEmail string) (cli.LateBindQueryist, error) {
 	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
 		return nil, err
@@ -104,7 +128,14 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 		sqlCtx := sql.NewContext(ctx)
 		sqlCtx.SetCurrentDatabase(dbRev)
 
-		if err := engine.InitCommitIdentitySessionConfig(queryist, sqlCtx, defaultName, defaultEmail); err != nil {
+		name, email := configName, configEmail
+		ip := net.ParseIP(host)
+		if !(host == "localhost" || (ip != nil && ip.IsLoopback())) {
+			// Remote connection: read name and email from CURRENT_USER() so the
+			// grant host reflects what the server assigned, not a client-side guess.
+			name, email = nameEmailFromCurrentUser(queryist, sqlCtx)
+		}
+		if err := engine.InitCommitIdentSessionConfig(queryist, sqlCtx, name, email); err != nil {
 			cli.PrintErr(err.Error())
 		}
 

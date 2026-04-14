@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -671,17 +670,9 @@ If you're interested in running this command against a remote host, hit us up on
 		if apr.Contains(cli.NoTLSFlag) {
 			tlsMode = sqlserver.QueryistTLSMode_Disabled
 		}
-		// Loopback connections use the dolt config identity. Remote connections use the MySQL credentials
-		// because the server has no access to the client's dolt config.
-		var committerName, committerEmail string
-		if ip := net.ParseIP(host); host == "localhost" || (ip != nil && ip.IsLoopback()) {
-			committerName = rootEnv.Config.GetStringOrDefault(config.UserNameKey, "")
-			committerEmail = rootEnv.Config.GetStringOrDefault(config.UserEmailKey, "")
-		} else {
-			committerName = creds.Username
-			committerEmail = fmt.Sprintf("%s@%s", creds.Username, host)
-		}
-		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, tlsMode, useDb, committerName, committerEmail)
+		doltConfigName := rootEnv.Config.GetStringOrDefault(config.UserNameKey, "")
+		doltConfigEmail := rootEnv.Config.GetStringOrDefault(config.UserEmailKey, "")
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, tlsMode, useDb, doltConfigName, doltConfigEmail)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
 		if hasPort {
