@@ -144,6 +144,11 @@ type NomsBlockStore struct {
 	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
 	gcInProgress bool
 
+	// gcCycleCounter is a monotonically increasing counter incremented each
+	// time a new GC cycle begins. It allows waitForGC to distinguish
+	// between GC cycles and avoid getting trapped across cycle boundaries.
+	gcCycleCounter uint64
+
 	fatalBehavior dherrors.FatalBehavior
 
 	closed bool
@@ -253,21 +258,21 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 		}
 		tables = nbs.tables
 		tables.acquire()
-		keeper, endRead, behavior := nbs.keeperFunc, nbs.beginRead(), nbs.fatalBehavior
+		keeper, endRead, behavior, cycle := nbs.keeperFunc, nbs.beginRead(), nbs.fatalBehavior, nbs.gcCycleCounter
 		nbs.mu.Unlock()
 
 		gr := toGetRecords(hashes)
 		ranges := make(map[*chunkSource]map[hash.Hash]Range)
 
 		gcb, err := fn(behavior, tables.upstream, gr, ranges, keeper)
-		if needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, false, endRead, tables, err); err != nil {
+		if needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, false, endRead, tables, cycle, err); err != nil {
 			return nil, err
 		} else if needsContinue {
 			continue
 		}
 
 		gcb, err = fn(behavior, tables.novel, gr, ranges, keeper)
-		if needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err); err != nil {
+		if needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, cycle, err); err != nil {
 			return nil, err
 		} else if needsContinue {
 			continue
@@ -295,7 +300,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 	return res, nil
 }
 
-func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endReadOnSuccess bool, endRead func(), tables *tableSet, err error) (bool, *tableSet, error) {
+func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endReadOnSuccess bool, endRead func(), tables *tableSet, cycle uint64, err error) (bool, *tableSet, error) {
 	if err != nil {
 		tables.release()
 		if endRead != nil {
@@ -311,7 +316,7 @@ func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavio
 		if endRead != nil {
 			endRead()
 		}
-		err := nbs.waitForGC(ctx)
+		err := nbs.waitForGC(ctx, cycle)
 		nbs.mu.Unlock()
 		return true, nil, err
 	} else {
@@ -891,10 +896,15 @@ func (nbs *NomsBlockStore) SetFatalBehavior(behavior dherrors.FatalBehavior) {
 	nbs.fatalBehavior = behavior
 }
 
-// Wait for GC to complete to continue with ongoing operations.
-// Called with nbs.mu held. When this function returns with a nil
-// error, gcInProgress will be false.
-func (nbs *NomsBlockStore) waitForGC(ctx context.Context) error {
+// waitForGC blocks until the GC cycle identified by |cycle| completes or
+// a new cycle begins. Called with nbs.mu held. The caller must pass the
+// value of nbs.gcCycleCounter that was current when the keeper rejected
+// the operation. This prevents a goroutine from being trapped across GC
+// cycle boundaries: if a new cycle starts before the goroutine
+// reacquires nbs.mu, it will observe gcCycleCounter != cycle and return
+// immediately, allowing the caller to re-evaluate the new cycle's
+// keeper.
+func (nbs *NomsBlockStore) waitForGC(ctx context.Context, cycle uint64) error {
 	stop := make(chan struct{})
 	defer close(stop)
 	go func() {
@@ -904,7 +914,7 @@ func (nbs *NomsBlockStore) waitForGC(ctx context.Context) error {
 		case <-stop:
 		}
 	}()
-	for nbs.gcInProgress && ctx.Err() == nil {
+	for nbs.gcInProgress && nbs.gcCycleCounter == cycle && ctx.Err() == nil {
 		nbs.gcCond.Wait()
 	}
 	return ctx.Err()
@@ -985,7 +995,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAdd
 			}
 			if gcb == gcBehavior_Block {
 				retry = true
-				if err := nbs.waitForGC(ctx); err != nil {
+				if err := nbs.waitForGC(ctx, nbs.gcCycleCounter); err != nil {
 					return false, err
 				}
 				continue
@@ -998,7 +1008,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAdd
 		if addChunkRes == chunkAdded || addChunkRes == chunkExists {
 			if nbs.keeperFunc != nil && nbs.keeperFunc(ch.Hash()) {
 				retry = true
-				if err := nbs.waitForGC(ctx); err != nil {
+				if err := nbs.waitForGC(ctx, nbs.gcCycleCounter); err != nil {
 					return false, err
 				}
 				continue
@@ -1064,7 +1074,7 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 				return chunks.EmptyChunk, err
 			}
 			if gcb == gcBehavior_Block {
-				err = nbs.waitForGC(ctx)
+				err = nbs.waitForGC(ctx, nbs.gcCycleCounter)
 				nbs.mu.Unlock()
 				if err != nil {
 					return chunks.EmptyChunk, err
@@ -1076,13 +1086,13 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 				return chunks.NewChunkWithHash(h, data), nil
 			}
 		}
-		keeper, endRead := nbs.keeperFunc, nbs.beginRead()
+		keeper, endRead, cycle := nbs.keeperFunc, nbs.beginRead(), nbs.gcCycleCounter
 		tables = nbs.tables
 		tables.acquire()
 		nbs.mu.Unlock()
 
 		data, gcb, err := tables.get(ctx, h, keeper, nbs.stats)
-		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err)
+		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, cycle, err)
 		if err != nil {
 			return chunks.EmptyChunk, err
 		}
@@ -1156,6 +1166,7 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 			return errors.New("*NomsBlockStore is closed")
 		}
 		keeper := nbs.keeperFunc
+		cycle := nbs.gcCycleCounter
 		if gcDepMode == gcDependencyMode_NoDependency {
 			keeper = nil
 		}
@@ -1167,7 +1178,7 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 				return err
 			}
 			if gcb == gcBehavior_Block {
-				err = nbs.waitForGC(ctx)
+				err = nbs.waitForGC(ctx, cycle)
 				nbs.mu.Unlock()
 				if err != nil {
 					return err
@@ -1190,7 +1201,7 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 			_, gcb, err := getManyFunc(ctx, tables, eg, reqs, keeper, nbs.stats)
 			return gcb, errors.Join(err, eg.Wait())
 		}()
-		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err)
+		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, cycle, err)
 		if err != nil {
 			return err
 		}
@@ -1259,7 +1270,7 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 				return false, err
 			}
 			if gcb == gcBehavior_Block {
-				err = nbs.waitForGC(ctx)
+				err = nbs.waitForGC(ctx, nbs.gcCycleCounter)
 				nbs.mu.Unlock()
 				if err != nil {
 					return false, err
@@ -1271,13 +1282,13 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 				return true, nil
 			}
 		}
-		keeper, endRead := nbs.keeperFunc, nbs.beginRead()
+		keeper, endRead, cycle := nbs.keeperFunc, nbs.beginRead(), nbs.gcCycleCounter
 		tables = nbs.tables
 		tables.acquire()
 		nbs.mu.Unlock()
 
 		has, gcb, err := tables.has(h, keeper)
-		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err)
+		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, cycle, err)
 		if err != nil {
 			return false, err
 		}
@@ -1320,6 +1331,7 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 			nbs.mu.Unlock()
 			return nil, errors.New("*NomsBlockStore is closed")
 		}
+		cycle := nbs.gcCycleCounter
 		if nbs.memtable != nil {
 			keeper := nbs.keeperFunc
 			if gcDepMode == gcDependencyMode_NoDependency {
@@ -1331,7 +1343,7 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 				return nil, err
 			}
 			if gcb == gcBehavior_Block {
-				err = nbs.waitForGC(ctx)
+				err = nbs.waitForGC(ctx, cycle)
 				nbs.mu.Unlock()
 				if err != nil {
 					return nil, err
@@ -1352,7 +1364,7 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 		nbs.mu.Unlock()
 
 		remaining, gcb, err := tables.hasMany(reqs, keeper)
-		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, err)
+		needsContinue, tables, err = nbs.handleUnlockedRead(ctx, gcb, true, endRead, tables, cycle, err)
 		if err != nil {
 			return nil, err
 		}
@@ -1477,7 +1489,7 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 
 	if nbs.keeperFunc != nil {
 		if nbs.keeperFunc(current) {
-			err = nbs.waitForGC(ctx)
+			err = nbs.waitForGC(ctx, nbs.gcCycleCounter)
 			if err != nil {
 				return false, err
 			}
@@ -1563,7 +1575,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 					return err
 				}
 				if gcb == gcBehavior_Block {
-					err = nbs.waitForGC(ctx)
+					err = nbs.waitForGC(ctx, nbs.gcCycleCounter)
 					if err != nil {
 						return err
 					}
@@ -2059,7 +2071,11 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	return nbs.lockedBeginGC(keeper)
+}
 
+// lockedBeginGC performs the work of BeginGC with nbs.mu already held.
+func (nbs *NomsBlockStore) lockedBeginGC(keeper func(hash.Hash) bool) error {
 	// Block until there is no ongoing conjoin...
 	for nbs.conjoinOp != nil {
 		nbs.conjoinOpCond.Wait()
@@ -2092,6 +2108,7 @@ func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode)
 	nbs.DisableConjoin()
 
 	nbs.gcInProgress = true
+	nbs.gcCycleCounter++
 	nbs.keeperFunc = keeper
 	nbs.gcCond.Broadcast()
 	return nil
@@ -2100,6 +2117,11 @@ func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode)
 func (nbs *NomsBlockStore) EndGC(_ chunks.GCMode) {
 	nbs.gcCond.L.Lock()
 	defer nbs.gcCond.L.Unlock()
+	nbs.lockedEndGC()
+}
+
+// lockedEndGC performs the work of EndGC with nbs.mu already held.
+func (nbs *NomsBlockStore) lockedEndGC() {
 	if !nbs.gcInProgress {
 		panic("EndGC called when gc was not in progress")
 	}
