@@ -2,6 +2,8 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
+BG_PIDS=()
+
 setup() {
     setup_no_dolt_init
 
@@ -47,6 +49,11 @@ EOF
 
 teardown() {
     stop_sql_server 1
+    for pid in "${BG_PIDS[@]}"; do
+        kill $pid 2>/dev/null || true
+        wait $pid 2>/dev/null || true
+    done
+    BG_PIDS=()
     teardown_common
 }
 
@@ -55,8 +62,8 @@ start_idle_connection() {
     local branch=$1
     [ -n "$branch" ] || fail "Expected non-empty string, got empty"
 
-    # Do nothing connection. These will be killed by the server shutting down.
     dolt --use-db "repo1/$branch" sql -q "SELECT SLEEP(60)" &
+    BG_PIDS+=($!)
 }
 
 @test "branch-activity: last_read set for connections" {
@@ -131,6 +138,7 @@ start_idle_connection() {
     start_idle_connection "feature1"
     # Same for repo2, should result in read on dev
     dolt --use-db "repo2/dev" sql -q "SELECT SLEEP(60)" &
+    BG_PIDS+=($!)
     sleep 1
 
     run dolt --use-db repo1 sql -q "SELECT branch FROM dolt_branch_activity WHERE last_read IS NOT NULL"

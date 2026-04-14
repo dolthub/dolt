@@ -5,7 +5,14 @@ setup() {
     setup_common
 }
 
+SLEEP_PID=
+
 teardown() {
+    if [ -n "$SLEEP_PID" ]; then
+        kill $SLEEP_PID 2>/dev/null || true
+        wait $SLEEP_PID 2>/dev/null || true
+        SLEEP_PID=
+    fi
     teardown_common
 }
 
@@ -15,6 +22,7 @@ teardown() {
     fi
 
     dolt sql -q "select sleep(1000)" &
+    SLEEP_PID=$!
     sleep 1
 
     run dolt sql -q "SHOW PROCESSLIST"
