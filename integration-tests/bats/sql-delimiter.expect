@@ -88,7 +88,7 @@ expect {
   failed { exp_continue; }
 }
 expect {
-  "> " { select null //\r"; }
+  "> " { send "select null //\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
