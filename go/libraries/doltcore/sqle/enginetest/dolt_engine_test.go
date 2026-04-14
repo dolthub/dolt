@@ -1116,10 +1116,15 @@ func TestConcurrentCreateDatabaseIfNotExists(t *testing.T) {
 	wg.Add(concurrency)
 	errs := make([]error, concurrency)
 
+	ctxs := make([]*sql.Context, concurrency)
+	for i := 0; i < concurrency; i++ {
+		ctxs[i] = enginetest.NewSession(harness)
+	}
+
 	for i := 0; i < concurrency; i++ {
 		go func(id int) {
 			defer wg.Done()
-			ctx := enginetest.NewSession(harness)
+			ctx := ctxs[id]
 			_, iter, _, err := engine.Query(ctx, "CREATE DATABASE IF NOT EXISTS newdb")
 			if err != nil {
 				errs[id] = err
