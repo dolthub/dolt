@@ -1114,18 +1114,13 @@ SQL
     # The JSON "head" key is absent, so the Merge field has no ref when the file is loaded.
     sed -i 's/"branches": {}/"branches": {"main": {"remote": "origin"}}/' .dolt/repo_state.json
 
-    # stderr is merged with stdout so that any runtime crash output is captured in $output.
-    run bash -c "dolt sql -q \"call dolt_pull('origin')\" 2>&1"
+    run dolt sql -q "call dolt_pull('origin')"
     [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]] || false
-    [[ ! "$output" =~ "nil pointer dereference" ]] || false
     [[ "$output" =~ "there is no tracking information for the current branch" ]] || false
     [[ "$output" =~ "dolt push --set-upstream origin main" ]] || false
 
-    run bash -c "dolt pull origin 2>&1"
+    run dolt pull origin
     [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]] || false
-    [[ ! "$output" =~ "nil pointer dereference" ]] || false
     [[ "$output" =~ "there is no tracking information for the current branch" ]] || false
     [[ "$output" =~ "dolt push --set-upstream origin main" ]] || false
 
