@@ -158,17 +158,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 }
 
 func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
-	if opts.Meta == nil {
-		// Noms testing relies on deterministic zero timestamps when CommitMeta is not provided.
-		epoch := CommitDateAt(time.UnixMilli(0))
-		opts.Meta = &CommitMeta{
-			Author:    CommitIdent{Date: epoch},
-			Committer: CommitIdent{Date: epoch},
-		}
-	} else {
-		// Resolve both dates at serialization time, sharing the same CommitterDate() snapshot.
-		opts.Meta.resolveDates()
-	}
+	opts.Meta.resolveDates()
 
 	if opts.Signer != nil {
 		payload := SignaturePayloadV2(opts.DBName, opts.Meta, opts.HeadHash.String(), opts.StagedHash.String())

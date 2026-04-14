@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/google/uuid"
@@ -353,7 +354,8 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 		}
 
 		rootVal := buildRootValue(am)
-		commitOpts := datas.CommitOptions{Parents: parent}
+		epoch := datas.CommitDateAt(time.UnixMilli(0))
+		commitOpts := datas.CommitOptions{Parents: parent, Meta: &datas.CommitMeta{Author: datas.CommitIdent{Date: epoch}, Committer: datas.CommitIdent{Date: epoch}}}
 		ds, err = db.Commit(ctx, ds, rootVal, commitOpts)
 		require.NoError(t, err)
 
@@ -368,7 +370,8 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 	am = addToAddressMap(t, ctx, ns, am, "big_table", bigTable)
 
 	rootVal := buildRootValue(am)
-	commitOpts := datas.CommitOptions{Parents: parent}
+	epoch := datas.CommitDateAt(time.UnixMilli(0))
+	commitOpts := datas.CommitOptions{Parents: parent, Meta: &datas.CommitMeta{Author: datas.CommitIdent{Date: epoch}, Committer: datas.CommitIdent{Date: epoch}}}
 	ds, err = db.Commit(ctx, ds, rootVal, commitOpts)
 	require.NoError(t, err)
 

@@ -191,7 +191,9 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Value) (types.Value, hash.Hash) {
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
-	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...)})
+	epoch := CommitDateAt(time.UnixMilli(0))
+	meta := &CommitMeta{Author: CommitIdent{Date: epoch}, Committer: CommitIdent{Date: epoch}}
+	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...), Meta: meta})
 	require.NoError(t, err)
 	return mustHead(ds), mustHeadAddr(ds)
 }

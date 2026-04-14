@@ -545,7 +545,7 @@ func (db *database) WriteCommit(ctx context.Context, ds Dataset, commit *Commit)
 
 // Calls db.Commit with empty CommitOptions{}.
 func CommitValue(ctx context.Context, db Database, ds Dataset, v types.Value) (Dataset, error) {
-	return db.Commit(ctx, ds, v, CommitOptions{})
+	return db.Commit(ctx, ds, v, CommitOptions{Meta: &CommitMeta{}})
 }
 func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurrentAddr hash.Hash, newCommitValue types.Value) error {
 	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
