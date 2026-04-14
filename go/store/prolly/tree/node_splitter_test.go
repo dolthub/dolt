@@ -60,6 +60,18 @@ func benchmarkNodeSplitter(b *testing.B, split nodeSplitter) {
 	}
 }
 
+func BenchmarkWeiBullCheck(b *testing.B) {
+	var size uint32 = 0
+	for i := 0; i < b.N; i++ {
+		j := i % len(benchData)
+		thisSize := uint32(len(benchData[j][:8])) + uint32(len(benchData[j][8:]))
+		size += thisSize
+		if weibullCheckOld(size, thisSize, xxHash32(benchData[j][:8], 0)) {
+			size = 0
+		}
+	}
+}
+
 func TestKeySplitterDistribution(t *testing.T) {
 	t.Skip("unskip for metrics")
 

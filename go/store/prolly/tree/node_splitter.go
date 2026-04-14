@@ -198,7 +198,6 @@ func (ks *keySplitter) Append(key, value Item) error {
 		return nil
 	}
 
-	// TODO: is there a way to reduce weibullChecks?
 	h := xxHash32(key, ks.salt)
 	ks.crossedBoundary = weibullCheck(ks.size, thisSize, h)
 	return nil
@@ -224,21 +223,11 @@ const (
 	L = targetSize
 )
 
-// This consumes 128MBs of space
-var weibullThresholds [maxChunkSize + 1]float64
-
 // weibullCDF4K calculates -expm1(-(x/L)^4)
 // It multiplies (x/L) by itself 4 times to avoid math.Exp
 func weibullCDF4K(x uint32) float64 {
 	pow := float64(x) / L
 	return -math.Expm1(-(pow * pow * pow * pow))
-}
-
-func init() {
-	weibullThresholds[0] = 0
-	for i := uint32(1); i <= maxChunkSize; i++ {
-		weibullThresholds[i] = weibullCDF4K(i)
-	}
 }
 
 // weibullCheck returns true if we should split
@@ -260,8 +249,17 @@ func init() {
 // treated as a uniform random number between [0,1),
 // is less than this percentage.
 func weibullCheck(size, thisSize, hash uint32) bool {
-	start := weibullThresholds[size-thisSize]
-	end := weibullThresholds[size]
+	if size >= 3744 && thisSize >= 32 && hash > 100013689 {
+		return false
+	}
+	start := weibullCDF4K(size - thisSize)
+	end := weibullCDF4K(size)
+	return float64(hash)*(1-start) < maxUint32*(end-start)
+}
+
+func weibullCheckOld(size, thisSize, hash uint32) bool {
+	start := weibullCDF4K(size - thisSize)
+	end := weibullCDF4K(size)
 	return float64(hash)*(1-start) < maxUint32*(end-start)
 }
 
