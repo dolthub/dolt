@@ -30,6 +30,10 @@ import (
 
 var ErrNoConflictsResolved = errors.New("no conflicts resolved")
 
+// IsValidIdentifier is used to validate identifiers. Defaults to MySQL rules.
+// Doltgres overrides this to use Postgres rules (which allow supplementary Unicode).
+var IsValidIdentifier = IsValidMySqlIdentifier
+
 // IsValidTableName checks if name is a valid identifier, and doesn't end with space characters
 func IsValidTableName(name string) bool {
 	if len(name) == 0 || unicode.IsSpace(rune(name[len(name)-1])) {
@@ -38,9 +42,9 @@ func IsValidTableName(name string) bool {
 	return IsValidIdentifier(name)
 }
 
-// IsValidIdentifier returns true according to MySQL's quoted identifier rules.
+// IsValidMySqlIdentifier returns true according to MySQL's quoted identifier rules.
 // Docs here: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
-func IsValidIdentifier(name string) bool {
+func IsValidMySqlIdentifier(name string) bool {
 	// Ignore all leading digits
 	if len(name) == 0 {
 		return false
