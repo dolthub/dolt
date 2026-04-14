@@ -324,7 +324,7 @@ func processJournalRecordsReader(ctx context.Context, r io.Reader, offin int64, 
 	// to scan to the end of the file in these cases to ensure there is no indication of data loss.
 	recovered = false
 
-	rdr = bufio.NewReaderSize(r, journalWriterBuffSize)
+	rdr = bufio.NewReaderSize(r, int(journalWriterBuffSize))
 	for {
 		if ctx.Err() != nil {
 			err = ctx.Err()
@@ -494,7 +494,7 @@ func possibleDataLossCheck(reader *bufio.Reader) (dataLoss bool, err error) {
 	atEOF := false
 
 	bufferPrefix := 0
-	const buffSize = journalWriterBuffSize * 2
+	buffSize := journalWriterBuffSize * 2
 
 	buf := make([]byte, buffSize)
 
