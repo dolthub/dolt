@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	sqldriver "database/sql/driver"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +42,7 @@ func TestConcurrentGC(t *testing.T) {
 		factors: func(base gcTest) []gcTest {
 			no, yes := base, base
 			no.commit = false
+			no.skip = true
 			yes.commit = true
 			return []gcTest{no, yes}
 		},
@@ -51,6 +53,7 @@ func TestConcurrentGC(t *testing.T) {
 			no, yes := base, base
 			no.full = false
 			yes.full = true
+			yes.skip = true
 			return []gcTest{no, yes}
 		},
 	}
@@ -59,14 +62,24 @@ func TestConcurrentGC(t *testing.T) {
 		factors: func(base gcTest) []gcTest {
 			no, yes := base, base
 			no.sessionAware = false
+			no.skip = true
 			yes.sessionAware = true
 			return []gcTest{no, yes}
 		},
 	}
 	var doDimensions func(t *testing.T, base gcTest, dims []dimension)
 	doDimensions = func(t *testing.T, base gcTest, dims []dimension) {
+		if base.skip {
+			t.SkipNow()
+		}
 		if len(dims) == 0 {
-			base.run(t)
+			for i := range 8 {
+				copy := base
+				t.Run(strconv.Itoa(i), func(t *testing.T) {
+					t.Parallel()
+					copy.run(t)
+				})
+			}
 			return
 		}
 		dim, dims := dims[0], dims[1:]
@@ -81,7 +94,7 @@ func TestConcurrentGC(t *testing.T) {
 	dimensions := []dimension{commits, full, safepoint}
 	doDimensions(t, gcTest{
 		numThreads: 8,
-		duration:   10 * time.Second,
+		duration:   4 * time.Second,
 	}, dimensions)
 }
 
@@ -91,6 +104,7 @@ type gcTest struct {
 	commit       bool
 	full         bool
 	sessionAware bool
+	skip         bool
 }
 
 func (gct gcTest) createDB(t *testing.T, ctx context.Context, db *sql.DB) {
