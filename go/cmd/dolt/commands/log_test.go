@@ -35,7 +35,7 @@ func TestLog(t *testing.T) {
 	ctx := context.Background()
 	dEnv := createUninitializedEnv()
 	err := dEnv.InitRepo(ctx, types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	if err != nil {
 		t.Error("Failed to init repo")
@@ -57,7 +57,7 @@ func TestLogSigterm(t *testing.T) {
 	ctx := context.Background()
 	dEnv := createUninitializedEnv()
 	err := dEnv.InitRepo(ctx, types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	if err != nil {
 		t.Error("Failed to init repo")

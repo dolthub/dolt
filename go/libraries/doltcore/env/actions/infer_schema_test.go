@@ -450,9 +450,8 @@ func TestInferSchema(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB(ctx).Close()
+			defer dEnv.Close()
 
 			wrCl, err := dEnv.FS.OpenForWrite(importFilePath, os.ModePerm)
 			require.NoError(t, err)

@@ -560,7 +560,7 @@ func (d *DoltHarness) newProvider(ctx context.Context) sql.MutableDatabaseProvid
 	} else {
 		dEnv = dtestutils.CreateTestEnv()
 	}
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	store := dEnv.DoltDB(ctx).ValueReadWriter().(*types.ValueStore)
 	store.SetValidateContentAddresses(true)

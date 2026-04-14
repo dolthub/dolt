@@ -1669,11 +1669,10 @@ func TestNullRanges(t *testing.T) {
 }
 
 func TestPersist(t *testing.T) {
-	ctx := sql.NewEmptyContext()
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
 	require.True(t, ok)
 	globals := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)

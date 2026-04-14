@@ -67,12 +67,11 @@ var (
 )
 
 func TestServerArgs(t *testing.T) {
-	ctx := context.Background()
 	controller := svcs.NewController()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+		assert.NoError(t, dEnv.Close())
 	}()
 	go func() {
 		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
@@ -100,7 +99,7 @@ func TestDeprecatedUserPasswordServerArgs(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+		assert.NoError(t, dEnv.Close())
 	}()
 	err = StartServer(ctx, "0.0.0", "dolt sql-server", []string{
 		"-H", "localhost",
@@ -129,11 +128,10 @@ listener:
     read_timeout_millis: 5000
     write_timeout_millis: 5000
 `
-	ctx := context.Background()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+		assert.NoError(t, dEnv.Close())
 	}()
 	controller := svcs.NewController()
 	go func() {
@@ -155,11 +153,10 @@ listener:
 }
 
 func TestServerBadArgs(t *testing.T) {
-	ctx := context.Background()
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, env.DoltDB(ctx).Close())
+		assert.NoError(t, env.Close())
 	}()
 
 	tests := [][]string{
@@ -185,8 +182,6 @@ func TestServerBadArgs(t *testing.T) {
 }
 
 func TestServerGoodParams(t *testing.T) {
-	ctx := context.Background()
-
 	tests := []servercfg.ServerConfig{
 		DefaultCommandLineServerConfig(),
 		DefaultCommandLineServerConfig().WithHost("127.0.0.1").WithPort(15400),
@@ -210,7 +205,7 @@ func TestServerGoodParams(t *testing.T) {
 			env, err := sqle.CreateEnvWithSeedData()
 			require.NoError(t, err)
 			defer func() {
-				assert.NoError(t, env.DoltDB(ctx).Close())
+				assert.NoError(t, env.Close())
 			}()
 			sc := svcs.NewController()
 			go func(config servercfg.ServerConfig, sc *svcs.Controller) {
@@ -236,11 +231,10 @@ func TestServerGoodParams(t *testing.T) {
 }
 
 func TestServerSelect(t *testing.T) {
-	ctx := context.Background()
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, env.DoltDB(ctx).Close())
+		assert.NoError(t, env.Close())
 	}()
 
 	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15300)
@@ -299,7 +293,6 @@ func TestServerSelect(t *testing.T) {
 
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
-	ctx := context.Background()
 	controller := svcs.NewController()
 	server := &http.Server{
 		Addr:    ":15200",
@@ -308,7 +301,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+		assert.NoError(t, dEnv.Close())
 	}()
 
 	var wg sync.WaitGroup
@@ -424,7 +417,7 @@ func TestReadOnlySystemVariable(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+		assert.NoError(t, dEnv.Close())
 	}()
 
 	// Test read-only server with command line flag
@@ -485,7 +478,7 @@ listener:
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+		assert.NoError(t, dEnv.Close())
 	}()
 
 	controller := svcs.NewController()
@@ -521,7 +514,7 @@ func TestPortSystemVariable(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+		assert.NoError(t, dEnv.Close())
 	}()
 
 	// Pick an ephemeral free port for this test
@@ -572,7 +565,7 @@ func TestReadOnlyEnforcement(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+		assert.NoError(t, dEnv.Close())
 	}()
 
 	// Test read-only server with command line flag
@@ -735,11 +728,10 @@ branch_control_file: dir1/dir2/abc.db
 
 // TestServerSetDefaultBranch is placed at the end because it sets global state that pollutes other tests
 func TestServerSetDefaultBranch(t *testing.T) {
-	ctx := context.Background()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+		assert.NoError(t, dEnv.Close())
 	}()
 
 	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15302)

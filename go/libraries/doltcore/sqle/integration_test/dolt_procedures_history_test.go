@@ -29,9 +29,8 @@ import (
 
 func TestDoltProceduresHistoryTable(t *testing.T) {
 	SkipByDefaultInCI(t)
-	ctx := context.Background()
 	dEnv := setupDoltProceduresHistoryTests(t)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 	for _, test := range doltProceduresHistoryTableTests() {
 		t.Run(test.name, func(t *testing.T) {
 			testDoltProceduresHistoryTable(t, test, dEnv)
