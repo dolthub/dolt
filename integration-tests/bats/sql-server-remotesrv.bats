@@ -187,9 +187,10 @@ call dolt_commit('-m', 'add some vals');
 set @@persist.dolt_read_replica_remote = 'origin';
 set @@persist.dolt_replicate_all_heads = 1;
 SQL
-    cat .dolt/config.json
+    cat .dolt/config.json && echo
     dolt sql-server --port 3307 &
     srv_two_pid=$!
+    wait_for_connection 3307 8500
 
     # move CWD to make sure we don't lock ".../read_replica/db"
     cd ../../
