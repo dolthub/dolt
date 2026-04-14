@@ -174,6 +174,11 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dbfactory.DirToDBName(envName)
+
+		if dEnv == nil {
+			// Only the driver uses this path currently.
+			dEnv = LoadWithoutDB(ctx, hdp, dataDirFS, doltdb.LocalDirDoltDB, "")
+		}
 	}
 
 	mrEnv := &MultiRepoEnv{
