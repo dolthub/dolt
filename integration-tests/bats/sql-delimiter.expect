@@ -66,13 +66,13 @@ expect {
   failed { exit 1; }
 }
 expect {
-  "> " { select null //\r"; }
+  "> " { send "select null //\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
 # delimiter statement in the middle of a undelimited statement should not set the delimiter
 expect {
-  "> " { select\r"; }
+  "> " { send "select\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
