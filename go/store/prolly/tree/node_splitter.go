@@ -249,9 +249,9 @@ func weibullCDF4K(x uint32) float64 {
 // treated as a uniform random number between [0,1),
 // is less than this percentage.
 func weibullCheck(size, thisSize, hash uint32) bool {
-	//if size >= 3744 && thisSize >= 32 && hash > 100013689 {
-	//	return false
-	//}
+	if size <= 4096 && thisSize <= 4096 && hash > 271493713 {
+		return false
+	}
 	start := weibullCDF4K(size - thisSize)
 	end := weibullCDF4K(size)
 	return float64(hash)*(1-start) < maxUint32*(end-start)
