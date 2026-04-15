@@ -2212,15 +2212,21 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 		return nil, err
 	}
 
+	// If incremental garbage collection is enabled (IncrementalFileSize > 0),
+	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
+	// with a new writer.
+	incrementalGcc, err := newRotatingGCCopier(gcConfig.ArchiveLevel, tfp, destNBS, gcConfig.IncrementalFileSize)
+
 	return &markAndSweeper{
-		src:      src,
-		dest:     destNBS,
-		getAddrs: getAddrs,
-		filter:   filter,
-		visited:  make(hash.HashSet),
-		tfp:      tfp,
-		gcc:      gcc,
-		gcConfig: gcConfig,
+		src:            src,
+		dest:           destNBS,
+		getAddrs:       getAddrs,
+		filter:         filter,
+		visited:        make(hash.HashSet),
+		tfp:            tfp,
+		gcc:            gcc,
+		gcConfig:       gcConfig,
+		incrementalGcc: incrementalGcc,
 	}, nil
 }
 
@@ -2236,7 +2242,8 @@ type markAndSweeper struct {
 	gcc      *gcCopier
 	gcConfig chunks.GCConfig
 
-	specs []tableSpec
+	incrementalGcc *rotatingGCCopier
+	specs          []tableSpec
 }
 
 func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) error {
@@ -2250,11 +2257,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	var err error
 	var mu sync.Mutex
 
-	// If incremental garbage collection is enabled (IncrementalFileSize > 0),
-	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
-	// with a new writer.
 	writeIncrementalChunkFiles := i.gcConfig.IncrementalFileSize != chunks.IncrementalGCTablesDisabled
-	incrementalGcc, err := newRotatingGCCopier(i.gcConfig.ArchiveLevel, i.tfp, i.dest, i.gcConfig.IncrementalFileSize)
 
 	first := true
 	for {
@@ -2268,25 +2271,25 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 		// We must wait here for all pending incremental chunk files to be written
 		// and the tableSet updated. Otherwise, we might not filter out
 		// chunks that have already been written during this walk.
-		err = incrementalGcc.waitForPendingChunkFiles()
+		err = i.incrementalGcc.waitForPendingChunkFiles()
 		if err != nil {
 			return err
 		}
 
-		if !first {
+		if !first || i.incrementalGcc.seenChunks.Size() > 0 {
 			copy := toVisit.Copy()
 			for h := range toVisit {
 				if _, ok := i.visited[h]; ok {
 					delete(copy, h)
 				}
-				if incrementalGcc.containsChunk(h) {
+				if i.incrementalGcc.containsChunk(h) {
 					delete(copy, h)
 				}
 			}
 			toVisit = copy
 		}
 
-		toVisit, err = incrementalGcc.specs.hasMany(ctx, toVisit)
+		toVisit, err = i.incrementalGcc.specs.hasMany(ctx, toVisit)
 		if err != nil {
 			return err
 		}
@@ -2333,7 +2336,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 			// To maintain the invariant that the destination only contains references to other chunks in
 			// the destination, we can only safely write leaf chunks into incremental chunk files.
 			if writeIncrementalChunkFiles && isLeaf {
-				addErr = incrementalGcc.addChunk(ctx, tc)
+				addErr = i.incrementalGcc.addChunk(ctx, tc)
 			} else {
 				addErr = i.gcc.addChunk(ctx, tc)
 				i.visited.Insert(tc.Hash())
@@ -2357,19 +2360,20 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 
 	}
 
-	// we don't need to acquire the mutex on the specs because all other tasks that reference it have completed.
-	specs, err := incrementalGcc.finalize(ctx)
-	if err != nil {
-		return err
-	}
-
-	i.specs = append(i.specs, specs...)
-
 	return nil
 }
 
 func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, error) {
 	valctx.ValidateContext(ctx)
+
+	// we don't need to acquire the mutex on the specs because all other tasks that reference it have completed.
+	incrementalSpecs, err := i.incrementalGcc.finalize(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	i.specs = append(i.specs, incrementalSpecs.specs...)
+
 	specs, pendingHandle, err := i.gcc.copyTablesToDir(ctx)
 	if err != nil {
 		return nil, err
@@ -2382,7 +2386,7 @@ func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, erro
 	for _, s := range specs {
 		files[s.name] = s.chunkCount
 	}
-	result, err := i.dest.openChunkSourcesForManifestUpdateAndRebase(ctx, files, nil)
+	result, err := i.dest.openChunkSourcesForManifestUpdateAndRebase(ctx, files, incrementalSpecs.sourceSet)
 	if err != nil {
 		return nil, err
 	}
