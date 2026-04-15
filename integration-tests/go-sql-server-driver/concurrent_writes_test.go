@@ -78,7 +78,9 @@ func TestConcurrentWrites(t *testing.T) {
 	for i := range numWriters {
 		eg.Go(func() error {
 			db, err := server.DB(driver.Connection{User: "root"})
-			require.NoError(t, err)
+			if err != nil {
+				return err
+			}
 			defer db.Close()
 			db.SetMaxOpenConns(1)
 			conn, err := db.Conn(ctx)
