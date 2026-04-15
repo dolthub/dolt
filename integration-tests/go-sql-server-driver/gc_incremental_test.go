@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"os"
@@ -100,23 +101,7 @@ func runGCIncrementalTest(t *testing.T, archiveLevel chunks.GCArchiveLevel, file
 		require.NoError(t, err)
 		defer conn.Close()
 
-		// Create some chunks that will be collected into oldgen because they're referenced by a commit
-		_, err = conn.ExecContext(ctx, "create table vals (id bigint primary key, val bigint)")
-		require.NoError(t, err)
-		vals := []string{}
-		for i := 0; i <= 1024; i++ {
-			vals = append(vals, fmt.Sprintf("(%d,0)", i))
-		}
-		_, err = conn.ExecContext(ctx, "insert into vals values "+strings.Join(vals, ","))
-		require.NoError(t, err)
-		_, err = conn.ExecContext(ctx, "call dolt_commit('-Am', 'create vals table')")
-		require.NoError(t, err)
-
-		// Create some chunks that will be collected into newgen because they aren't referenced by a commit
-		_, err = conn.ExecContext(ctx, "create table vals2 (id bigint primary key, val bigint)")
-		require.NoError(t, err)
-		_, err = conn.ExecContext(ctx, "insert into vals2 values "+strings.Join(vals, ","))
-		require.NoError(t, err)
+		populateDB(t, conn)
 		var gcSQL string
 		if full {
 			gcSQL = "call dolt_gc('--archive-level',?,'--incremental-file-size',?,'--full');"
@@ -136,6 +121,28 @@ func runGCIncrementalTest(t *testing.T, archiveLevel chunks.GCArchiveLevel, file
 	// Both newgen and oldgen should contain multiple chunk files
 	require.Greater(t, repoSize.NewGenC, 1)
 	require.Greater(t, repoSize.OldGenC, 1)
+}
+
+func populateDB(t *testing.T, conn *sql.Conn) {
+	ctx := context.Background()
+
+	// Create some chunks that will be collected into oldgen because they're referenced by a commit
+	_, err := conn.ExecContext(ctx, "create table vals (id bigint primary key, val bigint)")
+	require.NoError(t, err)
+	vals := []string{}
+	for i := 0; i <= 1024; i++ {
+		vals = append(vals, fmt.Sprintf("(%d,0)", i))
+	}
+	_, err = conn.ExecContext(ctx, "insert into vals values "+strings.Join(vals, ","))
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, "call dolt_commit('-Am', 'create vals table')")
+	require.NoError(t, err)
+
+	// Create some chunks that will be collected into newgen because they aren't referenced by a commit
+	_, err = conn.ExecContext(ctx, "create table vals2 (id bigint primary key, val bigint)")
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, "insert into vals2 values "+strings.Join(vals, ","))
+	require.NoError(t, err)
 }
 
 type RepoSize struct {
@@ -191,4 +198,106 @@ func GetRepoSize(dir string) (RepoSize, error) {
 		ret.OldGenC += 1
 	}
 	return ret, nil
+}
+
+func TestResumableGC(t *testing.T) {
+	t.Parallel()
+	var ports DynamicResources
+	ports.global = &GlobalPorts
+	ports.t = t
+
+	u, err := driver.NewDoltUser()
+	require.NoError(t, err)
+	t.Cleanup(func() { u.Cleanup() })
+
+	rs, err := u.MakeRepoStore()
+	require.NoError(t, err)
+
+	repoName := "resumable_gc_test"
+	repo, err := rs.MakeRepo(repoName)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	server := MakeServer(t, repo, &driver.Server{
+		Args:        []string{"--port", `{{get_port "server"}}`},
+		DynamicPort: "server",
+		Envs:        []string{"DOLT_TEST_ABORT_GC_AFTER_INCREMENTAL_FILE_WRITE=true"},
+	}, &ports)
+	server.DBName = repoName
+
+	// Create the database and run GC
+	func() {
+
+		db, err := server.DB(driver.Connection{User: "root"})
+		require.NoError(t, err)
+		defer db.Close()
+
+		conn, err := db.Conn(ctx)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		populateDB(t, conn)
+
+		// Test 1: Oldgen is not amended when --full is set
+		_, err = conn.ExecContext(ctx, "call dolt_gc('--archive-level','0','--incremental-file-size','1','--full');")
+		require.Errorf(t, err, "GC aborting after writing incremental table file")
+		requireFileAddedToManifest(t, filepath.Join(repo.Dir, ".dolt/noms/oldgen"), false)
+
+		// Test 2: Oldgen is amended when --full is not set
+		_, err = conn.ExecContext(ctx, "call dolt_gc('--archive-level','0','--incremental-file-size','1');")
+		require.Errorf(t, err, "GC aborting after writing incremental table file")
+		requireFileAddedToManifest(t, filepath.Join(repo.Dir, ".dolt/noms/oldgen"), true)
+
+		_, err = conn.ExecContext(ctx, "call dolt_gc('--archive-level','0','--incremental-file-size','1');")
+
+		// Test 3: Newgen is not amended even when --full is not set (but there are no changes to oldgen)
+		_, err = conn.ExecContext(ctx, "insert into vals2 values (1025, 0);")
+		require.NoError(t, err)
+		_, err = conn.ExecContext(ctx, "call dolt_gc('--archive-level','0','--incremental-file-size','1');")
+		require.Errorf(t, err, "GC aborting after writing incremental table file")
+		requireFileAddedToManifest(t, filepath.Join(repo.Dir, ".dolt/noms/oldgen"), false)
+	}()
+
+	// Verify that the DB is in a valid state and there are no dropped chunks.
+	err = repo.DoltExec("fsck")
+	require.NoError(t, err)
+}
+
+func requireFileAddedToManifest(t *testing.T, path string, expectedResult bool) {
+	// Verify that the manifest contains the new chunk file
+
+	manifest, err := os.Open(filepath.Join(path, "manifest"))
+	if os.IsNotExist(err) {
+		// A nonexistent manifest contains no files
+		require.False(t, expectedResult)
+		return
+	}
+	require.NoError(t, err)
+
+	entries, err := os.ReadDir(path)
+	require.NoError(t, err)
+	var tablefileName string
+	for _, e := range entries {
+		if e.Name() == "manifest" || e.Name() == "LOCK" {
+			continue
+		}
+		if e.IsDir() {
+			continue
+		}
+
+		tablefileName = e.Name()
+		break
+	}
+	require.NotEmpty(t, tablefileName)
+
+	manifestBuffer := make([]byte, 200)
+	_, err = manifest.Read(manifestBuffer)
+	require.NoError(t, err)
+
+	if expectedResult {
+		require.Contains(t, string(manifestBuffer), tablefileName)
+	} else {
+		require.NotContains(t, string(manifestBuffer), tablefileName)
+	}
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 
@@ -250,6 +251,9 @@ func (gcc *rotatingGCCopier) finalizeChildWriter(ctx context.Context, copier gcC
 		if err != nil {
 			return err
 		}
+	}
+	if _, abort := os.LookupEnv("DOLT_TEST_ABORT_GC_AFTER_INCREMENTAL_FILE_WRITE"); abort {
+		return fmt.Errorf("GC aborting after writing incremental table file")
 	}
 
 	return gcc.specs.append(ctx, specs, gcc.dest)
