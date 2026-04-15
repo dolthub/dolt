@@ -33,9 +33,9 @@ func (e *NonInteractiveAuthError) Error() string {
 	b.WriteString("remote authentication required but interactive prompting is disabled")
 	b.WriteString("\n\nHints:")
 	b.WriteString("\n- HTTPS: configure git credentials (credential helper, token) ahead of time")
-	b.WriteString("\n- SSH: run `ssh-add <key>` to pre-load your key into a running ssh-agent before invoking dolt")
+	b.WriteString("\n- SSH: ensure your key is loaded (`ssh-add <key>`) and the server host key is in known_hosts")
 	b.WriteString("\n- GCM: ensure non-interactive auth is configured")
-	if strings.TrimSpace(e.Output) != "" {
+	if e.Output != "" {
 		b.WriteString("\n\nGit output:\n")
 		b.WriteString(strings.TrimRight(e.Output, "\n"))
 	}
@@ -70,17 +70,15 @@ func NormalizeError(err error, output []byte) error {
 func looksLikeAuthPromptOrFailure(s string) bool {
 	// Keep these as simple substring matches; callers can extend as we observe new cases.
 	s = strings.ToLower(s)
-	patterns := []string{
+	for _, p := range []string{
 		"terminal prompts disabled",
-		"could not read Username",
-		"could not read Password",
-		"Authentication failed",
-		"Enter passphrase for key",
-		"Permission denied (publickey)",
-		"fatal: could not read from remote repository",
-	}
-	for _, p := range patterns {
-		if strings.Contains(s, strings.ToLower(p)) {
+		"could not read username",
+		"could not read password",
+		"authentication failed",
+		"enter passphrase for key",
+		"permission denied (publickey)",
+	} {
+		if strings.Contains(s, p) {
 			return true
 		}
 	}

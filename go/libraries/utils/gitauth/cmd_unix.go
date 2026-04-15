@@ -26,6 +26,8 @@ import (
 // for a passphrase; the open fails without a controlling terminal and SSH
 // exits with an authentication error that [NormalizeError] converts into a
 // [NonInteractiveAuthError].
+//
+// See https://man7.org/linux/man-pages/man2/setsid.2.html
 func CmdSetsid(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 }

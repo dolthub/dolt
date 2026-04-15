@@ -109,30 +109,17 @@ setup_git_sshd() {
 
     SSHD_PORT="$(definePORT)"
 
-    # Windows OpenSSH reads config paths as native Windows paths and does not
-    # support UsePAM, so we convert with cygpath and omit the PAM directive.
-    local host_key="$SSHD_DIR/host_key"
-    local auth_keys="$SSHD_DIR/authorized_keys"
-    local pid_file="$SSHD_DIR/sshd.pid"
-    local use_pam="UsePAM no"
-    if [[ "$IS_WINDOWS" == true ]] && command -v cygpath >/dev/null 2>&1; then
-        host_key="$(cygpath -w "$host_key")"
-        auth_keys="$(cygpath -w "$auth_keys")"
-        pid_file="$(cygpath -w "$pid_file")"
-        use_pam=""
-    fi
-
     cat > "$SSHD_DIR/sshd_config" <<EOF
 Port ${SSHD_PORT}
 ListenAddress 127.0.0.1
-HostKey ${host_key}
-AuthorizedKeysFile ${auth_keys}
+HostKey $SSHD_DIR/host_key
+AuthorizedKeysFile $SSHD_DIR/authorized_keys
 StrictModes no
 PasswordAuthentication no
-${use_pam}
+UsePAM no
 AllowTcpForwarding no
 X11Forwarding no
-PidFile ${pid_file}
+PidFile $SSHD_DIR/sshd.pid
 LogLevel ERROR
 EOF
 

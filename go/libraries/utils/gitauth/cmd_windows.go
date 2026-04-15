@@ -27,6 +27,8 @@ import (
 // [windows.DETACHED_PROCESS] on [syscall.SysProcAttr]. Without a console,
 // the MSYS2 ssh binary cannot open CONIN$ to prompt for a passphrase and
 // exits with an authentication error.
+//
+// See https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
 func CmdSetsid(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.DETACHED_PROCESS,

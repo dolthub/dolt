@@ -121,9 +121,9 @@ var commandsSkippingDBLoad = []cli.Command{
 	commands.FsckCmd{},
 }
 
-// commandsSkippingIORedirect lists commands that bypass the stdio redirection
-// applied by [cli.InitIO]. [commands.TransferCmd] uses stdin and stdout for
-// gRPC stream multiplexing and requires direct access to those file descriptors.
+// commands that use stdio directly and must not have it redirected.
+// These commands communicate over stdin/stdout (e.g., gRPC multiplexing) and would
+// break if dolt's normal IO redirection is applied.
 var commandsSkippingIORedirect = []cli.Command{
 	commands.TransferCmd{},
 }

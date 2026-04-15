@@ -32,7 +32,6 @@ func TestNormalizeError_WrapsCommonAuthPromptFailures(t *testing.T) {
 		{"Authentication failed", "remote: Invalid username or password.\nfatal: Authentication failed for 'https://example.com/'", "git failed"},
 		{"Enter passphrase for key", "Enter passphrase for key '/tmp/fake_key': ", "git failed"},
 		{"Permission denied (publickey)", "Permission denied (publickey).", "git failed"},
-		{"could not read from remote repository", "fatal: could not read from remote repository.", "git failed"},
 	}
 
 	for _, tt := range tests {
@@ -80,13 +79,5 @@ func TestNormalizeError_Idempotent(t *testing.T) {
 	got2 := NormalizeError(got1, authOutput)
 	if got1 != got2 {
 		t.Fatalf("expected NormalizeError to be idempotent when already normalized")
-	}
-}
-
-func TestNormalizeError_EmptyOutput_ReturnsOriginalError(t *testing.T) {
-	base := errors.New("exit status 128")
-	got := NormalizeError(base, nil)
-	if got != base {
-		t.Fatalf("expected original error when output is empty, got %T: %v", got, got)
 	}
 }

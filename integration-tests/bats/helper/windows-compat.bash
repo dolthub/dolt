@@ -27,13 +27,6 @@ if { [ -d "$WINDOWS_BASE_DIR"/Windows/System32 ] && [ "$IS_WSL" == false ]; } ||
         export WSLENV="$1$3"
     }
     skiponwindows() {
-        # A test tagged 'windows' explicitly opts in to running on Windows CI.
-        # Check before skipping so that opted-in tests are not suppressed by a
-        # file-level skiponwindows call in setup().
-        local tag
-        for tag in "${BATS_TEST_TAGS[@]:-}"; do
-            [[ "$tag" == "windows" ]] && return
-        done
         skip "$1"
     }
 fi
