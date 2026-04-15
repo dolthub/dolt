@@ -45,7 +45,7 @@ func TestCompute512MiB(t *testing.T) {
 
 	b := compute()
 
-	usable := float64(limit) * 0.75
+	usable := float64(limit) * 0.50
 	assert.Equal(t, uint64(usable*0.47), b.NodeCache)
 	assert.Equal(t, uint64(usable*0.47), b.Memtable)
 	assert.Equal(t, uint64(usable*0.06), b.DecodedChunks)
@@ -62,9 +62,9 @@ func TestCompute128MiB(t *testing.T) {
 
 	b := compute()
 
-	assert.Greater(t, b.NodeCache, uint64(minNodeCacheSize))
-	assert.Greater(t, b.Memtable, uint64(minMemtableSize))
-	assert.Greater(t, b.DecodedChunks, uint64(minDecodedChunksSize))
+	assert.GreaterOrEqual(t, b.NodeCache, uint64(minNodeCacheSize))
+	assert.GreaterOrEqual(t, b.Memtable, uint64(minMemtableSize))
+	assert.GreaterOrEqual(t, b.DecodedChunks, uint64(minDecodedChunksSize))
 
 	assert.Less(t, b.NodeCache, uint64(DefaultNodeCacheSize))
 	assert.Less(t, b.Memtable, uint64(DefaultMemtableSize))
@@ -92,9 +92,10 @@ func TestComputeLarge(t *testing.T) {
 
 	b := compute()
 
-	assert.Greater(t, b.NodeCache, uint64(DefaultNodeCacheSize))
-	assert.Greater(t, b.Memtable, uint64(DefaultMemtableSize))
-	assert.Greater(t, b.DecodedChunks, uint64(DefaultDecodedChunksSize))
+	// With max caps, caches should never exceed defaults even with large GOMEMLIMIT.
+	assert.Equal(t, uint64(maxNodeCacheSize), b.NodeCache)
+	assert.Equal(t, uint64(maxMemtableSize), b.Memtable)
+	assert.Equal(t, uint64(maxDecodedChunksSize), b.DecodedChunks)
 }
 
 func TestAccessorsCallInit(t *testing.T) {

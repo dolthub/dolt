@@ -14,6 +14,10 @@ const (
 	minNodeCacheSize     = 16 * 1024 * 1024 // 16 MiB
 	minMemtableSize      = 4 * 1024 * 1024  // 4 MiB
 	minDecodedChunksSize = 4 * 1024 * 1024  // 4 MiB
+
+	maxNodeCacheSize     = DefaultNodeCacheSize
+	maxMemtableSize      = DefaultMemtableSize
+	maxDecodedChunksSize = DefaultDecodedChunksSize
 )
 
 type Budget struct {
@@ -41,9 +45,9 @@ func compute() Budget {
 		return defaults()
 	}
 
-	// Partition 75% of the limit across caches, reserving the rest for
+	// Partition 50% of the limit across caches, reserving the rest for
 	// GC/stacks. Ratios mirror the original defaults (256:256:32 MiB).
-	usable := float64(limit) * 0.75
+	usable := float64(limit) * 0.50
 
 	b := Budget{
 		NodeCache:     uint64(usable * 0.47),
@@ -54,11 +58,20 @@ func compute() Budget {
 	if b.NodeCache < minNodeCacheSize {
 		b.NodeCache = minNodeCacheSize
 	}
+	if b.NodeCache > maxNodeCacheSize {
+		b.NodeCache = maxNodeCacheSize
+	}
 	if b.Memtable < minMemtableSize {
 		b.Memtable = minMemtableSize
 	}
+	if b.Memtable > maxMemtableSize {
+		b.Memtable = maxMemtableSize
+	}
 	if b.DecodedChunks < minDecodedChunksSize {
 		b.DecodedChunks = minDecodedChunksSize
+	}
+	if b.DecodedChunks > maxDecodedChunksSize {
+		b.DecodedChunks = maxDecodedChunksSize
 	}
 
 	return b
