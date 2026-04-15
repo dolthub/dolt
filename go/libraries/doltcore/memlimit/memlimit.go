@@ -23,7 +23,7 @@ import (
 const (
 	DefaultNodeCacheSize     = 256 * 1024 * 1024 // 256 MiB
 	DefaultMemtableSize      = 256 * 1024 * 1024 // 256 MiB
-	DefaultDecodedChunksSize = 1 << 25            // 32 MiB
+	DefaultDecodedChunksSize = 1 << 25           // 32 MiB
 
 	minNodeCacheSize     = 16 * 1024 * 1024 // 16 MiB
 	minMemtableSize      = 4 * 1024 * 1024  // 4 MiB
