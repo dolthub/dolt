@@ -79,8 +79,9 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tableFilePersister, mode 
 			defer reader.Close()
 			splitOffset, err := writer.ChunkDataLength()
 			require.NoError(t, err)
-			err = p.CopyTableFile(t.Context(), reader, name, writer.FullLength(), splitOffset)
+			ph, err := p.CopyTableFile(t.Context(), reader, name, writer.FullLength(), splitOffset)
 			require.NoError(t, err)
+			defer ph.Close()
 			h := hash.Parse(strings.TrimSuffix(name, ArchiveFileSuffix))
 			cs, err := p.Open(t.Context(), h, s, &Stats{})
 			require.NoError(t, err)
@@ -114,12 +115,15 @@ func makeTestTableSpecs(t *testing.T, tableSizes []uint32, p tableFilePersister,
 
 func TestConjoin(t *testing.T) {
 	t.Run("fake table persister", func(t *testing.T) {
+		t.Parallel()
 		testConjoin(t, testConjoinModeTableFile, func(*testing.T) tableFilePersister {
 			return newFakeTablePersister(&UnlimitedQuotaProvider{})
 		})
 	})
 	t.Run("in-memory blobstore persister", func(t *testing.T) {
+		t.Parallel()
 		t.Run("table file", func(t *testing.T) {
+			t.Parallel()
 			testConjoin(t, testConjoinModeTableFile, func(*testing.T) tableFilePersister {
 				return &blobstorePersister{
 					bs:        blobstore.NewInMemoryBlobstore(""),
@@ -129,6 +133,7 @@ func TestConjoin(t *testing.T) {
 			})
 		})
 		t.Run("archive", func(t *testing.T) {
+			t.Parallel()
 			testConjoin(t, testConjoinModeArchive, func(*testing.T) tableFilePersister {
 				return &blobstorePersister{
 					bs:        blobstore.NewInMemoryBlobstore(""),
@@ -139,7 +144,9 @@ func TestConjoin(t *testing.T) {
 		})
 	})
 	t.Run("local fs blobstore persister", func(t *testing.T) {
+		t.Parallel()
 		t.Run("table file", func(t *testing.T) {
+			t.Parallel()
 			testConjoin(t, testConjoinModeTableFile, func(*testing.T) tableFilePersister {
 				return &blobstorePersister{
 					bs:        blobstore.NewLocalBlobstore(t.TempDir()),
@@ -149,6 +156,7 @@ func TestConjoin(t *testing.T) {
 			})
 		})
 		t.Run("archive", func(t *testing.T) {
+			t.Parallel()
 			testConjoin(t, testConjoinModeArchive, func(*testing.T) tableFilePersister {
 				return &blobstorePersister{
 					bs:        blobstore.NewLocalBlobstore(t.TempDir()),
@@ -168,8 +176,7 @@ const (
 )
 
 func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) tableFilePersister) {
-	stats := &Stats{}
-	setup := func(lock hash.Hash, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tableFilePersister, upstream manifestContents) {
+	setup := func(t *testing.T, lock hash.Hash, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tableFilePersister, upstream manifestContents) {
 		p = factory(t)
 		fm = &fakeManifest{}
 		fm.set(constants.FormatDoltString, lock, root, makeTestTableSpecs(t, sizes, p, mode), nil)
@@ -190,6 +197,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	}
 
 	assertContainAll := func(t *testing.T, p tableFilePersister, expect, actual []tableSpec) {
+		stats := &Stats{}
 		open := func(specs []tableSpec) (sources chunkSources) {
 			for _, sp := range specs {
 				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, stats)
@@ -234,7 +242,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	}
 
 	// Compact some tables, interloper slips in a new table
-	makeExtra := func(p tableFilePersister) tableSpec {
+	makeExtra := func(t *testing.T, p tableFilePersister) tableSpec {
 		mt := newMemTable(testMemTableSize)
 		data := []byte{0xde, 0xad}
 		mt.addChunk(computeAddr(data), data)
@@ -261,13 +269,14 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	startLock, startRoot := computeAddr([]byte("lock")), hash.Of([]byte("root"))
 	t.Run("Success", func(t *testing.T) {
 		// Compact some tables, no one interrupts
+		t.Parallel()
 		for _, c := range tc {
 			t.Run(c.name, func(t *testing.T) {
-				fm, p, upstream := setup(startLock, startRoot, c.precompact)
+				fm, p, upstream := setup(t, startLock, startRoot, c.precompact)
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, &Stats{})
 				require.NoError(t, err)
-				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, c.postcompact, getSortedSizes(newUpstream.specs))
@@ -277,18 +286,19 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	})
 
 	t.Run("Retry", func(t *testing.T) {
+		t.Parallel()
 		for _, c := range tc {
 			t.Run(c.name, func(t *testing.T) {
-				fm, p, upstream := setup(startLock, startRoot, c.precompact)
+				fm, p, upstream := setup(t, startLock, startRoot, c.precompact)
 
-				newTable := makeExtra(p)
+				newTable := makeExtra(t, p)
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
 				}}
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
 				require.NoError(t, err)
-				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, append([]uint32{1}, c.postcompact...), getSortedSizes(newUpstream.specs))
@@ -298,17 +308,18 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	})
 
 	t.Run("TablesDroppedUpstream", func(t *testing.T) {
+		t.Parallel()
 		// Interloper drops some compactees
 		for _, c := range tc {
 			t.Run(c.name, func(t *testing.T) {
-				fm, p, upstream := setup(startLock, startRoot, c.precompact)
+				fm, p, upstream := setup(t, startLock, startRoot, c.precompact)
 
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
 				}}
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
 				require.NoError(t, err)
-				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, c.precompact[1:], getSortedSizes(newUpstream.specs))
@@ -316,7 +327,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 		}
 	})
 
-	setupAppendix := func(lock hash.Hash, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tableFilePersister, upstream manifestContents) {
+	setupAppendix := func(t *testing.T, lock hash.Hash, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tableFilePersister, upstream manifestContents) {
 		p = factory(t)
 		fm = &fakeManifest{}
 		fm.set(constants.FormatDoltString, lock, root, makeTestTableSpecs(t, specSizes, p, mode), makeTestTableSpecs(t, appendixSizes, p, mode))
@@ -344,14 +355,15 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	}
 
 	t.Run("SuccessAppendix", func(t *testing.T) {
+		t.Parallel()
 		// Compact some tables, no one interrupts
 		for _, c := range tca {
 			t.Run(c.name, func(t *testing.T) {
-				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
+				fm, p, upstream := setupAppendix(t, startLock, startRoot, c.precompact, c.appendix)
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, &Stats{})
 				require.NoError(t, err)
-				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, c.postcompact, getSortedSizes(newUpstream.specs))
@@ -363,19 +375,20 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	})
 
 	t.Run("RetryAppendixSpecsChange", func(t *testing.T) {
+		t.Parallel()
 		for _, c := range tca {
 			t.Run(c.name, func(t *testing.T) {
-				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
+				fm, p, upstream := setupAppendix(t, startLock, startRoot, c.precompact, c.appendix)
 
-				newTable := makeExtra(p)
+				newTable := makeExtra(t, p)
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
 				}}
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
 				require.NoError(t, err)
-				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, append([]uint32{1}, c.postcompact...), getSortedSizes(newUpstream.specs))
@@ -387,20 +400,21 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	})
 
 	t.Run("RetryAppendixAppendixChange", func(t *testing.T) {
+		t.Parallel()
 		for _, c := range tca {
 			t.Run(c.name, func(t *testing.T) {
-				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
+				fm, p, upstream := setupAppendix(t, startLock, startRoot, c.precompact, c.appendix)
 
-				newTable := makeExtra(p)
+				newTable := makeExtra(t, p)
 				u := updatePreemptManifest{fm, func() {
 					app := append([]tableSpec{}, upstream.appendix...)
 					specs := append([]tableSpec{}, newTable)
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
 				}}
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
 				require.NoError(t, err)
-				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
 				assert.True(t, exists)
 				if newUpstream.appendix != nil {
@@ -414,17 +428,18 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	})
 
 	t.Run("TablesDroppedUpstreamAppendixSpecChanges", func(t *testing.T) {
+		t.Parallel()
 		// Interloper drops some compactees
 		for _, c := range tca {
 			t.Run(c.name, func(t *testing.T) {
-				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
+				fm, p, upstream := setupAppendix(t, startLock, startRoot, c.precompact, c.appendix)
 
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
 				}}
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
 				require.NoError(t, err)
-				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, c.precompact[len(c.appendix)+1:], getSortedSizes(newUpstream.specs))
@@ -434,21 +449,22 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	})
 
 	t.Run("TablesDroppedUpstreamAppendixAppendixChanges", func(t *testing.T) {
+		t.Parallel()
 		// Interloper drops some compactees
 		for _, c := range tca {
 			t.Run(c.name, func(t *testing.T) {
-				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
+				fm, p, upstream := setupAppendix(t, startLock, startRoot, c.precompact, c.appendix)
 
-				newTable := makeExtra(p)
+				newTable := makeExtra(t, p)
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, newTable)
 					specs = append(specs, upstream.specs[len(c.appendix)+1:]...)
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
 				}}
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, stats)
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
 				require.NoError(t, err)
-				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, append([]uint32{1}, c.precompact[len(c.appendix)+1:]...), getSortedSizes(newUpstream.specs))

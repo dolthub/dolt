@@ -65,8 +65,7 @@ const (
 	GitHTTPSScheme = "git+https"
 	GitSSHScheme   = "git+ssh"
 
-	defaultScheme       = HTTPSScheme
-	defaultMemTableSize = 256 * 1024 * 1024
+	defaultScheme = HTTPSScheme
 )
 
 // DBFactory is an interface for creating concrete datas.Database instances from different backing stores

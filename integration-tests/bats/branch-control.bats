@@ -8,7 +8,7 @@ setup() {
 
 teardown() {
     assert_feature_version
-    stop_sql_server
+    stop_sql_server 1
     teardown_common
 }
 

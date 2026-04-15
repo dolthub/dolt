@@ -72,7 +72,7 @@ func testSchemaSerializationFlatbuffers(t *testing.T, sch schema.Schema) {
 func parseSchemaString(t *testing.T, s string) schema.Schema {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 	eng, db, err := engine.NewSqlEngineForEnv(ctx, dEnv)

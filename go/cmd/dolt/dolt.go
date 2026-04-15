@@ -53,6 +53,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -90,6 +91,7 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.ArchiveCmd{},
 	commands.FsckCmd{},
 	commands.ConfigCmd{},
+	commands.InitCmd{},
 }
 
 var commandsWithoutGlobalArgSupport = []cli.Command{
@@ -120,6 +122,7 @@ var commandsWithoutCurrentDirWrites = []cli.Command{
 // on terms that make sense for their purpose.
 var commandsSkippingDBLoad = []cli.Command{
 	commands.FsckCmd{},
+	commands.InitCmd{},
 }
 
 // commands that use stdio directly and must not have it redirected.
@@ -448,13 +451,15 @@ func runMain() int {
 
 	warnIfMaxFilesTooLow()
 
+	// Initialize memory budget from GOMEMLIMIT before any DB loading.
+	memlimit.Init()
+
 	if ok, exit := interceptSendMetrics(ctx, cfg.remainingArgs); ok {
 		return exit
 	}
 
 	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment.
 	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
-
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
 		return 1
@@ -512,7 +517,7 @@ func runMain() int {
 	// part of Dolt config in the first place!).
 	var mrEnv *env.MultiRepoEnv
 	if needsDBLoad(cfg.subCommand) {
-		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), cfg.dataDirFS, dEnv.Version, dEnv)
+		mrEnv, err = env.MultiEnvForDirectory(ctx, cfg.dataDirFS, dEnv)
 		if err != nil {
 			cli.PrintErrln("failed to load database names:", err.Error())
 			return 1
@@ -552,7 +557,10 @@ func runMain() int {
 			return 1
 		}
 	} else {
-		if cfg.hasGlobalArgs {
+		// This is a kludge, like a lot of the of the control flow in this file.
+		// `init` is just going to work on the root dEnv we passed, so it does
+		// support --data-dir.
+		if cfg.hasGlobalArgs && cfg.subCommand != "init" {
 			if supportsGlobalArgs(cfg.subCommand) {
 				cli.PrintErrln(
 					`Global arguments are not supported for this command as it has not yet been migrated to function in a remote context. 

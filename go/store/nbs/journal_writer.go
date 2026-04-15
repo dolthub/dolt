@@ -34,14 +34,14 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-const (
-	// journalWriterBuffSize is the size of the statically allocated buffer where journal records are
-	// built before being written to the journal file on disk. There is not a hard limit on the size
-	// of records – specifically, some newer data chunking formats (i.e. optimized JSON storage) can
-	// produce chunks (and therefore chunk records) that are megabytes in size. The current limit of
-	// 5MB should be large enough to cover all but the most extreme cases.
-	journalWriterBuffSize = 5 * 1024 * 1024
+// journalWriterBuffSize is the size of the statically allocated buffer where journal records are
+// built before being written to the journal file on disk. There is not a hard limit on the size
+// of records – specifically, some newer data chunking formats (i.e. optimized JSON storage) can
+// produce chunks (and therefore chunk records) that are megabytes in size. The current limit of
+// 5MB should be large enough to cover all but the most extreme cases.
+var journalWriterBuffSize uint32 = 5 * 1024 * 1024
 
+const (
 	chunkJournalAddr = chunks.JournalFileID
 
 	journalIndexFileName = "journal.idx"

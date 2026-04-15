@@ -44,7 +44,7 @@ func DEnvWithSeedDataForTest(ctx context.Context, t *testing.T) *env.DoltEnv {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		dEnv.DoltDB(ctx).Close()
+		dEnv.Close()
 	})
 	return dEnv
 }
@@ -179,7 +179,7 @@ func TestCreateTable(t *testing.T) {
 
 			dEnv := dtestutils.CreateTestEnv()
 			t.Cleanup(func() {
-				dEnv.DoltDB(ctx).Close()
+				dEnv.Close()
 			})
 			working, err := dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")

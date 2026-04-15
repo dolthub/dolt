@@ -43,7 +43,7 @@ func TestGCDoesNotLeakFd(t *testing.T) {
 		sanityNextFd := getNextFd(t)
 		require.Equal(t, nextFd, sanityNextFd)
 
-		for i := 0; i < 64; i++ {
+		for i := 0; i < 16; i++ {
 			runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 		}
 

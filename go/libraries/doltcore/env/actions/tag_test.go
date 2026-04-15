@@ -47,7 +47,7 @@ func createTestEnv() (*env.DoltEnv, *filesys.InMemFS) {
 	initialFiles := map[string][]byte{}
 
 	fs := filesys.NewInMemFS(initialDirs, initialFiles, workingDir)
-	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
+	dEnv := env.LoadWithoutDB(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
 
 	return dEnv, fs
 }

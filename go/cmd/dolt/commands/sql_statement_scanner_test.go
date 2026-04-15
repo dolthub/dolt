@@ -188,6 +188,18 @@ insert into foo values (1,2,3)|`,
 			lineNums: []int{1, 2},
 		},
 		{
+			// https://github.com/dolthub/dolt/issues/10828
+			input: `-- comment asdfasdf
+		delimiter //
+		select current_user() //`,
+			statements: []string{
+				"",
+				"",
+				"select current_user()",
+			},
+			lineNums: []int{1, 2, 3},
+		},
+		{
 			// https://github.com/dolthub/dolt/issues/8495
 			input: strings.Repeat(" ", 4096) + `insert into foo values (1,2,3)`,
 			statements: []string{
@@ -211,12 +223,11 @@ insert into foo values (1,2,3)|`,
 CALL dolt_commit('-m', 'message', '--allow-empty');
 CALL dolt_checkout('main');`,
 			statements: []string{
-				`-- '
--- can have intermediate comments
-CALL dolt_commit('-m', 'message', '--allow-empty')`,
+				"", "",
+				"CALL dolt_commit('-m', 'message', '--allow-empty')",
 				"CALL dolt_checkout('main')",
 			},
-			lineNums: []int{1, 4},
+			lineNums: []int{1, 2, 3, 4},
 		},
 		{
 			input: `/* block comment with lone quote '
@@ -245,15 +256,15 @@ in quote';`,
 			statements: []string{
 				"select * /* -- ignore line comment inside block comment */ from xy",
 				"select x from xy",
-				`-- select y from xy;
-select * /* ignore multi-line comment with ;
+				"",
+				`select * /* ignore multi-line comment with ;
 comment;
 comment;
 */ from foo`,
 				`select '-- ignore line comment
 in quote'`,
 			},
-			lineNums: []int{1, 2, 2, 7},
+			lineNums: []int{1, 2, 2, 3, 7},
 		},
 	}
 

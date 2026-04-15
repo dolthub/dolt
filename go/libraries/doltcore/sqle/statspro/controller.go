@@ -70,7 +70,12 @@ type StatsController struct {
 	pro            *sqle.DoltDatabaseProvider
 	bgThreads      *sql.BackgroundThreads
 	statsBackingDb filesys.Filesys
-	hdpEnv         *env.DoltEnv
+
+	// getUserHomeDir and dbLoadParams are captured from the DoltEnv at
+	// construction or InitDatabaseHook time. Once getUserHomeDir is set,
+	// neither field is overwritten.
+	getUserHomeDir env.HomeDirProvider
+	dbLoadParams   map[string]interface{}
 
 	dbFs map[string]filesys.Filesys
 
@@ -143,18 +148,33 @@ const defaultGcInterval = 24 * time.Hour
 
 func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
 	return &StatsController{
-		mu:          sync.Mutex{},
-		logger:      logger,
-		gcInterval:  defaultGcInterval,
-		rateLimiter: newSimpleRateLimiter(defaultJobInterval),
-		Stats:       newRootStats(),
-		dbFs:        make(map[string]filesys.Filesys),
-		closed:      make(chan struct{}),
-		kv:          NewMemStats(),
-		hdpEnv:      dEnv,
-		bgThreads:   bgThreads,
-		genCnt:      atomic.Uint64{},
+		mu:             sync.Mutex{},
+		logger:         logger,
+		gcInterval:     defaultGcInterval,
+		rateLimiter:    newSimpleRateLimiter(defaultJobInterval),
+		Stats:          newRootStats(),
+		dbFs:           make(map[string]filesys.Filesys),
+		closed:         make(chan struct{}),
+		kv:             NewMemStats(),
+		getUserHomeDir: dEnvHomeDir(dEnv),
+		dbLoadParams:   dEnvLoadParams(dEnv),
+		bgThreads:      bgThreads,
+		genCnt:         atomic.Uint64{},
 	}
+}
+
+func dEnvHomeDir(dEnv *env.DoltEnv) env.HomeDirProvider {
+	if dEnv == nil {
+		return nil
+	}
+	return dEnv.GetUserHomeDir
+}
+
+func dEnvLoadParams(dEnv *env.DoltEnv) map[string]interface{} {
+	if dEnv == nil || len(dEnv.DBLoadParams) == 0 {
+		return nil
+	}
+	return maps.Clone(dEnv.DBLoadParams)
 }
 
 func (sc *StatsController) SetBackgroundThreads(bgThreads *sql.BackgroundThreads) {
@@ -577,11 +597,9 @@ func (sc *StatsController) rm(fs filesys.Filesys) error {
 }
 
 func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) (*prollyStats, error) {
-	if sc.hdpEnv == nil {
+	if sc.getUserHomeDir == nil {
 		return nil, fmt.Errorf("cannot initialize *prollKv, missing homeDirProvider")
 	}
-	params := make(map[string]interface{})
-	params[dbfactory.GRPCDialProviderParam] = env.NewGRPCDialProviderFromDoltEnv(sc.hdpEnv)
 
 	var urlPath string
 	u, err := earl.Parse(sc.pro.DbFactoryUrl())
@@ -599,8 +617,8 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 	// Build DB load params for the stats DoltDB. Always bypass the singleton cache:
 	// the stats controller owns the lifecycle of its DoltDB instances directly.
 	var dbLoadParams map[string]interface{}
-	if sc.hdpEnv != nil && len(sc.hdpEnv.DBLoadParams) > 0 {
-		dbLoadParams = maps.Clone(sc.hdpEnv.DBLoadParams)
+	if len(sc.dbLoadParams) > 0 {
+		dbLoadParams = maps.Clone(sc.dbLoadParams)
 	} else {
 		dbLoadParams = make(map[string]interface{})
 	}
@@ -615,7 +633,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		}
 
 		// Use LoadWithoutDB so DB load params can be applied before any DB is opened.
-		dEnv = env.LoadWithoutDB(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, urlPath, doltversion.Version)
+		dEnv = env.LoadWithoutDB(ctx, sc.getUserHomeDir, statsFs, urlPath, doltversion.Version)
 		dEnv.DBLoadParams = dbLoadParams
 		err = dEnv.InitRepo(ctx, types.Format_Default, "stats", "stats@stats.com", env.DefaultInitBranch)
 		if err != nil {
@@ -624,12 +642,12 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 	} else if !isDir {
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
 	} else {
-		dEnv = env.LoadWithoutDB(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, "", doltversion.Version)
+		dEnv = env.LoadWithoutDB(ctx, sc.getUserHomeDir, statsFs, urlPath, doltversion.Version)
 		dEnv.DBLoadParams = dbLoadParams
-	}
-
-	if err := dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params); err != nil {
-		return nil, err
+		env.LoadDoltDB(ctx, dEnv)
+		if dEnv.DBLoadError != nil {
+			return nil, dEnv.DBLoadError
+		}
 	}
 
 	statsDdb := dEnv.DbData(ctx).Ddb

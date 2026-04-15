@@ -48,6 +48,11 @@ var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
 var ErrInvalidFetchSpec = errors.New("invalid fetch spec")
 var ErrPullWithRemoteNoUpstream = errors.New("You asked to pull from the remote '%s', but did not specify a branch. Because this is not the default configured remote for your current branch, you must specify a branch.")
 var ErrPullWithNoRemoteAndNoUpstream = errors.New("There is no tracking information for the current branch.\nPlease specify which branch you want to merge with.\n\n\tdolt pull <remote> <branch>\n\nIf you wish to set tracking information for this branch you can do so with:\n\n\t dolt push --set-upstream <remote> <branch>\n")
+var ErrPullWithNoUpstreamMergeRef = goerrors.NewKind("there is no tracking information for the current branch '%s'.\n" +
+	"Please specify which branch you want to merge with:\n\n" +
+	"\tdolt pull %s <branch>\n\n" +
+	"If you wish to set tracking information for this branch, run:\n\n" +
+	"\tdolt push --set-upstream %s %s")
 
 var ErrCurrentBranchHasNoUpstream = goerrors.NewKind("fatal: The current branch %s has no upstream branch.\n" +
 	"To push the current branch and set the remote as upstream, use\n" +
@@ -614,8 +619,11 @@ func WithForce(force bool) PullSpecOpt {
 	}
 }
 
-// NewPullSpec returns a PullSpec for the arguments given. This function validates remote and gets remoteRef
-// for given remoteRefName; if it's not defined, it uses current branch to get its upstream branch if it exists.
+// NewPullSpec builds a [PullSpec] for the given remote and branch. When |remoteRefName|
+// is empty, the merge ref is read from the tracking configuration for the current branch.
+// If the tracking entry exists but has no merge ref set, [ErrPullWithNoUpstreamMergeRef] is
+// returned. When |remoteOnly| is true and no tracking configuration exists, an error is
+// returned rather than falling back to a default.
 func NewPullSpec[C doltdb.Context](
 	ctx C,
 	rsr RepoStateReader[C],
@@ -661,6 +669,9 @@ func NewPullSpec[C doltdb.Context](
 		}
 
 		remoteRef = trackedBranch.Merge.Ref
+		if remoteRef == nil {
+			return nil, ErrPullWithNoUpstreamMergeRef.New(branch.GetPath(), remoteName, remoteName, branch.GetPath())
+		}
 	} else {
 		remoteRef = ref.NewBranchRef(remoteRefName)
 	}

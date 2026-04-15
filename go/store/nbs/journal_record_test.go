@@ -290,12 +290,14 @@ func TestJournalTruncated(t *testing.T) {
 }
 
 func TestJournalForDataLossOnBoundary(t *testing.T) {
+	origBuffSize := journalWriterBuffSize
+	journalWriterBuffSize = 8192
+	t.Cleanup(func() { journalWriterBuffSize = origBuffSize })
+
 	r := rand.New(rand.NewSource(987654321))
 	// The data loss detection logic has some special cases around buffer boundaries to avoid reading all data into
 	// memory at once. This test constructs a journal which starts with a few valid records, then a bunch of garbage
 	// data, then we'll stick two records which constitute data loss on the buffer boundary at each byte of the valid buffer.
-	//
-	// The data loss code uses a 10 Mb buffer, so we'll make a 10 Mb journal plus 1 Kb.
 	bufSz := 2*journalWriterBuffSize + (1 << 10)
 
 	// Pre generate random buffer to speed this process up.
@@ -349,7 +351,7 @@ func TestJournalForDataLossOnBoundary(t *testing.T) {
 		t.Run(backer.name, func(t *testing.T) {
 			// startPoint and endPoint define the range of offsets to test for data loss on the boundary.
 			startPoint := (2 * journalWriterBuffSize) - uint32(len(lostData)) - uint32(rootHashRecordSize())
-			// endPoint puts the fist byte of lostData 10 bytes after the 10 Mb read.
+			// endPoint puts the first byte of lostData past the 2*journalWriterBuffSize boundary.
 			endPoint := (2 * journalWriterBuffSize) + uint32(rootHashRecordSize())
 
 			for startPoint <= endPoint {
@@ -364,8 +366,7 @@ func TestJournalForDataLossOnBoundary(t *testing.T) {
 				// Reset the journal buffer to original status.
 				copy(journalBuf[startPoint:startPoint+uint32(len(lostData))], backer.buf[startPoint:startPoint+uint32(len(lostData))])
 
-				// Testing every option takes a couple hours. Don't use `r` because we want this to be non-deterministic.
-				startPoint += uint32(rand.Intn(38) + 1) // Don't want to skip rootHashRecordSize() entirely.
+				startPoint++
 			}
 		})
 	}

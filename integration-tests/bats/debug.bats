@@ -32,8 +32,8 @@ SQL
 }
 
 teardown() {
-    teardown_common
     stop_sql_server 1
+    teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
 }

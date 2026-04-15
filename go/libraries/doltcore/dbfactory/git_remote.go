@@ -28,6 +28,7 @@ import (
 
 	"github.com/dolthub/fslock"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -143,7 +144,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	cs, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: remoteName}, defaultMemTableSize, q)
+	cs, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: remoteName}, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
 	}

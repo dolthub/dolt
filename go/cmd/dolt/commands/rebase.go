@@ -453,9 +453,11 @@ func isRebaseConflictError(err error) bool {
 		return true
 	}
 
-	// For over-the-wire errors that lose their type, match against error message patterns
+	// For over-the-wire errors that lose their type, match against error message patterns.
+	// Use Contains instead of HasPrefix because MySQL wire errors are prefixed with
+	// "Error 1105 (HY000): " by the go-mysql-driver.
 	errMsg := err.Error()
-	return strings.HasPrefix(errMsg, dprocedures.RebaseDataConflictPrefix) ||
-		strings.HasPrefix(errMsg, dprocedures.RebaseVerificationFailedPrefix) ||
-		strings.HasPrefix(errMsg, actions.CommitVerificationFailedPrefix)
+	return strings.Contains(errMsg, dprocedures.RebaseDataConflictPrefix) ||
+		strings.Contains(errMsg, dprocedures.RebaseVerificationFailedPrefix) ||
+		strings.Contains(errMsg, actions.CommitVerificationFailedPrefix)
 }

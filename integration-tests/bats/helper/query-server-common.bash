@@ -151,11 +151,9 @@ stop_sql_server() {
     wait=$1
     if [ ! -z "$SERVER_PID" ]; then
         # ignore failures of kill command in the case the server is already dead
-        run kill $SERVER_PID
+        kill $SERVER_PID || :
         if [ $wait ]; then
-            while ps -p $SERVER_PID > /dev/null; do
-                sleep .1;
-            done
+            wait $SERVER_PID || :
         fi;
     fi
     SERVER_PID=
