@@ -51,6 +51,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
@@ -449,6 +450,9 @@ func runMain() int {
 	}
 
 	warnIfMaxFilesTooLow()
+
+	// Initialize memory budget from GOMEMLIMIT before any DB loading.
+	memlimit.Init()
 
 	if ok, exit := interceptSendMetrics(ctx, cfg.remainingArgs); ok {
 		return exit

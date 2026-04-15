@@ -26,6 +26,7 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -97,7 +98,7 @@ func (fact OSSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	return nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
+	return nbs.NewBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q)
 }
 
 func ossConfigFromParams(params map[string]interface{}) ossCredential {

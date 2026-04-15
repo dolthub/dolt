@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -42,7 +43,7 @@ func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 
 	bs := blobstore.NewInMemoryBlobstore(uuid.New().String())
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	cs, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
+	cs, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
 	}
