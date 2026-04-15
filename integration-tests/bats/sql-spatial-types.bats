@@ -302,5 +302,5 @@ SQL
     [ "$status" -eq 0 ]
 
     run dolt sql -q "SELECT ST_AsText(g), ST_AsText(p), ST_AsText(l), ST_AsText(po), ST_AsText(mp) from t1;"
-    [[ "$output" =~ "POINT(1 2)   | POINT(2 1)   | LINESTRING(0 0,1 2) | POLYGON((1 2,3 4,5 6,1 2)) | MULTIPOINT(0 0,1 2)" ]] || false
+    [[ "$output" =~ "POINT(1 2)   | POINT(2 1)   | LINESTRING(0 0,1 2) | POLYGON((1 2,3 4,5 6,1 2)) | MULTIPOINT((0 0),(1 2))" ]] || false
 }
