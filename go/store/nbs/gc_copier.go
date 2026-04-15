@@ -232,6 +232,25 @@ func (gcc *rotatingGCCopier) containsChunk(h hash.Hash) bool {
 	return gcc.seenChunks.Has(h)
 }
 
+func (gcc *rotatingGCCopier) finalizeChildWriter(ctx context.Context, copier gcCopier) error {
+
+	specs, pending, err := copier.copyTablesToDir(ctx)
+	if err != nil {
+		return err
+	}
+	defer pending.Close()
+
+	// TODO: We only need to add the files to the manifest here if we're appending to a block store without swapping (eg oldgen without --full).
+	// If we add files to the manifest in other situations, we result in a manifest with redundant table files.
+	// These will be removed during the swap at the end of GC, but will stick around if GC is interrupted.
+	err = addTableFilesToManifest(ctx, gcc.dest, specs, gcc.specs.sourceSet)
+	if err != nil {
+		return err
+	}
+
+	return gcc.specs.append(ctx, specs, gcc.dest)
+}
+
 // rotate replaces the table file writer with a new one, and creates an async goroutine to
 // finalize the original writer.
 func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
@@ -239,23 +258,7 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 	// even after gcc.gcCopier.writer gets reassigned below.
 	previousCopier := gcc.gcCopier
 	gcc.eg.Go(func() error {
-
-		specs, pending, err := previousCopier.copyTablesToDir(ctx)
-		defer pending.Close()
-
-		if err != nil {
-			return err
-		}
-
-		// TODO: We only need to add the files to the manifest here if we're appending to a block store without swapping (eg oldgen without --full).
-		// If we add files to the manifest in other situations, we result in a manifest with redundant table files.
-		// These will be removed during the swap at the end of GC, but will stick around if GC is interrupted.
-		err = addTableFilesToManifest(ctx, gcc.dest, specs, nil)
-		if err != nil {
-			return err
-		}
-
-		return gcc.specs.append(ctx, specs, gcc.dest)
+		return gcc.finalizeChildWriter(ctx, previousCopier)
 	})
 
 	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel)
@@ -269,28 +272,13 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 	return nil
 }
 
-func (gcc *rotatingGCCopier) finalize(ctx context.Context) ([]tableSpec, error) {
-	if gcc == nil {
-		return nil, nil
-	}
-
-	specs, pending, err := gcc.copyTablesToDir(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer pending.Close()
-
-	err = addTableFilesToManifest(ctx, gcc.dest, specs, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	err = gcc.specs.append(ctx, specs, gcc.dest)
+func (gcc *rotatingGCCopier) finalize(ctx context.Context) (*newlyWrittenSources, error) {
+	err := gcc.finalizeChildWriter(ctx, gcc.gcCopier)
 	if err != nil {
 		return nil, err
 	}
 	err = gcc.eg.Wait()
-	return gcc.specs.specs, err
+	return &gcc.specs, err
 }
 
 func (gcc *rotatingGCCopier) waitForPendingChunkFiles() error {
