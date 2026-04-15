@@ -77,7 +77,7 @@ func runGCIncrementalTest(t *testing.T, archiveLevel chunks.GCArchiveLevel, file
 	rs, err := u.MakeRepoStore()
 	require.NoError(t, err)
 
-	repoName := "incremental_gc_test"
+	repoName := fmt.Sprintf("incremental_gc_test_archiveLevel_%d_fileSize_%d_full_%v", archiveLevel, fileSize, full)
 	repo, err := rs.MakeRepo(repoName)
 	require.NoError(t, err)
 
