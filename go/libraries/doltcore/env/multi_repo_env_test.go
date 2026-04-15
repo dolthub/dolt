@@ -199,7 +199,7 @@ func TestMultiEnvForConfigAndDirectory_EmptyFS(t *testing.T) {
 	fs := filesys.EmptyInMemFS("/")
 	cfg := config.NewMapConfig(map[string]string{})
 
-	mrEnv, err := MultiEnvForConfigAndDirectory(ctx, cfg, fs)
+	mrEnv, err := MultiEnvForConfigAndDirectory(ctx, cfg, fs, nil)
 	require.NoError(t, err)
 	assert.Empty(t, mrEnv.envs)
 }

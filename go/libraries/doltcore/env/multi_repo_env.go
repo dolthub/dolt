@@ -135,8 +135,10 @@ func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, err
 
 // Only used by Driver, which currently doesn't have a *DoltEnv it is working with
 // when it opens a MultiEnv.
-func MultiEnvForConfigAndDirectory(ctx context.Context, config config.ReadWriteConfig, fs filesys.Filesys) (*MultiRepoEnv, error) {
-	return multiEnvForConfigDirectoryEnv(ctx, config, fs, nil)
+func MultiEnvForConfigAndDirectory(ctx context.Context, config config.ReadWriteConfig, fs filesys.Filesys, dbLoadParams map[string]any) (*MultiRepoEnv, error) {
+	dEnv := LoadWithoutDB(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "")
+	dEnv.DBLoadParams = dbLoadParams
+	return multiEnvForConfigDirectoryEnv(ctx, config, fs, dEnv)
 }
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
@@ -161,7 +163,7 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 
 	// Capture any caller-provided DB load params so we can apply them to newly created envs.
 	var dbLoadParams map[string]interface{}
-	if dEnv != nil && len(dEnv.DBLoadParams) > 0 {
+	if len(dEnv.DBLoadParams) > 0 {
 		dbLoadParams = maps.Clone(dEnv.DBLoadParams)
 	}
 
@@ -174,11 +176,6 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dbfactory.DirToDBName(envName)
-
-		if dEnv == nil {
-			// Only the driver uses this path currently.
-			dEnv = LoadWithoutDB(ctx, hdp, dataDirFS, doltdb.LocalDirDoltDB, "")
-		}
 	}
 
 	mrEnv := &MultiRepoEnv{
@@ -207,10 +204,8 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		openedEnvs = append(openedEnvs, dEnv)
 	}
 
-	if dEnv != nil {
-		if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
-			logrus.Warnf("failed to load database configuration with error: %s", cfgErr.Error())
-		}
+	if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
+		logrus.Warnf("failed to load database configuration with error: %s", cfgErr.Error())
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
@@ -249,9 +244,7 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 	})
 	if err != nil {
 		for _, dEnv := range openedEnvs {
-			if ddb := dEnv.DoltDB(ctx); ddb != nil {
-				ddb.Close()
-			}
+			dEnv.Close()
 		}
 		return nil, err
 	}
