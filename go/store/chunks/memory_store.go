@@ -410,7 +410,7 @@ func (i *msvMarkAndSweeper) Close(context.Context) error {
 	return nil
 }
 
-func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrs, filter HasManyFunc, dest ChunkStore, _ GCConfig) (MarkAndSweeper, error) {
+func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrs, filter HasManyFunc, dest ChunkStore, _ GCConfig, incrementalUpdateManifest bool) (MarkAndSweeper, error) {
 	if dest != ms {
 		panic("unsupported")
 	}

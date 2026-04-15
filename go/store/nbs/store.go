@@ -2121,9 +2121,9 @@ func (nbs *NomsBlockStore) beginRead() (endRead func()) {
 	return nil
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig) (chunks.MarkAndSweeper, error) {
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
 	valctx.ValidateContext(ctx)
-	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, gcConfig)
+	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, gcConfig, incrementalUpdateManifest)
 }
 
 // Returns true if this NomsBlockStore instance is carrying local
@@ -2141,7 +2141,7 @@ func (nbs *NomsBlockStore) hasLocalGCNovelty() bool {
 	return false
 }
 
-func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, gcConfig chunks.GCConfig) (chunks.MarkAndSweeper, error) {
+func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
@@ -2215,7 +2215,7 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 	// If incremental garbage collection is enabled (IncrementalFileSize > 0),
 	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
 	// with a new writer.
-	incrementalGcc, err := newRotatingGCCopier(gcConfig.ArchiveLevel, tfp, destNBS, gcConfig.IncrementalFileSize)
+	incrementalGcc, err := newRotatingGCCopier(gcConfig.ArchiveLevel, tfp, destNBS, gcConfig.IncrementalFileSize, incrementalUpdateManifest)
 
 	return &markAndSweeper{
 		src:            src,

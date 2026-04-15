@@ -268,8 +268,9 @@ type ChunkStoreGarbageCollector interface {
 	// hashes which should be saved into |dest|. The hashes are
 	// filtered through the |filter| and their references are walked with
 	// |getAddrs|, each of those addresses being filtered and copied as
-	// well.
-	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrs, filter HasManyFunc, dest ChunkStore, config GCConfig) (MarkAndSweeper, error)
+	// well. If |incrementalUpdateManifest| is true and incremental GC is enabled,
+	// it will attempt to update the destination manifest as after it writes each incremental file.
+	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrs, filter HasManyFunc, dest ChunkStore, config GCConfig, incrementalUpdateManifest bool) (MarkAndSweeper, error)
 
 	// Count returns the number of chunks in the store.
 	Count() (uint32, error)

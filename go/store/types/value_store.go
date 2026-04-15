@@ -618,12 +618,13 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 			}
 			newGenRefs.Insert(root)
 
+			incrementalUpdateManifest := gcConfig.Mode != chunks.GCMode_Full
 			var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
 			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, gcConfig, collector, oldGen, nil, func() hash.HashSet {
 				n := lvs.transitionToNewGenGC()
 				newGenRefs.InsertAll(n)
 				return make(hash.HashSet)
-			})
+			}, incrementalUpdateManifest)
 			if err != nil {
 				if errors.Is(err, chunks.ErrNothingToCollect) {
 					// nothing to do. not an error.
@@ -646,7 +647,7 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 				oldGenHasMany = newFileHasMany
 			}
 
-			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, gcConfig, collector, newGen, safepoint, lvs.transitionToFinalizingGC)
+			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, gcConfig, collector, newGen, safepoint, lvs.transitionToFinalizingGC, false)
 			if err != nil {
 				return err
 			}
@@ -707,7 +708,7 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 			newGenRefs.Insert(root)
 
 			var finalizer chunks.GCFinalizer
-			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, gcConfig, collector, collector, safepoint, lvs.transitionToFinalizingGC)
+			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, gcConfig, collector, collector, safepoint, lvs.transitionToFinalizingGC, false)
 			if err != nil {
 				return err
 			}
@@ -742,8 +743,9 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	gcConfig chunks.GCConfig,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointController GCSafepointController,
-	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
-	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.walkAddrs, hashFilter, dest, gcConfig)
+	finalize func() hash.HashSet,
+	incrementalUpdateManifest bool) (chunks.GCFinalizer, error) {
+	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.walkAddrs, hashFilter, dest, gcConfig, incrementalUpdateManifest)
 	if err != nil {
 		return nil, err
 	}

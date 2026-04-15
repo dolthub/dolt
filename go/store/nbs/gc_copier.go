@@ -162,7 +162,7 @@ func (sl *newlyWrittenSources) append(ctx context.Context, specs []tableSpec, nb
 	defer sl.mu.Unlock()
 	sl.specs = append(sl.specs, specs...)
 	for _, spec := range specs {
-		err := nbs.tables.insertIntoChunkSourceSet(ctx, sl.sourceSet, spec, nil, nil)
+		err := nbs.tables.insertIntoChunkSourceSet(ctx, sl.sourceSet, spec, nil, nbs.stats)
 		if err != nil {
 			return err
 		}
@@ -190,16 +190,20 @@ type rotatingGCCopier struct {
 	specs newlyWrittenSources
 	// seenChunks is the set of chunks already written to the in-progress table
 	seenChunks hash.HashSet
+	// incrementalUpdateManifest determines whether to update the manifest as each new file is created.
+	// This is useful for resuming GC if it gets interrupted, but only if the manifest isn't going to be swapped at the end.
+	// Thus, this should be true only when oldGen is being GCed, when not in full mode
+	incrementalUpdateManifest bool
 }
 
-func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, chunksLimit uint64) (*rotatingGCCopier, error) {
+func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, fileSizeLimit uint64, incrementalUpdateManifest bool) (*rotatingGCCopier, error) {
 	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
 	if err != nil {
 		return nil, err
 	}
 	return &rotatingGCCopier{
 		gcCopier:     gcCopier{writer, tfp},
-		maxFileSize:  chunksLimit,
+		maxFileSize:  fileSizeLimit,
 		bytesWritten: 0,
 		archiveLevel: archiveLevel,
 		dest:         dest,
@@ -207,7 +211,8 @@ func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersis
 		specs: newlyWrittenSources{
 			sourceSet: make(chunkSourceSet),
 		},
-		seenChunks: hash.HashSet{},
+		seenChunks:                hash.HashSet{},
+		incrementalUpdateManifest: incrementalUpdateManifest,
 	}, nil
 }
 
@@ -240,12 +245,11 @@ func (gcc *rotatingGCCopier) finalizeChildWriter(ctx context.Context, copier gcC
 	}
 	defer pending.Close()
 
-	// TODO: We only need to add the files to the manifest here if we're appending to a block store without swapping (eg oldgen without --full).
-	// If we add files to the manifest in other situations, we result in a manifest with redundant table files.
-	// These will be removed during the swap at the end of GC, but will stick around if GC is interrupted.
-	err = addTableFilesToManifest(ctx, gcc.dest, specs, gcc.specs.sourceSet)
-	if err != nil {
-		return err
+	if gcc.incrementalUpdateManifest {
+		err = addTableFilesToManifest(ctx, gcc.dest, specs, gcc.specs.sourceSet)
+		if err != nil {
+			return err
+		}
 	}
 
 	return gcc.specs.append(ctx, specs, gcc.dest)
