@@ -314,7 +314,7 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 			})
 		}
 
-		theirFK, ok = theirNewFKs.GetByNameCaseInsensitive(ourFK.Name)
+		theirFK, ok = theirNewFKs.GetByNameCaseInsensitive(ourFK.Name, ourFK.TableName)
 		if ok && !ourFK.EqualDefs(theirFK) {
 			// Two different Foreign Keys have the same name
 			conflicts = append(conflicts, FKConflict{
@@ -328,7 +328,7 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 
 	err = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
 		// The common set of FKs may already have this FK, if it was added on both branches
-		if commonFK, ok := common.GetByNameCaseInsensitive(ourFK.Name); ok && commonFK.EqualDefs(ourFK) {
+		if commonFK, ok := common.GetByNameCaseInsensitive(ourFK.Name, ourFK.TableName); ok && commonFK.EqualDefs(ourFK) {
 			// Skip this one if it's identical to the one in the common set
 			return false, nil
 		}
@@ -341,7 +341,7 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 
 	err = theirNewFKs.Iter(func(theirFK doltdb.ForeignKey) (stop bool, err error) {
 		// The common set of FKs may already have this FK, if it was added on both branches
-		if commonFK, ok := common.GetByNameCaseInsensitive(theirFK.Name); ok && commonFK.EqualDefs(theirFK) {
+		if commonFK, ok := common.GetByNameCaseInsensitive(theirFK.Name, theirFK.TableName); ok && commonFK.EqualDefs(theirFK) {
 			// Skip this one if it's identical to the one in the common set
 			return false, nil
 		}
@@ -954,7 +954,7 @@ func foreignKeysInCommon(
 
 		if theirs.EqualDefs(anc) {
 			// FK modified on our branch since the ancestor
-			fk, ok := common.GetByNameCaseInsensitive(ours.Name)
+			fk, ok := common.GetByNameCaseInsensitive(ours.Name, ours.TableName)
 			if ok {
 				conflicts = append(conflicts, FKConflict{
 					Kind:   NameCollision,
@@ -969,7 +969,7 @@ func foreignKeysInCommon(
 
 		if ours.EqualDefs(anc) {
 			// FK modified on their branch since the ancestor
-			fk, ok := common.GetByNameCaseInsensitive(theirs.Name)
+			fk, ok := common.GetByNameCaseInsensitive(theirs.Name, theirs.TableName)
 			if ok {
 				conflicts = append(conflicts, FKConflict{
 					Kind:   NameCollision,

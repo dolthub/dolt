@@ -179,7 +179,7 @@ func (bt *BranchesTable) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstr
 }
 
 // DropForeignKey implements sql.ForeignKeyTable
-func (bt *BranchesTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+func (bt *BranchesTable) DropForeignKey(ctx *sql.Context, fkName string, tableName string, schemaName string) error {
 	return fmt.Errorf("dolt system tables do not support dropping foreign keys")
 }
 

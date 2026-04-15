@@ -356,7 +356,12 @@ func backupFkcIndexesForPkDrop(ctx *sql.Context, tbl string, sch schema.Schema, 
 			return nil, sql.ErrCantDropIndex.New("PRIMARY", fk.Name)
 		}
 
-		fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: newIdx.Name()})
+		fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{
+			FkName:  fk.Name,
+			Table:   fk.TableName,
+			FromIdx: fk.ReferencedTableIndex,
+			ToIdx:   newIdx.Name(),
+		})
 	}
 	return fkUpdates, nil
 }
