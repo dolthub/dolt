@@ -15,6 +15,7 @@ setup() {
 }
 
 teardown() {
+    teardown_git
     assert_feature_version
     teardown_common
 }
@@ -600,8 +601,6 @@ seed_git_remote_branch() {
     run dolt push origin main
     [ "$status" -eq 0 ]
     [ -f "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND" ]
-
-    teardown_git
 }
 
 # bats test_tags=no_lambda
@@ -624,8 +623,6 @@ seed_git_remote_branch() {
     run expect "$BATS_TEST_DIRNAME/remotes-git-passphrase.expect"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "remote authentication required but interactive prompting is disabled" ]] || false
-
-    teardown_git
 }
 
 # bats test_tags=no_lambda
@@ -651,8 +648,6 @@ seed_git_remote_branch() {
     run expect "$BATS_TEST_DIRNAME/remotes-git-hostkey.expect"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "Host key verification failed" ]] || false
-
-    teardown_git
 }
 
 # bats test_tags=no_lambda
@@ -670,8 +665,6 @@ seed_git_remote_branch() {
 
     run dolt push origin main
     [ "$status" -eq 0 ]
-
-    teardown_git
 }
 
 

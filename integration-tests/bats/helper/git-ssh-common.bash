@@ -1,34 +1,33 @@
-load $BATS_TEST_DIRNAME/helper/query-server-common.bash
+load "$BATS_TEST_DIRNAME/helper/query-server-common.bash"
 
 # Helpers for testing dolt against a local bare git repository over SSH.
 # Functions compose in two layers:
 #
 #   1. setup_git_repo        - bare repository
-#   2. setup_git_ssh_wrapper - shell wrapper for GIT_SSH_COMMAND (no real sshd, for env tests)
+#   2. setup_git_ssh_wrapper - shell wrapper (no real sshd; for env-var tests)
 #      setup_git_sshd        - real OpenSSH daemon (for authentication tests)
 #
-# Typical usage for environment variable propagation tests:
+# Typical usage — environment variable propagation:
 #   setup_git_repo
 #   setup_git_ssh_wrapper
-#   dolt remote add origin "git@localhost:${GIT_SVC_DIR}"
 #   hook_git_record_env GIT_SSH_COMMAND
-#   teardown_git
+#   dolt remote add origin "git@localhost:${GIT_SVC_DIR}"
 #
-# Typical usage for real SSH authentication tests:
+# Typical usage — real SSH authentication:
 #   setup_git_repo
 #   setup_git_sshd
-#   gen_ssh_key "$BATS_TMPDIR/mykey" ""          # unlocked key
-#   export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/mykey -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+#   gen_ssh_key "$BATS_TMPDIR/mykey" ""   # empty passphrase = unlocked key
+#   export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/mykey -o IdentitiesOnly=yes \
+#       -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 #   dolt remote add origin "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
-#   teardown_git
 #
-# teardown_git cleans up all resources regardless of which setup functions were called.
+# teardown_git cleans up all resources; call it from the bats teardown() hook.
 #
 # Variables set by the setup functions:
 #   GIT_SVC_DIR       path to the bare repository
 #   GIT_SVC_WRAPPER   path to the GIT_SSH_COMMAND wrapper script
-#   GIT_SVC_HOOKS_DIR path to the directory sourced before each transport invocation
-#   SSHD_PORT         TCP port the real sshd is listening on (set by setup_git_sshd)
+#   GIT_SVC_HOOKS_DIR directory sourced before each transport invocation
+#   SSHD_PORT         TCP port the real sshd listens on (set by setup_git_sshd)
 GIT_SVC_DIR=""
 GIT_SVC_WRAPPER=""
 GIT_SVC_HOOKS_DIR=""
@@ -36,11 +35,20 @@ SSHD_DIR=""
 SSHD_PID=""
 SSHD_PORT=""
 
+# _elevate runs a command with sudo when the current user is not root.
+_elevate() {
+    if [[ $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        "$@"
+    fi
+}
+
 # setup_git_repo initializes a bare git repository seeded with one commit on main.
 setup_git_repo() {
-    local _parent
-    _parent="$(mktemp -d "$BATS_TMPDIR/git-svc.XXXXXX")"
-    GIT_SVC_DIR="$_parent/repo.git"
+    local parent
+    parent="$(mktemp -d "$BATS_TMPDIR/git-svc.XXXXXX")"
+    GIT_SVC_DIR="$parent/repo.git"
     git init --bare "$GIT_SVC_DIR" >/dev/null
 
     # Seed via a local path push so the SSH transport is not involved during setup.
@@ -66,37 +74,34 @@ setup_git_repo() {
 # created so hook_* helpers can inject behavior per invocation.
 setup_git_ssh_wrapper() {
     GIT_SVC_HOOKS_DIR="$(mktemp -d "$BATS_TMPDIR/git-svc-hooks.XXXXXX")"
-
     GIT_SVC_WRAPPER="$(mktemp "$BATS_TMPDIR/git-svc-wrapper.XXXXXX")"
+
     cat > "$GIT_SVC_WRAPPER" <<'WRAPPER'
 #!/usr/bin/env bash
 set -euo pipefail
-# nullglob prevents the glob from expanding to a literal path when the hooks
+# nullglob prevents the glob from expanding to a literal string when the hooks
 # directory is empty, which would cause the loop to source a nonexistent file.
 shopt -s nullglob
 for _h in "${GIT_SVC_HOOKS_DIR}"/*; do
     . "$_h"
 done
-# git passes the transport command as the last argument, so evaluating it here
-# serves the bare repository locally without a running SSH daemon.
+# git passes the transport command as the last argument; evaluate it to serve
+# the bare repository locally without a running SSH daemon.
 eval "${@: -1}"
 WRAPPER
+
     chmod +x "$GIT_SVC_WRAPPER"
     export GIT_SSH_COMMAND="$GIT_SVC_WRAPPER"
     export GIT_SVC_HOOKS_DIR
 }
 
 # setup_git_sshd starts a real OpenSSH daemon on a random loopback port.
-# After this call, SSHD_PORT is the port the daemon is listening on and
-# SSHD_DIR holds its config and host key. Call gen_ssh_key to authorize a
-# client key before making SSH connections. Skips the test if sshd is not found.
+# SSHD_PORT is set to the port the daemon is listening on.
+# Skips the test if sshd is not found on the system.
 setup_git_sshd() {
     local sshd_bin
-    sshd_bin="$(command -v sshd 2>/dev/null || true)"
-    [[ -z "$sshd_bin" && -x /usr/sbin/sshd ]] && sshd_bin=/usr/sbin/sshd
-    if [[ -z "$sshd_bin" ]]; then
-        skip "sshd not found"
-    fi
+    sshd_bin="$(command -v sshd 2>/dev/null)" || sshd_bin="/usr/sbin/sshd"
+    [[ -x "$sshd_bin" ]] || skip "sshd not found"
 
     SSHD_DIR="$(mktemp -d "$BATS_TMPDIR/sshd.XXXXXX")"
     chmod 700 "$SSHD_DIR"
@@ -123,28 +128,33 @@ PidFile $SSHD_DIR/sshd.pid
 LogLevel ERROR
 EOF
 
-    if command -v sudo >/dev/null 2>&1; then
-        sudo "$sshd_bin" -f "$SSHD_DIR/sshd_config" -D &
-    else
-        "$sshd_bin" -f "$SSHD_DIR/sshd_config" -D &
-    fi
+    # sshd requires the privilege separation directory to exist.
+    [[ -d /run/sshd ]] || _elevate mkdir -p /run/sshd
+
+    # Redirect stdio to /dev/null so sshd does not inherit bats' open pipe
+    # file descriptors. Without this, a running sshd would hold those pipes
+    # open and prevent bats from reaching EOF after all tests complete.
+    # When already root, run sshd directly so SSHD_PID refers to sshd itself;
+    # a sudo wrapper may not propagate signals to its child.
+    _elevate "$sshd_bin" -f "$SSHD_DIR/sshd_config" -D \
+        </dev/null >>"$SSHD_DIR/sshd.log" 2>&1 &
     SSHD_PID=$!
 
     local i
-    for i in $(seq 1 50); do
-        # Use bash /dev/tcp rather than nc so the check works on Windows.
-        if (: >/dev/tcp/localhost/"$SSHD_PORT") 2>/dev/null; then
-            return 0
-        fi
+    for (( i = 0; i < 50; i++ )); do
+        # /dev/tcp is a bash built-in that avoids a dependency on netcat.
+        (: >/dev/tcp/localhost/"$SSHD_PORT") 2>/dev/null && return 0
         sleep 0.1
     done
     echo "sshd failed to start on port $SSHD_PORT" >&2
     return 1
 }
 
-# gen_ssh_key |keypath| |passphrase|
-# Generates an ed25519 key pair at |keypath| and appends the public key to the
-# sshd's authorized_keys file. Must be called after setup_git_sshd.
+# gen_ssh_key generates an ed25519 key pair and authorizes it with the test sshd.
+# Must be called after setup_git_sshd.
+# Arguments:
+#   $1  path for the private key
+#   $2  passphrase (empty string for an unprotected key)
 gen_ssh_key() {
     local keypath="$1"
     local passphrase="$2"
@@ -154,34 +164,44 @@ gen_ssh_key() {
 }
 
 # teardown_git removes all resources created by the setup_git_* functions.
+# Safe to call even when only some setup functions were called.
 teardown_git() {
     unset GIT_SSH_COMMAND GIT_SVC_HOOKS_DIR SSH_AUTH_SOCK
+
     [[ -n "$GIT_SVC_DIR" ]]       && rm -rf "${GIT_SVC_DIR%/*}"
     [[ -n "$GIT_SVC_WRAPPER" ]]   && rm -f  "$GIT_SVC_WRAPPER"
     [[ -n "$GIT_SVC_HOOKS_DIR" ]] && rm -rf "$GIT_SVC_HOOKS_DIR"
     rm -f "$BATS_TMPDIR"/git_env_*
+
     GIT_SVC_DIR=""
     GIT_SVC_WRAPPER=""
     GIT_SVC_HOOKS_DIR=""
 
     if [[ -n "${SSHD_PID:-}" ]]; then
-        if command -v sudo >/dev/null 2>&1; then
-            sudo kill "$SSHD_PID" 2>/dev/null || true
-        else
-            kill "$SSHD_PID" 2>/dev/null || true
-        fi
+        # Prefer killing by PidFile so we target the actual sshd process even
+        # when SSHD_PID is a sudo wrapper that may not propagate signals.
+        local sshd_real_pid=""
+        [[ -f "${SSHD_DIR:-}/sshd.pid" ]] \
+            && sshd_real_pid="$(cat "$SSHD_DIR/sshd.pid" 2>/dev/null || true)"
+        [[ -n "$sshd_real_pid" ]] && _elevate kill "$sshd_real_pid" 2>/dev/null || true
+        _elevate kill "$SSHD_PID" 2>/dev/null || true
         wait "$SSHD_PID" 2>/dev/null || true
         SSHD_PID=""
     fi
+
     [[ -n "${SSHD_DIR:-}" ]] && rm -rf "$SSHD_DIR"
     SSHD_DIR=""
     SSHD_PORT=""
 }
 
-# hook_git_record_env records the value of |var| during each git transport
-# invocation. The value is written to ${BATS_TMPDIR}/git_env_${var}.
+# hook_git_record_env records an environment variable's value on each git
+# transport invocation. The value is written to ${BATS_TMPDIR}/git_env_<var>.
+# Must be called after setup_git_ssh_wrapper.
+# Arguments:
+#   $1  name of the environment variable to record
 hook_git_record_env() {
     local var="$1"
-    printf 'printf "%%s" "${%s}" > "${BATS_TMPDIR}/git_env_%s"\n' "$var" "$var" \
-        > "$GIT_SVC_HOOKS_DIR/env-${var}"
+    cat > "$GIT_SVC_HOOKS_DIR/env-${var}" <<EOF
+printf '%s' "\${${var}}" > "\${BATS_TMPDIR}/git_env_${var}"
+EOF
 }
