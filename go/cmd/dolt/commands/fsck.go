@@ -811,10 +811,11 @@ func (ts *treeScanner) validateTreeRoot(
 	if ts.visited.Has(treeHash) {
 		return nil
 	}
-	ts.visited.Insert(treeHash)
 
 	treeValue, err := ts.vs.ReadValue(ctx, treeHash)
 	if err != nil || treeValue == nil {
+		// Mark visited on error so a second commit sharing this root doesn't re-report the same error.
+		ts.visited.Insert(treeHash)
 		_ = ts.errs.CmtAppendF(commitHash, "failed to read tree %s: %w", treeHash.String(), err)
 		return nil
 	}
