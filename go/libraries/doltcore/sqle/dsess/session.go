@@ -1061,7 +1061,7 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 		return nil, nil, "", err
 	}
 
-	t := meta.Author.Date.Time()
+	t := meta.Committer.Date.Time()
 	commitTime = (*types.Timestamp)(&t)
 
 	commitHash, err := cm.HashOf()

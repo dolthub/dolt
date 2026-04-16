@@ -700,13 +700,14 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 	}
 
 	return &logTableFunctionRowIter{
-		child:         child,
-		showParents:   ltf.showParents,
-		showSignature: ltf.showSignature,
-		decoration:    ltf.decoration,
-		cHashToRefs:   cHashToRefs,
-		headHash:      headHash,
-		tableNames:    tableNames,
+		child:             child,
+		showParents:       ltf.showParents,
+		showSignature:     ltf.showSignature,
+		showCommitterOnly: ltf.showCommitterOnly,
+		decoration:        ltf.decoration,
+		cHashToRefs:       cHashToRefs,
+		headHash:          headHash,
+		tableNames:        tableNames,
 	}, nil
 }
 

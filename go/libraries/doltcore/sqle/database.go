@@ -1409,7 +1409,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 			}
 		}
 
-		if meta.Author.Date.Time().Equal(asOf) || meta.Author.Date.Time().Before(asOf) {
+		if meta.Committer.Date.Time().Equal(asOf) || meta.Committer.Date.Time().Before(asOf) {
 			root, err := curr.GetRootValue(ctx)
 			if err != nil {
 				return nil, nil, err

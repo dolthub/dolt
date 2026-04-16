@@ -28,6 +28,9 @@ import (
 
 var errUnblameableTable = errors.New("unable to generate blame view for table without primary key")
 
+// TODO(elianddb): blame should surface author identity (author, author_email, author_date)
+// rather than committer identity. Renaming the output columns is a backward-incompatible
+// view schema change.
 const (
 	// todo: force /*+ JOIN_ORDER(sd,ld) */ for testing consistency
 	viewExpressionTemplate = `

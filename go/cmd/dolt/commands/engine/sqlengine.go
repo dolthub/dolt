@@ -598,10 +598,27 @@ func doltSessionFactory(
 
 var ErrFailedToInitCommitIdent = fmt.Errorf("failed to initialize commit identity session variables from environment")
 
-// InitCommitIdentSessionConfig initializes the commit identity session variables for the current session.
-// |name| and |email| provide the base author and committer name and email. The DOLT_AUTHOR_* and
-// DOLT_COMMITTER_* environment variables override individual fields when set. Must be called after
-// [sql.SessionCommandBegin].
+// envSessionVar pairs an environment variable with the session variable it populates when non-empty.
+type envSessionVar struct {
+	envVar     string
+	sessionVar string
+}
+
+// commitIdentEnvOverrides lists the DOLT_AUTHOR_* and DOLT_COMMITTER_* environment variables
+// that [InitCommitIdentSessionConfig] maps to their corresponding session variables.
+var commitIdentEnvOverrides = []envSessionVar{
+	{dconfig.EnvDoltAuthorName, dsess.DoltAuthorName},
+	{dconfig.EnvDoltAuthorEmail, dsess.DoltAuthorEmail},
+	{dconfig.EnvDoltAuthorDate, dsess.DoltAuthorDate},
+	{dconfig.EnvDoltCommitterName, dsess.DoltCommitterName},
+	{dconfig.EnvDoltCommitterEmail, dsess.DoltCommitterEmail},
+	{dconfig.EnvDoltCommitterDate, dsess.DoltCommitterDate},
+}
+
+// InitCommitIdentSessionConfig sets the commit identity session variables for the current session.
+// |name| and |email| provide the initial name and email for both author and committer.
+// Non-empty DOLT_AUTHOR_* and DOLT_COMMITTER_* environment variables override the
+// corresponding fields. This function must be called after [sql.SessionCommandBegin].
 func InitCommitIdentSessionConfig(queryist cli.Queryist, sqlCtx *sql.Context, name, email string) error {
 	sessionVars := map[string]string{
 		dsess.DoltAuthorName:     name,
@@ -610,17 +627,9 @@ func InitCommitIdentSessionConfig(queryist cli.Queryist, sqlCtx *sql.Context, na
 		dsess.DoltCommitterEmail: email,
 	}
 
-	envVarOverrides := []struct{ environmentConfigVar, sessionConfigVar string }{
-		{dconfig.EnvDoltAuthorName, dsess.DoltAuthorName},
-		{dconfig.EnvDoltAuthorEmail, dsess.DoltAuthorEmail},
-		{dconfig.EnvDoltAuthorDate, dsess.DoltAuthorDate},
-		{dconfig.EnvDoltCommitterName, dsess.DoltCommitterName},
-		{dconfig.EnvDoltCommitterEmail, dsess.DoltCommitterEmail},
-		{dconfig.EnvDoltCommitterDate, dsess.DoltCommitterDate},
-	}
-	for _, pair := range envVarOverrides {
-		if val := os.Getenv(pair.environmentConfigVar); val != "" {
-			sessionVars[pair.sessionConfigVar] = val
+	for _, pair := range commitIdentEnvOverrides {
+		if val := os.Getenv(pair.envVar); val != "" {
+			sessionVars[pair.sessionVar] = val
 		}
 	}
 

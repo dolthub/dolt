@@ -253,7 +253,7 @@ func TestLDNoms(t *testing.T) {
 		meta, err := commit.GetCommitMeta(context.Background())
 		assert.NoError(t, err)
 
-		if meta.Author.Name != committerName || meta.Author.Email != committerEmail {
+		if meta.Committer.Name != committerName || meta.Committer.Email != committerEmail {
 			t.Error("Unexpected metadata")
 		}
 

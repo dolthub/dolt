@@ -170,8 +170,8 @@ func (dphri *doltProceduresHistoryRowIter) loadRows(ctx *sql.Context) error {
 
 	// Convert commit metadata to SQL values
 	commitHashStr := commitHash.String()
-	committerStr := commitMeta.Author.Name + " <" + commitMeta.Author.Email + ">"
-	commitDate := commitMeta.Author.Date.Time()
+	committerStr := commitMeta.Committer.Name + " <" + commitMeta.Committer.Email + ">"
+	commitDate := commitMeta.Committer.Date.Time()
 
 	// Get the schema
 	sch, err := tbl.GetSchema(dphri.ctx)
