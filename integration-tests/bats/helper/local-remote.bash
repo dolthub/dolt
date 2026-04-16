@@ -53,7 +53,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~import-create-tables.bats~
 ~status.bats~
 ~import-replace-tables.bats~
-~show.bats~
 ~system-tables.bats~
 ~deleted-branches.bats~
 ~schema-export.bats~
@@ -123,8 +122,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~doltpy.bats~
 ~sql-batch.bats~
 ~send-metrics.bats~
-~commit.bats~
-~sql-commit.bats~
 ~reset.bats~
 ~sql-reset.bats~
 ~sql-checkout.bats~
