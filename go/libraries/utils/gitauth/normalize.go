@@ -76,7 +76,7 @@ func looksLikeAuthPromptOrFailure(s string) bool {
 		"could not read password",
 		"authentication failed",
 		"enter passphrase for key",
-		"permission denied (publickey)",
+		"permission denied (publickey",
 	} {
 		if strings.Contains(s, p) {
 			return true

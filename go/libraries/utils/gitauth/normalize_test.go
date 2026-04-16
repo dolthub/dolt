@@ -32,6 +32,7 @@ func TestNormalizeError_WrapsCommonAuthPromptFailures(t *testing.T) {
 		{"Authentication failed", "remote: Invalid username or password.\nfatal: Authentication failed for 'https://example.com/'", "git failed"},
 		{"Enter passphrase for key", "Enter passphrase for key '/tmp/fake_key': ", "git failed"},
 		{"Permission denied (publickey)", "Permission denied (publickey).", "git failed"},
+		{"Permission denied (publickey,keyboard-interactive)", "Permission denied (publickey,keyboard-interactive).", "git failed"},
 	}
 
 	for _, tt := range tests {
