@@ -188,4 +188,3 @@ func resolveRevisionSpecs(ctx *sql.Context, dbName string, revisionStrs []string
 
 	return hashes, nil
 }
-

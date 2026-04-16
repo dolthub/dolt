@@ -165,11 +165,11 @@ teardown() {
     [[ ! "$output" =~ "main" ]] || false
     [[ "$output" =~ "create-table-branch" ]] || false
 
-    DOLT_COMMITTER_NAME="Bats Tests" DOLT_COMMITTER_EMAIL="bats@email.fake" \
-        dolt commit --allow-empty --author "Bats Tests <bats@email.fake>" -m "check author columns"
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --allow-empty --author "Bats Author <author@email.fake>" -m "check author columns"
     run dolt sql -r csv -q "SELECT latest_committer, latest_committer_email, latest_author, latest_author_email FROM dolt_branches WHERE name = 'create-table-branch'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Bats Tests,bats@email.fake,Bats Tests,bats@email.fake" ]] || false
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: query dolt_remote_branches system table" {
@@ -350,11 +350,11 @@ SQL
     [[ "$output" =~ "WORKING,testWorking,,,,,false,true" ]] || false
 
     dolt add testWorking
-    DOLT_COMMITTER_NAME="Bats Tests" DOLT_COMMITTER_EMAIL="bats@email.fake" \
-        dolt commit --author "Bats Tests <bats@email.fake>" -m "check author columns"
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --author "Bats Author <author@email.fake>" -m "check author columns"
     run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_diff WHERE message = 'check author columns' LIMIT 1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Bats Tests,bats@email.fake,Bats Tests,bats@email.fake" ]] || false
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: query dolt_column_diff system table" {
@@ -370,11 +370,11 @@ SQL
     [[ "$output" =~ "WORKING,testWorking,c1,,,,,added" ]] || false
 
     dolt add testWorking
-    DOLT_COMMITTER_NAME="Bats Tests" DOLT_COMMITTER_EMAIL="bats@email.fake" \
-        dolt commit --author "Bats Tests <bats@email.fake>" -m "check author columns"
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --author "Bats Author <author@email.fake>" -m "check author columns"
     run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_column_diff WHERE message = 'check author columns' LIMIT 1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Bats Tests,bats@email.fake,Bats Tests,bats@email.fake" ]] || false
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: dolt_diff author and committer columns are distinct when set differently" {
@@ -766,11 +766,11 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "4" ]] || false
 
-    DOLT_COMMITTER_NAME="Bats Tests" DOLT_COMMITTER_EMAIL="bats@email.fake" \
-        dolt commit --allow-empty --author "Bats Tests <bats@email.fake>" -m "check author columns"
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --allow-empty --author "Bats Author <author@email.fake>" -m "check author columns"
     run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_commits WHERE message = 'check author columns'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Bats Tests,bats@email.fake,Bats Tests,bats@email.fake" ]] || false
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: query dolt_ancestor_commits" {

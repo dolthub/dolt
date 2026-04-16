@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -59,6 +60,12 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.DBDir
 
+	epoch := datas.CommitDateAt(time.Unix(0, 0).UTC())
+	meta := &datas.CommitMeta{
+		Author:    datas.CommitIdent{Date: epoch},
+		Committer: datas.CommitIdent{Date: epoch},
+	}
+
 	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 
 	var golden1, golden2 string
@@ -76,13 +83,13 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	id := "testdataset"
 	set, err := db.GetDataset(context.Background(), id)
 	s.NoError(err)
-	set, err = datas.CommitValue(context.Background(), db, set, types.String("Commit Value"))
+	set, err = db.Commit(context.Background(), set, types.String("Commit Value"), datas.CommitOptions{Meta: meta})
 	s.NoError(err)
 
 	id2 := "testdataset2"
 	set2, err := db.GetDataset(context.Background(), id2)
 	s.NoError(err)
-	set2, err = datas.CommitValue(context.Background(), db, set2, types.String("Commit Value2"))
+	set2, err = db.Commit(context.Background(), set2, types.String("Commit Value2"), datas.CommitOptions{Meta: meta})
 	s.NoError(err)
 
 	err = db.Close()

@@ -224,13 +224,11 @@ const (
 	SysVarTrue  = int8(1)
 )
 
-// NewCommitStagedProps creates an [actions.CommitStagedProps] using session variables for author and committer
-// identity.
-//
-// Identity is resolved in the following order:
-//  1. Session variables ([DoltAuthorName], [DoltCommitterName], etc.), seeded from the dolt config at
-//     session creation and overridable per-connection via InitCommitIdentSessionConfig.
-//  2. The MySQL client name and email from [sql.Client], used when the session variables are not set.
+// NewCommitStagedProps creates an [actions.CommitStagedProps] using |message| as the commit
+// message and resolving author and committer identity via [ResolveNameEmail], which walks
+// session variables, the SQL client ([sql.Client]), then the session's configured identity.
+// The returned error surfaces session-variable access or date parse failures; the
+// empty-identity check happens downstream in [datas.NewCommitMetaWithAuthorCommitter].
 func NewCommitStagedProps(ctx *sql.Context, message string) (actions.CommitStagedProps, error) {
 	authorName, authorEmail, err := ResolveNameEmail(ctx, DoltAuthorName, DoltAuthorEmail)
 	if err != nil {
@@ -258,33 +256,46 @@ func NewCommitStagedProps(ctx *sql.Context, message string) (actions.CommitStage
 }
 
 // ResolveNameEmail reads the name and email session variables for a single author or committer,
-// falling back to the SQL client user and address when the variables are unset.
+// falling back to the SQL client user and address when the variables are unset, and to the
+// session's configured identity when the session has no wire client.
 func ResolveNameEmail(ctx *sql.Context, nameVar, emailVar string) (string, string, error) {
 	name, err := systemVarString(ctx, nameVar)
 	if err != nil {
 		return "", "", err
 	}
-	if name == "" {
-		name = ctx.Client().User
-	}
-
 	email, err := systemVarString(ctx, emailVar)
 	if err != nil {
 		return "", "", err
 	}
+
+	client := ctx.Client()
+	if name == "" {
+		if client.User != "" {
+			name = client.User
+		} else {
+			// No wire client on this session, so it was constructed internally
+			// by the server (background workers, cluster replication, tests).
+			// Fall back to the server's configured identity.
+			name = DSessFromSess(ctx.Session).Username()
+		}
+	}
 	if email == "" {
-		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+		if client.User != "" {
+			email = fmt.Sprintf("%s@%s", client.User, client.Address)
+		} else {
+			email = DSessFromSess(ctx.Session).Email()
+		}
 	}
 
 	return name, email, nil
 }
 
 // resolveDate reads the date session variable for a single author or committer,
-// returning [datas.CommitDateNow] when the variable is unset or empty.
+// returning the unset [datas.CommitDate] zero value when the variable is unset or empty.
 func resolveDate(ctx *sql.Context, dateVar string) (datas.CommitDate, error) {
 	strVal, err := systemVarString(ctx, dateVar)
 	if err != nil || strVal == "" {
-		return datas.CommitDateNow(), err
+		return datas.CommitDate{}, err
 	}
 	return datas.NewCommitDate(strVal)
 }

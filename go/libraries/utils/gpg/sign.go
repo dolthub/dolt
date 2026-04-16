@@ -131,7 +131,7 @@ func HasKey(ctx context.Context, keyId string) (bool, error) {
 // local GPG keyring to use.
 type Signer struct{ KeyId string }
 
-// Sign produces a detached GPG signature of payload using the key identified by [Signer.KeyId].
+// Sign produces a detached GPG signature of |payload| using the key identified by [Signer.KeyId].
 func (s *Signer) Sign(ctx context.Context, payload []byte) ([]byte, error) {
 	outBuf, _, err := execGpgAndReadOutput(ctx, payload, []string{"--clear-sign", "-u", s.KeyId})
 	if err != nil {

@@ -15,15 +15,24 @@ define_port() {
   return 1
 }
 
+# dolt_cli forwards its arguments to $dolt_client with the connection flags that the
+# compatibility suite needs. It pins --host, --port, --user, --password, --no-tls, and
+# --use-db so the resulting command reaches the running server without relying on
+# sql-server auto-discovery from the working directory.
+# Requires $dolt_client, $PORT, and $DB_NAME to be set by start_sql_server.
+dolt_cli() {
+  "$dolt_client" --host 127.0.0.1 --port "$PORT" --user root --password "" --no-tls --use-db "$DB_NAME" "$@"
+}
+
 # wait_for_server_connection polls the SQL client until it connects or the timeout (in ms) elapses.
-# Requires $dolt_client to be set.
+# Requires $dolt_client and PORT to be set.
 wait_for_server_connection() {
   local port="$1"
   local timeout_ms="$2"
   local end_time=$((SECONDS + (timeout_ms / 1000)))
 
   while [ $SECONDS -lt $end_time ]; do
-    if "$dolt_client" sql -q "SELECT 1;" > /dev/null 2>&1; then
+    if dolt_cli sql -q "SELECT 1;" > /dev/null 2>&1; then
       return 0
     fi
     sleep 1
@@ -65,6 +74,21 @@ stop_sql_server() {
   fi
 }
 
+# skip_if_client_lt skips the current test if the client binary version is older than min_version.
+# Requires $dolt_client to be set.
+skip_if_client_lt() {
+  local min_version="$1"
+  local reason="$2"
+  local client_version
+  client_version=$("$dolt_client" version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+  if [ -z "$client_version" ]; then
+    return 0
+  fi
+  if [ "$(printf '%s\n' "$client_version" "$min_version" | sort -V | head -n1)" != "$min_version" ]; then
+    skip "$reason (client version: $client_version)"
+  fi
+}
+
 # skip_if_server_lt skips the current test if the server binary version is older than min_version.
 # Requires $dolt_server to be set.
 skip_if_server_lt() {
@@ -92,9 +116,9 @@ extract_commit_hash() {
 }
 
 # latest_commit returns the hash of the most recent commit using $dolt_client.
-# Requires $dolt_client to be set.
+# Requires $dolt_client and PORT to be set.
 latest_commit() {
   local log_output
-  log_output=$("$dolt_client" log 2>&1)
+  log_output=$(dolt_cli log 2>&1)
   extract_commit_hash "$log_output"
 }

@@ -73,7 +73,7 @@ func (g *funHashCommitMetaGenerator) Next() (*CommitMeta, error) {
 
 	g.attempt += 1
 
-	return NewCommitMetaWithAuthorDate(g.name, g.email, description, g.timestamp)
+	return NewCommitMetaWithAuthor(g.name, g.email, description, g.timestamp)
 }
 
 func (g *funHashCommitMetaGenerator) IsGoodCommit(commit *Commit) bool {

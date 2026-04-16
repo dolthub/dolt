@@ -92,10 +92,11 @@ func mustValue(val types.Value, err error) types.Value {
 func TestIsCommit(t *testing.T) {
 	assert := assert.New(t)
 
-	meta, err := NewCommitMetaWithAuthorDate("test", "test@test.com", "test commit", time.UnixMilli(0))
+	meta, err := NewCommitMetaWithAuthor("test", "test@test.com", "test commit", time.UnixMilli(0))
 	if err != nil {
 		t.Fatal(err)
 	}
+	meta.Committer.Date = meta.Committer.Date.Or(time.UnixMilli(0))
 
 	commitMsg, _ := commit_flatbuffer(hash.Hash{}, CommitOptions{
 		Meta: meta,

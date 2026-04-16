@@ -53,26 +53,24 @@ EOF
     done
 }
 
-@test "sql-server: committer is sql user" {
+@test "sql-server: committer is dolt config user for local dolt client connections" {
   # Start a SQL-server and add a new user "user1"
   cd repo1
   start_sql_server
   dolt sql -q "create user user1@'%';"
   dolt sql -q "grant all privileges on *.* to user1@'%';"
 
-  # By default, commits will be authored by the current sql user (user1)
   dolt -u user1 sql -q "create table t2(pk int primary key);"
   dolt -u user1 sql -q "call dolt_commit('-Am', 'committing as user1');"
   run dolt -u user1 sql -q "select committer, email, message from dolt_log limit 1;" -r csv
   [ "$status" -eq 0 ]
-  [[ $output =~ "user1,user1@%,committing as user1" ]] || false
+  [[ $output =~ "Bats Tests,bats@email.fake,committing as user1" ]] || false
 
-  # If --author is explicitly provided, then always use that, even if dolt_sql_user_is_committer is enabled
   dolt -u user1 sql -q "create table t3(pk int primary key);"
   dolt -u user1 sql -q "call dolt_commit('--author', 'barbie <barbie@plastic.com>', '-Am', 'committing as barbie');"
   run dolt -u user1 sql -q "select author, author_email, message, committer, email from dolt_log limit 1;" -r csv
   [ "$status" -eq 0 ]
-  [[ $output =~ "barbie,barbie@plastic.com,committing as barbie,user1,user1@%" ]] || false
+  [[ $output =~ "barbie,barbie@plastic.com,committing as barbie,Bats Tests,bats@email.fake" ]] || false
 }
 
 @test "sql-server: can create savepoint when no database is selected" {
@@ -255,7 +253,11 @@ EOF
     [ "$status" -eq 1 ]
     run grep 'Error authenticating user' log.txt
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
+    # The dolt client seeds identity session variables at connection setup by
+    # running a SHOW VARIABLES and a SET, so a rejected password can log more
+    # than one auth failure line. The assertion only checks that the server
+    # rejected auth at least once.
+    [ "${#lines[@]}" -ge 1 ]
 }
 
 @test "sql-server: Database specific system variables should be loaded" {

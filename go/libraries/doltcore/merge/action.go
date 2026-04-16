@@ -87,9 +87,9 @@ func WithSquash(squash bool) MergeSpecOpt {
 	}
 }
 
-// NewMergeSpec returns a MergeSpec with the arguments provided.
-// Pass date as nil when --date was not explicitly specified; the merge commit will
-// then derive the author date from the dolt_author_date session variable.
+// NewMergeSpec returns a MergeSpec with the arguments provided. Pass |date| as nil when --date
+// was not explicitly specified; the merge commit will then derive the author date from the
+// dolt_author_date session variable.
 func NewMergeSpec[C doltdb.Context](
 	ctx C,
 	rsr env.RepoStateReader[C],

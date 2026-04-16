@@ -228,16 +228,14 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.Equal(uint64(2), l)
 }
 
-func zeroMeta() *CommitMeta {
-	epoch := CommitDateAt(time.UnixMilli(0))
-	return &CommitMeta{
-		Author:    CommitIdent{Date: epoch},
-		Committer: CommitIdent{Date: epoch},
-	}
-}
-
 func newOpts(vrw types.ValueReadWriter, parent hash.Hash) CommitOptions {
-	return CommitOptions{Parents: []hash.Hash{parent}, Meta: zeroMeta()}
+	return CommitOptions{
+		Parents: []hash.Hash{parent},
+		Meta: &CommitMeta{
+			Author:    CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+			Committer: CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+		},
+	}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {

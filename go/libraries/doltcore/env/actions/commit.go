@@ -46,17 +46,6 @@ type CommitStagedProps struct {
 	Committer datas.CommitIdent
 }
 
-// NewCommitStagedProps creates a [CommitStagedProps] with both Author and Committer initialized
-// from |name|, |email|, and |date|.
-func NewCommitStagedProps(name, email string, date datas.CommitDate, message string) CommitStagedProps {
-	sig := datas.CommitIdent{Name: name, Email: email, Date: date}
-	return CommitStagedProps{
-		Message:   message,
-		Author:    sig,
-		Committer: sig,
-	}
-}
-
 const (
 	// System variable name, defined here to avoid circular imports
 	DoltCommitVerificationGroups = "dolt_commit_verification_groups"
@@ -193,7 +182,7 @@ func GetCommitStaged(
 		}
 	}
 
-	commitMeta, err := datas.NewCommitMetaWithAuthorAndCommitter(props.Author, props.Committer, props.Message)
+	commitMeta, err := datas.NewCommitMetaWithAuthorCommitter(props.Author, props.Committer, props.Message)
 	if err != nil {
 		return nil, err
 	}

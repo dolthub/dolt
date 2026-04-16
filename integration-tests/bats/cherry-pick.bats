@@ -580,13 +580,13 @@ teardown() {
     
     # Create commit with specific author and timestamp
     DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt --branch branch1 commit --author="Original Author <original@example.com>" -m "commit with specific author"
-    commit_hash=$(get_head_commit branch1)
+    COMMIT_HASH=$(get_head_commit branch1)
     
     run dolt --branch branch1 log -n 1
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author <original@example.com>" ]] || false
     
-    run dolt cherry-pick $commit_hash
+    run dolt cherry-pick $COMMIT_HASH
     [ $status -eq 0 ]
     
     run dolt log -n 1

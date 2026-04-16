@@ -295,7 +295,6 @@ SQL
 
   run dolt sql -r csv -q "SELECT author, author_email, committer, email FROM dolt_log WHERE message = 'Commit with different author and committer'"
   [ "$status" -eq 0 ]
-  echo $output
   [[ "$output" =~ author,author_email,committer,email ]] || false
   [[ "$output" =~ "Bats Tests,bats@email.fake,Test Committer,committer@test.com" ]] || false
 

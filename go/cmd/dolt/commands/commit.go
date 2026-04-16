@@ -174,6 +174,10 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 
 	commit, err := getCommitInfo(queryist.Context, queryist.Queryist, "HEAD")
+	if err != nil {
+		cli.Printf("Commit completed, but failure to get commit details occurred: %s\n", err.Error())
+		return 0, false
+	}
 	if cli.ExecuteWithStdioRestored != nil {
 		cli.ExecuteWithStdioRestored(func() {
 			pager := outputpager.Start()
@@ -186,9 +190,11 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	return 0, false
 }
 
-// constructParametrizedDoltCommitQuery generates the SQL query to call the DOLT_COMMIT() stored procedure
-// with placeholders for arg input. Also returns the parameter values in the order they appear in the query.
-// The --author flag is only included when explicitly provided by the caller.
+// constructParametrizedDoltCommitQuery builds the CALL DOLT_COMMIT query the CLI sends to the
+// engine, returning the query text with placeholders and the ordered parameter list. |msg| is
+// the commit message and |apr| supplies the parsed CLI flags. When --author is not passed,
+// the server resolves author and committer from the identity session variables on the
+// connection. Returns an error when |cliCtx| has no configured user.name or user.email.
 func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseResults, cliCtx cli.CliContext) (string, []interface{}, error) {
 	var params []interface{}
 	var param bool
@@ -236,6 +242,9 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 		writeToBuffer("-f")
 	}
 
+	if _, _, err := env.GetNameAndEmail(cliCtx.Config()); err != nil {
+		return "", nil, err
+	}
 	if apr.Contains(cli.AuthorParam) {
 		writeToBuffer("--author")
 		param = true

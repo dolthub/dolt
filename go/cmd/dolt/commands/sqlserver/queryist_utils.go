@@ -79,16 +79,15 @@ func nameEmailFromCurrentUser(queryist cli.Queryist, sqlCtx *sql.Context) (name,
 	if !ok {
 		return "", ""
 	}
-	if idx := strings.LastIndex(currentUser, "@"); idx >= 0 {
-		return currentUser[:idx], currentUser
-	}
-	return currentUser, currentUser
+	name, _, _ = strings.Cut(currentUser, "@")
+	return name, currentUser
 }
 
-// BuildConnectionStringQueryist returns a [cli.LateBindQueryist] that connects to the server at |host|:|port|.
-// |configName| and |configEmail| are the author and committer name and email from the local dolt config,
-// applied when connecting to a loopback address. For all other connections the name and email are read
-// from CURRENT_USER() after the connection is established.
+// BuildConnectionStringQueryist returns a [cli.LateBindQueryist] that opens a connection to the
+// server at |host|:|port| using |creds| and |tlsMode|, and selects |dbRev| as the default
+// database. |configName| and |configEmail| are used as the commit identity when the client
+// connects over a loopback address; non-loopback connections read the identity from
+// CURRENT_USER() so the grant host matches whatever the server assigned.
 func BuildConnectionStringQueryist(_ context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, tlsMode QueryistTLSMode, dbRev string, configName, configEmail string) (cli.LateBindQueryist, error) {
 	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
@@ -131,8 +130,6 @@ func BuildConnectionStringQueryist(_ context.Context, cwdFS filesys.Filesys, cre
 		name, email := configName, configEmail
 		ip := net.ParseIP(host)
 		if !(host == "localhost" || (ip != nil && ip.IsLoopback())) {
-			// Remote connection: read name and email from CURRENT_USER() so the
-			// grant host reflects what the server assigned, not a client-side guess.
 			name, email = nameEmailFromCurrentUser(queryist, sqlCtx)
 		}
 		if err := engine.InitCommitIdentSessionConfig(queryist, sqlCtx, name, email); err != nil {

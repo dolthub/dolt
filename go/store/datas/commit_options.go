@@ -33,7 +33,6 @@ type CommitSigner interface {
 	Sign(ctx context.Context, payload []byte) ([]byte, error)
 }
 
-
 // CommitOptions is used to pass options into Commit.
 type CommitOptions struct {
 	// Meta contains the metadata for the commit.

@@ -500,8 +500,6 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
 
-	// Name and email are left empty when --author is not provided; the merge commit
-	// path resolves author identity from session variables in that case.
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		var err error
@@ -511,8 +509,6 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		}
 	}
 
-	// Date is left nil when --date is not provided; the merge commit path then
-	// resolves the author date from the dolt_author_date session variable.
 	var date *datas.CommitDate
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		t, err := dconfig.ParseDate(commitTimeStr)

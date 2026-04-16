@@ -24,6 +24,7 @@ package datas
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -67,7 +68,13 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	//        \ds2
 	ds2, err := store.GetDataset(context.Background(), id2)
 	assert.NoError(err)
-	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1)}, Meta: zeroMeta()})
+	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{
+		Parents: []hash.Hash{mustHeadAddr(ds1)},
+		Meta: &CommitMeta{
+			Author:    CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+			Committer: CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+		},
+	})
 	assert.NoError(err)
 	assert.True(mustGetCommittedValue(store, mustHead(ds2)).Equals(a))
 
@@ -87,11 +94,23 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
 	d := types.String("d")
-	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}, Meta: zeroMeta()})
+	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{
+		Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)},
+		Meta: &CommitMeta{
+			Author:    CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+			Committer: CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+		},
+	})
 	assert.NoError(err)
 	assert.True(mustGetCommittedValue(store, mustHead(ds2)).Equals(d))
 
-	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}, Meta: zeroMeta()})
+	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{
+		Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)},
+		Meta: &CommitMeta{
+			Author:    CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+			Committer: CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+		},
+	})
 	assert.NoError(err)
 	assert.True(mustGetCommittedValue(store, mustHead(ds1)).Equals(d))
 }

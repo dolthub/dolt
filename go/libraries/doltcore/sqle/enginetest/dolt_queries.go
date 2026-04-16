@@ -2921,6 +2921,20 @@ var BranchesSystemTableTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_branches latest_author columns reflect author identity when author and committer differ",
+		SetUpScript: []string{
+			"CALL DOLT_CHECKOUT('-b', 'feature');",
+			"CREATE TABLE t (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'author commit', '--author', 'Test Author <author@example.com>');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT latest_committer, latest_committer_email, latest_author, latest_author_email FROM dolt_branches WHERE name = 'feature';",
+				Expected: []sql.Row{{"root", "root@localhost", "Test Author", "author@example.com"}},
+			},
+		},
+	},
 }
 
 var DoltCheckoutScripts = []queries.ScriptTest{
@@ -3796,20 +3810,6 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query:    "select active_branch();",
 				Expected: []sql.Row{{"other"}},
-			},
-		},
-	},
-	{
-		Name: "dolt_branches latest_author columns reflect author identity when author and committer differ",
-		SetUpScript: []string{
-			"CALL DOLT_CHECKOUT('-b', 'feature');",
-			"CREATE TABLE t (pk INT PRIMARY KEY);",
-			"CALL DOLT_COMMIT('-Am', 'author commit', '--author', 'Test Author <author@example.com>');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "SELECT latest_committer, latest_committer_email, latest_author, latest_author_email FROM dolt_branches WHERE name = 'feature';",
-				Expected: []sql.Row{{"root", "root@localhost", "Test Author", "author@example.com"}},
 			},
 		},
 	},

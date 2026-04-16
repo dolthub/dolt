@@ -144,7 +144,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	// Override author date if --date flag is provided.
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		t, err := dconfig.ParseDate(commitTimeStr)
 		if err != nil {

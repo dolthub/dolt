@@ -53,7 +53,6 @@ func SetSystemVar(queryist Queryist, sqlCtx *sql.Context, newVal bool) (func() e
 	return update, err
 }
 
-
 func GetRowsForSql(queryist Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
 	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {

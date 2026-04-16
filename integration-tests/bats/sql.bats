@@ -878,14 +878,17 @@ SQL
 
 @test "sql: AS OF queries" {
     dolt add .
-    dolt commit -m "Initial main commit" --date "2020-03-01T12:00:00Z"
+    # --date sets the author date and AS OF timestamp resolves against the
+    # committer date, so DOLT_COMMITTER_DATE is exported as well to pin both
+    # sides of the commit identity to the same point in time.
+    DOLT_COMMITTER_DATE="2020-03-01T12:00:00Z" dolt commit -m "Initial main commit" --date "2020-03-01T12:00:00Z"
 
     main_commit=`dolt log | head -n1 | cut -d' ' -f2`
     dolt sql -q "update one_pk set c1 = c1 + 1"
     dolt sql -q "drop table two_pk"
     dolt checkout -b new_branch
     dolt add .
-    dolt commit -m "Updated a table, dropped a table" --date "2020-03-01T13:00:00Z"
+    DOLT_COMMITTER_DATE="2020-03-01T13:00:00Z" dolt commit -m "Updated a table, dropped a table" --date "2020-03-01T13:00:00Z"
     new_commit=`dolt log | head -n1 | cut -d' ' -f2`
 
     run dolt sql -r csv -q "select pk,c1 from one_pk order by c1"

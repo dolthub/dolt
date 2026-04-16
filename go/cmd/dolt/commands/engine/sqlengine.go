@@ -615,10 +615,12 @@ var commitIdentEnvOverrides = []envSessionVar{
 	{dconfig.EnvDoltCommitterDate, dsess.DoltCommitterDate},
 }
 
-// InitCommitIdentSessionConfig sets the commit identity session variables for the current session.
-// |name| and |email| provide the initial name and email for both author and committer.
-// Non-empty DOLT_AUTHOR_* and DOLT_COMMITTER_* environment variables override the
-// corresponding fields. This function must be called after [sql.SessionCommandBegin].
+// InitCommitIdentSessionConfig seeds the DOLT_ author and committer session variables on the
+// current session so later DOLT_COMMIT calls attribute the commit correctly. |name| and |email|
+// supply the default identity for both author and committer; any non-empty DOLT_AUTHOR_* or
+// DOLT_COMMITTER_* environment variable overrides the matching field. Must run after
+// [sql.SessionCommandBegin] so the session is ready to accept SET statements. Silently skips
+// variables not recognised by |queryist|, so older servers remain usable.
 func InitCommitIdentSessionConfig(queryist cli.Queryist, sqlCtx *sql.Context, name, email string) error {
 	sessionVars := map[string]string{
 		dsess.DoltAuthorName:     name,
@@ -633,26 +635,52 @@ func InitCommitIdentSessionConfig(queryist cli.Queryist, sqlCtx *sql.Context, na
 		}
 	}
 
-	var sb strings.Builder
-	for sessionVar, val := range sessionVars {
-		if val == "" {
+	var showQuery strings.Builder
+	showQuery.WriteString("SHOW VARIABLES WHERE Variable_name IN (")
+	hasVariableNames := false
+	for variableName, value := range sessionVars {
+		if value == "" {
 			continue
 		}
-		if sb.Len() == 0 {
-			sb.WriteString("SET ")
-		} else {
-			sb.WriteString(", ")
+		if hasVariableNames {
+			showQuery.WriteByte(',')
 		}
-		_, err := fmt.Fprintf(&sb, "@@SESSION.%s = %q", sessionVar, val)
-		if err != nil {
-			return err
-		}
+		showQuery.WriteByte('\'')
+		showQuery.WriteString(variableName)
+		showQuery.WriteByte('\'')
+		hasVariableNames = true
 	}
-	if sb.Len() == 0 {
+	if !hasVariableNames {
 		return nil
 	}
-	_, _, _, err := queryist.Query(sqlCtx, sb.String())
+	showQuery.WriteByte(')')
+	variableRows, err := cli.GetRowsForSql(queryist, sqlCtx, showQuery.String())
 	if err != nil {
+		return fmt.Errorf("%w: %v", ErrFailedToInitCommitIdent, err)
+	}
+
+	var setStatement strings.Builder
+	setStatement.WriteString("SET ")
+	hasAssignments := false
+	for _, row := range variableRows {
+		variableName, ok := row[0].(string)
+		if !ok {
+			continue
+		}
+		value, ok := sessionVars[strings.ToLower(variableName)]
+		if !ok {
+			continue
+		}
+		if hasAssignments {
+			setStatement.WriteString(", ")
+		}
+		fmt.Fprintf(&setStatement, "@@SESSION.%s = %q", variableName, value)
+		hasAssignments = true
+	}
+	if !hasAssignments {
+		return nil
+	}
+	if _, _, _, err := queryist.Query(sqlCtx, setStatement.String()); err != nil {
 		return fmt.Errorf("%w: %v", ErrFailedToInitCommitIdent, err)
 	}
 	return nil

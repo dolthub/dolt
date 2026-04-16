@@ -326,7 +326,7 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 		return "", 0, 0, 0, fmt.Errorf("error: unable to get commit metadata: %w", err)
 	}
 
-	// Create the commit with the original commit's metadata. In a conflict workflow, AllowEmpty is always false.
+	// In a conflict workflow, AllowEmpty is always false.
 	commitProps, err := CreateCommitStagedPropsFromCherryPickOptions(ctx, CherryPickOptions{
 		CommitMessage:              cherryCommitMeta.Description,
 		CommitBecomesEmptyHandling: doltdb.ErrorOnEmptyCommit,

@@ -703,18 +703,26 @@ func getCommitInfo(sqlCtx *sql.Context, queryist cli.Queryist, ref string) (*Com
 	return getCommitInfoWithOptions(sqlCtx, queryist, ref, commitInfoOptions{})
 }
 
+// getCommitInfoWithOptions reads the commit at |ref| through the dolt_log table function on
+// |queryist| and returns the parsed CommitInfo, applying the presentation flags in |opts| such
+// as whether to include the cryptographic signature. Works against servers that expose only
+// the committer columns and against newer servers that also expose the author columns; on
+// older servers the committer identity stands in for the author.
 func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	hasAuthorColumns := true
-	if err = sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0)); err != nil {
-		if !sql.ErrUnknownSystemVariable.Is(err) {
-			return nil, err
+	varRows, err := cli.GetRowsForSql(queryist, sqlCtx, "SHOW VARIABLES LIKE '"+dsess.DoltLogCommitterOnly+"'")
+	if err != nil {
+		return nil, err
+	}
+	hasAuthorColumns := len(varRows) > 0
+	if hasAuthorColumns {
+		if _, _, _, qErr := queryist.Query(sqlCtx, "SET @@SESSION."+dsess.DoltLogCommitterOnly+" = 0"); qErr != nil {
+			return nil, qErr
 		}
-		hasAuthorColumns = false
 	}
 
 	authorColumnsOffset := 0

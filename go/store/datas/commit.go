@@ -93,6 +93,15 @@ func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 	return newCommitForValue(ctx, cs, vrw, ns, v, opts)
 }
 
+// createStringIfDiffers writes |s| to |b| and returns its offset when |s| differs from |ref|.
+// When they match it returns a zero offset so the field is omitted from the serialized message.
+func createStringIfDiffers(b *flatbuffers.Builder, s, ref string) flatbuffers.UOffsetT {
+	if s == ref {
+		return 0
+	}
+	return b.CreateString(s)
+}
+
 func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, parentsClosureAddr hash.Hash) (serial.Message, uint64) {
 	builder := flatbuffers.NewBuilder(1024)
 	vaddroff := builder.CreateByteVector(vaddr[:])
@@ -129,15 +138,8 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 
 	// Committer name and email are only written when they differ from the author, so commits where
 	// author and committer are the same produce the same hash as before committer identity was added.
-	var committerNameOff flatbuffers.UOffsetT
-	if opts.Meta.Committer.Name != opts.Meta.Author.Name {
-		committerNameOff = builder.CreateString(opts.Meta.Committer.Name)
-	}
-
-	var committerEmailOff flatbuffers.UOffsetT
-	if opts.Meta.Committer.Email != opts.Meta.Author.Email {
-		committerEmailOff = builder.CreateString(opts.Meta.Committer.Email)
-	}
+	committerNameOff := createStringIfDiffers(builder, opts.Meta.Committer.Name, opts.Meta.Author.Name)
+	committerEmailOff := createStringIfDiffers(builder, opts.Meta.Committer.Email, opts.Meta.Author.Email)
 
 	serial.CommitStart(builder)
 	serial.CommitAddRoot(builder, vaddroff)
@@ -158,7 +160,9 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 }
 
 func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
-	opts.Meta.resolveDates()
+	now := CommitNow()
+	opts.Meta.Author.Date = opts.Meta.Author.Date.Or(now)
+	opts.Meta.Committer.Date = opts.Meta.Committer.Date.Or(now)
 
 	if opts.Signer != nil {
 		payload := SignaturePayloadV2(opts.DBName, opts.Meta, opts.HeadHash.String(), opts.StagedHash.String())
@@ -445,8 +449,8 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 			Email: string(serializedCommit.Email()),
 			Date:  CommitDateAt(time.UnixMilli(serializedCommit.UserTimestampMillis())),
 		},
-		Description:  string(serializedCommit.Description()),
-		Signature: string(serializedCommit.Signature()),
+		Description: string(serializedCommit.Description()),
+		Signature:   string(serializedCommit.Signature()),
 	}
 	// Committer fields default to the author when the stored commit has no separate committer identity.
 	ret.Committer.Name = ret.Author.Name
