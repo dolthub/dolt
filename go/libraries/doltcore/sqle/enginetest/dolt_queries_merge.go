@@ -3292,6 +3292,32 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "no-ff merge commit uses author session variables for author identity",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY)",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'initial commit')",
+			"CALL DOLT_CHECKOUT('-b', 'feature')",
+			"INSERT INTO t VALUES (1)",
+			"CALL DOLT_COMMIT('-am', 'feature commit')",
+			"CALL DOLT_CHECKOUT('main')",
+			"SET @@dolt_author_name = 'Session Author'",
+			"SET @@dolt_author_email = 'session@author.com'",
+			"SET @@dolt_committer_name = 'Session Committer'",
+			"SET @@dolt_committer_email = 'session@committer.com'",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature', '--no-ff', '-m', 'test merge commit')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT author, author_email, committer, email FROM dolt_log LIMIT 1",
+				Expected: []sql.Row{{"Session Author", "session@author.com", "Session Committer", "session@committer.com"}},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{

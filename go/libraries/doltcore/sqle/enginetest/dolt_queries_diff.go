@@ -4470,6 +4470,22 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_diff author columns reflect author identity when author and committer differ",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'create table', '--author', 'Test Author <author@example.com>');",
+			"INSERT INTO t VALUES (1);",
+			"CALL DOLT_COMMIT('-am', 'insert row', '--author', 'Test Author <author@example.com>');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT committer, email, author, author_email FROM dolt_diff WHERE message = 'insert row' LIMIT 1;",
+				Expected: []sql.Row{{"root", "root@localhost", "Test Author", "author@example.com"}},
+			},
+		},
+	},
 }
 
 var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
@@ -5224,6 +5240,20 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 					{"pk", "added"},
 					{"j", "added"},
 				},
+			},
+		},
+	},
+	{
+		Name: "dolt_column_diff author columns reflect author identity when author and committer differ",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, c VARCHAR(10));",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'create table', '--author', 'Test Author <author@example.com>');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT committer, email, author, author_email FROM dolt_column_diff WHERE message = 'create table' LIMIT 1;",
+				Expected: []sql.Row{{"root", "root@localhost", "Test Author", "author@example.com"}},
 			},
 		},
 	},

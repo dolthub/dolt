@@ -2683,6 +2683,32 @@ WHERE z IN (
 			},
 		},
 	},
+	{
+		Name: "dolt_history_dolt_schemas committer column reads from committer, not author",
+		SetUpScript: []string{
+			"CREATE VIEW v1 AS SELECT 1",
+			"CALL DOLT_COMMIT('-Am', 'create view', '--author', 'Test Author <test@example.com>')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT committer FROM dolt_history_dolt_schemas WHERE name = 'v1'",
+				Expected: []sql.Row{{"root <root@localhost>"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_history_dolt_procedures committer column reads from committer, not author",
+		SetUpScript: []string{
+			"CREATE PROCEDURE p1() SELECT 1",
+			"CALL DOLT_COMMIT('-Am', 'create procedure', '--author', 'Test Author <test@example.com>')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT committer FROM dolt_history_dolt_procedures WHERE name = 'p1'",
+				Expected: []sql.Row{{"root <root@localhost>"}},
+			},
+		},
+	},
 }
 
 // BrokenHistorySystemTableScriptTests contains tests that work for non-prepared, but don't work
@@ -3770,6 +3796,20 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query:    "select active_branch();",
 				Expected: []sql.Row{{"other"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branches latest_author columns reflect author identity when author and committer differ",
+		SetUpScript: []string{
+			"CALL DOLT_CHECKOUT('-b', 'feature');",
+			"CREATE TABLE t (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'author commit', '--author', 'Test Author <author@example.com>');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT latest_committer, latest_committer_email, latest_author, latest_author_email FROM dolt_branches WHERE name = 'feature';",
+				Expected: []sql.Row{{"root", "root@localhost", "Test Author", "author@example.com"}},
 			},
 		},
 	},
@@ -5294,6 +5334,35 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT message from dolt_log() dl1 where exists (select 1 from dolt_log(dl1.commit_hash, '--not', @Commit1));",
 				Expected: []sql.Row{{"inserting into t"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_log_committer_only=0 shows author columns with correct values",
+		SetUpScript: []string{
+			"CREATE TABLE log_author_tbl (pk INT PRIMARY KEY);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'author commit', '--author', 'Test Author <author@example.com>');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT committer, email, author, author_email FROM dolt_log ORDER BY date DESC LIMIT 1;",
+				Expected: []sql.Row{{"root", "root@localhost", "Test Author", "author@example.com"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_log_committer_only=1 hides author columns",
+		SetUpScript: []string{
+			"CREATE TABLE log_author_tbl (pk INT PRIMARY KEY);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'author commit', '--author', 'Test Author <author@example.com>');",
+			"SET @@dolt_log_committer_only = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "SELECT author FROM dolt_log LIMIT 1;",
+				ExpectedErrStr: "column \"author\" could not be found in any table in scope",
 			},
 		},
 	},
@@ -7502,6 +7571,20 @@ var DoltCommitTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT COUNT(parent_hash) FROM dolt_commit_ancestors WHERE commit_hash= @hash;",
 				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commits author columns reflect author identity when author and committer differ",
+		SetUpScript: []string{
+			"CREATE TABLE commits_author_tbl (pk INT PRIMARY KEY);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'author commit', '--author', 'Test Author <author@example.com>');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT committer, email, author, author_email FROM dolt_commits WHERE message = 'author commit';",
+				Expected: []sql.Row{{"root", "root@localhost", "Test Author", "author@example.com"}},
 			},
 		},
 	},
