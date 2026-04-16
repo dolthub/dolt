@@ -286,6 +286,47 @@ func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks
 	return nil
 }
 
+func (s journalChunkSource) tolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(error), _ *Stats) {
+	s.journal.lock.RLock()
+	defer s.journal.lock.RUnlock()
+
+	for h, r := range s.journal.ranges.novel {
+		if ctx.Err() != nil {
+			return
+		}
+		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
+		if err != nil {
+			errCb(fmt.Errorf("chunk %s: %w", h.String(), err))
+			continue
+		}
+		chunk, err := cchk.ToChunk()
+		if err != nil {
+			errCb(fmt.Errorf("chunk %s: decompress error: %w", h.String(), err))
+			continue
+		}
+		cb(chunk)
+	}
+
+	for a16, r := range s.journal.ranges.cached {
+		if ctx.Err() != nil {
+			return
+		}
+		var h hash.Hash
+		copy(h[:], a16[:])
+		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
+		if err != nil {
+			errCb(fmt.Errorf("chunk %s: %w", h.String(), err))
+			continue
+		}
+		chunk, err := cchk.ToChunk()
+		if err != nil {
+			errCb(fmt.Errorf("chunk %s: decompress error: %w", h.String(), err))
+			continue
+		}
+		cb(chunk)
+	}
+}
+
 func equalSpecs(left, right []tableSpec) bool {
 	if len(left) != len(right) {
 		return false

@@ -750,6 +750,119 @@ func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) erro
 	return nil
 }
 
+func (ar *archiveReader) tolerantIterate(ctx context.Context, cb func(chunks.Chunk), errCb func(error), stats *Stats) {
+	dictReverseIndex := make(map[uint32]struct{})
+	dataReverseIndex := make(map[uint32]uint32)
+
+	for chunkRefIdx := uint32(0); chunkRefIdx < ar.footer.chunkCount; chunkRefIdx++ {
+		dictId, dataId := ar.getChunkRef(int(chunkRefIdx))
+		if dictId != 0 {
+			dictReverseIndex[dictId] = struct{}{}
+		}
+		dataReverseIndex[dataId] = chunkRefIdx
+	}
+
+	dataSpan := ar.footer.dataSpan()
+	dataReader := io.NewSectionReader(&bridgeReaderAt{
+		rdr:   ar.reader,
+		ctx:   ctx,
+		stats: stats,
+	}, int64(dataSpan.offset), int64(dataSpan.length))
+	bufReader := bufio.NewReader(dataReader)
+	byteSpanCounter := uint32(1)
+
+	buf := make([]byte, 4*1024*1024)
+	loadedDictionaries := make(map[uint32]*gozstd.DDict)
+	failedDictionaries := make(map[uint32]struct{})
+
+	for byteSpanCounter <= ar.footer.byteSpanCount {
+		if ctx.Err() != nil {
+			return
+		}
+
+		span := ar.getByteSpanByID(byteSpanCounter)
+		for cap(buf) < int(span.length) {
+			buf = append(buf, make([]byte, cap(buf))...)
+		}
+
+		_, readErr := io.ReadFull(bufReader, buf[:span.length])
+		if readErr != nil {
+			// Stream position is unknown; cannot safely continue sequential read.
+			errCb(fmt.Errorf("error reading archive file at span %d: %w", byteSpanCounter, readErr))
+			return
+		}
+		spanData := buf[:span.length]
+
+		if _, exists := dictReverseIndex[byteSpanCounter]; exists {
+			dict, err := NewDecompBundle(spanData)
+			if err != nil {
+				errCb(fmt.Errorf("failure loading archive dictionary span %d: %w", byteSpanCounter, err))
+				failedDictionaries[byteSpanCounter] = struct{}{}
+			} else {
+				loadedDictionaries[byteSpanCounter] = dict.dDict
+			}
+		} else if chunkId, exists := dataReverseIndex[byteSpanCounter]; exists {
+			dictId, dataId := ar.getChunkRef(int(chunkId))
+			if byteSpanCounter != dataId {
+				panic("Reverse Index incorrect: ByteSpan ID does not match data ID in chunk reference")
+			}
+
+			prefix := ar.indexReader.getPrefix(chunkId)
+			suffix := ar.indexReader.getSuffix(chunkId)
+			h := reconstructHashFromPrefixAndSuffix(prefix, suffix)
+
+			var chunkData []byte
+			chunkOk := true
+
+			if dictId == 0 {
+				if ar.footer.formatVersion >= archiveVersionSnappySupport {
+					cc, err := NewCompressedChunk(h, spanData)
+					if err != nil {
+						errCb(fmt.Errorf("chunk %s: %w", h.String(), err))
+						chunkOk = false
+					} else {
+						chk, err := cc.ToChunk()
+						if err != nil {
+							errCb(fmt.Errorf("chunk %s: decompress error: %w", h.String(), err))
+							chunkOk = false
+						} else {
+							chunkData = chk.Data()
+						}
+					}
+				} else {
+					errCb(fmt.Errorf("chunk %s: no dictionary for old format version", h.String()))
+					chunkOk = false
+				}
+			} else {
+				if _, failed := failedDictionaries[dictId]; failed {
+					errCb(fmt.Errorf("chunk %s: skipped due to failed dictionary span %d", h.String(), dictId))
+					chunkOk = false
+				} else {
+					dict, ok := loadedDictionaries[dictId]
+					if !ok {
+						errCb(fmt.Errorf("chunk %s: dictionary span %d not loaded", h.String(), dictId))
+						chunkOk = false
+					} else {
+						var decompErr error
+						chunkData, decompErr = gozstd.DecompressDict(nil, spanData, dict)
+						if decompErr != nil {
+							errCb(fmt.Errorf("chunk %s: decompression error: %w", h.String(), decompErr))
+							chunkOk = false
+						}
+					}
+				}
+			}
+
+			if chunkOk {
+				cb(chunks.NewChunkWithHash(h, chunkData))
+			}
+		} else {
+			errCb(fmt.Errorf("archive span %d not found in dictionary or data reverse index", byteSpanCounter))
+		}
+		byteSpanCounter++
+	}
+}
+
 // prollyBinSearch is a search that returns the _best_ index of the target in the input slice. If the target exists,
 // one or more times, the index of the first instance is returned. If the target does not exist, the index which it
 // would be inserted at is returned.
