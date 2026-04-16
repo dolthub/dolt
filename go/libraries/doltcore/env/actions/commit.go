@@ -86,6 +86,27 @@ func GetCommitStaged(
 		return nil, datas.ErrEmptyCommitMessage
 	}
 
+	allowEmpty := ws.MergeActive() || props.AllowEmpty || props.Amend
+
+	// HashOf returns a cached value, so comparing the staged root against HEAD
+	// here avoids the full table delta walk for callers with nothing staged.
+	if !allowEmpty {
+		stagedHash, err := roots.Staged.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		headHash, err := roots.Head.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		if stagedHash == headHash {
+			if props.SkipEmpty {
+				return nil, nil
+			}
+			return nil, NothingStaged{}
+		}
+	}
+
 	stagedTables, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return nil, err
@@ -106,7 +127,6 @@ func GetCommitStaged(
 	}
 
 	isEmpty := len(stagedTables) == 0 && len(stagedSchemas) == 0
-	allowEmpty := ws.MergeActive() || props.AllowEmpty || props.Amend
 
 	if isEmpty && props.SkipEmpty {
 		return nil, nil
