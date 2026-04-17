@@ -43,7 +43,7 @@ jobs:
           aws-region: us-west-2
       - name: Send Email
         if: ${{ failure() && !env.ACT }}
-        uses: ./.github/actions/ses-email-action
+        uses: ./dolt/.github/actions/ses-email-action
         with:
           template: 'OrmIntegrationFailureTemplate'
           region: us-west-2
