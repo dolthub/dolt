@@ -457,7 +457,7 @@ func TestDropPks(t *testing.T) {
 				foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)
 				assert.NoError(t, err)
 
-				fk, ok := foreignKeyCollection.GetByNameCaseInsensitive(childFkName)
+				fk, ok := foreignKeyCollection.GetByNameCaseInsensitive(childFkName, doltdb.TableName{Name: childName})
 				assert.True(t, ok)
 				assert.Equal(t, childName, fk.TableName.Name)
 				if tt.fkIdxName != "" && fk.ReferencedTableIndex != "" {
