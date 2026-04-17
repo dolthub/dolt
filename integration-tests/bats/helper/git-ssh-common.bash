@@ -16,14 +16,6 @@ SSHD_DIR=""
 SSHD_PID=""
 SSHD_PORT=""
 
-_elevate() {
-    if [[ $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
-        sudo "$@"
-    else
-        "$@"
-    fi
-}
-
 # setup_git_repo initializes a bare git repository seeded with one commit on main.
 setup_git_repo() {
     local parent
@@ -81,7 +73,6 @@ WRAPPER
 setup_git_sshd() {
     local sshd_bin
     sshd_bin="$(command -v sshd 2>/dev/null)" || sshd_bin="/usr/sbin/sshd"
-    [[ -x "$sshd_bin" ]] || skip "sshd not found"
 
     SSHD_DIR="$(mktemp -d "$BATS_TMPDIR/sshd.XXXXXX")"
     chmod 700 "$SSHD_DIR"
@@ -102,21 +93,16 @@ AuthorizedKeysFile $SSHD_DIR/authorized_keys
 StrictModes no
 PasswordAuthentication no
 UsePAM no
+UsePrivilegeSeparation no
 AllowTcpForwarding no
 X11Forwarding no
-PidFile $SSHD_DIR/sshd.pid
 LogLevel ERROR
 EOF
-
-    # sshd requires the privilege separation directory to exist.
-    [[ -d /run/sshd ]] || _elevate mkdir -p /run/sshd
 
     # Redirect stdio to /dev/null so sshd does not inherit bats' open pipe
     # file descriptors. Without this, a running sshd would hold those pipes
     # open and prevent bats from reaching EOF after all tests complete.
-    # When already root, run sshd directly so SSHD_PID refers to sshd itself;
-    # a sudo wrapper may not propagate signals to its child.
-    _elevate "$sshd_bin" -f "$SSHD_DIR/sshd_config" -D \
+    "$sshd_bin" -f "$SSHD_DIR/sshd_config" -D \
         </dev/null >>"$SSHD_DIR/sshd.log" 2>&1 &
     SSHD_PID=$!
 
@@ -158,13 +144,7 @@ teardown_git() {
     GIT_SVC_HOOKS_DIR=""
 
     if [[ -n "${SSHD_PID:-}" ]]; then
-        # Prefer killing by PidFile so we target the actual sshd process even
-        # when SSHD_PID is a sudo wrapper that may not propagate signals.
-        local sshd_real_pid=""
-        [[ -f "${SSHD_DIR:-}/sshd.pid" ]] \
-            && sshd_real_pid="$(cat "$SSHD_DIR/sshd.pid" 2>/dev/null || true)"
-        [[ -n "$sshd_real_pid" ]] && _elevate kill "$sshd_real_pid" 2>/dev/null || true
-        _elevate kill "$SSHD_PID" 2>/dev/null || true
+        kill "$SSHD_PID" 2>/dev/null || true
         wait "$SSHD_PID" 2>/dev/null || true
         SSHD_PID=""
     fi

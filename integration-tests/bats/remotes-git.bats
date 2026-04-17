@@ -534,7 +534,7 @@ seed_git_remote_branch() {
 
     [ "$status" -ne 0 ]
     [ "$status" -ne 124 ]
-    [[ "$output" =~ "remote authentication required but interactive prompting is disabled" ]] || false
+    [[ "$output" =~ "hint: dolt does not support interactive credential prompts" ]] || false
     [[ "$output" =~ "terminal prompts disabled" ]] || false
 }
 
@@ -620,7 +620,7 @@ _init_repo_with_remote() {
     # that git subprocesses cannot reach it to prompt for a passphrase.
     run expect "$BATS_TEST_DIRNAME/remotes-git-ssh-prompt.expect" "Enter passphrase"
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "remote authentication required but interactive prompting is disabled" ]] || false
+    [[ "$output" =~ "hint: dolt does not support interactive credential prompts" ]] || false
 }
 
 # bats test_tags=no_lambda
@@ -639,6 +639,10 @@ _init_repo_with_remote() {
     run expect "$BATS_TEST_DIRNAME/remotes-git-ssh-prompt.expect" "The authenticity of host"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "Host key verification failed" ]] || false
+
+    export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_unlocked -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    run dolt push origin main
+    [ "$status" -eq 0 ]
 }
 
 # bats test_tags=no_lambda

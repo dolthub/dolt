@@ -17,12 +17,11 @@ package gitauth
 import (
 	"bytes"
 	"errors"
-	"slices"
 	"strings"
 )
 
-// NonInteractiveAuthError indicates that a git operation failed because
-// authentication was required but interactive prompting is disabled.
+// NonInteractiveAuthError wraps a git remote error and appends credential
+// hint lines so the user knows how to configure auth before retrying.
 type NonInteractiveAuthError struct {
 	Output string
 	Cause  error
@@ -30,23 +29,21 @@ type NonInteractiveAuthError struct {
 
 func (e *NonInteractiveAuthError) Error() string {
 	var b strings.Builder
-	b.WriteString("remote authentication required but interactive prompting is disabled")
-	b.WriteString("\n\nHints:")
-	b.WriteString("\n- HTTPS: configure git credentials (credential helper, token) ahead of time")
-	b.WriteString("\n- SSH: ensure your key is loaded (`ssh-add <key>`) and the server host key is in known_hosts")
-	b.WriteString("\n- GCM: ensure non-interactive auth is configured")
 	if e.Output != "" {
-		b.WriteString("\n\nGit output:\n")
 		b.WriteString(strings.TrimRight(e.Output, "\n"))
+		b.WriteString("\n")
 	}
+	b.WriteString("hint: dolt does not support interactive credential prompts\n")
+	b.WriteString("hint: configure git credentials (credential helper, token) for HTTPS remotes\n")
+	b.WriteString("hint: run `ssh-add <key>` to pre-load your key for SSH remotes\n")
+	b.WriteString("hint: ensure non-interactive auth is configured for GCM")
 	return b.String()
 }
 
 func (e *NonInteractiveAuthError) Unwrap() error { return e.Cause }
 
-// NormalizeError wraps |err| in a [NonInteractiveAuthError] when |output|
-// contains a git authentication prompt or failure message.
-// When |output| does not match, |err| is returned unchanged.
+// NormalizeError wraps |err| in a [NonInteractiveAuthError] so that
+// credential hints are always appended to git remote failures.
 func NormalizeError(err error, output []byte) error {
 	if err == nil {
 		return nil
@@ -55,24 +52,10 @@ func NormalizeError(err error, output []byte) error {
 	if errors.As(err, &already) {
 		return err
 	}
-
-	outStr := string(bytes.TrimSpace(output))
-	if !looksLikeAuthPromptOrFailure(outStr) {
-		return err
+	return &NonInteractiveAuthError{
+		Output: string(bytes.TrimSpace(output)),
+		Cause:  err,
 	}
-	return &NonInteractiveAuthError{Output: outStr, Cause: err}
-}
-
-func looksLikeAuthPromptOrFailure(s string) bool {
-	s = strings.ToLower(s)
-	return slices.ContainsFunc([]string{
-		"terminal prompts disabled",
-		"could not read username",
-		"could not read password",
-		"authentication failed",
-		"enter passphrase for key",
-		"permission denied (publickey",
-	}, func(p string) bool { return strings.Contains(s, p) })
 }
 
 var _ error = (*NonInteractiveAuthError)(nil)

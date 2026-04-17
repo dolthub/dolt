@@ -20,56 +20,35 @@ import (
 	"testing"
 )
 
-func TestNormalizeError_WrapsCommonAuthPromptFailures(t *testing.T) {
-	tests := []struct {
+func TestNormalizeError_AlwaysWrapsAndAppendsHints(t *testing.T) {
+	cases := []struct {
 		name   string
 		output string
-		errMsg string
 	}{
-		{"terminal prompts disabled", "fatal: could not read Username for 'https://example.com': terminal prompts disabled", "git failed"},
-		{"could not read Username", "fatal: could not read Username for 'https://example.com': No such device or address", "git failed"},
-		{"could not read Password", "fatal: could not read Password for 'https://example.com': No such device or address", "git failed"},
-		{"Authentication failed", "remote: Invalid username or password.\nfatal: Authentication failed for 'https://example.com/'", "git failed"},
-		{"Enter passphrase for key", "Enter passphrase for key '/tmp/fake_key': ", "git failed"},
-		{"Permission denied (publickey)", "Permission denied (publickey).", "git failed"},
-		{"Permission denied (publickey,keyboard-interactive)", "Permission denied (publickey,keyboard-interactive).", "git failed"},
+		{"terminal prompts disabled", "fatal: could not read Username for 'https://example.com': terminal prompts disabled"},
+		{"permission denied publickey", "Permission denied (publickey)."},
+		{"permission denied keyboard-interactive", "Permission denied (publickey,keyboard-interactive)."},
+		{"enter passphrase", "Enter passphrase for key '/tmp/fake_key': "},
+		{"connection closed", "Connection closed by UNKNOWN port 65535\nfatal: Could not read from remote repository."},
+		{"empty output", ""},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			base := errors.New(tt.errMsg)
-			got := NormalizeError(base, []byte(tt.output))
+			got := NormalizeError(errors.New("git failed"), []byte(tt.output))
 
 			var niae *NonInteractiveAuthError
 			if !errors.As(got, &niae) {
 				t.Fatalf("expected NonInteractiveAuthError, got %T: %v", got, got)
 			}
-			if niae.Cause == nil {
-				t.Fatalf("expected Cause to be set")
-			}
 			msg := got.Error()
-			if !strings.Contains(msg, "interactive prompting is disabled") {
-				t.Fatalf("expected normalized message, got: %q", msg)
+			if !strings.Contains(msg, "hint:") {
+				t.Fatalf("expected hint lines, got: %q", msg)
 			}
-			if !strings.Contains(msg, "Hints:") {
-				t.Fatalf("expected hints, got: %q", msg)
-			}
-			if !strings.Contains(msg, "HTTPS:") || !strings.Contains(msg, "SSH:") {
-				t.Fatalf("expected HTTPS and SSH hints, got: %q", msg)
-			}
-			// Ensure output is preserved in the error message when provided.
-			if strings.TrimSpace(tt.output) != "" && !strings.Contains(msg, "Git output:") {
-				t.Fatalf("expected git output section, got: %q", msg)
+			if tt.output != "" && !strings.Contains(msg, strings.TrimSpace(tt.output)) {
+				t.Fatalf("expected output preserved, got: %q", msg)
 			}
 		})
-	}
-}
-
-func TestNormalizeError_NoMatch_ReturnsOriginalError(t *testing.T) {
-	base := errors.New("some other failure")
-	got := NormalizeError(base, []byte("unrelated output"))
-	if got != base {
-		t.Fatalf("expected original error, got %T: %v", got, got)
 	}
 }
 
