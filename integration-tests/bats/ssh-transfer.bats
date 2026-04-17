@@ -691,3 +691,35 @@ MOCK
     [ "$status" -eq 0 ]
     [[ "$output" =~ "hello" ]] || false
 }
+
+@test "ssh-transfer: dolt_fetch via sql-server does not leak subprocesses" {
+    # See https://github.com/dolthub/dolt/issues/10897
+    mkdir "repo_leak_remote"
+    cd "repo_leak_remote"
+    dolt init --initial-branch main
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO t VALUES (1),(2),(3);"
+    dolt add .
+    dolt commit -m "init"
+
+    cd "$BATS_TEST_TMPDIR"
+    mkdir "repo_leak_local"
+    cd "repo_leak_local"
+    dolt init --initial-branch main
+    start_sql_server "repo_leak_local"
+
+    dolt --host 127.0.0.1 --port "$PORT" --no-tls --use-db "repo_leak_local" sql -q \
+        "CALL dolt_remote('add', 'origin', 'ssh://localhost$BATS_TEST_TMPDIR/repo_leak_remote');"
+
+    for i in 1 2 3; do
+        dolt --host 127.0.0.1 --port "$PORT" --no-tls --use-db "repo_leak_local" sql -q \
+            "CALL dolt_fetch('origin', 'main');"
+        sleep 1
+        LEAKED=$(pgrep -P "$SERVER_PID" | wc -l | tr -d ' ')
+        echo "after fetch $i: $LEAKED leaked children of sql-server (PID $SERVER_PID)"
+    done
+
+    sleep 2
+    LEAKED=$(pgrep -P "$SERVER_PID" | wc -l | tr -d ' ')
+    [ "$LEAKED" -eq 0 ]
+}
