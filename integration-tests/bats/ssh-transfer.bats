@@ -692,6 +692,22 @@ MOCK
     [[ "$output" =~ "hello" ]] || false
 }
 
+# assert_no_ssh_subprocess_leak calls |query| |n| times against the running
+# sql-server over TCP and asserts that no transfer subprocesses remain as
+# children of the server after all calls complete.
+assert_no_ssh_subprocess_leak() {
+    local n="$1" query="$2" i leaked
+    for i in $(seq 1 "$n"); do
+        dolt --host 127.0.0.1 --port "$PORT" --no-tls --use-db "$DEFAULT_DB" sql -q "$query"
+        sleep 1
+        leaked=$(pgrep -P "$SERVER_PID" | wc -l | tr -d ' ')
+        echo "after call $i: $leaked leaked children (PID $SERVER_PID)"
+    done
+    sleep 2
+    leaked=$(pgrep -P "$SERVER_PID" | wc -l | tr -d ' ')
+    [ "$leaked" -eq 0 ]
+}
+
 @test "ssh-transfer: dolt_fetch via sql-server does not leak subprocesses" {
     # See https://github.com/dolthub/dolt/issues/10897
     mkdir "repo_leak_remote"
@@ -708,18 +724,29 @@ MOCK
     dolt init --initial-branch main
     start_sql_server "repo_leak_local"
 
-    dolt --host 127.0.0.1 --port "$PORT" --no-tls --use-db "repo_leak_local" sql -q \
+    dolt --host 127.0.0.1 --port "$PORT" --no-tls --use-db "$DEFAULT_DB" sql -q \
         "CALL dolt_remote('add', 'origin', 'ssh://localhost$BATS_TEST_TMPDIR/repo_leak_remote');"
 
-    for i in 1 2 3; do
-        dolt --host 127.0.0.1 --port "$PORT" --no-tls --use-db "repo_leak_local" sql -q \
-            "CALL dolt_fetch('origin', 'main');"
-        sleep 1
-        LEAKED=$(pgrep -P "$SERVER_PID" | wc -l | tr -d ' ')
-        echo "after fetch $i: $LEAKED leaked children of sql-server (PID $SERVER_PID)"
-    done
+    assert_no_ssh_subprocess_leak 3 "CALL dolt_fetch('origin', 'main');"
+}
 
-    sleep 2
-    LEAKED=$(pgrep -P "$SERVER_PID" | wc -l | tr -d ' ')
-    [ "$LEAKED" -eq 0 ]
+@test "ssh-transfer: dolt_push via sql-server does not leak subprocesses" {
+    # See https://github.com/dolthub/dolt/issues/10897
+    mkdir "repo_push_remote"
+    cd "repo_push_remote"
+    dolt init --initial-branch main
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY);"
+    dolt sql -q "INSERT INTO t VALUES (1),(2),(3);"
+    dolt add .
+    dolt commit -m "init"
+
+    cd "$BATS_TEST_TMPDIR"
+    dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_push_remote" repo_push_local
+    cd "repo_push_local"
+    dolt sql -q "INSERT INTO t VALUES (4);"
+    dolt add .
+    dolt commit -m "add row"
+    start_sql_server "repo_push_local"
+
+    assert_no_ssh_subprocess_leak 3 "CALL dolt_push('origin', 'main');"
 }
