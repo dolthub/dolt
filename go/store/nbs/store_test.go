@@ -355,7 +355,7 @@ func TestNBSCopyGC(t *testing.T) {
 	for h := range keepers {
 		keepersSlice = append(keepersSlice, h)
 	}
-	require.NoError(t, sweeper.SaveHashes(ctx, keepersSlice))
+	require.NoError(t, sweeper.SaveHashes(ctx, hash.NewHashSet(keepersSlice...)))
 	finalizer, err := sweeper.Finalize(ctx)
 	require.NoError(t, err)
 	require.NoError(t, sweeper.Close(ctx))

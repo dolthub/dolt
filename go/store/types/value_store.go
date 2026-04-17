@@ -750,7 +750,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 		return nil, err
 	}
 
-	err = sweeper.SaveHashes(ctx, toVisit.ToSlice())
+	err = sweeper.SaveHashes(ctx, toVisit)
 	if err != nil {
 		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(fmt.Errorf("Error in SaveHashes call: %w", err), cErr)
@@ -769,7 +769,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	// NewGenToVisit. NewGen -> Finalize is going to block writes until
 	// we are done, so its best to keep it as small as possible.
 	next := lvs.readAndResetNewGenToVisit()
-	err = sweeper.SaveHashes(ctx, next.ToSlice())
+	err = sweeper.SaveHashes(ctx, next)
 	if err != nil {
 		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
@@ -777,7 +777,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	next = nil
 
 	final := finalize()
-	err = sweeper.SaveHashes(ctx, final.ToSlice())
+	err = sweeper.SaveHashes(ctx, final)
 	if err != nil {
 		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
