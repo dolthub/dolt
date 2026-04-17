@@ -692,9 +692,8 @@ MOCK
     [[ "$output" =~ "hello" ]] || false
 }
 
-# assert_no_ssh_subprocess_leak calls |query| |n| times against the running
-# sql-server over TCP and asserts that no transfer subprocesses remain as
-# children of the server after all calls complete.
+# assert_no_ssh_subprocess_leak runs |query| |n| times via the sql-server and
+# asserts that no transfer subprocesses remain as children of the server.
 assert_no_ssh_subprocess_leak() {
     local n="$1" query="$2" i leaked
     for i in $(seq 1 "$n"); do
