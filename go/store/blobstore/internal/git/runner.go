@@ -113,15 +113,20 @@ func (e *CmdError) Error() string {
 
 func (e *CmdError) Unwrap() error { return e.Cause }
 
-// Run executes "git <args...>" with GIT_DIR set and returns captured combined output
-// when Stdout/Stderr are not supplied.
-func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]byte, error) {
+func (r *Runner) buildCmd(ctx context.Context, opts RunOptions, args []string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, r.gitPath, args...) //nolint:gosec // args are controlled by caller; used for internal plumbing.
 	if opts.Dir != "" {
 		cmd.Dir = opts.Dir
 	}
 	cmd.Env = r.env(opts)
 	gitauth.CmdSetsid(cmd)
+	return cmd
+}
+
+// Run executes "git <args...>" with GIT_DIR set and returns captured combined output
+// when Stdout/Stderr are not supplied.
+func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]byte, error) {
+	cmd := r.buildCmd(ctx, opts, args)
 
 	if opts.Stdin != nil {
 		cmd.Stdin = opts.Stdin
@@ -173,12 +178,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 //   - The returned *exec.Cmd is provided for advanced uses (e.g. signals), but most
 //     callers should not call Wait() directly.
 func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io.ReadCloser, *exec.Cmd, error) {
-	cmd := exec.CommandContext(ctx, r.gitPath, args...) //nolint:gosec // args are controlled by caller; used for internal plumbing.
-	if opts.Dir != "" {
-		cmd.Dir = opts.Dir
-	}
-	cmd.Env = r.env(opts)
-	gitauth.CmdSetsid(cmd)
+	cmd := r.buildCmd(ctx, opts, args)
 	if opts.Stdin != nil {
 		cmd.Stdin = opts.Stdin
 	}

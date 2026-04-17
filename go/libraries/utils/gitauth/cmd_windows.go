@@ -23,12 +23,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// CmdSetsid detaches |cmd| from the parent console by setting
-// [windows.DETACHED_PROCESS] on [syscall.SysProcAttr]. Without a console,
-// the MSYS2 ssh binary cannot open CONIN$ to prompt for a passphrase and
-// exits with an authentication error.
-//
-// See https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
+// CmdSetsid detaches |cmd| from the parent console (DETACHED_PROCESS).
+// SSH needs CONIN$ to prompt for credentials; without a console it exits with an auth error.
 func CmdSetsid(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.DETACHED_PROCESS,

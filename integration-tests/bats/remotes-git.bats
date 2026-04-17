@@ -586,17 +586,20 @@ seed_git_remote_branch() {
     fi
 }
 
+_init_repo_with_remote() {
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -m "init"
+    dolt remote add origin "$1"
+}
+
 @test "remotes-git: GIT_SSH_COMMAND set by user is not clobbered" {
     # See https://github.com/dolthub/dolt/issues/10811.
     setup_git_repo
     setup_git_ssh_wrapper
     hook_git_record_env "GIT_SSH_COMMAND"
-
-    mkdir repo1
-    cd repo1
-    dolt init
-    dolt commit --allow-empty -m "init"
-    dolt remote add origin "git@localhost:${GIT_SVC_DIR}"
+    _init_repo_with_remote "git@localhost:${GIT_SVC_DIR}"
 
     run dolt push origin main
     [ "$status" -eq 0 ]
@@ -611,16 +614,11 @@ seed_git_remote_branch() {
     gen_ssh_key "$BATS_TMPDIR/ssh_key_locked" "test_passphrase"
     export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_locked -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     unset SSH_AUTH_SOCK
-
-    mkdir repo1
-    cd repo1
-    dolt init
-    dolt commit --allow-empty -m "init"
-    dolt remote add origin "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
 
     # expect allocates a real PTY for the dolt process so the test can verify
     # that git subprocesses cannot reach it to prompt for a passphrase.
-    run expect "$BATS_TEST_DIRNAME/remotes-git-passphrase.expect"
+    run expect "$BATS_TEST_DIRNAME/remotes-git-ssh-prompt.expect" "Enter passphrase"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "remote authentication required but interactive prompting is disabled" ]] || false
 }
@@ -636,16 +634,9 @@ seed_git_remote_branch() {
     # the controlling terminal.
     touch "$BATS_TMPDIR/ssh_known_hosts_empty"
     export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_unlocked -o IdentitiesOnly=yes -o UserKnownHostsFile=$BATS_TMPDIR/ssh_known_hosts_empty"
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
 
-    mkdir repo1
-    cd repo1
-    dolt init
-    dolt commit --allow-empty -m "init"
-    dolt remote add origin "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
-
-    # expect allocates a real PTY for the dolt process so the test can verify
-    # that git subprocesses cannot reach it to prompt for host key confirmation.
-    run expect "$BATS_TEST_DIRNAME/remotes-git-hostkey.expect"
+    run expect "$BATS_TEST_DIRNAME/remotes-git-ssh-prompt.expect" "The authenticity of host"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "Host key verification failed" ]] || false
 }
@@ -656,12 +647,7 @@ seed_git_remote_branch() {
     setup_git_sshd
     gen_ssh_key "$BATS_TMPDIR/ssh_key_unlocked" ""
     export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_unlocked -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-
-    mkdir repo1
-    cd repo1
-    dolt init
-    dolt commit --allow-empty -m "init"
-    dolt remote add origin "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
 
     run dolt push origin main
     [ "$status" -eq 0 ]

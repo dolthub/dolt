@@ -15,14 +15,14 @@
 package gitauth
 
 import (
+	"bytes"
 	"errors"
+	"slices"
 	"strings"
 )
 
 // NonInteractiveAuthError indicates that a git operation failed because
 // authentication was required but interactive prompting is disabled.
-//
-// It includes the captured git output (when available) to aid debugging.
 type NonInteractiveAuthError struct {
 	Output string
 	Cause  error
@@ -38,10 +38,6 @@ func (e *NonInteractiveAuthError) Error() string {
 	if e.Output != "" {
 		b.WriteString("\n\nGit output:\n")
 		b.WriteString(strings.TrimRight(e.Output, "\n"))
-	}
-	if e.Cause != nil {
-		b.WriteString("\nOriginal error: ")
-		b.WriteString(e.Cause.Error())
 	}
 	return b.String()
 }
@@ -60,7 +56,7 @@ func NormalizeError(err error, output []byte) error {
 		return err
 	}
 
-	outStr := strings.TrimSpace(string(output))
+	outStr := string(bytes.TrimSpace(output))
 	if !looksLikeAuthPromptOrFailure(outStr) {
 		return err
 	}
@@ -68,21 +64,15 @@ func NormalizeError(err error, output []byte) error {
 }
 
 func looksLikeAuthPromptOrFailure(s string) bool {
-	// Keep these as simple substring matches; callers can extend as we observe new cases.
 	s = strings.ToLower(s)
-	for _, p := range []string{
+	return slices.ContainsFunc([]string{
 		"terminal prompts disabled",
 		"could not read username",
 		"could not read password",
 		"authentication failed",
 		"enter passphrase for key",
 		"permission denied (publickey",
-	} {
-		if strings.Contains(s, p) {
-			return true
-		}
-	}
-	return false
+	}, func(p string) bool { return strings.Contains(s, p) })
 }
 
 var _ error = (*NonInteractiveAuthError)(nil)

@@ -310,11 +310,8 @@ func isGitRemoteAlreadyExistsError(err error, remoteName string) bool {
 	return strings.Contains(s, "remote "+strings.ToLower(remoteName)+" already exists")
 }
 
-// gitCmd builds an exec.Cmd for a git invocation. LC_ALL=C ensures English
-// error messages so pattern matching in [gitauth.NormalizeError] works
-// regardless of the user's locale. [gitauth.CmdSetsid] removes the controlling
-// terminal from the subprocess so SSH cannot open /dev/tty to prompt for a
-// passphrase.
+// gitCmd builds an exec.Cmd for a git invocation. LC_ALL=C forces English error
+// messages; CmdSetsid removes the controlling terminal so SSH cannot prompt.
 func gitCmd(ctx context.Context, args ...string) (*exec.Cmd, error) {
 	p, err := exec.LookPath("git")
 	if err != nil {

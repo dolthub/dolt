@@ -21,13 +21,8 @@ import (
 	"syscall"
 )
 
-// CmdSetsid places |cmd| in a new session with no controlling terminal by
-// setting Setsid on [syscall.SysProcAttr]. SSH requires /dev/tty to prompt
-// for a passphrase; the open fails without a controlling terminal and SSH
-// exits with an authentication error that [NormalizeError] converts into a
-// [NonInteractiveAuthError].
-//
-// See https://man7.org/linux/man-pages/man2/setsid.2.html
+// CmdSetsid places |cmd| in a new session with no controlling terminal (Setsid).
+// SSH needs /dev/tty to prompt for credentials; without one it exits with an auth error.
 func CmdSetsid(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 }

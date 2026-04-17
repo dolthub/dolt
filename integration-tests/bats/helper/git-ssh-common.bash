@@ -1,33 +1,14 @@
 load "$BATS_TEST_DIRNAME/helper/query-server-common.bash"
 
 # Helpers for testing dolt against a local bare git repository over SSH.
-# Functions compose in two layers:
-#
-#   1. setup_git_repo        - bare repository
-#   2. setup_git_ssh_wrapper - shell wrapper (no real sshd; for env-var tests)
-#      setup_git_sshd        - real OpenSSH daemon (for authentication tests)
-#
-# Typical usage — environment variable propagation:
-#   setup_git_repo
-#   setup_git_ssh_wrapper
-#   hook_git_record_env GIT_SSH_COMMAND
-#   dolt remote add origin "git@localhost:${GIT_SVC_DIR}"
-#
-# Typical usage — real SSH authentication:
-#   setup_git_repo
-#   setup_git_sshd
-#   gen_ssh_key "$BATS_TMPDIR/mykey" ""   # empty passphrase = unlocked key
-#   export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/mykey -o IdentitiesOnly=yes \
-#       -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-#   dolt remote add origin "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
-#
-# teardown_git cleans up all resources; call it from the bats teardown() hook.
+# setup_git_repo + setup_git_ssh_wrapper: wrapper transport (env-var tests)
+# setup_git_repo + setup_git_sshd:        real OpenSSH daemon (auth tests)
+# teardown_git cleans up all resources; call from the bats teardown() hook.
 #
 # Variables set by the setup functions:
-#   GIT_SVC_DIR       path to the bare repository
-#   GIT_SVC_WRAPPER   path to the GIT_SSH_COMMAND wrapper script
-#   GIT_SVC_HOOKS_DIR directory sourced before each transport invocation
-#   SSHD_PORT         TCP port the real sshd listens on (set by setup_git_sshd)
+#   GIT_SVC_DIR   path to the bare repository
+#   GIT_SVC_HOOKS_DIR  directory sourced before each wrapper invocation
+#   SSHD_PORT     TCP port the real sshd listens on (set by setup_git_sshd)
 GIT_SVC_DIR=""
 GIT_SVC_WRAPPER=""
 GIT_SVC_HOOKS_DIR=""
@@ -35,7 +16,6 @@ SSHD_DIR=""
 SSHD_PID=""
 SSHD_PORT=""
 
-# _elevate runs a command with sudo when the current user is not root.
 _elevate() {
     if [[ $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
         sudo "$@"
