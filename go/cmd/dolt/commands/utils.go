@@ -1013,4 +1013,3 @@ func (s *Spinner) Tick() {
 func (s *Spinner) Text() string {
 	return SpinnerChars[int(*s)%len(SpinnerChars)]
 }
-
