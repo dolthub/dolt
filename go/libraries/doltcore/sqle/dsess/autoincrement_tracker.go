@@ -99,13 +99,13 @@ func getGCSafepointController(ctx context.Context) *gcctx.GCSafepointController 
 	return gcctx.GetGCSafepointController(ctx)
 }
 
-func loadAutoIncValue(sequences *sync.Map, tableName string) (uint64, bool) {
+func loadAutoIncValue(sequences *sync.Map, tableName string) (current uint64, hasCurrent bool) {
 	tableName = strings.ToLower(tableName)
-	current, hasCurrent := sequences.Load(tableName)
+	stored, hasCurrent := sequences.Load(tableName)
 	if !hasCurrent {
 		return 0, false
 	}
-	return current.(uint64), true
+	return stored.(uint64), true
 }
 
 func (a *AutoIncrementTracker) initializeTableAutoIncrement(ctx *sql.Context, tableName string) (uint64, bool, error) {
@@ -194,12 +194,17 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 	curr, ok := loadAutoIncValue(a.sequences, tbl)
 	if !ok {
 		if !locked {
+			// Missing tracker state is unusual after initialization, but can happen when
+			// a running sql-server discovers a database restored after startup. Lock before
+			// rechecking so concurrent first users do not initialize the same table twice.
 			release := a.mm.Lock(tbl)
 			defer release()
 		}
 
 		curr, ok = loadAutoIncValue(a.sequences, tbl)
 		if !ok {
+			// The table metadata is the source of truth for a restored database that is
+			// missing from the in-memory tracker.
 			seq, found, err := a.initializeTableAutoIncrement(ctx, tbl)
 			if err != nil {
 				return 0, err
