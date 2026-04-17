@@ -292,6 +292,41 @@ teardown() {
     [[ "$output" =~ "invalid ref spec: 'unknown'" ]] || false
 }
 
+@test "sql-fetch: dolt_fetch with specific branch does not fetch other branches" {
+    cd repo1
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+    dolt checkout main
+
+    cd ../repo2
+    dolt fetch
+    dolt checkout other
+    dolt checkout main
+
+    # Make changes on both branches in repo1
+    cd ../repo1
+    dolt sql -q "insert into t1 values (10, 10)"
+    dolt commit -am "new commit on main"
+    dolt push origin main
+    dolt checkout other
+    dolt commit --allow-empty -m "new commit on other"
+    dolt push origin other
+
+    # Fetch only main in repo2
+    cd ../repo2
+    dolt sql -q "call dolt_fetch('origin', 'main')"
+
+    # main's remote tracking ref should be updated
+    run dolt log --oneline remotes/origin/main -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new commit on main" ]] || false
+
+    # other's remote tracking ref should NOT be updated
+    run dolt log --oneline remotes/origin/other -n 1
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "new commit on other" ]] || false
+}
+
 @test "sql-fetch: dolt_fetch empty remote fails" {
     cd repo2
     dolt remote remove origin
