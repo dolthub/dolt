@@ -178,7 +178,10 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	fetchRefSpecs := pullSpec.RefSpecs
 	if remoteRefName != "" {
 		specificRefSpecs, specErr := env.ParseRSFromArgs(pullSpec.Remote.Name, []string{remoteRefName})
-		if specErr == nil && len(specificRefSpecs) > 0 {
+		if specErr != nil {
+			return 0, 0, "", fmt.Errorf("invalid remote ref argument %q: %w", remoteRefName, specErr)
+		}
+		if len(specificRefSpecs) > 0 {
 			fetchRefSpecs = specificRefSpecs
 		}
 	}
