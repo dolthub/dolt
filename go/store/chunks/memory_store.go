@@ -370,8 +370,8 @@ type msvMarkAndSweeper struct {
 	keepers map[hash.Hash]Chunk
 }
 
-func (i *msvMarkAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) error {
-	newAddrs := hash.NewHashSet(hashes...)
+func (i *msvMarkAndSweeper) SaveHashes(ctx context.Context, hashes hash.HashSet) error {
+	newAddrs := hashes.Copy()
 	for {
 		for h := range i.keepers {
 			delete(newAddrs, h)

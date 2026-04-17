@@ -170,7 +170,7 @@ type MarkAndSweeper interface {
 	//
 	// A call to this function blocks until the entire transitive set of
 	// chunks is accessed and copied.
-	SaveHashes(context.Context, []hash.Hash) error
+	SaveHashes(context.Context, hash.HashSet) error
 
 	Finalize(context.Context) (GCFinalizer, error)
 

@@ -2272,17 +2272,11 @@ type markAndSweeper struct {
 	mode chunks.GCMode
 }
 
-func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) error {
+func (i *markAndSweeper) SaveHashes(ctx context.Context, toVisit hash.HashSet) error {
 	valctx.ValidateContext(ctx)
-	toVisit := make(hash.HashSet, len(hashes))
-	for _, h := range hashes {
-		if _, ok := i.visited[h]; !ok {
-			toVisit.Insert(h)
-		}
-	}
+
 	var err error
 	var mu sync.Mutex
-	first := true
 	for {
 		// We manually check context here, because in some cases
 		// the work we are doing here does not result in a timely
@@ -2291,15 +2285,13 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 			return context.Cause(ctx)
 		}
 
-		if !first {
-			copy := toVisit.Copy()
-			for h := range toVisit {
-				if _, ok := i.visited[h]; ok {
-					delete(copy, h)
-				}
+		copy := toVisit.Copy()
+		for h := range toVisit {
+			if _, ok := i.visited[h]; ok {
+				delete(copy, h)
 			}
-			toVisit = copy
 		}
+		toVisit = copy
 
 		toVisit, err = i.filter(ctx, toVisit)
 		if err != nil {
@@ -2309,7 +2301,6 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 			break
 		}
 
-		first = false
 		nextToVisit := make(hash.HashSet)
 
 		found := 0
