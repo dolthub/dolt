@@ -91,10 +91,11 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		remote = &rmt
 	}
 
-	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), *remote, true)
+	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), *remote, false)
 	if err != nil {
 		return cmdFailure, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
 	}
+	defer remoteDB.Close()
 
 	err = remoteDB.Rebase(ctx)
 	if err != nil {
