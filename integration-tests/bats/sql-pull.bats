@@ -425,7 +425,7 @@ SQL
     dolt checkout main
 
     cd ../repo1
-    dolt pull origin main
+    dolt fetch origin b1
     dolt checkout b1
     dolt pull origin b1
 
@@ -485,7 +485,7 @@ SQL
     dolt checkout main
 
     cd ../repo1
-    dolt pull origin main
+    dolt fetch origin b1
     dolt checkout b1
     dolt pull origin b1
 

@@ -173,7 +173,16 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 			fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
 	}
 
-	// Fetch all references
+	// Fetch references. When a specific branch is given, only fetch that branch
+	// to avoid unnecessarily downloading data for all remote branches.
+	fetchRefSpecs := pullSpec.RefSpecs
+	if remoteRefName != "" {
+		specificRefSpecs, specErr := env.ParseRSFromArgs(pullSpec.Remote.Name, []string{remoteRefName})
+		if specErr == nil && len(specificRefSpecs) > 0 {
+			fetchRefSpecs = specificRefSpecs
+		}
+	}
+
 	branchRefs, err := srcDB.GetHeadRefs(ctx)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
@@ -181,7 +190,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
 	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
-		err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, statsCh)
+		err = actions.FetchRefSpecs(ctx, dbData, srcDB, fetchRefSpecs, false, &pullSpec.Remote, mode, statsCh)
 	})
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fetch failed: %w", err)
