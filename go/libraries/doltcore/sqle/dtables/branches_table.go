@@ -58,7 +58,7 @@ type BranchesTable struct {
 // LookupPartitions implements sql.IndexedTable
 func (bt *BranchesTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == doltBranchesIndexName {
-		partitions, err := parseMySQLRangeLookup(lookup)
+		partitions, err := partitionsFromLookup(lookup)
 		if err != nil {
 			return nil, err
 		}

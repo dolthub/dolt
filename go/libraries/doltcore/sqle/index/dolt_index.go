@@ -81,23 +81,23 @@ func (bni *BranchNameIndex) ExtendedColumnExpressionTypes() []sql.ColumnExpressi
 	return bni.ColumnExpressionTypes()
 }
 
+// NewTagNameIndex returns a TagNameIndex wrapping |i|.
 func NewTagNameIndex(i *doltIndex) *TagNameIndex {
 	return &TagNameIndex{doltIndex: i}
 }
 
+// TagNameIndex is the sql.Index for the dolt_tags tag_name virtual index.
 type TagNameIndex struct {
 	*doltIndex
 }
 
 func (tni *TagNameIndex) ExtendedExpressions() []string {
-	// The MockIndex used by the tag name virtual index doesn't set an index schema, so
-	// we can't use the implementation of ExtendedExpressions from doltIndex.
+	// MockIndex sets indexSch to nil, so we cannot use doltIndex.ExtendedExpressions.
 	return tni.Expressions()
 }
 
 func (tni *TagNameIndex) ExtendedColumnExpressionTypes() []sql.ColumnExpressionType {
-	// The MockIndex used by the tag name virtual index doesn't set an index schema, so
-	// we can't use the implementation of ExtendedColumnExpressionTypes from doltIndex.
+	// MockIndex sets indexSch to nil, so we cannot use doltIndex.ExtendedColumnExpressionTypes.
 	return tni.ColumnExpressionTypes()
 }
 

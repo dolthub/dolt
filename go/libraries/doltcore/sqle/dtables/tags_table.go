@@ -29,8 +29,7 @@ import (
 
 const tagsDefaultRowCount = 10
 
-// doltTagsIndexName is the name of the index on the dolt_tags system table that covers
-// the "tag_name" field.
+// doltTagsIndexName is the index ID for the tag_name column on dolt_tags.
 const doltTagsIndexName = "dolt_tags_tag_name_idx"
 
 var _ sql.Table = (*TagsTable)(nil)
@@ -38,13 +37,13 @@ var _ sql.StatisticsTable = (*TagsTable)(nil)
 var _ sql.IndexedTable = (*TagsTable)(nil)
 var _ sql.IndexAddressable = (*TagsTable)(nil)
 
-// TagsTable is a sql.Table implementation that implements a system table which shows the dolt tags
+// TagsTable is the system table implementation for dolt_tags.
 type TagsTable struct {
 	ddb       *doltdb.DoltDB
 	tableName string
 }
 
-// NewTagsTable creates a TagsTable
+// NewTagsTable creates a TagsTable for |ddb|.
 func NewTagsTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB) sql.Table {
 	return &TagsTable{tableName: tableName, ddb: ddb}
 }
@@ -62,17 +61,17 @@ func (tt *TagsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return tagsDefaultRowCount, false, nil
 }
 
-// Name is a sql.Table interface function which returns the name of the table.
+// Name implements sql.Table.
 func (tt *TagsTable) Name() string {
 	return tt.tableName
 }
 
-// String is a sql.Table interface function which returns the name of the table.
+// String implements sql.Table.
 func (tt *TagsTable) String() string {
 	return tt.tableName
 }
 
-// Schema is a sql.Table interface function that gets the sql.Schema of the tags system table.
+// Schema implements sql.Table.
 func (tt *TagsTable) Schema() sql.Schema {
 	dbName := tt.ddb.GetDatabaseName()
 	return []*sql.Column{
@@ -85,20 +84,20 @@ func (tt *TagsTable) Schema() sql.Schema {
 	}
 }
 
-// Collation implements the sql.Table interface.
+// Collation implements sql.Table.
 func (tt *TagsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Partitions is a sql.Table interface function that returns a partition of the data. Currently, the data is unpartitioned.
+// Partitions implements sql.Table.
 func (tt *TagsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
-// LookupPartitions implements sql.IndexedTable
+// LookupPartitions implements sql.IndexedTable.
 func (tt *TagsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == doltTagsIndexName {
-		partitions, err := parseMySQLRangeLookup(lookup)
+		partitions, err := partitionsFromLookup(lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -107,12 +106,12 @@ func (tt *TagsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 	return nil, fmt.Errorf("unsupported index: %s", lookup.Index.ID())
 }
 
-// IndexedAccess implements sql.IndexAddressable
+// IndexedAccess implements sql.IndexAddressable.
 func (tt *TagsTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	return tt
 }
 
-// GetIndexes implements sql.IndexAddressable
+// GetIndexes implements sql.IndexAddressable.
 func (tt *TagsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return []sql.Index{
 		index.NewTagNameIndex(
@@ -121,12 +120,12 @@ func (tt *TagsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	}, nil
 }
 
-// PreciseMatch implements sql.IndexAddressable
+// PreciseMatch implements sql.IndexAddressable.
 func (tt *TagsTable) PreciseMatch() bool {
 	return false
 }
 
-// PartitionRows is a sql.Table interface function that gets a row iterator for a partition
+// PartitionRows implements sql.Table.
 func (tt *TagsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	if fp, ok := part.(*filteredPartition); ok {
 		return NewFilteredTagsItr(ctx, tt.ddb,
@@ -136,70 +135,46 @@ func (tt *TagsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 	return NewTagsItr(ctx, tt.ddb)
 }
 
-// TagsItr is a sql.RowItr implementation which iterates over each tag as if it's a row in the table.
+// TagsItr is a sql.RowIter over the dolt_tags table.
 type TagsItr struct {
 	tagsWithHash []doltdb.TagWithHash
 	idx          int
-
-	// lowerBound is an optional filter for the lowest (alphabetically) tag name returned
-	lowerBound          string
-	lowerBoundInclusive bool
-	// upperBound is an optional filter for the highest (alphabetically) tag name returned
-	upperBound          string
-	upperBoundInclusive bool
 }
 
-// NewTagsItr creates a TagsItr from the current environment.
+// NewTagsItr creates a TagsItr over all tags in |ddb|.
 func NewTagsItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*TagsItr, error) {
 	tagsWithHash, err := ddb.GetTagsWithHashes(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	return &TagsItr{tagsWithHash: tagsWithHash}, nil
 }
 
-// NewFilteredTagsItr creates a TagsItr that filters out tag names lower than
-// |lowerBound| and higher than |upperBound|.
+// NewFilteredTagsItr creates a TagsItr containing only tags whose names fall
+// within [|lowerBound|, |upperBound|]. Tag metadata is resolved only for
+// matching tags, so callers pay O(k) not O(n) when k << n.
 func NewFilteredTagsItr(ctx *sql.Context, ddb *doltdb.DoltDB, lowerBound string, lowerBoundInclusive bool, upperBound string, upperBoundInclusive bool) (*TagsItr, error) {
-	itr, err := NewTagsItr(ctx, ddb)
+	tagsWithHash, err := ddb.GetTagsWithHashesFiltered(ctx, func(name string) bool {
+		return !outOfLowerBound(name, lowerBound, lowerBoundInclusive) &&
+			!outOfUpperBound(name, upperBound, upperBoundInclusive)
+	})
 	if err != nil {
 		return nil, err
 	}
-	itr.lowerBound = lowerBound
-	itr.lowerBoundInclusive = lowerBoundInclusive
-	itr.upperBound = upperBound
-	itr.upperBoundInclusive = upperBoundInclusive
-	return itr, nil
+	return &TagsItr{tagsWithHash: tagsWithHash}, nil
 }
 
-// Next retrieves the next row. It will return io.EOF if it's the last row.
-// After retrieving the last row, Close will be automatically closed. If an upper
-// or lower bound has been configured, this function will filter out tag
-// names outside those bounds.
+// Next implements sql.RowIter.
 func (itr *TagsItr) Next(ctx *sql.Context) (sql.Row, error) {
-	defer func() {
-		itr.idx++
-	}()
-
-	for {
-		if itr.idx >= len(itr.tagsWithHash) {
-			return nil, io.EOF
-		}
-
-		twh := itr.tagsWithHash[itr.idx]
-		tagName := twh.Tag.Name
-		if outOfLowerBound(tagName, itr.lowerBound, itr.lowerBoundInclusive) ||
-			outOfUpperBound(tagName, itr.upperBound, itr.upperBoundInclusive) {
-			itr.idx++
-			continue
-		}
-
-		return sql.NewRow(tagName, twh.Hash.String(), twh.Tag.Meta.Name, twh.Tag.Meta.Email, twh.Tag.Meta.Time(), twh.Tag.Meta.Description), nil
+	if itr.idx >= len(itr.tagsWithHash) {
+		return nil, io.EOF
 	}
+	twh := itr.tagsWithHash[itr.idx]
+	itr.idx++
+	return sql.NewRow(twh.Tag.Name, twh.Hash.String(), twh.Tag.Meta.Name, twh.Tag.Meta.Email, twh.Tag.Meta.Time(), twh.Tag.Meta.Description), nil
 }
 
-// Close closes the iterator.
+// Close implements sql.RowIter.
 func (itr *TagsItr) Close(*sql.Context) error {
 	return nil
 }
