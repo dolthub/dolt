@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// filteredPartition represents a partition whose rows are constrained to a
+// filteredPartition is a sql.Partition whose rows are constrained to a
 // lower and upper bound on a string key (e.g. tag_name, branch name).
 type filteredPartition struct {
 	lowerBound          string
@@ -35,18 +35,19 @@ var _ sql.Partition = (*filteredPartition)(nil)
 
 // Key implements sql.Partition
 func (f filteredPartition) Key() []byte {
-	// Key is not used to identify the partition, so we return nil
+	// Dispatch happens via type assertion on the partition, not by key comparison.
 	return nil
 }
 
-// SliceOfPartitionsItr is a sql.PartitionIter backed by a pre-built slice of
-// partitions. It is safe for concurrent use.
+// SliceOfPartitionsItr is a sql.PartitionIter backed by a pre-built slice of partitions.
+// It is safe for concurrent use.
 type SliceOfPartitionsItr struct {
 	mu         sync.Mutex
 	partitions []sql.Partition
 	i          int
 }
 
+// NewSliceOfPartitionsItr returns a PartitionIter over |partitions|.
 func NewSliceOfPartitionsItr(partitions []sql.Partition) *SliceOfPartitionsItr {
 	return &SliceOfPartitionsItr{partitions: partitions}
 }
@@ -69,71 +70,75 @@ func (itr *SliceOfPartitionsItr) Close(*sql.Context) error {
 	return nil
 }
 
-// parseMySQLRangeLookup converts a MySQLRangeCollection index lookup into a
-// slice of filteredPartitions covering the requested string-key ranges.
-func parseMySQLRangeLookup(lookup sql.IndexLookup) ([]sql.Partition, error) {
+// partitionsFromLookup converts |lookup| into a slice of filteredPartitions
+// covering the requested string-key ranges.
+func partitionsFromLookup(lookup sql.IndexLookup) ([]sql.Partition, error) {
 	mysqlRanges, ok := lookup.Ranges.(sql.MySQLRangeCollection)
 	if !ok {
 		return nil, fmt.Errorf("unsupported range cut type: %T", lookup.Ranges)
 	}
 
+	ranges := mysqlRanges.ToRanges()
 	var partitions []sql.Partition
-	for i := range mysqlRanges.ToRanges() {
-		mysqlRange := mysqlRanges.ToRanges()[i].(sql.MySQLRange)
+	for i := range ranges {
+		mysqlRange := ranges[i].(sql.MySQLRange)
+		if len(mysqlRange) == 0 {
+			return nil, fmt.Errorf("empty MySQLRange at index %d", i)
+		}
 		rangeExpr := mysqlRange[0]
 
-		lowerBoundInclusive := false
-		noLowerBound := false
-		var lower string
-		switch x := rangeExpr.LowerBound.(type) {
-		case sql.Above:
-			lower = x.Key.(string)
-		case sql.Below:
-			lower = x.Key.(string)
-			lowerBoundInclusive = true
-		case sql.BelowNull, sql.AboveNull:
-			lower = ""
-		case sql.AboveAll:
-			noLowerBound = true
-			lower = ""
-		default:
-			return nil, fmt.Errorf("unknown range cut type: %T", rangeExpr.LowerBound)
+		lower, lowerInc, noLower, err := parseStringBound(rangeExpr.LowerBound, true)
+		if err != nil {
+			return nil, err
+		}
+		upper, upperInc, noUpper, err := parseStringBound(rangeExpr.UpperBound, false)
+		if err != nil {
+			return nil, err
 		}
 
-		upperBoundInclusive := false
-		noUpperBound := false
-		var upper string
-		switch x := rangeExpr.UpperBound.(type) {
-		case sql.Above:
-			upper = x.Key.(string)
-			upperBoundInclusive = true
-		case sql.Below:
-			upper = x.Key.(string)
-		case sql.AboveAll:
-			noUpperBound = true
-			upper = ""
-		case sql.BelowNull, sql.AboveNull:
-			upper = ""
-		default:
-			return nil, fmt.Errorf("unknown range cut type: %T", rangeExpr.UpperBound)
-		}
-
-		if noUpperBound && noLowerBound {
+		if noLower && noUpper {
 			continue
 		}
 
 		partitions = append(partitions, &filteredPartition{
 			lowerBound:          lower,
-			lowerBoundInclusive: lowerBoundInclusive,
+			lowerBoundInclusive: lowerInc,
 			upperBound:          upper,
-			upperBoundInclusive: upperBoundInclusive,
+			upperBoundInclusive: upperInc,
 		})
 	}
 	return partitions, nil
 }
 
-// outOfLowerBound reports whether name falls below the lower bound, meaning it
-// should be excluded from results. An empty bound is treated as unbounded.
+// parseStringBound extracts a string value and inclusiveness from |cut|.
+// |isLower| is required because Above and Below have opposite inclusiveness
+// depending on which side of the range they appear on. Returns |noBound|=true
+// when the cut is AboveAll, meaning no values can satisfy the bound.
+func parseStringBound(cut sql.MySQLRangeCut, isLower bool) (value string, inclusive bool, noBound bool, err error) {
+	switch c := cut.(type) {
+	case sql.Above:
+		str, ok := c.Key.(string)
+		if !ok {
+			return "", false, false, fmt.Errorf("expected string range key, got %T", c.Key)
+		}
+		return str, !isLower, false, nil
+	case sql.Below:
+		str, ok := c.Key.(string)
+		if !ok {
+			return "", false, false, fmt.Errorf("expected string range key, got %T", c.Key)
+		}
+		return str, isLower, false, nil
+	case sql.AboveAll:
+		return "", false, true, nil
+	case sql.BelowNull, sql.AboveNull:
+		return "", false, false, nil
+	default:
+		return "", false, false, fmt.Errorf("unknown range cut type: %T", cut)
+	}
+}
+
+// outOfLowerBound reports whether |name| falls below |bound| and should be
+// excluded from results. An empty |bound| is treated as unbounded.
 func outOfLowerBound(name, bound string, inclusive bool) bool {
 	if bound == "" {
 		return false
@@ -144,8 +149,8 @@ func outOfLowerBound(name, bound string, inclusive bool) bool {
 	return name <= bound
 }
 
-// outOfUpperBound reports whether name falls above the upper bound, meaning it
-// should be excluded from results. An empty bound is treated as unbounded.
+// outOfUpperBound reports whether |name| falls above |bound| and should be
+// excluded from results. An empty |bound| is treated as unbounded.
 func outOfUpperBound(name, bound string, inclusive bool) bool {
 	if bound == "" {
 		return false
