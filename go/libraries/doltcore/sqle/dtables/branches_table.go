@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -59,68 +58,12 @@ type BranchesTable struct {
 // LookupPartitions implements sql.IndexedTable
 func (bt *BranchesTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == doltBranchesIndexName {
-		mysqlRanges, ok := lookup.Ranges.(sql.MySQLRangeCollection)
-		if !ok {
-			return nil, fmt.Errorf("unsupported range cut type: %T", lookup.Ranges)
-		}
-
-		var partitions []sql.Partition
-		for i := range mysqlRanges.ToRanges() {
-			mysqlRange := mysqlRanges.ToRanges()[i].(sql.MySQLRange)
-			rangeExpr := mysqlRange[0]
-
-			lowerBoundInclusive := false
-			noLowerBoundResults := false
-			var lowerBoundValue any
-			switch x := rangeExpr.LowerBound.(type) {
-			case sql.Above:
-				lowerBoundValue = x.Key
-			case sql.Below:
-				lowerBoundValue = x.Key
-				lowerBoundInclusive = true
-			case sql.BelowNull, sql.AboveNull:
-				// BelowNull and AboveNull for a lower bound means no lower bound
-				// They evaluate the same, since name is a PK and will never be NULL.
-				lowerBoundValue = ""
-			case sql.AboveAll:
-				noLowerBoundResults = true
-				lowerBoundValue = ""
-			default:
-				return nil, fmt.Errorf("unknown range cut type: %T", rangeExpr.LowerBound)
-			}
-
-			upperBoundInclusive := false
-			noUpperBoundResults := false
-			var upperBoundValue any
-			switch x := rangeExpr.UpperBound.(type) {
-			case sql.Above:
-				upperBoundValue = x.Key
-				upperBoundInclusive = true
-			case sql.Below:
-				upperBoundValue = x.Key
-			case sql.AboveAll:
-				noUpperBoundResults = true
-				upperBoundValue = ""
-			case sql.BelowNull, sql.AboveNull:
-				upperBoundValue = ""
-			default:
-				return nil, fmt.Errorf("unknown range cut type: %T", rangeExpr.UpperBound)
-			}
-
-			if noUpperBoundResults && noLowerBoundResults {
-				continue
-			}
-
-			partitions = append(partitions, &filteredPartition{
-				lowerBound:          lowerBoundValue.(string),
-				lowerBoundInclusive: lowerBoundInclusive,
-				upperBound:          upperBoundValue.(string),
-				upperBoundInclusive: upperBoundInclusive,
-			})
+		partitions, err := parseMySQLRangeLookup(lookup)
+		if err != nil {
+			return nil, err
 		}
 		return NewSliceOfPartitionsItr(partitions), nil
 	}
-
 	return nil, fmt.Errorf("unsupported index: %s", lookup.Index.ID())
 }
 
@@ -417,32 +360,12 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 }
 
-// outOfLowerBound returns true if |branchName| is below the lower bound configured in |itr|,
-// indicating that it should be filtered out and not returned.
-func (itr *BranchItr) outOfLowerBound(branchName string) bool {
-	if itr.lowerBound == "" {
-		return false
-	}
-
-	threshold := 1
-	if itr.lowerBoundInclusive {
-		threshold = 0
-	}
-	return strings.Compare(branchName, itr.lowerBound) < threshold
+func (itr *BranchItr) outOfLowerBound(name string) bool {
+	return outOfLowerBound(name, itr.lowerBound, itr.lowerBoundInclusive)
 }
 
-// outOfUpperBound returns true if |branchName| is above the upper bound configured in |itr|,
-// indicating that it should be filtered out and not returned.
-func (itr *BranchItr) outOfUpperBound(branchName string) bool {
-	if itr.upperBound == "" {
-		return false
-	}
-
-	threshold := -1
-	if itr.upperBoundInclusive {
-		threshold = 0
-	}
-	return strings.Compare(branchName, itr.upperBound) > threshold
+func (itr *BranchItr) outOfUpperBound(name string) bool {
+	return outOfUpperBound(name, itr.upperBound, itr.upperBoundInclusive)
 }
 
 // isDirty returns true if the working ref points to a dirty branch.
@@ -565,19 +488,3 @@ func (bWr branchWriter) Close(*sql.Context) error {
 	return nil
 }
 
-// filteredPartition represents a partition of branch names that is filtered by a
-// lower bound and upper bound.
-type filteredPartition struct {
-	lowerBound          string
-	lowerBoundInclusive bool
-	upperBound          string
-	upperBoundInclusive bool
-}
-
-var _ sql.Partition = (*filteredPartition)(nil)
-
-// Key implements sql.Partition
-func (f filteredPartition) Key() []byte {
-	// Key is not used to identify the partition, so we return nil
-	return nil
-}
