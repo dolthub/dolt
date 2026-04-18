@@ -51,7 +51,7 @@ func runTagLookupBench(b *testing.B, ctx context.Context, dEnv *env.DoltEnv, cfg
 	eg, bctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		startErr, closeErr := srv.Serve(bctx, &srv.Config{
-			Version:      "",
+			Version:      "0.0.0",
 			ServerConfig: cfg,
 			Controller:   sc,
 			DoltEnv:      dEnv,
