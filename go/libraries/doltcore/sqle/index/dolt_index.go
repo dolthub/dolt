@@ -81,6 +81,26 @@ func (bni *BranchNameIndex) ExtendedColumnExpressionTypes() []sql.ColumnExpressi
 	return bni.ColumnExpressionTypes()
 }
 
+func NewTagNameIndex(i *doltIndex) *TagNameIndex {
+	return &TagNameIndex{doltIndex: i}
+}
+
+type TagNameIndex struct {
+	*doltIndex
+}
+
+func (tni *TagNameIndex) ExtendedExpressions() []string {
+	// The MockIndex used by the tag name virtual index doesn't set an index schema, so
+	// we can't use the implementation of ExtendedExpressions from doltIndex.
+	return tni.Expressions()
+}
+
+func (tni *TagNameIndex) ExtendedColumnExpressionTypes() []sql.ColumnExpressionType {
+	// The MockIndex used by the tag name virtual index doesn't set an index schema, so
+	// we can't use the implementation of ExtendedColumnExpressionTypes from doltIndex.
+	return tni.ColumnExpressionTypes()
+}
+
 func NewCommitIndex(i *doltIndex) *CommitIndex {
 	return &CommitIndex{doltIndex: i}
 }
