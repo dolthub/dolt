@@ -15,6 +15,7 @@
 package writer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -414,7 +415,14 @@ func (m prollySecondaryIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) 
 func isNoopUpdate(oldRow, newRow sql.Row, keyMap val.OrdinalMapping) bool {
 	for to := range keyMap {
 		from := keyMap.MapOrdinal(to)
-		if oldRow[from] != newRow[from] {
+		oldVal, newVal := oldRow[from], newRow[from]
+		// []byte must use bytes.Equal; != panics on interface{} values holding slices.
+		if oldBytes, ok := oldVal.([]byte); ok {
+			newBytes, ok := newVal.([]byte)
+			if !ok || !bytes.Equal(oldBytes, newBytes) {
+				return false
+			}
+		} else if oldVal != newVal {
 			return false
 		}
 	}
