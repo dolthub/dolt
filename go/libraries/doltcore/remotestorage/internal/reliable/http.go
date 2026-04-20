@@ -190,6 +190,21 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			cleanup()
 			// We successfully wrote this many bytes to |w|. Update |offset|.
 			offset += uint64(n)
+			if offset == req.Offset+req.Length {
+				// All requested bytes were delivered to the
+				// consumer. Treat this as success regardless of
+				// any error returned from io.Copy. With HTTP/2,
+				// Body.Read may not return io.EOF until an
+				// END_STREAM frame arrives; a consumer that
+				// closes the StreamingResponse right after
+				// reading its last byte races with that frame
+				// and surfaces here as context.Canceled even
+				// though the actual data transfer succeeded.
+				// Letting that fall through to RecordFailure
+				// erroneously halves fetch concurrency.
+				req.Health.RecordSuccess()
+				return nil
+			}
 			if err == nil {
 				// Success! We read until Body returned EOF.
 				req.Health.RecordSuccess()
