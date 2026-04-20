@@ -434,26 +434,8 @@ func newConstraintViolationsLoadedTable(
 
 // foreignKeyCVJson converts a foreign key to JSON data for use as the info field in a constraint violations map.
 func foreignKeyCVJson(foreignKey doltdb.ForeignKey, sch, refSch schema.Schema) ([]byte, error) {
-	schCols := sch.GetAllCols()
-	refSchCols := refSch.GetAllCols()
-	fkCols := make([]string, len(foreignKey.TableColumns))
-	refFkCols := make([]string, len(foreignKey.ReferencedTableColumns))
-	for i, tag := range foreignKey.TableColumns {
-		if col, ok := schCols.TagToCol[tag]; !ok {
-			return nil, fmt.Errorf("foreign key '%s' references tag '%d' on table '%s' but it cannot be found",
-				foreignKey.Name, tag, foreignKey.TableName)
-		} else {
-			fkCols[i] = col.Name
-		}
-	}
-	for i, tag := range foreignKey.ReferencedTableColumns {
-		if col, ok := refSchCols.TagToCol[tag]; !ok {
-			return nil, fmt.Errorf("foreign key '%s' references tag '%d' on table '%s' but it cannot be found",
-				foreignKey.Name, tag, foreignKey.ReferencedTableName)
-		} else {
-			refFkCols[i] = col.Name
-		}
-	}
+	fkCols := foreignKey.UnresolvedFKDetails.TableColumns
+	refFkCols := foreignKey.UnresolvedFKDetails.ReferencedTableColumns
 
 	// TODO: we need to change our serialization strategy for table names with schemas in order to properly store these.
 	//  You can't encode a null byte in a JSON blob like we do elsewhere. Probably the right move is to swap this JSON

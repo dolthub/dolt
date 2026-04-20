@@ -69,12 +69,16 @@ type ColCollection struct {
 	tagToStorageIndex map[uint64]int
 }
 
-// NewColCollection creates a new collection from a list of columns. If any columns have the same tag, by-tag lookups in
-// this collection will not function correctly. If any columns have the same name, by-name lookups from this collection
-// will not function correctly. If any columns have the same case-insensitive name, case-insensitive lookups will be
-// unable to return the correct column in all cases.
+// NewColCollection creates a new collection from a list of columns. Tags are assigned sequentially based on
+// column position (0, 1, 2, ...), regardless of any tags the columns may already have.
+// If any columns have the same name, by-name lookups from this collection will not function correctly.
+// If any columns have the same case-insensitive name, case-insensitive lookups will be unable to return the
+// correct column in all cases.
 // For this collection to be used as a Dolt schema, it must pass schema.ValidateForInsert.
 func NewColCollection(cols ...Column) *ColCollection {
+	// Assign sequential tags based on position
+	AssignColumnTags(cols)
+
 	var tags []uint64
 	var sortedTags []uint64
 
@@ -89,8 +93,6 @@ func NewColCollection(cols ...Column) *ColCollection {
 	var storedIndexes []int
 	storageIdx := 0
 	for i, col := range cols {
-		// If multiple columns have the same tag, the last one is used for tag lookups.
-		// Columns must have unique tags to pass schema.ValidateForInsert.
 		columns = append(columns, col)
 		tagToCol[col.Tag] = col
 		tagToIdx[col.Tag] = i
@@ -100,6 +102,61 @@ func NewColCollection(cols ...Column) *ColCollection {
 
 		// If multiple columns have the same lower case name, the first one is used for case-insensitive matching.
 		// Column names must all be case-insensitive different to pass schema.ValidateForInsert.
+		lowerCaseName := strings.ToLower(col.Name)
+		if _, ok := lowerNameToCol[lowerCaseName]; !ok {
+			lowerNameToCol[lowerCaseName] = cols[i]
+		}
+
+		if col.Virtual {
+			virtualColumns = append(virtualColumns, i)
+		} else {
+			storedIndexes = append(storedIndexes, i)
+			tagToStorageIndex[col.Tag] = storageIdx
+			storageIdx++
+		}
+	}
+
+	sort.Slice(sortedTags, func(i, j int) bool { return sortedTags[i] < sortedTags[j] })
+
+	return &ColCollection{
+		cols:              columns,
+		virtualColumns:    virtualColumns,
+		storedIndexes:     storedIndexes,
+		tagToStorageIndex: tagToStorageIndex,
+		Tags:              tags,
+		SortedTags:        sortedTags,
+		TagToCol:          tagToCol,
+		NameToCol:         nameToCol,
+		LowerNameToCol:    lowerNameToCol,
+		TagToIdx:          tagToIdx,
+	}
+}
+
+// NewColCollectionPreservingTags creates a ColCollection without reassigning
+// tags. This is used for sub-collections (pkCols, nonPKCols) that must keep
+// the tags already assigned by the parent allCols collection.
+func NewColCollectionPreservingTags(cols ...Column) *ColCollection {
+	var tags []uint64
+	var sortedTags []uint64
+
+	tagToCol := make(map[uint64]Column, len(cols))
+	nameToCol := make(map[string]Column, len(cols))
+	lowerNameToCol := make(map[string]Column, len(cols))
+	tagToIdx := make(map[uint64]int, len(cols))
+	tagToStorageIndex := make(map[uint64]int, len(cols))
+	var virtualColumns []int
+
+	var columns []Column
+	var storedIndexes []int
+	storageIdx := 0
+	for i, col := range cols {
+		columns = append(columns, col)
+		tagToCol[col.Tag] = col
+		tagToIdx[col.Tag] = i
+		tags = append(tags, col.Tag)
+		sortedTags = append(sortedTags, col.Tag)
+		nameToCol[col.Name] = cols[i]
+
 		lowerCaseName := strings.ToLower(col.Name)
 		if _, ok := lowerNameToCol[lowerCaseName]; !ok {
 			lowerNameToCol[lowerCaseName] = cols[i]

@@ -16,6 +16,7 @@ package diff
 
 import (
 	"reflect"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -65,28 +66,39 @@ func DiffSchColumns(fromSch, toSch schema.Schema) (map[uint64]ColumnDifference, 
 	return diffs, unionTags
 }
 
-// pairColumns loops over both sets of columns pairing columns with the same tag.
+// pairColumns loops over both sets of columns pairing columns with the same name.
+// With positional tags, column tags are not stable across schema changes, so
+// matching is done by name (case-insensitive) instead. The returned map keys
+// are the tags from the matched schema (fromSch tags for matched/removed columns,
+// toSch tags for added columns).
 func pairColumns(fromSch, toSch schema.Schema) (map[uint64]columnPair, []uint64) {
-	// collect the tag union of the two schemas, ordering fromSch before toSch
 	var unionTags []uint64
 	colPairMap := make(map[uint64]columnPair)
+	matchedNames := make(map[string]bool)
 
+	// First pass: add all "from" columns
 	_ = fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		colPairMap[tag] = columnPair{&col, nil}
 		unionTags = append(unionTags, tag)
-
 		return false, nil
 	})
 
+	// Second pass: match "to" columns by name
 	_ = toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if pair, ok := colPairMap[tag]; ok {
+		lowerName := strings.ToLower(col.Name)
+		// Try to find a matching "from" column by name
+		fromCol, ok := fromSch.GetAllCols().GetByNameCaseInsensitive(col.Name)
+		if ok {
+			// Matched by name — update the existing pair using the from column's tag
+			pair := colPairMap[fromCol.Tag]
 			pair[1] = &col
-			colPairMap[tag] = pair
+			colPairMap[fromCol.Tag] = pair
+			matchedNames[lowerName] = true
 		} else {
+			// New column — use its own tag
 			colPairMap[tag] = columnPair{nil, &col}
 			unionTags = append(unionTags, tag)
 		}
-
 		return false, nil
 	})
 
@@ -99,11 +111,11 @@ type IndexDifference struct {
 	To       schema.Index
 }
 
-// DiffSchIndexes matches two sets of Indexes based on column definitions.
+// DiffSchIndexes matches two sets of Indexes based on column names.
 // It returns matched and unmatched Indexes as a slice of IndexDifferences.
 func DiffSchIndexes(fromSch, toSch schema.Schema) (diffs []IndexDifference) {
 	_ = fromSch.Indexes().Iter(func(fromIdx schema.Index) (stop bool, err error) {
-		toIdx, ok := toSch.Indexes().GetIndexByTags(fromIdx.IndexedColumnTags()...)
+		toIdx, ok := toSch.Indexes().GetIndexByColumnNames(fromIdx.ColumnNames()...)
 
 		if !ok {
 			diffs = append(diffs, IndexDifference{
@@ -158,8 +170,8 @@ func DiffForeignKeys(fromFks, toFKs []doltdb.ForeignKey) (diffs []ForeignKeyDiff
 	for _, from := range fromFks {
 		matched := false
 		for _, to := range toFKs {
-			if reflect.DeepEqual(from.ReferencedTableColumns, to.ReferencedTableColumns) &&
-				reflect.DeepEqual(from.TableColumns, to.TableColumns) {
+			if reflect.DeepEqual(from.UnresolvedFKDetails.ReferencedTableColumns, to.UnresolvedFKDetails.ReferencedTableColumns) &&
+				reflect.DeepEqual(from.UnresolvedFKDetails.TableColumns, to.UnresolvedFKDetails.TableColumns) {
 
 				matched = true
 				d := ForeignKeyDifference{

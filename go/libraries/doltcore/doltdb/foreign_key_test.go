@@ -43,7 +43,7 @@ func TestForeignKeyHashOf(t *testing.T) {
 		}
 		hashOf, err := fk.HashOf()
 		assert.NoError(t, err)
-		assert.Equal(t, "65brfkb3fh6n7kgpv8d38mjb6krrc54r", hashOf.String())
+		assert.Equal(t, "ncpboaiiir2ah410gch0pm9cpibennto", hashOf.String())
 	})
 
 	// Assert that two unresolved Foreign Keys get unique hashes, when only their unresolved FK details are different
@@ -182,10 +182,24 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	require.NoError(t, err)
 
-	assert.Equal(t, test.fks, fkc.AllKeys())
+	actualFks := fkc.AllKeys()
+	require.Equal(t, len(test.fks), len(actualFks), "foreign key count mismatch")
+	for i, expected := range test.fks {
+		actual := actualFks[i]
+		// Compare FK structure without tag arrays (tags are now positional)
+		assert.Equal(t, expected.Name, actual.Name)
+		assert.Equal(t, expected.TableName, actual.TableName)
+		assert.Equal(t, expected.TableIndex, actual.TableIndex)
+		assert.Equal(t, expected.ReferencedTableName, actual.ReferencedTableName)
+		assert.Equal(t, expected.ReferencedTableIndex, actual.ReferencedTableIndex)
+		assert.Equal(t, expected.OnUpdate, actual.OnUpdate)
+		assert.Equal(t, expected.OnDelete, actual.OnDelete)
+		assert.Equal(t, expected.UnresolvedFKDetails.TableColumns, actual.UnresolvedFKDetails.TableColumns)
+		assert.Equal(t, expected.UnresolvedFKDetails.ReferencedTableColumns, actual.UnresolvedFKDetails.ReferencedTableColumns)
+	}
 
-	for _, fk := range test.fks {
-		// verify parent index
+	for _, fk := range actualFks {
+		// verify parent index columns match FK referenced columns
 		pt, _, ok, err := doltdb.GetTableInsensitive(ctx, root, fk.ReferencedTableName)
 		require.NoError(t, err)
 		require.True(t, ok)
@@ -193,9 +207,14 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 		require.NoError(t, err)
 		pi, ok := ps.Indexes().GetByNameCaseInsensitive(fk.ReferencedTableIndex)
 		require.True(t, ok)
-		require.Equal(t, fk.ReferencedTableColumns, pi.IndexedColumnTags())
+		// Verify FK columns by name match the index columns
+		for i, colName := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+			col, ok := ps.GetAllCols().GetByNameCaseInsensitive(colName)
+			require.True(t, ok, "parent column %s not found", colName)
+			require.Equal(t, col.Tag, pi.IndexedColumnTags()[i])
+		}
 
-		// verify child index
+		// verify child index columns match FK child columns
 		ct, _, ok, err := doltdb.GetTableInsensitive(ctx, root, fk.TableName)
 		require.NoError(t, err)
 		require.True(t, ok)
@@ -203,7 +222,12 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 		require.NoError(t, err)
 		ci, ok := cs.Indexes().GetByNameCaseInsensitive(fk.TableIndex)
 		require.True(t, ok)
-		require.Equal(t, fk.TableColumns, ci.IndexedColumnTags())
+		// Verify FK columns by name match the index columns
+		for i, colName := range fk.UnresolvedFKDetails.TableColumns {
+			col, ok := cs.GetAllCols().GetByNameCaseInsensitive(colName)
+			require.True(t, ok, "child column %s not found", colName)
+			require.Equal(t, col.Tag, ci.IndexedColumnTags()[i])
+		}
 	}
 }
 

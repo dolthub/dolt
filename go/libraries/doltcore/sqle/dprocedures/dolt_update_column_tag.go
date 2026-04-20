@@ -115,7 +115,10 @@ func updateColumnTag(sch schema.Schema, name string, tag uint64) (schema.Schema,
 		return nil, fmt.Errorf("column %s does not exist", name)
 	}
 
-	newSch, err := schema.SchemaFromCols(schema.NewColCollection(columns...))
+	// Use PreservingTags so the custom tag value is kept.
+	// Note: with positional tags, custom tags don't persist through serialization,
+	// but they are preserved for the current in-memory session.
+	newSch, err := schema.SchemaFromCols(schema.NewColCollectionPreservingTags(columns...))
 	if err != nil {
 		return nil, err
 	}

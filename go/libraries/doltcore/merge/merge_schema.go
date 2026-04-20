@@ -303,9 +303,9 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 	// TODO: figure out the best way to handle unresolved foreign keys here if one branch added an unresolved one and
 	// another branch added the same one but resolved
 	_ = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
-		theirFK, ok := theirNewFKs.GetByTags(ourFK.TableColumns, ourFK.ReferencedTableColumns)
+		theirFK, ok := theirNewFKs.GetByColumnNames(ourFK.UnresolvedFKDetails.TableColumns, ourFK.UnresolvedFKDetails.ReferencedTableColumns)
 		if ok && !ourFK.DeepEquals(theirFK) {
-			// Foreign Keys are defined over the same tags,
+			// Foreign Keys are defined over the same columns,
 			// but are not exactly equal
 			conflicts = append(conflicts, FKConflict{
 				Kind:   TagCollision,
@@ -546,11 +546,11 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 	return schema.NewColCollection(mergedColumns...), nil, mergeInfo, diffInfo, nil
 }
 
-// checkForColumnConflicts iterates over |mergedColumns|, checks for duplicate column names or column tags, and returns
-// a slice of ColConflicts for any conflicts found.
+// checkForColumnConflicts iterates over |mergedColumns|, checks for duplicate column names, and returns
+// a slice of ColConflicts for any conflicts found. Tag collisions are not checked because tags are
+// positional and will be reassigned by NewColCollection.
 func checkForColumnConflicts(mergedColumns []schema.Column) []ColConflict {
 	columnNameSet := map[string]schema.Column{}
-	columnTagSet := map[uint64]schema.Column{}
 	var conflicts []ColConflict
 
 	for _, col := range mergedColumns {
@@ -563,15 +563,6 @@ func checkForColumnConflicts(mergedColumns []schema.Column) []ColConflict {
 			})
 		}
 		columnNameSet[normalizedName] = col
-
-		if _, ok := columnTagSet[col.Tag]; ok {
-			conflicts = append(conflicts, ColConflict{
-				Kind:   TagCollision,
-				Ours:   col,
-				Theirs: columnTagSet[col.Tag],
-			})
-		}
-		columnTagSet[col.Tag] = col
 	}
 
 	return conflicts
@@ -716,42 +707,29 @@ func (c columnMappings) DebugString() string {
 // mapColumns returns a columnMappings instance that describes how the columns in |ourCC|, |theirCC|, and |ancCC|
 // map to each other.
 func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, error) {
-	// Make a copy of theirCC so we can modify it to track which their columns we've matched
-	theirCC = schema.NewColCollection(theirCC.GetColumns()...)
-	theirTagsToCols := theirCC.TagToCol
+	// Columns are matched purely by name. Without tags, a rename is indistinguishable
+	// from dropping the old column and adding a new one.
+	theirMatched := make(map[string]bool)
 
-	// TAGS: Use of tags here is safe since it's constrained to a single table
 	columnMappings := make(columnMappings, 0)
 	_ = ourCC.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
-		theirCol, foundTheirByTag := theirCC.GetByTag(ourCol.Tag)
-		if !foundTheirByTag {
-			// If we didn't find a column on the other side of the merge that exactly matches this tag, then
-			// we fallback to looking for a match by name
-			theirCol, _ = theirCC.GetByNameCaseInsensitive(ourCol.Name)
-		}
+		// Match columns by name only
+		theirCol, _ := theirCC.GetByNameCaseInsensitive(ourCol.Name)
+		ancCol, _ := ancCC.GetByNameCaseInsensitive(ourCol.Name)
 
-		ancCol, foundAncByTag := ancCC.GetByTag(ourCol.Tag)
-		if !foundAncByTag {
-			// Ditto for finding the ancestor column
-			ancCol, _ = ancCC.GetByNameCaseInsensitive(ourCol.Name)
+		if theirCol.Name != "" {
+			theirMatched[strings.ToLower(theirCol.Name)] = true
 		}
-
-		delete(theirTagsToCols, theirCol.Tag)
 		columnMappings = append(columnMappings, newColumnMapping(ancCol, ourCol, theirCol))
 		return false, nil
 	})
 
-	// Handle any remaining columns on the "their" side
+	// Handle remaining columns on the "their" side (not matched by name to any of ours)
 	_ = theirCC.Iter(func(tag uint64, theirCol schema.Column) (stop bool, err error) {
-		if _, ok := theirTagsToCols[tag]; !ok {
+		if theirMatched[strings.ToLower(theirCol.Name)] {
 			return // already added
 		}
-
-		ancCol, foundAncByTag := ancCC.GetByTag(tag)
-		if !foundAncByTag {
-			// Ditto for finding the ancestor column
-			ancCol, _ = ancCC.GetByNameCaseInsensitive(theirCol.Name)
-		}
+		ancCol, _ := ancCC.GetByNameCaseInsensitive(theirCol.Name)
 		columnMappings = append(columnMappings, newColumnMapping(ancCol, schema.InvalidCol, theirCol))
 		return
 	})
@@ -788,12 +766,9 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.IndexCollection) (common schema.IndexCollection, conflicts []IdxConflict) {
 	common = schema.NewIndexCollection(mergedCC, nil)
 	_ = ours.Iter(func(ourIdx schema.Index) (stop bool, err error) {
-		idxTags := ourIdx.IndexedColumnTags()
-		for _, t := range idxTags {
-			// if column doesn't exist anymore, drop index
-			// however, it shouldn't be possible for an index
-			// over a dropped column to exist in the intersection
-			if _, ok := mergedCC.GetByTag(t); !ok {
+		// Check that all indexed columns still exist in the merged schema
+		for _, colName := range ourIdx.ColumnNames() {
+			if !mergedCC.Contains(colName) {
 				return false, nil
 			}
 		}
@@ -819,7 +794,7 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 			return false, nil
 		}
 
-		ancIdx, ok := anc.GetIndexByTags(idxTags...)
+		ancIdx, ok := anc.GetIndexByTags(ourIdx.IndexedColumnTags()...)
 
 		if !ok {
 			// index added on our branch and their branch with different defs, conflict
@@ -904,15 +879,14 @@ func findIndexInCollectionByTags(idx schema.Index, idxColl schema.IndexCollectio
 func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCollection) (d schema.IndexCollection) {
 	d = schema.NewIndexCollection(cc, nil)
 	_ = left.Iter(func(idx schema.Index) (stop bool, err error) {
-		idxTags := idx.IndexedColumnTags()
-		for _, t := range idxTags {
-			// if column doesn't exist anymore, drop index
-			if _, ok := cc.GetByTag(t); !ok {
+		// Check that all indexed columns still exist
+		for _, colName := range idx.ColumnNames() {
+			if !cc.Contains(colName) {
 				return false, nil
 			}
 		}
 
-		_, ok := right.GetIndexByTags(idxTags...)
+		_, ok := right.GetIndexByTags(idx.IndexedColumnTags()...)
 		if !ok {
 			d.AddIndex(idx)
 		}
@@ -1033,8 +1007,8 @@ func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolve
 		if err != nil {
 			return false, err
 		}
-		for _, tag := range fk.ReferencedTableColumns {
-			if _, ok := parentSch.GetAllCols().GetByTag(tag); !ok {
+		for _, name := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+			if _, ok := parentSch.GetAllCols().GetByNameCaseInsensitive(name); !ok {
 				return false, nil
 			}
 		}
@@ -1047,8 +1021,8 @@ func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolve
 		if err != nil {
 			return false, err
 		}
-		for _, tag := range fk.TableColumns {
-			if _, ok := childSch.GetAllCols().GetByTag(tag); !ok {
+		for _, name := range fk.UnresolvedFKDetails.TableColumns {
+			if _, ok := childSch.GetAllCols().GetByNameCaseInsensitive(name); !ok {
 				return false, nil
 			}
 		}

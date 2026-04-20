@@ -118,8 +118,8 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 		return nil, ErrNoPrimaryKeyColumns
 	}
 
-	pkColColl := NewColCollection(pkCols...)
-	nonPKColColl := NewColCollection(nonPKCols...)
+	pkColColl := NewColCollectionPreservingTags(pkCols...)
+	nonPKColColl := NewColCollectionPreservingTags(nonPKCols...)
 
 	sch := SchemaFromColCollections(allCols, pkColColl, nonPKColColl)
 	err := sch.SetPkOrdinals(defaultPkOrds)
@@ -185,14 +185,8 @@ func ValidateForInsert(allCols *ColCollection) error {
 	}
 
 	colNames := make(map[string]bool)
-	colTags := make(map[uint64]bool)
 
 	err := allCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		if _, ok := colTags[tag]; ok {
-			return true, ErrColTagCollision
-		}
-		colTags[tag] = true
-
 		if _, ok := colNames[strings.ToLower(col.Name)]; ok {
 			return true, ErrColNameCollision
 		}
@@ -341,7 +335,7 @@ func (si *schemaImpl) SetPkOrdinals(o []int) error {
 		newPks[i] = pkCol
 		newPkTags[i] = pkCol.Tag
 	}
-	si.pkCols = NewColCollection(newPks...)
+	si.pkCols = NewColCollectionPreservingTags(newPks...)
 	return si.indexCollection.SetPks(newPkTags)
 }
 
@@ -422,13 +416,17 @@ func (si schemaImpl) AddColumn(newCol Column, order *ColumnOrder) (Schema, error
 		nonPkCols = append(nonPkCols, newCol)
 	}
 
+	oldAllCols := si.allCols
 	collection := NewColCollection(newCols...)
 	si.allCols = collection
-	si.pkCols = NewColCollection(pkCols...)
-	si.nonPKCols = NewColCollection(nonPkCols...)
+	si.pkCols = NewColCollectionPreservingTags(pkCols...)
+	si.nonPKCols = NewColCollectionPreservingTags(nonPkCols...)
 
 	// This must be done after we have set the new column order
 	si.pkOrdinals = primaryKeyOrdinals(&si, keyCols)
+
+	// Remap index tags from old column positions to new column positions
+	si.indexCollection.RemapTags(oldAllCols, collection)
 
 	err := ValidateForInsert(collection)
 	if err != nil {

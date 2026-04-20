@@ -281,10 +281,15 @@ func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
 		return false
 	}
 
+	// Match PK columns by name at each ordinal position.
+	// Both the column identity (name) and ordinal position must match.
 	for i := 0; i < cc1.Size(); i++ {
 		c1 := cc1.GetByIndex(i)
 		c2 := cc2.GetByIndex(i)
-		if (c1.Tag != c2.Tag) || (c1.IsPartOfPK != c2.IsPartOfPK) {
+		if !strings.EqualFold(c1.Name, c2.Name) {
+			return false // Different columns at this ordinal — not diffable
+		}
+		if c1.IsPartOfPK != c2.IsPartOfPK {
 			return false
 		}
 		if !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
@@ -311,15 +316,12 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) (val.OrdinalMapping, val.O
 		return keyMapping, make([]int, inSch.GetNonPKCols().Size()), nil
 	}
 
-	// Search for the PK by tag first; if not found, search by name, but ensure the type still matches
+	// Search for PK columns by name (tags are positional and not stable across schema changes)
 	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		i := inSch.GetPKCols().TagToIdx[tag]
-		foundCol, ok := outSch.GetPKCols().GetByTag(tag)
-		if !ok {
-			foundCol, ok = outSch.GetPKCols().GetByNameCaseInsensitive(col.Name)
-			if ok {
-				ok = foundCol.TypeInfo.ToSqlType() == col.TypeInfo.ToSqlType()
-			}
+		foundCol, ok := outSch.GetPKCols().GetByNameCaseInsensitive(col.Name)
+		if ok {
+			ok = foundCol.TypeInfo.ToSqlType() == col.TypeInfo.ToSqlType()
 		}
 
 		if ok {

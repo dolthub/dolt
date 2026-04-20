@@ -17,7 +17,6 @@ package doltdb
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
@@ -194,26 +193,14 @@ func (fk ForeignKey) HashOf() (hash.Hash, error) {
 		fkBufPool.Put(bb)
 	}()
 
-	var err error
 	bb = append(bb, fk.Name...)
 	bb = append(bb, fk.TableName.String()...)
 	bb = append(bb, fk.TableIndex...)
-	for _, col := range fk.TableColumns {
-		bb, err = binary.Append(bb, binary.LittleEndian, col)
-		if err != nil {
-			return hash.Hash{}, err
-		}
-	}
 	bb = append(bb, fk.ReferencedTableName.String()...)
 	bb = append(bb, fk.ReferencedTableIndex...)
-	for _, col := range fk.ReferencedTableColumns {
-		bb, err = binary.Append(bb, binary.LittleEndian, col)
-		if err != nil {
-			return hash.Hash{}, err
-		}
-	}
 	bb = append(bb, byte(fk.OnUpdate))
 	bb = append(bb, byte(fk.OnDelete))
+	// Column names are the identity of FK columns, not tags
 	for _, col := range fk.UnresolvedFKDetails.TableColumns {
 		bb = append(bb, col...)
 	}
@@ -248,26 +235,113 @@ func (fk ForeignKey) IsSelfReferential() bool {
 }
 
 // IsResolved returns whether the foreign key has been resolved.
+// A FK is resolved when it has column names AND has been fully validated against the
+// referenced table (indicated by having tag arrays populated at runtime).
+// An unresolved FK only has column names in UnresolvedFKDetails but empty tag arrays
+// (waiting for parent table creation or for tag resolution after deserialization).
 func (fk ForeignKey) IsResolved() bool {
 	return len(fk.TableColumns) > 0 && len(fk.ReferencedTableColumns) > 0
 }
 
+// ResolveColumnTags resolves the FK's column names to tags using the given schemas.
+// This is used at runtime when tag-based lookups are needed for FK enforcement.
+func (fk ForeignKey) ResolveColumnTags(childSch, parentSch schema.Schema) (childTags, parentTags []uint64, err error) {
+	if !fk.IsResolved() {
+		return nil, nil, nil
+	}
+	childTags = make([]uint64, len(fk.UnresolvedFKDetails.TableColumns))
+	for i, name := range fk.UnresolvedFKDetails.TableColumns {
+		col, ok := childSch.GetAllCols().GetByNameCaseInsensitive(name)
+		if !ok {
+			return nil, nil, fmt.Errorf("foreign key `%s`: child table `%s` missing column `%s`", fk.Name, fk.TableName, name)
+		}
+		childTags[i] = col.Tag
+	}
+	parentTags = make([]uint64, len(fk.UnresolvedFKDetails.ReferencedTableColumns))
+	for i, name := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+		col, ok := parentSch.GetAllCols().GetByNameCaseInsensitive(name)
+		if !ok {
+			return nil, nil, fmt.Errorf("foreign key `%s`: parent table `%s` missing column `%s`", fk.Name, fk.ReferencedTableName, name)
+		}
+		parentTags[i] = col.Tag
+	}
+	return childTags, parentTags, nil
+}
+
+// ResolveColumnTags populates the TableColumns and ReferencedTableColumns tag arrays
+// by resolving column names against the current table schemas. This is called after
+// deserialization since tags are no longer persisted.
+func (fkc *ForeignKeyCollection) ResolveColumnTags(ctx context.Context, root RootValue) error {
+	for key, fk := range fkc.foreignKeys {
+		// Skip FKs that already have tag arrays OR have no column names at all.
+		// Only process FKs with column names but no tags (deserialized from new format).
+		hasNames := len(fk.UnresolvedFKDetails.TableColumns) > 0 || len(fk.UnresolvedFKDetails.ReferencedTableColumns) > 0
+		if fk.IsResolved() || !hasNames {
+			continue
+		}
+		// Resolve tag arrays from column names.
+		if len(fk.UnresolvedFKDetails.TableColumns) > 0 {
+			tbl, ok, err := root.GetTable(ctx, fk.TableName)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue // Table might not exist yet (e.g., during branch creation)
+			}
+			sch, err := tbl.GetSchema(ctx)
+			if err != nil {
+				return err
+			}
+			fk.TableColumns = make([]uint64, len(fk.UnresolvedFKDetails.TableColumns))
+			for i, name := range fk.UnresolvedFKDetails.TableColumns {
+				col, ok := sch.GetAllCols().GetByNameCaseInsensitive(name)
+				if !ok {
+					continue // Column might not exist (unresolved state)
+				}
+				fk.TableColumns[i] = col.Tag
+			}
+		}
+		if len(fk.UnresolvedFKDetails.ReferencedTableColumns) > 0 {
+			refTbl, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue
+			}
+			refSch, err := refTbl.GetSchema(ctx)
+			if err != nil {
+				return err
+			}
+			fk.ReferencedTableColumns = make([]uint64, len(fk.UnresolvedFKDetails.ReferencedTableColumns))
+			for i, name := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+				col, ok := refSch.GetAllCols().GetByNameCaseInsensitive(name)
+				if !ok {
+					continue
+				}
+				fk.ReferencedTableColumns[i] = col.Tag
+			}
+		}
+		fkc.foreignKeys[key] = fk
+	}
+	return nil
+}
+
 // ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
 func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
-	// An unresolved foreign key will be validated later, so we don't return an error here.
 	if !fk.IsResolved() {
 		return nil
 	}
 	allSchCols := sch.GetAllCols()
-	for _, colTag := range fk.ReferencedTableColumns {
-		_, ok := allSchCols.GetByTag(colTag)
+	for _, colName := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+		_, ok := allSchCols.GetByNameCaseInsensitive(colName)
 		if !ok {
 			return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` has unexpected schema",
 				fk.Name, fk.ReferencedTableName)
 		}
 	}
 
-	if (fk.ReferencedTableIndex != "" && !sch.Indexes().Contains(fk.ReferencedTableIndex)) || (fk.ReferencedTableIndex == "" && sch.GetPKCols().Size() < len(fk.ReferencedTableColumns)) {
+	if (fk.ReferencedTableIndex != "" && !sch.Indexes().Contains(fk.ReferencedTableIndex)) || (fk.ReferencedTableIndex == "" && sch.GetPKCols().Size() < len(fk.UnresolvedFKDetails.ReferencedTableColumns)) {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` is missing the index `%s`",
 			fk.Name, fk.ReferencedTableName, fk.ReferencedTableIndex)
 	}
@@ -276,18 +350,17 @@ func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 
 // ValidateTableSchema verifies that the given schema matches the expectation of the declaring table.
 func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
-	// An unresolved foreign key will be validated later, so we don't return an error here.
 	if !fk.IsResolved() {
 		return nil
 	}
 	allSchCols := sch.GetAllCols()
-	for _, colTag := range fk.TableColumns {
-		_, ok := allSchCols.GetByTag(colTag)
+	for _, colName := range fk.UnresolvedFKDetails.TableColumns {
+		_, ok := allSchCols.GetByNameCaseInsensitive(colName)
 		if !ok {
 			return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` has unexpected schema", fk.Name, fk.TableName)
 		}
 	}
-	if (fk.TableIndex != "" && !sch.Indexes().Contains(fk.TableIndex)) || (fk.TableIndex == "" && sch.GetPKCols().Size() < len(fk.TableColumns)) {
+	if (fk.TableIndex != "" && !sch.Indexes().Contains(fk.TableIndex)) || (fk.TableIndex == "" && sch.GetPKCols().Size() < len(fk.UnresolvedFKDetails.TableColumns)) {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` is missing the index `%s`",
 			fk.Name, fk.TableName, fk.TableIndex)
 	}
@@ -435,6 +508,34 @@ OuterLoop:
 	return ForeignKey{}, false
 }
 
+// GetByColumnNames gets the ForeignKey defined over the given child and parent column names.
+func (fkc *ForeignKeyCollection) GetByColumnNames(childCols, parentCols []string) (ForeignKey, bool) {
+	if len(childCols) == 0 || len(parentCols) == 0 {
+		return ForeignKey{}, false
+	}
+OuterLoop:
+	for _, fk := range fkc.foreignKeys {
+		if len(fk.UnresolvedFKDetails.ReferencedTableColumns) != len(parentCols) {
+			continue
+		}
+		for i, name := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+			if !strings.EqualFold(name, parentCols[i]) {
+				continue OuterLoop
+			}
+		}
+		if len(fk.UnresolvedFKDetails.TableColumns) != len(childCols) {
+			continue
+		}
+		for i, name := range fk.UnresolvedFKDetails.TableColumns {
+			if !strings.EqualFold(name, childCols[i]) {
+				continue OuterLoop
+			}
+		}
+		return fk, true
+	}
+	return ForeignKey{}, false
+}
+
 // GetMatchingKey gets the ForeignKey defined over the parent and child columns. If the given foreign key is resolved,
 // then both resolved and unresolved keys are checked for a match. If the given foreign key is unresolved, then it
 // will match with unresolved keys, and may also match with resolved keys if |matchUnresolvedKeyToResolvedKey| is
@@ -487,8 +588,11 @@ func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[Ta
 OuterLoopResolved:
 	for _, existingFk := range fkc.foreignKeys {
 		if existingFk.IsResolved() {
-			// When both are resolved, we do a standard tag comparison
-			if len(fk.TableColumns) != len(existingFk.TableColumns) ||
+			// When both are resolved, compare table names and tags.
+			// Table name comparison is required because positional tags are not globally unique.
+			if fk.TableName != existingFk.TableName ||
+				fk.ReferencedTableName != existingFk.ReferencedTableName ||
+				len(fk.TableColumns) != len(existingFk.TableColumns) ||
 				len(fk.ReferencedTableColumns) != len(existingFk.ReferencedTableColumns) {
 				continue
 			}
@@ -645,53 +749,7 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 			}
 			delete(fkc.foreignKeys, fkHash.String())
 
-			fk.UnresolvedFKDetails.TableColumns = make([]string, len(fk.TableColumns))
-			fk.UnresolvedFKDetails.ReferencedTableColumns = make([]string, len(fk.ReferencedTableColumns))
-
-			tbl, ok, err := root.GetTable(ctx, fk.TableName)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return fmt.Errorf("table `%s` declares the resolved foreign key `%s` but the table cannot be found",
-					fk.TableName, fk.Name)
-			}
-			sch, err := tbl.GetSchema(ctx)
-			if err != nil {
-				return err
-			}
-			for i, tag := range fk.TableColumns {
-				col, ok := sch.GetAllCols().GetByTag(tag)
-				if !ok {
-					return fmt.Errorf("table `%s` uses tag `%d` in foreign key `%s` but no matching column was found",
-						fk.TableName, tag, fk.Name)
-				}
-				fk.UnresolvedFKDetails.TableColumns[i] = col.Name
-			}
-
-			refTbl, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return fmt.Errorf("table `%s` is referenced by the resolved foreign key `%s` but cannot be found",
-					fk.ReferencedTableName, fk.Name)
-			}
-			refSch, err := refTbl.GetSchema(ctx)
-			if err != nil {
-				return err
-			}
-			for i, tag := range fk.ReferencedTableColumns {
-				col, ok := refSch.GetAllCols().GetByTag(tag)
-				if !ok {
-					return fmt.Errorf("table `%s` uses tag `%d` in foreign key `%s` but no matching column was found",
-						fk.ReferencedTableName, tag, fk.Name)
-				}
-				fk.UnresolvedFKDetails.ReferencedTableColumns[i] = col.Name
-			}
-
-			fk.TableColumns = nil
-			fk.ReferencedTableColumns = nil
+			// Column names are already in UnresolvedFKDetails; just clear index references
 			fk.TableIndex = ""
 			fk.ReferencedTableIndex = ""
 

@@ -259,7 +259,8 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		serial.ColumnAddComment(b, co)
 		// schema.Schema determines display order
 		serial.ColumnAddDisplayOrder(b, int16(i))
-		serial.ColumnAddTag(b, col.Tag)
+		// Tags are no longer stored; they are derived from column position on read.
+		serial.ColumnAddTag(b, 0)
 		serial.ColumnAddEncoding(b, serial.Encoding(col.TypeInfo.Encoding()))
 		serial.ColumnAddPrimaryKey(b, col.IsPartOfPK)
 		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
@@ -381,7 +382,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 
 		cols[i] = schema.Column{
 			Name:          string(c.Name()),
-			Tag:           c.Tag(),
+			Tag:           uint64(i), // Tags are positional, not stored
 			Kind:          sqlType.NomsKind(),
 			IsPartOfPK:    c.PrimaryKey(),
 			TypeInfo:      sqlType,
@@ -471,7 +472,6 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 
 func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error {
 	idx := serial.Index{}
-	col := serial.Column{}
 	for i := 0; i < s.SecondaryIndexesLength(); i++ {
 		_, err := s.TrySecondaryIndexes(&idx, i)
 		if err != nil {
@@ -504,11 +504,8 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 		tags := make([]uint64, idx.IndexColumnsLength())
 		for j := range tags {
 			pos := idx.IndexColumns(j)
-			_, err := s.TryColumns(&col, int(pos))
-			if err != nil {
-				return err
-			}
-			tags[j] = col.Tag()
+			// Tags are positional — the column's tag equals its position
+			tags[j] = uint64(pos)
 		}
 
 		var prefixLengths []uint16

@@ -188,32 +188,14 @@ func ToForeignKeyConstraint(fk doltdb.ForeignKey, dbName string, childSch, paren
 		Database:       dbName,
 		SchemaName:     fk.TableName.Schema,
 		Table:          fk.TableName.Name,
-		Columns:        make([]string, len(fk.TableColumns)),
+		Columns:        append([]string{}, fk.UnresolvedFKDetails.TableColumns...),
 		ParentDatabase: dbName,
 		ParentSchema:   fk.ReferencedTableName.Schema,
 		ParentTable:    fk.ReferencedTableName.Name,
-		ParentColumns:  make([]string, len(fk.ReferencedTableColumns)),
+		ParentColumns:  append([]string{}, fk.UnresolvedFKDetails.ReferencedTableColumns...),
 		OnUpdate:       ToReferentialAction(fk.OnUpdate),
 		OnDelete:       ToReferentialAction(fk.OnDelete),
 		IsResolved:     fk.IsResolved(),
-	}
-
-	for i, tag := range fk.TableColumns {
-		c, ok := childSch.GetAllCols().GetByTag(tag)
-		if !ok {
-			return cst, fmt.Errorf("cannot find column for tag %d "+
-				"in table %s used in foreign key %s", tag, fk.TableName, fk.Name)
-		}
-		cst.Columns[i] = c.Name
-	}
-
-	for i, tag := range fk.ReferencedTableColumns {
-		c, ok := parentSch.GetAllCols().GetByTag(tag)
-		if !ok {
-			return cst, fmt.Errorf("cannot find column for tag %d "+
-				"in table %s used in foreign key %s", tag, fk.ReferencedTableName, fk.Name)
-		}
-		cst.ParentColumns[i] = c.Name
 	}
 
 	return cst, nil

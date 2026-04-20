@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var firstNameCol = Column{Name: "first", Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType}
+var firstNameCol = Column{Name: "first", Tag: 0, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType}
 var lastNameCol = Column{Name: "last", Tag: 1, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType}
 var firstNameCapsCol = Column{Name: "FiRsT", Tag: 2, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType}
 var lastNameCapsCol = Column{Name: "LAST", Tag: 3, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType}
@@ -103,17 +103,17 @@ func TestGetByNameCaseInsensitive(t *testing.T) {
 func TestAppendAndItrInSortOrder(t *testing.T) {
 	cols := []Column{
 		{Name: "0", Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
-		{Name: "2", Tag: 2, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
-		{Name: "4", Tag: 4, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
-		{Name: "3", Tag: 3, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 		{Name: "1", Tag: 1, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "2", Tag: 2, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "3", Tag: 3, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "4", Tag: 4, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 	}
 	cols2 := []Column{
-		{Name: "7", Tag: 7, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
-		{Name: "9", Tag: 9, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 		{Name: "5", Tag: 5, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
-		{Name: "8", Tag: 8, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 		{Name: "6", Tag: 6, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "7", Tag: 7, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "8", Tag: 8, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "9", Tag: 9, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 	}
 
 	colColl := NewColCollection(cols...)

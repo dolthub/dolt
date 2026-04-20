@@ -1881,7 +1881,20 @@ func fullTextRewriteEditor(
 func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColumns, oldSch schema.Schema, newSch schema.Schema) (schema.Schema, error) {
 	for _, idx := range oldSch.Indexes().AllIndexes() {
 		if !idx.IsFullText() {
-			newSch.Indexes().AddIndex(idx)
+			// Re-add by column names so tags are resolved in the new schema
+			_, err := newSch.Indexes().AddIndexByColNames(idx.Name(), idx.ColumnNames(), idx.PrefixLengths(),
+				schema.IndexProperties{
+					IsUnique:      idx.IsUnique(),
+					IsSpatial:     idx.IsSpatial(),
+					IsFullText:    idx.IsFullText(),
+					IsVector:      idx.IsVector(),
+					IsUserDefined: idx.IsUserDefined(),
+					Comment:       idx.Comment(),
+				})
+			if err != nil {
+				// Column might not exist in new schema (dropped), skip
+				continue
+			}
 			continue
 		}
 
@@ -1912,22 +1925,48 @@ func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColum
 
 // dropIndexesOnDroppedColumn removes from the schema any indexes which contain a dropped column.
 func dropIndexesOnDroppedColumn(newSch schema.Schema, oldSch schema.Schema, oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema, err error) (schema.Schema, error) {
-	newSch = schema.CopyIndexes(oldSch, newSch)
 	droppedCol := getDroppedColumn(oldSchema, newSchema)
-	for _, index := range newSch.Indexes().IndexesWithColumn(droppedCol.Name) {
-		_, err = newSch.Indexes().RemoveIndex(index.Name())
+
+	// Iterate over old indexes and add only those that don't reference the dropped column.
+	// We add by column name so that the new schema resolves the correct positional tags.
+	for _, index := range oldSch.Indexes().AllIndexes() {
+		if indexReferencesColumn(index, droppedCol.Name) {
+			// For fulltext indexes, we modify them to contain only the remaining columns
+			if index.IsFullText() {
+				modifyFulltextIndexForColumnDrop(index, newSch, droppedCol)
+			}
+			continue
+		}
+		_, err = newSch.Indexes().AddIndexByColNames(
+			index.Name(),
+			index.ColumnNames(),
+			index.PrefixLengths(),
+			schema.IndexProperties{
+				IsUnique:           index.IsUnique(),
+				IsSpatial:          index.IsSpatial(),
+				IsFullText:         index.IsFullText(),
+				IsVector:           index.IsVector(),
+				IsUserDefined:      index.IsUserDefined(),
+				Comment:            index.Comment(),
+				FullTextProperties: index.FullTextProperties(),
+				VectorProperties:   index.VectorProperties(),
+			})
 		if err != nil {
 			return nil, err
-		}
-
-		// For fulltext indexes, we don't just remove them entirely on a column drop, we modify them to contain only the
-		// remaining columns
-		if index.IsFullText() {
-			modifyFulltextIndexForColumnDrop(index, newSch, droppedCol)
 		}
 	}
 
 	return newSch, nil
+}
+
+// indexReferencesColumn returns true if the given index references the named column.
+func indexReferencesColumn(index schema.Index, colName string) bool {
+	for _, name := range index.ColumnNames() {
+		if strings.EqualFold(name, colName) {
+			return true
+		}
+	}
+	return false
 }
 
 // modifyFulltextIndexForColumnDrop modifies a fulltext index to remove a column that was dropped, adding it to the
@@ -2050,21 +2089,51 @@ func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, ol
 		return newSch, err
 	}
 
-	// Modifying a column
+	// Modifying a column — tags are positional, no need to preserve old tags
 	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.TableName(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 	if err != nil {
 		return nil, err
 	}
 
-	oldDoltCol, ok := oldSch.GetAllCols().GetByName(oldColumn.Name)
-	if !ok {
-		return nil, fmt.Errorf("expected column %s to exist in the old schema but did not find it", oldColumn.Name)
+	// Carry over indexes and checks from the old schema to the new one
+	for _, idx := range oldSch.Indexes().AllIndexes() {
+		// Remap column names (handle renames)
+		colNames := make([]string, len(idx.ColumnNames()))
+		for i, name := range idx.ColumnNames() {
+			if oldColumn != nil && strings.EqualFold(name, oldColumn.Name) && newColumn != nil {
+				colNames[i] = newColumn.Name
+			} else {
+				colNames[i] = name
+			}
+		}
+		_, err = newSch.Indexes().AddIndexByColNames(
+			idx.Name(),
+			colNames,
+			idx.PrefixLengths(),
+			schema.IndexProperties{
+				IsUnique:           idx.IsUnique(),
+				IsSpatial:          idx.IsSpatial(),
+				IsFullText:         idx.IsFullText(),
+				IsVector:           idx.IsVector(),
+				IsUserDefined:      idx.IsUserDefined(),
+				Comment:            idx.Comment(),
+				FullTextProperties: idx.FullTextProperties(),
+				VectorProperties:   idx.VectorProperties(),
+			})
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	newColCollection := replaceColumnTagInCollection(newSch.GetAllCols(), oldDoltCol.Name, oldDoltCol.Tag)
-	newPkColCollection := replaceColumnTagInCollection(newSch.GetPKCols(), oldDoltCol.Name, oldDoltCol.Tag)
-	return schema.NewSchema(newColCollection, newSch.GetPkOrdinals(), newSch.GetCollation(),
-		schema.NewIndexCollection(newColCollection, newPkColCollection), newSch.Checks())
+	// Copy over checks
+	for _, check := range oldSch.Checks().AllChecks() {
+		_, err = newSch.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newSch, nil
 }
 
 // replaceColumnTagInCollection returns a new ColCollection, based on |cc|, with the column named |name| updated
@@ -2528,6 +2597,7 @@ func (t *WritableDoltTable) createForeignKey(
 			},
 		}, nil
 	}
+	// Resolve child column names to tags (tags are derived at runtime, not stored)
 	colTags := make([]uint64, len(sqlFk.Columns))
 	for i, col := range sqlFk.Columns {
 		tableCol, ok := t.sch.GetAllCols().GetByNameCaseInsensitive(col)
@@ -2600,6 +2670,7 @@ func (t *WritableDoltTable) createForeignKey(
 		}
 	}
 
+	// Resolve parent column names to tags (tags are derived at runtime, not stored)
 	refColTags := make([]uint64, len(sqlFk.ParentColumns))
 	for i, name := range sqlFk.ParentColumns {
 		refCol, ok := refSch.GetAllCols().GetByNameCaseInsensitive(name)
@@ -2631,10 +2702,10 @@ func (t *WritableDoltTable) createForeignKey(
 		Name:                   sqlFk.Name,
 		TableName:              doltdb.TableName{Name: sqlFk.Table, Schema: t.db.SchemaName()},
 		TableIndex:             tableIndexName,
-		TableColumns:           colTags,
+		TableColumns:           colTags, // Derived from column names at runtime; not persisted
 		ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema},
 		ReferencedTableIndex:   refTableIndexName,
-		ReferencedTableColumns: refColTags,
+		ReferencedTableColumns: refColTags, // Derived from column names at runtime; not persisted
 		OnUpdate:               onUpdateRefAction,
 		OnDelete:               onDeleteRefAction,
 		UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
@@ -2914,12 +2985,8 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 		if fk.ReferencedTableIndex != oldIdx.Name() {
 			continue
 		}
-		// get column names from tags in foreign key
-		fkParentCols := make([]string, len(fk.ReferencedTableColumns))
-		for i, colTag := range fk.ReferencedTableColumns {
-			col, _ := oldIdx.GetColumn(colTag)
-			fkParentCols[i] = col.Name
-		}
+		// get column names from foreign key
+		fkParentCols := fk.UnresolvedFKDetails.ReferencedTableColumns
 		newIdx, ok, err := FindIndexWithPrefix(t.sch, fkParentCols)
 		if err != nil {
 			return nil, nil, err

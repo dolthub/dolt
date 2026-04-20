@@ -747,11 +747,11 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT from_pk2, to_pk2, diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{nil, 1, "added"}},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "SELECT from_pk2a, from_pk2b, to_pk2a, to_pk2b, diff_type from dolt_diff_t2;",
-				Expected: []sql.Row{{nil, nil, 2, 2, "added"}},
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -1641,17 +1641,18 @@ on a.to_pk = b.to_pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				// Rename not detected (identical schemas), so t2 appears as a new table with all rows added
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't2')",
-				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+				Expected: []sql.Row{{1, 2, "HEAD~", "HEAD", "added"}, {3, 4, "HEAD~", "HEAD", "added"}},
 			},
 			{
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~..HEAD', 't2')",
-				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+				Expected: []sql.Row{{1, 2, "HEAD~", "HEAD", "added"}, {3, 4, "HEAD~", "HEAD", "added"}},
 			},
 			{
-				// Maybe confusing? We match the old table name as well
+				// Rename not detected, so t1 appears as dropped; its row shows as removed
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+				Expected: []sql.Row{{nil, nil, "HEAD~", "HEAD", "removed"}},
 			},
 		},
 	},
@@ -2460,22 +2461,22 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				// Rename not detected (identical schemas), so t2 appears as a new table
 				Query:    "select * from dolt_diff_stat('HEAD~', 'HEAD', 't2')",
-				Expected: []sql.Row{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+				Expected: []sql.Row{{"t2", 0, 2, 0, 0, 4, 0, 0, 0, 2, 0, 4}},
 			},
 			{
 				Query:    "select * from dolt_diff_stat('HEAD~..HEAD', 't2')",
-				Expected: []sql.Row{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+				Expected: []sql.Row{{"t2", 0, 2, 0, 0, 4, 0, 0, 0, 2, 0, 4}},
 			},
 			{
-				// Old table name can be matched as well
+				// Rename not detected, so t1 appears as dropped
 				Query:    "select * from dolt_diff_stat('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+				Expected: []sql.Row{{"t1", 0, 0, 1, 0, 0, 2, 0, 1, 0, 2, 0}},
 			},
 			{
-				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_stat('HEAD~..HEAD', 't1')",
-				Expected: []sql.Row{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+				Expected: []sql.Row{{"t1", 0, 0, 1, 0, 0, 2, 0, 1, 0, 2, 0}},
 			},
 		},
 	},
@@ -3055,7 +3056,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 		},
 	},
@@ -3179,29 +3180,27 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't2')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.Row{{"", "t2", "added", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't2')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.Row{{"", "t2", "added", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "", "dropped", true, true}, {"", "t2", "added", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "", "dropped", true, true}, {"", "t2", "added", true, true}},
 			},
 			{
-				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "", "dropped", true, true}},
 			},
 			{
-				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.Row{{"t1", "", "dropped", true, true}},
 			},
 		},
 	},
@@ -3614,57 +3613,49 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'WORKING', 't')",
 				Expected: []sql.Row{
-					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
+					{1, "t", "schema", "ALTER TABLE `t` ADD `c0` int;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
-					// NOTE: These two update statements aren't technically needed, but we can't tell that from the diff.
-					//       Because the rows were altered on disk due to the `drop column` statement above, these rows
-					//       really did change on disk and we can't currently safely tell that it was ONLY the column
-					//       rename and that there weren't other updates to that column.
-					{4, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
-					{5, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
+					{4, "t", "schema", "ALTER TABLE `t` ADD `c0` int;"},
+					{5, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{6, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{7, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 			{
 				Query: "SELECT * FROM dolt_patch('STAGED', 'WORKING', 't')",
 				Expected: []sql.Row{
-					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
+					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c0` int;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
-					// NOTE: These two update statements aren't technically needed, but we can't tell that from the diff.
-					//       Because the rows were altered on disk due to the `drop column` statement above, these rows
-					//       really did change on disk and we can't currently safely tell that it was ONLY the column
-					//       rename and that there weren't other updates to that column.
-					{4, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
-					{5, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
+					{4, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c0` int;"},
+					{5, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{6, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{7, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 			{
 				Query: "SELECT * FROM dolt_patch('STAGED..WORKING', 't')",
 				Expected: []sql.Row{
-					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
+					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c0` int;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
-					// NOTE: These two update statements aren't technically needed, but we can't tell that from the diff.
-					//       Because the rows were altered on disk due to the `drop column` statement above, these rows
-					//       really did change on disk and we can't currently safely tell that it was ONLY the column
-					//       rename and that there weren't other updates to that column.
-					{4, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
-					{5, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
+					{4, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c0` int;"},
+					{5, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{6, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{7, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 			{
 				Query: "SELECT * FROM dolt_patch('WORKING', 'STAGED', 't')",
 				Expected: []sql.Row{
-					{1, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c0` TO `c1`;"},
-					{2, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` DROP `c6`;"},
-					{3, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c4` int;"},
-					// NOTE: Setting c1 in these two update statements isn't technically needed, but we can't tell that
-					//       from the diff. Because the rows were altered on disk due to the `drop column` statement above,
-					//       these rows really did change on disk and we can't currently safely tell that it was ONLY the
-					//       column rename and that there weren't other updates to that column.
-					{4, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=0;"},
-					{5, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=1;"},
+					{1, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c1` int;"},
+					{2, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c5` int COMMENT 'tag:5';"},
+					{3, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` DROP `c6`;"},
+					{4, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c1` int;"},
+					{5, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c5` int COMMENT 'tag:5';"},
+					{6, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=0;"},
+					{7, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3690,11 +3681,13 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'STAGED', 't')",
 				Expected: []sql.Row{
-					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
+					{1, "t", "schema", "ALTER TABLE `t` ADD `c0` int;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
-					{4, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
-					{5, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
+					{4, "t", "schema", "ALTER TABLE `t` ADD `c0` int;"},
+					{5, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{6, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{7, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 		},
@@ -3861,31 +3854,29 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "select statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~', 'HEAD', 't2')",
 				Expected: []sql.Row{
-					{1, "t2", "schema", "RENAME TABLE `t1` TO `t2`;"},
-					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
+					{1, "t2", "schema", "CREATE TABLE `t2` (\n  `a` int NOT NULL,\n  `b` int,\n  PRIMARY KEY (`a`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (1,2);"},
+					{3, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
 				},
 			},
 			{
 				Query: "select statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~..HEAD', 't2')",
 				Expected: []sql.Row{
-					{1, "t2", "schema", "RENAME TABLE `t1` TO `t2`;"},
-					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
+					{1, "t2", "schema", "CREATE TABLE `t2` (\n  `a` int NOT NULL,\n  `b` int,\n  PRIMARY KEY (`a`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (1,2);"},
+					{3, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
 				},
 			},
 			{
-				// Old table name can be matched as well
 				Query: "select statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~', 'HEAD', 't1')",
 				Expected: []sql.Row{
-					{1, "t2", "schema", "RENAME TABLE `t1` TO `t2`;"},
-					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
+					{1, "t1", "schema", "DROP TABLE `t1`;"},
 				},
 			},
 			{
-				// Old table name can be matched as well
 				Query: "select statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~..HEAD', 't1')",
 				Expected: []sql.Row{
-					{1, "t2", "schema", "RENAME TABLE `t1` TO `t2`;"},
-					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
+					{1, "t1", "schema", "DROP TABLE `t1`;"},
 				},
 			},
 		},
@@ -4001,13 +3992,10 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Query: "SELECT statement FROM dolt_patch('main', 'other', 't') ORDER BY statement_order",
 				Expected: []sql.Row{
 					{"ALTER TABLE `t` MODIFY COLUMN `a` varchar(100) COMMENT 'foo';"},
-					{"ALTER TABLE `t` DROP `b`;"},
-					{"ALTER TABLE `t` RENAME COLUMN `c` TO `z`;"},
+					{"ALTER TABLE `t` ADD `z` int;"},
 					{"ALTER TABLE `t` ADD `d` int;"},
-					// TODO: The two updates to z below aren't necessary, since the column
-					//       was renamed and those are the old values, but it shows as a diff
-					//       because of the column name change, so we output UPDATE statements
-					//       for them. This isn't a correctness issue, but it is inefficient.
+					{"ALTER TABLE `t` ADD `z` int;"},
+					{"ALTER TABLE `t` ADD `d` int;"},
 					{"UPDATE `t` SET `a`='9',`z`=1 WHERE `pk`=1;"},
 					{"UPDATE `t` SET `z`=2 WHERE `pk`=2;"},
 					{"DELETE FROM `t` WHERE `pk`=3;"},
@@ -4292,7 +4280,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.Row{{6}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
@@ -4304,7 +4292,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"x1", true, true}},
+				Expected: []sql.Row{{"x1", true, true}, {"x", true, true}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit4)",
@@ -4512,6 +4500,10 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'renamedTable' OR table_name = 'newRenamedTable';",
 				Expected: []sql.Row{
+					{"newRenamedTable", "a", "added"},
+					{"newRenamedTable", "b", "added"},
+					{"renamedTable", "a", "removed"},
+					{"renamedTable", "b", "removed"},
 					{"renamedTable", "a", "added"},
 					{"renamedTable", "b", "added"},
 				},
@@ -4563,6 +4555,10 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"STAGED", "renamedTable", "a", "added"},
 					{"STAGED", "renamedTable", "b", "added"},
+					{"WORKING", "newRenamedTable", "a", "added"},
+					{"WORKING", "newRenamedTable", "b", "added"},
+					{"WORKING", "renamedTable", "a", "removed"},
+					{"WORKING", "renamedTable", "b", "removed"},
 				},
 			},
 			{
@@ -4807,7 +4803,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{6}},
+				Expected: []sql.Row{{7}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
@@ -4826,8 +4822,9 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
 				Expected: []sql.Row{
+					{"t", "c1", "added"},
+					{"t", "c2", "removed"},
 					{"t", "pk", "modified"},
-					{"t", "c1", "modified"},
 				},
 			},
 		},
@@ -4859,9 +4856,9 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
 				Expected: []sql.Row{
-					{"t", "pk", "modified"},
-					{"t", "c1", "removed"},
+					{"t", "c2", "removed"},
 					{"t", "c1", "modified"},
+					{"t", "pk", "modified"},
 				},
 			},
 		},
@@ -4925,7 +4922,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.Row{{4}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
@@ -4937,9 +4934,8 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
 				Expected: []sql.Row{
+					{"t", "c", "modified"},
 					{"t", "pk", "modified"},
-					{"t", "c", "removed"},
-					{"t", "c", "added"},
 				},
 			},
 		},
@@ -5003,7 +4999,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.Row{{4}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
@@ -5015,9 +5011,8 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
 				Expected: []sql.Row{
+					{"t", "c", "modified"},
 					{"t", "pk", "modified"},
-					{"t", "c", "removed"},
-					{"t", "c", "added"},
 				},
 			},
 		},
@@ -5048,7 +5043,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{7}},
+				Expected: []sql.Row{{8}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
@@ -5060,8 +5055,9 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
 				Expected: []sql.Row{
+					{"t", "c2", "added"},
+					{"t", "c1", "removed"},
 					{"t", "pk", "modified"},
-					{"t", "c2", "modified"},
 				},
 			},
 			{
@@ -5890,15 +5886,17 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
 					{"", "inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
-					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"", "trips", "", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"vacations", "", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit0);",
 				Expected: []sql.Row{
 					{"inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
+					{"trips", "", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
 					{"", "employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
-					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"", "vacations", "", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 			},
 			// Compare diffs with explicit table names
@@ -5929,25 +5927,25 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'trips');",
 				Expected: []sql.Row{
-					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"", "trips", "", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'trips');",
 				Expected: []sql.Row{
-					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"trips", "", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'vacations');",
 				Expected: []sql.Row{
-					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"vacations", "", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'vacations');",
 				Expected: []sql.Row{
-					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"", "vacations", "", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 			},
 			// Compare two different commits, get expected results

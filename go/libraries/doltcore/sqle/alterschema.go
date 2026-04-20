@@ -132,12 +132,9 @@ func validateNewColumn(
 
 	cols := sch.GetAllCols()
 	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
-		if currColTag == tag {
-			return false, schema.NewErrTagPrevUsed(tag, newColName, tblName, tblName)
-		} else if strings.EqualFold(currCol.Name, newColName) {
+		if strings.EqualFold(currCol.Name, newColName) {
 			return true, fmt.Errorf("A column with the name %s already exists in table %s.", newColName, tblName)
 		}
-
 		return false, nil
 	})
 
@@ -242,15 +239,18 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		return nil, err
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
-		tags := index.IndexedColumnTags()
-		for i := range tags {
-			if tags[i] == oldCol.Tag {
-				tags[i] = newCol.Tag
+		// Rebuild index column names, replacing old column name with new
+		colNames := make([]string, len(index.ColumnNames()))
+		for i, name := range index.ColumnNames() {
+			if strings.EqualFold(name, oldCol.Name) {
+				colNames[i] = newCol.Name
+			} else {
+				colNames[i] = name
 			}
 		}
-		_, err = newSch.Indexes().AddIndexByColTags(
+		_, err = newSch.Indexes().AddIndexByColNames(
 			index.Name(),
-			tags,
+			colNames,
 			index.PrefixLengths(),
 			schema.IndexProperties{
 				IsUnique:           index.IsUnique(),
@@ -340,13 +340,6 @@ func backupFkcIndexesForPkDrop(ctx *sql.Context, tbl string, sch schema.Schema, 
 			continue
 		}
 		// pk reference by fk definition on |fk.TableName|
-
-		// get column names from tags in foreign key
-		fkParentCols := make([]string, len(fk.ReferencedTableColumns))
-		for i, colTag := range fk.ReferencedTableColumns {
-			col, _ := sch.GetPKCols().GetByTag(colTag)
-			fkParentCols[i] = col.Name
-		}
 
 		// find suitable secondary index
 		newIdx, ok, err := FindIndexWithPrefix(sch, sch.GetPKCols().GetColumnNames())

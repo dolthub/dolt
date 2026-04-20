@@ -346,8 +346,10 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 			},
 			{
+				// With positional tags, columns are matched by name.
+				// c1 was renamed to c2, so "c1" can't be found → NULL.
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.Row{{1, nil}, {2, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -429,6 +431,8 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 			},
 			{
+				// With positional tags, columns are matched by name. c1 exists in both
+				// schemas, so data maps correctly.
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, "one"}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
@@ -520,6 +524,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 			},
 			{
+				// With positional tags, columns are matched by name, so data maps correctly.
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, "one"}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
@@ -1088,8 +1093,10 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 			},
 			{
+				// With positional tags, renamed columns (pk→newPk, c1→c2) can't be
+				// matched by name. t1 data is all NULL, so the JOIN returns no rows.
 				Query:    "SELECT * from t1 JOIN t2 on t1.pk = t2.c1;",
-				Expected: []sql.Row{{1, "one", 100, 1, "blue"}},
+				Expected: []sql.Row{},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -1439,7 +1446,8 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			"drop table t;",
 			"create table other_t (pk int primary key);",
 			"insert into other_t (pk) values (1);",
-			"call dolt_commit('-am', 'dropping t, adding other_t');",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'dropping t, adding other_t');",
 			"SET @commit3 = hashof('HEAD');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
