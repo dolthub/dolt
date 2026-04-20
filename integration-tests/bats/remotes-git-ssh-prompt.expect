@@ -1,0 +1,24 @@
+#!/usr/bin/expect
+# Usage: expect remotes-git-ssh-prompt.expect <pattern>
+# Verifies that dolt push exits without showing a PTY prompt matching <pattern>.
+
+set timeout 30
+set env(NO_COLOR) 1
+set pattern [lindex $argv 0]
+
+spawn dolt push origin main
+
+expect {
+    -re $pattern {
+        puts "ERROR: interactive prompt appeared; git subprocesses can reach the controlling terminal"
+        exit 2
+    }
+    timeout {
+        puts "ERROR: dolt push did not exit within the timeout"
+        exit 1
+    }
+    eof {}
+}
+
+lassign [wait] - - - exit_status
+exit $exit_status

@@ -17,6 +17,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -362,8 +363,8 @@ func (a *GitAPIImpl) PushRefWithLease(ctx context.Context, remote string, srcRef
 }
 
 func isRefNotFoundErr(err error) bool {
-	ce, ok := err.(*CmdError)
-	if !ok {
+	var ce *CmdError
+	if !errors.As(err, &ce) {
 		return false
 	}
 	// For `git rev-parse --verify --quiet <ref>^{commit}`, a missing ref typically yields exit 1 and no output.
@@ -378,8 +379,8 @@ func isRefNotFoundErr(err error) bool {
 }
 
 func isRemoteRefNotFoundErr(err error) bool {
-	ce, ok := err.(*CmdError)
-	if !ok {
+	var ce *CmdError
+	if !errors.As(err, &ce) {
 		return false
 	}
 	msg := strings.ToLower(string(ce.Output))
@@ -391,8 +392,8 @@ func isRemoteRefNotFoundErr(err error) bool {
 }
 
 func isPathNotFoundErr(err error) bool {
-	ce, ok := err.(*CmdError)
-	if !ok {
+	var ce *CmdError
+	if !errors.As(err, &ce) {
 		return false
 	}
 	if ce.ExitCode == 128 || ce.ExitCode == 1 {
