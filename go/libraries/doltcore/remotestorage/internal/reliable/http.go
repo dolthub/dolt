@@ -213,7 +213,19 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 				// Reader closed; bail.
 				return backoff.Permanent(err)
 			} else {
-				if cerr := context.Cause(ctx); errors.Is(err, context.Canceled) && cerr != nil {
+				cerr := context.Cause(ctx)
+				if errors.Is(err, context.Canceled) && (cerr == nil || errors.Is(cerr, context.Canceled)) {
+					// The consumer closed the
+					// StreamingResponse (or the caller's
+					// context was canceled) before
+					// io.Copy returned. No cCause was
+					// set, so this isn't a transport
+					// failure — treat it the same as
+					// io.ErrClosedPipe: bail without
+					// recording a health signal.
+					return backoff.Permanent(err)
+				}
+				if errors.Is(err, context.Canceled) && cerr != nil {
 					// HTTP Body reader will return
 					// context.Canceled even if we cancel
 					// with a cause. Convert to the cause

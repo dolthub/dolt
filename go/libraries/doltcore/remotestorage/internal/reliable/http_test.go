@@ -179,12 +179,11 @@ func TestStreamingRangeDownload(t *testing.T) {
 		assert.Equal(t, int64(1), health.successes.Load(), "consumer close after full read should record one success")
 	})
 
-	t.Run("EarlyConsumerCloseDoesNotRecordFailure", func(t *testing.T) {
-		// Sanity check of the existing behavior: if the consumer
-		// closes before the full range is delivered, io.Copy fails
-		// with io.ErrClosedPipe and we take the backoff.Permanent
-		// path — no health signal is recorded (neither success nor
-		// failure).
+	t.Run("EarlyConsumerCloseOnBlockedWriteRecordsNothing", func(t *testing.T) {
+		// When the consumer closes before the full range is
+		// delivered and the producer is blocked on writing to the
+		// pipe, io.Copy fails with io.ErrClosedPipe and we take the
+		// backoff.Permanent path without recording a health signal.
 		const size = 1024
 		payload := make([]byte, size)
 
@@ -215,18 +214,79 @@ func TestStreamingRangeDownload(t *testing.T) {
 			RespHeadersTimeout: time.Hour,
 		})
 
-		// Read just one byte, then close.
 		one := make([]byte, 1)
 		_, err := io.ReadFull(resp.Body, one)
 		require.NoError(t, err)
 		require.NoError(t, resp.Close())
 
-		// Let the producer unwind.
-		start := time.Now()
-		for health.successes.Load() == 0 && health.failures.Load() == 0 && time.Since(start) < 500*time.Millisecond {
-			time.Sleep(time.Millisecond)
-		}
+		waitForHealth(health, 500*time.Millisecond)
 
 		assert.Equal(t, int64(0), health.failures.Load(), "early consumer close must not record a failure")
+		assert.Equal(t, int64(0), health.successes.Load(), "early consumer close must not record a success")
 	})
+
+	t.Run("EarlyConsumerCloseOnBlockedReadRecordsNothing", func(t *testing.T) {
+		// Consumer closes before the full range is delivered while
+		// the producer is blocked on Body.Read (not on a pipe Write).
+		// The cancel() triggered by Close() surfaces as
+		// context.Canceled from io.Copy. Because the per-attempt
+		// context's Cause is also context.Canceled (no cCause was
+		// called, the parent ctx was plain-canceled), this must be
+		// treated the same way as io.ErrClosedPipe: backoff.Permanent
+		// with no health signal.
+		const total = 1024
+		const delivered = 256
+		payload := make([]byte, delivered)
+		for i := range payload {
+			payload[i] = byte(i)
+		}
+
+		fetcher := fetcherFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusPartialContent,
+				Body: &http2LikeBody{
+					buf: bytes.NewReader(payload),
+					ctx: req.Context(),
+				},
+				Request: req,
+			}, nil
+		})
+
+		health := &countingHealth{}
+		resp := StreamingRangeDownload(context.Background(), StreamingRangeRequest{
+			Fetcher: fetcher,
+			Offset:  0,
+			Length:  total,
+			UrlFact: func(error) (string, error) { return "http://example.test/file", nil },
+			Stats:   noopStats{},
+			Health:  health,
+			BackOffFact: func(ctx context.Context) backoff.BackOff {
+				return &backoff.StopBackOff{}
+			},
+			Throughput: MinimumThroughputCheck{
+				CheckInterval: time.Hour,
+				BytesPerCheck: 1,
+				NumIntervals:  1,
+			},
+			RespHeadersTimeout: time.Hour,
+		})
+
+		got := make([]byte, delivered)
+		_, err := io.ReadFull(resp.Body, got)
+		require.NoError(t, err)
+		require.Equal(t, payload, got)
+		require.NoError(t, resp.Close())
+
+		waitForHealth(health, 500*time.Millisecond)
+
+		assert.Equal(t, int64(0), health.failures.Load(), "consumer-close cancel mid-range must not record a failure")
+		assert.Equal(t, int64(0), health.successes.Load(), "consumer-close cancel mid-range must not record a success")
+	})
+}
+
+func waitForHealth(h *countingHealth, d time.Duration) {
+	start := time.Now()
+	for h.successes.Load() == 0 && h.failures.Load() == 0 && time.Since(start) < d {
+		time.Sleep(time.Millisecond)
+	}
 }
