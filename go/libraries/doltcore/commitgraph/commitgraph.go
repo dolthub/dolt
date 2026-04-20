@@ -234,12 +234,12 @@ func (it *topoIter) Reset(ctx context.Context) error {
 // --- dot-dot iterator ------------------------------------------------------
 
 type dotDotIter struct {
-	includedResolver  HashResolver
-	excludedResolver  HashResolver
-	startHashes       []hash.Hash
-	excludedHashes    []hash.Hash
-	matchFn           func(*CommitInfo) (bool, error)
-	q                 *pq
+	includedResolver HashResolver
+	excludedResolver HashResolver
+	startHashes      []hash.Hash
+	excludedHashes   []hash.Hash
+	matchFn          func(*CommitInfo) (bool, error)
+	q                *pq
 }
 
 func newDotDotIter(ctx context.Context, inclR HashResolver, inclH []hash.Hash, exclR HashResolver, exclH []hash.Hash, matchFn func(*CommitInfo) (bool, error)) (*dotDotIter, error) {
