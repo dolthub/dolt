@@ -928,10 +928,16 @@ type StreamChunkLocationsRequest struct {
 	// and replay any unacked requests against a freshly opened stream,
 	// so the server must never need prior in-stream state to interpret
 	// a request.
-	RepoId        *RepoId  `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
-	RepoToken     string   `protobuf:"bytes,2,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
-	RepoPath      string   `protobuf:"bytes,3,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
-	ChunkHashes   [][]byte `protobuf:"bytes,4,rep,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
+	RepoId    *RepoId `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	RepoToken string  `protobuf:"bytes,2,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
+	RepoPath  string  `protobuf:"bytes,3,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
+	// Flat, packed buffer of 20-byte chunk hashes: hash N occupies
+	// bytes [N*20 : (N+1)*20]. Not a |repeated bytes| because every
+	// element is exactly 20 bytes and the 2-byte per-element
+	// tag/length overhead of |repeated bytes| is ~10% of the whole
+	// request in a 512-hash batch. Servers MUST reject requests
+	// where len(chunk_hashes) is not a multiple of 20.
+	ChunkHashes   []byte `protobuf:"bytes,4,opt,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -987,7 +993,7 @@ func (x *StreamChunkLocationsRequest) GetRepoPath() string {
 	return ""
 }
 
-func (x *StreamChunkLocationsRequest) GetChunkHashes() [][]byte {
+func (x *StreamChunkLocationsRequest) GetChunkHashes() []byte {
 	if x != nil {
 		return x.ChunkHashes
 	}
@@ -1008,12 +1014,11 @@ type StreamChunkLocationsResponse struct {
 	// Chunk locations for the hashes in the corresponding request.
 	// Response ordering is 1:1 with requests.
 	Locations []*StreamChunkLocationsResponse_ChunkLocation `protobuf:"bytes,3,rep,name=locations,proto3" json:"locations,omitempty"`
-	// Semantic indices into the corresponding request's chunk_hashes
-	// |repeated bytes| that the server could not find: i.e., a value
-	// of N here means "chunk_hashes[N] (the N'th 20-byte hash) was not
-	// found," not "the 20-byte run starting at byte offset N was not
-	// found." Sent explicitly so the client does not have to diff
-	// requested vs. returned.
+	// Hash indices into the corresponding request's chunk_hashes
+	// buffer that the server could not find: a value of N here means
+	// the N'th 20-byte hash (bytes [N*20 : (N+1)*20]) was not found.
+	// Not a byte offset. Sent explicitly so the client does not have
+	// to diff requested vs. returned.
 	MissingIndexes []uint32 `protobuf:"varint,4,rep,packed,name=missing_indexes,json=missingIndexes,proto3" json:"missing_indexes,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -2486,11 +2491,10 @@ type StreamChunkLocationsResponse_ChunkLocation struct {
 	// message on this same stream, or in the same response message
 	// as this ChunkLocation.
 	TableFileId uint32 `protobuf:"varint,1,opt,name=table_file_id,json=tableFileId,proto3" json:"table_file_id,omitempty"`
-	// Semantic index into the corresponding request's chunk_hashes
-	// |repeated bytes|: a value of N refers to chunk_hashes[N] (the
-	// N'th 20-byte hash element), not to a byte offset within a
-	// flattened hash buffer. Avoids re-transmitting the 20-byte
-	// hash on the wire.
+	// Hash index into the corresponding request's chunk_hashes
+	// buffer: a value of N refers to the N'th 20-byte hash, i.e.
+	// bytes [N*20 : (N+1)*20]. Not a byte offset. Avoids
+	// re-transmitting the 20-byte hash on the wire.
 	RequestIndex uint32 `protobuf:"varint,2,opt,name=request_index,json=requestIndex,proto3" json:"request_index,omitempty"`
 	Offset       uint64 `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
 	Length       uint32 `protobuf:"varint,4,opt,name=length,proto3" json:"length,omitempty"`
@@ -2634,7 +2638,7 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\n" +
 	"repo_token\x18\x02 \x01(\tR\trepoToken\x12\x1b\n" +
 	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x12!\n" +
-	"\fchunk_hashes\x18\x04 \x03(\fR\vchunkHashes\"\xce\x05\n" +
+	"\fchunk_hashes\x18\x04 \x01(\fR\vchunkHashes\"\xce\x05\n" +
 	"\x1cStreamChunkLocationsResponse\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x01 \x01(\tR\trepoToken\x12p\n" +

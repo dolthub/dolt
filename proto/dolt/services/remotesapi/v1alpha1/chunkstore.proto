@@ -155,7 +155,13 @@ message StreamChunkLocationsRequest {
   string repo_token = 2;
   string repo_path = 3;
 
-  repeated bytes chunk_hashes = 4;
+  // Flat, packed buffer of 20-byte chunk hashes: hash N occupies
+  // bytes [N*20 : (N+1)*20]. Not a |repeated bytes| because every
+  // element is exactly 20 bytes and the 2-byte per-element
+  // tag/length overhead of |repeated bytes| is ~10% of the whole
+  // request in a 512-hash batch. Servers MUST reject requests
+  // where len(chunk_hashes) is not a multiple of 20.
+  bytes chunk_hashes = 4;
 }
 
 message StreamChunkLocationsResponse {
@@ -195,11 +201,10 @@ message StreamChunkLocationsResponse {
     // as this ChunkLocation.
     uint32 table_file_id = 1;
 
-    // Semantic index into the corresponding request's chunk_hashes
-    // |repeated bytes|: a value of N refers to chunk_hashes[N] (the
-    // N'th 20-byte hash element), not to a byte offset within a
-    // flattened hash buffer. Avoids re-transmitting the 20-byte
-    // hash on the wire.
+    // Hash index into the corresponding request's chunk_hashes
+    // buffer: a value of N refers to the N'th 20-byte hash, i.e.
+    // bytes [N*20 : (N+1)*20]. Not a byte offset. Avoids
+    // re-transmitting the 20-byte hash on the wire.
     uint32 request_index = 2;
 
     uint64 offset = 3;
@@ -226,12 +231,11 @@ message StreamChunkLocationsResponse {
   // Response ordering is 1:1 with requests.
   repeated ChunkLocation locations = 3;
 
-  // Semantic indices into the corresponding request's chunk_hashes
-  // |repeated bytes| that the server could not find: i.e., a value
-  // of N here means "chunk_hashes[N] (the N'th 20-byte hash) was not
-  // found," not "the 20-byte run starting at byte offset N was not
-  // found." Sent explicitly so the client does not have to diff
-  // requested vs. returned.
+  // Hash indices into the corresponding request's chunk_hashes
+  // buffer that the server could not find: a value of N here means
+  // the N'th 20-byte hash (bytes [N*20 : (N+1)*20]) was not found.
+  // Not a byte offset. Sent explicitly so the client does not have
+  // to diff requested vs. returned.
   repeated uint32 missing_indexes = 4;
 }
 

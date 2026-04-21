@@ -41,6 +41,20 @@ type (
 	chunkLoc     = remotesapi.StreamChunkLocationsResponse_ChunkLocation
 )
 
+// hashAtIndex returns the 20-byte sub-slice of |buf| at hash index
+// |idx| (i.e. buf[idx*20 : (idx+1)*20]), or ok=false if |idx| is
+// out of range for |buf| viewed as a flat 20-byte-per-hash buffer.
+// Used to decode request_index / missing_indexes returned by the
+// server against the request's chunk_hashes buffer.
+func hashAtIndex(buf []byte, idx uint32) ([]byte, bool) {
+	start := int(idx) * hash.ByteLen
+	end := start + hash.ByteLen
+	if end > len(buf) {
+		return nil, false
+	}
+	return buf[start:end], true
+}
+
 // A remotestorage.ChunkFetcher is a pipelined chunk fetcher for fetching a
 // large number of chunks where the downloads may benefit from range
 // coalescing, hedging, automatic retries, pipelining of download location
@@ -100,8 +114,15 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		locsReqCh := make(chan *remotesapi.StreamChunkLocationsRequest)
 		eg.Go(func() error {
 			return fetcherHashSetToReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, func(hashes [][]byte) *remotesapi.StreamChunkLocationsRequest {
+				// StreamChunkLocationsRequest.chunk_hashes is a
+				// flat 20-byte-per-hash buffer, not repeated bytes
+				// (see the proto file for rationale).
+				flat := make([]byte, 0, hash.ByteLen*len(hashes))
+				for _, h := range hashes {
+					flat = append(flat, h...)
+				}
 				id, token := dcs.getRepoId()
-				return &remotesapi.StreamChunkLocationsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: hashes}
+				return &remotesapi.StreamChunkLocationsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: flat}
 			})
 		})
 		eg.Go(func() error {
@@ -408,11 +429,12 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 
 			if missingChunkCh != nil {
 				for _, idx := range resp.MissingIndexes {
-					if int(idx) >= len(req.ChunkHashes) {
+					bs, ok := hashAtIndex(req.ChunkHashes, idx)
+					if !ok {
 						return NewRpcError(errors.New("server returned missing_index out of range"), "StreamChunkLocations", host, req)
 					}
 					var h hash.Hash
-					copy(h[:], req.ChunkHashes[idx])
+					copy(h[:], bs)
 					select {
 					case missingChunkCh <- nbs.CompressedChunk{H: h}:
 					case <-ctx.Done():
@@ -453,7 +475,8 @@ func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locati
 	idOrder := make([]uint32, 0, len(tfByID))
 	rangesByID := make(map[uint32][]*remotesapi.RangeChunk)
 	for _, cl := range locations {
-		if int(cl.RequestIndex) >= len(req.ChunkHashes) {
+		bs, ok := hashAtIndex(req.ChunkHashes, cl.RequestIndex)
+		if !ok {
 			return nil, errors.New("server returned ChunkLocation.request_index out of range")
 		}
 		if _, ok := tfByID[cl.TableFileId]; !ok {
@@ -463,7 +486,7 @@ func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locati
 			idOrder = append(idOrder, cl.TableFileId)
 		}
 		rangesByID[cl.TableFileId] = append(rangesByID[cl.TableFileId], &remotesapi.RangeChunk{
-			Hash:             req.ChunkHashes[cl.RequestIndex],
+			Hash:             bs,
 			Offset:           cl.Offset,
 			Length:           cl.Length,
 			DictionaryOffset: cl.DictionaryOffset,

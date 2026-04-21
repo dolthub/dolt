@@ -393,11 +393,21 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 			}
 		}
 
-		// ParseByteSlices gives us both a HashSet to pass to
+		// req.ChunkHashes is a flat 20-byte-per-hash buffer (validated
+		// above). Walk it to build a HashSet to pass to
 		// GetChunkLocationsWithPaths and the position-in-request
 		// index lookup used for request_index / missing_indexes.
-		hashes, hashToIndex := remotestorage.ParseByteSlices(req.ChunkHashes)
-		numHashes += len(hashes)
+		// hash.New copies each 20-byte sub-slice into a Hash value,
+		// so no heap allocation per element.
+		n := len(req.ChunkHashes) / hash.ByteLen
+		hashes := make(hash.HashSet, n)
+		hashToIndex := make(map[hash.Hash]int, n)
+		for i := 0; i < n; i++ {
+			h := hash.New(req.ChunkHashes[i*hash.ByteLen : (i+1)*hash.ByteLen])
+			hashes[h] = struct{}{}
+			hashToIndex[h] = i
+		}
+		numHashes += n
 
 		// GetChunkLocationsWithPaths deletes found hashes from
 		// |hashes|; the remainder is exactly the set the server
