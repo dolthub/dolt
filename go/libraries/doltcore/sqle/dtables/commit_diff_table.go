@@ -241,7 +241,6 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 	return NewSliceOfPartitionsItr([]sql.Partition{dp}), nil
 }
 
-
 func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (doltdb.RootValue, string, *types.Timestamp, error) {
 	var root doltdb.RootValue
 	var commitTime *types.Timestamp

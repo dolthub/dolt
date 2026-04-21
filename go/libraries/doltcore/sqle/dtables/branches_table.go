@@ -487,4 +487,3 @@ func (bWr branchWriter) StatementComplete(ctx *sql.Context) error {
 func (bWr branchWriter) Close(*sql.Context) error {
 	return nil
 }
-
