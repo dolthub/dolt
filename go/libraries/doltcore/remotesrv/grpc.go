@@ -697,6 +697,9 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 		NbsVersion:             req.ClientRepoFormat.NbsVersion,
 		StorageSize:            size,
 		PushConcurrencyControl: rs.concurrencyControl,
+		Features: []remotesapi.Feature{
+			remotesapi.Feature_FEATURE_STREAM_CHUNK_LOCATIONS,
+		},
 	}, nil
 }
 
