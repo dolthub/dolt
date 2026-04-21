@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -133,6 +134,16 @@ type DoltChunkStore struct {
 	stats       cacheStats
 	logger      chunks.DebugLogger
 	wsValidate  bool
+}
+
+// hasFeature reports whether |f| appears in |md|'s advertised
+// features list. FEATURE_UNSPECIFIED is treated as always absent.
+// |md| may be nil.
+func hasFeature(md *remotesapi.GetRepoMetadataResponse, f remotesapi.Feature) bool {
+	if md == nil || f == remotesapi.Feature_FEATURE_UNSPECIFIED {
+		return false
+	}
+	return slices.Contains(md.Features, f)
 }
 
 func NewDoltChunkStoreFromPath(
