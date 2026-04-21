@@ -93,9 +93,9 @@ func (c *countingHealth) RecordFailure() { c.failures.Add(1) }
 
 type noopStats struct{}
 
-func (noopStats) RecordTimeToFirstByte(retry int, size uint64, d time.Duration)   {}
-func (noopStats) RecordDownloadAttemptStart(retry int, offset, size uint64)       {}
-func (noopStats) RecordDownloadComplete(retry int, size uint64, d time.Duration)  {}
+func (noopStats) RecordTimeToFirstByte(retry int, size uint64, d time.Duration)  {}
+func (noopStats) RecordDownloadAttemptStart(retry int, offset, size uint64)      {}
+func (noopStats) RecordDownloadComplete(retry int, size uint64, d time.Duration) {}
 
 // http2LikeBody simulates an HTTP/2 response body where the transport has
 // delivered all content bytes but has not yet observed the END_STREAM frame.
