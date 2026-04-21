@@ -322,7 +322,7 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 		tb := NewTupleBuilder(td, vs)
 
 		t.Run("inline one of two columns", func(t *testing.T) {
-			// In this test, the strings are sized such that the first is stored out-of-band but the second can be stored inline.
+			// In this test, the strings are sized such that one is stored out-of-band and the other can be stored inline.
 
 			columnSize := defaultTupleLengthTarget / 2
 			mediumByteArray := make([]byte, columnSize)
@@ -350,6 +350,115 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 				require.NoError(t, err)
 				adaptiveEncodingByteArray := adaptiveEncodingBytes.([]byte)
 				require.Equal(t, mediumByteArray, adaptiveEncodingByteArray)
+			}
+		})
+	}
+
+	{
+		// Test that the largest value is moved out-of-band first, regardless of column order.
+		// Column 0 has a small value and column 1 has a large value.
+		// Only one needs to go out-of-band to fit under the target.
+		// The builder should pick column 1 (the larger one) to go out-of-band,
+		// keeping column 0 inline.
+		types := []Type{
+			{Enc: BytesAdaptiveEnc},
+			{Enc: BytesAdaptiveEnc},
+		}
+		vs := &TestValueStore{}
+		td := NewTupleDescriptor(types...)
+		tb := NewTupleBuilder(td, vs)
+
+		t.Run("largest value moved out-of-band first", func(t *testing.T) {
+			// Column 0: small value (1/4 of the target)
+			// Column 1: large value (the full target)
+			// Combined inline size exceeds the target, but only moving column 1
+			// out-of-band is sufficient to fit.
+			smallByteArray := make([]byte, defaultTupleLengthTarget/4)
+			largeByteArray := make([]byte, defaultTupleLengthTarget)
+			err := tb.PutAdaptiveBytesFromInline(ctx, 0, smallByteArray)
+			require.NoError(t, err)
+			err = tb.PutAdaptiveBytesFromInline(ctx, 1, largeByteArray)
+			require.NoError(t, err)
+
+			tup, err := tb.Build(testPool)
+			require.NoError(t, err)
+
+			{
+				// Column 0 (small) should be stored inline
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(ctx, 0, vs, tup)
+				require.NoError(t, err)
+				adaptiveEncodingByteArray := adaptiveEncodingBytes.([]byte)
+				require.Equal(t, smallByteArray, adaptiveEncodingByteArray)
+			}
+
+			{
+				// Column 1 (large) should be stored out-of-band
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(ctx, 1, vs, tup)
+				require.NoError(t, err)
+				adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
+				outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
+				require.NoError(t, err)
+				require.Equal(t, largeByteArray, outBytes)
+			}
+		})
+	}
+
+	{
+		// Test with three columns of varying sizes: the builder should move the
+		// largest values out-of-band first and keep the smallest inline.
+		types := []Type{
+			{Enc: BytesAdaptiveEnc},
+			{Enc: BytesAdaptiveEnc},
+			{Enc: BytesAdaptiveEnc},
+		}
+		vs := &TestValueStore{}
+		td := NewTupleDescriptor(types...)
+		tb := NewTupleBuilder(td, vs)
+
+		t.Run("three columns largest first ordering", func(t *testing.T) {
+			// Column 0: medium value (1/3 of target)
+			// Column 1: small value (1/4 of target)
+			// Column 2: large value (3/4 of target)
+			// Combined they exceed the target. Moving only column 2 (largest) out-of-band
+			// should be enough. Column 0 and 1 should remain inline.
+			smallByteArray := make([]byte, defaultTupleLengthTarget/4)
+			mediumByteArray := make([]byte, defaultTupleLengthTarget/3)
+			largeByteArray := make([]byte, defaultTupleLengthTarget*3/4)
+
+			err := tb.PutAdaptiveBytesFromInline(ctx, 0, mediumByteArray)
+			require.NoError(t, err)
+			err = tb.PutAdaptiveBytesFromInline(ctx, 1, smallByteArray)
+			require.NoError(t, err)
+			err = tb.PutAdaptiveBytesFromInline(ctx, 2, largeByteArray)
+			require.NoError(t, err)
+
+			tup, err := tb.Build(testPool)
+			require.NoError(t, err)
+
+			{
+				// Column 0 (medium) should be inline
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(ctx, 0, vs, tup)
+				require.NoError(t, err)
+				_, ok := adaptiveEncodingBytes.([]byte)
+				require.True(t, ok, "column 0 should be stored inline")
+			}
+
+			{
+				// Column 1 (small) should be inline
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(ctx, 1, vs, tup)
+				require.NoError(t, err)
+				_, ok := adaptiveEncodingBytes.([]byte)
+				require.True(t, ok, "column 1 should be stored inline")
+			}
+
+			{
+				// Column 2 (large) should be out-of-band
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(ctx, 2, vs, tup)
+				require.NoError(t, err)
+				adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
+				outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
+				require.NoError(t, err)
+				require.Equal(t, largeByteArray, outBytes)
 			}
 		})
 	}
