@@ -348,11 +348,13 @@ func RunBigBlobsTest(t *testing.T, h DoltEnginetestHarness) {
 
 func RunTestAdaptiveEncoding(t *testing.T, h DoltEnginetestHarness, columnType AdaptiveEncodingTestColumnType, testPurpose AdaptiveEncodingTestPurpose) {
 	defer h.Close()
-	h.Setup(setup.MydbData, MakeBigAdaptiveEncodingQueriesSetup(columnType))
-	enginetest.RunQueryTests(t, h, MakeBigAdaptiveEncodingQueries(columnType, testPurpose))
-	for _, tt := range MakeBigAdaptiveEncodingWriteQueries(columnType, testPurpose) {
-		enginetest.RunWriteQueryTest(t, h, tt)
-	}
+	t.Run(fmt.Sprintf("%v, %v", columnType, testPurpose), func(t *testing.T) {
+		h.Setup(setup.MydbData, MakeBigAdaptiveEncodingQueriesSetup(columnType))
+		enginetest.RunQueryTests(t, h, MakeBigAdaptiveEncodingQueries(columnType, testPurpose))
+		for _, tt := range MakeBigAdaptiveEncodingWriteQueries(columnType, testPurpose) {
+			enginetest.RunWriteQueryTest(t, h, tt)
+		}
+	})
 }
 
 func RunDropEngineTest(t *testing.T, h DoltEnginetestHarness) {
