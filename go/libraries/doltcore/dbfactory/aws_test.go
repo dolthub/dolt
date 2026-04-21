@@ -640,3 +640,13 @@ aws_secret_access_key = new_secret_access_key
 		}
 	})
 }
+
+// TestS3ClientNoChecksumWarnSpam verifies that awsConfigFromParams sets
+// ResponseChecksumValidation to WhenRequired.
+//
+// See https://github.com/dolthub/dolt/issues/10895
+func TestS3ClientNoChecksumWarnSpam(t *testing.T) {
+	cfg, err := awsConfigFromParams(context.Background(), map[string]interface{}{})
+	require.NoError(t, err)
+	assert.Equal(t, aws.ResponseChecksumValidationWhenRequired, cfg.ResponseChecksumValidation)
+}
