@@ -55,7 +55,6 @@ type DiffTableFunction struct {
 	tableNameExpr    sql.Expression
 	database         sql.Database
 	overriddenSchema schema.Schema
-	ctx              *sql.Context
 	fromDate         *types.Timestamp
 	toDate           *types.Timestamp
 	includeCols      map[string]struct{}
@@ -66,11 +65,10 @@ type DiffTableFunction struct {
 // NewInstance creates a new instance of TableFunction interface
 func (dtf *DiffTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &DiffTableFunction{
-		ctx:      ctx,
 		database: database,
 	}
 
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.WithExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +77,7 @@ func (dtf *DiffTableFunction) NewInstance(ctx *sql.Context, database sql.Databas
 }
 
 func (dtf *DiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(dtf.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(dtf.Schema(ctx))
 	numRows, _, err := dtf.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -116,7 +114,7 @@ func (dtf *DiffTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface
-func (dtf *DiffTableFunction) WithExpressions(expressions ...sql.Expression) (sql.Node, error) {
+func (dtf *DiffTableFunction) WithExpressions(ctx *sql.Context, expressions ...sql.Expression) (sql.Node, error) {
 	newDtf := *dtf
 	// TODO: For now, we will only support literal / fully-resolved arguments to the
 	//       DiffTableFunction to avoid issues where the schema is needed in the analyzer
@@ -179,12 +177,12 @@ func (dtf *DiffTableFunction) WithExpressions(expressions ...sql.Expression) (sq
 		newDtf.tableNameExpr = expressions[2]
 	}
 
-	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := newDtf.evaluateArguments()
+	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := newDtf.evaluateArguments(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	err = newDtf.generateSchema(newDtf.ctx, fromCommitVal, toCommitVal, dotCommitVal, tableName)
+	err = newDtf.generateSchema(ctx, fromCommitVal, toCommitVal, dotCommitVal, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +201,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	// TODO: When we add support for joining on table functions, we'll need to evaluate this against the
 	//       specified row. That row is what has the left_table context in a join query.
 	//       This will expand the test cases we need to cover significantly.
-	fromCommitVal, toCommitVal, dotCommitVal, _, err := dtf.evaluateArguments()
+	fromCommitVal, toCommitVal, dotCommitVal, _, err := dtf.evaluateArguments(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +380,7 @@ func resolveCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headRef ref.DoltRef, cS
 }
 
 // WithChildren implements the sql.Node interface
-func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
+func (dtf *DiffTableFunction) WithChildren(ctx *sql.Context, node ...sql.Node) (sql.Node, error) {
 	if len(node) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -391,9 +389,9 @@ func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (dtf *DiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	_, _, _, tableName, err := dtf.evaluateArguments()
+	_, _, _, tableName, err := dtf.evaluateArguments(ctx)
 	if err != nil {
-		return ExpressionIsDeferred(dtf.tableNameExpr)
+		return ExpressionIsDeferred(ctx, dtf.tableNameExpr)
 	}
 
 	baseDB, _ := doltdb.SplitRevisionDbName(dtf.database.Name())
@@ -408,16 +406,16 @@ func (dtf *DiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privileg
 // the expressions, and doesn't validate the values.
 // TODO: evaluating expression arguments during binding is incompatible
 // with prepared statement support.
-func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, interface{}, string, error) {
+func (dtf *DiffTableFunction) evaluateArguments(ctx *sql.Context) (interface{}, interface{}, interface{}, string, error) {
 	if !dtf.Resolved() {
 		return nil, nil, nil, "", nil
 	}
 
-	if !gmstypes.IsText(dtf.tableNameExpr.Type()) {
+	if !gmstypes.IsText(dtf.tableNameExpr.Type(ctx)) {
 		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.tableNameExpr.String())
 	}
 
-	tableNameVal, err := dtf.tableNameExpr.Eval(dtf.ctx, nil)
+	tableNameVal, err := dtf.tableNameExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, nil, "", err
 	}
@@ -428,11 +426,11 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 	}
 
 	if dtf.dotCommitExpr != nil {
-		if !gmstypes.IsText(dtf.dotCommitExpr.Type()) {
+		if !gmstypes.IsText(dtf.dotCommitExpr.Type(ctx)) {
 			return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.dotCommitExpr.String())
 		}
 
-		dotCommitVal, err := dtf.dotCommitExpr.Eval(dtf.ctx, nil)
+		dotCommitVal, err := dtf.dotCommitExpr.Eval(ctx, nil)
 		if err != nil {
 			return nil, nil, nil, "", err
 		}
@@ -440,19 +438,19 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 		return nil, nil, dotCommitVal, tableName, nil
 	}
 
-	if !gmstypes.IsText(dtf.fromCommitExpr.Type()) {
+	if !gmstypes.IsText(dtf.fromCommitExpr.Type(ctx)) {
 		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.fromCommitExpr.String())
 	}
-	if !gmstypes.IsText(dtf.toCommitExpr.Type()) {
+	if !gmstypes.IsText(dtf.toCommitExpr.Type(ctx)) {
 		return nil, nil, nil, "", sql.ErrInvalidArgumentDetails.New(dtf.Name(), dtf.toCommitExpr.String())
 	}
 
-	fromCommitVal, err := dtf.fromCommitExpr.Eval(dtf.ctx, nil)
+	fromCommitVal, err := dtf.fromCommitExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, nil, "", err
 	}
 
-	toCommitVal, err := dtf.toCommitExpr.Eval(dtf.ctx, nil)
+	toCommitVal, err := dtf.toCommitExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, nil, "", err
 	}
@@ -672,7 +670,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 	//       This allows column projections to work correctly with table functions, but we will need to add a
 	//       unique id (e.g. hash generated from method arguments) when we add support for aliasing and joining
 	//       table functions in order for the analyzer to determine which table function result a column comes from.
-	sqlSchema, err := sqlutil.FromDoltSchema("", "", diffTableSch)
+	sqlSchema, err := sqlutil.FromDoltSchema(ctx, "", "", diffTableSch)
 	if err != nil {
 		return err
 	}
@@ -748,7 +746,7 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 }
 
 // Schema implements the sql.Node interface
-func (dtf *DiffTableFunction) Schema() sql.Schema {
+func (dtf *DiffTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	if !dtf.Resolved() {
 		return nil
 	}

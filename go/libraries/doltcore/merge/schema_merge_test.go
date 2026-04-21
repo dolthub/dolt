@@ -1419,7 +1419,7 @@ func createLargeDocumentForTesting(t *testing.T, ctx *sql.Context, ns tree.NodeS
 	var err error
 
 	for level := 0; level < 8; level++ {
-		docExpression, err = json.NewJSONInsert(docExpression, expression.NewLiteral(fmt.Sprintf("$.level%d", level), sqltypes.Text), docExpression)
+		docExpression, err = json.NewJSONInsert(ctx, docExpression, expression.NewLiteral(fmt.Sprintf("$.level%d", level), sqltypes.Text), docExpression)
 		require.NoError(t, err)
 	}
 	doc, err := docExpression.Eval(ctx, nil)

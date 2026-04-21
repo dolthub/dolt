@@ -40,7 +40,7 @@ var _ sql.FunctionExpression = (*HashOf)(nil)
 
 // NewHashOfFunc creates a constructor for a Hashof function which will properly initialize the name
 func NewHashOfFunc(name string) sql.CreateFunc1Args {
-	return func(e sql.Expression) sql.Expression {
+	return func(ctx *sql.Context, e sql.Expression) sql.Expression {
 		return newHashOf(e, name)
 	}
 }
@@ -146,12 +146,12 @@ func (t *HashOf) Description() string {
 }
 
 // IsNullable implements the Expression interface.
-func (t *HashOf) IsNullable() bool {
-	return t.Child.IsNullable()
+func (t *HashOf) IsNullable(ctx *sql.Context) bool {
+	return t.Child.IsNullable(ctx)
 }
 
 // WithChildren implements the Expression interface.
-func (t *HashOf) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (t *HashOf) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 1 {
 		return nil, sql.ErrInvalidChildrenNumber.New(t, len(children), 1)
 	}
@@ -159,6 +159,6 @@ func (t *HashOf) WithChildren(children ...sql.Expression) (sql.Expression, error
 }
 
 // Type implements the Expression interface.
-func (t *HashOf) Type() sql.Type {
+func (t *HashOf) Type(ctx *sql.Context) sql.Type {
 	return types.Text
 }

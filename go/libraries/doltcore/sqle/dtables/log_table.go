@@ -52,7 +52,7 @@ func NewLogTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, h
 
 // DataLength implements sql.StatisticsTable
 func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema(ctx))
 	numRows, _, err := dt.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -85,7 +85,7 @@ func (dt *LogTable) String() string {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
-func (dt *LogTable) Schema() sql.Schema {
+func (dt *LogTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
 		{Name: "committer", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
@@ -146,7 +146,7 @@ func (dt *LogTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (
 func (dt *LogTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	hashStrs, ok := index.LookupToPointSelectStr(lookup)
 	if !ok {
-		return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+		return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(ctx, lookup.Ranges))
 	}
 	hashes, commits, metas := index.HashesToCommits(ctx, dt.ddb, hashStrs, nil, false)
 	if len(hashes) == 0 {

@@ -27,9 +27,10 @@ import (
 )
 
 // TODO: Many callers only care about field names and types, not the table or db names.
-// Those callers may be passing in "" for these values, or may be passing in incorrect values
-// that are currently unused.
-func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
+//
+//	Those callers may be passing in "" for these values, or may be passing in incorrect values
+//	that are currently unused.
+func FromDoltSchema(ctx context.Context, dbName, tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
 	cols := make(sql.Schema, sch.GetAllCols().Size())
 
 	var i int

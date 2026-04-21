@@ -62,7 +62,7 @@ func doltTestsSchema() sql.Schema {
 var GetDoltTestsSchema = doltTestsSchema
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the dolt_tests system table.
-func (tt *TestsTable) Schema() sql.Schema {
+func (tt *TestsTable) Schema(ctx *sql.Context) sql.Schema {
 	return GetDoltTestsSchema()
 }
 
@@ -208,7 +208,7 @@ func (tw *testsWriter) Delete(ctx *sql.Context, r sql.Row) error {
 // in some way that it may be returned to in the case of an error.
 func (tw *testsWriter) StatementBegin(ctx *sql.Context) {
 	name := getDoltTestsTableName()
-	prevHash, tableWriter, err := createWriteableSystemTable(ctx, name, tw.tt.Schema())
+	prevHash, tableWriter, err := createWriteableSystemTable(ctx, name, tw.tt.Schema(ctx))
 	if err != nil {
 		tw.errDuringStatementBegin = err
 		return

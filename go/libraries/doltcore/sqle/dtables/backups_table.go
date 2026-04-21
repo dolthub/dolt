@@ -46,7 +46,7 @@ func (bt BackupsTable) String() string {
 	return bt.tableName
 }
 
-func (bt BackupsTable) Schema() sql.Schema {
+func (bt BackupsTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "name", Type: types.Text, PrimaryKey: true, Nullable: false},
 		{Name: "url", Type: types.Text, PrimaryKey: false, Nullable: false},

@@ -171,11 +171,15 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 }
 
 // WithProjections implements sql.ProjectedTable
-func (t *WritableIndexedDoltTable) WithProjections(colNames []string) sql.Table {
-	return &WritableIndexedDoltTable{
-		WritableDoltTable: t.WritableDoltTable.WithProjections(colNames).(*WritableDoltTable),
-		idx:               t.idx,
+func (t *WritableIndexedDoltTable) WithProjections(ctx *sql.Context, colNames []string) (sql.Table, error) {
+	wdtProj, err := t.WritableDoltTable.WithProjections(ctx, colNames)
+	if err != nil {
+		return nil, err
 	}
+	return &WritableIndexedDoltTable{
+		WritableDoltTable: wdtProj.(*WritableDoltTable),
+		idx:               t.idx,
+	}, nil
 }
 
 // Projections implements sql.ProjectedTable

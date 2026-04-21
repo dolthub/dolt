@@ -50,7 +50,7 @@ func (rltf *ReflogTableFunction) NewInstance(ctx *sql.Context, database sql.Data
 		database: database,
 	}
 
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.WithExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	return sql.RowsToRowIter(rows...), nil
 }
 
-func (rltf *ReflogTableFunction) Schema() sql.Schema {
+func (rltf *ReflogTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	return reflogTableSchema
 }
 
@@ -208,7 +208,7 @@ func (rltf *ReflogTableFunction) Children() []sql.Node {
 	return nil
 }
 
-func (rltf *ReflogTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (rltf *ReflogTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -223,7 +223,7 @@ func (rltf *ReflogTableFunction) Expressions() []sql.Expression {
 	return rltf.refAndArgExprs
 }
 
-func (rltf *ReflogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
+func (rltf *ReflogTableFunction) WithExpressions(ctx *sql.Context, expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) > 2 {
 		return nil, sql.ErrInvalidArgumentNumber.New(rltf.Name(), "0 to 2", len(expression))
 	}

@@ -29,7 +29,7 @@ type ActiveBranchFunc struct {
 }
 
 // NewActiveBranchFunc creates a new ActiveBranchFunc expression.
-func NewActiveBranchFunc() sql.Expression {
+func NewActiveBranchFunc(ctx *sql.Context) sql.Expression {
 	return &ActiveBranchFunc{}
 }
 
@@ -79,7 +79,7 @@ func (ab *ActiveBranchFunc) String() string {
 }
 
 // IsNullable implements the Expression interface.
-func (ab *ActiveBranchFunc) IsNullable() bool {
+func (ab *ActiveBranchFunc) IsNullable(ctx *sql.Context) bool {
 	return false
 }
 
@@ -88,7 +88,7 @@ func (*ActiveBranchFunc) Resolved() bool {
 	return true
 }
 
-func (ab *ActiveBranchFunc) Type() sql.Type {
+func (ab *ActiveBranchFunc) Type(ctx *sql.Context) sql.Type {
 	return types.Text
 }
 
@@ -98,9 +98,9 @@ func (*ActiveBranchFunc) Children() []sql.Expression {
 }
 
 // WithChildren implements the Expression interface.
-func (ab *ActiveBranchFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (ab *ActiveBranchFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 0 {
 		return nil, sql.ErrInvalidChildrenNumber.New(ab, len(children), 0)
 	}
-	return NewActiveBranchFunc(), nil
+	return NewActiveBranchFunc(ctx), nil
 }

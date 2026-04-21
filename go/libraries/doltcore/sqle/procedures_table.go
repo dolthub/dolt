@@ -59,8 +59,8 @@ func (pt *ProceduresTable) String() string {
 	return ProceduresTableName
 }
 
-func (pt *ProceduresTable) Schema() sql.Schema {
-	return ProceduresTableSqlSchema().Schema
+func (pt *ProceduresTable) Schema(ctx *sql.Context) sql.Schema {
+	return ProceduresTableSqlSchema(ctx).Schema
 }
 
 func (pt *ProceduresTable) Collation() sql.CollationID {
@@ -123,8 +123,8 @@ var _ sql.IndexAddressableTable = (*ProceduresTable)(nil)
 var _ WritableDoltTableWrapper = (*ProceduresTable)(nil)
 
 // The fixed SQL schema for the `dolt_procedures` table.
-func ProceduresTableSqlSchema() sql.PrimaryKeySchema {
-	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.ProceduresTableName, ProceduresTableSchema())
+func ProceduresTableSqlSchema(ctx *sql.Context) sql.PrimaryKeySchema {
+	sqlSchema, err := sqlutil.FromDoltSchema(ctx, "", doltdb.ProceduresTableName, ProceduresTableSchema())
 	if err != nil {
 		panic(err) // should never happen
 	}
@@ -203,8 +203,8 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 // schema version by adding any columns that do not exist.
 func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *WritableDoltTable) (newTable *WritableDoltTable, rerr error) {
 	// Check whether the table needs to be migrated
-	targetSchema := ProceduresTableSqlSchema().Schema
-	if len(oldTable.Schema()) == len(targetSchema) {
+	targetSchema := ProceduresTableSqlSchema(ctx).Schema
+	if len(oldTable.Schema(ctx)) == len(targetSchema) {
 		return oldTable, nil
 	}
 
@@ -214,11 +214,11 @@ func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *Writab
 		return nil, err
 	}
 
-	nameIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableNameCol)
-	createStatementIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableCreateStmtCol)
-	createdAtIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableCreatedAtCol)
-	modifiedAtIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableModifiedAtCol)
-	sqlModeIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableSqlModeCol)
+	nameIdx := oldTable.sqlSchema(ctx).IndexOfColName(doltdb.ProceduresTableNameCol)
+	createStatementIdx := oldTable.sqlSchema(ctx).IndexOfColName(doltdb.ProceduresTableCreateStmtCol)
+	createdAtIdx := oldTable.sqlSchema(ctx).IndexOfColName(doltdb.ProceduresTableCreatedAtCol)
+	modifiedAtIdx := oldTable.sqlSchema(ctx).IndexOfColName(doltdb.ProceduresTableModifiedAtCol)
+	sqlModeIdx := oldTable.sqlSchema(ctx).IndexOfColName(doltdb.ProceduresTableSqlModeCol)
 
 	defer func(iter sql.RowIter, ctx *sql.Context) {
 		err := iter.Close(ctx)
@@ -335,9 +335,9 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database, procedureName string) (
 
 	var lookup sql.IndexLookup
 	if procedureName == "" {
-		lookup, err = sql.NewMySQLIndexBuilder(idx).IsNotNull(ctx, nameExpr).Build(ctx)
+		lookup, err = sql.NewMySQLIndexBuilder(ctx, idx).IsNotNull(ctx, nameExpr).Build(ctx)
 	} else {
-		lookup, err = sql.NewMySQLIndexBuilder(idx).Equals(ctx, nameExpr, gmstypes.Text, procedureName).Build(ctx)
+		lookup, err = sql.NewMySQLIndexBuilder(ctx, idx).Equals(ctx, nameExpr, gmstypes.Text, procedureName).Build(ctx)
 	}
 	if err != nil {
 		return nil, err
@@ -471,7 +471,7 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 		return sql.StoredProcedureDetails{}, false, fmt.Errorf("could not find primary key index on system table `%s`", doltdb.ProceduresTableName)
 	}
 
-	indexLookup, err := sql.NewMySQLIndexBuilder(fragNameIndex).
+	indexLookup, err := sql.NewMySQLIndexBuilder(ctx, fragNameIndex).
 		Equals(ctx, fragNameIndex.Expressions()[0], gmstypes.Text, name).
 		Build(ctx)
 	if err != nil {

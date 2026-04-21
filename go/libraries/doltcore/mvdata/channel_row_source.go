@@ -50,7 +50,7 @@ func (c *ChannelRowSource) String() string {
 }
 
 // Schema implements the sql.Node interface.
-func (c *ChannelRowSource) Schema() sql.Schema {
+func (c *ChannelRowSource) Schema(ctx *sql.Context) sql.Schema {
 	return c.schema
 }
 
@@ -67,7 +67,7 @@ func (c *ChannelRowSource) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, 
 }
 
 // WithChildren implements the sql.Node interface.
-func (c *ChannelRowSource) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (c *ChannelRowSource) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, sql.ErrInvalidChildrenNumber.New(c, len(children), 0)
 	}

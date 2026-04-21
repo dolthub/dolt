@@ -50,7 +50,7 @@ func (bst *UserSpaceSystemTable) String() string {
 	return bst.tableName.Name
 }
 
-func (bst *UserSpaceSystemTable) Schema() sql.Schema {
+func (bst *UserSpaceSystemTable) Schema(ctx *sql.Context) sql.Schema {
 	return bst.schema
 }
 
@@ -169,7 +169,7 @@ func (bstw *backedSystemTableWriter) Delete(ctx *sql.Context, r sql.Row) error {
 // StatementBegin is called before the first operation of a statement. Integrators should mark the state of the data
 // in some way that it may be returned to in the case of an error.
 func (bstw *backedSystemTableWriter) StatementBegin(ctx *sql.Context) {
-	prevHash, tableWriter, err := createWriteableSystemTable(ctx, bstw.bst.tableName, bstw.bst.Schema())
+	prevHash, tableWriter, err := createWriteableSystemTable(ctx, bstw.bst.tableName, bstw.bst.Schema(ctx))
 	if err != nil {
 		bstw.errDuringStatementBegin = err
 		return

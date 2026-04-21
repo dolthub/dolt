@@ -34,16 +34,16 @@ type HasAncestor struct {
 var _ sql.FunctionExpression = (*HasAncestor)(nil)
 
 // NewHasAncestor creates a new HasAncestor expression.
-func NewHasAncestor(head, anc sql.Expression) sql.Expression {
+func NewHasAncestor(ctx *sql.Context, head, anc sql.Expression) sql.Expression {
 	return &HasAncestor{reference: head, ancestor: anc}
 }
 
 // Eval implements the Expression interface.
 func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	if !types.IsText(a.reference.Type()) {
+	if !types.IsText(a.reference.Type(ctx)) {
 		return nil, sql.ErrInvalidArgumentDetails.New(a, a.reference)
 	}
-	if !types.IsText(a.ancestor.Type()) {
+	if !types.IsText(a.ancestor.Type(ctx)) {
 		return nil, sql.ErrInvalidArgumentDetails.New(a, a.ancestor)
 	}
 
@@ -145,19 +145,19 @@ func (a *HasAncestor) Description() string {
 }
 
 // IsNullable implements the Expression interface.
-func (a *HasAncestor) IsNullable() bool {
-	return a.reference.IsNullable() || a.ancestor.IsNullable()
+func (a *HasAncestor) IsNullable(ctx *sql.Context) bool {
+	return a.reference.IsNullable(ctx) || a.ancestor.IsNullable(ctx)
 }
 
 // WithChildren implements the Expression interface.
-func (a *HasAncestor) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (a *HasAncestor) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 2 {
 		return nil, sql.ErrInvalidChildrenNumber.New(a, len(children), 2)
 	}
-	return NewHasAncestor(children[0], children[1]), nil
+	return NewHasAncestor(ctx, children[0], children[1]), nil
 }
 
 // Type implements the Expression interface.
-func (a *HasAncestor) Type() sql.Type {
+func (a *HasAncestor) Type(ctx *sql.Context) sql.Type {
 	return types.Boolean
 }

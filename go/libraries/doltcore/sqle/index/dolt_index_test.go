@@ -1058,7 +1058,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			expectedRows := convertSqlRowToInt64(test.expectedRows)
 
 			exprs := idx.Expressions()
-			sqlIndex := sql.NewMySQLIndexBuilder(idx)
+			sqlIndex := sql.NewMySQLIndexBuilder(ctx, idx)
 			for i := range test.greaterThanOrEqual {
 				sqlIndex = sqlIndex.
 					GreaterOrEqual(ctx, exprs[i], nil, test.greaterThanOrEqual[i]).
@@ -1067,7 +1067,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			indexLookup, err := sqlIndex.Build(ctx)
 			require.NoError(t, err)
 
-			pkSch, err := sqlutil.FromDoltSchema("", "fake_table", idx.Schema())
+			pkSch, err := sqlutil.FromDoltSchema(ctx, "", "fake_table", idx.Schema())
 			require.NoError(t, err)
 
 			dt, ok, err := root.GetTable(ctx, doltdb.TableName{Name: idx.Table()})
@@ -1296,7 +1296,7 @@ func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Ro
 func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
 	ctx = sql.NewEmptyContext()
 	exprs := idx.Expressions()
-	builder := sql.NewMySQLIndexBuilder(idx)
+	builder := sql.NewMySQLIndexBuilder(ctx, idx)
 	for i, key := range keys {
 		switch cmp {
 		case indexComp_Eq:
@@ -1322,7 +1322,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys [
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	pkSch, err := sqlutil.FromDoltSchema("", "fake_table", idx.Schema())
+	pkSch, err := sqlutil.FromDoltSchema(ctx, "", "fake_table", idx.Schema())
 	require.NoError(t, err)
 
 	indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil)

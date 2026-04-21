@@ -72,7 +72,7 @@ func getDoltDocsSchema() sql.Schema {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the dolt_docs system table.
-func (dt *DocsTable) Schema() sql.Schema {
+func (dt *DocsTable) Schema(ctx *sql.Context) sql.Schema {
 	return GetDocsSchema()
 }
 
@@ -235,7 +235,7 @@ func getDoltDocsTableName() doltdb.TableName {
 // in some way that it may be returned to in the case of an error.
 func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 	name := getDoltDocsTableName()
-	prevHash, tableWriter, err := createWriteableSystemTable(ctx, name, iw.it.Schema())
+	prevHash, tableWriter, err := createWriteableSystemTable(ctx, name, iw.it.Schema(ctx))
 	if err != nil {
 		iw.errDuringStatementBegin = err
 	}

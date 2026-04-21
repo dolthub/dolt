@@ -118,7 +118,7 @@ func TestCountAgg(t *testing.T) {
 			node, err = engine.EngineAnalyzer().Analyze(sqlCtx, node, nil, qFlags)
 			require.NoError(t, err)
 
-			j := getAgg(node)
+			j := getAgg(sqlCtx, node)
 			require.NotNil(t, j)
 
 			iter, err := Builder{}.Build(sqlCtx, j, nil)
@@ -128,18 +128,18 @@ func TestCountAgg(t *testing.T) {
 	}
 }
 
-func getAgg(n sql.Node) sql.Node {
+func getAgg(ctx *sql.Context, n sql.Node) sql.Node {
 	var ret sql.Node
-	transform.NodeWithOpaque(n, func(n sql.Node) (sql.Node, transform.TreeIdentity, error) {
+	transform.NodeWithOpaque(ctx, n, func(ctx *sql.Context, n sql.Node) (sql.Node, transform.TreeIdentity, error) {
 		if agg, ok := n.(*plan.GroupBy); ok {
 			ret = agg
 		}
 		return n, transform.SameTree, nil
 	})
 	if ret == nil {
-		transform.NodeExprs(n, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
+		transform.NodeExprs(ctx, n, func(ctx *sql.Context, e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 			if sq, ok := e.(*plan.Subquery); ok {
-				ret = getAgg(sq.Query)
+				ret = getAgg(ctx, sq.Query)
 			}
 			return e, transform.SameTree, nil
 		})
