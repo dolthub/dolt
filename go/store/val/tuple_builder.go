@@ -94,12 +94,6 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple, err error) {
 	return tb.BuildPermissive(pool)
 }
 
-// adaptiveCandidate represents an adaptive encoding column that could be moved out-of-band.
-type adaptiveCandidate struct {
-	index   int   // column index
-	savings int64 // inlineSize - outOfBandSize (positive means out-of-band is smaller)
-}
-
 // BuildPermissive materializes a Tuple from the fields
 // written to the TupleBuilder without validating nullability.
 func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err error) {
@@ -109,6 +103,11 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 	// In the best case, we don't need to convert any of them, so the TupleBuilder initially stores them in the form they're given.
 	// But we track the tuple size if they're all inlined vs the tuple size if they're all out-of-band,
 	// Then use this to determine which values need to be stored out of band.
+
+	type adaptiveCandidate struct {
+		columnIndex int
+		savings     int64 // inlineSize - outOfBandSize
+	}
 	totalSize := tb.inlineSize
 	if totalSize > tb.tupleLengthTarget {
 		// Collect all adaptive columns that would benefit from out-of-band storage,
@@ -124,7 +123,7 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 				inlineSize := adaptiveValue.inlineSize()
 				savings := inlineSize - outOfBandSize
 				if savings > 0 {
-					candidates = append(candidates, adaptiveCandidate{index: i, savings: savings})
+					candidates = append(candidates, adaptiveCandidate{columnIndex: i, savings: savings})
 				}
 			}
 		}
@@ -138,15 +137,15 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 		// Convert to out-of-band in order of largest savings until we're under the target.
 		outOfBandSet := make(map[int]bool)
 		for _, c := range candidates {
-			adaptiveValue := AdaptiveValue(tb.fields[c.index])
+			adaptiveValue := AdaptiveValue(tb.fields[c.columnIndex])
 			if !adaptiveValue.IsOutOfBand() {
 				outOfBandValue, err := adaptiveValue.convertToOutOfBand(ctx, tb.vs, nil)
 				if err != nil {
 					return nil, err
 				}
-				tb.PutRaw(c.index, outOfBandValue)
+				tb.PutRaw(c.columnIndex, outOfBandValue)
 			}
-			outOfBandSet[c.index] = true
+			outOfBandSet[c.columnIndex] = true
 			totalSize -= c.savings
 			if totalSize <= tb.tupleLengthTarget {
 				break

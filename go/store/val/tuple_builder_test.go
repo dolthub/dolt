@@ -321,8 +321,9 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 		td := NewTupleDescriptor(types...)
 		tb := NewTupleBuilder(td, vs)
 
-		t.Run("inline one of two columns", func(t *testing.T) {
-			// In this test, the strings are sized such that one is stored out-of-band and the other can be stored inline.
+		t.Run("inline larger of two columns", func(t *testing.T) {
+			// In this test, only one of two equally sized columns needs to be stored out of band.
+			// Only the first column should be stored out-of-band.
 
 			columnSize := defaultTupleLengthTarget / 2
 			mediumByteArray := make([]byte, columnSize)
@@ -352,21 +353,6 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 				require.Equal(t, mediumByteArray, adaptiveEncodingByteArray)
 			}
 		})
-	}
-
-	{
-		// Test that the largest value is moved out-of-band first, regardless of column order.
-		// Column 0 has a small value and column 1 has a large value.
-		// Only one needs to go out-of-band to fit under the target.
-		// The builder should pick column 1 (the larger one) to go out-of-band,
-		// keeping column 0 inline.
-		types := []Type{
-			{Enc: BytesAdaptiveEnc},
-			{Enc: BytesAdaptiveEnc},
-		}
-		vs := &TestValueStore{}
-		td := NewTupleDescriptor(types...)
-		tb := NewTupleBuilder(td, vs)
 
 		t.Run("largest value moved out-of-band first", func(t *testing.T) {
 			// Column 0: small value (1/4 of the target)
