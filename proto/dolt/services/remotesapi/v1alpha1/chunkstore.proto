@@ -32,6 +32,10 @@ service ChunkStoreService {
   // Get the download locations for a list of chunk hashes. Streaming to
   // support large and incrementally available payloads. Results are generated
   // as requests come in.
+  //
+  // Deprecated: prefer StreamChunkLocations, which deduplicates
+  // table-file metadata across the stream. Kept on the wire
+  // indefinitely so old clients continue to work.
   rpc StreamDownloadLocations(stream GetDownloadLocsRequest) returns (stream GetDownloadLocsResponse);
 
   // Get the download locations for a list of chunk hashes. Streaming

@@ -2971,6 +2971,10 @@ type ChunkStoreServiceClient interface {
 	// Get the download locations for a list of chunk hashes. Streaming to
 	// support large and incrementally available payloads. Results are generated
 	// as requests come in.
+	//
+	// Deprecated: prefer StreamChunkLocations, which deduplicates
+	// table-file metadata across the stream. Kept on the wire
+	// indefinitely so old clients continue to work.
 	StreamDownloadLocations(ctx context.Context, opts ...grpc.CallOption) (ChunkStoreService_StreamDownloadLocationsClient, error)
 	// Get the download locations for a list of chunk hashes. Streaming
 	// variant that deduplicates table-file metadata across the stream.
@@ -3158,6 +3162,10 @@ type ChunkStoreServiceServer interface {
 	// Get the download locations for a list of chunk hashes. Streaming to
 	// support large and incrementally available payloads. Results are generated
 	// as requests come in.
+	//
+	// Deprecated: prefer StreamChunkLocations, which deduplicates
+	// table-file metadata across the stream. Kept on the wire
+	// indefinitely so old clients continue to work.
 	StreamDownloadLocations(ChunkStoreService_StreamDownloadLocationsServer) error
 	// Get the download locations for a list of chunk hashes. Streaming
 	// variant that deduplicates table-file metadata across the stream.
