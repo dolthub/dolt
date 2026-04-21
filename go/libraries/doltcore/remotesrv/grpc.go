@@ -331,6 +331,150 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 	}
 }
 
+func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreService_StreamChunkLocationsServer) error {
+	ologger := getReqLogger(rs.lgr, "StreamChunkLocations")
+	numMessages := 0
+	numHashes := 0
+	numNewTableFiles := 0
+	numLocations := 0
+	numMissing := 0
+	defer func() {
+		ologger.WithFields(logrus.Fields{
+			"num_messages":        numMessages,
+			"num_requested":       numHashes,
+			"num_new_table_files": numNewTableFiles,
+			"num_locations":       numLocations,
+			"num_missing":         numMissing,
+		}).Trace("finished")
+	}()
+	logger := ologger
+
+	md, _ := metadata.FromIncomingContext(stream.Context())
+
+	var repoPath string
+	var cs RemoteSrvStore
+	var prefix string
+
+	// Stream-local table-file-path -> table_file_id map. Scoped to this
+	// handler invocation. Discarded on handler exit; a fresh handler
+	// after a client-side reliable reconnect starts from an empty map
+	// and re-introduces any id it reuses. The client relies on
+	// TableFileRecord overwrite semantics to make that transparent.
+	tfByPath := make(map[string]uint32)
+	var nextTFID uint32
+
+	for {
+		req, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+
+		numMessages++
+
+		if err := ValidateStreamChunkLocationsRequest(req); err != nil {
+			return status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		nextPath := getRepoPath(req)
+		if nextPath != repoPath {
+			repoPath = nextPath
+			logger = ologger.WithField(RepoPathField, repoPath)
+			cs, err = rs.getStore(stream.Context(), logger, repoPath)
+			if err != nil {
+				return err
+			}
+			prefix, err = rs.getRelativeStorePath(cs)
+			if err != nil {
+				logger.WithError(err).Error("error getting file store path for chunk store")
+				return err
+			}
+		}
+
+		// ParseByteSlices gives us both a HashSet to pass to
+		// GetChunkLocationsWithPaths and the position-in-request
+		// index lookup used for request_index / missing_indexes.
+		hashes, hashToIndex := remotestorage.ParseByteSlices(req.ChunkHashes)
+		numHashes += len(hashes)
+
+		// GetChunkLocationsWithPaths deletes found hashes from
+		// |hashes|; the remainder is exactly the set the server
+		// could not find.
+		locations, err := cs.GetChunkLocationsWithPaths(stream.Context(), hashes)
+		if err != nil {
+			logger.WithError(err).Error("error getting chunk locations for hashes")
+			return err
+		}
+
+		var tableFiles []*remotesapi.StreamChunkLocationsResponse_TableFileRecord
+		var chunkLocs []*remotesapi.StreamChunkLocationsResponse_ChunkLocation
+
+		for path, hashToRange := range locations {
+			if len(hashToRange) == 0 {
+				continue
+			}
+
+			id, seen := tfByPath[path]
+			if !seen {
+				id = nextTFID
+				nextTFID++
+				tfByPath[path] = id
+
+				u := rs.getDownloadUrl(md, prefix+"/"+path)
+				preurl := u.String()
+				u, err = rs.sealer.Seal(u)
+				if err != nil {
+					logger.WithError(err).Error("error sealing download url")
+					return err
+				}
+				logger.WithFields(logrus.Fields{
+					"url":           preurl,
+					"sealed_url":    u.String(),
+					"table_file_id": id,
+				}).Trace("introducing table file record")
+
+				tableFiles = append(tableFiles, &remotesapi.StreamChunkLocationsResponse_TableFileRecord{
+					TableFileId: id,
+					Url:         u.String(),
+					FileId:      path,
+				})
+				numNewTableFiles++
+			}
+
+			for h, r := range hashToRange {
+				chunkLocs = append(chunkLocs, &remotesapi.StreamChunkLocationsResponse_ChunkLocation{
+					TableFileId:      id,
+					RequestIndex:     uint32(hashToIndex[h]),
+					Offset:           r.Offset,
+					Length:           r.Length,
+					DictionaryOffset: r.DictOffset,
+					DictionaryLength: r.DictLength,
+				})
+				numLocations++
+			}
+		}
+
+		var missing []uint32
+		if len(hashes) > 0 {
+			missing = make([]uint32, 0, len(hashes))
+			for h := range hashes {
+				missing = append(missing, uint32(hashToIndex[h]))
+			}
+			numMissing += len(missing)
+		}
+
+		if err := stream.Send(&remotesapi.StreamChunkLocationsResponse{
+			TableFiles:     tableFiles,
+			Locations:      chunkLocs,
+			MissingIndexes: missing,
+		}); err != nil {
+			return err
+		}
+	}
+}
+
 func (rs *RemoteChunkStore) getHost(md metadata.MD) string {
 	host := rs.HttpHost
 	if strings.HasPrefix(rs.HttpHost, ":") {

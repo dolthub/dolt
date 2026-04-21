@@ -92,6 +92,13 @@ func ValidateGetDownloadLocsRequest(req *remotesapi.GetDownloadLocsRequest) erro
 	return validateHashes("chunk_hashes", req.ChunkHashes)
 }
 
+func ValidateStreamChunkLocationsRequest(req *remotesapi.StreamChunkLocationsRequest) error {
+	if err := validateRepoRequest(req); err != nil {
+		return err
+	}
+	return validateHashes("chunk_hashes", req.ChunkHashes)
+}
+
 func ValidateGetUploadLocsRequest(req *remotesapi.GetUploadLocsRequest) error {
 	if err := validateRepoRequest(req); err != nil {
 		return err

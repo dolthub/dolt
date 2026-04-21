@@ -183,6 +183,9 @@ func (f refreshClient) GetDownloadLocations(ctx context.Context, in *remotesapi.
 func (f refreshClient) StreamDownloadLocations(ctx context.Context, opts ...grpc.CallOption) (remotesapi.ChunkStoreService_StreamDownloadLocationsClient, error) {
 	return nil, nil
 }
+func (f refreshClient) StreamChunkLocations(ctx context.Context, opts ...grpc.CallOption) (remotesapi.ChunkStoreService_StreamChunkLocationsClient, error) {
+	return nil, nil
+}
 func (f refreshClient) GetUploadLocations(ctx context.Context, in *remotesapi.GetUploadLocsRequest, opts ...grpc.CallOption) (*remotesapi.GetUploadLocsResponse, error) {
 	return nil, nil
 }
