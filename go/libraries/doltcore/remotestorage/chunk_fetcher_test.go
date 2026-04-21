@@ -25,14 +25,14 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func TestFetcherHashSetToGetDlLocsReqsThread(t *testing.T) {
+func TestFetcherHashSetToReqsThread(t *testing.T) {
 	t.Run("ImmediateClose", func(t *testing.T) {
 		reqCh := make(chan hash.HashSet)
 		close(reqCh)
 
 		resCh := make(chan *remotesapi.GetDownloadLocsRequest)
 
-		err := fetcherHashSetToGetDlLocsReqsThread(context.Background(), reqCh, nil, resCh, 32, "", testIdFunc)
+		err := fetcherHashSetToReqsThread(context.Background(), reqCh, nil, resCh, 32, testBuildDlReq)
 		assert.NoError(t, err)
 		_, ok := <-resCh
 		assert.False(t, ok)
@@ -45,7 +45,7 @@ func TestFetcherHashSetToGetDlLocsReqsThread(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		err := fetcherHashSetToGetDlLocsReqsThread(ctx, reqCh, nil, resCh, 32, "", testIdFunc)
+		err := fetcherHashSetToReqsThread(ctx, reqCh, nil, resCh, 32, testBuildDlReq)
 		assert.Error(t, err)
 	})
 
@@ -55,7 +55,7 @@ func TestFetcherHashSetToGetDlLocsReqsThread(t *testing.T) {
 
 		eg, ctx := errgroup.WithContext(context.Background())
 		eg.Go(func() error {
-			return fetcherHashSetToGetDlLocsReqsThread(ctx, reqCh, nil, resCh, 8, "", testIdFunc)
+			return fetcherHashSetToReqsThread(ctx, reqCh, nil, resCh, 8, testBuildDlReq)
 		})
 
 		// First send a batch of 16 hashes.
@@ -116,4 +116,9 @@ func TestFetcherHashSetToGetDlLocsReqsThread(t *testing.T) {
 
 func testIdFunc() (*remotesapi.RepoId, string) {
 	return new(remotesapi.RepoId), ""
+}
+
+func testBuildDlReq(hashes [][]byte) *remotesapi.GetDownloadLocsRequest {
+	id, token := testIdFunc()
+	return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoToken: token, ChunkHashes: hashes}
 }
