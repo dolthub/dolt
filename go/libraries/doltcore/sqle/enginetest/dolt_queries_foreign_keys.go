@@ -26,7 +26,7 @@ import (
 var DoltForeignKeyTests = []queries.ScriptTest{
 	{
 		// See https://github.com/dolthub/dolt/issues/10903
-		Name: "UPDATE on table with BINARY primary key, explicit secondary index, and foreign key does not panic",
+		Name: "UPDATE on table with BINARY primary key, explicit secondary index, and foreign key",
 		SetUpScript: []string{
 			"CREATE TABLE a (a_id INT NOT NULL PRIMARY KEY);",
 			"CREATE TABLE b (b_id BINARY(1) NOT NULL PRIMARY KEY, a_id INT NOT NULL, val INT NOT NULL, KEY a_id (a_id), CONSTRAINT FOREIGN KEY (a_id) REFERENCES a (a_id));",
@@ -46,7 +46,7 @@ var DoltForeignKeyTests = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/10903
-		Name: "UPDATE on table with BINARY or VARBINARY primary key and foreign key does not panic",
+		Name: "UPDATE on table with BINARY or VARBINARY primary key and foreign key",
 		SetUpScript: []string{
 			"CREATE TABLE parent (id INT NOT NULL PRIMARY KEY);",
 			"CREATE TABLE bin_child (id BINARY(16) NOT NULL PRIMARY KEY, parent_id INT, val INT, CONSTRAINT fk_bin FOREIGN KEY (parent_id) REFERENCES parent(id));",
@@ -89,7 +89,7 @@ var DoltForeignKeyTests = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/10903
-		Name: "UPDATE on table with composite BINARY primary key and foreign key does not panic",
+		Name: "UPDATE on table with composite BINARY primary key and foreign key",
 		SetUpScript: []string{
 			"CREATE TABLE parent (id INT NOT NULL PRIMARY KEY);",
 			"CREATE TABLE child (id1 BINARY(8) NOT NULL, id2 BINARY(8) NOT NULL, parent_id INT, val INT, PRIMARY KEY (id1, id2), CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES parent(id));",
@@ -109,7 +109,7 @@ var DoltForeignKeyTests = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/10903
-		Name: "UPDATE on table where the FK column is BINARY does not panic",
+		Name: "UPDATE on table where the FK column is BINARY",
 		SetUpScript: []string{
 			"CREATE TABLE parent (id BINARY(16) NOT NULL PRIMARY KEY);",
 			"CREATE TABLE child (id INT NOT NULL PRIMARY KEY, parent_id BINARY(16), val INT, CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES parent(id));",
