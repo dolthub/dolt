@@ -107,6 +107,67 @@ func (PushConcurrencyControl) EnumDescriptor() ([]byte, []int) {
 	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{0}
 }
 
+// Optional, additive capability flags advertised by the server in
+// GetRepoMetadataResponse.features. Use this for pure "does the
+// server implement X?" booleans. Mode selectors with more than two
+// states (such as the existing PushConcurrencyControl) keep their
+// own typed fields; this list is only for flag-shaped capabilities.
+//
+// Guidelines for growth:
+//   - Add new values at the end; never reuse a removed value's
+//     number. If a feature is retired, reserve its number rather
+//     than re-purposing it.
+//   - FEATURE_UNSPECIFIED = 0 is never sent; presence of the zero
+//     value in a received list should be ignored by the client.
+type Feature int32
+
+const (
+	Feature_FEATURE_UNSPECIFIED Feature = 0
+	// Server implements the StreamChunkLocations RPC. Clients should
+	// prefer it to StreamDownloadLocations when this feature is
+	// present.
+	Feature_FEATURE_STREAM_CHUNK_LOCATIONS Feature = 1
+)
+
+// Enum value maps for Feature.
+var (
+	Feature_name = map[int32]string{
+		0: "FEATURE_UNSPECIFIED",
+		1: "FEATURE_STREAM_CHUNK_LOCATIONS",
+	}
+	Feature_value = map[string]int32{
+		"FEATURE_UNSPECIFIED":            0,
+		"FEATURE_STREAM_CHUNK_LOCATIONS": 1,
+	}
+)
+
+func (x Feature) Enum() *Feature {
+	p := new(Feature)
+	*p = x
+	return p
+}
+
+func (x Feature) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Feature) Descriptor() protoreflect.EnumDescriptor {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[1].Descriptor()
+}
+
+func (Feature) Type() protoreflect.EnumType {
+	return &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[1]
+}
+
+func (x Feature) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Feature.Descriptor instead.
+func (Feature) EnumDescriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{1}
+}
+
 type ManifestAppendixOption int32
 
 const (
@@ -140,11 +201,11 @@ func (x ManifestAppendixOption) String() string {
 }
 
 func (ManifestAppendixOption) Descriptor() protoreflect.EnumDescriptor {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[1].Descriptor()
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[2].Descriptor()
 }
 
 func (ManifestAppendixOption) Type() protoreflect.EnumType {
-	return &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[1]
+	return &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[2]
 }
 
 func (x ManifestAppendixOption) Number() protoreflect.EnumNumber {
@@ -153,7 +214,7 @@ func (x ManifestAppendixOption) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ManifestAppendixOption.Descriptor instead.
 func (ManifestAppendixOption) EnumDescriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{1}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{2}
 }
 
 // RepoId is how repositories are represented on dolthub, for example
@@ -858,6 +919,164 @@ func (x *GetDownloadLocsResponse) GetRepoToken() string {
 	return ""
 }
 
+type StreamChunkLocationsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Every request must populate RepoId/repo_token/repo_path on the
+	// wire. This matches what the current StreamDownloadLocations
+	// client already does and is load-bearing for retry correctness:
+	// the reliable-RPC layer may tear down the underlying gRPC stream
+	// and replay any unacked requests against a freshly opened stream,
+	// so the server must never need prior in-stream state to interpret
+	// a request.
+	RepoId        *RepoId  `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	RepoToken     string   `protobuf:"bytes,2,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
+	RepoPath      string   `protobuf:"bytes,3,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
+	ChunkHashes   [][]byte `protobuf:"bytes,4,rep,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamChunkLocationsRequest) Reset() {
+	*x = StreamChunkLocationsRequest{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunkLocationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunkLocationsRequest) ProtoMessage() {}
+
+func (x *StreamChunkLocationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunkLocationsRequest.ProtoReflect.Descriptor instead.
+func (*StreamChunkLocationsRequest) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *StreamChunkLocationsRequest) GetRepoId() *RepoId {
+	if x != nil {
+		return x.RepoId
+	}
+	return nil
+}
+
+func (x *StreamChunkLocationsRequest) GetRepoToken() string {
+	if x != nil {
+		return x.RepoToken
+	}
+	return ""
+}
+
+func (x *StreamChunkLocationsRequest) GetRepoPath() string {
+	if x != nil {
+		return x.RepoPath
+	}
+	return ""
+}
+
+func (x *StreamChunkLocationsRequest) GetChunkHashes() [][]byte {
+	if x != nil {
+		return x.ChunkHashes
+	}
+	return nil
+}
+
+type StreamChunkLocationsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// If non-empty, advertises a new repo_token that the client should
+	// use on future requests on this service.
+	RepoToken string `protobuf:"bytes,1,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
+	// Zero or more table-file records introduced by this response.
+	// Valid for the remainder of this server-side stream. Clients MUST
+	// integrate these into their table_file_id map (inserting or
+	// overwriting) before resolving any |locations| in this same
+	// response.
+	TableFiles []*StreamChunkLocationsResponse_TableFileRecord `protobuf:"bytes,2,rep,name=table_files,json=tableFiles,proto3" json:"table_files,omitempty"`
+	// Chunk locations for the hashes in the corresponding request.
+	// Response ordering is 1:1 with requests.
+	Locations []*StreamChunkLocationsResponse_ChunkLocation `protobuf:"bytes,3,rep,name=locations,proto3" json:"locations,omitempty"`
+	// Semantic indices into the corresponding request's chunk_hashes
+	// |repeated bytes| that the server could not find: i.e., a value
+	// of N here means "chunk_hashes[N] (the N'th 20-byte hash) was not
+	// found," not "the 20-byte run starting at byte offset N was not
+	// found." Sent explicitly so the client does not have to diff
+	// requested vs. returned.
+	MissingIndexes []uint32 `protobuf:"varint,4,rep,packed,name=missing_indexes,json=missingIndexes,proto3" json:"missing_indexes,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StreamChunkLocationsResponse) Reset() {
+	*x = StreamChunkLocationsResponse{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunkLocationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunkLocationsResponse) ProtoMessage() {}
+
+func (x *StreamChunkLocationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunkLocationsResponse.ProtoReflect.Descriptor instead.
+func (*StreamChunkLocationsResponse) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *StreamChunkLocationsResponse) GetRepoToken() string {
+	if x != nil {
+		return x.RepoToken
+	}
+	return ""
+}
+
+func (x *StreamChunkLocationsResponse) GetTableFiles() []*StreamChunkLocationsResponse_TableFileRecord {
+	if x != nil {
+		return x.TableFiles
+	}
+	return nil
+}
+
+func (x *StreamChunkLocationsResponse) GetLocations() []*StreamChunkLocationsResponse_ChunkLocation {
+	if x != nil {
+		return x.Locations
+	}
+	return nil
+}
+
+func (x *StreamChunkLocationsResponse) GetMissingIndexes() []uint32 {
+	if x != nil {
+		return x.MissingIndexes
+	}
+	return nil
+}
+
 type TableFileDetails struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            []byte                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -872,7 +1091,7 @@ type TableFileDetails struct {
 
 func (x *TableFileDetails) Reset() {
 	*x = TableFileDetails{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[11]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -884,7 +1103,7 @@ func (x *TableFileDetails) String() string {
 func (*TableFileDetails) ProtoMessage() {}
 
 func (x *TableFileDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[11]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -897,7 +1116,7 @@ func (x *TableFileDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TableFileDetails.ProtoReflect.Descriptor instead.
 func (*TableFileDetails) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{11}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *TableFileDetails) GetId() []byte {
@@ -956,7 +1175,7 @@ type GetUploadLocsRequest struct {
 
 func (x *GetUploadLocsRequest) Reset() {
 	*x = GetUploadLocsRequest{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[12]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -968,7 +1187,7 @@ func (x *GetUploadLocsRequest) String() string {
 func (*GetUploadLocsRequest) ProtoMessage() {}
 
 func (x *GetUploadLocsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[12]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -981,7 +1200,7 @@ func (x *GetUploadLocsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUploadLocsRequest.ProtoReflect.Descriptor instead.
 func (*GetUploadLocsRequest) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{12}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetUploadLocsRequest) GetRepoId() *RepoId {
@@ -1030,7 +1249,7 @@ type GetUploadLocsResponse struct {
 
 func (x *GetUploadLocsResponse) Reset() {
 	*x = GetUploadLocsResponse{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[13]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1042,7 +1261,7 @@ func (x *GetUploadLocsResponse) String() string {
 func (*GetUploadLocsResponse) ProtoMessage() {}
 
 func (x *GetUploadLocsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[13]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1055,7 +1274,7 @@ func (x *GetUploadLocsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUploadLocsResponse.ProtoReflect.Descriptor instead.
 func (*GetUploadLocsResponse) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{13}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetUploadLocsResponse) GetLocs() []*UploadLoc {
@@ -1083,7 +1302,7 @@ type RebaseRequest struct {
 
 func (x *RebaseRequest) Reset() {
 	*x = RebaseRequest{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[14]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1095,7 +1314,7 @@ func (x *RebaseRequest) String() string {
 func (*RebaseRequest) ProtoMessage() {}
 
 func (x *RebaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[14]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1108,7 +1327,7 @@ func (x *RebaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebaseRequest.ProtoReflect.Descriptor instead.
 func (*RebaseRequest) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{14}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *RebaseRequest) GetRepoId() *RepoId {
@@ -1141,7 +1360,7 @@ type RebaseResponse struct {
 
 func (x *RebaseResponse) Reset() {
 	*x = RebaseResponse{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[15]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1153,7 +1372,7 @@ func (x *RebaseResponse) String() string {
 func (*RebaseResponse) ProtoMessage() {}
 
 func (x *RebaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[15]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1166,7 +1385,7 @@ func (x *RebaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebaseResponse.ProtoReflect.Descriptor instead.
 func (*RebaseResponse) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{15}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RebaseResponse) GetRepoToken() string {
@@ -1187,7 +1406,7 @@ type RootRequest struct {
 
 func (x *RootRequest) Reset() {
 	*x = RootRequest{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[16]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1199,7 +1418,7 @@ func (x *RootRequest) String() string {
 func (*RootRequest) ProtoMessage() {}
 
 func (x *RootRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[16]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1212,7 +1431,7 @@ func (x *RootRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RootRequest.ProtoReflect.Descriptor instead.
 func (*RootRequest) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{16}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RootRequest) GetRepoId() *RepoId {
@@ -1246,7 +1465,7 @@ type RootResponse struct {
 
 func (x *RootResponse) Reset() {
 	*x = RootResponse{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[17]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1258,7 +1477,7 @@ func (x *RootResponse) String() string {
 func (*RootResponse) ProtoMessage() {}
 
 func (x *RootResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[17]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1271,7 +1490,7 @@ func (x *RootResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RootResponse.ProtoReflect.Descriptor instead.
 func (*RootResponse) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{17}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RootResponse) GetRootHash() []byte {
@@ -1298,7 +1517,7 @@ type ChunkTableInfo struct {
 
 func (x *ChunkTableInfo) Reset() {
 	*x = ChunkTableInfo{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[18]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1310,7 +1529,7 @@ func (x *ChunkTableInfo) String() string {
 func (*ChunkTableInfo) ProtoMessage() {}
 
 func (x *ChunkTableInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[18]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1323,7 +1542,7 @@ func (x *ChunkTableInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChunkTableInfo.ProtoReflect.Descriptor instead.
 func (*ChunkTableInfo) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{18}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ChunkTableInfo) GetHash() []byte {
@@ -1354,7 +1573,7 @@ type CommitRequest struct {
 
 func (x *CommitRequest) Reset() {
 	*x = CommitRequest{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[19]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1366,7 +1585,7 @@ func (x *CommitRequest) String() string {
 func (*CommitRequest) ProtoMessage() {}
 
 func (x *CommitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[19]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1379,7 +1598,7 @@ func (x *CommitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommitRequest.ProtoReflect.Descriptor instead.
 func (*CommitRequest) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{19}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CommitRequest) GetRepoId() *RepoId {
@@ -1433,7 +1652,7 @@ type CommitResponse struct {
 
 func (x *CommitResponse) Reset() {
 	*x = CommitResponse{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[20]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1445,7 +1664,7 @@ func (x *CommitResponse) String() string {
 func (*CommitResponse) ProtoMessage() {}
 
 func (x *CommitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[20]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1458,7 +1677,7 @@ func (x *CommitResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommitResponse.ProtoReflect.Descriptor instead.
 func (*CommitResponse) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{20}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *CommitResponse) GetSuccess() bool {
@@ -1480,7 +1699,7 @@ type GetRepoMetadataRequest struct {
 
 func (x *GetRepoMetadataRequest) Reset() {
 	*x = GetRepoMetadataRequest{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[21]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1492,7 +1711,7 @@ func (x *GetRepoMetadataRequest) String() string {
 func (*GetRepoMetadataRequest) ProtoMessage() {}
 
 func (x *GetRepoMetadataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[21]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1505,7 +1724,7 @@ func (x *GetRepoMetadataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRepoMetadataRequest.ProtoReflect.Descriptor instead.
 func (*GetRepoMetadataRequest) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{21}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetRepoMetadataRequest) GetRepoId() *RepoId {
@@ -1549,13 +1768,17 @@ type GetRepoMetadataResponse struct {
 	StorageSize            uint64                 `protobuf:"varint,3,opt,name=storage_size,json=storageSize,proto3" json:"storage_size,omitempty"`
 	RepoToken              string                 `protobuf:"bytes,4,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
 	PushConcurrencyControl PushConcurrencyControl `protobuf:"varint,5,opt,name=push_concurrency_control,json=pushConcurrencyControl,proto3,enum=dolt.services.remotesapi.v1alpha1.PushConcurrencyControl" json:"push_concurrency_control,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// Optional capability flags advertised by the server. See the
+	// Feature enum above. Order is not significant; duplicates
+	// should be treated the same as a single occurrence.
+	Features      []Feature `protobuf:"varint,6,rep,packed,name=features,proto3,enum=dolt.services.remotesapi.v1alpha1.Feature" json:"features,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetRepoMetadataResponse) Reset() {
 	*x = GetRepoMetadataResponse{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[22]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1567,7 +1790,7 @@ func (x *GetRepoMetadataResponse) String() string {
 func (*GetRepoMetadataResponse) ProtoMessage() {}
 
 func (x *GetRepoMetadataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[22]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1580,7 +1803,7 @@ func (x *GetRepoMetadataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRepoMetadataResponse.ProtoReflect.Descriptor instead.
 func (*GetRepoMetadataResponse) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{22}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetRepoMetadataResponse) GetNbfVersion() string {
@@ -1618,6 +1841,13 @@ func (x *GetRepoMetadataResponse) GetPushConcurrencyControl() PushConcurrencyCon
 	return PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED
 }
 
+func (x *GetRepoMetadataResponse) GetFeatures() []Feature {
+	if x != nil {
+		return x.Features
+	}
+	return nil
+}
+
 type ClientRepoFormat struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NbfVersion    string                 `protobuf:"bytes,1,opt,name=nbf_version,json=nbfVersion,proto3" json:"nbf_version,omitempty"`
@@ -1628,7 +1858,7 @@ type ClientRepoFormat struct {
 
 func (x *ClientRepoFormat) Reset() {
 	*x = ClientRepoFormat{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[23]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1640,7 +1870,7 @@ func (x *ClientRepoFormat) String() string {
 func (*ClientRepoFormat) ProtoMessage() {}
 
 func (x *ClientRepoFormat) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[23]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1653,7 +1883,7 @@ func (x *ClientRepoFormat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientRepoFormat.ProtoReflect.Descriptor instead.
 func (*ClientRepoFormat) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{23}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ClientRepoFormat) GetNbfVersion() string {
@@ -1683,7 +1913,7 @@ type ListTableFilesRequest struct {
 
 func (x *ListTableFilesRequest) Reset() {
 	*x = ListTableFilesRequest{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[24]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1695,7 +1925,7 @@ func (x *ListTableFilesRequest) String() string {
 func (*ListTableFilesRequest) ProtoMessage() {}
 
 func (x *ListTableFilesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[24]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1708,7 +1938,7 @@ func (x *ListTableFilesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTableFilesRequest.ProtoReflect.Descriptor instead.
 func (*ListTableFilesRequest) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{24}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListTableFilesRequest) GetRepoId() *RepoId {
@@ -1754,7 +1984,7 @@ type TableFileInfo struct {
 
 func (x *TableFileInfo) Reset() {
 	*x = TableFileInfo{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[25]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1766,7 +1996,7 @@ func (x *TableFileInfo) String() string {
 func (*TableFileInfo) ProtoMessage() {}
 
 func (x *TableFileInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[25]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1779,7 +2009,7 @@ func (x *TableFileInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TableFileInfo.ProtoReflect.Descriptor instead.
 func (*TableFileInfo) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{25}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *TableFileInfo) GetFileId() string {
@@ -1836,7 +2066,7 @@ type RefreshTableFileUrlRequest struct {
 
 func (x *RefreshTableFileUrlRequest) Reset() {
 	*x = RefreshTableFileUrlRequest{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[26]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1848,7 +2078,7 @@ func (x *RefreshTableFileUrlRequest) String() string {
 func (*RefreshTableFileUrlRequest) ProtoMessage() {}
 
 func (x *RefreshTableFileUrlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[26]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1861,7 +2091,7 @@ func (x *RefreshTableFileUrlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTableFileUrlRequest.ProtoReflect.Descriptor instead.
 func (*RefreshTableFileUrlRequest) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{26}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RefreshTableFileUrlRequest) GetRepoId() *RepoId {
@@ -1903,7 +2133,7 @@ type RefreshTableFileUrlResponse struct {
 
 func (x *RefreshTableFileUrlResponse) Reset() {
 	*x = RefreshTableFileUrlResponse{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[27]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1915,7 +2145,7 @@ func (x *RefreshTableFileUrlResponse) String() string {
 func (*RefreshTableFileUrlResponse) ProtoMessage() {}
 
 func (x *RefreshTableFileUrlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[27]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1928,7 +2158,7 @@ func (x *RefreshTableFileUrlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTableFileUrlResponse.ProtoReflect.Descriptor instead.
 func (*RefreshTableFileUrlResponse) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{27}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RefreshTableFileUrlResponse) GetUrl() string {
@@ -1964,7 +2194,7 @@ type ListTableFilesResponse struct {
 
 func (x *ListTableFilesResponse) Reset() {
 	*x = ListTableFilesResponse{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[28]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1976,7 +2206,7 @@ func (x *ListTableFilesResponse) String() string {
 func (*ListTableFilesResponse) ProtoMessage() {}
 
 func (x *ListTableFilesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[28]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1989,7 +2219,7 @@ func (x *ListTableFilesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTableFilesResponse.ProtoReflect.Descriptor instead.
 func (*ListTableFilesResponse) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{28}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListTableFilesResponse) GetRootHash() []byte {
@@ -2040,7 +2270,7 @@ type AddTableFilesRequest struct {
 
 func (x *AddTableFilesRequest) Reset() {
 	*x = AddTableFilesRequest{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[29]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2052,7 +2282,7 @@ func (x *AddTableFilesRequest) String() string {
 func (*AddTableFilesRequest) ProtoMessage() {}
 
 func (x *AddTableFilesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[29]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2065,7 +2295,7 @@ func (x *AddTableFilesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddTableFilesRequest.ProtoReflect.Descriptor instead.
 func (*AddTableFilesRequest) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{29}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *AddTableFilesRequest) GetRepoId() *RepoId {
@@ -2120,7 +2350,7 @@ type AddTableFilesResponse struct {
 
 func (x *AddTableFilesResponse) Reset() {
 	*x = AddTableFilesResponse{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[30]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2132,7 +2362,7 @@ func (x *AddTableFilesResponse) String() string {
 func (*AddTableFilesResponse) ProtoMessage() {}
 
 func (x *AddTableFilesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[30]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2145,7 +2375,7 @@ func (x *AddTableFilesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddTableFilesResponse.ProtoReflect.Descriptor instead.
 func (*AddTableFilesResponse) Descriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{30}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *AddTableFilesResponse) GetSuccess() bool {
@@ -2160,6 +2390,188 @@ func (x *AddTableFilesResponse) GetRepoToken() string {
 		return x.RepoToken
 	}
 	return ""
+}
+
+// TableFileRecord and ChunkLocation are nested inside the response
+// rather than free-standing at package level. Their invariants
+// (table_file_id is stream-scoped; request_index is scoped to one
+// request's chunk_hashes) only hold in the context of this
+// response.
+type StreamChunkLocationsResponse_TableFileRecord struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Opaque id assigned by the server, scoped to the current
+	// server-side stream. The server MUST emit a TableFileRecord
+	// for any id on its first use within a given server-side
+	// stream, before (or in the same response as) any
+	// ChunkLocation that references the id. Clients MUST overwrite
+	// any prior entry for the same id when a new TableFileRecord
+	// arrives.
+	TableFileId uint32 `protobuf:"varint,1,opt,name=table_file_id,json=tableFileId,proto3" json:"table_file_id,omitempty"`
+	// Signed URL the client should issue byte-range requests
+	// against.
+	Url string `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	// When the client should consider |url| stale and call
+	// RefreshTableFileUrl.
+	RefreshAfter *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=refresh_after,json=refreshAfter,proto3" json:"refresh_after,omitempty"`
+	// The file_id to use when calling RefreshTableFileUrl. All the
+	// other fields of RefreshTableFileUrlRequest (repo_id,
+	// repo_token, repo_path) are already known to the client.
+	FileId        string `protobuf:"bytes,4,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamChunkLocationsResponse_TableFileRecord) Reset() {
+	*x = StreamChunkLocationsResponse_TableFileRecord{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunkLocationsResponse_TableFileRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunkLocationsResponse_TableFileRecord) ProtoMessage() {}
+
+func (x *StreamChunkLocationsResponse_TableFileRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunkLocationsResponse_TableFileRecord.ProtoReflect.Descriptor instead.
+func (*StreamChunkLocationsResponse_TableFileRecord) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{12, 0}
+}
+
+func (x *StreamChunkLocationsResponse_TableFileRecord) GetTableFileId() uint32 {
+	if x != nil {
+		return x.TableFileId
+	}
+	return 0
+}
+
+func (x *StreamChunkLocationsResponse_TableFileRecord) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *StreamChunkLocationsResponse_TableFileRecord) GetRefreshAfter() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RefreshAfter
+	}
+	return nil
+}
+
+func (x *StreamChunkLocationsResponse_TableFileRecord) GetFileId() string {
+	if x != nil {
+		return x.FileId
+	}
+	return ""
+}
+
+type StreamChunkLocationsResponse_ChunkLocation struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Refers to a TableFileRecord.table_file_id introduced in the
+	// current server-side stream -- either in an earlier response
+	// message on this same stream, or in the same response message
+	// as this ChunkLocation.
+	TableFileId uint32 `protobuf:"varint,1,opt,name=table_file_id,json=tableFileId,proto3" json:"table_file_id,omitempty"`
+	// Semantic index into the corresponding request's chunk_hashes
+	// |repeated bytes|: a value of N refers to chunk_hashes[N] (the
+	// N'th 20-byte hash element), not to a byte offset within a
+	// flattened hash buffer. Avoids re-transmitting the 20-byte
+	// hash on the wire.
+	RequestIndex uint32 `protobuf:"varint,2,opt,name=request_index,json=requestIndex,proto3" json:"request_index,omitempty"`
+	Offset       uint64 `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
+	Length       uint32 `protobuf:"varint,4,opt,name=length,proto3" json:"length,omitempty"`
+	// zStd dictionary span within the same table file. Same
+	// semantics as the existing RangeChunk.dictionary_{offset,length}.
+	DictionaryOffset uint64 `protobuf:"varint,5,opt,name=dictionary_offset,json=dictionaryOffset,proto3" json:"dictionary_offset,omitempty"`
+	DictionaryLength uint32 `protobuf:"varint,6,opt,name=dictionary_length,json=dictionaryLength,proto3" json:"dictionary_length,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *StreamChunkLocationsResponse_ChunkLocation) Reset() {
+	*x = StreamChunkLocationsResponse_ChunkLocation{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunkLocationsResponse_ChunkLocation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunkLocationsResponse_ChunkLocation) ProtoMessage() {}
+
+func (x *StreamChunkLocationsResponse_ChunkLocation) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunkLocationsResponse_ChunkLocation.ProtoReflect.Descriptor instead.
+func (*StreamChunkLocationsResponse_ChunkLocation) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{12, 1}
+}
+
+func (x *StreamChunkLocationsResponse_ChunkLocation) GetTableFileId() uint32 {
+	if x != nil {
+		return x.TableFileId
+	}
+	return 0
+}
+
+func (x *StreamChunkLocationsResponse_ChunkLocation) GetRequestIndex() uint32 {
+	if x != nil {
+		return x.RequestIndex
+	}
+	return 0
+}
+
+func (x *StreamChunkLocationsResponse_ChunkLocation) GetOffset() uint64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *StreamChunkLocationsResponse_ChunkLocation) GetLength() uint32 {
+	if x != nil {
+		return x.Length
+	}
+	return 0
+}
+
+func (x *StreamChunkLocationsResponse_ChunkLocation) GetDictionaryOffset() uint64 {
+	if x != nil {
+		return x.DictionaryOffset
+	}
+	return 0
+}
+
+func (x *StreamChunkLocationsResponse_ChunkLocation) GetDictionaryLength() uint32 {
+	if x != nil {
+		return x.DictionaryLength
+	}
+	return 0
 }
 
 var File_dolt_services_remotesapi_v1alpha1_chunkstore_proto protoreflect.FileDescriptor
@@ -2216,7 +2628,32 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x17GetDownloadLocsResponse\x12B\n" +
 	"\x04locs\x18\x01 \x03(\v2..dolt.services.remotesapi.v1alpha1.DownloadLocR\x04locs\x12\x1d\n" +
 	"\n" +
-	"repo_token\x18\x02 \x01(\tR\trepoToken\"\xc6\x01\n" +
+	"repo_token\x18\x02 \x01(\tR\trepoToken\"\xc0\x01\n" +
+	"\x1bStreamChunkLocationsRequest\x12B\n" +
+	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12\x1d\n" +
+	"\n" +
+	"repo_token\x18\x02 \x01(\tR\trepoToken\x12\x1b\n" +
+	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x12!\n" +
+	"\fchunk_hashes\x18\x04 \x03(\fR\vchunkHashes\"\xce\x05\n" +
+	"\x1cStreamChunkLocationsResponse\x12\x1d\n" +
+	"\n" +
+	"repo_token\x18\x01 \x01(\tR\trepoToken\x12p\n" +
+	"\vtable_files\x18\x02 \x03(\v2O.dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecordR\n" +
+	"tableFiles\x12k\n" +
+	"\tlocations\x18\x03 \x03(\v2M.dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocationR\tlocations\x12'\n" +
+	"\x0fmissing_indexes\x18\x04 \x03(\rR\x0emissingIndexes\x1a\xa1\x01\n" +
+	"\x0fTableFileRecord\x12\"\n" +
+	"\rtable_file_id\x18\x01 \x01(\rR\vtableFileId\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12?\n" +
+	"\rrefresh_after\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\frefreshAfter\x12\x17\n" +
+	"\afile_id\x18\x04 \x01(\tR\x06fileId\x1a\xe2\x01\n" +
+	"\rChunkLocation\x12\"\n" +
+	"\rtable_file_id\x18\x01 \x01(\rR\vtableFileId\x12#\n" +
+	"\rrequest_index\x18\x02 \x01(\rR\frequestIndex\x12\x16\n" +
+	"\x06offset\x18\x03 \x01(\x04R\x06offset\x12\x16\n" +
+	"\x06length\x18\x04 \x01(\rR\x06length\x12+\n" +
+	"\x11dictionary_offset\x18\x05 \x01(\x04R\x10dictionaryOffset\x12+\n" +
+	"\x11dictionary_length\x18\x06 \x01(\rR\x10dictionaryLength\"\xc6\x01\n" +
 	"\x10TableFileDetails\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\fR\x02id\x12%\n" +
 	"\x0econtent_length\x18\x02 \x01(\x04R\rcontentLength\x12!\n" +
@@ -2271,7 +2708,7 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x12client_repo_format\x18\x0e \x01(\v23.dolt.services.remotesapi.v1alpha1.ClientRepoFormatR\x10clientRepoFormat\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x02 \x01(\tR\trepoToken\x12\x1b\n" +
-	"\trepo_path\x18\x03 \x01(\tR\brepoPath\"\x92\x02\n" +
+	"\trepo_path\x18\x03 \x01(\tR\brepoPath\"\xda\x02\n" +
 	"\x17GetRepoMetadataResponse\x12\x1f\n" +
 	"\vnbf_version\x18\x01 \x01(\tR\n" +
 	"nbfVersion\x12\x1f\n" +
@@ -2280,7 +2717,8 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\fstorage_size\x18\x03 \x01(\x04R\vstorageSize\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x04 \x01(\tR\trepoToken\x12s\n" +
-	"\x18push_concurrency_control\x18\x05 \x01(\x0e29.dolt.services.remotesapi.v1alpha1.PushConcurrencyControlR\x16pushConcurrencyControl\"T\n" +
+	"\x18push_concurrency_control\x18\x05 \x01(\x0e29.dolt.services.remotesapi.v1alpha1.PushConcurrencyControlR\x16pushConcurrencyControl\x12F\n" +
+	"\bfeatures\x18\x06 \x03(\x0e2*.dolt.services.remotesapi.v1alpha1.FeatureR\bfeatures\"T\n" +
 	"\x10ClientRepoFormat\x12\x1f\n" +
 	"\vnbf_version\x18\x01 \x01(\tR\n" +
 	"nbfVersion\x12\x1f\n" +
@@ -2332,16 +2770,20 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x16PushConcurrencyControl\x12(\n" +
 	"$PUSH_CONCURRENCY_CONTROL_UNSPECIFIED\x10\x00\x12/\n" +
 	"+PUSH_CONCURRENCY_CONTROL_IGNORE_WORKING_SET\x10\x01\x12/\n" +
-	"+PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET\x10\x02*\x89\x01\n" +
+	"+PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET\x10\x02*F\n" +
+	"\aFeature\x12\x17\n" +
+	"\x13FEATURE_UNSPECIFIED\x10\x00\x12\"\n" +
+	"\x1eFEATURE_STREAM_CHUNK_LOCATIONS\x10\x01*\x89\x01\n" +
 	"\x16ManifestAppendixOption\x12(\n" +
 	"$MANIFEST_APPENDIX_OPTION_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cMANIFEST_APPENDIX_OPTION_SET\x10\x01\x12#\n" +
-	"\x1fMANIFEST_APPENDIX_OPTION_APPEND\x10\x022\xb2\v\n" +
+	"\x1fMANIFEST_APPENDIX_OPTION_APPEND\x10\x022\xd0\f\n" +
 	"\x11ChunkStoreService\x12\x88\x01\n" +
 	"\x0fGetRepoMetadata\x129.dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse\x12v\n" +
 	"\tHasChunks\x123.dolt.services.remotesapi.v1alpha1.HasChunksRequest\x1a4.dolt.services.remotesapi.v1alpha1.HasChunksResponse\x12\x8d\x01\n" +
 	"\x14GetDownloadLocations\x129.dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse\x12\x94\x01\n" +
-	"\x17StreamDownloadLocations\x129.dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse(\x010\x01\x12\x87\x01\n" +
+	"\x17StreamDownloadLocations\x129.dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse(\x010\x01\x12\x9b\x01\n" +
+	"\x14StreamChunkLocations\x12>.dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest\x1a?.dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse(\x010\x01\x12\x87\x01\n" +
 	"\x12GetUploadLocations\x127.dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest\x1a8.dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse\x12m\n" +
 	"\x06Rebase\x120.dolt.services.remotesapi.v1alpha1.RebaseRequest\x1a1.dolt.services.remotesapi.v1alpha1.RebaseResponse\x12g\n" +
 	"\x04Root\x12..dolt.services.remotesapi.v1alpha1.RootRequest\x1a/.dolt.services.remotesapi.v1alpha1.RootResponse\x12m\n" +
@@ -2362,103 +2804,115 @@ func file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP() []byt
 	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescData
 }
 
-var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_goTypes = []any{
-	(PushConcurrencyControl)(0),         // 0: dolt.services.remotesapi.v1alpha1.PushConcurrencyControl
-	(ManifestAppendixOption)(0),         // 1: dolt.services.remotesapi.v1alpha1.ManifestAppendixOption
-	(*RepoId)(nil),                      // 2: dolt.services.remotesapi.v1alpha1.RepoId
-	(*HasChunksRequest)(nil),            // 3: dolt.services.remotesapi.v1alpha1.HasChunksRequest
-	(*HasChunksResponse)(nil),           // 4: dolt.services.remotesapi.v1alpha1.HasChunksResponse
-	(*HttpGetChunk)(nil),                // 5: dolt.services.remotesapi.v1alpha1.HttpGetChunk
-	(*RangeChunk)(nil),                  // 6: dolt.services.remotesapi.v1alpha1.RangeChunk
-	(*HttpGetRange)(nil),                // 7: dolt.services.remotesapi.v1alpha1.HttpGetRange
-	(*DownloadLoc)(nil),                 // 8: dolt.services.remotesapi.v1alpha1.DownloadLoc
-	(*HttpPostTableFile)(nil),           // 9: dolt.services.remotesapi.v1alpha1.HttpPostTableFile
-	(*UploadLoc)(nil),                   // 10: dolt.services.remotesapi.v1alpha1.UploadLoc
-	(*GetDownloadLocsRequest)(nil),      // 11: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
-	(*GetDownloadLocsResponse)(nil),     // 12: dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
-	(*TableFileDetails)(nil),            // 13: dolt.services.remotesapi.v1alpha1.TableFileDetails
-	(*GetUploadLocsRequest)(nil),        // 14: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
-	(*GetUploadLocsResponse)(nil),       // 15: dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
-	(*RebaseRequest)(nil),               // 16: dolt.services.remotesapi.v1alpha1.RebaseRequest
-	(*RebaseResponse)(nil),              // 17: dolt.services.remotesapi.v1alpha1.RebaseResponse
-	(*RootRequest)(nil),                 // 18: dolt.services.remotesapi.v1alpha1.RootRequest
-	(*RootResponse)(nil),                // 19: dolt.services.remotesapi.v1alpha1.RootResponse
-	(*ChunkTableInfo)(nil),              // 20: dolt.services.remotesapi.v1alpha1.ChunkTableInfo
-	(*CommitRequest)(nil),               // 21: dolt.services.remotesapi.v1alpha1.CommitRequest
-	(*CommitResponse)(nil),              // 22: dolt.services.remotesapi.v1alpha1.CommitResponse
-	(*GetRepoMetadataRequest)(nil),      // 23: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
-	(*GetRepoMetadataResponse)(nil),     // 24: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
-	(*ClientRepoFormat)(nil),            // 25: dolt.services.remotesapi.v1alpha1.ClientRepoFormat
-	(*ListTableFilesRequest)(nil),       // 26: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
-	(*TableFileInfo)(nil),               // 27: dolt.services.remotesapi.v1alpha1.TableFileInfo
-	(*RefreshTableFileUrlRequest)(nil),  // 28: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
-	(*RefreshTableFileUrlResponse)(nil), // 29: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
-	(*ListTableFilesResponse)(nil),      // 30: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
-	(*AddTableFilesRequest)(nil),        // 31: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
-	(*AddTableFilesResponse)(nil),       // 32: dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
-	(*timestamppb.Timestamp)(nil),       // 33: google.protobuf.Timestamp
+	(PushConcurrencyControl)(0),                          // 0: dolt.services.remotesapi.v1alpha1.PushConcurrencyControl
+	(Feature)(0),                                         // 1: dolt.services.remotesapi.v1alpha1.Feature
+	(ManifestAppendixOption)(0),                          // 2: dolt.services.remotesapi.v1alpha1.ManifestAppendixOption
+	(*RepoId)(nil),                                       // 3: dolt.services.remotesapi.v1alpha1.RepoId
+	(*HasChunksRequest)(nil),                             // 4: dolt.services.remotesapi.v1alpha1.HasChunksRequest
+	(*HasChunksResponse)(nil),                            // 5: dolt.services.remotesapi.v1alpha1.HasChunksResponse
+	(*HttpGetChunk)(nil),                                 // 6: dolt.services.remotesapi.v1alpha1.HttpGetChunk
+	(*RangeChunk)(nil),                                   // 7: dolt.services.remotesapi.v1alpha1.RangeChunk
+	(*HttpGetRange)(nil),                                 // 8: dolt.services.remotesapi.v1alpha1.HttpGetRange
+	(*DownloadLoc)(nil),                                  // 9: dolt.services.remotesapi.v1alpha1.DownloadLoc
+	(*HttpPostTableFile)(nil),                            // 10: dolt.services.remotesapi.v1alpha1.HttpPostTableFile
+	(*UploadLoc)(nil),                                    // 11: dolt.services.remotesapi.v1alpha1.UploadLoc
+	(*GetDownloadLocsRequest)(nil),                       // 12: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
+	(*GetDownloadLocsResponse)(nil),                      // 13: dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
+	(*StreamChunkLocationsRequest)(nil),                  // 14: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest
+	(*StreamChunkLocationsResponse)(nil),                 // 15: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse
+	(*TableFileDetails)(nil),                             // 16: dolt.services.remotesapi.v1alpha1.TableFileDetails
+	(*GetUploadLocsRequest)(nil),                         // 17: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
+	(*GetUploadLocsResponse)(nil),                        // 18: dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
+	(*RebaseRequest)(nil),                                // 19: dolt.services.remotesapi.v1alpha1.RebaseRequest
+	(*RebaseResponse)(nil),                               // 20: dolt.services.remotesapi.v1alpha1.RebaseResponse
+	(*RootRequest)(nil),                                  // 21: dolt.services.remotesapi.v1alpha1.RootRequest
+	(*RootResponse)(nil),                                 // 22: dolt.services.remotesapi.v1alpha1.RootResponse
+	(*ChunkTableInfo)(nil),                               // 23: dolt.services.remotesapi.v1alpha1.ChunkTableInfo
+	(*CommitRequest)(nil),                                // 24: dolt.services.remotesapi.v1alpha1.CommitRequest
+	(*CommitResponse)(nil),                               // 25: dolt.services.remotesapi.v1alpha1.CommitResponse
+	(*GetRepoMetadataRequest)(nil),                       // 26: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
+	(*GetRepoMetadataResponse)(nil),                      // 27: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
+	(*ClientRepoFormat)(nil),                             // 28: dolt.services.remotesapi.v1alpha1.ClientRepoFormat
+	(*ListTableFilesRequest)(nil),                        // 29: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
+	(*TableFileInfo)(nil),                                // 30: dolt.services.remotesapi.v1alpha1.TableFileInfo
+	(*RefreshTableFileUrlRequest)(nil),                   // 31: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
+	(*RefreshTableFileUrlResponse)(nil),                  // 32: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
+	(*ListTableFilesResponse)(nil),                       // 33: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
+	(*AddTableFilesRequest)(nil),                         // 34: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
+	(*AddTableFilesResponse)(nil),                        // 35: dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
+	(*StreamChunkLocationsResponse_TableFileRecord)(nil), // 36: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
+	(*StreamChunkLocationsResponse_ChunkLocation)(nil),   // 37: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
+	(*timestamppb.Timestamp)(nil),                        // 38: google.protobuf.Timestamp
 }
 var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_depIdxs = []int32{
-	2,  // 0: dolt.services.remotesapi.v1alpha1.HasChunksRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	6,  // 1: dolt.services.remotesapi.v1alpha1.HttpGetRange.ranges:type_name -> dolt.services.remotesapi.v1alpha1.RangeChunk
-	5,  // 2: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetChunk
-	7,  // 3: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get_range:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetRange
-	33, // 4: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_after:type_name -> google.protobuf.Timestamp
-	28, // 5: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
-	9,  // 6: dolt.services.remotesapi.v1alpha1.UploadLoc.http_post:type_name -> dolt.services.remotesapi.v1alpha1.HttpPostTableFile
-	2,  // 7: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	8,  // 8: dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.DownloadLoc
-	2,  // 9: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	13, // 10: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.table_file_details:type_name -> dolt.services.remotesapi.v1alpha1.TableFileDetails
-	10, // 11: dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.UploadLoc
-	2,  // 12: dolt.services.remotesapi.v1alpha1.RebaseRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	2,  // 13: dolt.services.remotesapi.v1alpha1.RootRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	2,  // 14: dolt.services.remotesapi.v1alpha1.CommitRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	20, // 15: dolt.services.remotesapi.v1alpha1.CommitRequest.chunk_table_info:type_name -> dolt.services.remotesapi.v1alpha1.ChunkTableInfo
-	25, // 16: dolt.services.remotesapi.v1alpha1.CommitRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
-	2,  // 17: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	25, // 18: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
-	0,  // 19: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse.push_concurrency_control:type_name -> dolt.services.remotesapi.v1alpha1.PushConcurrencyControl
-	2,  // 20: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	33, // 21: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_after:type_name -> google.protobuf.Timestamp
-	28, // 22: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
-	2,  // 23: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	33, // 24: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse.refresh_after:type_name -> google.protobuf.Timestamp
-	27, // 25: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
-	27, // 26: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.appendix_table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
-	2,  // 27: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	25, // 28: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
-	20, // 29: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.chunk_table_info:type_name -> dolt.services.remotesapi.v1alpha1.ChunkTableInfo
-	1,  // 30: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.appendix_option:type_name -> dolt.services.remotesapi.v1alpha1.ManifestAppendixOption
-	23, // 31: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:input_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
-	3,  // 32: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:input_type -> dolt.services.remotesapi.v1alpha1.HasChunksRequest
-	11, // 33: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
-	11, // 34: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
-	14, // 35: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
-	16, // 36: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:input_type -> dolt.services.remotesapi.v1alpha1.RebaseRequest
-	18, // 37: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:input_type -> dolt.services.remotesapi.v1alpha1.RootRequest
-	21, // 38: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:input_type -> dolt.services.remotesapi.v1alpha1.CommitRequest
-	26, // 39: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
-	28, // 40: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:input_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
-	31, // 41: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
-	24, // 42: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:output_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
-	4,  // 43: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:output_type -> dolt.services.remotesapi.v1alpha1.HasChunksResponse
-	12, // 44: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
-	12, // 45: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
-	15, // 46: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
-	17, // 47: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:output_type -> dolt.services.remotesapi.v1alpha1.RebaseResponse
-	19, // 48: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:output_type -> dolt.services.remotesapi.v1alpha1.RootResponse
-	22, // 49: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:output_type -> dolt.services.remotesapi.v1alpha1.CommitResponse
-	30, // 50: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
-	29, // 51: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:output_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
-	32, // 52: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
-	42, // [42:53] is the sub-list for method output_type
-	31, // [31:42] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	3,  // 0: dolt.services.remotesapi.v1alpha1.HasChunksRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	7,  // 1: dolt.services.remotesapi.v1alpha1.HttpGetRange.ranges:type_name -> dolt.services.remotesapi.v1alpha1.RangeChunk
+	6,  // 2: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetChunk
+	8,  // 3: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get_range:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetRange
+	38, // 4: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_after:type_name -> google.protobuf.Timestamp
+	31, // 5: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
+	10, // 6: dolt.services.remotesapi.v1alpha1.UploadLoc.http_post:type_name -> dolt.services.remotesapi.v1alpha1.HttpPostTableFile
+	3,  // 7: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	9,  // 8: dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.DownloadLoc
+	3,  // 9: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	36, // 10: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.table_files:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
+	37, // 11: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.locations:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
+	3,  // 12: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	16, // 13: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.table_file_details:type_name -> dolt.services.remotesapi.v1alpha1.TableFileDetails
+	11, // 14: dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.UploadLoc
+	3,  // 15: dolt.services.remotesapi.v1alpha1.RebaseRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	3,  // 16: dolt.services.remotesapi.v1alpha1.RootRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	3,  // 17: dolt.services.remotesapi.v1alpha1.CommitRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	23, // 18: dolt.services.remotesapi.v1alpha1.CommitRequest.chunk_table_info:type_name -> dolt.services.remotesapi.v1alpha1.ChunkTableInfo
+	28, // 19: dolt.services.remotesapi.v1alpha1.CommitRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
+	3,  // 20: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	28, // 21: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
+	0,  // 22: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse.push_concurrency_control:type_name -> dolt.services.remotesapi.v1alpha1.PushConcurrencyControl
+	1,  // 23: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse.features:type_name -> dolt.services.remotesapi.v1alpha1.Feature
+	3,  // 24: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	38, // 25: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_after:type_name -> google.protobuf.Timestamp
+	31, // 26: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
+	3,  // 27: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	38, // 28: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse.refresh_after:type_name -> google.protobuf.Timestamp
+	30, // 29: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
+	30, // 30: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.appendix_table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
+	3,  // 31: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	28, // 32: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
+	23, // 33: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.chunk_table_info:type_name -> dolt.services.remotesapi.v1alpha1.ChunkTableInfo
+	2,  // 34: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.appendix_option:type_name -> dolt.services.remotesapi.v1alpha1.ManifestAppendixOption
+	38, // 35: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord.refresh_after:type_name -> google.protobuf.Timestamp
+	26, // 36: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:input_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
+	4,  // 37: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:input_type -> dolt.services.remotesapi.v1alpha1.HasChunksRequest
+	12, // 38: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
+	12, // 39: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
+	14, // 40: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:input_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest
+	17, // 41: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
+	19, // 42: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:input_type -> dolt.services.remotesapi.v1alpha1.RebaseRequest
+	21, // 43: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:input_type -> dolt.services.remotesapi.v1alpha1.RootRequest
+	24, // 44: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:input_type -> dolt.services.remotesapi.v1alpha1.CommitRequest
+	29, // 45: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
+	31, // 46: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:input_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
+	34, // 47: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
+	27, // 48: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:output_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
+	5,  // 49: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:output_type -> dolt.services.remotesapi.v1alpha1.HasChunksResponse
+	13, // 50: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
+	13, // 51: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
+	15, // 52: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:output_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse
+	18, // 53: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
+	20, // 54: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:output_type -> dolt.services.remotesapi.v1alpha1.RebaseResponse
+	22, // 55: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:output_type -> dolt.services.remotesapi.v1alpha1.RootResponse
+	25, // 56: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:output_type -> dolt.services.remotesapi.v1alpha1.CommitResponse
+	33, // 57: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
+	32, // 58: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:output_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
+	35, // 59: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
+	48, // [48:60] is the sub-list for method output_type
+	36, // [36:48] is the sub-list for method input_type
+	36, // [36:36] is the sub-list for extension type_name
+	36, // [36:36] is the sub-list for extension extendee
+	0,  // [0:36] is the sub-list for field type_name
 }
 
 func init() { file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_init() }
@@ -2478,8 +2932,8 @@ func file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc), len(file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   31,
+			NumEnums:      3,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
@@ -2514,6 +2968,11 @@ type ChunkStoreServiceClient interface {
 	// support large and incrementally available payloads. Results are generated
 	// as requests come in.
 	StreamDownloadLocations(ctx context.Context, opts ...grpc.CallOption) (ChunkStoreService_StreamDownloadLocationsClient, error)
+	// Get the download locations for a list of chunk hashes. Streaming
+	// variant that deduplicates table-file metadata across the stream.
+	// Preferred over StreamDownloadLocations when the server advertises
+	// FEATURE_STREAM_CHUNK_LOCATIONS in GetRepoMetadataResponse.features.
+	StreamChunkLocations(ctx context.Context, opts ...grpc.CallOption) (ChunkStoreService_StreamChunkLocationsClient, error)
 	// Get upload locations for a list of table file hashes.
 	// NOTE: We upload full table files but download individual chunks.
 	GetUploadLocations(ctx context.Context, in *GetUploadLocsRequest, opts ...grpc.CallOption) (*GetUploadLocsResponse, error)
@@ -2585,6 +3044,37 @@ func (x *chunkStoreServiceStreamDownloadLocationsClient) Send(m *GetDownloadLocs
 
 func (x *chunkStoreServiceStreamDownloadLocationsClient) Recv() (*GetDownloadLocsResponse, error) {
 	m := new(GetDownloadLocsResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *chunkStoreServiceClient) StreamChunkLocations(ctx context.Context, opts ...grpc.CallOption) (ChunkStoreService_StreamChunkLocationsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_ChunkStoreService_serviceDesc.Streams[1], "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/StreamChunkLocations", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &chunkStoreServiceStreamChunkLocationsClient{stream}
+	return x, nil
+}
+
+type ChunkStoreService_StreamChunkLocationsClient interface {
+	Send(*StreamChunkLocationsRequest) error
+	Recv() (*StreamChunkLocationsResponse, error)
+	grpc.ClientStream
+}
+
+type chunkStoreServiceStreamChunkLocationsClient struct {
+	grpc.ClientStream
+}
+
+func (x *chunkStoreServiceStreamChunkLocationsClient) Send(m *StreamChunkLocationsRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *chunkStoreServiceStreamChunkLocationsClient) Recv() (*StreamChunkLocationsResponse, error) {
+	m := new(StreamChunkLocationsResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -2665,6 +3155,11 @@ type ChunkStoreServiceServer interface {
 	// support large and incrementally available payloads. Results are generated
 	// as requests come in.
 	StreamDownloadLocations(ChunkStoreService_StreamDownloadLocationsServer) error
+	// Get the download locations for a list of chunk hashes. Streaming
+	// variant that deduplicates table-file metadata across the stream.
+	// Preferred over StreamDownloadLocations when the server advertises
+	// FEATURE_STREAM_CHUNK_LOCATIONS in GetRepoMetadataResponse.features.
+	StreamChunkLocations(ChunkStoreService_StreamChunkLocationsServer) error
 	// Get upload locations for a list of table file hashes.
 	// NOTE: We upload full table files but download individual chunks.
 	GetUploadLocations(context.Context, *GetUploadLocsRequest) (*GetUploadLocsResponse, error)
@@ -2691,6 +3186,9 @@ func (*UnimplementedChunkStoreServiceServer) GetDownloadLocations(context.Contex
 }
 func (*UnimplementedChunkStoreServiceServer) StreamDownloadLocations(ChunkStoreService_StreamDownloadLocationsServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamDownloadLocations not implemented")
+}
+func (*UnimplementedChunkStoreServiceServer) StreamChunkLocations(ChunkStoreService_StreamChunkLocationsServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamChunkLocations not implemented")
 }
 func (*UnimplementedChunkStoreServiceServer) GetUploadLocations(context.Context, *GetUploadLocsRequest) (*GetUploadLocsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUploadLocations not implemented")
@@ -2792,6 +3290,32 @@ func (x *chunkStoreServiceStreamDownloadLocationsServer) Send(m *GetDownloadLocs
 
 func (x *chunkStoreServiceStreamDownloadLocationsServer) Recv() (*GetDownloadLocsRequest, error) {
 	m := new(GetDownloadLocsRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _ChunkStoreService_StreamChunkLocations_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ChunkStoreServiceServer).StreamChunkLocations(&chunkStoreServiceStreamChunkLocationsServer{stream})
+}
+
+type ChunkStoreService_StreamChunkLocationsServer interface {
+	Send(*StreamChunkLocationsResponse) error
+	Recv() (*StreamChunkLocationsRequest, error)
+	grpc.ServerStream
+}
+
+type chunkStoreServiceStreamChunkLocationsServer struct {
+	grpc.ServerStream
+}
+
+func (x *chunkStoreServiceStreamChunkLocationsServer) Send(m *StreamChunkLocationsResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *chunkStoreServiceStreamChunkLocationsServer) Recv() (*StreamChunkLocationsRequest, error) {
+	m := new(StreamChunkLocationsRequest)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -2973,6 +3497,12 @@ var _ChunkStoreService_serviceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamDownloadLocations",
 			Handler:       _ChunkStoreService_StreamDownloadLocations_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "StreamChunkLocations",
+			Handler:       _ChunkStoreService_StreamChunkLocations_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
