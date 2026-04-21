@@ -49,6 +49,7 @@ var CLONE_ADMIN_RPC_METHODS = map[string]bool{
 	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/RefreshTableFileUrl":     true,
 	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/Root":                    true,
 	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/StreamDownloadLocations": true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/StreamChunkLocations":    true,
 }
 
 // AccessControl is an interface that provides authentication and authorization for the gRPC server.
