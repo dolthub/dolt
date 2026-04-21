@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -118,7 +117,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	urlStr := earl.FileUrlFromPath(filepath.ToSlash(absPath), os.PathSeparator)
-	u, err := url.Parse(urlStr)
+	u, err := earl.Parse(urlStr)
 	if err != nil {
 		panic(err)
 	}
