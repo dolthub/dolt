@@ -17,8 +17,10 @@ package remotesrv
 import (
 	"context"
 	"crypto/tls"
+	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
@@ -30,6 +32,16 @@ import (
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
+
+// disabledFeaturesEnvVar is an undocumented internal test hook. If
+// set, its value is parsed as a comma-separated list of
+// remotesapi.Feature enum names; each resolved feature is appended to
+// ServerArgs.DisabledFeatures before the server starts. Used by
+// integration tests to force clients down legacy-RPC fallback paths
+// against a server that actually supports the new RPC. Unknown names
+// cause NewServer to log.Fatalln — loud failure on typos is the right
+// default for a test hook.
+const disabledFeaturesEnvVar = "DOLT_REMOTESAPI_DISABLED_FEATURES"
 
 // MaxGRPCMessageSize is the maximum gRPC message size used for chunk store
 // operations. This applies to both send and receive directions.
@@ -69,6 +81,15 @@ type ServerArgs struct {
 
 	ConcurrencyControl remotesapi.PushConcurrencyControl
 
+	// Feature flags this server implements but will not advertise in
+	// GetRepoMetadataResponse.features. Internal test hook — used by
+	// integration tests to force clients down the older-RPC fallback
+	// against a server that actually supports the new RPC. Go-level
+	// tests set this directly; process-level tests set it indirectly
+	// via the DOLT_REMOTESAPI_DISABLED_FEATURES env var, which
+	// NewServer appends to this field at startup.
+	DisabledFeatures []remotesapi.Feature
+
 	HttpInterceptor func(http.Handler) http.Handler
 
 	// If supplied, the listener(s) returned from Listeners() will be TLS
@@ -78,6 +99,20 @@ type ServerArgs struct {
 }
 
 func NewServer(args ServerArgs) (*Server, error) {
+	if v := os.Getenv(disabledFeaturesEnvVar); v != "" {
+		for _, name := range strings.Split(v, ",") {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			id, ok := remotesapi.Feature_value[name]
+			if !ok {
+				log.Fatalln(disabledFeaturesEnvVar + ": unknown feature name: " + name)
+			}
+			args.DisabledFeatures = append(args.DisabledFeatures, remotesapi.Feature(id))
+		}
+	}
+
 	if args.Logger == nil {
 		args.Logger = logrus.NewEntry(logrus.StandardLogger())
 	}
@@ -99,7 +134,7 @@ func NewServer(args ServerArgs) (*Server, error) {
 	s.wg.Add(2)
 	s.grpcListenAddr = args.GrpcListenAddr
 	s.grpcSrv = grpc.NewServer(append([]grpc.ServerOption{grpc.MaxRecvMsgSize(MaxGRPCMessageSize)}, args.Options...)...)
-	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, scheme, args.ConcurrencyControl, sealer)
+	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, scheme, args.ConcurrencyControl, sealer, args.DisabledFeatures)
 
 	if args.ReadOnly {
 		chnkSt = ReadOnlyChunkStore{chnkSt}

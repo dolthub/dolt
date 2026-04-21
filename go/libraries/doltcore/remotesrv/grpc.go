@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -55,10 +56,18 @@ type RemoteChunkStore struct {
 	fs      filesys.Filesys
 	lgr     *logrus.Entry
 	sealer  Sealer
+
+	// Feature flags this server implements but will not advertise in
+	// GetRepoMetadataResponse.features. The RPCs themselves stay
+	// enabled — this only suppresses capability advertisement, so
+	// older-client fallback paths can be exercised in tests against
+	// a fully-capable server. See the plan's step 7 for rationale.
+	disabledFeatures []remotesapi.Feature
+
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
-func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys, scheme string, concurrencyControl remotesapi.PushConcurrencyControl, sealer Sealer) *RemoteChunkStore {
+func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys, scheme string, concurrencyControl remotesapi.PushConcurrencyControl, sealer Sealer, disabledFeatures []remotesapi.Feature) *RemoteChunkStore {
 	if concurrencyControl == remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED {
 		concurrencyControl = remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_IGNORE_WORKING_SET
 	}
@@ -72,7 +81,8 @@ func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCac
 		lgr: lgr.WithFields(logrus.Fields{
 			"service": "dolt.services.remotesapi.v1alpha1.ChunkStoreServiceServer",
 		}),
-		sealer: sealer,
+		sealer:           sealer,
+		disabledFeatures: disabledFeatures,
 	}
 }
 
@@ -707,10 +717,29 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 		NbsVersion:             req.ClientRepoFormat.NbsVersion,
 		StorageSize:            size,
 		PushConcurrencyControl: rs.concurrencyControl,
-		Features: []remotesapi.Feature{
-			remotesapi.Feature_FEATURE_STREAM_CHUNK_LOCATIONS,
-		},
+		Features:               rs.advertisedFeatures(),
 	}, nil
+}
+
+// supportedFeatures is the canonical list of Feature flags this build
+// of remotesrv implements. Advertised set is this list minus
+// rs.disabledFeatures. Append new features here when they land; do not
+// hand-roll per-feature booleans.
+var supportedFeatures = []remotesapi.Feature{
+	remotesapi.Feature_FEATURE_STREAM_CHUNK_LOCATIONS,
+}
+
+func (rs *RemoteChunkStore) advertisedFeatures() []remotesapi.Feature {
+	if len(rs.disabledFeatures) == 0 {
+		return supportedFeatures
+	}
+	out := make([]remotesapi.Feature, 0, len(supportedFeatures))
+	for _, f := range supportedFeatures {
+		if !slices.Contains(rs.disabledFeatures, f) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.ListTableFilesRequest) (*remotesapi.ListTableFilesResponse, error) {
