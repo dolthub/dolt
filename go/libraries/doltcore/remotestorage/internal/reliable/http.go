@@ -35,10 +35,15 @@ type UrlFactoryFunc func(error) (string, error)
 type StreamingResponse struct {
 	Body   io.Reader
 	cancel func()
+	done   <-chan struct{}
 }
 
+// Close cancels the outstanding download (if any) and blocks until the
+// producer goroutine has fully exited. After Close returns, no further
+// Health or Stats callbacks will fire for this response.
 func (r StreamingResponse) Close() error {
 	r.cancel()
+	<-r.done
 	return nil
 }
 
@@ -111,8 +116,14 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 	// This is the overall context for the operation, encompassing all of its retries. When StreamingResponse is closed, this is canceled.
 	ctx, cancel := context.WithCancel(ctx)
 
+	// |done| is closed when the producer goroutine below has fully exited.
+	// |StreamingResponse.Close| blocks on this to ensure no further Health
+	// or Stats callbacks will fire after Close returns.
+	done := make(chan struct{})
+
 	// This naked go routine makes retried HTTP requests for the byte range, writing the HTTP response bodies to |w|.
 	go func() {
+		defer close(done)
 		origOffset := req.Offset
 		// |offset| starts at |req.Offset| but may be updated if we
 		// make retries and have already delivered some bytes.
@@ -253,6 +264,7 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			r.Close()
 			cancel()
 		},
+		done: done,
 	}
 }
 

@@ -168,13 +168,6 @@ func TestStreamingRangeDownload(t *testing.T) {
 
 		require.NoError(t, resp.Close())
 
-		// Give the producer goroutine a moment to unwind after
-		// cancel() and either record its (non-)outcome.
-		start := time.Now()
-		for health.successes.Load() == 0 && health.failures.Load() == 0 && time.Since(start) < 2*time.Second {
-			time.Sleep(time.Millisecond)
-		}
-
 		assert.Equal(t, int64(0), health.failures.Load(), "consumer close after full read must not record a failure")
 		assert.Equal(t, int64(1), health.successes.Load(), "consumer close after full read should record one success")
 	})
@@ -218,8 +211,6 @@ func TestStreamingRangeDownload(t *testing.T) {
 		_, err := io.ReadFull(resp.Body, one)
 		require.NoError(t, err)
 		require.NoError(t, resp.Close())
-
-		waitForHealth(health, 500*time.Millisecond)
 
 		assert.Equal(t, int64(0), health.failures.Load(), "early consumer close must not record a failure")
 		assert.Equal(t, int64(0), health.successes.Load(), "early consumer close must not record a success")
@@ -277,16 +268,7 @@ func TestStreamingRangeDownload(t *testing.T) {
 		require.Equal(t, payload, got)
 		require.NoError(t, resp.Close())
 
-		waitForHealth(health, 500*time.Millisecond)
-
 		assert.Equal(t, int64(0), health.failures.Load(), "consumer-close cancel mid-range must not record a failure")
 		assert.Equal(t, int64(0), health.successes.Load(), "consumer-close cancel mid-range must not record a success")
 	})
-}
-
-func waitForHealth(h *countingHealth, d time.Duration) {
-	start := time.Now()
-	for h.successes.Load() == 0 && h.failures.Load() == 0 && time.Since(start) < d {
-		time.Sleep(time.Millisecond)
-	}
 }
