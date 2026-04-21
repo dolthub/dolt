@@ -1293,7 +1293,7 @@ func (t *DoltTable) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint)
 }
 
 // DropForeignKey implements sql.ForeignKeyTable
-func (t *DoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+func (t *DoltTable) DropForeignKey(ctx *sql.Context, fkName string, tableName string, schemaName string) error {
 	return fmt.Errorf("no foreign key operations on a read-only table")
 }
 
@@ -2742,7 +2742,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 }
 
 // DropForeignKey implements sql.ForeignKeyTable
-func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string, tableName string, schemaName string) error {
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
@@ -2754,7 +2754,7 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 	if err != nil {
 		return err
 	}
-	if !fkc.RemoveKeyByName(fkName) {
+	if !fkc.RemoveKeyByName(fkName, doltdb.TableName{Name: tableName, Schema: schemaName}) {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
 	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
@@ -2788,16 +2788,22 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	if err != nil {
 		return err
 	}
-	doltFk, ok := fkc.GetByNameCaseInsensitive(fkName)
+
+	// TODO: need schema name in foreign key defn
+	schemaName := sqlFk.SchemaName
+	if schemaName == "" {
+		schemaName = t.db.SchemaName()
+	}
+	tblName := doltdb.TableName{Name: sqlFk.Table, Schema: schemaName}
+
+	doltFk, ok := fkc.GetByNameCaseInsensitive(fkName, tblName)
 	if !ok {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
-	fkc.RemoveKeyByName(doltFk.Name)
+	fkc.RemoveKeyByName(doltFk.Name, tblName)
 	doltFk.Name = sqlFk.Name
-
-	// TODO: need schema name in foreign key defn
-	doltFk.TableName = doltdb.TableName{Name: sqlFk.Table, Schema: t.db.SchemaName()}
-	doltFk.ReferencedTableName = doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.SchemaName()}
+	doltFk.TableName = tblName
+	doltFk.ReferencedTableName = doltdb.TableName{Name: sqlFk.ParentTable, Schema: schemaName}
 	doltFk.UnresolvedFKDetails.TableColumns = sqlFk.Columns
 	doltFk.UnresolvedFKDetails.ReferencedTableColumns = sqlFk.ParentColumns
 
