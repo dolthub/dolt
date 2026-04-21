@@ -179,3 +179,28 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   [ "$status" -eq 1 ]
   [[ "$output" =~ "::commit:0vh56jekvb9hs0kqf8e8dc5208s0o0mi: read failure of fthj68monkbgkrb6g4c11php7ht2dib" ]] || false
 }
+
+@test "fsck: opens database correctly on Windows paths including spaces" {
+  # See https://github.com/dolthub/dolt/issues/1863
+  # Normal path
+  dolt init
+  dolt sql -q "create table t (i int primary key)"
+  dolt commit -Am "create t"
+
+  run dolt fsck
+  [ "$status" -eq 0 ]
+  ! [[ "$output" =~ "the filename, directory name, or volume label syntax is incorrect" ]]
+
+  # Path with spaces
+  local spacedir
+  spacedir="$(mktemp -d "$BATS_TMPDIR/fsck spaces XXXXXX")"
+  cd "$spacedir"
+
+  dolt init
+  dolt sql -q "create table t (i int primary key)"
+  dolt commit -Am "create t"
+
+  run dolt fsck
+  [ "$status" -eq 0 ]
+  ! [[ "$output" =~ "the filename, directory name, or volume label syntax is incorrect" ]]
+}
