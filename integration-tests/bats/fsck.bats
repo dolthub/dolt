@@ -181,7 +181,6 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 }
 
 @test "fsck: opens database correctly on Windows paths including spaces" {
-  # See https://github.com/dolthub/dolt/issues/1863
   # Normal path
   dolt init
   dolt sql -q "create table t (i int primary key)"
@@ -189,7 +188,7 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
   run dolt fsck
   [ "$status" -eq 0 ]
-  ! [[ "$output" =~ "the filename, directory name, or volume label syntax is incorrect" ]]
+  ! [[ "$output" =~ "the filename, directory name, or volume label syntax is incorrect" ]] || false
 
   # Path with spaces
   local spacedir
@@ -202,5 +201,5 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
   run dolt fsck
   [ "$status" -eq 0 ]
-  ! [[ "$output" =~ "the filename, directory name, or volume label syntax is incorrect" ]]
+  ! [[ "$output" =~ "the filename, directory name, or volume label syntax is incorrect" ]] || false
 }
