@@ -325,6 +325,6 @@ func (gct gcTest) run(t *testing.T) {
 	db.Close()
 	db, err = server.DB(driver.Connection{User: "root"})
 	require.NoError(t, err)
-
 	gct.finalize(t, context.Background(), db)
+	db.Close()
 }
