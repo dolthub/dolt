@@ -1992,6 +1992,16 @@ func RunDoltVerifyConstraintsTests(t *testing.T, harness DoltEnginetestHarness) 
 	}
 }
 
+func RunDoltForeignKeyTests(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range DoltForeignKeyTests {
+		func() {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		}()
+	}
+}
+
 func RunDoltStorageFormatTests(t *testing.T, h DoltEnginetestHarness) {
 	var expectedFormatString = "NEW ( __DOLT__ )"
 	script := queries.ScriptTest{
