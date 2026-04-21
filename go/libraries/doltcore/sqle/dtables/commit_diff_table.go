@@ -17,9 +17,7 @@ package dtables
 import (
 	"errors"
 	"fmt"
-	"io"
 	"strings"
-	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -241,37 +239,6 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 	}
 
 	return NewSliceOfPartitionsItr([]sql.Partition{dp}), nil
-}
-
-type SliceOfPartitionsItr struct {
-	mu         *sync.Mutex
-	partitions []sql.Partition
-	i          int
-}
-
-func NewSliceOfPartitionsItr(partitions []sql.Partition) *SliceOfPartitionsItr {
-	return &SliceOfPartitionsItr{
-		partitions: partitions,
-		mu:         &sync.Mutex{},
-	}
-}
-
-func (itr *SliceOfPartitionsItr) Next(*sql.Context) (sql.Partition, error) {
-	itr.mu.Lock()
-	defer itr.mu.Unlock()
-
-	if itr.i >= len(itr.partitions) {
-		return nil, io.EOF
-	}
-
-	next := itr.partitions[itr.i]
-	itr.i++
-
-	return next, nil
-}
-
-func (itr *SliceOfPartitionsItr) Close(*sql.Context) error {
-	return nil
 }
 
 func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (doltdb.RootValue, string, *types.Timestamp, error) {

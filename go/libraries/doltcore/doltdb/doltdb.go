@@ -1292,21 +1292,32 @@ type TagWithHash struct {
 	Hash hash.Hash
 }
 
-// GetTagsWithHashes returns a list of objects containing Tags with their associated Commit's hashes
+// GetTagsWithHashes returns all tags with their associated commit hashes.
 func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error) {
+	return ddb.GetTagsWithHashesFiltered(ctx, nil)
+}
+
+// GetTagsWithHashesFiltered returns tags whose names satisfy |pred|, resolving
+// metadata only for matching tags. Pass nil to load all tags.
+func (ddb *DoltDB) GetTagsWithHashesFiltered(ctx context.Context, pred func(name string) bool) ([]TagWithHash, error) {
 	var refs []TagWithHash
-	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, h hash.Hash) error {
-		if tr, ok := r.(ref.TagRef); ok {
-			tag, err := ddb.ResolveTag(ctx, tr)
-			if err != nil {
-				return err
-			}
-			h, err := tag.Commit.HashOf()
-			if err != nil {
-				return err
-			}
-			refs = append(refs, TagWithHash{tag, h})
+	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, _ hash.Hash) error {
+		tr, ok := r.(ref.TagRef)
+		if !ok {
+			return nil
 		}
+		if pred != nil && !pred(tr.GetPath()) {
+			return nil
+		}
+		tag, err := ddb.ResolveTag(ctx, tr)
+		if err != nil {
+			return err
+		}
+		h, err := tag.Commit.HashOf()
+		if err != nil {
+			return err
+		}
+		refs = append(refs, TagWithHash{tag, h})
 		return nil
 	})
 	return refs, err

@@ -6015,6 +6015,84 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/10365
+		Name: "dolt_tags.tag_name index",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"CALL DOLT_COMMIT('-Am', 'created table test');",
+			"CALL DOLT_TAG('tag1', '-m', 'create tag1');",
+			"CALL DOLT_TAG('tag2', '-m', 'create tag2');",
+			"CALL DOLT_TAG('tag3', '-m', 'create tag3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:           "SELECT tag_name, message FROM dolt_tags WHERE tag_name = 'tag1';",
+				Expected:        []sql.Row{{"tag1", "create tag1"}},
+				ExpectedIndexes: []string{"dolt_tags_tag_name_idx"},
+			},
+			{
+				Query: "SELECT tag_name, message FROM dolt_tags WHERE tag_name > 'tag1';",
+				Expected: []sql.Row{
+					{"tag2", "create tag2"},
+					{"tag3", "create tag3"},
+				},
+				ExpectedIndexes: []string{"dolt_tags_tag_name_idx"},
+			},
+			{
+				Query: "SELECT tag_name, message FROM dolt_tags WHERE tag_name >= 'tag2';",
+				Expected: []sql.Row{
+					{"tag2", "create tag2"},
+					{"tag3", "create tag3"},
+				},
+				ExpectedIndexes: []string{"dolt_tags_tag_name_idx"},
+			},
+			{
+				Query: "SELECT tag_name, message FROM dolt_tags WHERE tag_name < 'tag3';",
+				Expected: []sql.Row{
+					{"tag1", "create tag1"},
+					{"tag2", "create tag2"},
+				},
+				ExpectedIndexes: []string{"dolt_tags_tag_name_idx"},
+			},
+			{
+				Query: "SELECT tag_name, message FROM dolt_tags WHERE tag_name <= 'tag2';",
+				Expected: []sql.Row{
+					{"tag1", "create tag1"},
+					{"tag2", "create tag2"},
+				},
+				ExpectedIndexes: []string{"dolt_tags_tag_name_idx"},
+			},
+			{
+				Query: "SELECT tag_name, message FROM dolt_tags WHERE tag_name <= 'tag3' AND tag_name > 'tag1';",
+				Expected: []sql.Row{
+					{"tag2", "create tag2"},
+					{"tag3", "create tag3"},
+				},
+				ExpectedIndexes: []string{"dolt_tags_tag_name_idx"},
+			},
+			{
+				Query: "SELECT tag_name, message FROM dolt_tags WHERE tag_name <= 'tag2' AND tag_name >= 'tag2';",
+				Expected: []sql.Row{
+					{"tag2", "create tag2"},
+				},
+				ExpectedIndexes: []string{"dolt_tags_tag_name_idx"},
+			},
+			{
+				Query:           "SELECT tag_name, message FROM dolt_tags WHERE tag_name < 'tag3' AND tag_name > 'tag2';",
+				Expected:        []sql.Row{},
+				ExpectedIndexes: []string{"dolt_tags_tag_name_idx"},
+			},
+			{
+				Query: "SELECT tag_name, message FROM dolt_tags WHERE tag_name <= 'tag1' OR tag_name > 'tag2';",
+				Expected: []sql.Row{
+					{"tag1", "create tag1"},
+					{"tag3", "create tag3"},
+				},
+				ExpectedIndexes: []string{"dolt_tags_tag_name_idx"},
+			},
+		},
+	},
 }
 
 var DoltRemoteTestScripts = []queries.ScriptTest{
