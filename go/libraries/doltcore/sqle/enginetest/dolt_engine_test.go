@@ -1928,6 +1928,11 @@ func TestDoltVerifyConstraints(t *testing.T) {
 	RunDoltVerifyConstraintsTests(t, harness)
 }
 
+func TestDoltForeignKeyTests(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltForeignKeyTests(t, harness)
+}
+
 func TestDoltStorageFormat(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltStorageFormatTests(t, h)

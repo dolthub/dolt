@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/git-ssh-common.bash
 
 setup() {
     skiponwindows "tests are flaky on Windows"
@@ -14,6 +15,7 @@ setup() {
 }
 
 teardown() {
+    teardown_git
     assert_feature_version
     teardown_common
 }
@@ -532,7 +534,7 @@ seed_git_remote_branch() {
 
     [ "$status" -ne 0 ]
     [ "$status" -ne 124 ]
-    [[ "$output" =~ "git authentication required but interactive prompting is disabled" ]] || false
+    [[ "$output" =~ "hint: dolt does not support interactive credential prompts" ]] || false
     [[ "$output" =~ "terminal prompts disabled" ]] || false
 }
 
@@ -583,6 +585,78 @@ seed_git_remote_branch() {
         false
     fi
 }
+
+_init_repo_with_remote() {
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -m "init"
+    dolt remote add origin "$1"
+}
+
+@test "remotes-git: GIT_SSH_COMMAND set by user is not clobbered" {
+    # See https://github.com/dolthub/dolt/issues/10811.
+    setup_git_repo
+    setup_git_ssh_wrapper
+    hook_git_record_env "GIT_SSH_COMMAND"
+    _init_repo_with_remote "git@localhost:${GIT_SVC_DIR}"
+
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND" ]
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: ssh passphrase prompt is blocked and returns normalized error" {
+    # See https://github.com/dolthub/dolt/issues/10811.
+    setup_git_repo
+    setup_git_sshd
+    gen_ssh_key "$BATS_TMPDIR/ssh_key_locked" "test_passphrase"
+    export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_locked -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    unset SSH_AUTH_SOCK
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+
+    # expect allocates a real PTY for the dolt process so the test can verify
+    # that git subprocesses cannot reach it to prompt for a passphrase.
+    run expect "$BATS_TEST_DIRNAME/remotes-git-ssh-prompt.expect" "Enter passphrase"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "hint: dolt does not support interactive credential prompts" ]] || false
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: host key prompt is blocked and returns error" {
+    # See https://github.com/dolthub/dolt/issues/10811.
+    setup_git_repo
+    setup_git_sshd
+    gen_ssh_key "$BATS_TMPDIR/ssh_key_unlocked" ""
+    # An empty known_hosts file causes SSH to default to StrictHostKeyChecking=ask
+    # and prompt for host key confirmation. expect verifies the prompt cannot reach
+    # the controlling terminal.
+    touch "$BATS_TMPDIR/ssh_known_hosts_empty"
+    export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_unlocked -o IdentitiesOnly=yes -o UserKnownHostsFile=$BATS_TMPDIR/ssh_known_hosts_empty"
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+
+    run expect "$BATS_TEST_DIRNAME/remotes-git-ssh-prompt.expect" "The authenticity of host"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Host key verification failed" ]] || false
+
+    export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_unlocked -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: ssh push without passphrase prompt succeeds" {
+    setup_git_repo
+    setup_git_sshd
+    gen_ssh_key "$BATS_TMPDIR/ssh_key_unlocked" ""
+    export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_unlocked -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+}
+
 
 install_fake_git_url_recorder() {
     # Fake git that records the URL passed to `git remote add` so tests can
@@ -719,3 +793,4 @@ exit 128
 EOF
     chmod +x "$BATS_TMPDIR/fakebin/git"
 }
+

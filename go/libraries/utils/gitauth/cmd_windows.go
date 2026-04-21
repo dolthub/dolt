@@ -1,4 +1,4 @@
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2026 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltversion
+//go:build windows
 
-const (
-	Version = "1.86.3"
+package gitauth
+
+import (
+	"os/exec"
+	"syscall"
+
+	"golang.org/x/sys/windows"
 )
+
+// CmdSetsid detaches |cmd| from the parent console (DETACHED_PROCESS).
+// SSH needs CONIN$ to prompt for credentials; without a console it exits with an auth error.
+func CmdSetsid(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: windows.DETACHED_PROCESS,
+	}
+}
