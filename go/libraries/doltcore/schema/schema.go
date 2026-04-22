@@ -96,6 +96,13 @@ type Schema interface {
 	// SetComment sets the table's comment.
 	SetComment(comment string)
 
+	// GetAdaptiveEncodingMaxRowSize returns the table's adaptive encoding max row size.
+	// Returns 2048 if not explicitly set.
+	GetAdaptiveEncodingMaxRowSize() uint32
+
+	// SetAdaptiveEncodingMaxRowSize sets the table's adaptive encoding max row size.
+	SetAdaptiveEncodingMaxRowSize(value uint32)
+
 	// Copy returns a copy of this Schema that can be safely modified independently.
 	Copy() Schema
 }
@@ -190,6 +197,10 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	}
 
 	if sch1.GetCollation() != sch2.GetCollation() {
+		return false
+	}
+
+	if sch1.GetAdaptiveEncodingMaxRowSize() != sch2.GetAdaptiveEncodingMaxRowSize() {
 		return false
 	}
 

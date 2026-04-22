@@ -46,6 +46,7 @@ type schemaImpl struct {
 	collation                  Collation
 	contentHashedFields        []uint64
 	comment                    string
+	adaptiveEncodingMaxRowSize uint32
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -299,6 +300,17 @@ func (si *schemaImpl) GetComment() string {
 
 func (si *schemaImpl) SetComment(comment string) {
 	si.comment = comment
+}
+
+func (si *schemaImpl) GetAdaptiveEncodingMaxRowSize() uint32 {
+	if si.adaptiveEncodingMaxRowSize == 0 {
+		return 2048
+	}
+	return si.adaptiveEncodingMaxRowSize
+}
+
+func (si *schemaImpl) SetAdaptiveEncodingMaxRowSize(value uint32) {
+	si.adaptiveEncodingMaxRowSize = value
 }
 
 // GetAllCols gets the collection of all columns (pk and non-pk)

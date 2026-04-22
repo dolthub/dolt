@@ -78,6 +78,10 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 		serial.TableSchemaAddComment(b, comment)
 		hasFeaturesAfterTryAccessors = true
 	}
+	if aemrs := sch.GetAdaptiveEncodingMaxRowSize(); aemrs != 2048 {
+		serial.TableSchemaAddAdaptiveEncodingMaxRowSize(b, aemrs)
+		hasFeaturesAfterTryAccessors = true
+	}
 	if hasFeaturesAfterTryAccessors {
 		serial.TableSchemaAddHasFeaturesAfterTryAccessors(b, hasFeaturesAfterTryAccessors)
 	}
@@ -130,6 +134,7 @@ func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Sc
 
 	sch.SetCollation(schema.Collation(s.Collation()))
 	sch.SetComment(string(s.Comment()))
+	sch.SetAdaptiveEncodingMaxRowSize(s.AdaptiveEncodingMaxRowSize())
 
 	return sch, nil
 }

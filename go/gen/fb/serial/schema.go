@@ -195,7 +195,19 @@ func (rcv *TableSchema) Comment() []byte {
 	return nil
 }
 
-const TableSchemaNumFields = 7
+func (rcv *TableSchema) AdaptiveEncodingMaxRowSize() uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.GetUint32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *TableSchema) MutateAdaptiveEncodingMaxRowSize(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(18, n)
+}
+
+const TableSchemaNumFields = 8
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(TableSchemaNumFields)
@@ -229,6 +241,9 @@ func TableSchemaAddHasFeaturesAfterTryAccessors(builder *flatbuffers.Builder, ha
 }
 func TableSchemaAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(comment), 0)
+}
+func TableSchemaAddAdaptiveEncodingMaxRowSize(builder *flatbuffers.Builder, adaptiveEncodingMaxRowSize uint32) {
+	builder.PrependUint32Slot(7, adaptiveEncodingMaxRowSize, 0)
 }
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

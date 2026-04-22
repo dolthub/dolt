@@ -278,6 +278,9 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 	// Copy over the collation
 	newSch.SetCollation(sch.GetCollation())
 
+	// Copy over adaptive encoding max row size
+	newSch.SetAdaptiveEncodingMaxRowSize(sch.GetAdaptiveEncodingMaxRowSize())
+
 	pkOrds, err := modifyPkOrdinals(sch, newSch)
 	if err != nil {
 		return nil, err

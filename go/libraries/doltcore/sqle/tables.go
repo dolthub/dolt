@@ -1506,6 +1506,7 @@ type doltAlterableTableInterface interface {
 	sql.ProjectedTable
 	sql.CollationAlterableTable
 	sql.CommentAlterableTable
+	sql.AdaptiveEncodingMaxRowSizeAlterableTable
 	fulltext.IndexAlterableTable
 }
 
@@ -3078,6 +3079,18 @@ func (t *AlterableDoltTable) ModifyComment(ctx *sql.Context, comment string) err
 	}
 
 	sch.SetComment(comment)
+
+	return t.updateFromSchema(ctx, root, sch)
+}
+
+// ModifyAdaptiveEncodingMaxRowSize implements sql.AdaptiveEncodingMaxRowSizeAlterableTable
+func (t *AlterableDoltTable) ModifyAdaptiveEncodingMaxRowSize(ctx *sql.Context, value uint64) error {
+	root, sch, err := t.getWritableSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	sch.SetAdaptiveEncodingMaxRowSize(uint32(value))
 
 	return t.updateFromSchema(ctx, root, sch)
 }
