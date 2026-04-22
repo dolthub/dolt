@@ -2831,7 +2831,12 @@ type StreamChunksRequest_Get struct {
 	// Flat 20-byte-per-hash buffer; same encoding as
 	// StreamChunkLocationsRequest.chunk_hashes. Servers MUST reject
 	// requests where len(chunk_hashes) is not a multiple of 20.
-	ChunkHashes   []byte `protobuf:"bytes,1,opt,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
+	ChunkHashes []byte `protobuf:"bytes,1,opt,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
+	// Client-assigned monotonic batch identifier, starting at 1 and
+	// strictly increasing across the client-side stream. Every
+	// response Chunk for this batch echoes this value back in
+	// Chunk.get_seq. Servers MUST reject get_seq == 0.
+	GetSeq        uint64 `protobuf:"varint,2,opt,name=get_seq,json=getSeq,proto3" json:"get_seq,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2871,6 +2876,13 @@ func (x *StreamChunksRequest_Get) GetChunkHashes() []byte {
 		return x.ChunkHashes
 	}
 	return nil
+}
+
+func (x *StreamChunksRequest_Get) GetGetSeq() uint64 {
+	if x != nil {
+		return x.GetSeq
+	}
+	return 0
 }
 
 type StreamChunksResponse_HandshakeAck struct {
@@ -2980,7 +2992,11 @@ func (x *StreamChunksResponse_Dictionary) GetData() []byte {
 
 type StreamChunksResponse_Chunk struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Index into the currently-pending Get request's chunk_hashes
+	// Echoes the client's StreamChunksRequest.Get.get_seq so the
+	// client can demultiplex pipelined responses back to the
+	// batch's chunk_hashes buffer. Always set.
+	GetSeq uint64 `protobuf:"varint,6,opt,name=get_seq,json=getSeq,proto3" json:"get_seq,omitempty"`
+	// Index into the Get identified by |get_seq|'s chunk_hashes
 	// buffer: N refers to the N'th 20-byte hash (bytes [N*20:(N+1)*20]).
 	// Ignored when this is a pure batch-terminator (see |final|).
 	RequestIndex uint32 `protobuf:"varint,1,opt,name=request_index,json=requestIndex,proto3" json:"request_index,omitempty"`
@@ -2991,13 +3007,13 @@ type StreamChunksResponse_Chunk struct {
 	// introduced earlier on this server-side stream.
 	Data   []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	DictId uint32 `protobuf:"varint,3,opt,name=dict_id,json=dictId,proto3" json:"dict_id,omitempty"`
-	// True on the last Chunk message for the currently-pending Get.
-	// When the server has nothing to send for a Get (e.g. all hashes
-	// missing), it MUST still emit a terminator: a Chunk with
-	// final=true, data unset, dict_id=0. Clients treat a final Chunk
-	// with empty data as a pure batch terminator.
+	// True on the last Chunk message for the Get identified by
+	// |get_seq|. When the server has nothing to send for a Get (e.g.
+	// all hashes missing), it MUST still emit a terminator: a Chunk
+	// with final=true, data unset, dict_id=0. Clients treat a final
+	// Chunk with empty data as a pure batch terminator.
 	Final bool `protobuf:"varint,4,opt,name=final,proto3" json:"final,omitempty"`
-	// Hash indexes from the pending Get's chunk_hashes that the server
+	// Hash indexes from this Get's chunk_hashes that the server
 	// could not find. Populated only on messages with final=true.
 	MissingIndexes []uint32 `protobuf:"varint,5,rep,packed,name=missing_indexes,json=missingIndexes,proto3" json:"missing_indexes,omitempty"`
 	unknownFields  protoimpl.UnknownFields
@@ -3032,6 +3048,13 @@ func (x *StreamChunksResponse_Chunk) ProtoReflect() protoreflect.Message {
 // Deprecated: Use StreamChunksResponse_Chunk.ProtoReflect.Descriptor instead.
 func (*StreamChunksResponse_Chunk) Descriptor() ([]byte, []int) {
 	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{34, 2}
+}
+
+func (x *StreamChunksResponse_Chunk) GetGetSeq() uint64 {
+	if x != nil {
+		return x.GetSeq
+	}
+	return 0
 }
 
 func (x *StreamChunksResponse_Chunk) GetRequestIndex() uint32 {
@@ -3261,7 +3284,7 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x15AddTableFilesResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1d\n" +
 	"\n" +
-	"repo_token\x18\x02 \x01(\tR\trepoToken\"\x8a\x03\n" +
+	"repo_token\x18\x02 \x01(\tR\trepoToken\"\xa3\x03\n" +
 	"\x13StreamChunksRequest\x12`\n" +
 	"\thandshake\x18\x01 \x01(\v2@.dolt.services.remotesapi.v1alpha1.StreamChunksRequest.HandshakeH\x00R\thandshake\x12N\n" +
 	"\x03get\x18\x02 \x01(\v2:.dolt.services.remotesapi.v1alpha1.StreamChunksRequest.GetH\x00R\x03get\x1a\x8b\x01\n" +
@@ -3269,10 +3292,11 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x02 \x01(\tR\trepoToken\x12\x1b\n" +
-	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x1a(\n" +
+	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x1aA\n" +
 	"\x03Get\x12!\n" +
-	"\fchunk_hashes\x18\x01 \x01(\fR\vchunkHashesB\t\n" +
-	"\apayload\"\xc9\x04\n" +
+	"\fchunk_hashes\x18\x01 \x01(\fR\vchunkHashes\x12\x17\n" +
+	"\aget_seq\x18\x02 \x01(\x04R\x06getSeqB\t\n" +
+	"\apayload\"\xe2\x04\n" +
 	"\x14StreamChunksResponse\x12d\n" +
 	"\thandshake\x18\x01 \x01(\v2D.dolt.services.remotesapi.v1alpha1.StreamChunksResponse.HandshakeAckH\x00R\thandshake\x12d\n" +
 	"\n" +
@@ -3285,8 +3309,9 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\n" +
 	"Dictionary\x12\x17\n" +
 	"\adict_id\x18\x01 \x01(\rR\x06dictId\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\x1a\x98\x01\n" +
-	"\x05Chunk\x12#\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x1a\xb1\x01\n" +
+	"\x05Chunk\x12\x17\n" +
+	"\aget_seq\x18\x06 \x01(\x04R\x06getSeq\x12#\n" +
 	"\rrequest_index\x18\x01 \x01(\rR\frequestIndex\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12\x17\n" +
 	"\adict_id\x18\x03 \x01(\rR\x06dictId\x12\x14\n" +
@@ -3547,14 +3572,17 @@ type ChunkStoreServiceClient interface {
 	//
 	//	Client: sends exactly one |handshake| message (RepoId, repo_token,
 	//	  repo_path) first, then zero or more |get| messages each carrying
-	//	  a flat 20-byte-per-hash chunk_hashes buffer.
+	//	  a client-assigned monotonic get_seq (starting at 1, unique on
+	//	  this stream) and a flat 20-byte-per-hash chunk_hashes buffer.
 	//	Server: responds once with |handshake| (optional new repo_token),
-	//	  then, for each client |get| in order, emits zero or more
-	//	  |dictionary| messages and zero or more |chunk| messages,
-	//	  terminating the batch with a |chunk| whose final=true. All
-	//	  response messages for a given |get| precede any response for
-	//	  the next |get|. Missing-chunk hash indexes ride on the final
-	//	  chunk message.
+	//	  then for each client |get| emits zero or more |dictionary|
+	//	  messages (stream-scoped, not per-get) and zero or more |chunk|
+	//	  messages each stamped with the get_seq of the batch they
+	//	  belong to, terminating each batch with a |chunk| whose
+	//	  final=true. Missing-chunk hash indexes ride on the final
+	//	  chunk message. Responses for different get_seqs may interleave
+	//	  on the wire, which lets the server process Gets in parallel;
+	//	  the client demultiplexes by get_seq.
 	//
 	// Deliberately not a reliable/resumable RPC: there is no 1:1
 	// correspondence between client messages and server messages, so
@@ -3792,14 +3820,17 @@ type ChunkStoreServiceServer interface {
 	//
 	//	Client: sends exactly one |handshake| message (RepoId, repo_token,
 	//	  repo_path) first, then zero or more |get| messages each carrying
-	//	  a flat 20-byte-per-hash chunk_hashes buffer.
+	//	  a client-assigned monotonic get_seq (starting at 1, unique on
+	//	  this stream) and a flat 20-byte-per-hash chunk_hashes buffer.
 	//	Server: responds once with |handshake| (optional new repo_token),
-	//	  then, for each client |get| in order, emits zero or more
-	//	  |dictionary| messages and zero or more |chunk| messages,
-	//	  terminating the batch with a |chunk| whose final=true. All
-	//	  response messages for a given |get| precede any response for
-	//	  the next |get|. Missing-chunk hash indexes ride on the final
-	//	  chunk message.
+	//	  then for each client |get| emits zero or more |dictionary|
+	//	  messages (stream-scoped, not per-get) and zero or more |chunk|
+	//	  messages each stamped with the get_seq of the batch they
+	//	  belong to, terminating each batch with a |chunk| whose
+	//	  final=true. Missing-chunk hash indexes ride on the final
+	//	  chunk message. Responses for different get_seqs may interleave
+	//	  on the wire, which lets the server process Gets in parallel;
+	//	  the client demultiplexes by get_seq.
 	//
 	// Deliberately not a reliable/resumable RPC: there is no 1:1
 	// correspondence between client messages and server messages, so

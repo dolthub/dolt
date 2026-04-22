@@ -69,14 +69,17 @@ service ChunkStoreService {
   // Protocol:
   //   Client: sends exactly one |handshake| message (RepoId, repo_token,
   //     repo_path) first, then zero or more |get| messages each carrying
-  //     a flat 20-byte-per-hash chunk_hashes buffer.
+  //     a client-assigned monotonic get_seq (starting at 1, unique on
+  //     this stream) and a flat 20-byte-per-hash chunk_hashes buffer.
   //   Server: responds once with |handshake| (optional new repo_token),
-  //     then, for each client |get| in order, emits zero or more
-  //     |dictionary| messages and zero or more |chunk| messages,
-  //     terminating the batch with a |chunk| whose final=true. All
-  //     response messages for a given |get| precede any response for
-  //     the next |get|. Missing-chunk hash indexes ride on the final
-  //     chunk message.
+  //     then for each client |get| emits zero or more |dictionary|
+  //     messages (stream-scoped, not per-get) and zero or more |chunk|
+  //     messages each stamped with the get_seq of the batch they
+  //     belong to, terminating each batch with a |chunk| whose
+  //     final=true. Missing-chunk hash indexes ride on the final
+  //     chunk message. Responses for different get_seqs may interleave
+  //     on the wire, which lets the server process Gets in parallel;
+  //     the client demultiplexes by get_seq.
   //
   // Deliberately not a reliable/resumable RPC: there is no 1:1
   // correspondence between client messages and server messages, so
@@ -490,6 +493,12 @@ message StreamChunksRequest {
     // StreamChunkLocationsRequest.chunk_hashes. Servers MUST reject
     // requests where len(chunk_hashes) is not a multiple of 20.
     bytes chunk_hashes = 1;
+
+    // Client-assigned monotonic batch identifier, starting at 1 and
+    // strictly increasing across the client-side stream. Every
+    // response Chunk for this batch echoes this value back in
+    // Chunk.get_seq. Servers MUST reject get_seq == 0.
+    uint64 get_seq = 2;
   }
 
   oneof payload {
@@ -524,7 +533,12 @@ message StreamChunksResponse {
   }
 
   message Chunk {
-    // Index into the currently-pending Get request's chunk_hashes
+    // Echoes the client's StreamChunksRequest.Get.get_seq so the
+    // client can demultiplex pipelined responses back to the
+    // batch's chunk_hashes buffer. Always set.
+    uint64 get_seq = 6;
+
+    // Index into the Get identified by |get_seq|'s chunk_hashes
     // buffer: N refers to the N'th 20-byte hash (bytes [N*20:(N+1)*20]).
     // Ignored when this is a pure batch-terminator (see |final|).
     uint32 request_index = 1;
@@ -537,14 +551,14 @@ message StreamChunksResponse {
     bytes data = 2;
     uint32 dict_id = 3;
 
-    // True on the last Chunk message for the currently-pending Get.
-    // When the server has nothing to send for a Get (e.g. all hashes
-    // missing), it MUST still emit a terminator: a Chunk with
-    // final=true, data unset, dict_id=0. Clients treat a final Chunk
-    // with empty data as a pure batch terminator.
+    // True on the last Chunk message for the Get identified by
+    // |get_seq|. When the server has nothing to send for a Get (e.g.
+    // all hashes missing), it MUST still emit a terminator: a Chunk
+    // with final=true, data unset, dict_id=0. Clients treat a final
+    // Chunk with empty data as a pure batch terminator.
     bool final = 4;
 
-    // Hash indexes from the pending Get's chunk_hashes that the server
+    // Hash indexes from this Get's chunk_hashes that the server
     // could not find. Populated only on messages with final=true.
     repeated uint32 missing_indexes = 5;
   }
