@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.25-alpine AS golang_cgo125
+FROM golang:1.26.2-alpine AS golang_cgo
 ENV CGO_ENABLED=1
 ENV GO_LDFLAGS="-linkmode external -extldflags '-static'"
 RUN apk add --no-cache build-base
 
-FROM golang_cgo125 AS dolt_build
+FROM golang_cgo AS dolt_build
 RUN apk add --no-cache icu-dev icu-static
 COPY dolt/go/go.mod /build/dolt/go/
 WORKDIR /build/dolt/go/
@@ -12,7 +12,7 @@ RUN go mod download
 COPY dolt/go/ /build/dolt/go/
 RUN go build -tags icu_static -ldflags "$GO_LDFLAGS" -o /build/bin/dolt ./cmd/dolt
 
-FROM golang_cgo125 AS go_clients_build
+FROM golang_cgo AS go_clients_build
 COPY dolt/integration-tests/mysql-client-tests/go /build/go/
 WORKDIR /build/go/
 RUN go build -ldflags "$GO_LDFLAGS" -o /build/bin/mysql-client-test
