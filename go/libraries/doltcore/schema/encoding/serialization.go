@@ -278,8 +278,13 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 			serial.ColumnAddUsesAdaptiveEncoding(b, true)
 		}
 
-		serial.ColumnAddHidden(b, col.Hidden)
-		serial.ColumnAddHiddenSystem(b, col.SystemHidden)
+		if col.Hidden {
+			serial.ColumnAddHidden(b, col.Hidden)
+		}
+
+		if col.SystemHidden {
+			serial.ColumnAddHiddenSystem(b, col.SystemHidden)
+		}
 		offs[i] = serial.ColumnEnd(b)
 	}
 
