@@ -236,8 +236,12 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT LENGTH(c_medblob) FROM blobdata where pk = 2 order by 1",
+				Expected: []sql.Row{{70000}},
+			},
+			{
 				Query:    "SELECT LENGTH(c_varbinary), LENGTH(c_tinyblob), LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata where pk = 2 order by 1",
-				Expected: []sql.Row{{13, 10, 60000, 70000, 90000}},
+				Expected: []sql.Row{{12, 10, 60000, 70000, 90000}},
 			},
 		},
 	},
