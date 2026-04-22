@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -507,4 +508,14 @@ func TestExternalProtocol(t *testing.T) {
 	assert.NoError(err)
 	assert.True(ok)
 	assert.True(types.String("hi!").Equals(headVal))
+}
+
+// TestAWSConfigFromSpecOptionsChecksumValidation verifies that awsConfigFromSpecOptions
+// sets ResponseChecksumValidation to WhenRequired.
+//
+// See https://github.com/dolthub/dolt/issues/10895
+func TestAWSConfigFromSpecOptionsChecksumValidation(t *testing.T) {
+	cfg, err := awsConfigFromSpecOptions(context.Background(), SpecOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, aws.ResponseChecksumValidationWhenRequired, cfg.ResponseChecksumValidation)
 }

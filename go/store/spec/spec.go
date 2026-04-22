@@ -328,15 +328,7 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	}
 }
 
-func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunks.ChunkStore {
-	fmt.Println(awsURL, options)
-
-	// earl has special handling for aws:// urls.
-	u, err := earl.ParseRawWithAWSSupport(awsURL)
-	d.PanicIfError(err)
-	parts := strings.SplitN(u.Hostname(), ":", 2) // [table] [, bucket]?
-	d.PanicIfFalse(len(parts) == 2)
-
+func awsConfigFromSpecOptions(ctx context.Context, options SpecOptions) (aws.Config, error) {
 	var opts []func(*config.LoadOptions) error
 	// WhenRequired silences the per-GetObject WARN emitted when objects have no stored checksum.
 	opts = append(opts, config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired))
@@ -373,10 +365,22 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 			opts = append(opts, opt)
 		}
 	default:
-		panic("unsupported credential type")
+		return aws.Config{}, fmt.Errorf("unsupported credential type")
 	}
 
-	cfg, err := config.LoadDefaultConfig(ctx, opts...)
+	return config.LoadDefaultConfig(ctx, opts...)
+}
+
+func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunks.ChunkStore {
+	fmt.Println(awsURL, options)
+
+	// earl has special handling for aws:// urls.
+	u, err := earl.ParseRawWithAWSSupport(awsURL)
+	d.PanicIfError(err)
+	parts := strings.SplitN(u.Hostname(), ":", 2) // [table] [, bucket]?
+	d.PanicIfFalse(len(parts) == 2)
+
+	cfg, err := awsConfigFromSpecOptions(ctx, options)
 	d.PanicIfError(err)
 
 	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
