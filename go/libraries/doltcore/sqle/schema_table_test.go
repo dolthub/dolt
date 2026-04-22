@@ -70,7 +70,7 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, wrapper.backingTable)
 	// unmodified dolt_schemas table.
-	require.Equal(t, 3, len(wrapper.backingTable.Schema()))
+	require.Equal(t, 3, len(wrapper.backingTable.Schema(sqlCtx)))
 
 	inserter := wrapper.backingTable.Inserter(sqlCtx)
 	err = inserter.Insert(sqlCtx, sql.Row{"view", "view1", "SELECT v1 FROM test;"})
@@ -131,14 +131,14 @@ func TestV1SchemasTable(t *testing.T) {
 	require.NotNil(t, wrapper.backingTable)
 
 	// unmodified dolt_schemas table.
-	require.Equal(t, 4, len(wrapper.backingTable.Schema()))
+	require.Equal(t, 4, len(wrapper.backingTable.Schema(sqlCtx)))
 
 	tbl, err = getOrCreateDoltSchemasTable(sqlCtx, db)
 	require.NoError(t, err)
 	require.NotNil(t, tbl)
 
 	// modified dolt_schemas table.
-	require.Equal(t, 5, len(tbl.Schema()))
+	require.Equal(t, 5, len(tbl.Schema(sqlCtx)))
 
 	tbl, _, err = db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
 	require.NoError(t, err)
@@ -147,6 +147,6 @@ func TestV1SchemasTable(t *testing.T) {
 	require.NotNil(t, wrapper.backingTable)
 
 	// modified dolt_schemas table.
-	require.Equal(t, 5, len(wrapper.backingTable.Schema()))
+	require.Equal(t, 5, len(wrapper.backingTable.Schema(sqlCtx)))
 
 }

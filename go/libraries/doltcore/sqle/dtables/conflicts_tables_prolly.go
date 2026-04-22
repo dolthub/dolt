@@ -57,7 +57,7 @@ func newProllyConflictsTable(
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConfTablePrefix+tblName.Name, confSch)
+	sqlSch, err := sqlutil.FromDoltSchema(ctx, "", doltdb.DoltConfTablePrefix+tblName.Name, confSch)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (ct ProllyConflictsTable) String() string {
 	return doltdb.DoltConfTablePrefix + ct.tblName.Name
 }
 
-func (ct ProllyConflictsTable) Schema() sql.Schema {
+func (ct ProllyConflictsTable) Schema(ctx *sql.Context) sql.Schema {
 	return ct.sqlSch.Schema
 }
 
@@ -126,7 +126,7 @@ func (ct ProllyConflictsTable) Updater(ctx *sql.Context) sql.RowUpdater {
 }
 
 func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
-	return newProllyConflictDeleter(ct)
+	return newProllyConflictDeleter(ctx, ct)
 }
 
 type prollyConflictRowIter struct {
@@ -197,7 +197,7 @@ func GetConflictOffsets(keyless bool, cds ConflictDescriptors) ConflictOffsets {
 
 // GetConflictDescriptors returns the descriptors for the key and base, ours, and theirs
 // values.
-func GetConflictDescriptors(baseSch, ourSch, theirSch schema.Schema, ns tree.NodeStore) ConflictDescriptors {
+func GetConflictDescriptors(ctx *sql.Context, baseSch, ourSch, theirSch schema.Schema, ns tree.NodeStore) ConflictDescriptors {
 	key := baseSch.GetKeyDescriptor(ns)
 	baseVD := baseSch.GetValueDescriptor(ns)
 	oursVD := ourSch.GetValueDescriptor(ns)
@@ -228,7 +228,7 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 	}
 
 	keyless := schema.IsKeyless(ct.ourSch)
-	cds := GetConflictDescriptors(ct.baseSch, ct.ourSch, ct.theirSch, ct.root.NodeStore())
+	cds := GetConflictDescriptors(ctx, ct.baseSch, ct.ourSch, ct.theirSch, ct.root.NodeStore())
 	offsets := GetConflictOffsets(keyless, cds)
 
 	return &prollyConflictRowIter{
@@ -611,7 +611,7 @@ type prollyConflictDeleter struct {
 	ourColSize     int
 }
 
-func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
+func newProllyConflictDeleter(ctx *sql.Context, ct ProllyConflictsTable) *prollyConflictDeleter {
 	kd, _ := ct.artM.Descriptors()
 	ed := ct.artM.Editor()
 	kB := val.NewTupleBuilder(kd, ct.artM.NodeStore())

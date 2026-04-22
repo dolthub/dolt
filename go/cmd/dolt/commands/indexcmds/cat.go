@@ -143,7 +143,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema, idx durable.Index) error {
-	wr, err := getTableWriter(cmd.resultFormat, doltSch)
+	wr, err := getTableWriter(ctx, cmd.resultFormat, doltSch)
 	if err != nil {
 		return err
 	}
@@ -174,8 +174,8 @@ func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema,
 	return nil
 }
 
-func getTableWriter(format resultFormat, sch schema.Schema) (wr table.SqlRowWriter, err error) {
-	s, err := sqlutil.FromDoltSchema("", "", sch)
+func getTableWriter(ctx context.Context, format resultFormat, sch schema.Schema) (wr table.SqlRowWriter, err error) {
+	s, err := sqlutil.FromDoltSchema(ctx, "", "", sch)
 	if err != nil {
 		return nil, err
 	}

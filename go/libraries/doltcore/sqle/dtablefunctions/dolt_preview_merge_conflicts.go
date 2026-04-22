@@ -51,7 +51,6 @@ type PreviewMergeConflictsTableFunction struct {
 	baseSch         schema.Schema
 	ourSch          schema.Schema
 	theirSch        schema.Schema
-	ctx             *sql.Context
 	tblName         doltdb.TableName
 	sqlSch          sql.PrimaryKeySchema
 }
@@ -59,11 +58,10 @@ type PreviewMergeConflictsTableFunction struct {
 // NewInstance creates a new instance of TableFunction interface
 func (pm *PreviewMergeConflictsTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &PreviewMergeConflictsTableFunction{
-		ctx:      ctx,
 		database: db,
 	}
 
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.WithExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +70,7 @@ func (pm *PreviewMergeConflictsTableFunction) NewInstance(ctx *sql.Context, db s
 }
 
 func (pm *PreviewMergeConflictsTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(pm.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(pm.Schema(ctx))
 	numRows, _, err := pm.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -123,13 +121,13 @@ func (pm *PreviewMergeConflictsTableFunction) String() string {
 //   - our_diff_type, their_diff_type: Indicates the type of change for our and their columns respectively ("added", "modified", "removed").
 //   - base_cardinality, our_cardinality, their_cardinality: Additional columns for keyless tables only, indicating the number of occurrences of the conflicting row in the base, our, and their branches.
 //   - dolt_conflict_id: Unique identifier for the conflict, derived from the key and the right-side commit hash.
-func (pm *PreviewMergeConflictsTableFunction) Schema() sql.Schema {
+func (pm *PreviewMergeConflictsTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	if !pm.Resolved() {
 		return nil
 	}
 	// Lazy schema generation - generate schema on first access
 	if pm.sqlSch.Schema == nil {
-		err := pm.generateSchema(pm.ctx)
+		err := pm.generateSchema(ctx)
 		if err != nil {
 			// Schema generation failed, but we can't return an error from Schema()
 			// This will surface the error when RowIter() is called
@@ -146,7 +144,7 @@ func (pm *PreviewMergeConflictsTableFunction) Children() []sql.Node {
 }
 
 // WithChildren implements the sql.Node interface.
-func (pm *PreviewMergeConflictsTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (pm *PreviewMergeConflictsTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -155,11 +153,11 @@ func (pm *PreviewMergeConflictsTableFunction) WithChildren(children ...sql.Node)
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (pm *PreviewMergeConflictsTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	if !types.IsText(pm.tableNameExpr.Type()) {
-		return ExpressionIsDeferred(pm.tableNameExpr)
+	if !types.IsText(pm.tableNameExpr.Type(ctx)) {
+		return ExpressionIsDeferred(ctx, pm.tableNameExpr)
 	}
 
-	tableNameVal, err := pm.tableNameExpr.Eval(pm.ctx, nil)
+	tableNameVal, err := pm.tableNameExpr.Eval(ctx, nil)
 	if err != nil {
 		return false
 	}
@@ -183,7 +181,7 @@ func (pm *PreviewMergeConflictsTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface.
-func (pm *PreviewMergeConflictsTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+func (pm *PreviewMergeConflictsTableFunction) WithExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.Node, error) {
 	if len(exprs) != 3 {
 		return nil, sql.ErrInvalidArgumentNumber.New(pm.Name(), "3", len(exprs))
 	}
@@ -204,13 +202,13 @@ func (pm *PreviewMergeConflictsTableFunction) WithExpressions(exprs ...sql.Expre
 	newPmcs.tableNameExpr = exprs[2]
 
 	// validate the expressions
-	if !types.IsText(newPmcs.leftBranchExpr.Type()) && !expression.IsBindVar(newPmcs.leftBranchExpr) {
+	if !types.IsText(newPmcs.leftBranchExpr.Type(ctx)) && !expression.IsBindVar(newPmcs.leftBranchExpr) {
 		return nil, sql.ErrInvalidArgumentDetails.New(newPmcs.Name(), newPmcs.leftBranchExpr.String())
 	}
-	if !types.IsText(newPmcs.rightBranchExpr.Type()) && !expression.IsBindVar(newPmcs.rightBranchExpr) {
+	if !types.IsText(newPmcs.rightBranchExpr.Type(ctx)) && !expression.IsBindVar(newPmcs.rightBranchExpr) {
 		return nil, sql.ErrInvalidArgumentDetails.New(newPmcs.Name(), newPmcs.rightBranchExpr.String())
 	}
-	if !types.IsText(newPmcs.tableNameExpr.Type()) && !expression.IsBindVar(newPmcs.tableNameExpr) {
+	if !types.IsText(newPmcs.tableNameExpr.Type(ctx)) && !expression.IsBindVar(newPmcs.tableNameExpr) {
 		return nil, sql.ErrInvalidArgumentDetails.New(newPmcs.Name(), newPmcs.tableNameExpr.String())
 	}
 
@@ -232,7 +230,7 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context) e
 		return fmt.Errorf("unexpected database type: %T", pm.database)
 	}
 
-	leftBranchVal, rightBranchVal, tableName, err := pm.evaluateArguments()
+	leftBranchVal, rightBranchVal, tableName, err := pm.evaluateArguments(ctx)
 	if err != nil {
 		return err
 	}
@@ -266,7 +264,7 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context) e
 		return err
 	}
 
-	sqlSch, err := sqlutil.FromDoltSchema(sqledb.Name(), pm.Name(), confSch)
+	sqlSch, err := sqlutil.FromDoltSchema(ctx, sqledb.Name(), pm.Name(), confSch)
 	if err != nil {
 		return err
 	}
@@ -505,10 +503,10 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		return nil, err
 	}
 
-	cds := dtables.GetConflictDescriptors(pm.baseSch, pm.ourSch, pm.theirSch, pm.rootInfo.baseRoot.NodeStore())
+	cds := dtables.GetConflictDescriptors(ctx, pm.baseSch, pm.ourSch, pm.theirSch, pm.rootInfo.baseRoot.NodeStore())
 	offsets := dtables.GetConflictOffsets(keyless, cds)
 
-	valueMerger := tm.GetNewValueMerger(mergeSch, leftRows)
+	valueMerger := tm.GetNewValueMerger(ctx, mergeSch, leftRows)
 
 	differ, err := tree.NewThreeWayDiffer(
 		ctx,
@@ -543,18 +541,18 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 // evaluateArguments returns leftBranchVal amd rightBranchVal.
 // It evaluates the argument expressions to turn them into values this PreviewMergeConflictsTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
-func (pm *PreviewMergeConflictsTableFunction) evaluateArguments() (interface{}, interface{}, string, error) {
-	leftBranchVal, err := pm.leftBranchExpr.Eval(pm.ctx, nil)
+func (pm *PreviewMergeConflictsTableFunction) evaluateArguments(ctx *sql.Context) (interface{}, interface{}, string, error) {
+	leftBranchVal, err := pm.leftBranchExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, "", err
 	}
 
-	rightBranchVal, err := pm.rightBranchExpr.Eval(pm.ctx, nil)
+	rightBranchVal, err := pm.rightBranchExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, "", err
 	}
 
-	tableNameVal, err := pm.tableNameExpr.Eval(pm.ctx, nil)
+	tableNameVal, err := pm.tableNameExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, "", err
 	}

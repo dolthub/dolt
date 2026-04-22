@@ -50,7 +50,7 @@ func (totwv *TableOfTablesWithViolations) String() string {
 }
 
 // Schema implements the interface sql.Table.
-func (totwv *TableOfTablesWithViolations) Schema() sql.Schema {
+func (totwv *TableOfTablesWithViolations) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "table", Type: types.Text, Source: totwv.tableName, PrimaryKey: true},
 		{Name: "num_violations", Type: types.Uint64, Source: totwv.tableName, PrimaryKey: false},

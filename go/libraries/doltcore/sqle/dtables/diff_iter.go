@@ -131,12 +131,12 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		nodeStore = dp.from.NodeStore()
 	}
 
-	fromConverter, err := NewProllyRowConverter(fsch, targetFromSchema, ctx.Warn, nodeStore)
+	fromConverter, err := NewProllyRowConverter(ctx, fsch, targetFromSchema, ctx.Warn, nodeStore)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}
 
-	toConverter, err := NewProllyRowConverter(tsch, targetToSchema, ctx.Warn, nodeStore)
+	toConverter, err := NewProllyRowConverter(ctx, tsch, targetToSchema, ctx.Warn, nodeStore)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}

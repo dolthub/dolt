@@ -37,7 +37,7 @@ var _ sql.FunctionExpression = (*JoinCost)(nil)
 var _ sql.CollationCoercible = (*JoinCost)(nil)
 
 // NewJoinCost returns a new JoinCost expression.
-func NewJoinCost(e sql.Expression) sql.Expression {
+func NewJoinCost(ctx *sql.Context, e sql.Expression) sql.Expression {
 	return &JoinCost{q: e}
 }
 
@@ -52,7 +52,7 @@ func (c *JoinCost) Description() string {
 }
 
 // Type implements the Expression interface.
-func (c *JoinCost) Type() sql.Type { return types.LongText }
+func (c *JoinCost) Type(ctx *sql.Context) sql.Type { return types.LongText }
 
 // CollationCoercibility implements the interface sql.CollationCoercible.
 func (*JoinCost) CollationCoercibility(ctx *sql.Context) (collation sql.CollationID, coercibility byte) {
@@ -60,7 +60,7 @@ func (*JoinCost) CollationCoercibility(ctx *sql.Context) (collation sql.Collatio
 }
 
 // IsNullable implements the Expression interface.
-func (c *JoinCost) IsNullable() bool {
+func (c *JoinCost) IsNullable(ctx *sql.Context) bool {
 	return false
 }
 
@@ -111,7 +111,7 @@ func (c *JoinCost) Children() []sql.Expression {
 }
 
 // WithChildren implements the Expression interface.
-func (c *JoinCost) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (c *JoinCost) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 0 {
 		return nil, sql.ErrInvalidChildrenNumber.New(c, len(children), 3)
 	}

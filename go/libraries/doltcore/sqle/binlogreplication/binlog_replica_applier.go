@@ -812,7 +812,7 @@ func getTableSchema(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 		return nil, "", fmt.Errorf("unable to find table %q", tableName)
 	}
 
-	return table.Schema(), table.Name(), nil
+	return table.Schema(ctx), table.Name(), nil
 }
 
 // getTableWriter returns a WriteSession and a TableWriter for writing to the specified |table| in the specified |database|.

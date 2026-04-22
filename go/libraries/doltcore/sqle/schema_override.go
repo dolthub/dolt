@@ -58,7 +58,7 @@ func resolveOverriddenNonexistentTable(ctx *sql.Context, tblName string, db Data
 	if err != nil {
 		return nil, false, err
 	}
-	overriddenSqlSchema, err := sqlutil.FromDoltSchema(db.Name(), tblName, overriddenSchema)
+	overriddenSqlSchema, err := sqlutil.FromDoltSchema(ctx, db.Name(), tblName, overriddenSchema)
 	if err != nil {
 		return nil, false, err
 	}

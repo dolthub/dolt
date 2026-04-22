@@ -66,8 +66,8 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 	formatter := overrides.SchemaFormatterFromContext(ctx)
 	for _, check := range ct.Checks() {
 		// Check definitions created before v1.55.3 may not have backquotes around identifiers
-		quotedExpr := stripTableNamesFromExpression(formatter, check.Expr, true).String()
-		unquotedExpr := stripTableNamesFromExpression(formatter, check.Expr, false).String()
+		quotedExpr := stripTableNamesFromExpression(ctx, formatter, check.Expr, true).String()
+		unquotedExpr := stripTableNamesFromExpression(ctx, formatter, check.Expr, false).String()
 		if quotedExpr == checkExpr || unquotedExpr == checkExpr {
 			return check.Expr, nil
 		}
@@ -76,8 +76,8 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 	return nil, fmt.Errorf("unable to find check expression")
 }
 
-func stripTableNamesFromExpression(formatter sql.SchemaFormatter, expr sql.Expression, quoted bool) sql.Expression {
-	e, _, _ := transform.Expr(expr, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
+func stripTableNamesFromExpression(ctx *sql.Context, formatter sql.SchemaFormatter, expr sql.Expression, quoted bool) sql.Expression {
+	e, _, _ := transform.Expr(ctx, expr, func(ctx *sql.Context, e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 		if col, ok := e.(*expression.GetField); ok {
 			return col.WithTable("").WithQuotedNames(formatter, quoted), transform.NewTree, nil
 		}

@@ -73,7 +73,7 @@ func (b *BranchStatusTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface
-func (b *BranchStatusTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+func (b *BranchStatusTableFunction) WithExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.Node, error) {
 	nd := *b
 	nd.exprs = exprs
 	return &nd, nil
@@ -97,7 +97,7 @@ func (b *BranchStatusTableFunction) IsReadOnly() bool {
 }
 
 // Schema implements the sql.Node interface
-func (b *BranchStatusTableFunction) Schema() sql.Schema {
+func (b *BranchStatusTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	return sql.Schema{
 		&sql.Column{Name: "branch", Type: types.Text, Nullable: false},
 		&sql.Column{Name: "commits_ahead", Type: types.Uint64, Nullable: false},
@@ -111,7 +111,7 @@ func (b *BranchStatusTableFunction) Children() []sql.Node {
 }
 
 // WithChildren implements the sql.Node interface
-func (b *BranchStatusTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (b *BranchStatusTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	return b, nil
 }
 

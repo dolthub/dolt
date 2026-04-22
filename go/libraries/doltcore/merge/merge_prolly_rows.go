@@ -78,7 +78,7 @@ func mergeProllyTable(
 	if err != nil {
 		return nil, nil, err
 	}
-	valueMerger := tm.GetNewValueMerger(mergedSch, leftRows)
+	valueMerger := tm.GetNewValueMerger(ctx, mergedSch, leftRows)
 
 	if !valueMerger.leftMapping.IsIdentityMapping() {
 		mergeInfo.LeftNeedsRewrite = true
@@ -1430,7 +1430,7 @@ func resolveDefaults(ctx *sql.Context, tableName string, mergedSchema schema.Sch
 			if exprs[i] == nil {
 				continue
 			}
-			exprs[i], _, _ = transform.Expr(exprs[i], func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
+			exprs[i], _, _ = transform.Expr(ctx, exprs[i], func(ctx *sql.Context, e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 				if gf, ok := e.(*expression.GetField); ok {
 					newIdx := indexOf(gf.Name(), sourceSchema.GetAllCols().GetColumnNames())
 					if newIdx >= 0 {
@@ -1827,7 +1827,7 @@ type valueMerger struct {
 	ns                                     tree.NodeStore
 }
 
-func NewValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore) *valueMerger {
+func NewValueMerger(ctx context.Context, merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore) *valueMerger {
 	leftMapping, rightMapping, baseMapping := generateSchemaMappings(merged, leftSch, rightSch, baseSch)
 
 	baseToLeftMapping, baseToRightMapping, baseToResultMapping := generateSchemaMappings(baseSch, leftSch, rightSch, merged)

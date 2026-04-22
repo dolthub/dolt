@@ -45,7 +45,7 @@ func NewCommitAncestorsTable(_ *sql.Context, dbName, tableName string, ddb *dolt
 }
 
 func (ct *CommitAncestorsTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(ct.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(ct.Schema(ctx))
 	numRows, _, err := ct.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -68,7 +68,7 @@ func (ct *CommitAncestorsTable) String() string {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the commit_ancestors system table.
-func (ct *CommitAncestorsTable) Schema() sql.Schema {
+func (ct *CommitAncestorsTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "commit_hash", Type: types.Text, Source: ct.tableName, PrimaryKey: true, DatabaseSource: ct.dbName},
 		{Name: "parent_hash", Type: types.Text, Source: ct.tableName, PrimaryKey: true, DatabaseSource: ct.dbName},
@@ -120,7 +120,7 @@ func (ct *CommitAncestorsTable) LookupPartitions(ctx *sql.Context, lookup sql.In
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse commit hash lookup: %s", sql.DebugString(lookup.Ranges))
+			return nil, fmt.Errorf("failed to parse commit hash lookup: %s", sql.DebugString(ctx, lookup.Ranges))
 		}
 
 		hashes, commits, metas := index.HashesToCommits(ctx, ct.ddb, hs, nil, false)

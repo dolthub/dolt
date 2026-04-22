@@ -412,7 +412,7 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 
 		fmt.Fprintf(planBuf, "query: %s\n", query)
 		fmt.Fprintf(planBuf, "plan: \n%s", planned.String())
-		fmt.Fprintf(planBuf, "debug plan: \n%s", sql.DebugString(planned))
+		fmt.Fprintf(planBuf, "debug plan: \n%s", sql.DebugString(ctx, planned))
 	}
 
 	return planBuf.Flush()

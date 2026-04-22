@@ -519,7 +519,7 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 	if err != nil {
 		return nil, err
 	}
-	finalSch, err := sqlutil.FromDoltSchema("", workspaceTableName, totalSch)
+	finalSch, err := sqlutil.FromDoltSchema(ctx, "", workspaceTableName, totalSch)
 	if err != nil {
 		return nil, err
 	}
@@ -544,7 +544,7 @@ func (wt *WorkspaceTable) String() string {
 	return wt.Name()
 }
 
-func (wt *WorkspaceTable) Schema() sql.Schema {
+func (wt *WorkspaceTable) Schema(ctx *sql.Context) sql.Schema {
 	return wt.sqlSchema
 }
 
@@ -937,17 +937,17 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 		return workspaceDiffIter{}, errors.New("no base, staging, or working table")
 	}
 
-	baseConverter, err := NewProllyRowConverter(wp.baseSch, wp.baseSch, ctx.Warn, nodeStore)
+	baseConverter, err := NewProllyRowConverter(ctx, wp.baseSch, wp.baseSch, ctx.Warn, nodeStore)
 	if err != nil {
 		return workspaceDiffIter{}, err
 	}
 
-	stagingConverter, err := NewProllyRowConverter(wp.stagingSch, wp.stagingSch, ctx.Warn, nodeStore)
+	stagingConverter, err := NewProllyRowConverter(ctx, wp.stagingSch, wp.stagingSch, ctx.Warn, nodeStore)
 	if err != nil {
 		return workspaceDiffIter{}, err
 	}
 
-	workingConverter, err := NewProllyRowConverter(wp.workingSch, wp.workingSch, ctx.Warn, nodeStore)
+	workingConverter, err := NewProllyRowConverter(ctx, wp.workingSch, wp.workingSch, ctx.Warn, nodeStore)
 	if err != nil {
 		return workspaceDiffIter{}, err
 	}
@@ -992,7 +992,7 @@ func (e emptyWorkspaceTable) String() string {
 	return e.Name()
 }
 
-func (e emptyWorkspaceTable) Schema() sql.Schema {
+func (e emptyWorkspaceTable) Schema(ctx *sql.Context) sql.Schema {
 	sch := GetDoltWorkspaceBaseSqlSchema()
 	// Only return the "id" and "staged" columns.
 	return sch[0:2]

@@ -225,7 +225,7 @@ func (t *TempTable) Format() *types.NomsBinFormat {
 	return t.table.Format()
 }
 
-func (t *TempTable) Schema() sql.Schema {
+func (t *TempTable) Schema(ctx *sql.Context) sql.Schema {
 	return t.pkSch.Schema
 }
 
@@ -394,7 +394,7 @@ func (t *TempTable) GetChecks(*sql.Context) ([]sql.CheckDefinition, error) {
 	return checksInSchema(t.sch), nil
 }
 
-func (t *TempTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+func (t *TempTable) PrimaryKeySchema(ctx *sql.Context) sql.PrimaryKeySchema {
 	return t.pkSch
 }
 

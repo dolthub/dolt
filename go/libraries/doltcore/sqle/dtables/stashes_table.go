@@ -42,7 +42,7 @@ func NewStashesTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, tableNam
 }
 
 func (st *StashesTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(st.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(st.Schema(ctx))
 	numRows, _, err := st.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -81,7 +81,7 @@ func (st *StashesTable) String() string {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the remotes system table
-func (st *StashesTable) Schema() sql.Schema {
+func (st *StashesTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "name", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
 		{Name: "stash_id", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},

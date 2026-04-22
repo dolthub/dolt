@@ -20,7 +20,7 @@ import (
 )
 
 func compareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (int, error) {
-	return l1.Type().Compare(ctx, l1.Value(), l2.Value())
+	return l1.Type(ctx).Compare(ctx, l1.Value(), l2.Value())
 }
 
 // CompareOp is an interface for comparing values using SQL type semantics.

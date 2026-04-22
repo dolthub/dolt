@@ -102,7 +102,7 @@ func (st *StatisticsTable) String() string {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
-func (st *StatisticsTable) Schema() sql.Schema {
+func (st *StatisticsTable) Schema(ctx *sql.Context) sql.Schema {
 	return schema.StatsTableSqlSchema(st.dbName).Schema
 }
 
