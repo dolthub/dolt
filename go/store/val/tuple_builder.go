@@ -61,7 +61,7 @@ func (om OrdinalMapping) IsIdentityMapping() bool {
 	return true
 }
 
-var defaultTupleLengthTarget int64 = (1 << 11)
+var defaultTupleLengthTarget uint16 = (1 << 11)
 
 type TupleBuilder struct {
 	vs                ValueStore
@@ -69,9 +69,9 @@ type TupleBuilder struct {
 	fields            [][]byte
 	buf               []byte
 	pos               int64
-	tupleLengthTarget int64 // The max tuple length before the tuple builder attempts to store values out-of-band.
-	outOfBandSize     int64 // The size of the tuple if every adaptive value is stored out-of-band
-	inlineSize        int64 // The size of the tuple if every adaptive value is inlined
+	tupleLengthTarget uint16 // The max tuple length before the tuple builder attempts to store values out-of-band.
+	outOfBandSize     int64  // The size of the tuple if every adaptive value is stored out-of-band
+	inlineSize        int64  // The size of the tuple if every adaptive value is inlined
 }
 
 func NewTupleBuilder(desc *TupleDesc, vs ValueStore) *TupleBuilder {
@@ -109,7 +109,7 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 		savings     int64 // inlineSize - outOfBandSize
 	}
 	totalSize := tb.inlineSize
-	if totalSize > tb.tupleLengthTarget {
+	if totalSize > int64(tb.tupleLengthTarget) {
 		// Collect all adaptive columns that would benefit from out-of-band storage,
 		// then sort by savings descending so we move the largest values out-of-band first.
 		var candidates []adaptiveCandidate
@@ -147,7 +147,7 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 			}
 			outOfBandSet[c.columnIndex] = true
 			totalSize -= c.savings
-			if totalSize <= tb.tupleLengthTarget {
+			if totalSize <= int64(tb.tupleLengthTarget) {
 				break
 			}
 		}
@@ -582,8 +582,8 @@ func (tb *TupleBuilder) PutAdaptiveExtendedFromInline(ctx context.Context, i int
 
 func (tb *TupleBuilder) PutAdaptiveFromInline(ctx context.Context, i int, v []byte) error {
 
-	inlineSize := ByteSize(len(v)) + 1 // include extra header byte
-	if int64(inlineSize) > tb.tupleLengthTarget {
+	inlineSize := int64(len(v) + 1) // include extra header byte
+	if inlineSize > int64(tb.tupleLengthTarget) {
 		// Inline value is too large. We must store it out-of-band.
 		tb.ensureCapacity(maxOutOfBandAdaptiveValueLength)
 		blobLength := uint64(len(v))
@@ -598,24 +598,25 @@ func (tb *TupleBuilder) PutAdaptiveFromInline(ctx context.Context, i int, v []by
 		field := tb.buf[tb.pos : tb.pos+int64(outOfBandSize)]
 		tb.fields[i] = field
 		tb.pos += int64(outOfBandSize)
-		tb.inlineSize += int64(inlineSize)
+		tb.inlineSize += inlineSize
 		tb.outOfBandSize += int64(outOfBandSize)
 		return nil
 	}
 
-	tb.ensureCapacity(inlineSize)
-	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(inlineSize)])
+	// inlineSize <= tb.tupleLengthTarget, so it must fit within a 16-bit ByteSize
+	tb.ensureCapacity(ByteSize(inlineSize))
+	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+inlineSize])
 	tb.fields[i] = field
 	field[0] = 0 // Mark this as inline
 	copy(field[1:], v)
-	tb.pos += int64(inlineSize)
-	tb.inlineSize += int64(inlineSize)
+	tb.pos += inlineSize
+	tb.inlineSize += inlineSize
 	tb.outOfBandSize += field.outOfBandSize()
 	return nil
 }
 
 func (tb *TupleBuilder) PutAdaptiveValue(ctx context.Context, vs ValueStore, i int, v AdaptiveValue) error {
-	if v.getMessageLength() > tb.tupleLengthTarget {
+	if v.getMessageLength() > int64(tb.tupleLengthTarget) {
 		// The message won't fit inlined, so premptively store it out-of-band
 		byteArray, err := v.convertToByteArray(ctx, vs, nil)
 		if err != nil {

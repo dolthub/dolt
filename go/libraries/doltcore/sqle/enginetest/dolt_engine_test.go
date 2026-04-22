@@ -810,10 +810,10 @@ func TestAdaptiveEncoding(t *testing.T) {
 	defer func() { typeinfo.UseAdaptiveEncoding = false }()
 	typeinfo.UseAdaptiveEncoding = true
 
-	// RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Representation)
-	// RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Correctness)
-	// RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Representation)
-	// RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Correctness)
+	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Representation)
+	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Correctness)
+	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Representation)
+	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Correctness)
 
 	RunAdaptiveEncodingScripts(t, newDoltHarness(t))
 }
