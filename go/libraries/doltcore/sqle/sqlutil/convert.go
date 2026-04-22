@@ -66,6 +66,8 @@ func FromDoltSchema(ctx context.Context, dbName, tableName string, sch schema.Sc
 			Comment:        col.Comment,
 			Virtual:        col.Virtual,
 			Extra:          extra,
+			Hidden:         col.Hidden,
+			HiddenSystem:   col.SystemHidden,
 		}
 		i++
 		return false, nil
@@ -149,7 +151,7 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	var defaultVal, generatedVal, onUpdateVal string
 	if col.Default != nil {
 		defaultVal = col.Default.String()
-	} else {
+	} else if col.Generated != nil {
 		generatedVal = col.Generated.String()
 	}
 
@@ -170,6 +172,8 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		AutoIncrement: col.AutoIncrement,
 		Comment:       col.Comment,
 		Constraints:   constraints,
+		Hidden:        col.Hidden,
+		SystemHidden:  col.HiddenSystem,
 	}
 
 	err = schema.ValidateColumn(c)
