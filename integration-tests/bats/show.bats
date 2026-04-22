@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+# Tests in this file use dolt show to read raw NBS storage, which requires direct local
+# access to the data store and is not available in remote-engine mode.
 
 setup() {
     setup_common
@@ -123,6 +125,7 @@ assert_has_key_value() {
 }
 
 @test "show: --no-pretty" {
+    skip_if_remote
     dolt commit --allow-empty -m "commit: initialize table1"
     run dolt show --no-pretty
     [ $status -eq 0 ]
@@ -141,6 +144,7 @@ assert_has_key_value() {
 }
 
 @test "show: --no-pretty commit hash" {
+    skip_if_remote
     dolt commit --allow-empty -m "commit: initialize table1"
     hash=$(dolt sql -q "select dolt_hashof('head');" -r csv | tail -n 1)
     run dolt show --no-pretty $hash
@@ -160,6 +164,7 @@ assert_has_key_value() {
 }
 
 @test "show: HEAD root" {
+    skip_if_remote
     dolt sql -q "create table table1 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (1), (2), (3)"
     dolt add .
@@ -182,6 +187,7 @@ assert_has_key_value() {
 }
 
 @test "show: WORKING" {
+    skip_if_remote
     dolt sql -q "create table table1 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (1), (2), (3)"
     dolt add .
@@ -199,6 +205,7 @@ assert_has_key_value() {
 }
 
 @test "show: STAGED" {
+    skip_if_remote
     dolt sql -q "create table table1 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (1), (2), (3)"
     dolt add .
@@ -216,6 +223,7 @@ assert_has_key_value() {
 }
 
 @test "show: table" {
+    skip_if_remote
     dolt sql -q "create table table1 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (1), (2), (3)"
     dolt add .
@@ -237,6 +245,7 @@ assert_has_key_value() {
 }
 
 @test "show: pretty commit from hash" {
+    skip_if_remote
     dolt tag v0
     dolt commit --allow-empty -m "commit1"
 
@@ -254,6 +263,7 @@ assert_has_key_value() {
 }
 
 @test "show: primary index leaf" {
+    skip_if_remote
     dolt sql <<EOF
 create table test(pk int primary key, t text, j json);
 insert into test values (0, "Hello", "{}"), (1, "World", "[]");
@@ -266,6 +276,7 @@ EOF
 }
 
 @test "show: blob leaf" {
+    skip_if_remote
     dolt sql <<EOF
 create table test(pk int primary key, t text, j json);
 insert into test values (0, "Hello", "{}"), (1, "World", "[]");
@@ -277,6 +288,7 @@ EOF
 }
 
 @test "show: blob non-leaf" {
+    skip_if_remote
     dolt sql <<EOF
 create table words (t text);
 insert into words values ("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas interdum, magna nec lacinia ultrices, nunc urna pretium neque, eu feugiat tortor elit vitae felis. Aliquam laoreet non ex vitae porttitor. Phasellus bibendum felis vel elit ultrices fermentum. Proin eleifend hendrerit auctor. Curabitur non neque lectus. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras ut tincidunt magna. Fusce faucibus eget enim sit amet fringilla. Fusce vitae est quis velit efficitur rutrum iaculis quis lacus. Sed vitae diam id odio maximus interdum id at libero. Suspendisse iaculis facilisis mauris. Sed sagittis libero urna, posuere facilisis dolor porttitor sed. Nulla sed diam in risus sollicitudin blandit. Mauris purus libero, rhoncus vitae turpis ut, luctus rutrum arcu. In porta magna non enim molestie pharetra quis nec sem. Maecenas vehicula neque dolor, ut malesuada leo finibus sit amet. Proin viverra mauris sit amet urna rutrum ullamcorper. Duis hendrerit turpis a massa dapibus consectetur. Nunc posuere faucibus nibh, sed fringilla tellus mollis ac. Aliquam placerat ipsum at velit pretium, id convallis nisi euismod. Curabitur eget euismod ante, non interdum ipsum. Sed quis volutpat lorem, non luctus diam. Sed commodo enim vel nisi ultricies, nec porta magna placerat. Maecenas tristique viverra cursus. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras tempus nisl et purus sodales, vitae dignissim mi condimentum. Nullam ut ullamcorper purus. Phasellus malesuada bibendum elit. Mauris justo magna, condimentum id accumsan sit amet, mollis ut nulla. Nullam et lorem sed nulla semper dapibus. Nam quis ipsum a elit sodales ultrices. Praesent convallis ipsum et semper commodo. Donec nec nunc erat. Curabitur ut hendrerit tellus, in lobortis leo. Sed at venenatis lectus. Sed faucibus in odio eu aliquet. Morbi sed enim nisl. Vestibulum gravida magna at lectus ornare, vel porta quam placerat. Fusce ornare, felis vitae sagittis volutpat, nisi ex euismod lorem, ac sollicitudin urna ipsum vitae massa. Cras lacinia mauris velit. Nam et laoreet orci, et porttitor augue. Integer viverra felis vel erat cursus, vel consequat tellus consectetur. Mauris laoreet ut tortor non finibus. Fusce mattis odio suscipit sem elementum, in vehicula nisl dignissim. Phasellus neque ligula, ullamcorper sit amet risus dapibus, tincidunt ornare mauris. Quisque non cursus ante. Nulla facilisi. Aliquam id lacus in tortor semper malesuada. Vestibulum at mattis tellus. Duis placerat tempus libero, sit amet dictum nibh pulvinar molestie. Ut aliquam tellus nec libero semper volutpat. Aenean pretium porttitor ex, non volutpat arcu aliquam non. Vestibulum eget eleifend dui. Nullam mollis, ipsum sit amet iaculis scelerisque, lorem diam eleifend leo, eget lobortis arcu orci a nulla. Morbi non ligula ex. Aliquam ac augue congue, finibus ante at, convallis leo. Vestibulum fermentum hendrerit felis ut ullamcorper. Sed porttitor turpis at justo iaculis aliquam. Praesent hendrerit sit amet justo ut aliquam. Praesent ut ligula placerat mi eleifend aliquam sit amet vel leo. Phasellus vitae arcu a turpis accumsan volutpat. Proin libero purus, dictum nec ullamcorper in, venenatis luctus felis. Sed pharetra, justo nec ornare mattis, neque erat tristique felis, ut finibus massa felis eu erat. In dictum dui nibh, a finibus velit scelerisque at. Aenean lacinia, ex a bibendum gravida, felis enim tincidunt dolor, in tristique eros nunc eu nibh. Nulla facilisi. Donec non risus porttitor, egestas nulla vitae, sollicitudin lorem. Proin sem lectus, fermentum vel dui cursus, mattis tempus nulla. Mauris quis justo urna. In vestibulum erat id lobortis malesuada. Curabitur non velit laoreet, porttitor felis vitae, aliquam magna. Quisque id tempor justo. Suspendisse potenti. Morbi vel ipsum suscipit, aliquam tellus ac, pharetra neque. Suspendisse ultrices, justo pulvinar sodales convallis, mauris risus vulputate erat, nec euismod libero quam at nulla. Curabitur ac suscipit nulla. Maecenas a augue nulla. Ut quis mauris at enim accumsan ultricies. Morbi non pellentesque elit. Proin et arcu ullamcorper, finibus nisi ut, tincidunt justo. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Nunc ultrices imperdiet nulla quis tincidunt. Donec pulvinar odio non magna imperdiet, at varius augue efficitur. Suspendisse molestie sapien lacus, in ornare est tincidunt non. Aliquam arcu sem, sagittis ac feugiat at, fermentum quis neque. Pellentesque ut nisl eget nulla lobortis pellentesque semper et felis.");
@@ -288,6 +300,7 @@ EOF
 }
 
 @test "show: primary index non-leaf" {
+    skip_if_remote
     dolt sql <<EOF
 create table test(pk int primary key);
 insert into test values (1);
@@ -301,6 +314,7 @@ EOF
 }
 
 @test "show: schema" {
+    skip_if_remote
     dolt sql <<EOF
 create table test(pk int primary key);
 insert into test values (1);
@@ -318,6 +332,7 @@ EOF
 }
 
 @test "show: secondary index leaf" {
+    skip_if_remote
     dolt sql <<EOF
 create table test(pk int primary key, v2 int unique);
 insert into test values (0, 35), (1, 19), (2, 3);
@@ -331,6 +346,7 @@ EOF
 }
 
 @test "show: secondary index non-leaf" {
+    skip_if_remote
     dolt sql <<EOF
 create table test(pk int primary key, v1 int, index(v1));
 insert into test values (1, 0);

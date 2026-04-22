@@ -718,7 +718,11 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	p.applyDBLoadParamsToEnv(newEnv)
 
 	newDbStorageFormat := types.Format_Default
-	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)
+	committerName, committerEmail, err := dsess.ResolveNameEmail(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
+	if err != nil {
+		return err
+	}
+	err = newEnv.InitRepo(ctx, newDbStorageFormat, committerName, committerEmail, p.defaultBranch)
 	if err != nil {
 		return err
 	}
@@ -812,16 +816,11 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 			return fmt.Errorf("unable to get roots for database %s", name)
 		}
 
-		t := ctx.QueryTime()
-		userName := ctx.Client().User
-		userEmail := fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
-
-		pendingCommit, err := sess.NewPendingCommit(ctx, name, roots, actions.CommitStagedProps{
-			Message: "CREATE DATABASE",
-			Date:    t,
-			Name:    userName,
-			Email:   userEmail,
-		})
+		commitStagedProps, err := dsess.NewCommitStagedProps(ctx, "CREATE DATABASE")
+		if err != nil {
+			return err
+		}
+		pendingCommit, err := sess.NewPendingCommit(ctx, name, roots, commitStagedProps)
 		if err != nil {
 			return err
 		}

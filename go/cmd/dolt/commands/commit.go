@@ -174,6 +174,10 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 
 	commit, err := getCommitInfo(queryist.Context, queryist.Queryist, "HEAD")
+	if err != nil {
+		cli.Printf("Commit completed, but failure to get commit details occurred: %s\n", err.Error())
+		return 0, false
+	}
 	if cli.ExecuteWithStdioRestored != nil {
 		cli.ExecuteWithStdioRestored(func() {
 			pager := outputpager.Start()
@@ -186,8 +190,11 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	return 0, false
 }
 
-// constructParametrizedDoltCommitQuery generates the sql query necessary to call the DOLT_COMMIT() stored procedure with placeholders
-// for arg input. Also returns a list of the inputs in the order in which they appear in the query.
+// constructParametrizedDoltCommitQuery builds the CALL DOLT_COMMIT query the CLI sends to the
+// engine, returning the query text with placeholders and the ordered parameter list. |msg| is
+// the commit message and |apr| supplies the parsed CLI flags. When --author is not passed,
+// the server resolves author and committer from the identity session variables on the
+// connection. Returns an error when |cliCtx| has no configured user.name or user.email.
 func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseResults, cliCtx cli.CliContext) (string, []interface{}, error) {
 	var params []interface{}
 	var param bool
@@ -235,20 +242,16 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 		writeToBuffer("-f")
 	}
 
-	writeToBuffer("--author")
-	param = true
-	writeToBuffer("?")
-	var author string
-	if apr.Contains(cli.AuthorParam) {
-		author, _ = apr.GetValue(cli.AuthorParam)
-	} else {
-		name, email, err := env.GetNameAndEmail(cliCtx.Config())
-		if err != nil {
-			return "", nil, err
-		}
-		author = name + " <" + email + ">"
+	if _, _, err := env.GetNameAndEmail(cliCtx.Config()); err != nil {
+		return "", nil, err
 	}
-	params = append(params, author)
+	if apr.Contains(cli.AuthorParam) {
+		writeToBuffer("--author")
+		param = true
+		writeToBuffer("?")
+		author, _ := apr.GetValue(cli.AuthorParam)
+		params = append(params, author)
+	}
 
 	if apr.Contains(cli.AllFlag) {
 		writeToBuffer("-a")
@@ -291,7 +294,7 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 		return 0
 	}
 
-	if err == datas.ErrNameNotConfigured {
+	if datas.ErrNameNotConfigured.Is(err) {
 		bdr := errhand.BuildDError("Could not determine %s.", config.UserNameKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", config.UserNameKey)
@@ -299,7 +302,7 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	if err == datas.ErrEmailNotConfigured {
+	if datas.ErrEmailNotConfigured.Is(err) {
 		bdr := errhand.BuildDError("Could not determine %s.", config.UserEmailKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", config.UserEmailKey)

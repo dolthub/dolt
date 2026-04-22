@@ -670,7 +670,9 @@ If you're interested in running this command against a remote host, hit us up on
 		if apr.Contains(cli.NoTLSFlag) {
 			tlsMode = sqlserver.QueryistTLSMode_Disabled
 		}
-		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, tlsMode, useDb)
+		doltConfigName := rootEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
+		doltConfigEmail := rootEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, tlsMode, useDb, doltConfigName, doltConfigEmail)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
 		if hasPort {
@@ -781,7 +783,9 @@ If you're interested in running this command against a remote host, hit us up on
 			if !creds.Specified {
 				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: localCreds.Secret, Specified: false}
 			}
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb)
+			doltConfigName := targetEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
+			doltConfigEmail := targetEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
 		}
 	}
 

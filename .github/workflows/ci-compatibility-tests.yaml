@@ -52,3 +52,4 @@ jobs:
         working-directory: ./integration-tests/compatibility
         env:
           DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
+          BATS_PRINT_OUTPUT_ON_FAILURE: "1"

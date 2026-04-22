@@ -17,7 +17,6 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -25,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
@@ -111,22 +109,8 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return "", false, err
-		}
-	} else {
-		// In SQL mode, use the current SQL user as the commit author, instead of the `dolt config` configured values.
-		// We won't have an email address for the SQL user though, so instead use the MySQL user@address notation.
-		name = ctx.Client().User
-		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
-	}
-
-	amend := apr.Contains(cli.AmendFlag)
-
 	msg, msgOk := apr.GetValue(cli.MessageArg)
+	amend := apr.Contains(cli.AmendFlag)
 	if !msgOk {
 		if amend {
 			commit, err := dSess.GetHeadCommit(ctx, dbName)
@@ -143,35 +127,37 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	t := ctx.QueryTime()
-	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		var err error
-		t, err = dconfig.ParseDate(commitTimeStr)
+	commitStagedProps, err := dsess.NewCommitStagedProps(ctx, msg)
+	if err != nil {
+		return "", false, err
+	}
+	commitStagedProps.Amend = amend
 
+	commitStagedProps.AllowEmpty = apr.Contains(cli.AllowEmptyFlag)
+	commitStagedProps.SkipEmpty = apr.Contains(cli.SkipEmptyFlag)
+	commitStagedProps.SkipVerification = apr.Contains(cli.SkipVerificationFlag)
+
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		commitStagedProps.Author.Name, commitStagedProps.Author.Email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
 			return "", false, err
 		}
-	} else if datas.CustomAuthorDate {
-		t = datas.AuthorDate()
+	}
+
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+		t, err := dconfig.ParseDate(commitTimeStr)
+		if err != nil {
+			return "", false, err
+		}
+		commitStagedProps.Author.Date = datas.CommitDateAt(t)
 	}
 
 	if apr.Contains(cli.ForceFlag) {
+		commitStagedProps.Force = true
 		err = ctx.SetSessionVariable(ctx, "dolt_force_transaction_commit", 1)
 		if err != nil {
 			return "", false, err
 		}
-	}
-
-	csp := actions.CommitStagedProps{
-		Message:          msg,
-		Date:             t,
-		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
-		SkipEmpty:        apr.Contains(cli.SkipEmptyFlag),
-		Amend:            amend,
-		Force:            apr.Contains(cli.ForceFlag),
-		Name:             name,
-		Email:            email,
-		SkipVerification: apr.Contains(cli.SkipVerificationFlag),
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
@@ -179,7 +165,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		return "", false, fmt.Errorf("failed to get gpgsign: %w", err)
 	}
 
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, csp)
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, commitStagedProps)
 	if err != nil {
 		return "", false, err
 	}
@@ -211,17 +197,19 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 			}
 		}
 
-		strToSign, err := commitSignatureStr(ctx, dbName, roots, csp)
+		headHash, err := roots.Head.HashOf()
+		if err != nil {
+			return "", false, err
+		}
+		stagedHash, err := roots.Staged.HashOf()
 		if err != nil {
 			return "", false, err
 		}
 
-		signature, err := gpg.Sign(ctx, keyId, []byte(strToSign))
-		if err != nil {
-			return "", false, err
-		}
-
-		pendingCommit.CommitOptions.Meta.Signature = string(signature)
+		pendingCommit.CommitOptions.Signer = &gpg.Signer{KeyId: keyId}
+		pendingCommit.CommitOptions.DBName = dbName
+		pendingCommit.CommitOptions.HeadHash = headHash
+		pendingCommit.CommitOptions.StagedHash = stagedHash
 	}
 
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
@@ -256,28 +244,4 @@ func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]st
 	}
 
 	return args, nil
-}
-
-func commitSignatureStr(ctx *sql.Context, dbName string, roots doltdb.Roots, csp actions.CommitStagedProps) (string, error) {
-	var lines []string
-	lines = append(lines, fmt.Sprint("db: ", dbName))
-	lines = append(lines, fmt.Sprint("Message: ", csp.Message))
-	lines = append(lines, fmt.Sprint("Name: ", csp.Name))
-	lines = append(lines, fmt.Sprint("Email: ", csp.Email))
-	lines = append(lines, fmt.Sprint("Date: ", csp.Date.String()))
-
-	head, err := roots.Head.HashOf()
-	if err != nil {
-		return "", err
-	}
-
-	staged, err := roots.Staged.HashOf()
-	if err != nil {
-		return "", err
-	}
-
-	lines = append(lines, fmt.Sprint("Head: ", head.String()))
-	lines = append(lines, fmt.Sprint("Staged: ", staged.String()))
-
-	return strings.Join(lines, "\n"), nil
 }

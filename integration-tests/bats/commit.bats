@@ -191,6 +191,8 @@ SQL
 }
 
 @test "commit: dolt commit works correctly with multiple branches" {
+    # dolt checkout is not supported in remote-engine mode.
+    skip_if_remote
     dolt branch branch2
     dolt checkout -b branch1
     dolt sql -q "CREATE table t1 (pk int primary key);"
@@ -215,6 +217,8 @@ SQL
 }
 
 @test "commit: no config set" {
+    # In remote-engine mode, client identity variables are not forwarded to the server.
+    skip_if_remote
     dolt config --global --unset user.email
     dolt config --global --unset user.name
 
@@ -245,6 +249,8 @@ SQL
 }
 
 @test "commit: set committer time with env var" {
+    # The final branch hash comparison uses dolt checkout, which is not supported in remote-engine mode.
+    skip_if_remote
     dolt sql -q "CREATE table t (pk int primary key);"
     dolt add t
 

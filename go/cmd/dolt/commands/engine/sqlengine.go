@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"os"
 	"strconv"
@@ -593,6 +594,96 @@ func doltSessionFactory(
 
 		return doltSession, nil
 	}
+}
+
+var ErrFailedToInitCommitIdent = fmt.Errorf("failed to initialize commit identity session variables from environment")
+
+// envSessionVar pairs an environment variable with the session variable it populates when non-empty.
+type envSessionVar struct {
+	envVar     string
+	sessionVar string
+}
+
+// commitIdentEnvOverrides lists the DOLT_AUTHOR_* and DOLT_COMMITTER_* environment variables
+// that [InitCommitIdentSessionConfig] maps to their corresponding session variables.
+var commitIdentEnvOverrides = []envSessionVar{
+	{dconfig.EnvDoltAuthorName, dsess.DoltAuthorName},
+	{dconfig.EnvDoltAuthorEmail, dsess.DoltAuthorEmail},
+	{dconfig.EnvDoltAuthorDate, dsess.DoltAuthorDate},
+	{dconfig.EnvDoltCommitterName, dsess.DoltCommitterName},
+	{dconfig.EnvDoltCommitterEmail, dsess.DoltCommitterEmail},
+	{dconfig.EnvDoltCommitterDate, dsess.DoltCommitterDate},
+}
+
+// InitCommitIdentSessionConfig seeds the DOLT_ author and committer session variables on the
+// current session so later DOLT_COMMIT calls attribute the commit correctly. |name| and |email|
+// supply the default identity for both author and committer; any non-empty DOLT_AUTHOR_* or
+// DOLT_COMMITTER_* environment variable overrides the matching field. Must run after
+// [sql.SessionCommandBegin] so the session is ready to accept SET statements. Silently skips
+// variables not recognised by |queryist|, so older servers remain usable.
+func InitCommitIdentSessionConfig(queryist cli.Queryist, sqlCtx *sql.Context, name, email string) error {
+	sessionVars := map[string]string{
+		dsess.DoltAuthorName:     name,
+		dsess.DoltAuthorEmail:    email,
+		dsess.DoltCommitterName:  name,
+		dsess.DoltCommitterEmail: email,
+	}
+
+	for _, pair := range commitIdentEnvOverrides {
+		if val := os.Getenv(pair.envVar); val != "" {
+			sessionVars[pair.sessionVar] = val
+		}
+	}
+
+	var showQuery strings.Builder
+	showQuery.WriteString("SHOW VARIABLES WHERE Variable_name IN (")
+	hasVariableNames := false
+	for variableName, value := range sessionVars {
+		if value == "" {
+			continue
+		}
+		if hasVariableNames {
+			showQuery.WriteByte(',')
+		}
+		showQuery.WriteByte('\'')
+		showQuery.WriteString(variableName)
+		showQuery.WriteByte('\'')
+		hasVariableNames = true
+	}
+	if !hasVariableNames {
+		return nil
+	}
+	showQuery.WriteByte(')')
+	variableRows, err := cli.GetRowsForSql(queryist, sqlCtx, showQuery.String())
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrFailedToInitCommitIdent, err)
+	}
+
+	var setStatement strings.Builder
+	setStatement.WriteString("SET ")
+	hasAssignments := false
+	for _, row := range variableRows {
+		variableName, ok := row[0].(string)
+		if !ok {
+			continue
+		}
+		value, ok := sessionVars[strings.ToLower(variableName)]
+		if !ok {
+			continue
+		}
+		if hasAssignments {
+			setStatement.WriteString(", ")
+		}
+		fmt.Fprintf(&setStatement, "@@SESSION.%s = %q", variableName, value)
+		hasAssignments = true
+	}
+	if !hasAssignments {
+		return nil
+	}
+	if _, _, _, err := queryist.Query(sqlCtx, setStatement.String()); err != nil {
+		return fmt.Errorf("%w: %v", ErrFailedToInitCommitIdent, err)
+	}
+	return nil
 }
 
 type ConfigOption func(*SqlEngineConfig)

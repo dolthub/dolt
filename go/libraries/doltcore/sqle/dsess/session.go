@@ -503,14 +503,11 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 		dbName := ctx.GetCurrentDatabase()
 		var pendingCommit *doltdb.PendingCommit
-		pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, actions.CommitStagedProps{
-			Message:    message,
-			Date:       ctx.QueryTime(),
-			AllowEmpty: false,
-			Force:      false,
-			Name:       d.Username(),
-			Email:      d.Email(),
-		})
+		commitStagedProps, err := NewCommitStagedProps(ctx, message)
+		if err != nil {
+			return err
+		}
+		pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, commitStagedProps)
 		if err != nil {
 			return err
 		}
@@ -1064,7 +1061,7 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 		return nil, nil, "", err
 	}
 
-	t := meta.Time()
+	t := meta.Committer.Date.Time()
 	commitTime = (*types.Timestamp)(&t)
 
 	commitHash, err := cm.HashOf()

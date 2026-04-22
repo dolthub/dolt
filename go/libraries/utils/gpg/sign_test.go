@@ -39,7 +39,7 @@ func TestSign(t *testing.T) {
 	signTestSetup(t, ctx)
 
 	message := []byte("I did a thing")
-	signature, err := Sign(ctx, keyId, message)
+	signature, err := (&Signer{KeyId: keyId}).Sign(ctx, message)
 	require.NoError(t, err)
 	require.NotNil(t, signature)
 	require.NotEmpty(t, signature)

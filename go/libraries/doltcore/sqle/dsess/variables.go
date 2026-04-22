@@ -22,6 +22,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // Per-DB system variables
@@ -71,6 +73,15 @@ const (
 	DoltStatsGCEnabled   = "dolt_stats_gc_enabled"
 
 	DoltAutoGCEnabled = "dolt_auto_gc_enabled"
+
+	DoltLogCommitterOnly = "dolt_log_committer_only"
+
+	DoltAuthorName     = "dolt_author_name"
+	DoltAuthorEmail    = "dolt_author_email"
+	DoltAuthorDate     = "dolt_author_date"
+	DoltCommitterName  = "dolt_committer_name"
+	DoltCommitterEmail = "dolt_committer_email"
+	DoltCommitterDate  = "dolt_committer_date"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"
@@ -212,3 +223,90 @@ const (
 	SysVarFalse = int8(0)
 	SysVarTrue  = int8(1)
 )
+
+// NewCommitStagedProps creates an [actions.CommitStagedProps] using |message| as the commit
+// message and resolving author and committer identity via [ResolveNameEmail], which walks
+// session variables, the SQL client ([sql.Client]), then the session's configured identity.
+// The returned error surfaces session-variable access or date parse failures; the
+// empty-identity check happens downstream in [datas.NewCommitMetaWithAuthorCommitter].
+func NewCommitStagedProps(ctx *sql.Context, message string) (actions.CommitStagedProps, error) {
+	authorName, authorEmail, err := ResolveNameEmail(ctx, DoltAuthorName, DoltAuthorEmail)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	authorDate, err := resolveDate(ctx, DoltAuthorDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+
+	committerName, committerEmail, err := ResolveNameEmail(ctx, DoltCommitterName, DoltCommitterEmail)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	committerDate, err := resolveDate(ctx, DoltCommitterDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+
+	return actions.CommitStagedProps{
+		Message:   message,
+		Author:    datas.CommitIdent{Name: authorName, Email: authorEmail, Date: authorDate},
+		Committer: datas.CommitIdent{Name: committerName, Email: committerEmail, Date: committerDate},
+	}, nil
+}
+
+// ResolveNameEmail reads the name and email session variables for a single author or committer,
+// falling back to the SQL client user and address when the variables are unset, and to the
+// session's configured identity when the session has no wire client.
+func ResolveNameEmail(ctx *sql.Context, nameVar, emailVar string) (string, string, error) {
+	name, err := systemVarString(ctx, nameVar)
+	if err != nil {
+		return "", "", err
+	}
+	email, err := systemVarString(ctx, emailVar)
+	if err != nil {
+		return "", "", err
+	}
+
+	client := ctx.Client()
+	if name == "" {
+		if client.User != "" {
+			name = client.User
+		} else {
+			// No wire client on this session, so it was constructed internally
+			// by the server (background workers, cluster replication, tests).
+			// Fall back to the server's configured identity.
+			name = DSessFromSess(ctx.Session).Username()
+		}
+	}
+	if email == "" {
+		if client.User != "" {
+			email = fmt.Sprintf("%s@%s", client.User, client.Address)
+		} else {
+			email = DSessFromSess(ctx.Session).Email()
+		}
+	}
+
+	return name, email, nil
+}
+
+// resolveDate reads the date session variable for a single author or committer,
+// returning the unset [datas.CommitDate] zero value when the variable is unset or empty.
+func resolveDate(ctx *sql.Context, dateVar string) (datas.CommitDate, error) {
+	strVal, err := systemVarString(ctx, dateVar)
+	if err != nil || strVal == "" {
+		return datas.CommitDate{}, err
+	}
+	return datas.NewCommitDate(strVal)
+}
+
+// systemVarString returns the string value of the named system variable, returning an empty string
+// when the variable is unset.
+func systemVarString(ctx *sql.Context, varName string) (string, error) {
+	val, err := ctx.GetSessionVariable(ctx, varName)
+	if err != nil {
+		return "", err
+	}
+	strVal, _ := val.(string)
+	return strVal, nil
+}

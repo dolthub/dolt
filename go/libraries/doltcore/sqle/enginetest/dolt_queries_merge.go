@@ -393,7 +393,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
@@ -436,7 +436,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
@@ -481,7 +481,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{6}},
 			},
 			{
-				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
 			},
 		},
@@ -521,7 +521,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				// careful to filter out the initial commit, which will be later than the ones above
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -584,7 +584,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -689,7 +689,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -784,7 +784,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Skip:     true,
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update val col"}},
 			},
 			{
@@ -1100,7 +1100,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
 			},
 			{
-				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
 			},
 		},
@@ -1139,7 +1139,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
 			},
 			{
-				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
 			},
 			{
@@ -1189,7 +1189,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -3289,6 +3289,32 @@ var MergeScripts = []queries.ScriptTest{
 				Query: "INSERT INTO child VALUES (2, 1, 'z');",
 				// The re-added FK constraint (fk2) must still be enforced after the merge.
 				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+		},
+	},
+	{
+		Name: "no-ff merge commit uses author session variables for author identity",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY)",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'initial commit')",
+			"CALL DOLT_CHECKOUT('-b', 'feature')",
+			"INSERT INTO t VALUES (1)",
+			"CALL DOLT_COMMIT('-am', 'feature commit')",
+			"CALL DOLT_CHECKOUT('main')",
+			"SET @@dolt_author_name = 'Session Author'",
+			"SET @@dolt_author_email = 'session@author.com'",
+			"SET @@dolt_committer_name = 'Session Committer'",
+			"SET @@dolt_committer_email = 'session@committer.com'",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature', '--no-ff', '-m', 'test merge commit')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT author, author_email, committer, email FROM dolt_log LIMIT 1",
+				Expected: []sql.Row{{"Session Author", "session@author.com", "Session Committer", "session@committer.com"}},
 			},
 		},
 	},

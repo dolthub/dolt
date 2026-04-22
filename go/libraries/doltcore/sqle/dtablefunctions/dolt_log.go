@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -39,13 +40,14 @@ const logTableDefaultRowCount = 10
 // It is created once at build time to determine the table schema (ignoring arguments that must be deferred)
 // It is created again at execution time, this time incorporating deferred arguments.
 type LogTableFunctionArgs struct {
-	decoration      string
-	revisionStrs    []string
-	notRevisionStrs []string
-	tableNames      []string
-	minParents      int
-	showParents     bool
-	showSignature   bool
+	decoration        string
+	revisionStrs      []string
+	notRevisionStrs   []string
+	tableNames        []string
+	minParents        int
+	showParents       bool
+	showSignature     bool
+	showCommitterOnly bool
 }
 
 // Name implements the sql.TableFunction interface
@@ -138,6 +140,7 @@ func (ltfa *LogTableFunctionArgs) addOptions(ctx *sql.Context, expressions []sql
 	ltfa.minParents = minParents
 	ltfa.showParents = apr.Contains(cli.ParentsFlag)
 	ltfa.showSignature = apr.Contains(cli.ShowSignatureFlag)
+	ltfa.showCommitterOnly, _ = dsess.GetBooleanSystemVar(ctx, dsess.DoltLogCommitterOnly)
 
 	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
 	switch decorateOption {
@@ -172,15 +175,6 @@ type LogTableFunction struct {
 var _ sql.TableFunction = (*LogTableFunction)(nil)
 var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
-
-var logTableSchema = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: types.Text},
-	&sql.Column{Name: "committer", Type: types.Text},
-	&sql.Column{Name: "email", Type: types.Text},
-	&sql.Column{Name: "date", Type: types.Datetime3},
-	&sql.Column{Name: "message", Type: types.Text},
-	&sql.Column{Name: "commit_order", Type: types.Uint64},
-}
 
 // NewInstance creates a new instance of TableFunction interface
 func (ltf *LogTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
@@ -281,9 +275,8 @@ func (ltf *LogTableFunction) getOptionsString() string {
 }
 
 // Schema implements the sql.Node interface.
-func (ltf *LogTableFunction) Schema(ctx *sql.Context) sql.Schema {
-	logSchema := logTableSchema
-
+func (ltf *LogTableFunction) Schema(_ *sql.Context) sql.Schema {
+	logSchema := dtables.NewLogTableSchema(true)
 	if ltf.showParents {
 		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
 	}
@@ -292,6 +285,9 @@ func (ltf *LogTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	}
 	if ltf.showSignature {
 		logSchema = append(logSchema, &sql.Column{Name: "signature", Type: types.Text})
+	}
+	if !ltf.showCommitterOnly {
+		logSchema = append(logSchema, dtables.LogSchemaAuthorColumns...)
 	}
 
 	return logSchema
@@ -303,7 +299,7 @@ func (ltf *LogTableFunction) Children() []sql.Node {
 }
 
 // WithChildren implements the sql.Node interface.
-func (ltf *LogTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
+func (ltf *LogTableFunction) WithChildren(_ *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -362,7 +358,7 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, tableName strin
 }
 
 // WithExpressions returns copy with expressions stored and revision strings cleared.
-func (ltf *LogTableFunction) WithExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.Node, error) {
+func (ltf *LogTableFunction) WithExpressions(_ *sql.Context, exprs ...sql.Expression) (sql.Node, error) {
 	newLtf := *ltf
 	newLtf.argumentExprs = exprs
 	newLtf.revisionStrs = nil
@@ -638,13 +634,14 @@ var _ sql.RowIter = (*logTableFunctionRowIter)(nil)
 
 // logTableFunctionRowIter is a sql.RowIter implementation which iterates over each commit as if it's a row in the table.
 type logTableFunctionRowIter struct {
-	child         doltdb.CommitItr[*sql.Context]
-	cHashToRefs   map[hash.Hash][]string
-	decoration    string
-	tableNames    []string
-	headHash      hash.Hash
-	showParents   bool
-	showSignature bool
+	child             doltdb.CommitItr[*sql.Context]
+	cHashToRefs       map[hash.Hash][]string
+	decoration        string
+	tableNames        []string
+	headHash          hash.Hash
+	showParents       bool
+	showSignature     bool
+	showCommitterOnly bool
 }
 
 // NewLogTableFunctionRowIter creates iterator for single commit history traversal.
@@ -660,13 +657,14 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 	}
 
 	return &logTableFunctionRowIter{
-		child:         child,
-		showParents:   ltf.showParents,
-		showSignature: ltf.showSignature,
-		decoration:    ltf.decoration,
-		cHashToRefs:   cHashToRefs,
-		headHash:      h,
-		tableNames:    tableNames,
+		child:             child,
+		showParents:       ltf.showParents,
+		showSignature:     ltf.showSignature,
+		showCommitterOnly: ltf.showCommitterOnly,
+		decoration:        ltf.decoration,
+		cHashToRefs:       cHashToRefs,
+		headHash:          h,
+		tableNames:        tableNames,
 	}, nil
 }
 
@@ -702,13 +700,14 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 	}
 
 	return &logTableFunctionRowIter{
-		child:         child,
-		showParents:   ltf.showParents,
-		showSignature: ltf.showSignature,
-		decoration:    ltf.decoration,
-		cHashToRefs:   cHashToRefs,
-		headHash:      headHash,
-		tableNames:    tableNames,
+		child:             child,
+		showParents:       ltf.showParents,
+		showSignature:     ltf.showSignature,
+		showCommitterOnly: ltf.showCommitterOnly,
+		decoration:        ltf.decoration,
+		cHashToRefs:       cHashToRefs,
+		headHash:          headHash,
+		tableNames:        tableNames,
 	}, nil
 }
 
@@ -809,7 +808,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height)
+	row := dtables.NewLogTableRow(commitHash, meta, height, true)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)
@@ -835,6 +834,10 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		} else {
 			row = append(row, "")
 		}
+	}
+
+	if !itr.showCommitterOnly {
+		row = append(row, meta.Author.Name, meta.Author.Email, meta.Author.Date.Time())
 	}
 
 	return row, nil

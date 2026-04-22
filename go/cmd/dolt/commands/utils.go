@@ -42,6 +42,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
@@ -310,8 +311,8 @@ func newLateBindingEngine(
 			// Ensure a root user exists, with superuser privs
 			dbUser = DefaultUser
 			ed := rawDb.Editor()
-			defer ed.Close()
 			rawDb.AddEphemeralSuperUser(ed, dbUser, config.ServerHost, "")
+			ed.Close()
 		}
 
 		sqlCtx, err := se.NewDefaultContext(ctx)
@@ -323,18 +324,26 @@ func newLateBindingEngine(
 		// database set when you begin using them.
 		sqlCtx.SetCurrentDatabase(database)
 
+		// SetClient must come before InitCommitIdentSessionConfig since it requires an authenticated client on the context.
+		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
+
 		// For now, we treat the entire lifecycle of this
 		// sqlCtx as one big session-in-use window.
 		sql.SessionCommandBegin(sqlCtx.Session)
+
+		// Author and committer name and email are initialized from the session's dolt config values, then
+		// the DOLT_AUTHOR_* and DOLT_COMMITTER_* environment variables override individual fields. The
+		// resulting values are stored in the session variables read by [dsess.NewCommitStagedProps].
+		dSess := dsess.DSessFromSess(sqlCtx.Session)
+		if err := engine.InitCommitIdentSessionConfig(se, sqlCtx, dSess.Username(), dSess.Email()); err != nil {
+			cli.PrintErr(err.Error())
+		}
 
 		close := func() {
 			sql.SessionCommandEnd(sqlCtx.Session)
 			sql.SessionEnd(sqlCtx.Session)
 			se.Close()
 		}
-
-		// Set client to specified user
-		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
 		res.Queryist = se
 		res.Context = sqlCtx
 		res.Closer = close
@@ -440,6 +449,25 @@ func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string,
 		return "", fmt.Errorf("unexpectedly received non-string column in '%s': %s", query, row[0])
 	}
 	return branchName, nil
+}
+
+func getTimestampColAsInt64(col interface{}) (int64, error) {
+	switch v := col.(type) {
+	case string:
+		t, err := time.Parse("2006-01-02 15:04:05.999", v)
+		if err != nil {
+			return 0, fmt.Errorf("error parsing timestamp %s: %w", v, err)
+		}
+		return t.UnixMilli(), nil
+	case int64:
+		return v, nil
+	case uint64:
+		return int64(v), nil
+	case time.Time:
+		return v.UnixMilli(), nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or time.Time", v)
+	}
 }
 
 func getTimestampColAsUint64(col interface{}) (uint64, error) {
@@ -608,7 +636,7 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, show
 		}
 	}
 
-	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
+	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Author.Name, comm.commitMeta.Author.Email)))
 
 	timeStr := comm.commitMeta.FormatTS()
 	pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
@@ -675,18 +703,36 @@ func getCommitInfo(sqlCtx *sql.Context, queryist cli.Queryist, ref string) (*Com
 	return getCommitInfoWithOptions(sqlCtx, queryist, ref, commitInfoOptions{})
 }
 
+// getCommitInfoWithOptions reads the commit at |ref| through the dolt_log table function on
+// |queryist| and returns the parsed CommitInfo, applying the presentation flags in |opts| such
+// as whether to include the cryptographic signature. Works against servers that expose only
+// the committer columns and against newer servers that also expose the author columns; on
+// older servers the committer identity stands in for the author.
 func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
+	varRows, err := cli.GetRowsForSql(queryist, sqlCtx, "SHOW VARIABLES LIKE '"+dsess.DoltLogCommitterOnly+"'")
+	if err != nil {
+		return nil, err
+	}
+	hasAuthorColumns := len(varRows) > 0
+	if hasAuthorColumns {
+		if _, _, _, qErr := queryist.Query(sqlCtx, "SET @@SESSION."+dsess.DoltLogCommitterOnly+" = 0"); qErr != nil {
+			return nil, qErr
+		}
+	}
+
+	authorColumnsOffset := 0
 	var q string
 	if opts.showSignature {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
 			return nil, fmt.Errorf("error interpolating query: %v", err)
 		}
+		authorColumnsOffset++
 	} else {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
@@ -703,15 +749,31 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		return nil, nil
 	}
 
+	// Author-specific columns appear at the end of the dolt log schema to remain compatible with hard-coded indices of
+	// older dolt clients.
 	row := rows[0]
-	commitHash := row[0].(string)
-	name := row[1].(string)
-	email := row[2].(string)
-	timestamp, err := getTimestampColAsUint64(row[3])
-	if err != nil {
-		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
+	commitHashStr, ok := row[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for commit hash: %T", row[0])
 	}
-	message := row[4].(string)
+
+	committerName, ok := row[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for committer name: %T", row[1])
+	}
+	committerEmail, ok := row[2].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for committer email: %T", row[2])
+	}
+	committerDate, err := getTimestampColAsUint64(row[3])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing committer timestamp '%v': %w", row[3], err)
+	}
+
+	message, ok := row[4].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for commit message: %T", row[4])
+	}
 
 	var commitOrder uint64
 	switch v := row[5].(type) {
@@ -727,52 +789,71 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		return nil, fmt.Errorf("unexpected type for commit_order: %T", v)
 	}
 
-	parent := row[6].(string)
-	height := commitOrder
-
-	isHead := commitHash == hashOfHead
+	parentHashStrs := []string{}
+	if parentStr, ok := row[6].(string); ok && parentStr != "" {
+		parentHashStrs = strings.Split(parentStr, ", ")
+	}
 
 	var signature string
 	if opts.showSignature {
-		// Signature is always the last column when present
-		signature = row[len(row)-1].(string)
+		signature = row[8].(string)
 	}
 
-	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
-	if err != nil {
-		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHash, err)
-	}
-	remoteBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, false)
-	if err != nil {
-		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHash, err)
-	}
-	tagsForHash, err := getTagsForHash(queryist, sqlCtx, commitHash)
-	if err != nil {
-		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHash, err)
+	// Default author to committer identity; servers that expose author columns override these below.
+	authorName, authorEmail, authorDate := committerName, committerEmail, int64(committerDate)
+	if hasAuthorColumns {
+		authorName, ok = row[8+authorColumnsOffset].(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColumnsOffset])
+		}
+		authorEmail, ok = row[9+authorColumnsOffset].(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColumnsOffset])
+		}
+		authorDate, err = getTimestampColAsInt64(row[10+authorColumnsOffset])
+		if err != nil {
+			return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColumnsOffset], err)
+		}
 	}
 
-	ci := &CommitInfo{
-		commitMeta: &datas.CommitMeta{
-			Name:          name,
-			Email:         email,
-			Timestamp:     timestamp,
-			Description:   message,
-			UserTimestamp: int64(timestamp),
-			Signature:     signature,
+	commitMeta := &datas.CommitMeta{
+		Author: datas.CommitIdent{
+			Name:  authorName,
+			Email: authorEmail,
+			Date:  datas.CommitDateAt(time.UnixMilli(authorDate)),
 		},
-		commitHash:        commitHash,
-		height:            height,
-		isHead:            isHead,
-		localBranchNames:  localBranchesForHash,
-		remoteBranchNames: remoteBranchesForHash,
-		tagNames:          tagsForHash,
+		Committer: datas.CommitIdent{
+			Name:  committerName,
+			Email: committerEmail,
+			Date:  datas.CommitDateAt(time.UnixMilli(int64(committerDate))),
+		},
+		Description: message,
+		Signature:   signature,
 	}
 
-	if parent != "" {
-		ci.parentHashes = strings.Split(parent, ", ")
+	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
+	if err != nil {
+		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHashStr, err)
+	}
+	remoteBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, false)
+	if err != nil {
+		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHashStr, err)
+	}
+	tags, err := getTagsForHash(queryist, sqlCtx, commitHashStr)
+	if err != nil {
+		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHashStr, err)
 	}
 
-	return ci, nil
+	return &CommitInfo{
+		commitMeta:        commitMeta,
+		commitHash:        commitHashStr,
+		height:            commitOrder,
+		isHead:            commitHashStr == hashOfHead,
+		parentHashes:      parentHashStrs,
+		localBranchNames:  localBranches,
+		remoteBranchNames: remoteBranches,
+		tagNames:          tags,
+	}, nil
 }
 
 func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string, getLocalBranches bool) ([]string, error) {

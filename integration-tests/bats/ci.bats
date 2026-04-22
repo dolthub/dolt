@@ -880,7 +880,7 @@ jobs:
     steps:
       - name: "verify dolt commit"
         saved_query_name: check dolt commit
-        expected_columns: "== 5"
+        expected_columns: "== 8"
 EOF
     dolt ci init
     dolt ci import ./workflow.yaml
@@ -903,22 +903,22 @@ jobs:
     steps:
       - name: equals comp
         saved_query_name: main
-        expected_columns: "== 5"
+        expected_columns: "== 8"
       - name: not equals comp
         saved_query_name: main
         expected_columns: "!= 1"
       - name: greater than comp
         saved_query_name: main
-        expected_columns: "> 4"
+        expected_columns: "> 7"
       - name: greater or equal than comp
         saved_query_name: main
-        expected_columns: ">= 5"
+        expected_columns: ">= 8"
       - name: less than comp
         saved_query_name: main
-        expected_columns: "< 6"
+        expected_columns: "< 9"
       - name: less or equal than comp
         saved_query_name: main
-        expected_columns: "<= 5"
+        expected_columns: "<= 8"
 EOF
     dolt ci init
     dolt ci import ./workflow.yaml
@@ -961,7 +961,7 @@ EOF
     [[ "$output" =~ "    - error: Assertion failed: expected row count 2, got 3" ]] || false
     [[ "$output" =~ "Step: expect columns" ]] || false
     [[ "$output" =~ "  - query: select * from dolt_commits;" ]] || false
-    [[ "$output" =~ "    - error: Assertion failed: expected column count less than 5, got 5" ]] || false
+    [[ "$output" =~ "    - error: Assertion failed: expected column count less than 5, got 8" ]] || false
 }
 
 @test "ci: ci run fails on bad query" {

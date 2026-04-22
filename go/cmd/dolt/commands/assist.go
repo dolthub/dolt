@@ -498,7 +498,7 @@ func getInitialPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.D
 		return nil, err
 	}
 
-	responseJson, err = json.Marshal(map[string]string{"action": "ANSWER", "content": fmt.Sprintf("The most recent commit was written by %s", cm.Name)})
+	responseJson, err = json.Marshal(map[string]string{"action": "ANSWER", "content": fmt.Sprintf("The most recent commit was written by %s", cm.Author.Name)})
 	if err != nil {
 		return nil, err
 	}

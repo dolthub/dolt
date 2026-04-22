@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"sort"
 	"testing"
+	"time"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/stretchr/testify/assert"
@@ -91,8 +92,14 @@ func mustValue(val types.Value, err error) types.Value {
 func TestIsCommit(t *testing.T) {
 	assert := assert.New(t)
 
+	meta, err := NewCommitMetaWithAuthor("test", "test@test.com", "test commit", time.UnixMilli(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta.Committer.Date = meta.Committer.Date.Or(time.UnixMilli(0))
+
 	commitMsg, _ := commit_flatbuffer(hash.Hash{}, CommitOptions{
-		Meta: &CommitMeta{Name: "test", Email: "test@test.com", Description: "test commit"},
+		Meta: meta,
 	}, nil, hash.Hash{})
 	metaCommit := types.SerialMessage(commitMsg)
 	ok, err := IsCommit(metaCommit)
@@ -185,7 +192,9 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Value) (types.Value, hash.Hash) {
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
-	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...)})
+	epoch := CommitDateAt(time.UnixMilli(0))
+	meta := &CommitMeta{Author: CommitIdent{Date: epoch}, Committer: CommitIdent{Date: epoch}}
+	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...), Meta: meta})
 	require.NoError(t, err)
 	return mustHead(ds), mustHeadAddr(ds)
 }

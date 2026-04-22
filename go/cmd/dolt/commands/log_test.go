@@ -46,7 +46,7 @@ func TestLog(t *testing.T) {
 	commit, _ := opt.ToCommit()
 
 	meta, _ := commit.GetCommitMeta(context.Background())
-	require.Equal(t, "Bill Billerson", meta.Name)
+	require.Equal(t, "Bill Billerson", meta.Author.Name)
 }
 
 func TestLogSigterm(t *testing.T) {
@@ -79,7 +79,7 @@ func TestLogSigterm(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33mcommit %s \033[0m", chStr)))
-		pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", cMeta.Name, cMeta.Email)))
+		pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", cMeta.Author.Name, cMeta.Author.Email)))
 
 		timeStr := cMeta.FormatTS()
 		pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))

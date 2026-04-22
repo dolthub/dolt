@@ -164,6 +164,12 @@ teardown() {
     [ $status -eq 0 ]
     [[ ! "$output" =~ "main" ]] || false
     [[ "$output" =~ "create-table-branch" ]] || false
+
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --allow-empty --author "Bats Author <author@email.fake>" -m "check author columns"
+    run dolt sql -r csv -q "SELECT latest_committer, latest_committer_email, latest_author, latest_author_email FROM dolt_branches WHERE name = 'create-table-branch'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: query dolt_remote_branches system table" {
@@ -342,6 +348,13 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "STAGED,testStaged,,,,,false,true" ]] || false
     [[ "$output" =~ "WORKING,testWorking,,,,,false,true" ]] || false
+
+    dolt add testWorking
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --author "Bats Author <author@email.fake>" -m "check author columns"
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_diff WHERE message = 'check author columns' LIMIT 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: query dolt_column_diff system table" {
@@ -355,6 +368,45 @@ SQL
     [[ "$output" =~ "STAGED,testStaged,c1,,,,,added" ]] || false
     [[ "$output" =~ "WORKING,testWorking,pk,,,,,added" ]] || false
     [[ "$output" =~ "WORKING,testWorking,c1,,,,,added" ]] || false
+
+    dolt add testWorking
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --author "Bats Author <author@email.fake>" -m "check author columns"
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_column_diff WHERE message = 'check author columns' LIMIT 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
+}
+
+@test "system-tables: dolt_diff author and committer columns are distinct when set differently" {
+    dolt sql <<SQL
+CREATE TABLE t_diff_ident (pk INT PRIMARY KEY);
+CALL DOLT_ADD('t_diff_ident');
+SET @@dolt_author_name = 'Diff Author';
+SET @@dolt_author_email = 'diff_author@test.com';
+SET @@dolt_committer_name = 'Diff Committer';
+SET @@dolt_committer_email = 'diff_committer@test.com';
+CALL DOLT_COMMIT('-m', 'diff identity test');
+SQL
+
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_diff WHERE message = 'diff identity test' LIMIT 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Diff Committer,diff_committer@test.com,Diff Author,diff_author@test.com" ]] || false
+}
+
+@test "system-tables: dolt_column_diff author and committer columns are distinct when set differently" {
+    dolt sql <<SQL
+CREATE TABLE t_cdiff_ident (pk INT PRIMARY KEY);
+CALL DOLT_ADD('t_cdiff_ident');
+SET @@dolt_author_name = 'CDiff Author';
+SET @@dolt_author_email = 'cdiff_author@test.com';
+SET @@dolt_committer_name = 'CDiff Committer';
+SET @@dolt_committer_email = 'cdiff_committer@test.com';
+CALL DOLT_COMMIT('-m', 'column diff identity test');
+SQL
+
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_column_diff WHERE message = 'column diff identity test' LIMIT 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CDiff Committer,cdiff_committer@test.com,CDiff Author,cdiff_author@test.com" ]] || false
 }
 
 @test "system-tables: query dolt_diff_ system table" {
@@ -713,6 +765,12 @@ SQL
     run dolt sql -q "SELECT count(*) FROM dolt_commits;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "4" ]] || false
+
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --allow-empty --author "Bats Author <author@email.fake>" -m "check author columns"
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_commits WHERE message = 'check author columns'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: query dolt_ancestor_commits" {
@@ -1219,4 +1277,47 @@ SQL
     run dolt ls --system
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt_status_ignored" ]] || false
+}
+
+assert_committer_only() {
+  local output="$1"
+  [[ ! "$output" =~ ,author, ]] || false
+  [[ ! "$output" =~ ,author_email, ]] || false
+  [[ ! "$output" =~ ,author_date ]] || false
+  [[ "$output" =~ ,committer, ]] || false
+  [[ "$output" =~ ,email, ]] || false
+}
+
+assert_dolt_log() {
+  local output="$1"
+  [[ "$output" =~ ,author, ]] || false
+  [[ "$output" =~ ,author_email, ]] || false
+  [[ "$output" =~ ,author_date ]] || false
+  [[ "$output" =~ ,committer, ]] || false
+  [[ "$output" =~ ,email, ]] || false
+}
+
+@test "system-tables: dolt_log_committer_only session variable controls author columns" {
+  dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+  dolt add test
+  dolt commit -m "Initial commit"
+
+  dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
+  dolt sql -q "CALL DOLT_ADD('test2')"
+  dolt sql -q "CALL DOLT_COMMIT('--author', 'Test Author <author@test.com>', '-m', 'Commit with different author and committer')"
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
+  [ "$status" -eq 0 ]
+  assert_committer_only "$output"
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
+  [ "$status" -eq 0 ]
+  assert_dolt_log "$output"
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
+  assert_committer_only "$output"
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
+  [ $status -eq 0 ]
+  assert_dolt_log "$output"
 }

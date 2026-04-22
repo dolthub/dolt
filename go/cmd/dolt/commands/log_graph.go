@@ -344,7 +344,7 @@ func printCommitMetadata(graph [][]string, pager *outputpager.Pager, row, col in
 		printLine(graph, col, row+1, pager, color.WhiteString("Merge: %s", strings.Join(commit.Commit.parentHashes, " ")), commit.Commit, "no")
 	}
 
-	printLine(graph, col, row+1+printMergeInfo, pager, color.WhiteString("Author: %s <%s>", commit.Commit.commitMeta.Name, commit.Commit.commitMeta.Email), commit.Commit, "no")
+	printLine(graph, col, row+1+printMergeInfo, pager, color.WhiteString("Author: %s <%s>", commit.Commit.commitMeta.Author.Name, commit.Commit.commitMeta.Author.Email), commit.Commit, "no")
 
 	printLine(graph, col, row+2+printMergeInfo, pager, color.WhiteString("Date: %s", commit.Commit.commitMeta.FormatTS()), commit.Commit, "no")
 

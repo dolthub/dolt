@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -308,8 +309,11 @@ func performMerge(
 
 	var commit string
 	if !noCommit {
-		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
-		args := []string{"-m", msg, "--author", author}
+		args := []string{"-m", msg}
+		if spec.Name != "" {
+			author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
+			args = append(args, "--author", author)
+		}
 		if spec.Force {
 			args = append(args, "--"+cli.ForceFlag)
 		}
@@ -455,14 +459,23 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message:          msg,
-		Date:             spec.Date,
-		Force:            spec.Force,
-		Name:             spec.Name,
-		Email:            spec.Email,
-		SkipVerification: skipVerification,
-	})
+	commitStagedProps, err := dsess.NewCommitStagedProps(ctx, msg)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Author identity and date are overridden only when the corresponding flags were
+	// explicitly provided. NewCommitStagedProps already resolved both from the
+	// dolt_author_name, dolt_author_email, and dolt_author_date session variables.
+	if spec.Name != "" {
+		commitStagedProps.Author.Name = spec.Name
+		commitStagedProps.Author.Email = spec.Email
+	}
+	if spec.Date != nil {
+		commitStagedProps.Author.Date = *spec.Date
+	}
+	commitStagedProps.Force = spec.Force
+	commitStagedProps.SkipVerification = skipVerification
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, commitStagedProps)
 	if err != nil {
 		if actions.ErrCommitVerificationFailed.Is(err) {
 			return ws, nil, err
@@ -487,17 +500,23 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
 
-	name, email, err := getNameAndEmail(ctx, apr)
-	if err != nil {
-		return nil, err
-	}
-
-	t := ctx.QueryTime()
-	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		t, err = dconfig.ParseDate(commitTimeStr)
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		var err error
+		name, email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	var date *datas.CommitDate
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+		t, err := dconfig.ParseDate(commitTimeStr)
+		if err != nil {
+			return nil, err
+		}
+		d := datas.CommitDateAt(t)
+		date = &d
 	}
 
 	roots, ok := sess.GetRoots(ctx, dbName)
@@ -525,28 +544,13 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		name,
 		email,
 		commitSpecStr,
-		t,
+		date,
 		merge.WithSquash(apr.Contains(cli.SquashParam)),
 		merge.WithFastForwardMode(ffMode),
 		merge.WithForce(apr.Contains(cli.ForceFlag)),
 		merge.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
 		merge.WithNoEdit(apr.Contains(cli.NoEditFlag)),
 	)
-}
-
-func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, string, error) {
-	var err error
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return "", "", err
-		}
-	} else {
-		name = ctx.Client().User
-		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
-	}
-	return name, email, nil
 }
 
 func mergeRootToWorking(

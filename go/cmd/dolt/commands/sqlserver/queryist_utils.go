@@ -20,6 +20,7 @@ import (
 	sql2 "database/sql"
 	"fmt"
 	"io"
+	"net"
 	"regexp"
 	"strings"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -61,9 +63,32 @@ const (
 	QueryistTLSMode_NoVerify_FallbackToPlaintext
 )
 
-// BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
-// module isn't ideal, but it's the only way to get the server config into the queryist.
-func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, tlsMode QueryistTLSMode, dbRev string) (cli.LateBindQueryist, error) {
+// nameEmailFromCurrentUser queries CURRENT_USER() and returns the username as the name and
+// the full user@host grant string as the email.
+func nameEmailFromCurrentUser(queryist cli.Queryist, sqlCtx *sql.Context) (name, email string) {
+	_, rowIter, _, err := queryist.Query(sqlCtx, "SELECT CURRENT_USER()")
+	if err != nil {
+		return "", ""
+	}
+	defer rowIter.Close(sqlCtx)
+	row, err := rowIter.Next(sqlCtx)
+	if err != nil || len(row) == 0 || row[0] == nil {
+		return "", ""
+	}
+	currentUser, ok := row[0].(string)
+	if !ok {
+		return "", ""
+	}
+	name, _, _ = strings.Cut(currentUser, "@")
+	return name, currentUser
+}
+
+// BuildConnectionStringQueryist returns a [cli.LateBindQueryist] that opens a connection to the
+// server at |host|:|port| using |creds| and |tlsMode|, and selects |dbRev| as the default
+// database. |configName| and |configEmail| are used as the commit identity when the client
+// connects over a loopback address; non-loopback connections read the identity from
+// CURRENT_USER() so the grant host matches whatever the server assigned.
+func BuildConnectionStringQueryist(_ context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, tlsMode QueryistTLSMode, dbRev string, configName, configEmail string) (cli.LateBindQueryist, error) {
 	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
 		return nil, err
@@ -101,6 +126,16 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 	var lateBind cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 		sqlCtx := sql.NewContext(ctx)
 		sqlCtx.SetCurrentDatabase(dbRev)
+
+		name, email := configName, configEmail
+		ip := net.ParseIP(host)
+		if !(host == "localhost" || (ip != nil && ip.IsLoopback())) {
+			name, email = nameEmailFromCurrentUser(queryist, sqlCtx)
+		}
+		if err := engine.InitCommitIdentSessionConfig(queryist, sqlCtx, name, email); err != nil {
+			cli.PrintErr(err.Error())
+		}
+
 		res.Queryist = queryist
 		res.Context = sqlCtx
 		res.Closer = func() {

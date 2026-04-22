@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -42,6 +43,12 @@ type nomsRootTestSuite struct {
 }
 
 func (s *nomsRootTestSuite) TestBasic() {
+	epoch := datas.CommitDateAt(time.Unix(0, 0).UTC())
+	meta := &datas.CommitMeta{
+		Author:    datas.CommitIdent{Date: epoch},
+		Committer: datas.CommitIdent{Date: epoch},
+	}
+
 	datasetName := "root-get"
 	dsSpec := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 	sp, err := spec.ForDataset(dsSpec)
@@ -61,11 +68,11 @@ func (s *nomsRootTestSuite) TestBasic() {
 		s.Fail("no golden values exist for NBF %s", types.Format_Default.VersionString())
 	}
 
-	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("hello!"))
+	ds, _ = db.Commit(context.Background(), ds, types.String("hello!"), datas.CommitOptions{Meta: meta})
 	c1, _ := s.MustRun(main, []string{"root", dbSpecStr})
 	s.Equal(goldenHello, c1)
 
-	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("goodbye"))
+	ds, _ = db.Commit(context.Background(), ds, types.String("goodbye"), datas.CommitOptions{Meta: meta})
 	c2, _ := s.MustRun(main, []string{"root", dbSpecStr})
 	s.Equal(goldenGoodbye, c2)
 

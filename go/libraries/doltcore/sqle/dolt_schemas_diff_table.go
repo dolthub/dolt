@@ -195,7 +195,7 @@ func (dsdp *DoltSchemasDiffPartitionItr) Next(ctx *sql.Context) (sql.Partition, 
 				if err != nil {
 					return nil, err
 				}
-				cmCommitDate := types.Timestamp(cmMeta.Time())
+				cmCommitDate := types.Timestamp(cmMeta.Committer.Date.Time())
 
 				return &DoltSchemasDiffPartition{
 					toTable:   cmSchemasTable,
@@ -253,13 +253,13 @@ func (dsdp *DoltSchemasDiffPartitionItr) Next(ctx *sql.Context) (sql.Partition, 
 			if err != nil {
 				return nil, err
 			}
-			cmCommitDate := types.Timestamp(cmMeta.Time())
+			cmCommitDate := types.Timestamp(cmMeta.Committer.Date.Time())
 
 			parentMeta, err := parentCm.GetCommitMeta(ctx)
 			if err != nil {
 				return nil, err
 			}
-			parentCommitDate := types.Timestamp(parentMeta.Time())
+			parentCommitDate := types.Timestamp(parentMeta.Committer.Date.Time())
 
 			parentHash, err := parentCm.HashOf()
 			if err != nil {
@@ -297,7 +297,7 @@ func (dsdp *DoltSchemasDiffPartitionItr) createWorkingPartition(ctx *sql.Context
 	if err != nil {
 		return nil, err
 	}
-	headCommitDate := types.Timestamp(headMeta.Time())
+	headCommitDate := types.Timestamp(headMeta.Committer.Date.Time())
 
 	headSchemasTable, _, err := headRoot.GetTable(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
 	if err != nil {

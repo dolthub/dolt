@@ -127,18 +127,20 @@ func HasKey(ctx context.Context, keyId string) (bool, error) {
 	return strings.Contains(outBuf.String(), keyId), nil
 }
 
-// Sign signs a message using the key with the given keyId
-func Sign(ctx context.Context, keyId string, message []byte) ([]byte, error) {
-	args := []string{"--clear-sign", "-u", keyId}
-	outBuf, _, err := execGpgAndReadOutput(ctx, message, args)
+// Signer signs commit payloads using a GPG key. KeyId identifies which key from the
+// local GPG keyring to use.
+type Signer struct{ KeyId string }
+
+// Sign produces a detached GPG signature of |payload| using the key identified by [Signer.KeyId].
+func (s *Signer) Sign(ctx context.Context, payload []byte) ([]byte, error) {
+	outBuf, _, err := execGpgAndReadOutput(ctx, payload, []string{"--clear-sign", "-u", s.KeyId})
 	if err != nil {
 		return nil, err
 	}
-
 	return outBuf.Bytes(), nil
 }
 
-// Verify verifies a signature
+// Verify verifies a signature and returns the GPG output (signer info, etc).
 func Verify(ctx context.Context, signature []byte) ([]byte, error) {
 	args := []string{"--verify"}
 	_, errBuf, err := execGpgAndReadOutput(ctx, signature, args)
