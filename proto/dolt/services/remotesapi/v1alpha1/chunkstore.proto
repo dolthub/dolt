@@ -486,6 +486,35 @@ message StreamChunksRequest {
     RepoId repo_id = 1;
     string repo_token = 2;
     string repo_path = 3;
+
+    // Optional server-side tuning knobs the client can override for
+    // this stream. All zero-valued fields mean "use the server's
+    // default for this knob"; the server is free to ignore any field
+    // it does not implement. Prototype-only: the settings hang off
+    // the handshake so rebuilding the client is enough to experiment
+    // without redeploying the server.
+
+    // Maximum number of merged batches (Gets after any server-side
+    // merging) the server may process concurrently on this stream.
+    uint32 max_concurrent_gets = 4;
+
+    // Server-side Nagle: when |min_batch_size| > 0, the server
+    // accumulates Recv'd Gets until either the merged hash count
+    // reaches |min_batch_size|, |max_batch_size| is reached, or
+    // |batch_debounce_nanos| elapses since the first accumulated
+    // Get. A merged batch is then processed by a single
+    // GetManyCompressed, with per-get_seq response messages and
+    // finals. |min_batch_size| == 0 disables merging.
+    uint32 min_batch_size = 5;
+
+    // Safety ceiling for merged batch size in hashes. Ignored when
+    // merging is disabled.
+    uint32 max_batch_size = 6;
+
+    // Maximum time in nanoseconds the server waits for more
+    // accumulated hashes before flushing a sub-threshold merged
+    // batch. Ignored when merging is disabled.
+    uint64 batch_debounce_nanos = 7;
   }
 
   message Get {

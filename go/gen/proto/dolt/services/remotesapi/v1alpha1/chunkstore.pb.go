@@ -2767,12 +2767,30 @@ func (x *StreamChunkLocationsResponse_ChunkLocation) GetDictionaryLength() uint3
 }
 
 type StreamChunksRequest_Handshake struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RepoId        *RepoId                `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
-	RepoToken     string                 `protobuf:"bytes,2,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
-	RepoPath      string                 `protobuf:"bytes,3,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RepoId    *RepoId                `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	RepoToken string                 `protobuf:"bytes,2,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
+	RepoPath  string                 `protobuf:"bytes,3,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
+	// Maximum number of merged batches (Gets after any server-side
+	// merging) the server may process concurrently on this stream.
+	MaxConcurrentGets uint32 `protobuf:"varint,4,opt,name=max_concurrent_gets,json=maxConcurrentGets,proto3" json:"max_concurrent_gets,omitempty"`
+	// Server-side Nagle: when |min_batch_size| > 0, the server
+	// accumulates Recv'd Gets until either the merged hash count
+	// reaches |min_batch_size|, |max_batch_size| is reached, or
+	// |batch_debounce_nanos| elapses since the first accumulated
+	// Get. A merged batch is then processed by a single
+	// GetManyCompressed, with per-get_seq response messages and
+	// finals. |min_batch_size| == 0 disables merging.
+	MinBatchSize uint32 `protobuf:"varint,5,opt,name=min_batch_size,json=minBatchSize,proto3" json:"min_batch_size,omitempty"`
+	// Safety ceiling for merged batch size in hashes. Ignored when
+	// merging is disabled.
+	MaxBatchSize uint32 `protobuf:"varint,6,opt,name=max_batch_size,json=maxBatchSize,proto3" json:"max_batch_size,omitempty"`
+	// Maximum time in nanoseconds the server waits for more
+	// accumulated hashes before flushing a sub-threshold merged
+	// batch. Ignored when merging is disabled.
+	BatchDebounceNanos uint64 `protobuf:"varint,7,opt,name=batch_debounce_nanos,json=batchDebounceNanos,proto3" json:"batch_debounce_nanos,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *StreamChunksRequest_Handshake) Reset() {
@@ -2824,6 +2842,34 @@ func (x *StreamChunksRequest_Handshake) GetRepoPath() string {
 		return x.RepoPath
 	}
 	return ""
+}
+
+func (x *StreamChunksRequest_Handshake) GetMaxConcurrentGets() uint32 {
+	if x != nil {
+		return x.MaxConcurrentGets
+	}
+	return 0
+}
+
+func (x *StreamChunksRequest_Handshake) GetMinBatchSize() uint32 {
+	if x != nil {
+		return x.MinBatchSize
+	}
+	return 0
+}
+
+func (x *StreamChunksRequest_Handshake) GetMaxBatchSize() uint32 {
+	if x != nil {
+		return x.MaxBatchSize
+	}
+	return 0
+}
+
+func (x *StreamChunksRequest_Handshake) GetBatchDebounceNanos() uint64 {
+	if x != nil {
+		return x.BatchDebounceNanos
+	}
+	return 0
 }
 
 type StreamChunksRequest_Get struct {
@@ -3284,15 +3330,19 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x15AddTableFilesResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1d\n" +
 	"\n" +
-	"repo_token\x18\x02 \x01(\tR\trepoToken\"\xa3\x03\n" +
+	"repo_token\x18\x02 \x01(\tR\trepoToken\"\xd1\x04\n" +
 	"\x13StreamChunksRequest\x12`\n" +
 	"\thandshake\x18\x01 \x01(\v2@.dolt.services.remotesapi.v1alpha1.StreamChunksRequest.HandshakeH\x00R\thandshake\x12N\n" +
-	"\x03get\x18\x02 \x01(\v2:.dolt.services.remotesapi.v1alpha1.StreamChunksRequest.GetH\x00R\x03get\x1a\x8b\x01\n" +
+	"\x03get\x18\x02 \x01(\v2:.dolt.services.remotesapi.v1alpha1.StreamChunksRequest.GetH\x00R\x03get\x1a\xb9\x02\n" +
 	"\tHandshake\x12B\n" +
 	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x02 \x01(\tR\trepoToken\x12\x1b\n" +
-	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x1aA\n" +
+	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x12.\n" +
+	"\x13max_concurrent_gets\x18\x04 \x01(\rR\x11maxConcurrentGets\x12$\n" +
+	"\x0emin_batch_size\x18\x05 \x01(\rR\fminBatchSize\x12$\n" +
+	"\x0emax_batch_size\x18\x06 \x01(\rR\fmaxBatchSize\x120\n" +
+	"\x14batch_debounce_nanos\x18\a \x01(\x04R\x12batchDebounceNanos\x1aA\n" +
 	"\x03Get\x12!\n" +
 	"\fchunk_hashes\x18\x01 \x01(\fR\vchunkHashes\x12\x17\n" +
 	"\aget_seq\x18\x02 \x01(\x04R\x06getSeqB\t\n" +

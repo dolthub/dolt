@@ -117,13 +117,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 	if protoChunksEnabled {
 		getCh := make(chan *remotesapi.StreamChunksRequest_Get)
 		eg.Go(func() error {
-			return fetcherHashSetToReqsThread(ctx, ret.toGetCh, ret.abortCh, getCh, getLocsBatchSize, func(hashes [][]byte) *remotesapi.StreamChunksRequest_Get {
-				flat := make([]byte, 0, hash.ByteLen*len(hashes))
-				for _, h := range hashes {
-					flat = append(flat, h...)
-				}
-				return &remotesapi.StreamChunksRequest_Get{ChunkHashes: flat}
-			})
+			return fetcherHashSetToGetsThread(ctx, ret.toGetCh, ret.abortCh, getCh)
 		})
 		eg.Go(func() error {
 			return fetcherStreamChunksThreads(ctx, getCh, ret.resCh, dcs.csClient, dcs.getRepoId, dcs.repoPath, storeRepoToken, dcs.host)
