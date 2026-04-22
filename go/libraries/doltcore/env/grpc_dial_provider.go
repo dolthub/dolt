@@ -15,12 +15,14 @@
 package env
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -35,6 +37,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/netstats"
 )
 
 var defaultDialer = &net.Dialer{
@@ -90,32 +94,75 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 		}
 	}
 
-	var httpfetcher grpcendpoint.HTTPFetcher = defaultHttpFetcher
+	// When DOLT_NETSTATS is enabled, wrap the dialer so that raw TCP bytes
+	// can be counted under the gRPC and HTTP transports that flow through
+	// this provider.
+	dialContext := defaultDialer.DialContext
+	if netstats.Enabled() {
+		dialContext = netstats.DialContextFunc(netstats.Global().WrapDialContext(dialContext))
+	}
+
+	// Factory for fresh *http.Clients. Each call returns a Client whose
+	// Transport has a private connection pool and HPACK state, plus any
+	// netstats instrumentation. Used below either once (for the normal
+	// single-fetcher case) or many times (by PerURLFetcher).
+	newHTTPClient := func() *http.Client {
+		transport := &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           dialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          1024,
+			MaxIdleConnsPerHost:   256,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
+		if config.TLSConfig != nil {
+			transport.TLSClientConfig = config.TLSConfig
+		}
+		var rt http.RoundTripper = transport
+		if netstats.Enabled() {
+			rt = netstats.Global().WrapRoundTripper(rt)
+		}
+		return &http.Client{Transport: rt}
+	}
+
+	var httpfetcher grpcendpoint.HTTPFetcher
+	if os.Getenv("DOLT_PER_URL_FETCHER") != "" {
+		cap := 1024
+		if v := os.Getenv("DOLT_PER_URL_FETCHER_CACHE"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				cap = n
+			}
+		}
+		httpfetcher = remotestorage.NewPerURLFetcher(newHTTPClient, cap)
+	} else if config.TLSConfig == nil && !netstats.Enabled() {
+		// Nothing to customize — reuse the shared fetcher to preserve
+		// connection pooling across databases in the same process.
+		httpfetcher = defaultHttpFetcher
+	} else {
+		httpfetcher = newHTTPClient()
+	}
 
 	var opts []grpc.DialOption
 	if config.TLSConfig != nil {
 		tc := expcreds.NewTLSWithALPNDisabled(config.TLSConfig)
 		opts = append(opts, grpc.WithTransportCredentials(tc))
-
-		transport := &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           defaultDialer.DialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          1024,
-			MaxIdleConnsPerHost:   256,
-			IdleConnTimeout:       90 * time.Second,
-			TLSClientConfig:       config.TLSConfig,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		}
-		httpfetcher = &http.Client{
-			Transport: transport,
-		}
 	} else if config.Insecure {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
 		tc := expcreds.NewTLSWithALPNDisabled(&tls.Config{})
 		opts = append(opts, grpc.WithTransportCredentials(tc))
+	}
+
+	if netstats.Enabled() {
+		// Route the gRPC connection's TCP dial through the counting dialer.
+		// gRPC will layer TLS on top of the returned net.Conn when transport
+		// credentials are configured.
+		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+			return dialContext(ctx, "tcp", addr)
+		}))
+		opts = append(opts, grpc.WithStatsHandler(netstats.Global().StatsHandler()))
 	}
 
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(remotesrv.MaxGRPCMessageSize)))

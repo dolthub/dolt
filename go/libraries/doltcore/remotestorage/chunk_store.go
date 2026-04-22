@@ -28,6 +28,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -108,14 +109,38 @@ type NetworkRequestParams struct {
 }
 
 var defaultRequestParams = NetworkRequestParams{
-	StartingConcurrentDownloads:    64,
-	MaximumConcurrentDownloads:     64,
+	StartingConcurrentDownloads:    envIntOr("DOLT_STARTING_CONCURRENT_DOWNLOADS", 64),
+	MaximumConcurrentDownloads:     envIntOr("DOLT_MAX_CONCURRENT_DOWNLOADS", 64),
 	UploadRetryCount:               5,
 	DownloadRetryCount:             5,
 	ThroughputMinimumCheckInterval: time.Second,
 	ThroughputMinimumBytesPerCheck: 1024,
 	ThroughputMinimumNumIntervals:  5,
 	RespHeadersTimeout:             15 * time.Second,
+}
+
+// envIntOr reads a positive integer from the named environment variable.
+// If the variable is unset or unparseable, |def| is returned. Invalid values
+// are logged to stderr to surface misconfiguration.
+func envIntOr(name string, def int) int {
+	v := os.Getenv(name)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		fmt.Fprintf(os.Stderr, "remotestorage: ignoring invalid %s=%q, using default %d\n", name, v, def)
+		return def
+	}
+	return n
+}
+
+func init() {
+	if defaultRequestParams.StartingConcurrentDownloads > defaultRequestParams.MaximumConcurrentDownloads {
+		fmt.Fprintf(os.Stderr, "remotestorage: DOLT_STARTING_CONCURRENT_DOWNLOADS=%d exceeds DOLT_MAX_CONCURRENT_DOWNLOADS=%d; clamping start to max\n",
+			defaultRequestParams.StartingConcurrentDownloads, defaultRequestParams.MaximumConcurrentDownloads)
+		defaultRequestParams.StartingConcurrentDownloads = defaultRequestParams.MaximumConcurrentDownloads
+	}
 }
 
 type DoltChunkStore struct {
@@ -1086,9 +1111,11 @@ func HttpPostUpload(ctx context.Context, httpFetcher HTTPFetcher, post *remotesa
 	return processHttpResp(resp, err)
 }
 
-const (
-	chunkAggDistance = 8 * 1024
-)
+// chunkAggDistance is the maximum gap in bytes between two chunk byte
+// ranges that will be coalesced into a single HTTP Range request. Larger
+// values reduce request count at the cost of downloading unused "dark"
+// bytes between the chunks. Override with DOLT_CHUNK_AGG_DISTANCE.
+var chunkAggDistance = envIntOr("DOLT_CHUNK_AGG_DISTANCE", 8*1024)
 
 func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
 	return chunks.TableFileStoreOps{

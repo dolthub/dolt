@@ -54,6 +54,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/netstats"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -229,6 +230,10 @@ func main() {
 
 func runMain() int {
 	args := os.Args[1:]
+
+	if netstats.Enabled() {
+		defer netstats.Global().Dump(os.Stderr)
+	}
 
 	start := time.Now()
 
