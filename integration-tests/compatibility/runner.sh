@@ -91,6 +91,24 @@ function test_bidirectional_compatibility() {
   DOLT_LEGACY_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/$ver-backward" bats --print-output-on-failure ./test_files/bats/bidirectional
 }
 
+function test_bidirectional_remote_compatibility() {
+  ver=$1
+  bin=`download_release "$ver"`
+
+  DOLT_NEW=`which dolt`
+
+  # Like test_bidirectional_compatibility, the tests under ./bats/bidirectional_remote do their
+  # own initialization; REPO_DIR just needs to exist as a clean scratch space that gets copied
+  # into bats_repo by each test's setup().
+  mkdir "repos/$ver-remote-forward"
+  echo "Run the bidirectional remote tests with current Dolt version and older Dolt version $ver"
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW" REPO_DIR="$(pwd)/repos/$ver-remote-forward" bats --print-output-on-failure ./test_files/bats/bidirectional_remote
+
+  mkdir "repos/$ver-remote-backward"
+  echo "Run the bidirectional remote tests with older Dolt version $ver and current Dolt version"
+  DOLT_LEGACY_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/$ver-remote-backward" bats --print-output-on-failure ./test_files/bats/bidirectional_remote
+}
+
 function list_2_0_breaking_versions() {
   grep -v '^ *#' < test_files/2_0_breaking_versions.txt
 }
@@ -204,6 +222,16 @@ _main() {
       if [ -s "test_files/forward_compatible_versions.txt" ]; then
           list_forward_compatible_versions | while IFS= read -r ver; do
               test_bidirectional_compatibility "$ver"
+          done
+      fi
+  fi
+
+  # test bidirectional remote compatibility: two versions add the same column independently,
+  # insert disjoint data, and sync via a file remote. Same forward-compatibility limit applies.
+  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
+      if [ -s "test_files/forward_compatible_versions.txt" ]; then
+          list_forward_compatible_versions | while IFS= read -r ver; do
+              test_bidirectional_remote_compatibility "$ver"
           done
       fi
   fi
