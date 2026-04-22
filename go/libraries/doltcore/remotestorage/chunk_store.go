@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -435,6 +436,8 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
+var UseHTTP2 = os.Getenv("USE_HTTP2") != ""
+
 func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, resCb func(context.Context, []byte, *Range) error, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
@@ -442,14 +445,24 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 
 	return func() error {
 		urlF := func(lastError error) (string, error) {
-			url, err := pathToUrl(ctx, lastError, gr.ResourcePath())
+			urlS, err := pathToUrl(ctx, lastError, gr.ResourcePath())
 			if err != nil {
 				return "", err
 			}
-			if url == "" {
-				url = gr.Url
+			if urlS == "" {
+				urlS = gr.Url
 			}
-			return url, nil
+			if UseHTTP2 {
+				parsed, err := url.Parse(urlS)
+				if err != nil {
+					return "", err
+				}
+				if parsed.Host == "dolthub-chunks-dev.s3.us-east-1.amazonaws.com" {
+					parsed.Host = "dyqg1o7zazd96.cloudfront.net"
+					urlS = parsed.String()
+				}
+			}
+			return urlS, nil
 		}
 		rangeLen := gr.RangeLen()
 		resp := reliable.StreamingRangeDownload(ctx, reliable.StreamingRangeRequest{
