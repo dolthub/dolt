@@ -338,6 +338,8 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	d.PanicIfFalse(len(parts) == 2)
 
 	var opts []func(*config.LoadOptions) error
+	// WhenRequired silences the per-GetObject WARN emitted when objects have no stored checksum.
+	opts = append(opts, config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired))
 	opts = append(opts, config.WithRegion(options.AwsRegionOrDefault()))
 
 	switch options.AWSCredSource {

@@ -181,9 +181,7 @@ func validatePath(path string) (string, error) {
 
 func awsConfigFromParams(ctx context.Context, params map[string]interface{}) (aws.Config, error) {
 	var opts []func(*config.LoadOptions) error
-	// WhenRequired silences the per-GetObject WARN the SDK emits when an object has no
-	// stored checksum. The default WhenSupported emits this WARN on every read, and
-	// existing objects were not uploaded with checksums.
+	// WhenRequired silences the per-GetObject WARN emitted when objects have no stored checksum.
 	opts = append(opts, config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired))
 
 	// aws-region always sets the region. Otherwise it comes from AWS_REGION or AWS_DEFAULT_REGION.
