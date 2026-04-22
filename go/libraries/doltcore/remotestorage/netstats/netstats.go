@@ -123,6 +123,13 @@ type Recorder struct {
 	darkCacheHits       atomic.Uint64
 	darkCacheHitBytes   atomic.Uint64
 	darkCache           *darkCache
+
+	// Multi-range fetch counters. Populated only when
+	// DOLT_MULTI_RANGE is enabled.
+	multiRangeReqs          atomic.Uint64
+	multiRangeGroupsTotal   atomic.Uint64 // sum of groups (= Range header entries) over requests
+	multiRangeChunksTotal   atomic.Uint64 // sum of delivered chunks over requests
+	multiRangeBridgedDark   atomic.Uint64 // slop bytes bridged inside groups at pop time
 }
 
 func newRecorder() *Recorder {
@@ -149,6 +156,24 @@ func (r *Recorder) RecordDispatchedDarkBytes(n uint64) {
 // same URL will report a hit if the chunk bytes fall inside this span.
 func (r *Recorder) RecordDispatchedRegion(url string, start, end uint64) {
 	r.darkCache.insert(url, start, end)
+}
+
+// RecordMultiRangeRequest records the completion of one multi-range
+// HTTP request: |groups| is the number of entries in the Range
+// header; |chunks| is the number of chunks delivered to callbacks by
+// that request.
+func (r *Recorder) RecordMultiRangeRequest(groups, chunks uint64) {
+	r.multiRangeReqs.Add(1)
+	r.multiRangeGroupsTotal.Add(groups)
+	r.multiRangeChunksTotal.Add(chunks)
+}
+
+// RecordMultiRangeBridgedDark accumulates slop bytes that MRQueue
+// bridged within groups at pop time — these bytes will be downloaded
+// but not delivered to any chunk callback (the multi-range analogue
+// of Tree's dispatched dark bytes).
+func (r *Recorder) RecordMultiRangeBridgedDark(n uint64) {
+	r.multiRangeBridgedDark.Add(n)
 }
 
 // CheckDarkCacheHit reports whether the byte range [offset, offset+length)
@@ -409,6 +434,17 @@ func (r *Recorder) Dump(w io.Writer) {
 	if regions := r.dispatchedRegions.Load(); regions > 0 {
 		fmt.Fprintf(&buf, "Fetch: dispatched_regions=%d  dispatched_dark_bytes=%s\n",
 			regions, humanBytes(r.dispatchedDarkBytes.Load()))
+	}
+	if mrReqs := r.multiRangeReqs.Load(); mrReqs > 0 {
+		groups := r.multiRangeGroupsTotal.Load()
+		chunksD := r.multiRangeChunksTotal.Load()
+		var avgGroups, avgChunks float64
+		if mrReqs > 0 {
+			avgGroups = float64(groups) / float64(mrReqs)
+			avgChunks = float64(chunksD) / float64(mrReqs)
+		}
+		fmt.Fprintf(&buf, "Multi-range: reqs=%d  groups/req=%.1f  chunks/req=%.1f  bridged_dark=%s\n",
+			mrReqs, avgGroups, avgChunks, humanBytes(r.multiRangeBridgedDark.Load()))
 	}
 	if checks := r.darkCacheChecks.Load(); checks > 0 {
 		hits := r.darkCacheHits.Load()

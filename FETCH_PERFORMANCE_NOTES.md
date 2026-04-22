@@ -287,3 +287,39 @@ go/libraries/doltcore/remotestorage/internal/ranges/ranges.go   (DeleteMaxRegion
 go/libraries/doltcore/env/grpc_dial_provider.go                 (factory refactor, netstats wiring, PerURLFetcher gate)
 go/cmd/dolt/dolt.go                                             (defer netstats dump in runMain)
 ```
+
+# Multiple Byte Ranges Per Request
+
+We tried to implement Range requests with multiple byte ranges per request. If
+the CDN could split them into separate requests with a single byte range to the
+upstream then this would have been a big win for dark bytes and egress
+bandwidth efficiency. CloudFront does not split them up, so that direction was
+abandoned for now.
+
+  Env vars
+
+  ┌─────────────────────────────┬─────────┬─────────────────────────┐
+  │             Var             │ Default │         Effect          │
+  ├─────────────────────────────┼─────────┼─────────────────────────┤
+  │ DOLT_MULTI_RANGE            │ unset   │ Top-level gate          │
+  ├─────────────────────────────┼─────────┼─────────────────────────┤
+  │ DOLT_MULTI_RANGE_SLOP       │ 256     │ Pop-time coalesce slop  │
+  ├─────────────────────────────┼─────────┼─────────────────────────┤
+  │ DOLT_MULTI_RANGE_MAX_BYTES  │ 4 MiB   │ Per-request byte budget │
+  ├─────────────────────────────┼─────────┼─────────────────────────┤
+  │ DOLT_MULTI_RANGE_MAX_RANGES │ 128     │ Per-request range cap   │
+  └─────────────────────────────┴─────────┴─────────────────────────┘
+
+
+# Aaron Thoughts
+
+* netstats taking an optional duration in an envvar and the
+  periodically outputting some minimal stats, including number of
+  outstanding ranges and throughput-over-last-period, would be useful
+  to investigate end-of-fetch throughput dropoff
+
+* as it stands against CloudFront we don't have unlimited concurrent
+  connections budget --- too many concurrent requests causes
+  connection churn somehow. needs more investigation. maybe
+  client-side behavior, like less concurrent requests per connection,
+  can help / mitigate.

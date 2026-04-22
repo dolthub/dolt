@@ -560,6 +560,11 @@ type fetchResp struct {
 	rangeType rangeType
 	dictCache *dictionaryCache
 	path      string
+	// multiRange indicates the worker should use
+	// GetMultiRangeDownloadFunc (comma-separated Range header with
+	// multipart/byteranges response) instead of the single-range
+	// GetDownloadFunc.
+	multiRange bool
 }
 
 type fetchReq struct {
@@ -568,16 +573,26 @@ type fetchReq struct {
 
 // A simple structure to keep track of *GetRange requests along with
 // |locationRefreshes| for the URL paths we have seen.
+//
+// When |multiRangeEnabled| is false (default), |chunkRanges| and
+// |dictRanges| are the authoritative stores; the MRQueue fields are
+// nil. When |multiRangeEnabled| is true, the roles are reversed: the
+// Tree fields are nil and the MRQueue fields hold pending chunks for
+// multi-range HTTP dispatch.
+//
+// Dictionary ranges and chunk ranges are kept in separate stores in
+// both modes: chunk worker threads have a blocking data dependency on
+// dictionary bytes being resolved, and keeping dictionary fetches on
+// their own path means chunk workers never have to wait on an
+// out-of-order dict response bundled into the same request.
 type downloads struct {
-	// This Tree exclusively holds Chunk fetch ranges.
+	// Tree path (multi-range disabled).
 	chunkRanges *ranges.Tree
-	// This Tree exclusively holds Dictionary fetch ranges. Every
-	// entry that we create in |dictionaryCache| which needs to be
-	// populated goes in here. These ranges must be fetched before
-	// (or concurrently with) any chunkRanges, since the chunk
-	// range fetches will block the fetching thread on the
-	// population of the dictionary cache entry.
-	dictRanges *ranges.Tree
+	dictRanges  *ranges.Tree
+	// MRQueue path (DOLT_MULTI_RANGE=1).
+	chunkMR *ranges.MRQueue
+	dictMR  *ranges.MRQueue
+
 	// Holds all pending and fetched dictionaries for any chunk
 	// ranges that have gone into |chunkRanges|.
 	dictCache *dictionaryCache
@@ -585,12 +600,32 @@ type downloads struct {
 }
 
 func newDownloads() downloads {
-	return downloads{
-		chunkRanges: ranges.NewTree(chunkAggDistance),
-		dictRanges:  ranges.NewTree(chunkAggDistance),
-		dictCache:   &dictionaryCache{},
-		refreshes:   make(map[string]*locationRefresh),
+	d := downloads{
+		dictCache: &dictionaryCache{},
+		refreshes: make(map[string]*locationRefresh),
 	}
+	if multiRangeEnabled {
+		d.chunkMR = ranges.NewMRQueue()
+		d.dictMR = ranges.NewMRQueue()
+	} else {
+		d.chunkRanges = ranges.NewTree(chunkAggDistance)
+		d.dictRanges = ranges.NewTree(chunkAggDistance)
+	}
+	return d
+}
+
+func (d downloads) chunkLen() int {
+	if multiRangeEnabled {
+		return d.chunkMR.Len()
+	}
+	return d.chunkRanges.Len()
+}
+
+func (d downloads) dictLen() int {
+	if multiRangeEnabled {
+		return d.dictMR.Len()
+	}
+	return d.dictRanges.Len()
 }
 
 func (d downloads) Add(resp *remotesapi.DownloadLoc) {
@@ -607,16 +642,24 @@ func (d downloads) Add(resp *remotesapi.DownloadLoc) {
 		if r.DictionaryLength != 0 {
 			_, has := d.dictCache.getOrCreate(path, r.DictionaryOffset, r.DictionaryLength)
 			if !has {
-				if netstats.Enabled() {
+				if !multiRangeEnabled && netstats.Enabled() {
 					netstats.Global().CheckDarkCacheHit(hgr.Url, r.DictionaryOffset, uint64(r.DictionaryLength))
 				}
-				d.dictRanges.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, 0, 0)
+				if multiRangeEnabled {
+					d.dictMR.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, 0, 0)
+				} else {
+					d.dictRanges.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, 0, 0)
+				}
 			}
 		}
-		if netstats.Enabled() {
+		if !multiRangeEnabled && netstats.Enabled() {
 			netstats.Global().CheckDarkCacheHit(hgr.Url, r.Offset, uint64(r.Length))
 		}
-		d.chunkRanges.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
+		if multiRangeEnabled {
+			d.chunkMR.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
+		} else {
+			d.chunkRanges.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
+		}
 	}
 }
 
@@ -646,7 +689,7 @@ const (
 func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.DownloadLoc, fetchReqCh chan fetchReq, doneCh chan struct{}) error {
 	downloads := newDownloads()
 	for {
-		hasWork := downloads.dictRanges.Len() > 0 || downloads.chunkRanges.Len() > 0
+		hasWork := downloads.dictLen() > 0 || downloads.chunkLen() > 0
 		if !hasWork && locCh == nil {
 			// Once |locCh| closes, we sit it to |nil|. If
 			// our range trees are empty then we have
@@ -669,39 +712,7 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 				}
 			}
 		case req := <-reqCh:
-			var toSend *GetRange
-			var toSendType rangeType
-			var dark uint64
-			var region *ranges.Region
-			if downloads.dictRanges.Len() > 0 {
-				var max []*ranges.GetRange
-				max, region, dark = downloads.dictRanges.DeleteMaxRegion()
-				toSend, toSendType = toGetRange(max), rangeType_Dictionary
-			} else {
-				// Necessarily non-empty, since |hasWork| is true...
-				var max []*ranges.GetRange
-				max, region, dark = downloads.chunkRanges.DeleteMaxRegion()
-				toSend, toSendType = toGetRange(max), rangeType_Chunk
-			}
-			if netstats.Enabled() {
-				if dark > 0 {
-					netstats.Global().RecordDispatchedDarkBytes(dark)
-				}
-				if region != nil {
-					netstats.Global().RecordDispatchedRegion(region.Url, region.StartOffset, region.EndOffset)
-				}
-			}
-			path := toSend.ResourcePath()
-			refresh := downloads.refreshes[path]
-			resp := fetchResp{
-				get: toSend,
-				refresh: func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error) {
-					return refresh.GetURL(ctx, err, client)
-				},
-				rangeType: toSendType,
-				path:      path,
-				dictCache: downloads.dictCache,
-			}
+			resp := dispatchOne(downloads)
 			// Requester should deliver an exclusive,
 			// buffered channel where this deliver always
 			// succeeds.
@@ -709,6 +720,77 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		}
+	}
+}
+
+// dispatchOne pops one unit of work from |downloads| — either the
+// next Region from the Tree (legacy single-range path) or the next
+// multi-range request's worth of chunks from the MRQueue. Dicts are
+// dispatched before chunks in both modes.
+func dispatchOne(downloads downloads) fetchResp {
+	if multiRangeEnabled {
+		var groups [][]*ranges.GetRange
+		var url string
+		var bridgedDark uint64
+		var toSendType rangeType
+		if downloads.dictLen() > 0 {
+			groups, url, bridgedDark = downloads.dictMR.PopRequest(multiRangeMaxBytes, multiRangeMaxRanges, multiRangeSlop)
+			toSendType = rangeType_Dictionary
+		} else {
+			groups, url, bridgedDark = downloads.chunkMR.PopRequest(multiRangeMaxBytes, multiRangeMaxRanges, multiRangeSlop)
+			toSendType = rangeType_Chunk
+		}
+		if netstats.Enabled() && bridgedDark > 0 {
+			netstats.Global().RecordMultiRangeBridgedDark(bridgedDark)
+		}
+		var flat []*ranges.GetRange
+		for _, g := range groups {
+			flat = append(flat, g...)
+		}
+		toSend := toGetRange(flat)
+		if toSend.Url == "" {
+			// toGetRange only sets Url from the first entry;
+			// when flat is empty we must still send the URL
+			// we popped so the refresh lookup works.
+			toSend.Url = url
+		}
+		return buildFetchResp(downloads, toSend, toSendType, true)
+	}
+
+	var toSendType rangeType
+	var dark uint64
+	var region *ranges.Region
+	var max []*ranges.GetRange
+	if downloads.dictRanges.Len() > 0 {
+		max, region, dark = downloads.dictRanges.DeleteMaxRegion()
+		toSendType = rangeType_Dictionary
+	} else {
+		max, region, dark = downloads.chunkRanges.DeleteMaxRegion()
+		toSendType = rangeType_Chunk
+	}
+	if netstats.Enabled() {
+		if dark > 0 {
+			netstats.Global().RecordDispatchedDarkBytes(dark)
+		}
+		if region != nil {
+			netstats.Global().RecordDispatchedRegion(region.Url, region.StartOffset, region.EndOffset)
+		}
+	}
+	return buildFetchResp(downloads, toGetRange(max), toSendType, false)
+}
+
+func buildFetchResp(downloads downloads, toSend *GetRange, t rangeType, multiRange bool) fetchResp {
+	path := toSend.ResourcePath()
+	refresh := downloads.refreshes[path]
+	return fetchResp{
+		get: toSend,
+		refresh: func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error) {
+			return refresh.GetURL(ctx, err, client)
+		},
+		rangeType:  t,
+		path:       path,
+		dictCache:  downloads.dictCache,
+		multiRange: multiRange,
 	}
 }
 
@@ -868,9 +950,15 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 				} else {
 					cb = setDictionaryCallback(fetchResp.dictCache, fetchResp.path)
 				}
-				f := fetchResp.get.GetDownloadFunc(ctx, stats, health, fetcher, params, cb, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
+				urlF := func(ctx context.Context, lastError error, resourcePath string) (string, error) {
 					return fetchResp.refresh(ctx, lastError, client)
-				})
+				}
+				var f func() error
+				if fetchResp.multiRange {
+					f = fetchResp.get.GetMultiRangeDownloadFunc(ctx, stats, health, fetcher, params, cb, urlF)
+				} else {
+					f = fetchResp.get.GetDownloadFunc(ctx, stats, health, fetcher, params, cb, urlF)
+				}
 				err := f()
 				if err != nil {
 					return err
