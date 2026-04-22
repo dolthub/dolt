@@ -415,8 +415,9 @@ func mergeComparer(
 	cmp, ok := filter.(expression.Comparer)
 	if !ok {
 		if equality, ok := filter.(expression.Equality); ok && equality.RepresentsEquality() {
+			sqlCtx, _ := ctx.(*sql.Context) // Only Doltgres needs this, and this will always work when called from Doltgres
 			var err error
-			cmp, err = equality.ToComparer()
+			cmp, err = equality.ToComparer(sqlCtx)
 			if err != nil {
 				return nil, nil, false
 			}

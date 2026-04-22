@@ -223,7 +223,7 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMov
 			return sqlexport.OpenSQLExportWriter(ctx, wr, root, mvOpts.SrcName(), mvOpts.IsAutocommitOff(), outSch, opts)
 		}
 	case ParquetFile:
-		return parquet.NewParquetRowWriterForFile(outSch, mvOpts.DestName())
+		return parquet.NewParquetRowWriterForFile(ctx, outSch, mvOpts.DestName())
 	}
 
 	panic("Invalid Data Format." + string(dl.Format))

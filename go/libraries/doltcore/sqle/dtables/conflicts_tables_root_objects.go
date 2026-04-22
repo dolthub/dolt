@@ -59,7 +59,7 @@ func (ct ConflictRootObjectTable) String() string {
 }
 
 // Schema implements the interface sql.Table.
-func (ct ConflictRootObjectTable) Schema() sql.Schema {
+func (ct ConflictRootObjectTable) Schema(ctx *sql.Context) sql.Schema {
 	return ct.sqlSch
 }
 

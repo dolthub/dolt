@@ -50,7 +50,7 @@ func NewRemotesTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, tableNam
 }
 
 func (rt *RemotesTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(rt.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(rt.Schema(ctx))
 	numRows, _, err := rt.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -73,7 +73,7 @@ func (rt *RemotesTable) String() string {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the remotes system table
-func (rt *RemotesTable) Schema() sql.Schema {
+func (rt *RemotesTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "name", Type: types.Text, Source: rt.tableName, PrimaryKey: true, Nullable: false},
 		{Name: "url", Type: types.Text, Source: rt.tableName, PrimaryKey: false, Nullable: false},

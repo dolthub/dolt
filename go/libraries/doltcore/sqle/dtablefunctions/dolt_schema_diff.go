@@ -79,7 +79,7 @@ func (ds *SchemaDiffTableFunction) NewInstance(ctx *sql.Context, db sql.Database
 		database: db,
 	}
 
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.WithExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (ds *SchemaDiffTableFunction) NewInstance(ctx *sql.Context, db sql.Database
 }
 
 func (ds *SchemaDiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(ds.Schema(ctx))
 	numRows, _, err := ds.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -153,7 +153,7 @@ func (ds *SchemaDiffTableFunction) String() string {
 }
 
 // Schema implements the sql.Node interface.
-func (ds *SchemaDiffTableFunction) Schema() sql.Schema {
+func (ds *SchemaDiffTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	return schemaDiffTableSchema
 }
 
@@ -163,7 +163,7 @@ func (ds *SchemaDiffTableFunction) Children() []sql.Node {
 }
 
 // WithChildren implements the sql.Node interface.
-func (ds *SchemaDiffTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (ds *SchemaDiffTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -176,7 +176,7 @@ func (ds *SchemaDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Pri
 	if ds.tableNameExpr != nil {
 		_, _, _, tableName, err := ds.evaluateArguments()
 		if err != nil {
-			return ExpressionIsDeferred(ds.tableNameExpr)
+			return ExpressionIsDeferred(ctx, ds.tableNameExpr)
 		}
 
 		subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tableName}
@@ -211,7 +211,7 @@ func (ds *SchemaDiffTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface.
-func (ds *SchemaDiffTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+func (ds *SchemaDiffTableFunction) WithExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.Node, error) {
 	if len(exprs) < 1 || len(exprs) > 3 {
 		return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 to 3", len(exprs))
 	}
@@ -245,19 +245,19 @@ func (ds *SchemaDiffTableFunction) WithExpressions(exprs ...sql.Expression) (sql
 
 	// validate the expressions
 	if newDstf.dotCommitExpr != nil {
-		if !types.IsText(newDstf.dotCommitExpr.Type()) && !expression.IsBindVar(newDstf.dotCommitExpr) {
+		if !types.IsText(newDstf.dotCommitExpr.Type(ctx)) && !expression.IsBindVar(newDstf.dotCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.dotCommitExpr.String())
 		}
 	} else {
-		if !types.IsText(newDstf.fromCommitExpr.Type()) && !expression.IsBindVar(newDstf.fromCommitExpr) {
+		if !types.IsText(newDstf.fromCommitExpr.Type(ctx)) && !expression.IsBindVar(newDstf.fromCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.fromCommitExpr.String())
 		}
-		if !types.IsText(newDstf.toCommitExpr.Type()) && !expression.IsBindVar(newDstf.toCommitExpr) {
+		if !types.IsText(newDstf.toCommitExpr.Type(ctx)) && !expression.IsBindVar(newDstf.toCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.toCommitExpr.String())
 		}
 	}
 
-	if newDstf.tableNameExpr != nil && !types.IsText(newDstf.tableNameExpr.Type()) && !expression.IsBindVar(newDstf.tableNameExpr) {
+	if newDstf.tableNameExpr != nil && !types.IsText(newDstf.tableNameExpr.Type(ctx)) && !expression.IsBindVar(newDstf.tableNameExpr) {
 		return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.tableNameExpr.String())
 	}
 
@@ -416,9 +416,9 @@ var _ sql.RowIter = (*schemaDiffTableFunctionRowIter)(nil)
 // ExpressionIsDeferred checks for whether the given expression is a deferred binding variable. For prepared statements,
 // the normal workflow causes issues with privilege checking since it occurs during AST construction rather than during
 // analysis, so this will catch those instances.
-func ExpressionIsDeferred(expr sql.Expression) bool {
+func ExpressionIsDeferred(ctx *sql.Context, expr sql.Expression) bool {
 	if bv, ok := expr.(*expression.BindVar); ok {
-		if deferredType, ok := bv.Type().(sql.DeferredType); ok && deferredType.IsDeferred() {
+		if deferredType, ok := bv.Type(ctx).(sql.DeferredType); ok && deferredType.IsDeferred() {
 			return true
 		}
 	}

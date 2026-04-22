@@ -65,7 +65,7 @@ func (dt *ColumnDiffTable) Name() string {
 }
 
 func (dt *ColumnDiffTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema(ctx))
 	numRows, _, err := dt.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -84,7 +84,7 @@ func (dt *ColumnDiffTable) String() string {
 }
 
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
-func (dt *ColumnDiffTable) Schema() sql.Schema {
+func (dt *ColumnDiffTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
 		{Name: "table_name", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
@@ -139,7 +139,7 @@ func (dt *ColumnDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(ctx, lookup.Ranges))
 		}
 		hashes, commits, metas := index.HashesToCommits(ctx, dt.ddb, hs, dt.head, false)
 		if len(hashes) == 0 {

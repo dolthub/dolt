@@ -47,7 +47,7 @@ func (bat *BranchActivityTable) String() string {
 	return bat.tableName
 }
 
-func (bat *BranchActivityTable) Schema() sql.Schema {
+func (bat *BranchActivityTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "branch", Type: types.Text, Source: bat.tableName, PrimaryKey: true, Nullable: false, DatabaseSource: bat.db.Name()},
 		{Name: "last_read", Type: types.DatetimeMaxPrecision, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},

@@ -765,7 +765,7 @@ func moveRows(
 	parsedRowChan chan sql.Row,
 	badRowCb badRowFn,
 ) error {
-	rdSqlSch, err := sqlutil.FromDoltSchema("", options.destTableName, rd.GetSchema())
+	rdSqlSch, err := sqlutil.FromDoltSchema(ctx, "", options.destTableName, rd.GetSchema())
 	if err != nil {
 		return err
 	}

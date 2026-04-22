@@ -177,7 +177,7 @@ func TestLookupJoin(t *testing.T) {
 			node, err = engine.EngineAnalyzer().Analyze(sqlCtx, node, nil, qFlags)
 			require.NoError(t, err)
 
-			j := getJoin(node)
+			j := getJoin(sqlCtx, node)
 			require.NotNil(t, j)
 
 			iter, err := Builder{}.Build(sqlCtx, j, nil)
@@ -187,18 +187,18 @@ func TestLookupJoin(t *testing.T) {
 	}
 }
 
-func getJoin(n sql.Node) sql.Node {
+func getJoin(ctx *sql.Context, n sql.Node) sql.Node {
 	var j sql.Node
-	transform.NodeWithOpaque(n, func(n sql.Node) (sql.Node, transform.TreeIdentity, error) {
+	transform.NodeWithOpaque(ctx, n, func(ctx *sql.Context, n sql.Node) (sql.Node, transform.TreeIdentity, error) {
 		if join, ok := n.(*plan.JoinNode); ok {
 			j = join
 		}
 		return n, transform.SameTree, nil
 	})
 	if j == nil {
-		transform.NodeExprs(n, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
+		transform.NodeExprs(ctx, n, func(ctx *sql.Context, e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 			if sq, ok := e.(*plan.Subquery); ok {
-				j = getJoin(sq.Query)
+				j = getJoin(ctx, sq.Query)
 			}
 			return e, transform.SameTree, nil
 		})

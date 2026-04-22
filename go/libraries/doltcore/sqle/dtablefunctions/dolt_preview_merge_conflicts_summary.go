@@ -56,7 +56,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) NewInstance(ctx *sql.Contex
 		database: db,
 	}
 
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.WithExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) NewInstance(ctx *sql.Contex
 }
 
 func (pm *PreviewMergeConflictsSummaryTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(pm.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(pm.Schema(ctx))
 	numRows, _, err := pm.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -109,7 +109,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) String() string {
 }
 
 // Schema implements the sql.Node interface.
-func (pm *PreviewMergeConflictsSummaryTableFunction) Schema() sql.Schema {
+func (pm *PreviewMergeConflictsSummaryTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	return previewMergeConflictsSummarySchema
 }
 
@@ -119,7 +119,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) Children() []sql.Node {
 }
 
 // WithChildren implements the sql.Node interface.
-func (pm *PreviewMergeConflictsSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (pm *PreviewMergeConflictsSummaryTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -149,7 +149,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) Expressions() []sql.Express
 }
 
 // WithExpressions implements the sql.Expressioner interface.
-func (pm *PreviewMergeConflictsSummaryTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+func (pm *PreviewMergeConflictsSummaryTableFunction) WithExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.Node, error) {
 	if len(exprs) != 2 {
 		return nil, sql.ErrInvalidArgumentNumber.New(pm.Name(), "2", len(exprs))
 	}
@@ -169,10 +169,10 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) WithExpressions(exprs ...sq
 	newPmcs.rightBranchExpr = exprs[1]
 
 	// validate the expressions
-	if !types.IsText(newPmcs.leftBranchExpr.Type()) && !expression.IsBindVar(newPmcs.leftBranchExpr) {
+	if !types.IsText(newPmcs.leftBranchExpr.Type(ctx)) && !expression.IsBindVar(newPmcs.leftBranchExpr) {
 		return nil, sql.ErrInvalidArgumentDetails.New(newPmcs.Name(), newPmcs.leftBranchExpr.String())
 	}
-	if !types.IsText(newPmcs.rightBranchExpr.Type()) && !expression.IsBindVar(newPmcs.rightBranchExpr) {
+	if !types.IsText(newPmcs.rightBranchExpr.Type(ctx)) && !expression.IsBindVar(newPmcs.rightBranchExpr) {
 		return nil, sql.ErrInvalidArgumentDetails.New(newPmcs.Name(), newPmcs.rightBranchExpr.String())
 	}
 
@@ -424,7 +424,7 @@ func getDataConflictsForTable(ctx *sql.Context, tm *merge.TableMerger, tblName d
 		return nil, err
 	}
 
-	valueMerger := tm.GetNewValueMerger(mergeSch, leftRows)
+	valueMerger := tm.GetNewValueMerger(ctx, mergeSch, leftRows)
 
 	differ, err := tree.NewThreeWayDiffer(
 		ctx,

@@ -203,7 +203,7 @@ func (ltf *LogTableFunction) Database() sql.Database {
 
 // DataLength estimates total data size for query planning.
 func (ltf *LogTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(ltf.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(ltf.Schema(ctx))
 	numRows, _, err := ltf.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -281,7 +281,7 @@ func (ltf *LogTableFunction) getOptionsString() string {
 }
 
 // Schema implements the sql.Node interface.
-func (ltf *LogTableFunction) Schema() sql.Schema {
+func (ltf *LogTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	logSchema := logTableSchema
 
 	if ltf.showParents {
@@ -303,7 +303,7 @@ func (ltf *LogTableFunction) Children() []sql.Node {
 }
 
 // WithChildren implements the sql.Node interface.
-func (ltf *LogTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (ltf *LogTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -344,7 +344,7 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, tableName strin
 			return nil, err
 		}
 
-		if !types.IsText(expr.Type()) {
+		if !types.IsText(expr.Type(ctx)) {
 			return args, sql.ErrInvalidArgumentDetails.New(tableName, expr.String())
 		}
 
@@ -362,7 +362,7 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, tableName strin
 }
 
 // WithExpressions returns copy with expressions stored and revision strings cleared.
-func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+func (ltf *LogTableFunction) WithExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.Node, error) {
 	newLtf := *ltf
 	newLtf.argumentExprs = exprs
 	newLtf.revisionStrs = nil
@@ -392,7 +392,7 @@ func (ltf *LogTableFunction) deferExpressions(ctx *sql.Context, expressions ...s
 	hasDeferredExpression := false
 	var err error
 	for _, expr := range expressions {
-		sql.Inspect(expr, func(expr sql.Expression) bool {
+		sql.Inspect(ctx, expr, func(ctx *sql.Context, expr sql.Expression) bool {
 			// functions are not allowed as arguments
 			if _, ok := expr.(sql.FunctionExpression); ok {
 				err = ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
@@ -413,7 +413,7 @@ func (ltf *LogTableFunction) deferExpressions(ctx *sql.Context, expressions ...s
 		return nil, err
 	}
 
-	node, _ := ltf.WithExpressions(expressions...)
+	node, _ := ltf.WithExpressions(ctx, expressions...)
 	newLtf := *node.(*LogTableFunction)
 
 	// Parse literal arguments for schema determination during analysis phase

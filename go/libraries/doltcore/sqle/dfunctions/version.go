@@ -26,7 +26,7 @@ var VersionString = "SET_BY_INIT"
 type Version struct{}
 
 // NewVersion creates a new Version expression.
-func NewVersion() sql.Expression {
+func NewVersion(ctx *sql.Context) sql.Expression {
 	return &Version{}
 }
 
@@ -41,7 +41,7 @@ func (*Version) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 }
 
 // IsNullable implements the Expression interface.
-func (*Version) IsNullable() bool {
+func (*Version) IsNullable(ctx *sql.Context) bool {
 	return false
 }
 
@@ -56,14 +56,14 @@ func (*Version) String() string {
 }
 
 // Type implements the Expression interface.
-func (*Version) Type() sql.Type {
+func (*Version) Type(ctx *sql.Context) sql.Type {
 	return types.Text
 }
 
 // WithChildren implements the Expression interface.
-func (v *Version) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (v *Version) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 0 {
 		return nil, sql.ErrInvalidChildrenNumber.New(v, len(children), 0)
 	}
-	return NewVersion(), nil
+	return NewVersion(ctx), nil
 }

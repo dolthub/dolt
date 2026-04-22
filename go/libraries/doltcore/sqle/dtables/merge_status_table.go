@@ -55,7 +55,7 @@ func getDoltMergeStatusSchema(dbName, tableName string) sql.Schema {
 // by Doltgres to update the dolt_merge_status schema using Doltgres types.
 var GetDoltMergeStatusSchema = getDoltMergeStatusSchema
 
-func (mst MergeStatusTable) Schema() sql.Schema {
+func (mst MergeStatusTable) Schema(ctx *sql.Context) sql.Schema {
 	return GetDoltMergeStatusSchema(mst.dbName, mst.tableName)
 }
 

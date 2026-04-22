@@ -90,6 +90,16 @@ type Column struct {
 
 	// Constraints are rules that can be checked on each column to say if the columns value is valid
 	Constraints []ColConstraint
+
+	// Hidden columns are user created columns that have been marked as not visible. They are not included in * expansion
+	// but can be explicitly queried. Hidden columns still show up in SHOW CREATE TABLE output.
+	Hidden bool
+
+	// SystemHidden columns are hidden columns that are created by the system and cannot be queried directly. They do
+	// not show up in SHOW CREATE TABLE output. They exist as part of the table, but users will never know they are
+	// part of the table. SystemHidden columns are used for storing functional expression results so that they can be
+	// used in secondary indexes.
+	SystemHidden bool
 }
 
 // NewColumn creates a Column instance with the default type info for the NomsKind

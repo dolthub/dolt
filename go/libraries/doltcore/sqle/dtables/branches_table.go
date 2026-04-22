@@ -163,7 +163,7 @@ func (bt *BranchesTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.Forei
 		return nil, fmt.Errorf("unable to get roots for database '%s'", databaseName)
 	}
 
-	pkSch := sql.NewPrimaryKeySchema(bt.Schema(), 0)
+	pkSch := sql.NewPrimaryKeySchema(bt.Schema(ctx), 0)
 	tableName := doltdb.TableName{Name: "dolt_branches"}
 	doltSchema, err := sqlutil.ToDoltSchema(ctx, roots.Working, tableName, pkSch, roots.Head, bt.Collation())
 	if err != nil {
@@ -206,7 +206,7 @@ func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.SqlDatabase, tableName str
 }
 
 func (bt *BranchesTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(bt.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(bt.Schema(ctx))
 	numRows, _, err := bt.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -229,7 +229,7 @@ func (bt *BranchesTable) String() string {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the branches system table
-func (bt *BranchesTable) Schema() sql.Schema {
+func (bt *BranchesTable) Schema(ctx *sql.Context) sql.Schema {
 	columns := []*sql.Column{
 		{Name: "name", Type: types.Text, Source: bt.tableName, PrimaryKey: true, Nullable: false, DatabaseSource: bt.db.Name()},
 		{Name: "hash", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bt.db.Name()},

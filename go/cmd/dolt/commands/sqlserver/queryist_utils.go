@@ -164,7 +164,7 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 		}
 	}
 
-	return rowIter.Schema(), rowIter, nil, nil
+	return rowIter.Schema(ctx), rowIter, nil, nil
 }
 
 func (c ConnectionQueryist) QueryWithBindings(ctx *sql.Context, query string, _ sqlparser.Statement, _ map[string]sqlparser.Expr, _ *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
@@ -226,7 +226,7 @@ func NewMysqlRowWrapper(sqlRows *sql2.Rows) (*MysqlRowWrapper, error) {
 	}, nil
 }
 
-func (s *MysqlRowWrapper) Schema() sql.Schema {
+func (s *MysqlRowWrapper) Schema(ctx *sql.Context) sql.Schema {
 	return s.schema
 }
 

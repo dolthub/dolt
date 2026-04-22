@@ -42,7 +42,7 @@ func NewTagsTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB) sql.Tabl
 }
 
 func (tt *TagsTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(tt.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(tt.Schema(ctx))
 	numRows, _, err := tt.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -65,7 +65,7 @@ func (tt *TagsTable) String() string {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the tags system table.
-func (tt *TagsTable) Schema() sql.Schema {
+func (tt *TagsTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "tag_name", Type: types.Text, Source: tt.tableName, PrimaryKey: true},
 		{Name: "tag_hash", Type: types.Text, Source: tt.tableName, PrimaryKey: true},

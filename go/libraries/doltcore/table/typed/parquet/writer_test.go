@@ -90,7 +90,7 @@ Andy Anderson,27,
 
 	rows := getSampleRows()
 
-	pWr, err := NewParquetRowWriterForFile(rowSch, path)
+	pWr, err := NewParquetRowWriterForFile(nil, rowSch, path)
 	if err != nil {
 		require.NoError(t, err)
 	}

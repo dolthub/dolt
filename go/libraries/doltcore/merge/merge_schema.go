@@ -195,7 +195,7 @@ func SchemaMerge(
 	}
 
 	var mergedCC *schema.ColCollection
-	mergedCC, sc.ColConflicts, mergeInfo, diffInfo, err = mergeColumns(tblName.Name, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
+	mergedCC, sc.ColConflicts, mergeInfo, diffInfo, err = mergeColumns(ctx, tblName.Name, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
 		return nil, SchemaConflict{}, mergeInfo, diffInfo, err
 	}
@@ -365,7 +365,7 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 // have a default value cannot be merged automatically, since we don't know what value to set for any existing rows,
 // so instead of reporting a schema conflict and allowing customers to use the conflict resolution workflow, we return
 // an error and instruct them how to manually fix the problem.
-func checkUnmergeableNewColumns(tblName string, columnMappings columnMappings) error {
+func checkUnmergeableNewColumns(ctx *sql.Context, tblName string, columnMappings columnMappings) error {
 	for _, mapping := range columnMappings {
 		anc := mapping.anc
 		ours := mapping.ours
@@ -402,7 +402,7 @@ type MergeInfo struct {
 // compatible with the current stored format. The merged columns, any column conflicts, and a boolean value stating if
 // a full table rewrite is needed to align the existing table rows with the new, merged schema. If any unexpected error
 // occurs, then that error is returned and the other response fields should be ignored.
-func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, MergeInfo, tree.ThreeWayDiffInfo, error) {
+func mergeColumns(ctx *sql.Context, tblName string, format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, MergeInfo, tree.ThreeWayDiffInfo, error) {
 	mergeInfo := MergeInfo{}
 	diffInfo := tree.ThreeWayDiffInfo{}
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
@@ -415,7 +415,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 		return nil, nil, mergeInfo, diffInfo, err
 	}
 
-	err = checkUnmergeableNewColumns(tblName, columnMappings)
+	err = checkUnmergeableNewColumns(ctx, tblName, columnMappings)
 	if err != nil {
 		return nil, nil, mergeInfo, diffInfo, err
 	}

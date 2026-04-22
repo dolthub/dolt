@@ -63,7 +63,7 @@ func NewUnscopedDiffTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.
 }
 
 func (dt *UnscopedDiffTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema(ctx))
 	numRows, _, err := dt.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -103,7 +103,7 @@ func getUnscopedDoltDiffSchema(dbName, tableName string) sql.Schema {
 var GetUnscopedDoltDiffSchema = getUnscopedDoltDiffSchema
 
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
-func (dt *UnscopedDiffTable) Schema() sql.Schema {
+func (dt *UnscopedDiffTable) Schema(ctx *sql.Context) sql.Schema {
 	return GetUnscopedDoltDiffSchema(dt.dbName, dt.tableName)
 }
 
@@ -165,7 +165,7 @@ func (dt *UnscopedDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.Index
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(ctx, lookup.Ranges))
 		}
 		hashes, commits, metas := index.HashesToCommits(ctx, dt.ddb, hs, dt.head, false)
 		if len(hashes) == 0 {

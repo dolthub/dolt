@@ -57,7 +57,7 @@ func (dsht *doltSchemasHistoryTable) String() string {
 }
 
 // Schema implements sql.Table
-func (dsht *doltSchemasHistoryTable) Schema() sql.Schema {
+func (dsht *doltSchemasHistoryTable) Schema(ctx *sql.Context) sql.Schema {
 	// Base schema from dolt_schemas table
 	baseSch := sql.Schema{
 		&sql.Column{Name: doltdb.SchemasTablesTypeCol, Type: types.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: false, PrimaryKey: true, Source: dsht.name},
@@ -104,9 +104,9 @@ func (dsht *doltSchemasHistoryTable) PartitionRows(ctx *sql.Context, partition s
 }
 
 // PrimaryKeySchema implements sql.PrimaryKeyTable
-func (dsht *doltSchemasHistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+func (dsht *doltSchemasHistoryTable) PrimaryKeySchema(ctx *sql.Context) sql.PrimaryKeySchema {
 	return sql.PrimaryKeySchema{
-		Schema:     dsht.Schema(),
+		Schema:     dsht.Schema(ctx),
 		PkOrdinals: []int{0, 1, 5}, // type, name, commit_hash
 	}
 }
@@ -125,7 +125,7 @@ type doltSchemasHistoryRowIter struct {
 func (dshri *doltSchemasHistoryRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if dshri.rows == nil {
 		// Initialize rows from the commit's dolt_schemas table
-		err := dshri.loadRows()
+		err := dshri.loadRows(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -141,7 +141,7 @@ func (dshri *doltSchemasHistoryRowIter) Next(ctx *sql.Context) (sql.Row, error) 
 	return row, nil
 }
 
-func (dshri *doltSchemasHistoryRowIter) loadRows() error {
+func (dshri *doltSchemasHistoryRowIter) loadRows(ctx *sql.Context) error {
 	root, err := dshri.commit.GetRootValue(dshri.ctx)
 	if err != nil {
 		return err
@@ -180,7 +180,7 @@ func (dshri *doltSchemasHistoryRowIter) loadRows() error {
 	}
 
 	// Create a DoltTable using the database reference we now have
-	doltTable, err := NewDoltTable(doltdb.SchemasTableName, sch, tbl, dshri.history.db, editor.Options{})
+	doltTable, err := NewDoltTable(ctx, doltdb.SchemasTableName, sch, tbl, dshri.history.db, editor.Options{})
 	if err != nil {
 		return err
 	}

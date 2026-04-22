@@ -58,12 +58,26 @@ const (
 	AdaptiveEncodingTestType_Text
 )
 
+func (a AdaptiveEncodingTestColumnType) String() string {
+	if a == AdaptiveEncodingTestType_Blob {
+		return "Blob"
+	}
+	return "Text"
+}
+
 type AdaptiveEncodingTestPurpose byte
 
 const (
 	AdaptiveEncodingTestPurpose_Representation AdaptiveEncodingTestPurpose = iota
 	AdaptiveEncodingTestPurpose_Correctness
 )
+
+func (a AdaptiveEncodingTestPurpose) String() string {
+	if a == AdaptiveEncodingTestPurpose_Representation {
+		return "Representation"
+	}
+	return "Correctness"
+}
 
 func MakeBigAdaptiveEncodingQueriesSetup(columnType AdaptiveEncodingTestColumnType) []setup.SetupScript {
 	var typename string
@@ -154,13 +168,13 @@ func MakeBigAdaptiveEncodingQueries(columnType AdaptiveEncodingTestColumnType, t
 			WrapBehavior: wrapBehavior,
 		},
 		{
-			// When a tuple with multiple adaptive columns is too large, columns are moved out-of-band from left to right.
+			// When a tuple with multiple adaptive columns is too large, columns are moved out-of-band from largest to smallest.
 			// However, strings smaller than the address size (20 bytes) are never stored out-of-band.
 			Query:        "select i, b1, b2 from blobt2",
 			WrapBehavior: wrapBehavior,
 			Expected: []sql.Row{
 				{"FF", fullSizeOutOfLineRepr, fullSizeOutOfLineRepr},
-				{"HF", halfSizeOutOfLineRepr, fullSizeOutOfLineRepr},
+				{"HF", halfSize, fullSizeOutOfLineRepr},
 				{"TF", tiny, fullSizeOutOfLineRepr},
 				{"NF", nil, fullSizeOutOfLineRepr},
 				{"FH", fullSizeOutOfLineRepr, halfSize},

@@ -16,6 +16,7 @@ package val
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"time"
 
@@ -102,9 +103,16 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 	// In the best case, we don't need to convert any of them, so the TupleBuilder initially stores them in the form they're given.
 	// But we track the tuple size if they're all inlined vs the tuple size if they're all out-of-band,
 	// Then use this to determine which values need to be stored out of band.
+
+	type adaptiveCandidate struct {
+		columnIndex int
+		savings     int64 // inlineSize - outOfBandSize
+	}
 	totalSize := tb.inlineSize
 	if totalSize > tb.tupleLengthTarget {
-		// We're above the size limit, begin converting to out-of-band storage.
+		// Collect all adaptive columns that would benefit from out-of-band storage,
+		// then sort by savings descending so we move the largest values out-of-band first.
+		var candidates []adaptiveCandidate
 		for i, descType := range tb.Desc.Types {
 			if IsAdaptiveEncoding(descType.Enc) {
 				adaptiveValue := AdaptiveValue(tb.fields[i])
@@ -113,36 +121,48 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 				}
 				outOfBandSize := adaptiveValue.outOfBandSize()
 				inlineSize := adaptiveValue.inlineSize()
-
-				// We only store a field out-of-band if it makes the tuple shorter.
-				if outOfBandSize < inlineSize {
-					if !adaptiveValue.IsOutOfBand() {
-						outOfBandValue, err := adaptiveValue.convertToOutOfBand(ctx, tb.vs, nil)
-						if err != nil {
-							return nil, err
-						}
-						tb.PutRaw(i, outOfBandValue)
-					}
-
-					totalSize += outOfBandSize - inlineSize
+				savings := inlineSize - outOfBandSize
+				if savings > 0 {
+					candidates = append(candidates, adaptiveCandidate{columnIndex: i, savings: savings})
 				}
 			}
+		}
 
-			if totalSize <= tb.tupleLengthTarget {
-				// We have enough space, mark all the remaining columns as inline
-				for j, descType := range tb.Desc.Types[i+1:] {
-					if IsAdaptiveEncoding(descType.Enc) {
-						adaptiveValue := AdaptiveValue(tb.fields[j+i+1])
-						if adaptiveValue.IsOutOfBand() {
-							inline, err := adaptiveValue.convertToInline(ctx, tb.vs, nil)
-							if err != nil {
-								return nil, err
-							}
-							tb.PutRaw(j+i+1, inline)
-						}
-					}
+		// Sort candidates by savings descending (largest values first).
+		// Use stable sort to preserve column order for equal-sized values.
+		sort.SliceStable(candidates, func(a, b int) bool {
+			return candidates[a].savings > candidates[b].savings
+		})
+
+		// Convert to out-of-band in order of largest savings until we're under the target.
+		outOfBandSet := make(map[int]bool)
+		for _, c := range candidates {
+			adaptiveValue := AdaptiveValue(tb.fields[c.columnIndex])
+			if !adaptiveValue.IsOutOfBand() {
+				outOfBandValue, err := adaptiveValue.convertToOutOfBand(ctx, tb.vs, nil)
+				if err != nil {
+					return nil, err
 				}
+				tb.PutRaw(c.columnIndex, outOfBandValue)
+			}
+			outOfBandSet[c.columnIndex] = true
+			totalSize -= c.savings
+			if totalSize <= tb.tupleLengthTarget {
 				break
+			}
+		}
+
+		// Ensure any remaining adaptive columns that were not selected for out-of-band are inline.
+		for i, descType := range tb.Desc.Types {
+			if IsAdaptiveEncoding(descType.Enc) && !outOfBandSet[i] {
+				adaptiveValue := AdaptiveValue(tb.fields[i])
+				if adaptiveValue.IsOutOfBand() {
+					inline, err := adaptiveValue.convertToInline(ctx, tb.vs, nil)
+					if err != nil {
+						return nil, err
+					}
+					tb.PutRaw(i, inline)
+				}
 			}
 		}
 	}

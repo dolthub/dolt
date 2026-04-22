@@ -84,7 +84,7 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 		}
 		ddlStatements = append(ddlStatements, stmt)
 	} else {
-		stmts, err := generateNonCreateNonDropTableSqlSchemaDiff(formatter, td, toSchemas, fromSch, toSch)
+		stmts, err := generateNonCreateNonDropTableSqlSchemaDiff(ctx, formatter, td, toSchemas, fromSch, toSch)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +96,7 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 
 // generateNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
 // TODO: schema names
-func generateNonCreateNonDropTableSqlSchemaDiff(formatter sql.SchemaFormatter, td diff.TableDelta, toSchemas map[doltdb.TableName]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
+func generateNonCreateNonDropTableSqlSchemaDiff(ctx *sql.Context, formatter sql.SchemaFormatter, td diff.TableDelta, toSchemas map[doltdb.TableName]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
 	if td.IsAdd() || td.IsDrop() {
 		// use add and drop specific methods
 		return nil, nil
@@ -118,7 +118,7 @@ func generateNonCreateNonDropTableSqlSchemaDiff(formatter sql.SchemaFormatter, t
 		switch cd.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, AlterTableAddColStmt(formatter, td.ToName.Name, GenerateCreateTableColumnDefinition(formatter, *cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+			ddlStatements = append(ddlStatements, AlterTableAddColStmt(formatter, td.ToName.Name, GenerateCreateTableColumnDefinition(ctx, formatter, *cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 		case diff.SchDiffRemoved:
 			ddlStatements = append(ddlStatements, AlterTableDropColStmt(formatter, td.ToName.Name, cd.Old.Name))
 		case diff.SchDiffModified:
@@ -131,7 +131,7 @@ func generateNonCreateNonDropTableSqlSchemaDiff(formatter sql.SchemaFormatter, t
 			}
 			if !cd.Old.TypeInfo.Equals(cd.New.TypeInfo) {
 				ddlStatements = append(ddlStatements, AlterTableModifyColStmt(formatter, td.ToName.Name,
-					GenerateCreateTableColumnDefinition(formatter, *cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+					GenerateCreateTableColumnDefinition(ctx, formatter, *cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 			}
 		}
 	}
@@ -185,13 +185,13 @@ func generateNonCreateNonDropTableSqlSchemaDiff(formatter sql.SchemaFormatter, t
 }
 
 // GenerateCreateTableColumnDefinition returns column definition for CREATE TABLE statement with no indentation
-func GenerateCreateTableColumnDefinition(formatter sql.SchemaFormatter, col schema.Column, tableCollation sql.CollationID) string {
-	colStr := GenerateCreateTableIndentedColumnDefinition(formatter, col, tableCollation)
+func GenerateCreateTableColumnDefinition(ctx *sql.Context, formatter sql.SchemaFormatter, col schema.Column, tableCollation sql.CollationID) string {
+	colStr := GenerateCreateTableIndentedColumnDefinition(ctx, formatter, col, tableCollation)
 	return strings.TrimPrefix(colStr, "  ")
 }
 
 // GenerateCreateTableIndentedColumnDefinition returns column definition for CREATE TABLE statement with no indentation
-func GenerateCreateTableIndentedColumnDefinition(formatter sql.SchemaFormatter, col schema.Column, tableCollation sql.CollationID) string {
+func GenerateCreateTableIndentedColumnDefinition(ctx *sql.Context, formatter sql.SchemaFormatter, col schema.Column, tableCollation sql.CollationID) string {
 	var defaultVal, genVal, onUpdateVal *sql.ColumnDefaultValue
 	if col.Default != "" {
 		// hacky way to determine if column default is an expression
@@ -457,7 +457,7 @@ func GenerateCreateTableStatement(ctx *sql.Context, tblName string, sch schema.S
 
 	// Statement creation parts for each column
 	for i, col := range sch.GetAllCols().GetColumns() {
-		colStmts[i] = GenerateCreateTableIndentedColumnDefinition(formatter, col, sql.CollationID(sch.GetCollation()))
+		colStmts[i] = GenerateCreateTableIndentedColumnDefinition(ctx, formatter, col, sql.CollationID(sch.GetCollation()))
 	}
 
 	primaryKeyCols := sch.GetPKCols().GetColumnNames()

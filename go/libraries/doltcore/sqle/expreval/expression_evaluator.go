@@ -110,7 +110,7 @@ func getExpFunc(ctx *sql.Context, sch sql.Schema, exp sql.Expression) (Expressio
 		return newComparisonFunc(ctx, EqualsOp{}, expression.NewNullSafeEquals(typedExpr.Child, expression.NewLiteral(nil, gmstypes.Null)), sch)
 	}
 
-	return nil, errNotImplemented.New(exp.Type().String())
+	return nil, errNotImplemented.New(exp.Type(ctx).String())
 }
 
 func newOrFunc(left ExpressionFunc, right ExpressionFunc) ExpressionFunc {

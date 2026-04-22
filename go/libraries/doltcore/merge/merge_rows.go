@@ -83,8 +83,8 @@ type TableMerger struct {
 	recordViolations bool
 }
 
-func (tm TableMerger) GetNewValueMerger(mergeSch schema.Schema, leftRows prolly.Map) *valueMerger {
-	return NewValueMerger(mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore())
+func (tm TableMerger) GetNewValueMerger(ctx context.Context, mergeSch schema.Schema, leftRows prolly.Map) *valueMerger {
+	return NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore())
 }
 
 func rowsFromTable(ctx context.Context, tbl *doltdb.Table) (prolly.Map, error) {

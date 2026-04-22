@@ -38,8 +38,6 @@ var _ sql.ExecSourceRel = (*DiffSummaryTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*DiffSummaryTableFunction)(nil)
 
 type DiffSummaryTableFunction struct {
-	ctx *sql.Context
-
 	fromCommitExpr sql.Expression
 	toCommitExpr   sql.Expression
 	dotCommitExpr  sql.Expression
@@ -58,11 +56,10 @@ var diffSummaryTableSchema = sql.Schema{
 // NewInstance creates a new instance of TableFunction interface
 func (ds *DiffSummaryTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &DiffSummaryTableFunction{
-		ctx:      ctx,
 		database: db,
 	}
 
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.WithExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +68,7 @@ func (ds *DiffSummaryTableFunction) NewInstance(ctx *sql.Context, db sql.Databas
 }
 
 func (ds *DiffSummaryTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(ds.Schema(ctx))
 	numRows, _, err := ds.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -134,7 +131,7 @@ func (ds *DiffSummaryTableFunction) String() string {
 }
 
 // Schema implements the sql.Node interface.
-func (ds *DiffSummaryTableFunction) Schema() sql.Schema {
+func (ds *DiffSummaryTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	return diffSummaryTableSchema
 }
 
@@ -144,7 +141,7 @@ func (ds *DiffSummaryTableFunction) Children() []sql.Node {
 }
 
 // WithChildren implements the sql.Node interface.
-func (ds *DiffSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (ds *DiffSummaryTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -155,11 +152,11 @@ func (ds *DiffSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node
 func (ds *DiffSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	baseDB, _ := doltdb.SplitRevisionDbName(ds.database.Name())
 	if ds.tableNameExpr != nil {
-		if !types.IsText(ds.tableNameExpr.Type()) {
-			return ExpressionIsDeferred(ds.tableNameExpr)
+		if !types.IsText(ds.tableNameExpr.Type(ctx)) {
+			return ExpressionIsDeferred(ctx, ds.tableNameExpr)
 		}
 
-		tableNameVal, err := ds.tableNameExpr.Eval(ds.ctx, nil)
+		tableNameVal, err := ds.tableNameExpr.Eval(ctx, nil)
 		if err != nil {
 			return false
 		}
@@ -205,7 +202,7 @@ func (ds *DiffSummaryTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface.
-func (ds *DiffSummaryTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+func (ds *DiffSummaryTableFunction) WithExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.Node, error) {
 	if len(exprs) < 1 {
 		return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 to 3", len(exprs))
 	}
@@ -242,20 +239,20 @@ func (ds *DiffSummaryTableFunction) WithExpressions(exprs ...sql.Expression) (sq
 
 	// validate the expressions
 	if newDstf.dotCommitExpr != nil {
-		if !types.IsText(newDstf.dotCommitExpr.Type()) && !expression.IsBindVar(newDstf.dotCommitExpr) {
+		if !types.IsText(newDstf.dotCommitExpr.Type(ctx)) && !expression.IsBindVar(newDstf.dotCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.dotCommitExpr.String())
 		}
 	} else {
-		if !types.IsText(newDstf.fromCommitExpr.Type()) && !expression.IsBindVar(newDstf.fromCommitExpr) {
+		if !types.IsText(newDstf.fromCommitExpr.Type(ctx)) && !expression.IsBindVar(newDstf.fromCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.fromCommitExpr.String())
 		}
-		if !types.IsText(newDstf.toCommitExpr.Type()) && !expression.IsBindVar(newDstf.toCommitExpr) {
+		if !types.IsText(newDstf.toCommitExpr.Type(ctx)) && !expression.IsBindVar(newDstf.toCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.toCommitExpr.String())
 		}
 	}
 
 	if newDstf.tableNameExpr != nil {
-		if !types.IsText(newDstf.tableNameExpr.Type()) && !expression.IsBindVar(newDstf.tableNameExpr) {
+		if !types.IsText(newDstf.tableNameExpr.Type(ctx)) && !expression.IsBindVar(newDstf.tableNameExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.tableNameExpr.String())
 		}
 	}
@@ -265,7 +262,7 @@ func (ds *DiffSummaryTableFunction) WithExpressions(exprs ...sql.Expression) (sq
 
 // RowIter implements the sql.Node interface
 func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := ds.evaluateArguments()
+	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := ds.evaluateArguments(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -378,10 +375,10 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 // evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
 // It evaluates the argument expressions to turn them into values this DiffSummaryTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
-func (ds *DiffSummaryTableFunction) evaluateArguments() (interface{}, interface{}, interface{}, string, error) {
+func (ds *DiffSummaryTableFunction) evaluateArguments(ctx *sql.Context) (interface{}, interface{}, interface{}, string, error) {
 	var tableName string
 	if ds.tableNameExpr != nil {
-		tableNameVal, err := ds.tableNameExpr.Eval(ds.ctx, nil)
+		tableNameVal, err := ds.tableNameExpr.Eval(ctx, nil)
 		if err != nil {
 			return nil, nil, nil, "", err
 		}
@@ -393,7 +390,7 @@ func (ds *DiffSummaryTableFunction) evaluateArguments() (interface{}, interface{
 	}
 
 	if ds.dotCommitExpr != nil {
-		dotCommitVal, err := ds.dotCommitExpr.Eval(ds.ctx, nil)
+		dotCommitVal, err := ds.dotCommitExpr.Eval(ctx, nil)
 		if err != nil {
 			return nil, nil, nil, "", err
 		}
@@ -401,12 +398,12 @@ func (ds *DiffSummaryTableFunction) evaluateArguments() (interface{}, interface{
 		return nil, nil, dotCommitVal, tableName, nil
 	}
 
-	fromCommitVal, err := ds.fromCommitExpr.Eval(ds.ctx, nil)
+	fromCommitVal, err := ds.fromCommitExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, nil, "", err
 	}
 
-	toCommitVal, err := ds.toCommitExpr.Eval(ds.ctx, nil)
+	toCommitVal, err := ds.toCommitExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, nil, "", err
 	}

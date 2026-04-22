@@ -433,7 +433,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			// Keyless tables encode their fields differently than tables with primary keys, notably, they
 			// include an extra field indicating how many duplicate rows they represent, so we need to
 			// extract that information here before we can serialize these changes to the binlog.
-			rowCount, diffType, err := extractRowCountAndDiffType(sch, diff)
+			rowCount, diffType, err := extractRowCountAndDiffType(ctx, sch, diff)
 			if err != nil {
 				return err
 			}
@@ -653,7 +653,7 @@ func isFullRowMetadata(ctx *sql.Context) (bool, error) {
 // row was updated, but if the rowCount for the keyless row in diff.To is 4 and the rowCount
 // for the keyless row in diff.From is 2, then it is translated to a deletion of 2 rows, by
 // returning a |rowCount| of 2 and a |diffType| of tree.RemovedDiff.
-func extractRowCountAndDiffType(sch schema.Schema, diff tree.Diff) (rowCount uint64, diffType tree.DiffType, err error) {
+func extractRowCountAndDiffType(ctx *sql.Context, sch schema.Schema, diff tree.Diff) (rowCount uint64, diffType tree.DiffType, err error) {
 	// For tables with primary keys, we don't have to worry about duplicate rows or
 	// translating the diff type, so just return immediately
 	if schema.IsKeyless(sch) == false {

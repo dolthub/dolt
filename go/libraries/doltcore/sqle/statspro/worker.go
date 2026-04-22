@@ -632,7 +632,7 @@ func (sc *StatsController) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTabl
 	if template, ok := sc.GetTemplate(key); ok {
 		return key, template, nil
 	}
-	fds, colset, err := stats.IndexFds(strings.ToLower(sqlTable.Name()), sqlTable.Schema(), sqlIdx)
+	fds, colset, err := stats.IndexFds(ctx, strings.ToLower(sqlTable.Name()), sqlTable.Schema(ctx), sqlIdx)
 	if err != nil {
 		return templateCacheKey{}, stats.Statistic{}, err
 	}
@@ -648,7 +648,7 @@ func (sc *StatsController) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTabl
 	}
 
 	var types []sql.Type
-	for _, cet := range sqlIdx.ColumnExpressionTypes() {
+	for _, cet := range sqlIdx.ColumnExpressionTypes(ctx) {
 		types = append(types, cet.Type)
 	}
 

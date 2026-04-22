@@ -35,7 +35,7 @@ type HashOfTable struct {
 var _ sql.FunctionExpression = (*HashOfTable)(nil)
 
 // NewHashOfTable creates a new HashOfTable expression.
-func NewHashOfTable(e sql.Expression) sql.Expression {
+func NewHashOfTable(ctx *sql.Context, e sql.Expression) sql.Expression {
 	return &HashOfTable{expression.UnaryExpressionStub{Child: e}}
 }
 
@@ -96,19 +96,19 @@ func (t *HashOfTable) Description() string {
 }
 
 // IsNullable implements the Expression interface.
-func (t *HashOfTable) IsNullable() bool {
-	return t.Child.IsNullable()
+func (t *HashOfTable) IsNullable(ctx *sql.Context) bool {
+	return t.Child.IsNullable(ctx)
 }
 
 // WithChildren implements the Expression interface.
-func (t *HashOfTable) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (t *HashOfTable) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 1 {
 		return nil, sql.ErrInvalidChildrenNumber.New(t, len(children), 1)
 	}
-	return NewHashOfTable(children[0]), nil
+	return NewHashOfTable(ctx, children[0]), nil
 }
 
 // Type implements the Expression interface.
-func (t *HashOfTable) Type() sql.Type {
+func (t *HashOfTable) Type(ctx *sql.Context) sql.Type {
 	return types.Text
 }

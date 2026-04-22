@@ -68,7 +68,7 @@ func ParseCreateTableStatement(ctx *sql.Context, root doltdb.RootValue, engine *
 
 	// foreign keys are stored on the *doltdb.Table object, ignore them here
 	for _, chk := range create.Checks() {
-		name := getCheckConstraintName(chk)
+		name := getCheckConstraintName(ctx, chk)
 		_, err = sch.Checks().AddCheck(name, chk.Expr.String(), chk.Enforced)
 		if err != nil {
 			return "", nil, err
@@ -84,9 +84,9 @@ func getIndexName(def *sql.IndexDef) string {
 	return strings.Join(def.ColumnNames(), "_") + "_key"
 }
 
-func getCheckConstraintName(chk *sql.CheckConstraint) string {
+func getCheckConstraintName(ctx *sql.Context, chk *sql.CheckConstraint) string {
 	if chk.Name != "" {
 		return chk.Name
 	}
-	return chk.DebugString()
+	return chk.DebugString(ctx)
 }

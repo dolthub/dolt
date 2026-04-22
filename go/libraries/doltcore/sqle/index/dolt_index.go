@@ -69,16 +69,16 @@ type BranchNameIndex struct {
 	*doltIndex
 }
 
-func (bni *BranchNameIndex) ExtendedExpressions() []string {
+func (bni *BranchNameIndex) ExtendedExpressions(ctx *sql.Context) []string {
 	// The MockIndex used by the branch name virtual index doesn't set an index schema, so
 	// we can't use the implementation of ExtendedExpressions from doltIndex.
 	return bni.Expressions()
 }
 
-func (bni *BranchNameIndex) ExtendedColumnExpressionTypes() []sql.ColumnExpressionType {
+func (bni *BranchNameIndex) ExtendedColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
 	// The MockIndex used by the branch name virtual index doesn't set an index schema, so
 	// we can't use the implementation of ExtendedColumnExpressionTypes from doltIndex.
-	return bni.ColumnExpressionTypes()
+	return bni.ColumnExpressionTypes(ctx)
 }
 
 func NewCommitIndex(i *doltIndex) *CommitIndex {
@@ -556,7 +556,10 @@ type LookupMeta struct {
 	Ordinals []int
 }
 
-func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) []LookupMeta {
+// GetStrictLookups searches |indexes| and returns a slice of LookupMeta that indicates which indexes can be used
+// for strict lookups. Indexes may be used for strict lookups if they are a unique index and the columns they
+// cover are not nullable.
+func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes []sql.Index) []LookupMeta {
 	var lookups []LookupMeta
 	for _, i := range indexes {
 		idx := i.(*doltIndex)
@@ -608,7 +611,7 @@ func (di *doltIndex) CanSupportOrderBy(expr sql.Expression) bool {
 }
 
 // ColumnExpressionTypes implements the interface sql.Index.
-func (di *doltIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
+func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
 	if di.colExprTypes == nil {
 		di.colExprTypes = make([]sql.ColumnExpressionType, len(di.columns))
 		for i, col := range di.columns {
@@ -622,7 +625,7 @@ func (di *doltIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
 }
 
 // ExtendedColumnExpressionTypes implements the interface sql.ExtendedIndex.
-func (di *doltIndex) ExtendedColumnExpressionTypes() []sql.ColumnExpressionType {
+func (di *doltIndex) ExtendedColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
 	pkCols := di.indexSch.GetPKCols()
 	cets := make([]sql.ColumnExpressionType, 0, len(pkCols.Tags))
 	_ = pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -740,7 +743,7 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 	return covers
 }
 
-func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
+func (di *doltIndex) HandledFilters(ctx *sql.Context, filters []sql.Expression) []sql.Expression {
 	if !di.constrainedToLookupExpression {
 		return nil
 	}
@@ -752,7 +755,7 @@ func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 
 	var handled []sql.Expression
 	for _, f := range filters {
-		if !expression.PreciseComparison(f) {
+		if !expression.PreciseComparison(ctx, f) {
 			continue
 		}
 		handled = append(handled, f)
@@ -796,7 +799,7 @@ func (di *doltIndex) HasContentHashedField() bool {
 	return contentHashedField
 }
 
-func (di *doltIndex) Order() sql.IndexOrder {
+func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
 	if di.HasContentHashedField() {
 		return sql.IndexOrderNone
 	}
@@ -804,7 +807,7 @@ func (di *doltIndex) Order() sql.IndexOrder {
 	return di.order
 }
 
-func (di *doltIndex) Reversible() bool {
+func (di *doltIndex) Reversible(ctx *sql.Context) bool {
 	if di.HasContentHashedField() {
 		return false
 	}
@@ -829,7 +832,7 @@ func (di *doltIndex) Expressions() []string {
 }
 
 // ExtendedExpressions implements sql.ExtendedIndex
-func (di *doltIndex) ExtendedExpressions() []string {
+func (di *doltIndex) ExtendedExpressions(ctx *sql.Context) []string {
 	pkCols := di.indexSch.GetPKCols()
 	strs := make([]string, 0, len(pkCols.Tags))
 	_ = pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {

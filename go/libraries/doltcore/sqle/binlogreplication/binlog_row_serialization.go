@@ -44,7 +44,7 @@ type rowSerializationIter struct {
 // |key| and |value| tuple data, and using the |toSch| which describes the target format for the rows being serialized
 // by the serializeRowToBinlogBytes() function. Both schemas are required, because in the case of a schema change, the
 // diff data will use the "from" schema for the start of the diff, and the "to" schema for the end of the diff.
-func newRowSerializationIter(fromSch, toSch schema.Schema, key, value tree.Item, ns tree.NodeStore) *rowSerializationIter {
+func newRowSerializationIter(ctx *sql.Context, fromSch, toSch schema.Schema, key, value tree.Item, ns tree.NodeStore) *rowSerializationIter {
 	return &rowSerializationIter{
 		fromSch:   fromSch,
 		toSch:     toSch,
@@ -136,7 +136,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, fromSch, toSch schema.Schema, k
 	columns := toSch.GetAllCols().GetColumns()
 	nullBitmap = mysql.NewServerBitmap(len(columns))
 
-	iter := newRowSerializationIter(fromSch, toSch, key, value, ns)
+	iter := newRowSerializationIter(ctx, fromSch, toSch, key, value, ns)
 	rowIdx := -1
 	for iter.hasNext() {
 		rowIdx++
