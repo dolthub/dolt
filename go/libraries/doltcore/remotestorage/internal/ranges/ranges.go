@@ -16,7 +16,9 @@ package ranges
 
 import (
 	"container/heap"
+	"fmt"
 	"math/rand/v2"
+	"os"
 
 	"github.com/google/btree"
 )
@@ -72,21 +74,46 @@ const (
 	HeapStrategy_smallest = iota
 	HeapStrategy_largest
 	HeapStrategy_random
+	// HeapStrategy_largestGoodput orders by Region.MatchedBytes — the
+	// sum of chunk lengths within the region — rather than total span.
+	// Dispatches the region carrying the most wanted bytes first,
+	// leaving sparser regions in the tree longer where they may still
+	// coalesce with newly arriving chunks.
+	HeapStrategy_largestGoodput
 )
 
-var strategy = HeapStrategy_largest
+// strategy is read once at package init from DOLT_HEAP_STRATEGY.
+// It is deliberately not mutated afterward: container/heap requires
+// Less to be consistent across invocations.
+var strategy = initStrategy()
+
+func initStrategy() int {
+	switch os.Getenv("DOLT_HEAP_STRATEGY") {
+	case "", "largest":
+		return HeapStrategy_largest
+	case "smallest":
+		return HeapStrategy_smallest
+	case "random":
+		return HeapStrategy_random
+	case "goodput", "largest_goodput":
+		return HeapStrategy_largestGoodput
+	default:
+		fmt.Fprintf(os.Stderr, "ranges: ignoring unknown DOLT_HEAP_STRATEGY=%q; using largest\n",
+			os.Getenv("DOLT_HEAP_STRATEGY"))
+		return HeapStrategy_largest
+	}
+}
 
 func (rh RegionHeap) Less(i, j int) bool {
-	leni := rh[i].EndOffset - rh[i].StartOffset
-	lenj := rh[j].EndOffset - rh[j].StartOffset
-	if strategy == HeapStrategy_largest {
-		// This makes us track the largest region...
-		return leni > lenj
-	} else if strategy == HeapStrategy_smallest {
-		// This makes us track the smallest...
-		return leni < lenj
-	} else {
-		// This makes us track a random order...
+	switch strategy {
+	case HeapStrategy_largest:
+		return (rh[i].EndOffset - rh[i].StartOffset) > (rh[j].EndOffset - rh[j].StartOffset)
+	case HeapStrategy_smallest:
+		return (rh[i].EndOffset - rh[i].StartOffset) < (rh[j].EndOffset - rh[j].StartOffset)
+	case HeapStrategy_largestGoodput:
+		return rh[i].MatchedBytes > rh[j].MatchedBytes
+	default:
+		// HeapStrategy_random: stable random-ish order via the per-Region score.
 		return rh[i].Score < rh[j].Score
 	}
 }
@@ -244,10 +271,13 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32, dic
 // Returns all the |*GetRange| entries in the tree that are encompassed by the
 // current top entry in our |RegionHeap|. For |HeapStrategy_largest|, this will
 // be the largest possible download we can currently start, given our
-// |coalesceLimit|.
-func (t *Tree) DeleteMaxRegion() []*GetRange {
+// |coalesceLimit|. Also returns the popped region (so callers can record its
+// URL/offset span) and the number of dark bytes in the dispatched region —
+// bytes inside [StartOffset, EndOffset) that are not covered by any returned
+// GetRange and that will be downloaded but discarded.
+func (t *Tree) DeleteMaxRegion() ([]*GetRange, *Region, uint64) {
 	if t.regions.Len() == 0 {
-		return nil
+		return nil, nil, 0
 	}
 	region := heap.Pop(t.regions).(*Region)
 	start := &GetRange{Url: region.Url, Offset: region.StartOffset}
@@ -259,5 +289,6 @@ func (t *Tree) DeleteMaxRegion() []*GetRange {
 		t.t.Delete(gr)
 		return true
 	})
-	return ret
+	dark := (region.EndOffset - region.StartOffset) - region.MatchedBytes
+	return ret, region, dark
 }

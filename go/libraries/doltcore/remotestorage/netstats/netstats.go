@@ -115,6 +115,14 @@ type Recorder struct {
 	tcpTotalIn    atomic.Uint64
 	tcpTotalOut   atomic.Uint64
 	tcpTotalConns atomic.Uint64
+
+	// Fetch-layer counters, populated from the chunk fetcher.
+	dispatchedDarkBytes atomic.Uint64
+	dispatchedRegions   atomic.Uint64
+	darkCacheChecks     atomic.Uint64
+	darkCacheHits       atomic.Uint64
+	darkCacheHitBytes   atomic.Uint64
+	darkCache           *darkCache
 }
 
 func newRecorder() *Recorder {
@@ -123,7 +131,37 @@ func newRecorder() *Recorder {
 		grpcByMethod: map[string]*methodStats{},
 		httpByTarget: map[string]*targetStats{},
 		tcpByAddr:    map[string]*connStats{},
+		darkCache:    newDarkCache(),
 	}
+}
+
+// RecordDispatchedDarkBytes accumulates bytes that will be downloaded as
+// part of a coalesced region but are not covered by any of the wanted
+// chunk ranges within that region. This sizes the upper bound on the
+// savings a dark-range cache could provide.
+func (r *Recorder) RecordDispatchedDarkBytes(n uint64) {
+	r.dispatchedDarkBytes.Add(n)
+	r.dispatchedRegions.Add(1)
+}
+
+// RecordDispatchedRegion inserts a dispatched region's byte span into the
+// shadow cache. A subsequent CheckDarkCacheHit for a chunk range on the
+// same URL will report a hit if the chunk bytes fall inside this span.
+func (r *Recorder) RecordDispatchedRegion(url string, start, end uint64) {
+	r.darkCache.insert(url, start, end)
+}
+
+// CheckDarkCacheHit reports whether the byte range [offset, offset+length)
+// on url is covered by a previously-dispatched region. Always increments
+// the check counter; increments the hit counter (and hit-bytes) when true.
+func (r *Recorder) CheckDarkCacheHit(url string, offset, length uint64) bool {
+	r.darkCacheChecks.Add(1)
+	if r.darkCache.contains(url, offset, length) {
+		r.darkCacheHits.Add(1)
+		r.darkCacheHitBytes.Add(length)
+		return true
+	}
+	return false
 }
 
 // ---- gRPC stats.Handler ----
@@ -367,6 +405,22 @@ func (r *Recorder) Dump(w io.Writer) {
 			a, s.conns.Load(), humanBytes(s.in.Load()), humanBytes(s.out.Load()))
 	}
 	r.tcpMu.Unlock()
+
+	if regions := r.dispatchedRegions.Load(); regions > 0 {
+		fmt.Fprintf(&buf, "Fetch: dispatched_regions=%d  dispatched_dark_bytes=%s\n",
+			regions, humanBytes(r.dispatchedDarkBytes.Load()))
+	}
+	if checks := r.darkCacheChecks.Load(); checks > 0 {
+		hits := r.darkCacheHits.Load()
+		hitBytes := r.darkCacheHitBytes.Load()
+		urls, spans, resident := r.darkCache.stats()
+		var pct float64
+		if checks > 0 {
+			pct = 100 * float64(hits) / float64(checks)
+		}
+		fmt.Fprintf(&buf, "Dark cache (shadow): checks=%d  hits=%d (%.1f%%)  hit_bytes=%s  resident(urls=%d spans=%d bytes=%s)\n",
+			checks, hits, pct, humanBytes(hitBytes), urls, spans, humanBytes(resident))
+	}
 
 	fmt.Fprintln(&buf, "gRPC (client):")
 	r.grpcMu.Lock()

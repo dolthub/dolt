@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/pool"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/ranges"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/netstats"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
@@ -606,8 +607,14 @@ func (d downloads) Add(resp *remotesapi.DownloadLoc) {
 		if r.DictionaryLength != 0 {
 			_, has := d.dictCache.getOrCreate(path, r.DictionaryOffset, r.DictionaryLength)
 			if !has {
+				if netstats.Enabled() {
+					netstats.Global().CheckDarkCacheHit(hgr.Url, r.DictionaryOffset, uint64(r.DictionaryLength))
+				}
 				d.dictRanges.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, 0, 0)
 			}
+		}
+		if netstats.Enabled() {
+			netstats.Global().CheckDarkCacheHit(hgr.Url, r.Offset, uint64(r.Length))
 		}
 		d.chunkRanges.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
 	}
@@ -664,13 +671,25 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 		case req := <-reqCh:
 			var toSend *GetRange
 			var toSendType rangeType
+			var dark uint64
+			var region *ranges.Region
 			if downloads.dictRanges.Len() > 0 {
-				max := downloads.dictRanges.DeleteMaxRegion()
+				var max []*ranges.GetRange
+				max, region, dark = downloads.dictRanges.DeleteMaxRegion()
 				toSend, toSendType = toGetRange(max), rangeType_Dictionary
 			} else {
 				// Necessarily non-empty, since |hasWork| is true...
-				max := downloads.chunkRanges.DeleteMaxRegion()
+				var max []*ranges.GetRange
+				max, region, dark = downloads.chunkRanges.DeleteMaxRegion()
 				toSend, toSendType = toGetRange(max), rangeType_Chunk
+			}
+			if netstats.Enabled() {
+				if dark > 0 {
+					netstats.Global().RecordDispatchedDarkBytes(dark)
+				}
+				if region != nil {
+					netstats.Global().RecordDispatchedRegion(region.Url, region.StartOffset, region.EndOffset)
+				}
 			}
 			path := toSend.ResourcePath()
 			refresh := downloads.refreshes[path]
