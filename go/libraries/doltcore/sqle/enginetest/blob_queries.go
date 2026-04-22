@@ -204,6 +204,31 @@ func MakeBigAdaptiveEncodingQueries(columnType AdaptiveEncodingTestColumnType, t
 	}
 }
 
+var AdaptiveEncodingScripts = []queries.ScriptTest{
+	{
+		Name: "blob length function",
+		SetUpScript: []string{
+			`CREATE TABLE blobdata (                                                                                                                
+  pk          INT NOT NULL PRIMARY KEY,                                                                                                
+  c_varbinary VARBINARY(255),                                                                                                          
+  c_tinyblob  TINYBLOB,                                                                                                                
+  c_blob      BLOB,                                                                                                                    
+  c_medblob   MEDIUMBLOB,                                                                                                              
+  c_longblob  LONGBLOB                                                                                                                 
+);`,
+			`INSERT INTO blobdata VALUES                                                                                                            
+  (1, 'varbin-old-1', 'tiny-old-1', 'blob-old-1', 'med-old-1', 'long-old-1'),                                                          
+  (2, 'varbin-old-2', 'tiny-old-2', REPEAT('b', 60000), REPEAT('m', 70000), REPEAT('l', 90000));`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT LENGTH(c_varbinary), LENGTH(c_tinyblob), LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata where pk = 2 order by 1",
+				Expected: []sql.Row{{13, 10, 60000, 70000, 90000}},
+			},
+		},
+	},
+}
+
 func MakeBigAdaptiveEncodingWriteQueries(columnType AdaptiveEncodingTestColumnType, testPurpose AdaptiveEncodingTestPurpose) []queries.WriteQueryTest {
 	var fullSize interface{}
 	var halfSize interface{}

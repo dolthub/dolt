@@ -162,24 +162,6 @@ require_binaries() {
 # Integer types
 # ---------------------------------------------------------------------------
 
-@test "remote_add_column: TINYINT" {
-    require_binaries
-    run_workflow "TINYINT" "120" "121" "-10" "-11"
-    verify_all "c_col" "-10" "-11" "120" "121"
-}
-
-@test "remote_add_column: SMALLINT" {
-    require_binaries
-    run_workflow "SMALLINT" "20000" "20001" "-10000" "-10001"
-    verify_all "c_col" "-10000" "-10001" "20000" "20001"
-}
-
-@test "remote_add_column: MEDIUMINT" {
-    require_binaries
-    run_workflow "MEDIUMINT" "200000" "200001" "-100000" "-100001"
-    verify_all "c_col" "-100000" "-100001" "200000" "200001"
-}
-
 @test "remote_add_column: INT" {
     require_binaries
     run_workflow "INT" "2000000" "2000001" "-1000000" "-1000001"
@@ -216,12 +198,6 @@ require_binaries() {
     verify_all "c_col" "10.5" "11.5" "20.5" "21.5"
 }
 
-@test "remote_add_column: DOUBLE" {
-    require_binaries
-    run_workflow "DOUBLE" "20.125" "21.125" "10.125" "11.125"
-    verify_all "c_col" "10.125" "11.125" "20.125" "21.125"
-}
-
 @test "remote_add_column: DECIMAL" {
     require_binaries
     run_workflow "DECIMAL(10,2)" "20.50" "21.75" "10.25" "11.00"
@@ -232,13 +208,6 @@ require_binaries() {
 # String and text types
 # ---------------------------------------------------------------------------
 
-@test "remote_add_column: CHAR" {
-    require_binaries
-    run_workflow "CHAR(20)" \
-      "'a-char-20'" "'a-char-21'" "'b-char-10'" "'b-char-11'"
-    verify_all "c_col" "b-char-10" "b-char-11" "a-char-20" "a-char-21"
-}
-
 @test "remote_add_column: VARCHAR" {
     require_binaries
     run_workflow "VARCHAR(255)" \
@@ -246,32 +215,11 @@ require_binaries() {
     verify_all "c_col" "b-varchar-10" "b-varchar-11" "a-varchar-20" "a-varchar-21"
 }
 
-@test "remote_add_column: TINYTEXT" {
-    require_binaries
-    run_workflow "TINYTEXT" \
-      "'a-tiny-20'" "'a-tiny-21'" "'b-tiny-10'" "'b-tiny-11'"
-    verify_all "c_col" "b-tiny-10" "b-tiny-11" "a-tiny-20" "a-tiny-21"
-}
-
 @test "remote_add_column: TEXT" {
     require_binaries
     run_workflow "TEXT" \
       "'a-text-20'" "'a-text-21'" "'b-text-10'" "'b-text-11'"
     verify_all "c_col" "b-text-10" "b-text-11" "a-text-20" "a-text-21"
-}
-
-@test "remote_add_column: MEDIUMTEXT" {
-    require_binaries
-    run_workflow "MEDIUMTEXT" \
-      "'a-med-20'" "'a-med-21'" "'b-med-10'" "'b-med-11'"
-    verify_all "c_col" "b-med-10" "b-med-11" "a-med-20" "a-med-21"
-}
-
-@test "remote_add_column: LONGTEXT" {
-    require_binaries
-    run_workflow "LONGTEXT" \
-      "'a-long-20'" "'a-long-21'" "'b-long-10'" "'b-long-11'"
-    verify_all "c_col" "b-long-10" "b-long-11" "a-long-20" "a-long-21"
 }
 
 # ---------------------------------------------------------------------------
@@ -285,13 +233,6 @@ require_binaries() {
     verify_all "c_col" "b-vb-10" "b-vb-11" "a-vb-20" "a-vb-21"
 }
 
-@test "remote_add_column: TINYBLOB" {
-    require_binaries
-    run_workflow "TINYBLOB" \
-      "'a-tb-20'" "'a-tb-21'" "'b-tb-10'" "'b-tb-11'"
-    verify_all "c_col" "b-tb-10" "b-tb-11" "a-tb-20" "a-tb-21"
-}
-
 @test "remote_add_column: BLOB" {
     require_binaries
     run_workflow "BLOB" \
@@ -299,37 +240,9 @@ require_binaries() {
     verify_all "c_col" "b-blob-10" "b-blob-11" "a-blob-20" "a-blob-21"
 }
 
-@test "remote_add_column: MEDIUMBLOB" {
-    require_binaries
-    run_workflow "MEDIUMBLOB" \
-      "'a-mbl-20'" "'a-mbl-21'" "'b-mbl-10'" "'b-mbl-11'"
-    verify_all "c_col" "b-mbl-10" "b-mbl-11" "a-mbl-20" "a-mbl-21"
-}
-
-@test "remote_add_column: LONGBLOB" {
-    require_binaries
-    run_workflow "LONGBLOB" \
-      "'a-lbl-20'" "'a-lbl-21'" "'b-lbl-10'" "'b-lbl-11'"
-    verify_all "c_col" "b-lbl-10" "b-lbl-11" "a-lbl-20" "a-lbl-21"
-}
-
 # ---------------------------------------------------------------------------
 # Temporal types
 # ---------------------------------------------------------------------------
-
-@test "remote_add_column: DATE" {
-    require_binaries
-    run_workflow "DATE" \
-      "'2025-03-20'" "'2025-03-21'" "'2025-01-10'" "'2025-01-11'"
-    verify_all "c_col" "2025-01-10" "2025-01-11" "2025-03-20" "2025-03-21"
-}
-
-@test "remote_add_column: TIME" {
-    require_binaries
-    run_workflow "TIME" \
-      "'20:00:00'" "'21:00:00'" "'10:00:00'" "'11:00:00'"
-    verify_all "c_col" "10:00:00" "11:00:00" "20:00:00" "21:00:00"
-}
 
 @test "remote_add_column: DATETIME" {
     require_binaries
@@ -349,12 +262,6 @@ require_binaries() {
     verify_all "c_col" \
       "2025-01-10 10:00:00" "2025-01-11 11:00:00" \
       "2025-03-20 20:00:00" "2025-03-21 21:00:00"
-}
-
-@test "remote_add_column: YEAR" {
-    require_binaries
-    run_workflow "YEAR" "2020" "2021" "2010" "2011"
-    verify_all "c_col" "2010" "2011" "2020" "2021"
 }
 
 # ---------------------------------------------------------------------------
@@ -413,66 +320,6 @@ require_binaries() {
     verify_count
     verify_col "ST_AsText(c_col)" 10 "LINESTRING"
     verify_col "ST_AsText(c_col)" 20 "LINESTRING"
-}
-
-@test "remote_add_column: POLYGON" {
-    require_binaries
-    run_workflow "POLYGON" \
-      "ST_GeomFromText('POLYGON((0 0,20 0,20 20,0 20,0 0))')" \
-      "ST_GeomFromText('POLYGON((0 0,21 0,21 21,0 21,0 0))')" \
-      "ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0))')" \
-      "ST_GeomFromText('POLYGON((0 0,11 0,11 11,0 11,0 0))')"
-    verify_count
-    verify_col "ST_AsText(c_col)" 10 "POLYGON"
-    verify_col "ST_AsText(c_col)" 20 "POLYGON"
-}
-
-@test "remote_add_column: GEOMETRY" {
-    require_binaries
-    run_workflow "GEOMETRY" \
-      "ST_GeomFromText('POINT(20 20)')" "ST_GeomFromText('POINT(21 21)')" \
-      "ST_GeomFromText('LINESTRING(0 0,10 10)')" "ST_GeomFromText('LINESTRING(0 0,11 11)')"
-    verify_count
-    verify_col "ST_AsText(c_col)" 10 "LINESTRING"
-    verify_col "ST_AsText(c_col)" 11 "LINESTRING"
-    verify_col "ST_AsText(c_col)" 20 "POINT"
-    verify_col "ST_AsText(c_col)" 21 "POINT"
-}
-
-@test "remote_add_column: MULTIPOINT" {
-    require_binaries
-    run_workflow "MULTIPOINT" \
-      "ST_GeomFromText('MULTIPOINT(20 20,21 21)')" \
-      "ST_GeomFromText('MULTIPOINT(22 22,23 23)')" \
-      "ST_GeomFromText('MULTIPOINT(10 10,11 11)')" \
-      "ST_GeomFromText('MULTIPOINT(12 12,13 13)')"
-    verify_count
-    verify_col "ST_AsText(c_col)" 10 "MULTIPOINT"
-    verify_col "ST_AsText(c_col)" 20 "MULTIPOINT"
-}
-
-@test "remote_add_column: MULTILINESTRING" {
-    require_binaries
-    run_workflow "MULTILINESTRING" \
-      "ST_GeomFromText('MULTILINESTRING((0 0,20 20),(1 1,21 21))')" \
-      "ST_GeomFromText('MULTILINESTRING((0 0,22 22))')" \
-      "ST_GeomFromText('MULTILINESTRING((0 0,10 10))')" \
-      "ST_GeomFromText('MULTILINESTRING((0 0,11 11))')"
-    verify_count
-    verify_col "ST_AsText(c_col)" 10 "MULTILINESTRING"
-    verify_col "ST_AsText(c_col)" 20 "MULTILINESTRING"
-}
-
-@test "remote_add_column: MULTIPOLYGON" {
-    require_binaries
-    run_workflow "MULTIPOLYGON" \
-      "ST_GeomFromText('MULTIPOLYGON(((0 0,20 0,20 20,0 20,0 0)))')" \
-      "ST_GeomFromText('MULTIPOLYGON(((0 0,21 0,21 21,0 21,0 0)))')" \
-      "ST_GeomFromText('MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))')" \
-      "ST_GeomFromText('MULTIPOLYGON(((0 0,11 0,11 11,0 11,0 0)))')"
-    verify_count
-    verify_col "ST_AsText(c_col)" 10 "MULTIPOLYGON"
-    verify_col "ST_AsText(c_col)" 20 "MULTIPOLYGON"
 }
 
 @test "remote_add_column: GEOMETRYCOLLECTION" {

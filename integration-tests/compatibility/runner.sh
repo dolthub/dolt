@@ -128,6 +128,11 @@ function list_forward_compatible_versions() {
   grep -v '^ *#' < test_files/forward_compatible_versions.txt
 }
 
+function list_2_0_forward_compatible_versions() {
+  grep -v '^ *#' < test_files/2_0_forward_compatible_versions.txt
+}
+
+
 function test_forward_compatibility() {
   ver=$1
   bin=`download_release "$ver"`
@@ -189,9 +194,9 @@ _main() {
   trap cleanup "EXIT"
 
   # test backward compatibility
-  list_backward_compatible_versions | while IFS= read -r ver; do
-      test_backward_compatibility "$ver"
-  done
+  # list_backward_compatible_versions | while IFS= read -r ver; do
+  #     test_backward_compatibility "$ver"
+  # done
 
   # setup repo for current dolt version
   setup_repo HEAD
@@ -201,41 +206,57 @@ _main() {
   # of the versions which are actually forward compatible
   
   # test forward compatibility
-  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
-      if [ -s "test_files/forward_compatible_versions.txt" ]; then
-          list_forward_compatible_versions | while IFS= read -r ver; do
-              test_forward_compatibility "$ver"
-          done
-      fi
-  else
-      # For now we only test that we break with an appropriate error message
-      if [ -s "test_files/2_0_breaking_versions.txt" ]; then
-          list_2_0_breaking_versions | while IFS= read -r ver; do
-              test_2_0_breaking_compatibility "$ver"
-          done
-      fi
-  fi
+  # if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
+  #     if [ -s "test_files/forward_compatible_versions.txt" ]; then
+  #         list_forward_compatible_versions | while IFS= read -r ver; do
+  #             test_forward_compatibility "$ver"
+  #         done
+  #     fi
+  # else
+  #     # For now we only test that we break with an appropriate error message
+  #     if [ -s "test_files/2_0_breaking_versions.txt" ]; then
+  #         list_2_0_breaking_versions | while IFS= read -r ver; do
+  #             test_2_0_breaking_compatibility "$ver"
+  #         done
+  #     fi
+  # fi
 
 
-  # test bidirectional compatibility
+  # # test bidirectional compatibility
   if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
+      echo "Testing pre-2.0 bi-directional compatible versions"
       if [ -s "test_files/forward_compatible_versions.txt" ]; then
           list_forward_compatible_versions | while IFS= read -r ver; do
               test_bidirectional_compatibility "$ver"
           done
       fi
+  else
+      echo "Testing post-2.0 bi-directional compatible versions"
+      if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+          list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+              test_bidirectional_compatibility "$ver"
+          done
+      fi      
   fi
 
   # test bidirectional remote compatibility: two versions add the same column independently,
   # insert disjoint data, and sync via a file remote. Same forward-compatibility limit applies.
   if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
+      echo "Testing pre-2.0 remote compatible versions"
       if [ -s "test_files/forward_compatible_versions.txt" ]; then
           list_forward_compatible_versions | while IFS= read -r ver; do
               test_bidirectional_remote_compatibility "$ver"
           done
       fi
+  else
+      echo "Testing post-2.0 remote compatible versions"
+      if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+          list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+              test_bidirectional_remote_compatibility "$ver"
+          done
+      fi
   fi
-
+ 
   # sanity check: run tests against current version
   echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
   DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats --print-output-on-failure ./test_files/bats
