@@ -59,6 +59,29 @@ service ChunkStoreService {
   rpc RefreshTableFileUrl(RefreshTableFileUrlRequest) returns (RefreshTableFileUrlResponse);
 
   rpc AddTableFiles(AddTableFilesRequest) returns (AddTableFilesResponse);
+
+  // Prototype: stream chunk bytes back to the client directly over
+  // the gRPC channel, bypassing the presigned-URL/CDN download path.
+  // Env-gated on the client (DOLT_PROTO_CHUNKS=1). Not advertised in
+  // GetRepoMetadataResponse.features; clients that want to use this
+  // path must know the server implements it.
+  //
+  // Protocol:
+  //   Client: sends exactly one |handshake| message (RepoId, repo_token,
+  //     repo_path) first, then zero or more |get| messages each carrying
+  //     a flat 20-byte-per-hash chunk_hashes buffer.
+  //   Server: responds once with |handshake| (optional new repo_token),
+  //     then, for each client |get| in order, emits zero or more
+  //     |dictionary| messages and zero or more |chunk| messages,
+  //     terminating the batch with a |chunk| whose final=true. All
+  //     response messages for a given |get| precede any response for
+  //     the next |get|. Missing-chunk hash indexes ride on the final
+  //     chunk message.
+  //
+  // Deliberately not a reliable/resumable RPC: there is no 1:1
+  // correspondence between client messages and server messages, so
+  // the client shuts down on stream error rather than replaying.
+  rpc StreamChunks(stream StreamChunksRequest) returns (stream StreamChunksResponse);
 }
 
 // RepoId is how repositories are represented on dolthub, for example
@@ -451,4 +474,84 @@ message AddTableFilesRequest {
 message AddTableFilesResponse {
   bool success = 1;
   string repo_token = 2;
+}
+
+// Client -> server message on the StreamChunks stream. The client sends
+// one |Handshake| first, then any number of |Get| messages.
+message StreamChunksRequest {
+  message Handshake {
+    RepoId repo_id = 1;
+    string repo_token = 2;
+    string repo_path = 3;
+  }
+
+  message Get {
+    // Flat 20-byte-per-hash buffer; same encoding as
+    // StreamChunkLocationsRequest.chunk_hashes. Servers MUST reject
+    // requests where len(chunk_hashes) is not a multiple of 20.
+    bytes chunk_hashes = 1;
+  }
+
+  oneof payload {
+    Handshake handshake = 1;
+    Get get = 2;
+  }
+}
+
+// Server -> client message on the StreamChunks stream. The server
+// sends one |HandshakeAck| first, then for each client Get message
+// (in the order it arrived): zero or more |Dictionary| messages
+// introducing archive dictionaries, zero or more |Chunk| messages
+// carrying chunk bytes, and one |Chunk| with final=true closing the
+// batch.
+message StreamChunksResponse {
+  message HandshakeAck {
+    // If non-empty, advertises a new repo_token the client should use
+    // on future ChunkStoreService requests.
+    string repo_token = 1;
+  }
+
+  // Archive dictionary record. The server assigns a stream-scoped
+  // non-zero |dict_id| and emits this message at most once per
+  // dictionary before (or in a batch with) the first Chunk that
+  // references it. The id is valid for the remainder of this
+  // server-side stream; if the server re-emits the same id, clients
+  // MUST overwrite any prior dictionary with the new bytes.
+  message Dictionary {
+    uint32 dict_id = 1;
+    // zstd-compressed dictionary bytes; input to nbs.NewDecompBundle.
+    bytes data = 2;
+  }
+
+  message Chunk {
+    // Index into the currently-pending Get request's chunk_hashes
+    // buffer: N refers to the N'th 20-byte hash (bytes [N*20:(N+1)*20]).
+    // Ignored when this is a pure batch-terminator (see |final|).
+    uint32 request_index = 1;
+
+    // If |dict_id| == 0: |data| is a full snappy-compressed chunk
+    // (CompressedChunk.FullCompressedChunk, includes trailing CRC).
+    // If |dict_id| != 0: |data| is a zstd-compressed archive chunk;
+    // its dictionary is resolved via |dict_id| against dictionaries
+    // introduced earlier on this server-side stream.
+    bytes data = 2;
+    uint32 dict_id = 3;
+
+    // True on the last Chunk message for the currently-pending Get.
+    // When the server has nothing to send for a Get (e.g. all hashes
+    // missing), it MUST still emit a terminator: a Chunk with
+    // final=true, data unset, dict_id=0. Clients treat a final Chunk
+    // with empty data as a pure batch terminator.
+    bool final = 4;
+
+    // Hash indexes from the pending Get's chunk_hashes that the server
+    // could not find. Populated only on messages with final=true.
+    repeated uint32 missing_indexes = 5;
+  }
+
+  oneof payload {
+    HandshakeAck handshake = 1;
+    Dictionary dictionary = 2;
+    Chunk chunk = 3;
+  }
 }

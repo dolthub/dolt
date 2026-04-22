@@ -97,3 +97,29 @@ func (a *ArchiveToChunker) IsGhost() bool {
 func (a *ArchiveToChunker) CompressedSize() uint32 {
 	return uint32(len(a.chunkData))
 }
+
+// Dict returns the DecompBundle for this archive chunk so callers can
+// route the dictionary separately (e.g. the StreamChunks prototype, which
+// needs to emit dictionary bytes as their own response message).
+func (a *ArchiveToChunker) Dict() *DecompBundle {
+	return a.dict
+}
+
+// ChunkData returns the raw archive-compressed chunk bytes (as stored on
+// disk, decompressible with this ArchiveToChunker's dictionary). Used by
+// the StreamChunks prototype to send chunk bytes over gRPC.
+func (a *ArchiveToChunker) ChunkData() []byte {
+	return a.chunkData
+}
+
+// RawDictionary returns the decompressed dictionary bytes held by this
+// DecompBundle. The StreamChunks prototype re-zstd-compresses these
+// before sending them over the wire, which the client then rehydrates
+// with NewDecompBundle. This is a known prototype bias: the re-compressed
+// wire form is within a few percent of the on-disk form.
+func (d *DecompBundle) RawDictionary() []byte {
+	if d == nil || d.rawDictionary == nil {
+		return nil
+	}
+	return *d.rawDictionary
+}

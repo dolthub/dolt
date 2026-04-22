@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +35,12 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
+
+// protoChunksEnabled, when true, replaces the StreamChunkLocations +
+// HTTP range-fetch pipeline with a single StreamChunks RPC that
+// returns chunk bytes directly over gRPC. Prototype, env-gated on the
+// client only. See FETCH_PERFORMANCE_NOTES.md Section E.
+var protoChunksEnabled = os.Getenv("DOLT_PROTO_CHUNKS") != ""
 
 // Local aliases for the deeply nested generated message types so the
 // rest of this file stays readable.
@@ -105,11 +112,28 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		stats:   StatsFactory(),
 	}
 
+	storeRepoToken := func(s string) { dcs.repoToken.Store(s) }
+
+	if protoChunksEnabled {
+		getCh := make(chan *remotesapi.StreamChunksRequest_Get)
+		eg.Go(func() error {
+			return fetcherHashSetToReqsThread(ctx, ret.toGetCh, ret.abortCh, getCh, getLocsBatchSize, func(hashes [][]byte) *remotesapi.StreamChunksRequest_Get {
+				flat := make([]byte, 0, hash.ByteLen*len(hashes))
+				for _, h := range hashes {
+					flat = append(flat, h...)
+				}
+				return &remotesapi.StreamChunksRequest_Get{ChunkHashes: flat}
+			})
+		})
+		eg.Go(func() error {
+			return fetcherStreamChunksThreads(ctx, getCh, ret.resCh, dcs.csClient, dcs.getRepoId, dcs.repoPath, storeRepoToken, dcs.host)
+		})
+		return ret
+	}
+
 	downloadLocCh := make(chan []*remotesapi.DownloadLoc)
 	locDoneCh := make(chan struct{})
 	fetchReqCh := make(chan fetchReq)
-
-	storeRepoToken := func(s string) { dcs.repoToken.Store(s) }
 
 	if hasFeature(dcs.metadata, remotesapi.Feature_FEATURE_STREAM_CHUNK_LOCATIONS) {
 		locsReqCh := make(chan *remotesapi.StreamChunkLocationsRequest)

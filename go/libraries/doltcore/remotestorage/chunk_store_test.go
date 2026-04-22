@@ -208,6 +208,9 @@ func (f *refreshClient) RefreshTableFileUrl(ctx context.Context, in *remotesapi.
 func (f refreshClient) AddTableFiles(ctx context.Context, in *remotesapi.AddTableFilesRequest, opts ...grpc.CallOption) (*remotesapi.AddTableFilesResponse, error) {
 	return nil, nil
 }
+func (f refreshClient) StreamChunks(ctx context.Context, opts ...grpc.CallOption) (remotesapi.ChunkStoreService_StreamChunksClient, error) {
+	return nil, nil
+}
 
 func TestHasFeature(t *testing.T) {
 	const known = remotesapi.Feature_FEATURE_STREAM_CHUNK_LOCATIONS

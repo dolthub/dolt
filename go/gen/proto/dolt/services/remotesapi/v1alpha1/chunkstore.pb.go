@@ -2397,6 +2397,194 @@ func (x *AddTableFilesResponse) GetRepoToken() string {
 	return ""
 }
 
+// Client -> server message on the StreamChunks stream. The client sends
+// one |Handshake| first, then any number of |Get| messages.
+type StreamChunksRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*StreamChunksRequest_Handshake_
+	//	*StreamChunksRequest_Get_
+	Payload       isStreamChunksRequest_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamChunksRequest) Reset() {
+	*x = StreamChunksRequest{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunksRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunksRequest) ProtoMessage() {}
+
+func (x *StreamChunksRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunksRequest.ProtoReflect.Descriptor instead.
+func (*StreamChunksRequest) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *StreamChunksRequest) GetPayload() isStreamChunksRequest_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *StreamChunksRequest) GetHandshake() *StreamChunksRequest_Handshake {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamChunksRequest_Handshake_); ok {
+			return x.Handshake
+		}
+	}
+	return nil
+}
+
+func (x *StreamChunksRequest) GetGet() *StreamChunksRequest_Get {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamChunksRequest_Get_); ok {
+			return x.Get
+		}
+	}
+	return nil
+}
+
+type isStreamChunksRequest_Payload interface {
+	isStreamChunksRequest_Payload()
+}
+
+type StreamChunksRequest_Handshake_ struct {
+	Handshake *StreamChunksRequest_Handshake `protobuf:"bytes,1,opt,name=handshake,proto3,oneof"`
+}
+
+type StreamChunksRequest_Get_ struct {
+	Get *StreamChunksRequest_Get `protobuf:"bytes,2,opt,name=get,proto3,oneof"`
+}
+
+func (*StreamChunksRequest_Handshake_) isStreamChunksRequest_Payload() {}
+
+func (*StreamChunksRequest_Get_) isStreamChunksRequest_Payload() {}
+
+// Server -> client message on the StreamChunks stream. The server
+// sends one |HandshakeAck| first, then for each client Get message
+// (in the order it arrived): zero or more |Dictionary| messages
+// introducing archive dictionaries, zero or more |Chunk| messages
+// carrying chunk bytes, and one |Chunk| with final=true closing the
+// batch.
+type StreamChunksResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*StreamChunksResponse_Handshake
+	//	*StreamChunksResponse_Dictionary_
+	//	*StreamChunksResponse_Chunk_
+	Payload       isStreamChunksResponse_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamChunksResponse) Reset() {
+	*x = StreamChunksResponse{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunksResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunksResponse) ProtoMessage() {}
+
+func (x *StreamChunksResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunksResponse.ProtoReflect.Descriptor instead.
+func (*StreamChunksResponse) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *StreamChunksResponse) GetPayload() isStreamChunksResponse_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *StreamChunksResponse) GetHandshake() *StreamChunksResponse_HandshakeAck {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamChunksResponse_Handshake); ok {
+			return x.Handshake
+		}
+	}
+	return nil
+}
+
+func (x *StreamChunksResponse) GetDictionary() *StreamChunksResponse_Dictionary {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamChunksResponse_Dictionary_); ok {
+			return x.Dictionary
+		}
+	}
+	return nil
+}
+
+func (x *StreamChunksResponse) GetChunk() *StreamChunksResponse_Chunk {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamChunksResponse_Chunk_); ok {
+			return x.Chunk
+		}
+	}
+	return nil
+}
+
+type isStreamChunksResponse_Payload interface {
+	isStreamChunksResponse_Payload()
+}
+
+type StreamChunksResponse_Handshake struct {
+	Handshake *StreamChunksResponse_HandshakeAck `protobuf:"bytes,1,opt,name=handshake,proto3,oneof"`
+}
+
+type StreamChunksResponse_Dictionary_ struct {
+	Dictionary *StreamChunksResponse_Dictionary `protobuf:"bytes,2,opt,name=dictionary,proto3,oneof"`
+}
+
+type StreamChunksResponse_Chunk_ struct {
+	Chunk *StreamChunksResponse_Chunk `protobuf:"bytes,3,opt,name=chunk,proto3,oneof"`
+}
+
+func (*StreamChunksResponse_Handshake) isStreamChunksResponse_Payload() {}
+
+func (*StreamChunksResponse_Dictionary_) isStreamChunksResponse_Payload() {}
+
+func (*StreamChunksResponse_Chunk_) isStreamChunksResponse_Payload() {}
+
 // TableFileRecord and ChunkLocation are nested inside the response
 // rather than free-standing at package level. Their invariants
 // (table_file_id is stream-scoped; request_index is scoped to one
@@ -2428,7 +2616,7 @@ type StreamChunkLocationsResponse_TableFileRecord struct {
 
 func (x *StreamChunkLocationsResponse_TableFileRecord) Reset() {
 	*x = StreamChunkLocationsResponse_TableFileRecord{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[33]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2440,7 +2628,7 @@ func (x *StreamChunkLocationsResponse_TableFileRecord) String() string {
 func (*StreamChunkLocationsResponse_TableFileRecord) ProtoMessage() {}
 
 func (x *StreamChunkLocationsResponse_TableFileRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[33]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2508,7 +2696,7 @@ type StreamChunkLocationsResponse_ChunkLocation struct {
 
 func (x *StreamChunkLocationsResponse_ChunkLocation) Reset() {
 	*x = StreamChunkLocationsResponse_ChunkLocation{}
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[34]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2520,7 +2708,7 @@ func (x *StreamChunkLocationsResponse_ChunkLocation) String() string {
 func (*StreamChunkLocationsResponse_ChunkLocation) ProtoMessage() {}
 
 func (x *StreamChunkLocationsResponse_ChunkLocation) ProtoReflect() protoreflect.Message {
-	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[34]
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2576,6 +2764,309 @@ func (x *StreamChunkLocationsResponse_ChunkLocation) GetDictionaryLength() uint3
 		return x.DictionaryLength
 	}
 	return 0
+}
+
+type StreamChunksRequest_Handshake struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RepoId        *RepoId                `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	RepoToken     string                 `protobuf:"bytes,2,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
+	RepoPath      string                 `protobuf:"bytes,3,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamChunksRequest_Handshake) Reset() {
+	*x = StreamChunksRequest_Handshake{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunksRequest_Handshake) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunksRequest_Handshake) ProtoMessage() {}
+
+func (x *StreamChunksRequest_Handshake) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunksRequest_Handshake.ProtoReflect.Descriptor instead.
+func (*StreamChunksRequest_Handshake) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{33, 0}
+}
+
+func (x *StreamChunksRequest_Handshake) GetRepoId() *RepoId {
+	if x != nil {
+		return x.RepoId
+	}
+	return nil
+}
+
+func (x *StreamChunksRequest_Handshake) GetRepoToken() string {
+	if x != nil {
+		return x.RepoToken
+	}
+	return ""
+}
+
+func (x *StreamChunksRequest_Handshake) GetRepoPath() string {
+	if x != nil {
+		return x.RepoPath
+	}
+	return ""
+}
+
+type StreamChunksRequest_Get struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Flat 20-byte-per-hash buffer; same encoding as
+	// StreamChunkLocationsRequest.chunk_hashes. Servers MUST reject
+	// requests where len(chunk_hashes) is not a multiple of 20.
+	ChunkHashes   []byte `protobuf:"bytes,1,opt,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamChunksRequest_Get) Reset() {
+	*x = StreamChunksRequest_Get{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunksRequest_Get) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunksRequest_Get) ProtoMessage() {}
+
+func (x *StreamChunksRequest_Get) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunksRequest_Get.ProtoReflect.Descriptor instead.
+func (*StreamChunksRequest_Get) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{33, 1}
+}
+
+func (x *StreamChunksRequest_Get) GetChunkHashes() []byte {
+	if x != nil {
+		return x.ChunkHashes
+	}
+	return nil
+}
+
+type StreamChunksResponse_HandshakeAck struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// If non-empty, advertises a new repo_token the client should use
+	// on future ChunkStoreService requests.
+	RepoToken     string `protobuf:"bytes,1,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamChunksResponse_HandshakeAck) Reset() {
+	*x = StreamChunksResponse_HandshakeAck{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunksResponse_HandshakeAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunksResponse_HandshakeAck) ProtoMessage() {}
+
+func (x *StreamChunksResponse_HandshakeAck) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunksResponse_HandshakeAck.ProtoReflect.Descriptor instead.
+func (*StreamChunksResponse_HandshakeAck) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{34, 0}
+}
+
+func (x *StreamChunksResponse_HandshakeAck) GetRepoToken() string {
+	if x != nil {
+		return x.RepoToken
+	}
+	return ""
+}
+
+// Archive dictionary record. The server assigns a stream-scoped
+// non-zero |dict_id| and emits this message at most once per
+// dictionary before (or in a batch with) the first Chunk that
+// references it. The id is valid for the remainder of this
+// server-side stream; if the server re-emits the same id, clients
+// MUST overwrite any prior dictionary with the new bytes.
+type StreamChunksResponse_Dictionary struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	DictId uint32                 `protobuf:"varint,1,opt,name=dict_id,json=dictId,proto3" json:"dict_id,omitempty"`
+	// zstd-compressed dictionary bytes; input to nbs.NewDecompBundle.
+	Data          []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamChunksResponse_Dictionary) Reset() {
+	*x = StreamChunksResponse_Dictionary{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunksResponse_Dictionary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunksResponse_Dictionary) ProtoMessage() {}
+
+func (x *StreamChunksResponse_Dictionary) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunksResponse_Dictionary.ProtoReflect.Descriptor instead.
+func (*StreamChunksResponse_Dictionary) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{34, 1}
+}
+
+func (x *StreamChunksResponse_Dictionary) GetDictId() uint32 {
+	if x != nil {
+		return x.DictId
+	}
+	return 0
+}
+
+func (x *StreamChunksResponse_Dictionary) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type StreamChunksResponse_Chunk struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Index into the currently-pending Get request's chunk_hashes
+	// buffer: N refers to the N'th 20-byte hash (bytes [N*20:(N+1)*20]).
+	// Ignored when this is a pure batch-terminator (see |final|).
+	RequestIndex uint32 `protobuf:"varint,1,opt,name=request_index,json=requestIndex,proto3" json:"request_index,omitempty"`
+	// If |dict_id| == 0: |data| is a full snappy-compressed chunk
+	// (CompressedChunk.FullCompressedChunk, includes trailing CRC).
+	// If |dict_id| != 0: |data| is a zstd-compressed archive chunk;
+	// its dictionary is resolved via |dict_id| against dictionaries
+	// introduced earlier on this server-side stream.
+	Data   []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	DictId uint32 `protobuf:"varint,3,opt,name=dict_id,json=dictId,proto3" json:"dict_id,omitempty"`
+	// True on the last Chunk message for the currently-pending Get.
+	// When the server has nothing to send for a Get (e.g. all hashes
+	// missing), it MUST still emit a terminator: a Chunk with
+	// final=true, data unset, dict_id=0. Clients treat a final Chunk
+	// with empty data as a pure batch terminator.
+	Final bool `protobuf:"varint,4,opt,name=final,proto3" json:"final,omitempty"`
+	// Hash indexes from the pending Get's chunk_hashes that the server
+	// could not find. Populated only on messages with final=true.
+	MissingIndexes []uint32 `protobuf:"varint,5,rep,packed,name=missing_indexes,json=missingIndexes,proto3" json:"missing_indexes,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StreamChunksResponse_Chunk) Reset() {
+	*x = StreamChunksResponse_Chunk{}
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamChunksResponse_Chunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamChunksResponse_Chunk) ProtoMessage() {}
+
+func (x *StreamChunksResponse_Chunk) ProtoReflect() protoreflect.Message {
+	mi := &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamChunksResponse_Chunk.ProtoReflect.Descriptor instead.
+func (*StreamChunksResponse_Chunk) Descriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{34, 2}
+}
+
+func (x *StreamChunksResponse_Chunk) GetRequestIndex() uint32 {
+	if x != nil {
+		return x.RequestIndex
+	}
+	return 0
+}
+
+func (x *StreamChunksResponse_Chunk) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *StreamChunksResponse_Chunk) GetDictId() uint32 {
+	if x != nil {
+		return x.DictId
+	}
+	return 0
+}
+
+func (x *StreamChunksResponse_Chunk) GetFinal() bool {
+	if x != nil {
+		return x.Final
+	}
+	return false
+}
+
+func (x *StreamChunksResponse_Chunk) GetMissingIndexes() []uint32 {
+	if x != nil {
+		return x.MissingIndexes
+	}
+	return nil
 }
 
 var File_dolt_services_remotesapi_v1alpha1_chunkstore_proto protoreflect.FileDescriptor
@@ -2770,7 +3261,38 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x15AddTableFilesResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1d\n" +
 	"\n" +
-	"repo_token\x18\x02 \x01(\tR\trepoToken*\xa4\x01\n" +
+	"repo_token\x18\x02 \x01(\tR\trepoToken\"\x8a\x03\n" +
+	"\x13StreamChunksRequest\x12`\n" +
+	"\thandshake\x18\x01 \x01(\v2@.dolt.services.remotesapi.v1alpha1.StreamChunksRequest.HandshakeH\x00R\thandshake\x12N\n" +
+	"\x03get\x18\x02 \x01(\v2:.dolt.services.remotesapi.v1alpha1.StreamChunksRequest.GetH\x00R\x03get\x1a\x8b\x01\n" +
+	"\tHandshake\x12B\n" +
+	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12\x1d\n" +
+	"\n" +
+	"repo_token\x18\x02 \x01(\tR\trepoToken\x12\x1b\n" +
+	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x1a(\n" +
+	"\x03Get\x12!\n" +
+	"\fchunk_hashes\x18\x01 \x01(\fR\vchunkHashesB\t\n" +
+	"\apayload\"\xc9\x04\n" +
+	"\x14StreamChunksResponse\x12d\n" +
+	"\thandshake\x18\x01 \x01(\v2D.dolt.services.remotesapi.v1alpha1.StreamChunksResponse.HandshakeAckH\x00R\thandshake\x12d\n" +
+	"\n" +
+	"dictionary\x18\x02 \x01(\v2B.dolt.services.remotesapi.v1alpha1.StreamChunksResponse.DictionaryH\x00R\n" +
+	"dictionary\x12U\n" +
+	"\x05chunk\x18\x03 \x01(\v2=.dolt.services.remotesapi.v1alpha1.StreamChunksResponse.ChunkH\x00R\x05chunk\x1a-\n" +
+	"\fHandshakeAck\x12\x1d\n" +
+	"\n" +
+	"repo_token\x18\x01 \x01(\tR\trepoToken\x1a9\n" +
+	"\n" +
+	"Dictionary\x12\x17\n" +
+	"\adict_id\x18\x01 \x01(\rR\x06dictId\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x1a\x98\x01\n" +
+	"\x05Chunk\x12#\n" +
+	"\rrequest_index\x18\x01 \x01(\rR\frequestIndex\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12\x17\n" +
+	"\adict_id\x18\x03 \x01(\rR\x06dictId\x12\x14\n" +
+	"\x05final\x18\x04 \x01(\bR\x05final\x12'\n" +
+	"\x0fmissing_indexes\x18\x05 \x03(\rR\x0emissingIndexesB\t\n" +
+	"\apayload*\xa4\x01\n" +
 	"\x16PushConcurrencyControl\x12(\n" +
 	"$PUSH_CONCURRENCY_CONTROL_UNSPECIFIED\x10\x00\x12/\n" +
 	"+PUSH_CONCURRENCY_CONTROL_IGNORE_WORKING_SET\x10\x01\x12/\n" +
@@ -2781,7 +3303,7 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x16ManifestAppendixOption\x12(\n" +
 	"$MANIFEST_APPENDIX_OPTION_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cMANIFEST_APPENDIX_OPTION_SET\x10\x01\x12#\n" +
-	"\x1fMANIFEST_APPENDIX_OPTION_APPEND\x10\x022\xd0\f\n" +
+	"\x1fMANIFEST_APPENDIX_OPTION_APPEND\x10\x022\xd6\r\n" +
 	"\x11ChunkStoreService\x12\x88\x01\n" +
 	"\x0fGetRepoMetadata\x129.dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse\x12v\n" +
 	"\tHasChunks\x123.dolt.services.remotesapi.v1alpha1.HasChunksRequest\x1a4.dolt.services.remotesapi.v1alpha1.HasChunksResponse\x12\x8d\x01\n" +
@@ -2794,7 +3316,8 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x06Commit\x120.dolt.services.remotesapi.v1alpha1.CommitRequest\x1a1.dolt.services.remotesapi.v1alpha1.CommitResponse\x12\x85\x01\n" +
 	"\x0eListTableFiles\x128.dolt.services.remotesapi.v1alpha1.ListTableFilesRequest\x1a9.dolt.services.remotesapi.v1alpha1.ListTableFilesResponse\x12\x94\x01\n" +
 	"\x13RefreshTableFileUrl\x12=.dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest\x1a>.dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse\x12\x82\x01\n" +
-	"\rAddTableFiles\x127.dolt.services.remotesapi.v1alpha1.AddTableFilesRequest\x1a8.dolt.services.remotesapi.v1alpha1.AddTableFilesResponseBSZQgithub.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapib\x06proto3"
+	"\rAddTableFiles\x127.dolt.services.remotesapi.v1alpha1.AddTableFilesRequest\x1a8.dolt.services.remotesapi.v1alpha1.AddTableFilesResponse\x12\x83\x01\n" +
+	"\fStreamChunks\x126.dolt.services.remotesapi.v1alpha1.StreamChunksRequest\x1a7.dolt.services.remotesapi.v1alpha1.StreamChunksResponse(\x010\x01BSZQgithub.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapib\x06proto3"
 
 var (
 	file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescOnce sync.Once
@@ -2809,7 +3332,7 @@ func file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP() []byt
 }
 
 var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_goTypes = []any{
 	(PushConcurrencyControl)(0),                          // 0: dolt.services.remotesapi.v1alpha1.PushConcurrencyControl
 	(Feature)(0),                                         // 1: dolt.services.remotesapi.v1alpha1.Feature
@@ -2847,23 +3370,30 @@ var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_goTypes = []any{
 	(*ListTableFilesResponse)(nil),                       // 33: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
 	(*AddTableFilesRequest)(nil),                         // 34: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
 	(*AddTableFilesResponse)(nil),                        // 35: dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
-	(*StreamChunkLocationsResponse_TableFileRecord)(nil), // 36: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
-	(*StreamChunkLocationsResponse_ChunkLocation)(nil),   // 37: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
-	(*timestamppb.Timestamp)(nil),                        // 38: google.protobuf.Timestamp
+	(*StreamChunksRequest)(nil),                          // 36: dolt.services.remotesapi.v1alpha1.StreamChunksRequest
+	(*StreamChunksResponse)(nil),                         // 37: dolt.services.remotesapi.v1alpha1.StreamChunksResponse
+	(*StreamChunkLocationsResponse_TableFileRecord)(nil), // 38: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
+	(*StreamChunkLocationsResponse_ChunkLocation)(nil),   // 39: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
+	(*StreamChunksRequest_Handshake)(nil),                // 40: dolt.services.remotesapi.v1alpha1.StreamChunksRequest.Handshake
+	(*StreamChunksRequest_Get)(nil),                      // 41: dolt.services.remotesapi.v1alpha1.StreamChunksRequest.Get
+	(*StreamChunksResponse_HandshakeAck)(nil),            // 42: dolt.services.remotesapi.v1alpha1.StreamChunksResponse.HandshakeAck
+	(*StreamChunksResponse_Dictionary)(nil),              // 43: dolt.services.remotesapi.v1alpha1.StreamChunksResponse.Dictionary
+	(*StreamChunksResponse_Chunk)(nil),                   // 44: dolt.services.remotesapi.v1alpha1.StreamChunksResponse.Chunk
+	(*timestamppb.Timestamp)(nil),                        // 45: google.protobuf.Timestamp
 }
 var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_depIdxs = []int32{
 	3,  // 0: dolt.services.remotesapi.v1alpha1.HasChunksRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
 	7,  // 1: dolt.services.remotesapi.v1alpha1.HttpGetRange.ranges:type_name -> dolt.services.remotesapi.v1alpha1.RangeChunk
 	6,  // 2: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetChunk
 	8,  // 3: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get_range:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetRange
-	38, // 4: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_after:type_name -> google.protobuf.Timestamp
+	45, // 4: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_after:type_name -> google.protobuf.Timestamp
 	31, // 5: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
 	10, // 6: dolt.services.remotesapi.v1alpha1.UploadLoc.http_post:type_name -> dolt.services.remotesapi.v1alpha1.HttpPostTableFile
 	3,  // 7: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
 	9,  // 8: dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.DownloadLoc
 	3,  // 9: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	36, // 10: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.table_files:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
-	37, // 11: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.locations:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
+	38, // 10: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.table_files:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
+	39, // 11: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.locations:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
 	3,  // 12: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
 	16, // 13: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.table_file_details:type_name -> dolt.services.remotesapi.v1alpha1.TableFileDetails
 	11, // 14: dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.UploadLoc
@@ -2877,46 +3407,54 @@ var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_depIdxs = []int32{
 	0,  // 22: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse.push_concurrency_control:type_name -> dolt.services.remotesapi.v1alpha1.PushConcurrencyControl
 	1,  // 23: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse.features:type_name -> dolt.services.remotesapi.v1alpha1.Feature
 	3,  // 24: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	38, // 25: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_after:type_name -> google.protobuf.Timestamp
+	45, // 25: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_after:type_name -> google.protobuf.Timestamp
 	31, // 26: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
 	3,  // 27: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	38, // 28: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse.refresh_after:type_name -> google.protobuf.Timestamp
+	45, // 28: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse.refresh_after:type_name -> google.protobuf.Timestamp
 	30, // 29: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
 	30, // 30: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.appendix_table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
 	3,  // 31: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
 	28, // 32: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
 	23, // 33: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.chunk_table_info:type_name -> dolt.services.remotesapi.v1alpha1.ChunkTableInfo
 	2,  // 34: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.appendix_option:type_name -> dolt.services.remotesapi.v1alpha1.ManifestAppendixOption
-	38, // 35: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord.refresh_after:type_name -> google.protobuf.Timestamp
-	26, // 36: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:input_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
-	4,  // 37: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:input_type -> dolt.services.remotesapi.v1alpha1.HasChunksRequest
-	12, // 38: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
-	12, // 39: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
-	14, // 40: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:input_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest
-	17, // 41: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
-	19, // 42: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:input_type -> dolt.services.remotesapi.v1alpha1.RebaseRequest
-	21, // 43: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:input_type -> dolt.services.remotesapi.v1alpha1.RootRequest
-	24, // 44: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:input_type -> dolt.services.remotesapi.v1alpha1.CommitRequest
-	29, // 45: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
-	31, // 46: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:input_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
-	34, // 47: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
-	27, // 48: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:output_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
-	5,  // 49: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:output_type -> dolt.services.remotesapi.v1alpha1.HasChunksResponse
-	13, // 50: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
-	13, // 51: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
-	15, // 52: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:output_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse
-	18, // 53: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
-	20, // 54: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:output_type -> dolt.services.remotesapi.v1alpha1.RebaseResponse
-	22, // 55: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:output_type -> dolt.services.remotesapi.v1alpha1.RootResponse
-	25, // 56: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:output_type -> dolt.services.remotesapi.v1alpha1.CommitResponse
-	33, // 57: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
-	32, // 58: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:output_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
-	35, // 59: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
-	48, // [48:60] is the sub-list for method output_type
-	36, // [36:48] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	40, // 35: dolt.services.remotesapi.v1alpha1.StreamChunksRequest.handshake:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunksRequest.Handshake
+	41, // 36: dolt.services.remotesapi.v1alpha1.StreamChunksRequest.get:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunksRequest.Get
+	42, // 37: dolt.services.remotesapi.v1alpha1.StreamChunksResponse.handshake:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunksResponse.HandshakeAck
+	43, // 38: dolt.services.remotesapi.v1alpha1.StreamChunksResponse.dictionary:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunksResponse.Dictionary
+	44, // 39: dolt.services.remotesapi.v1alpha1.StreamChunksResponse.chunk:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunksResponse.Chunk
+	45, // 40: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord.refresh_after:type_name -> google.protobuf.Timestamp
+	3,  // 41: dolt.services.remotesapi.v1alpha1.StreamChunksRequest.Handshake.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	26, // 42: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:input_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
+	4,  // 43: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:input_type -> dolt.services.remotesapi.v1alpha1.HasChunksRequest
+	12, // 44: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
+	12, // 45: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
+	14, // 46: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:input_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest
+	17, // 47: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
+	19, // 48: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:input_type -> dolt.services.remotesapi.v1alpha1.RebaseRequest
+	21, // 49: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:input_type -> dolt.services.remotesapi.v1alpha1.RootRequest
+	24, // 50: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:input_type -> dolt.services.remotesapi.v1alpha1.CommitRequest
+	29, // 51: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
+	31, // 52: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:input_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
+	34, // 53: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
+	36, // 54: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunks:input_type -> dolt.services.remotesapi.v1alpha1.StreamChunksRequest
+	27, // 55: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:output_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
+	5,  // 56: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:output_type -> dolt.services.remotesapi.v1alpha1.HasChunksResponse
+	13, // 57: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
+	13, // 58: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
+	15, // 59: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:output_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse
+	18, // 60: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
+	20, // 61: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:output_type -> dolt.services.remotesapi.v1alpha1.RebaseResponse
+	22, // 62: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:output_type -> dolt.services.remotesapi.v1alpha1.RootResponse
+	25, // 63: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:output_type -> dolt.services.remotesapi.v1alpha1.CommitResponse
+	33, // 64: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
+	32, // 65: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:output_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
+	35, // 66: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
+	37, // 67: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunks:output_type -> dolt.services.remotesapi.v1alpha1.StreamChunksResponse
+	55, // [55:68] is the sub-list for method output_type
+	42, // [42:55] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_init() }
@@ -2931,13 +3469,22 @@ func file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_init() {
 	file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[8].OneofWrappers = []any{
 		(*UploadLoc_HttpPost)(nil),
 	}
+	file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[33].OneofWrappers = []any{
+		(*StreamChunksRequest_Handshake_)(nil),
+		(*StreamChunksRequest_Get_)(nil),
+	}
+	file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes[34].OneofWrappers = []any{
+		(*StreamChunksResponse_Handshake)(nil),
+		(*StreamChunksResponse_Dictionary_)(nil),
+		(*StreamChunksResponse_Chunk_)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc), len(file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   35,
+			NumMessages:   42,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
@@ -2990,6 +3537,29 @@ type ChunkStoreServiceClient interface {
 	ListTableFiles(ctx context.Context, in *ListTableFilesRequest, opts ...grpc.CallOption) (*ListTableFilesResponse, error)
 	RefreshTableFileUrl(ctx context.Context, in *RefreshTableFileUrlRequest, opts ...grpc.CallOption) (*RefreshTableFileUrlResponse, error)
 	AddTableFiles(ctx context.Context, in *AddTableFilesRequest, opts ...grpc.CallOption) (*AddTableFilesResponse, error)
+	// Prototype: stream chunk bytes back to the client directly over
+	// the gRPC channel, bypassing the presigned-URL/CDN download path.
+	// Env-gated on the client (DOLT_PROTO_CHUNKS=1). Not advertised in
+	// GetRepoMetadataResponse.features; clients that want to use this
+	// path must know the server implements it.
+	//
+	// Protocol:
+	//
+	//	Client: sends exactly one |handshake| message (RepoId, repo_token,
+	//	  repo_path) first, then zero or more |get| messages each carrying
+	//	  a flat 20-byte-per-hash chunk_hashes buffer.
+	//	Server: responds once with |handshake| (optional new repo_token),
+	//	  then, for each client |get| in order, emits zero or more
+	//	  |dictionary| messages and zero or more |chunk| messages,
+	//	  terminating the batch with a |chunk| whose final=true. All
+	//	  response messages for a given |get| precede any response for
+	//	  the next |get|. Missing-chunk hash indexes ride on the final
+	//	  chunk message.
+	//
+	// Deliberately not a reliable/resumable RPC: there is no 1:1
+	// correspondence between client messages and server messages, so
+	// the client shuts down on stream error rather than replaying.
+	StreamChunks(ctx context.Context, opts ...grpc.CallOption) (ChunkStoreService_StreamChunksClient, error)
 }
 
 type chunkStoreServiceClient struct {
@@ -3152,6 +3722,37 @@ func (c *chunkStoreServiceClient) AddTableFiles(ctx context.Context, in *AddTabl
 	return out, nil
 }
 
+func (c *chunkStoreServiceClient) StreamChunks(ctx context.Context, opts ...grpc.CallOption) (ChunkStoreService_StreamChunksClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_ChunkStoreService_serviceDesc.Streams[2], "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/StreamChunks", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &chunkStoreServiceStreamChunksClient{stream}
+	return x, nil
+}
+
+type ChunkStoreService_StreamChunksClient interface {
+	Send(*StreamChunksRequest) error
+	Recv() (*StreamChunksResponse, error)
+	grpc.ClientStream
+}
+
+type chunkStoreServiceStreamChunksClient struct {
+	grpc.ClientStream
+}
+
+func (x *chunkStoreServiceStreamChunksClient) Send(m *StreamChunksRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *chunkStoreServiceStreamChunksClient) Recv() (*StreamChunksResponse, error) {
+	m := new(StreamChunksResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ChunkStoreServiceServer is the server API for ChunkStoreService service.
 type ChunkStoreServiceServer interface {
 	GetRepoMetadata(context.Context, *GetRepoMetadataRequest) (*GetRepoMetadataResponse, error)
@@ -3181,6 +3782,29 @@ type ChunkStoreServiceServer interface {
 	ListTableFiles(context.Context, *ListTableFilesRequest) (*ListTableFilesResponse, error)
 	RefreshTableFileUrl(context.Context, *RefreshTableFileUrlRequest) (*RefreshTableFileUrlResponse, error)
 	AddTableFiles(context.Context, *AddTableFilesRequest) (*AddTableFilesResponse, error)
+	// Prototype: stream chunk bytes back to the client directly over
+	// the gRPC channel, bypassing the presigned-URL/CDN download path.
+	// Env-gated on the client (DOLT_PROTO_CHUNKS=1). Not advertised in
+	// GetRepoMetadataResponse.features; clients that want to use this
+	// path must know the server implements it.
+	//
+	// Protocol:
+	//
+	//	Client: sends exactly one |handshake| message (RepoId, repo_token,
+	//	  repo_path) first, then zero or more |get| messages each carrying
+	//	  a flat 20-byte-per-hash chunk_hashes buffer.
+	//	Server: responds once with |handshake| (optional new repo_token),
+	//	  then, for each client |get| in order, emits zero or more
+	//	  |dictionary| messages and zero or more |chunk| messages,
+	//	  terminating the batch with a |chunk| whose final=true. All
+	//	  response messages for a given |get| precede any response for
+	//	  the next |get|. Missing-chunk hash indexes ride on the final
+	//	  chunk message.
+	//
+	// Deliberately not a reliable/resumable RPC: there is no 1:1
+	// correspondence between client messages and server messages, so
+	// the client shuts down on stream error rather than replaying.
+	StreamChunks(ChunkStoreService_StreamChunksServer) error
 }
 
 // UnimplementedChunkStoreServiceServer can be embedded to have forward compatible implementations.
@@ -3222,6 +3846,9 @@ func (*UnimplementedChunkStoreServiceServer) RefreshTableFileUrl(context.Context
 }
 func (*UnimplementedChunkStoreServiceServer) AddTableFiles(context.Context, *AddTableFilesRequest) (*AddTableFilesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddTableFiles not implemented")
+}
+func (*UnimplementedChunkStoreServiceServer) StreamChunks(ChunkStoreService_StreamChunksServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamChunks not implemented")
 }
 
 func RegisterChunkStoreServiceServer(s *grpc.Server, srv ChunkStoreServiceServer) {
@@ -3460,6 +4087,32 @@ func _ChunkStoreService_AddTableFiles_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ChunkStoreService_StreamChunks_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ChunkStoreServiceServer).StreamChunks(&chunkStoreServiceStreamChunksServer{stream})
+}
+
+type ChunkStoreService_StreamChunksServer interface {
+	Send(*StreamChunksResponse) error
+	Recv() (*StreamChunksRequest, error)
+	grpc.ServerStream
+}
+
+type chunkStoreServiceStreamChunksServer struct {
+	grpc.ServerStream
+}
+
+func (x *chunkStoreServiceStreamChunksServer) Send(m *StreamChunksResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *chunkStoreServiceStreamChunksServer) Recv() (*StreamChunksRequest, error) {
+	m := new(StreamChunksRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 var _ChunkStoreService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "dolt.services.remotesapi.v1alpha1.ChunkStoreService",
 	HandlerType: (*ChunkStoreServiceServer)(nil),
@@ -3515,6 +4168,12 @@ var _ChunkStoreService_serviceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamChunkLocations",
 			Handler:       _ChunkStoreService_StreamChunkLocations_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "StreamChunks",
+			Handler:       _ChunkStoreService_StreamChunks_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
