@@ -208,4 +208,4 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-go 1.25.6
+go 1.26.2

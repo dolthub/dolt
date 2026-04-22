@@ -102,9 +102,9 @@ jobs:
         run: |
           latest=$(git rev-parse HEAD)
           echo "commitish=$latest" >> $GITHUB_OUTPUT
-          GO_BUILD_VERSION=1.25.6 go/utils/publishrelease/buildpgobinaries.sh
+          GO_BUILD_VERSION=1.26.2 go/utils/publishrelease/buildpgobinaries.sh
         env:
-          GO_BUILD_VERSION: "1.25.6"
+          GO_BUILD_VERSION: "1.26.2"
           PROFILE: ${{ format('{0}/dolt-cpu-profile.pprof', github.workspace) }}
       - name: Create Release
         id: create_release
