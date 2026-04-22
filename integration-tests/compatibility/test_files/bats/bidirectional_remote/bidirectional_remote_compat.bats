@@ -20,13 +20,16 @@
 
 dolt config --global --add metrics.disabled true > /dev/null 2>&1
 
+startdir=""
+
 setup() {
     cp -Rpf $REPO_DIR bats_repo
+    startdir="$(pwd)"
     cd bats_repo
 }
 
 teardown() {
-    cd ..
+    cd $startdir
     rm -rf bats_repo
 }
 
