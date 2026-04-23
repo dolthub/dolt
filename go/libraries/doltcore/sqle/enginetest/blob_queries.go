@@ -246,11 +246,6 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// Tests a single adaptive (LONGBLOB) column surrounded by non-adaptive INT columns.
-		// The non-adaptive columns contribute 8 bytes to the value tuple's inline size, so the
-		// adaptive column is outlined when len(b)+9 > 2048, i.e. len(b) >= 2040.
-		// Also exercises sizes near the varint 1→2 byte boundary (240/241 bytes) and values
-		// too small to ever be outlined (≤ 20 bytes, where out-of-band would cost more).
 		Name: "single adaptive column interleaved with non-adaptive columns",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_single (
@@ -284,27 +279,20 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// Inline value (pk=1): filter and read work correctly.
 				Query:    "SELECT LENGTH(b) FROM t_ae_single WHERE b = REPEAT('a', 100)",
 				Expected: []sql.Row{{100}},
 			},
 			{
-				// Out-of-band value (pk=3): filter and read work correctly.
 				Query:    "SELECT LENGTH(b) FROM t_ae_single WHERE b = REPEAT('a', 2040)",
 				Expected: []sql.Row{{2040}},
 			},
 			{
-				// Non-adaptive columns are unaffected by adaptive encoding decisions.
 				Query:    "SELECT pk, a, c FROM t_ae_single WHERE pk = 3",
 				Expected: []sql.Row{{3, 10, 20}},
 			},
 		},
 	},
 	{
-		// Tests two adaptive columns with a non-adaptive INT column between them.
-		// The adaptive encoding algorithm outlines columns in largest-savings-first order.
-		// When savings are equal the stable sort preserves column order, so the leftmost
-		// adaptive column is outlined first.
 		Name: "two adaptive columns interleaved with non-adaptive columns, largest outlined first",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_two (
@@ -313,9 +301,6 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				a  INT,
 				b2 LONGBLOB
 			)`,
-			// Value tuple: b1(adaptive), a(4 bytes), b2(adaptive).
-			// inlineSize = (1+len1) + 4 + (1+len2) = len1+len2+6.
-			// Outlining triggers when len1+len2+6 > 2048.
 			`INSERT INTO t_ae_two VALUES
 				(1, REPEAT('a', 1000), 1, REPEAT('b', 1000)),
 				(2, REPEAT('a', 1500), 2, REPEAT('b', 1500)),
@@ -337,32 +322,24 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// pk=2: equal sizes → b1 (leftmost) outlined first, b2 stays inline.
 				Query:    "SELECT LENGTH(b1) FROM t_ae_two WHERE b2 = REPEAT('b', 1500) AND pk = 2",
 				Expected: []sql.Row{{1500}},
 			},
 			{
-				// pk=3: b1 is larger → b1 outlined, b2 remains inline.
 				Query:    "SELECT LENGTH(b2) FROM t_ae_two WHERE b1 = REPEAT('a', 3000) AND pk = 3",
 				Expected: []sql.Row{{100}},
 			},
 			{
-				// pk=4: b2 is larger → b2 outlined, b1 remains inline.
 				Query:    "SELECT LENGTH(b1) FROM t_ae_two WHERE b2 = REPEAT('b', 3000) AND pk = 4",
 				Expected: []sql.Row{{100}},
 			},
 			{
-				// pk=6: NULL b1 does not interfere with outlining decision for b2.
 				Query:    "SELECT LENGTH(b2) FROM t_ae_two WHERE pk = 6",
 				Expected: []sql.Row{{1500}},
 			},
 		},
 	},
 	{
-		// Tests three adaptive columns with non-adaptive INT columns between them.
-		// Verifies priority ordering (b1 large, b2 medium, b3 tiny: b1 outlined first),
-		// equal-savings ordering (both b1 and b2 outlined for pk=2), and values that are
-		// too small to ever benefit from out-of-band storage (b3 = 10 bytes).
 		Name: "three adaptive columns with non-adaptive columns between them",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_three (
@@ -373,8 +350,6 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				a2 INT,
 				b3 LONGBLOB
 			)`,
-			// Value tuple: b1, a1(4), b2, a2(4), b3.
-			// inlineSize = (1+len1)+4+(1+len2)+4+(1+len3) = len1+len2+len3+11.
 			`INSERT INTO t_ae_three VALUES
 				(1, REPEAT('a', 5000), 1, REPEAT('b', 1500), 1, REPEAT('c', 10)),
 				(2, REPEAT('a', 2000), 2, REPEAT('b', 2000), 2, REPEAT('c', 10)),
@@ -392,23 +367,16 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// b3 is 10 bytes (out-of-band would cost 21 bytes, savings < 0)
-				// so it is never outlined regardless of other columns' sizes.
 				Query:    "SELECT pk FROM t_ae_three WHERE b3 = REPEAT('c', 10) ORDER BY pk",
 				Expected: []sql.Row{{1}, {2}, {4}},
 			},
 			{
-				// All three columns outlined for pk=3; verify all are readable.
 				Query:    "SELECT pk FROM t_ae_three WHERE b1 = REPEAT('a', 3000) AND b2 = REPEAT('b', 3000) AND b3 = REPEAT('c', 3000)",
 				Expected: []sql.Row{{3}},
 			},
 		},
 	},
 	{
-		// Tests adaptive column sizes at the SQLite4 varint 1→2 byte encoding boundary.
-		// Values of 240 bytes use a 1-byte varint in out-of-band encoding; values of 241
-		// bytes use a 2-byte varint. With 9 equal-sized columns whose combined inline size
-		// exceeds 2048, the stable-sort outlining algorithm outlines only b1 (leftmost).
 		Name: "adaptive encoding sizes at varint 1-to-2 byte encoding boundary",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_varint (
@@ -423,17 +391,11 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				b8 LONGBLOB,
 				b9 LONGBLOB
 			)`,
-			// 9 columns × 240 bytes: combined inline = 9×241 = 2169 > 2048.
-			// 240-byte values use a 1-byte varint out-of-band; savings = 220 each.
-			// Only b1 is outlined (after outlining it, total drops to 1949 ≤ 2048).
 			`INSERT INTO t_ae_varint VALUES
 				(1,
 				 REPEAT('a', 240), REPEAT('b', 240), REPEAT('c', 240),
 				 REPEAT('d', 240), REPEAT('e', 240), REPEAT('f', 240),
 				 REPEAT('g', 240), REPEAT('h', 240), REPEAT('i', 240))`,
-			// 9 columns × 241 bytes: combined inline = 9×242 = 2178 > 2048.
-			// 241-byte values cross into 2-byte varint territory.
-			// Only b1 is outlined (total drops to 1957 ≤ 2048).
 			`INSERT INTO t_ae_varint VALUES
 				(2,
 				 REPEAT('a', 241), REPEAT('b', 241), REPEAT('c', 241),
@@ -449,12 +411,10 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// b1 is outlined for both rows; verify correct out-of-band read.
 				Query:    "SELECT pk FROM t_ae_varint WHERE b1 = REPEAT('a', 240)",
 				Expected: []sql.Row{{1}},
 			},
 			{
-				// b9 is inline for both rows; verify correct inline read.
 				Query:    "SELECT pk FROM t_ae_varint WHERE b9 = REPEAT('i', 240)",
 				Expected: []sql.Row{{1}},
 			},
@@ -469,11 +429,6 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// Tests the exact outlining threshold for a single adaptive column with no other
-		// value-tuple columns. The value tuple contains only b, so inlineSize = 1 + len(b).
-		// The condition to outline is 1+len > 2048, meaning len=2047 stays inline but
-		// len=2048 is outlined. Also tests that PutAdaptiveFromInline immediately stores
-		// values out-of-band when they individually exceed the 2048-byte target.
 		Name: "single adaptive column: 2047-byte value stays inline, 2048-byte value is outlined",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_threshold (pk INT NOT NULL PRIMARY KEY, b LONGBLOB)`,
@@ -512,13 +467,6 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// Tests five adaptive columns whose combined tracked inline size approaches 64KB.
-		// Values of 12000 bytes each exceed the 2048-byte per-value threshold, so they are
-		// immediately written out-of-band during tuple construction, but their inline sizes
-		// are still tracked for the outlining accounting (5 × 12001 = 60005 bytes total).
-		// Also tests a mixed row where three large values sit alongside two medium values,
-		// verifying that the priority ordering correctly outlines the large values first and
-		// that only as many medium values are outlined as needed.
 		Name: "multiple large adaptive columns with combined inline size approaching 64KB",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_large_combined (
@@ -529,16 +477,10 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				b4 LONGBLOB,
 				b5 LONGBLOB
 			)`,
-			// All five columns at 12000 bytes: each individually exceeds 2048 so each is
-			// immediately stored out-of-band. Combined tracked inline size ≈ 60 KB.
 			`INSERT INTO t_ae_large_combined VALUES
 				(1,
 				 REPEAT('a', 12000), REPEAT('b', 12000), REPEAT('c', 12000),
 				 REPEAT('d', 12000), REPEAT('e', 12000))`,
-			// Three 12000-byte (immediately OOB) plus two 1000-byte (initially inline).
-			// Combined tracked inline = 3×12001 + 2×1001 = 38005.
-			// Outlining order: b1, b2, b3 first (largest savings); then b4 is outlined
-			// to bring total below 2048. b5 stays inline.
 			`INSERT INTO t_ae_large_combined VALUES
 				(2,
 				 REPEAT('a', 12000), REPEAT('b', 12000), REPEAT('c', 12000),
@@ -553,31 +495,24 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// b1 is out-of-band for both rows; verify filter and read.
 				Query:    "SELECT pk FROM t_ae_large_combined WHERE b1 = REPEAT('a', 12000) ORDER BY pk",
 				Expected: []sql.Row{{1}, {2}},
 			},
 			{
-				// pk=1 b5 is out-of-band (12000 bytes); verify correct retrieval.
 				Query:    "SELECT pk FROM t_ae_large_combined WHERE b5 = REPEAT('e', 12000)",
 				Expected: []sql.Row{{1}},
 			},
 			{
-				// pk=2 b4 was outlined during BuildPermissive; verify correct retrieval.
 				Query:    "SELECT pk FROM t_ae_large_combined WHERE b4 = REPEAT('d', 1000)",
 				Expected: []sql.Row{{2}},
 			},
 			{
-				// pk=2 b5 remains inline; verify correct retrieval.
 				Query:    "SELECT pk FROM t_ae_large_combined WHERE b5 = REPEAT('e', 1000)",
 				Expected: []sql.Row{{2}},
 			},
 		},
 	},
 	{
-		// Tests five medium-sized adaptive columns where the combined size requires selective
-		// outlining: the algorithm outlines columns from largest savings to smallest until the
-		// tuple falls within the 2048-byte target, leaving the remaining columns inline.
 		Name: "many medium adaptive columns with selective outlining",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_selective (
@@ -588,15 +523,10 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				b4 LONGBLOB,
 				b5 LONGBLOB
 			)`,
-			// Row 1: 5 × 1500 bytes; inlineSize = 5×1501 = 7505 > 2048.
-			// All have equal savings (~1480); stable sort outlines b1..b4 in order.
-			// After outlining 4 columns: 7505 - 4×1480 = 1585 ≤ 2048. b5 stays inline.
 			`INSERT INTO t_ae_selective VALUES
 				(1,
 				 REPEAT('a', 1500), REPEAT('b', 1500), REPEAT('c', 1500),
 				 REPEAT('d', 1500), REPEAT('e', 1500))`,
-			// Row 2: descending sizes; b1 has the most savings and is outlined first.
-			// After outlining b1 (~savings 1980), total ≈ 1825 ≤ 2048: b2..b5 stay inline.
 			`INSERT INTO t_ae_selective VALUES
 				(2,
 				 REPEAT('a', 2000), REPEAT('b', 1000), REPEAT('c', 500),
@@ -611,12 +541,10 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// b5 stays inline for row 1; verify filter and correct value.
 				Query:    "SELECT pk FROM t_ae_selective WHERE b5 = REPEAT('e', 1500)",
 				Expected: []sql.Row{{1}},
 			},
 			{
-				// b1..b4 outlined for row 1; verify all are readable.
 				Query:    "SELECT pk FROM t_ae_selective WHERE b1 = REPEAT('a', 1500) AND b4 = REPEAT('d', 1500)",
 				Expected: []sql.Row{{1}},
 			},
@@ -625,19 +553,12 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{2000, 1000, 500, 200, 100}},
 			},
 			{
-				// b1 outlined for row 2; b2..b5 inline. Verify mix of storage formats.
 				Query:    "SELECT pk FROM t_ae_selective WHERE b1 = REPEAT('a', 2000) AND b5 = REPEAT('e', 100)",
 				Expected: []sql.Row{{2}},
 			},
 		},
 	},
 	{
-		// Tests that the adaptive encoding system correctly handles tuples whose combined
-		// tracked inline size is much greater than 64KB (the tuple format's hard limit).
-		// Each 30000-byte value individually exceeds 2048 and is immediately stored
-		// out-of-band; the combined tracked inline size is 5 × 30001 ≈ 150 KB.
-		// The second row mixes very large values with medium ones; after the three large
-		// columns bring the total below 2048, the two medium columns stay inline.
 		Name: "combined LONGBLOB values much greater than 64KB",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_large (
@@ -648,15 +569,10 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				b4 LONGBLOB,
 				b5 LONGBLOB
 			)`,
-			// Row 1: all five columns at 30000 bytes; combined tracked inline ≈ 150 KB.
 			`INSERT INTO t_ae_large VALUES
 				(1,
 				 REPEAT('a', 30000), REPEAT('b', 30000), REPEAT('c', 30000),
 				 REPEAT('d', 30000), REPEAT('e', 30000))`,
-			// Row 2: b1..b3 at 30000 bytes (immediately OOB); b4 at 1500 bytes and
-			// b5 at 100 bytes (initially inline). Combined tracked inline ≈ 91 KB.
-			// After outlining b1..b3 the total drops to ~1671 bytes ≤ 2048, so b4 and b5
-			// remain inline even though the combined size was far above the format limit.
 			`INSERT INTO t_ae_large VALUES
 				(2,
 				 REPEAT('a', 30000), REPEAT('b', 30000), REPEAT('c', 30000),
@@ -675,25 +591,16 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}, {2}},
 			},
 			{
-				// b4 is inline for row 2; verify it is readable.
 				Query:    "SELECT pk FROM t_ae_large WHERE b4 = REPEAT('d', 1500)",
 				Expected: []sql.Row{{2}},
 			},
 			{
-				// b5 is inline for row 2; verify it is readable.
 				Query:    "SELECT pk FROM t_ae_large WHERE b5 = REPEAT('e', 100)",
 				Expected: []sql.Row{{2}},
 			},
 		},
 	},
 	{
-		// Tests that the outlining threshold is based on the storage byte length of a TEXT
-		// value, not its character count. The character 'ñ' (U+00F1) encodes as two UTF-8
-		// bytes. A string of 1024 'ñ' characters is 2048 bytes and is outlined, while a
-		// string of 2047 ASCII 'a' characters is 2047 bytes and stays inline — even though
-		// the ASCII string has nearly twice the character count.
-		// Additionally tests that 3-byte ('€', U+20AC) and 4-byte ('😀', U+1F600) UTF-8
-		// characters follow the same byte-length rule.
 		Name: "LONGTEXT outlining uses byte length not character count",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_text_enc (
@@ -742,8 +649,6 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// pk=1 (2047 ASCII bytes, inline) and pk=4 (1024 ñ chars = 2048 bytes, outlined)
-				// both return correct values, demonstrating correct storage regardless of encoding.
 				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('a', 2047)",
 				Expected: []sql.Row{{1}},
 			},
@@ -756,8 +661,6 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				// 1024 'ñ' characters = 2048 bytes: outlined because byte length ≥ 2048,
-				// even though 1024 ASCII characters would be far below the threshold.
 				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('ñ', 1024)",
 				Expected: []sql.Row{{4}},
 			},
@@ -780,11 +683,6 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// Tests multiple LONGTEXT columns containing multibyte UTF-8 characters where the
-		// combined storage size is much greater than 64KB. Also verifies interleaving with
-		// non-adaptive columns, that CHARACTER_LENGTH and LENGTH diverge for multibyte text,
-		// and that the selective outlining algorithm correctly handles a mix of immediately
-		// out-of-band values and medium inline values.
 		Name: "multiple LONGTEXT columns with multibyte characters and combined size much greater than 64KB",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_text_large (
@@ -845,22 +743,18 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// Row 1: all five columns outlined, all readable.
 				Query:    "SELECT CHAR_LENGTH(t1), CHAR_LENGTH(t2), CHAR_LENGTH(t3), CHAR_LENGTH(t4), CHAR_LENGTH(t5) FROM t_ae_text_large WHERE pk = 1",
 				Expected: []sql.Row{{15000, 15000, 15000, 15000, 15000}},
 			},
 			{
-				// Row 2: t5 stays inline (100 'ñ' chars = 200 bytes).
 				Query:    "SELECT pk FROM t_ae_text_large WHERE t5 = REPEAT('ñ', 100)",
 				Expected: []sql.Row{{2}},
 			},
 			{
-				// Row 2: t4 outlined in BuildPermissive; still readable.
 				Query:    "SELECT pk FROM t_ae_text_large WHERE t4 = REPEAT('ñ', 1000)",
 				Expected: []sql.Row{{2}},
 			},
 			{
-				// Row 3: t1 has 10000 '€' chars = 30000 bytes; t3 is NULL.
 				Query:    "SELECT CHAR_LENGTH(t1), LENGTH(t1), CHAR_LENGTH(t2), LENGTH(t2), LENGTH(t3) FROM t_ae_text_large WHERE pk = 3",
 				Expected: []sql.Row{{10000, 30000, 100, 300, nil}},
 			},
@@ -871,10 +765,6 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// Tests a table containing both LONGTEXT (StringAdaptiveEnc) and LONGBLOB
-		// (BytesAdaptiveEnc) adaptive columns interleaved with non-adaptive INT columns.
-		// Verifies that the two different adaptive encoding types coexist correctly in
-		// the same tuple and that multibyte text characters are handled as bytes.
 		Name: "mixed LONGTEXT and LONGBLOB adaptive columns with multibyte text",
 		SetUpScript: []string{
 			`CREATE TABLE t_ae_mixed (
@@ -885,28 +775,10 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				bl LONGBLOB,
 				c  INT
 			)`,
-			// Value tuple: a(4), t(adaptive text), b(4), bl(adaptive blob), c(4).
-			// inlineSize = 4 + (1+byte_len_t) + 4 + (1+len_bl) + 4 = byte_len_t+len_bl+14.
-
-			// Both inline: t=1000 ASCII chars (1000 bytes), bl=1000 bytes.
-			// total = 1000+1000+14 = 2014 ≤ 2048.
 			`INSERT INTO t_ae_mixed VALUES (1, 1, REPEAT('a', 1000), 2, REPEAT('x', 1000), 3)`,
-
-			// t outlined (2-byte chars): t=1024 'ñ' chars = 2048 bytes, bl=100 bytes.
-			// total = 2048+100+14 = 2162 > 2048.
-			// savings t=2048, savings bl=80; t outlined first.
 			`INSERT INTO t_ae_mixed VALUES (2, 1, REPEAT('ñ', 1024), 2, REPEAT('x', 100), 3)`,
-
-			// bl outlined: t=100 ASCII chars (100 bytes), bl=3000 bytes.
-			// total = 100+3000+14 = 3114 > 2048.
-			// savings bl=2980, savings t=80; bl outlined first.
 			`INSERT INTO t_ae_mixed VALUES (3, 1, REPEAT('a', 100), 2, REPEAT('x', 3000), 3)`,
-
-			// Both outlined: t=3000 'ñ' chars (6000 bytes), bl=3000 bytes.
-			// Both immediately OOB (individual sizes >> 2048).
 			`INSERT INTO t_ae_mixed VALUES (4, 1, REPEAT('ñ', 3000), 2, REPEAT('x', 3000), 3)`,
-
-			// NULL text: only bl contributes to inline size.
 			`INSERT INTO t_ae_mixed VALUES (5, 1, NULL, 2, REPEAT('x', 1500), 3)`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -921,27 +793,22 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				// pk=2: t (2-byte chars, outlined) and bl (inline) both readable.
 				Query:    "SELECT pk FROM t_ae_mixed WHERE t = REPEAT('ñ', 1024) AND bl = REPEAT('x', 100)",
 				Expected: []sql.Row{{2}},
 			},
 			{
-				// pk=3: bl (outlined) and t (inline) both readable.
 				Query:    "SELECT pk FROM t_ae_mixed WHERE bl = REPEAT('x', 3000) AND t = REPEAT('a', 100)",
 				Expected: []sql.Row{{3}},
 			},
 			{
-				// pk=4: both t (6000 bytes, 3000 'ñ') and bl (3000 bytes) outlined.
 				Query:    "SELECT pk FROM t_ae_mixed WHERE t = REPEAT('ñ', 3000) AND bl = REPEAT('x', 3000)",
 				Expected: []sql.Row{{4}},
 			},
 			{
-				// pk=5: NULL text does not interfere with bl outlining.
 				Query:    "SELECT pk FROM t_ae_mixed WHERE t IS NULL AND bl = REPEAT('x', 1500)",
 				Expected: []sql.Row{{5}},
 			},
 			{
-				// Non-adaptive columns (a, b, c) are unaffected by adaptive encoding.
 				Query:    "SELECT a, b, c FROM t_ae_mixed WHERE pk = 2",
 				Expected: []sql.Row{{1, 2, 3}},
 			},
