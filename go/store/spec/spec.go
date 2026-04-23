@@ -377,7 +377,9 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	d.PanicIfError(err)
 
-	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+	// DisableLogOutputChecksumValidationSkipped silences the per-GetObject WARN emitted when objects have no stored checksum.
+	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
+	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3c, dynamodb.NewFromConfig(cfg), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 	d.PanicIfError(err)
 
 	return cs
