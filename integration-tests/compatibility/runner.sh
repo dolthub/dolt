@@ -194,32 +194,28 @@ _main() {
   trap cleanup "EXIT"
 
   # test backward compatibility
-  # list_backward_compatible_versions | while IFS= read -r ver; do
-  #     test_backward_compatibility "$ver"
-  # done
+  list_backward_compatible_versions | while IFS= read -r ver; do
+      test_backward_compatibility "$ver"
+  done
 
   # setup repo for current dolt version
   setup_repo HEAD
 
-  # TODO: forwards compatibility breaks when adaptive encoding is turned on in all cases. After we
-  # have a release with the new schema serialization field, we should get a new, more limited list
-  # of the versions which are actually forward compatible
-  
   # test forward compatibility
-  # if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
-  #     if [ -s "test_files/forward_compatible_versions.txt" ]; then
-  #         list_forward_compatible_versions | while IFS= read -r ver; do
-  #             test_forward_compatibility "$ver"
-  #         done
-  #     fi
-  # else
-  #     # For now we only test that we break with an appropriate error message
-  #     if [ -s "test_files/2_0_breaking_versions.txt" ]; then
-  #         list_2_0_breaking_versions | while IFS= read -r ver; do
-  #             test_2_0_breaking_compatibility "$ver"
-  #         done
-  #     fi
-  # fi
+  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
+      if [ -s "test_files/forward_compatible_versions.txt" ]; then
+          list_forward_compatible_versions | while IFS= read -r ver; do
+              test_forward_compatibility "$ver"
+          done
+      fi
+  else
+      # For now we only test that we break with an appropriate error message
+      if [ -s "test_files/2_0_breaking_versions.txt" ]; then
+          list_2_0_breaking_versions | while IFS= read -r ver; do
+              test_2_0_breaking_compatibility "$ver"
+          done
+      fi
+  fi
 
 
   # # test bidirectional compatibility
