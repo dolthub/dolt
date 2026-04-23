@@ -101,7 +101,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	require.NoError(t, err)
 
 	urlStr := earl.FileUrlFromPath(filepath.Join(envPath, ".dolt", "noms"), os.PathSeparator)
-	dEnv := Load(context.Background(), hdp, fs, urlStr, "test")
+	dEnv := LoadWithoutDB(context.Background(), hdp, fs, urlStr, "test")
 	cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
 	cfg.SetStrings(map[string]string{
 		config.UserNameKey:  name,
@@ -122,7 +122,7 @@ func TestMultiEnvForDirectory(t *testing.T) {
 	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
 
-	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 1)
 
@@ -159,7 +159,7 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	subEnv1 := initRepoWithRelativePath(t, filepath.Join(envPath, "abc"), hdp)
 	subEnv2 := initRepoWithRelativePath(t, filepath.Join(envPath, "def"), hdp)
 
-	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 3)
 
@@ -186,12 +186,22 @@ func TestMultiRepoEnvClose(t *testing.T) {
 	_ = initRepoWithRelativePath(t, filepath.Join(envPath, "sub_db"), hdp)
 
 	ctx := context.Background()
-	mrEnv, err := MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 2)
 
 	err = mrEnv.Close(ctx)
 	require.NoError(t, err)
+}
+
+func TestMultiEnvForConfigAndDirectory_EmptyFS(t *testing.T) {
+	ctx := context.Background()
+	fs := filesys.EmptyInMemFS("/")
+	cfg := config.NewMapConfig(map[string]string{})
+
+	mrEnv, err := MultiEnvForConfigAndDirectory(ctx, cfg, fs, nil)
+	require.NoError(t, err)
+	assert.Empty(t, mrEnv.envs)
 }
 
 func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDirProvider, map[string]*DoltEnv) {

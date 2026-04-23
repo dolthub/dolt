@@ -32,7 +32,7 @@ import (
 func TestViews(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	var err error
 	_, err = ExecuteSql(ctx, dEnv, "create table test (a int primary key)")

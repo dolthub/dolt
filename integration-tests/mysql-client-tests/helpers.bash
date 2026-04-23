@@ -21,7 +21,9 @@ setup_dolt_repo() {
 }
 
 teardown_dolt_repo() {
-    kill $SERVER_PID
+    kill $SERVER_PID || :
+    wait $SERVER_PID || :
+    SERVER_PID=
     rm -rf $REPO_NAME
 }
 

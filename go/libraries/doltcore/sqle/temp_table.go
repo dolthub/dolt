@@ -225,7 +225,7 @@ func (t *TempTable) Format() *types.NomsBinFormat {
 	return t.table.Format()
 }
 
-func (t *TempTable) Schema() sql.Schema {
+func (t *TempTable) Schema(ctx *sql.Context) sql.Schema {
 	return t.pkSch.Schema
 }
 
@@ -366,7 +366,7 @@ func (t *TempTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.For
 	return sql.ErrTemporaryTablesForeignKeySupport.New()
 }
 
-func (t *TempTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+func (t *TempTable) DropForeignKey(ctx *sql.Context, fkName string, tableName string, schemaName string) error {
 	return sql.ErrTemporaryTablesForeignKeySupport.New()
 }
 
@@ -394,7 +394,7 @@ func (t *TempTable) GetChecks(*sql.Context) ([]sql.CheckDefinition, error) {
 	return checksInSchema(t.sch), nil
 }
 
-func (t *TempTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+func (t *TempTable) PrimaryKeySchema(ctx *sql.Context) sql.PrimaryKeySchema {
 	return t.pkSch
 }
 

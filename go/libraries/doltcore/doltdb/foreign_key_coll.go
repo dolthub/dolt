@@ -311,7 +311,7 @@ func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) 
 // both column counts are equal. All other validation should occur before being added to the collection.
 func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 	for _, key := range fks {
-		if _, ok := fkc.GetByNameCaseInsensitive(key.Name); ok {
+		if _, ok := fkc.GetByNameCaseInsensitive(key.Name, key.TableName); ok {
 			return sql.ErrForeignKeyDuplicateName.New(key.Name)
 		}
 		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
@@ -342,8 +342,8 @@ func (fkc *ForeignKeyCollection) AllKeys() []ForeignKey {
 }
 
 // Contains returns whether the given foreign key name already exists for this collection.
-func (fkc *ForeignKeyCollection) Contains(foreignKeyName string) bool {
-	_, ok := fkc.GetByNameCaseInsensitive(foreignKeyName)
+func (fkc *ForeignKeyCollection) Contains(foreignKeyName string, tableName TableName) bool {
+	_, ok := fkc.GetByNameCaseInsensitive(foreignKeyName, tableName)
 	return ok
 }
 
@@ -363,13 +363,20 @@ func (fkc *ForeignKeyCollection) Count() int {
 }
 
 // GetByNameCaseInsensitive returns a ForeignKey with a matching case-insensitive name, and whether a match exists.
-func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string) (ForeignKey, bool) {
+func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string, tableName TableName) (ForeignKey, bool) {
 	if foreignKeyName == "" {
 		return ForeignKey{}, false
 	}
 	for _, fk := range fkc.foreignKeys {
-		if strings.EqualFold(fk.Name, foreignKeyName) {
-			return fk, true
+		if tableName.Schema != "" {
+			// schema name is empty for Dolt but not in Doltgres. (schema name must be populated for Doltgres)
+			if strings.EqualFold(fk.Name, foreignKeyName) && strings.EqualFold(fk.TableName.Name, tableName.Name) && strings.EqualFold(fk.TableName.Schema, tableName.Schema) {
+				return fk, true
+			}
+		} else {
+			if strings.EqualFold(fk.Name, foreignKeyName) {
+				return fk, true
+			}
 		}
 	}
 	return ForeignKey{}, false
@@ -377,6 +384,7 @@ func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string)
 
 type FkIndexUpdate struct {
 	FkName  string
+	Table   TableName
 	FromIdx string
 	ToIdx   string
 }
@@ -385,7 +393,7 @@ type FkIndexUpdate struct {
 // keys updated in this manner must belong to the same table, whose schema is provided.
 func (fkc *ForeignKeyCollection) UpdateIndexes(ctx context.Context, tableSchema schema.Schema, updates []FkIndexUpdate) error {
 	for _, u := range updates {
-		fk, ok := fkc.GetByNameCaseInsensitive(u.FkName)
+		fk, ok := fkc.GetByNameCaseInsensitive(u.FkName, u.Table)
 		if !ok {
 			return errors.New("foreign key not found")
 		}
@@ -589,12 +597,20 @@ func (fkc *ForeignKeyCollection) RemoveKeys(fks ...ForeignKey) {
 
 // RemoveKeyByName removes a foreign key from the collection. It does not remove the associated indexes from their
 // respective tables. Returns true if the key was successfully removed.
-func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) bool {
+func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string, tableName TableName) bool {
 	var key string
 	for k, fk := range fkc.foreignKeys {
-		if strings.EqualFold(fk.Name, foreignKeyName) {
-			key = k
-			break
+		if tableName.Schema != "" {
+			// schema name is empty for Dolt but not in Doltgres. (schema name must be populated for Doltgres)
+			if strings.EqualFold(fk.Name, foreignKeyName) && strings.EqualFold(fk.TableName.Name, tableName.Name) && strings.EqualFold(fk.TableName.Schema, tableName.Schema) {
+				key = k
+				break
+			}
+		} else {
+			if strings.EqualFold(fk.Name, foreignKeyName) {
+				key = k
+				break
+			}
 		}
 	}
 	if key == "" {
@@ -609,7 +625,6 @@ func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) bool {
 func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...TableName) error {
 	outgoing := NewTableNameSet(tables)
 	for _, fk := range fkc.foreignKeys {
-
 		dropChild := outgoing.Contains(fk.TableName)
 		dropParent := outgoing.Contains(fk.ReferencedTableName)
 		if dropParent && !dropChild {

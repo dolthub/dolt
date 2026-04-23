@@ -32,9 +32,8 @@ import (
 
 func TestHistoryTable(t *testing.T) {
 	SkipByDefaultInCI(t)
-	ctx := context.Background()
 	dEnv := setupHistoryTests(t)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 	for _, test := range historyTableTests() {
 		t.Run(test.name, func(t *testing.T) {
 			testHistoryTable(t, test, dEnv)

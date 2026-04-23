@@ -28,6 +28,7 @@ import (
 
 	"github.com/dolthub/fslock"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -143,7 +144,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	cs, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: remoteName}, defaultMemTableSize, q)
+	cs, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: remoteName}, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -310,8 +311,8 @@ func isGitRemoteAlreadyExistsError(err error, remoteName string) bool {
 	return strings.Contains(s, "remote "+strings.ToLower(remoteName)+" already exists")
 }
 
-// gitCmd builds an exec.Cmd for a git invocation with LC_ALL=C so that
-// error-message parsing works regardless of the user's locale.
+// gitCmd builds an exec.Cmd for a git invocation. LC_ALL=C forces English error
+// messages; CmdSetsid removes the controlling terminal so SSH cannot prompt.
 func gitCmd(ctx context.Context, args ...string) (*exec.Cmd, error) {
 	p, err := exec.LookPath("git")
 	if err != nil {
@@ -319,6 +320,7 @@ func gitCmd(ctx context.Context, args ...string) (*exec.Cmd, error) {
 	}
 	cmd := exec.CommandContext(ctx, p, args...) //nolint:gosec // controlled args
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	gitauth.CmdSetsid(cmd)
 	return cmd, nil
 }
 

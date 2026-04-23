@@ -19,6 +19,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -28,6 +29,7 @@ type FileConfig struct {
 	// The path of the config file in the filesystem
 	Path string
 
+	mu         sync.RWMutex
 	fs         filesys.ReadWriteFS
 	properties map[string]string
 }
@@ -46,7 +48,7 @@ func NewFileConfig(path string, fs filesys.ReadWriteFS, properties map[string]st
 		return nil, err
 	}
 
-	fc := &FileConfig{path, fs, properties}
+	fc := &FileConfig{Path: path, fs: fs, properties: properties}
 	err = fc.write()
 
 	if err != nil {
@@ -72,11 +74,13 @@ func FromFile(path string, fs filesys.ReadWriteFS) (*FileConfig, error) {
 		return nil, err
 	}
 
-	return &FileConfig{path, fs, properties}, nil
+	return &FileConfig{Path: path, fs: fs, properties: properties}, nil
 }
 
 // GetString retrieves a string from the cached config state
 func (fc *FileConfig) GetString(k string) (string, error) {
+	fc.mu.RLock()
+	defer fc.mu.RUnlock()
 	if val, ok := fc.properties[k]; ok {
 		return val, nil
 	}
@@ -86,6 +90,8 @@ func (fc *FileConfig) GetString(k string) (string, error) {
 
 // GetString retrieves a string from the cached config state
 func (fc *FileConfig) GetStringOrDefault(k, defStr string) string {
+	fc.mu.RLock()
+	defer fc.mu.RUnlock()
 	if val, ok := fc.properties[k]; ok {
 		return val
 	}
@@ -95,6 +101,8 @@ func (fc *FileConfig) GetStringOrDefault(k, defStr string) string {
 
 // SetStrings will set the value of configuration parameters in memory, and persist any changes to the backing file.
 func (fc *FileConfig) SetStrings(updates map[string]string) error {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
 	modified := false
 	for k, v := range updates {
 		if val, ok := fc.properties[k]; !ok || val != v {
@@ -113,6 +121,8 @@ func (fc *FileConfig) SetStrings(updates map[string]string) error {
 // Iter will perform a callback for ech value in a config until all values have been exhausted or until the
 // callback returns true indicating that it should stop.
 func (fc *FileConfig) Iter(cb func(string, string) (stop bool)) {
+	fc.mu.RLock()
+	defer fc.mu.RUnlock()
 	for k, v := range fc.properties {
 		stop := cb(k, v)
 
@@ -134,6 +144,8 @@ func (fc *FileConfig) write() error {
 
 // Unset removes a configuration parameter from the config
 func (fc *FileConfig) Unset(params []string) error {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
 	for _, param := range params {
 		if _, ok := fc.properties[param]; !ok {
 			return errors.New("key does not exist on this configuration")
@@ -147,5 +159,7 @@ func (fc *FileConfig) Unset(params []string) error {
 
 // Size returns the number of properties contained within the config
 func (fc *FileConfig) Size() int {
+	fc.mu.RLock()
+	defer fc.mu.RUnlock()
 	return len(fc.properties)
 }

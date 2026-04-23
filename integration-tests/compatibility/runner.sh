@@ -91,6 +91,24 @@ function test_bidirectional_compatibility() {
   DOLT_LEGACY_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/$ver-backward" bats --print-output-on-failure ./test_files/bats/bidirectional
 }
 
+function test_bidirectional_remote_compatibility() {
+  ver=$1
+  bin=`download_release "$ver"`
+
+  DOLT_NEW=`which dolt`
+
+  # Like test_bidirectional_compatibility, the tests under ./bats/bidirectional_remote do their
+  # own initialization; REPO_DIR just needs to exist as a clean scratch space that gets copied
+  # into bats_repo by each test's setup().
+  mkdir "repos/$ver-remote-forward"
+  echo "Run the bidirectional remote tests with current Dolt version and older Dolt version $ver"
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW" REPO_DIR="$(pwd)/repos/$ver-remote-forward" bats --print-output-on-failure ./test_files/bats/bidirectional_remote
+
+  mkdir "repos/$ver-remote-backward"
+  echo "Run the bidirectional remote tests with older Dolt version $ver and current Dolt version"
+  DOLT_LEGACY_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/$ver-remote-backward" bats --print-output-on-failure ./test_files/bats/bidirectional_remote
+}
+
 function list_2_0_breaking_versions() {
   grep -v '^ *#' < test_files/2_0_breaking_versions.txt
 }
@@ -109,6 +127,11 @@ function test_2_0_breaking_compatibility() {
 function list_forward_compatible_versions() {
   grep -v '^ *#' < test_files/forward_compatible_versions.txt
 }
+
+function list_2_0_forward_compatible_versions() {
+  grep -v '^ *#' < test_files/2_0_forward_compatible_versions.txt
+}
+
 
 function test_forward_compatibility() {
   ver=$1
@@ -178,10 +201,6 @@ _main() {
   # setup repo for current dolt version
   setup_repo HEAD
 
-  # TODO: forwards compatibility breaks when adaptive encoding is turned on in all cases. After we
-  # have a release with the new schema serialization field, we should get a new, more limited list
-  # of the versions which are actually forward compatible
-  
   # test forward compatibility
   if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
       if [ -s "test_files/forward_compatible_versions.txt" ]; then
@@ -199,15 +218,41 @@ _main() {
   fi
 
 
-  # test bidirectional compatibility
+  # # test bidirectional compatibility
   if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
+      echo "Testing pre-2.0 bi-directional compatible versions"
       if [ -s "test_files/forward_compatible_versions.txt" ]; then
           list_forward_compatible_versions | while IFS= read -r ver; do
               test_bidirectional_compatibility "$ver"
           done
       fi
+  else
+      echo "Testing post-2.0 bi-directional compatible versions"
+      if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+          list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+              test_bidirectional_compatibility "$ver"
+          done
+      fi      
   fi
 
+  # test bidirectional remote compatibility: two versions add the same column independently,
+  # insert disjoint data, and sync via a file remote. Same forward-compatibility limit applies.
+  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
+      echo "Testing pre-2.0 remote compatible versions"
+      if [ -s "test_files/forward_compatible_versions.txt" ]; then
+          list_forward_compatible_versions | while IFS= read -r ver; do
+              test_bidirectional_remote_compatibility "$ver"
+          done
+      fi
+  else
+      echo "Testing post-2.0 remote compatible versions"
+      if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+          list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+              test_bidirectional_remote_compatibility "$ver"
+          done
+      fi
+  fi
+ 
   # sanity check: run tests against current version
   echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
   DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats --print-output-on-failure ./test_files/bats

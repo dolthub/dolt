@@ -55,7 +55,7 @@ func (ht *HelpTable) String() string {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the help system table.
-func (ht *HelpTable) Schema() sql.Schema {
+func (ht *HelpTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{
 			Name:           "name",

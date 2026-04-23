@@ -54,7 +54,7 @@ func (sct *SchemaConflictsTable) String() string {
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
-func (sct *SchemaConflictsTable) Schema() sql.Schema {
+func (sct *SchemaConflictsTable) Schema(ctx *sql.Context) sql.Schema {
 	return []*sql.Column{
 		{Name: "table_name", Type: types.Text, Source: sct.tableName, PrimaryKey: true, DatabaseSource: sct.dbName},
 		{Name: "base_schema", Type: types.Text, Source: sct.tableName, PrimaryKey: false, DatabaseSource: sct.dbName},

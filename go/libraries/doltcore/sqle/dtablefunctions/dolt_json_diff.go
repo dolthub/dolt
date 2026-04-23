@@ -45,7 +45,7 @@ func (dtf *JsonDiffTableFunction) NewInstance(ctx *sql.Context, database sql.Dat
 		database: database,
 	}
 
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.WithExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (dtf *JsonDiffTableFunction) NewInstance(ctx *sql.Context, database sql.Dat
 }
 
 func (dtf *JsonDiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(dtf.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(dtf.Schema(ctx))
 	numRows, _, err := dtf.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -85,7 +85,7 @@ func (dtf *JsonDiffTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface
-func (dtf *JsonDiffTableFunction) WithExpressions(expressions ...sql.Expression) (sql.Node, error) {
+func (dtf *JsonDiffTableFunction) WithExpressions(ctx *sql.Context, expressions ...sql.Expression) (sql.Node, error) {
 	if len(expressions) != 2 {
 		return nil, sql.ErrInvalidArgumentNumber.New(dtf, len(expressions), 2)
 	}
@@ -151,7 +151,7 @@ func (j jsonDiffRowIter) Close(ctx *sql.Context) error {
 var _ sql.RowIter = jsonDiffRowIter{}
 
 // WithChildren implements the sql.Node interface
-func (dtf *JsonDiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
+func (dtf *JsonDiffTableFunction) WithChildren(ctx *sql.Context, node ...sql.Node) (sql.Node, error) {
 	if len(node) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -166,7 +166,7 @@ var jsonDiffTableSchema = sql.Schema{
 }
 
 // Schema implements the sql.Node interface
-func (dtf *JsonDiffTableFunction) Schema() sql.Schema {
+func (dtf *JsonDiffTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	return jsonDiffTableSchema
 }
 

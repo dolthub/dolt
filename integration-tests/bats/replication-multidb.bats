@@ -46,7 +46,7 @@ push_helper() {
 }
 
 teardown() {
-    stop_sql_server
+    stop_sql_server 1
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR

@@ -21,6 +21,7 @@ import (
 
 	"cloud.google.com/go/storage"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -48,7 +49,7 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 
 	bs := blobstore.NewGCSBlobstore(gcs, urlObj.Host, urlObj.Path)
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	gcsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
+	gcsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q)
 
 	if err != nil {
 		return nil, nil, nil, err
@@ -81,7 +82,7 @@ func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinForma
 
 	bs := blobstore.NewLocalBlobstore(absPath)
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	bsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
+	bsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q)
 
 	if err != nil {
 		return nil, nil, nil, err

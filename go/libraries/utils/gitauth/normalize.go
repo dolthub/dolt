@@ -15,14 +15,13 @@
 package gitauth
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 )
 
-// NonInteractiveAuthError indicates that a git operation failed because
-// authentication was required but interactive prompting is disabled.
-//
-// It includes the captured git output (when available) to aid debugging.
+// NonInteractiveAuthError wraps a git remote error and appends credential
+// hint lines so the user knows how to configure auth before retrying.
 type NonInteractiveAuthError struct {
 	Output string
 	Cause  error
@@ -30,28 +29,21 @@ type NonInteractiveAuthError struct {
 
 func (e *NonInteractiveAuthError) Error() string {
 	var b strings.Builder
-	b.WriteString("git authentication required but interactive prompting is disabled")
-	b.WriteString("\n\nHints:")
-	b.WriteString("\n- HTTPS: configure git credentials (credential helper, token) ahead of time")
-	b.WriteString("\n- SSH: use ssh-agent / keychain and verify `ssh -o BatchMode=yes <host>` works")
-	b.WriteString("\n- GCM: ensure non-interactive auth is configured")
-	if strings.TrimSpace(e.Output) != "" {
-		b.WriteString("\n\nGit output:\n")
+	if e.Output != "" {
 		b.WriteString(strings.TrimRight(e.Output, "\n"))
+		b.WriteString("\n")
 	}
-	if e.Cause != nil {
-		b.WriteString("\nOriginal error: ")
-		b.WriteString(e.Cause.Error())
-	}
+	b.WriteString("hint: dolt does not support interactive credential prompts\n")
+	b.WriteString("hint: configure git credentials (credential helper, token) for HTTPS remotes\n")
+	b.WriteString("hint: run `ssh-add <key>` to pre-load your key for SSH remotes\n")
+	b.WriteString("hint: ensure non-interactive auth is configured for GCM")
 	return b.String()
 }
 
 func (e *NonInteractiveAuthError) Unwrap() error { return e.Cause }
 
-// NormalizeError wraps err in a NonInteractiveAuthError when output and/or err indicate
-// a credentials prompt or auth failure that would normally require prompting.
-//
-// output is optional; when empty, NormalizeError falls back to err.Error() for pattern matching.
+// NormalizeError wraps |err| in a [NonInteractiveAuthError] so that
+// credential hints are always appended to git remote failures.
 func NormalizeError(err error, output []byte) error {
 	if err == nil {
 		return nil
@@ -60,41 +52,10 @@ func NormalizeError(err error, output []byte) error {
 	if errors.As(err, &already) {
 		return err
 	}
-
-	outStr := strings.TrimSpace(string(output))
-	hay := outStr
-	if hay == "" {
-		hay = err.Error()
-	} else {
-		hay = hay + "\n" + err.Error()
+	return &NonInteractiveAuthError{
+		Output: string(bytes.TrimSpace(output)),
+		Cause:  err,
 	}
-	if !looksLikeAuthPromptOrFailure(hay) {
-		return err
-	}
-	if outStr == "" {
-		outStr = strings.TrimSpace(err.Error())
-	}
-	return &NonInteractiveAuthError{Output: outStr, Cause: err}
-}
-
-func looksLikeAuthPromptOrFailure(s string) bool {
-	// Keep these as simple substring matches; callers can extend as we observe new cases.
-	s = strings.ToLower(s)
-	patterns := []string{
-		"terminal prompts disabled",
-		"could not read Username",
-		"could not read Password",
-		"Authentication failed",
-		"Enter passphrase for key",
-		"Permission denied (publickey)",
-		"fatal: could not read from remote repository",
-	}
-	for _, p := range patterns {
-		if strings.Contains(s, strings.ToLower(p)) {
-			return true
-		}
-	}
-	return false
 }
 
 var _ error = (*NonInteractiveAuthError)(nil)

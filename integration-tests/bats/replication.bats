@@ -19,11 +19,10 @@ setup() {
 }
 
 teardown() {
+    stop_sql_server 1
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
-
-    stop_sql_server
 }
 
 @test "replication: configuration errors" {

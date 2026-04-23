@@ -102,3 +102,6 @@ func (ecs emptyChunkSource) clone() (chunkSource, error) {
 func (ecs emptyChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk), _ *Stats) error {
 	return nil
 }
+
+func (ecs emptyChunkSource) tolerantIterateAllChunks(_ context.Context, _ func(chunks.Chunk), _ func(error), _ *Stats) {
+}

@@ -10,9 +10,9 @@ setup() {
 }
 
 teardown() {
+    stop_sql_server 1
     teardown_common
     rm -rf "$BATS_TMPDIR/config-test$$"
-    stop_sql_server
 }
 
 function no_stderr {

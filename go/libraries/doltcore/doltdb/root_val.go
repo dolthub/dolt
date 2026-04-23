@@ -1226,7 +1226,7 @@ func ValidateForeignKeysOnSchemas(ctx *sql.Context, tableResolver TableResolver,
 				return nil, err
 			}
 		} else {
-			if !fkCollection.RemoveKeyByName(foreignKey.Name) {
+			if !fkCollection.RemoveKeyByName(foreignKey.Name, foreignKey.TableName) {
 				return nil, fmt.Errorf("`%s` does not exist as a foreign key", foreignKey.Name)
 			}
 		}

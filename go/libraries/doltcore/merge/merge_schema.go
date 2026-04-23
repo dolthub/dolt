@@ -195,7 +195,7 @@ func SchemaMerge(
 	}
 
 	var mergedCC *schema.ColCollection
-	mergedCC, sc.ColConflicts, mergeInfo, diffInfo, err = mergeColumns(tblName.Name, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
+	mergedCC, sc.ColConflicts, mergeInfo, diffInfo, err = mergeColumns(ctx, tblName.Name, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
 		return nil, SchemaConflict{}, mergeInfo, diffInfo, err
 	}
@@ -314,7 +314,7 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 			})
 		}
 
-		theirFK, ok = theirNewFKs.GetByNameCaseInsensitive(ourFK.Name)
+		theirFK, ok = theirNewFKs.GetByNameCaseInsensitive(ourFK.Name, ourFK.TableName)
 		if ok && !ourFK.EqualDefs(theirFK) {
 			// Two different Foreign Keys have the same name
 			conflicts = append(conflicts, FKConflict{
@@ -328,7 +328,7 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 
 	err = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
 		// The common set of FKs may already have this FK, if it was added on both branches
-		if commonFK, ok := common.GetByNameCaseInsensitive(ourFK.Name); ok && commonFK.EqualDefs(ourFK) {
+		if commonFK, ok := common.GetByNameCaseInsensitive(ourFK.Name, ourFK.TableName); ok && commonFK.EqualDefs(ourFK) {
 			// Skip this one if it's identical to the one in the common set
 			return false, nil
 		}
@@ -341,7 +341,7 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 
 	err = theirNewFKs.Iter(func(theirFK doltdb.ForeignKey) (stop bool, err error) {
 		// The common set of FKs may already have this FK, if it was added on both branches
-		if commonFK, ok := common.GetByNameCaseInsensitive(theirFK.Name); ok && commonFK.EqualDefs(theirFK) {
+		if commonFK, ok := common.GetByNameCaseInsensitive(theirFK.Name, theirFK.TableName); ok && commonFK.EqualDefs(theirFK) {
 			// Skip this one if it's identical to the one in the common set
 			return false, nil
 		}
@@ -365,7 +365,7 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 // have a default value cannot be merged automatically, since we don't know what value to set for any existing rows,
 // so instead of reporting a schema conflict and allowing customers to use the conflict resolution workflow, we return
 // an error and instruct them how to manually fix the problem.
-func checkUnmergeableNewColumns(tblName string, columnMappings columnMappings) error {
+func checkUnmergeableNewColumns(ctx *sql.Context, tblName string, columnMappings columnMappings) error {
 	for _, mapping := range columnMappings {
 		anc := mapping.anc
 		ours := mapping.ours
@@ -402,7 +402,7 @@ type MergeInfo struct {
 // compatible with the current stored format. The merged columns, any column conflicts, and a boolean value stating if
 // a full table rewrite is needed to align the existing table rows with the new, merged schema. If any unexpected error
 // occurs, then that error is returned and the other response fields should be ignored.
-func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, MergeInfo, tree.ThreeWayDiffInfo, error) {
+func mergeColumns(ctx *sql.Context, tblName string, format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, MergeInfo, tree.ThreeWayDiffInfo, error) {
 	mergeInfo := MergeInfo{}
 	diffInfo := tree.ThreeWayDiffInfo{}
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
@@ -415,7 +415,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 		return nil, nil, mergeInfo, diffInfo, err
 	}
 
-	err = checkUnmergeableNewColumns(tblName, columnMappings)
+	err = checkUnmergeableNewColumns(ctx, tblName, columnMappings)
 	if err != nil {
 		return nil, nil, mergeInfo, diffInfo, err
 	}
@@ -954,7 +954,7 @@ func foreignKeysInCommon(
 
 		if theirs.EqualDefs(anc) {
 			// FK modified on our branch since the ancestor
-			fk, ok := common.GetByNameCaseInsensitive(ours.Name)
+			fk, ok := common.GetByNameCaseInsensitive(ours.Name, ours.TableName)
 			if ok {
 				conflicts = append(conflicts, FKConflict{
 					Kind:   NameCollision,
@@ -969,7 +969,7 @@ func foreignKeysInCommon(
 
 		if ours.EqualDefs(anc) {
 			// FK modified on their branch since the ancestor
-			fk, ok := common.GetByNameCaseInsensitive(theirs.Name)
+			fk, ok := common.GetByNameCaseInsensitive(theirs.Name, theirs.TableName)
 			if ok {
 				conflicts = append(conflicts, FKConflict{
 					Kind:   NameCollision,

@@ -106,7 +106,7 @@ func parse_Statistics(ctx context.Context, bs []byte, ns tree.NodeStore, vr type
 		return nil, err
 	}
 
-	m, err := shim.MapFromValue(value, schema.StatsTableDoltSchema, ns, false)
+	m, err := shim.MapFromValue(ctx, value, schema.StatsTableDoltSchema, ns, false)
 	if err != nil {
 		return nil, err
 	}

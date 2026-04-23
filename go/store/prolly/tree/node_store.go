@@ -19,16 +19,13 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-)
-
-const (
-	cacheSize = 256 * 1024 * 1024
 )
 
 // NodeStore reads and writes prolly tree Nodes.
@@ -69,7 +66,17 @@ type nodeStore struct {
 
 var _ NodeStore = &nodeStore{}
 
-var sharedCache = newChunkCache(cacheSize)
+var (
+	sharedCacheOnce sync.Once
+	sharedCache     nodeCache
+)
+
+func getSharedCache() nodeCache {
+	sharedCacheOnce.Do(func() {
+		sharedCache = newChunkCache(int(memlimit.NodeCacheSize()))
+	})
+	return sharedCache
+}
 
 var sharedPool = pool.NewBuffPool()
 
@@ -83,7 +90,7 @@ var blobBuilderPool = sync.Pool{
 func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 	return &nodeStore{
 		store: cs,
-		cache: sharedCache,
+		cache: getSharedCache(),
 		bp:    sharedPool,
 		bbp:   &blobBuilderPool,
 	}

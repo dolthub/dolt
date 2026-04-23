@@ -93,7 +93,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) (*DoltEnv, *filesys.
 	}
 
 	fs := filesys.NewInMemFS(initialDirs, initialFiles, workingDir)
-	dEnv := Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
+	dEnv := LoadWithoutDB(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
 
 	return dEnv, fs
 }
@@ -102,7 +102,7 @@ func createFileTestEnv(t *testing.T, workingDir, homeDir string) *DoltEnv {
 	fs, err := filesys.LocalFilesysWithWorkingDir(filepath.ToSlash(workingDir))
 	require.NoError(t, err)
 
-	return Load(context.Background(), func() (string, error) {
+	return LoadWithoutDB(context.Background(), func() (string, error) {
 		return homeDir, nil
 	}, fs, doltdb.LocalDirDoltDB, "test")
 }
@@ -168,11 +168,10 @@ func TestRepoDirNoLocal(t *testing.T) {
 }
 
 func TestInitRepo(t *testing.T) {
-	ctx := context.Background()
 	dEnv, _ := createTestEnv(false, false)
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
 	require.NoError(t, err)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	_, err = dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -198,7 +197,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
 	require.NoError(t, err)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	ws, err := dEnv.WorkingSet(context.Background())
 	require.NoError(t, err)

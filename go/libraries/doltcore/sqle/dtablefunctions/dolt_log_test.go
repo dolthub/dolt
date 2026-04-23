@@ -75,7 +75,7 @@ func TestDoltLogExpressionsInterface(t *testing.T) {
 		expression.NewLiteral("HEAD~1", types.Text),
 	}
 
-	newNode, err := ltf.WithExpressions(newExprs...)
+	newNode, err := ltf.WithExpressions(sql.NewEmptyContext(), newExprs...)
 	require.NoError(t, err)
 
 	newLtf, ok := newNode.(*LogTableFunction)
@@ -167,7 +167,7 @@ func TestDoltLogBindVariableWithParents(t *testing.T) {
 	assert.True(t, newLtf.showParents)
 
 	// Schema should include parents column during analysis when --parents is literal
-	schema := newLtf.Schema()
+	schema := newLtf.Schema(ctx)
 	parentColumn := false
 	for _, col := range schema {
 		if col.Name == "parents" {
@@ -192,7 +192,7 @@ func TestDoltLogBindVariableWithParents(t *testing.T) {
 	assert.True(t, newLtf.showParents)
 
 	// Schema should still include parents column (unchanged from analysis)
-	schemaAfterExecution := newLtf.Schema()
+	schemaAfterExecution := newLtf.Schema(ctx)
 	parentColumnAfterExecution := false
 	for _, col := range schemaAfterExecution {
 		if col.Name == "parents" {
@@ -234,7 +234,7 @@ func TestDoltLogBindVariableAsOption(t *testing.T) {
 	assert.False(t, newLtf.showParents)
 
 	// Schema should NOT include parents column during analysis (flag is in bind variable)
-	schema := newLtf.Schema()
+	schema := newLtf.Schema(ctx)
 	parentColumn := false
 	for _, col := range schema {
 		if col.Name == "parents" {

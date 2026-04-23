@@ -131,14 +131,11 @@ func NewSqlEngine(
 	// (For already-loaded envs, these will not affect the existing instance.)
 	if config != nil && len(config.DBLoadParams) > 0 {
 		_ = mrEnv.Iter(func(_ string, dEnv *env.DoltEnv) (stop bool, err error) {
-			if dEnv == nil {
-				return false, nil
-			}
 			if dEnv.DBLoadParams == nil {
 				dEnv.DBLoadParams = maps.Clone(config.DBLoadParams)
-				return false, nil
+			} else {
+				maps.Copy(dEnv.DBLoadParams, config.DBLoadParams)
 			}
-			maps.Copy(dEnv.DBLoadParams, config.DBLoadParams)
 			return false, nil
 		})
 	}
@@ -603,7 +600,7 @@ type ConfigOption func(*SqlEngineConfig)
 // NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user.
 // Returns the new engine, the first database name, and any error that occurred.
 func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv, options ...ConfigOption) (*SqlEngine, string, error) {
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	if err != nil {
 		return nil, "", err
 	}

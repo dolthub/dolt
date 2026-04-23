@@ -17,10 +17,10 @@ setup() {
 }
 
 teardown() {
-    teardown_common
     kill $remotesrv_pid
     wait $remotesrv_pid || :
     remotesrv_pid=""
+    teardown_common
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 

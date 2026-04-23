@@ -51,13 +51,13 @@ func createLargeDocumentForTesting(t *testing.T, ctx *sql.Context, ns NodeStore)
 	leafDoc := make(map[string]interface{})
 	leafDoc["number"] = float64(1.0)
 	leafDoc["string"] = "dolt"
-	docExpression, err := json.NewJSONArray(expression.NewLiteral(newIndexedJsonDocumentFromValue(t, ctx, ns, leafDoc), types.JSON))
+	docExpression, err := json.NewJSONArray(ctx, expression.NewLiteral(newIndexedJsonDocumentFromValue(t, ctx, ns, leafDoc), types.JSON))
 	require.NoError(t, err)
 
 	for level := 0; level < 8; level++ {
-		childObjectExpression, err := json.NewJSONObject(expression.NewLiteral("children", types.Text), docExpression)
+		childObjectExpression, err := json.NewJSONObject(ctx, expression.NewLiteral("children", types.Text), docExpression)
 		require.NoError(t, err)
-		docExpression, err = json.NewJSONArrayAppend(docExpression, expression.NewLiteral("$", types.Text), childObjectExpression)
+		docExpression, err = json.NewJSONArrayAppend(ctx, docExpression, expression.NewLiteral("$", types.Text), childObjectExpression)
 		require.NoError(t, err)
 	}
 	doc, err := docExpression.Eval(ctx, nil)

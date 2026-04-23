@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -211,7 +212,7 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 		}
 		newGenSt, err = nbs.NewLocalJournalingStoreWithOptions(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb, opts)
 	} else {
-		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q, mmapArchiveIndexes)
+		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, memlimit.MemtableSize(), q, mmapArchiveIndexes)
 	}
 
 	if err != nil {
@@ -231,7 +232,7 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 		}
 	}
 
-	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, defaultMemTableSize, q, mmapArchiveIndexes)
+	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, memlimit.MemtableSize(), q, mmapArchiveIndexes)
 	if err != nil {
 		return nil, nil, nil, err
 	}

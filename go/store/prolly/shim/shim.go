@@ -36,7 +36,7 @@ func ValueFromMap(m prolly.MapInterface) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 
-func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.Map, error) {
+func MapFromValue(ctx context.Context, v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.Map, error) {
 	root, fileId, err := NodeFromValue(v)
 	if fileId == serial.VectorIndexNodeFileID {
 		return prolly.Map{}, fmt.Errorf("can't make a prolly.Map from a vector index node")

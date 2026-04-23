@@ -69,8 +69,6 @@ const (
 )
 
 type PatchTableFunction struct {
-	ctx *sql.Context
-
 	fromCommitExpr sql.Expression
 	toCommitExpr   sql.Expression
 	dotCommitExpr  sql.Expression
@@ -79,7 +77,7 @@ type PatchTableFunction struct {
 }
 
 func (p *PatchTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(p.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(p.Schema(ctx))
 	numRows, _, err := p.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -122,7 +120,7 @@ func (p *PatchTableFunction) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 // This table has a partition for just schema changes, one for just data changes, and one for both.
 // TODO: schema names
 func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := p.evaluateArguments()
+	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := p.evaluateArguments(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -178,11 +176,11 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 }
 
 // LookupPartitions is a sql.IndexedTable interface function that takes an index lookup and returns the set of corresponding partitions.
-func (p *PatchTableFunction) LookupPartitions(context *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+func (p *PatchTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == diffTypeColumnName {
 		diffTypes, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(ctx, lookup.Ranges))
 		}
 
 		includeSchemaDiff := slices.Contains(diffTypes, diffTypeSchema)
@@ -240,11 +238,10 @@ var patchTableSchema = sql.Schema{
 // NewInstance creates a new instance of TableFunction interface
 func (p *PatchTableFunction) NewInstance(ctx *sql.Context, db sql.Database, exprs []sql.Expression) (sql.Node, error) {
 	newInstance := &PatchTableFunction{
-		ctx:      ctx,
 		database: db,
 	}
 
-	node, err := newInstance.WithExpressions(exprs...)
+	node, err := newInstance.WithExpressions(ctx, exprs...)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +286,7 @@ func (p *PatchTableFunction) String() string {
 }
 
 // Schema implements the sql.Node interface.
-func (p *PatchTableFunction) Schema() sql.Schema {
+func (p *PatchTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	return patchTableSchema
 }
 
@@ -299,7 +296,7 @@ func (p *PatchTableFunction) Children() []sql.Node {
 }
 
 // WithChildren implements the sql.Node interface.
-func (p *PatchTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (p *PatchTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -310,11 +307,11 @@ func (p *PatchTableFunction) WithChildren(children ...sql.Node) (sql.Node, error
 func (p *PatchTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	baseDB, _ := doltdb.SplitRevisionDbName(p.database.Name())
 	if p.tableNameExpr != nil {
-		if !sqltypes.IsText(p.tableNameExpr.Type()) {
-			return ExpressionIsDeferred(p.tableNameExpr)
+		if !sqltypes.IsText(p.tableNameExpr.Type(ctx)) {
+			return ExpressionIsDeferred(ctx, p.tableNameExpr)
 		}
 
-		tableNameVal, err := p.tableNameExpr.Eval(p.ctx, nil)
+		tableNameVal, err := p.tableNameExpr.Eval(ctx, nil)
 		if err != nil {
 			return false
 		}
@@ -356,7 +353,7 @@ func (p *PatchTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface.
-func (p *PatchTableFunction) WithExpressions(expr ...sql.Expression) (sql.Node, error) {
+func (p *PatchTableFunction) WithExpressions(ctx *sql.Context, expr ...sql.Expression) (sql.Node, error) {
 	if len(expr) < 1 {
 		return nil, sql.ErrInvalidArgumentNumber.New(p.Name(), "1 to 3", len(expr))
 	}
@@ -393,20 +390,20 @@ func (p *PatchTableFunction) WithExpressions(expr ...sql.Expression) (sql.Node, 
 
 	// validate the expressions
 	if newPtf.dotCommitExpr != nil {
-		if !sqltypes.IsText(newPtf.dotCommitExpr.Type()) && !expression.IsBindVar(newPtf.dotCommitExpr) {
+		if !sqltypes.IsText(newPtf.dotCommitExpr.Type(ctx)) && !expression.IsBindVar(newPtf.dotCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.dotCommitExpr.String())
 		}
 	} else {
-		if !sqltypes.IsText(newPtf.fromCommitExpr.Type()) && !expression.IsBindVar(newPtf.fromCommitExpr) {
+		if !sqltypes.IsText(newPtf.fromCommitExpr.Type(ctx)) && !expression.IsBindVar(newPtf.fromCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.fromCommitExpr.String())
 		}
-		if !sqltypes.IsText(newPtf.toCommitExpr.Type()) && !expression.IsBindVar(newPtf.toCommitExpr) {
+		if !sqltypes.IsText(newPtf.toCommitExpr.Type(ctx)) && !expression.IsBindVar(newPtf.toCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.toCommitExpr.String())
 		}
 	}
 
 	if newPtf.tableNameExpr != nil {
-		if !sqltypes.IsText(newPtf.tableNameExpr.Type()) && !expression.IsBindVar(newPtf.tableNameExpr) {
+		if !sqltypes.IsText(newPtf.tableNameExpr.Type(ctx)) && !expression.IsBindVar(newPtf.tableNameExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.tableNameExpr.String())
 		}
 	}
@@ -444,10 +441,10 @@ func (p *PatchTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 // evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
 // It evaluates the argument expressions to turn them into values this PatchTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
-func (p *PatchTableFunction) evaluateArguments() (interface{}, interface{}, interface{}, string, error) {
+func (p *PatchTableFunction) evaluateArguments(ctx *sql.Context) (interface{}, interface{}, interface{}, string, error) {
 	var tableName string
 	if p.tableNameExpr != nil {
-		tableNameVal, err := p.tableNameExpr.Eval(p.ctx, nil)
+		tableNameVal, err := p.tableNameExpr.Eval(ctx, nil)
 		if err != nil {
 			return nil, nil, nil, "", err
 		}
@@ -459,7 +456,7 @@ func (p *PatchTableFunction) evaluateArguments() (interface{}, interface{}, inte
 	}
 
 	if p.dotCommitExpr != nil {
-		dotCommitVal, err := p.dotCommitExpr.Eval(p.ctx, nil)
+		dotCommitVal, err := p.dotCommitExpr.Eval(ctx, nil)
 		if err != nil {
 			return nil, nil, nil, "", err
 		}
@@ -467,12 +464,12 @@ func (p *PatchTableFunction) evaluateArguments() (interface{}, interface{}, inte
 		return nil, nil, dotCommitVal, tableName, nil
 	}
 
-	fromCommitVal, err := p.fromCommitExpr.Eval(p.ctx, nil)
+	fromCommitVal, err := p.fromCommitExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, nil, "", err
 	}
 
-	toCommitVal, err := p.toCommitExpr.Eval(p.ctx, nil)
+	toCommitVal, err := p.toCommitExpr.Eval(ctx, nil)
 	if err != nil {
 		return nil, nil, nil, "", err
 	}
@@ -567,7 +564,7 @@ func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData[*sql.Context],
 		return nil, err
 	}
 
-	targetPkSch, err := sqlutil.FromDoltSchema("", td.ToName.Name, td.ToSch)
+	targetPkSch, err := sqlutil.FromDoltSchema(ctx, "", td.ToName.Name, td.ToSch)
 	if err != nil {
 		return nil, err
 	}
@@ -630,7 +627,7 @@ func getDiffQuery(ctx *sql.Context, dbData env.DbData[*sql.Context], td diff.Tab
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	diffPKSch, err := sqlutil.FromDoltSchema("", "", diffTableSchema)
+	diffPKSch, err := sqlutil.FromDoltSchema(ctx, "", "", diffTableSchema)
 	if err != nil {
 		return nil, nil, nil, err
 	}

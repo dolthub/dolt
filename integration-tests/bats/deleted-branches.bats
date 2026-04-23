@@ -10,8 +10,8 @@ setup() {
 }
 
 teardown() {
+    stop_sql_server 1
     teardown_common
-    stop_sql_server
 }
 
 make_it() {

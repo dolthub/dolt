@@ -35,7 +35,7 @@ func TestCommitHooksNoErrors(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	dEnv, err := CreateEnvWithSeedData()
 	require.NoError(t, err)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	sql.SystemVariables.SetGlobal(ctx, dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(ctx, dsess.ReplicateToRemote, "unknown")
@@ -56,7 +56,7 @@ func TestCommitHooksBackgroundThreadsUniqueNames(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	dEnv, err := CreateEnvWithSeedData()
 	require.NoError(t, err)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 
 	dest := t.TempDir()
 	t.Cleanup(func() {

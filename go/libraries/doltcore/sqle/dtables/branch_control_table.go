@@ -100,7 +100,7 @@ func (tbl BranchControlTable) String() string {
 }
 
 // Schema implements the interface sql.Table.
-func (tbl BranchControlTable) Schema() sql.Schema {
+func (tbl BranchControlTable) Schema(ctx *sql.Context) sql.Schema {
 	return accessSchema
 }
 

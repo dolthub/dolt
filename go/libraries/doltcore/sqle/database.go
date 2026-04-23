@@ -1551,7 +1551,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 		}
 	}
 
-	table, err := db.newDoltTable(tableName, sch, tbl)
+	table, err := db.newDoltTable(ctx, tableName, sch, tbl)
 	if err != nil {
 		return nil, false, err
 	}
@@ -1664,8 +1664,8 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	return tableName, tbl, true, nil
 }
 
-func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
-	readonlyTable, err := NewDoltTable(tableName, sch, tbl, db, db.editOpts)
+func (db Database) newDoltTable(ctx *sql.Context, tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
+	readonlyTable, err := NewDoltTable(ctx, tableName, sch, tbl, db, db.editOpts)
 	if err != nil {
 		return nil, err
 	}

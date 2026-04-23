@@ -356,6 +356,46 @@ SQL
     [[ "$output" =~ "behind 'origin/other' by 1 commit" ]] || false
 }
 
+@test "sql-pull: dolt_pull with specific branch does not fetch other branches" {
+    cd repo1
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+    dolt checkout main
+
+    cd ../repo2
+    dolt fetch
+    dolt checkout other
+    dolt checkout main
+
+    # Make changes on both branches in repo1
+    cd ../repo1
+    dolt sql -q "insert into t1 values (10, 10)"
+    dolt commit -am "new commit on main"
+    dolt push origin main
+    dolt checkout other
+    dolt commit --allow-empty -m "new commit on other"
+    dolt push origin other
+
+    # Pull only main in repo2
+    cd ../repo2
+    dolt sql -q "call dolt_pull('origin', 'main')"
+
+    # main should be updated
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new commit on main" ]] || false
+
+    # other's remote tracking ref should NOT be updated
+    dolt checkout other
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "new commit on other" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "behind" ]] || false
+}
+
 @test "sql-pull: dolt_pull commits successful merge on current branch" {
     cd repo1
     dolt checkout -b other
@@ -425,7 +465,7 @@ SQL
     dolt checkout main
 
     cd ../repo1
-    dolt pull origin main
+    dolt fetch origin b1
     dolt checkout b1
     dolt pull origin b1
 
@@ -485,7 +525,7 @@ SQL
     dolt checkout main
 
     cd ../repo1
-    dolt pull origin main
+    dolt fetch origin b1
     dolt checkout b1
     dolt pull origin b1
 
@@ -1100,4 +1140,45 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "0,0" ]] || false
     [[ "$output" =~ "20,20" ]] || false
+}
+
+# https://github.com/dolthub/dolt/issues/10839
+@test "sql-pull: dolt_pull returns a corrective error when the branch tracking merge ref is unset" {
+    cd repo1
+
+    # Push to the remote without setting upstream tracking, matching the original issue repro.
+    dolt sql -q "call dolt_push('origin', 'main')"
+
+    # Write a tracking entry that has a remote but no merge ref, equivalent to running
+    # git config branch.main.remote origin without a corresponding merge line.
+    # The JSON "head" key is absent, so the Merge field has no ref when the file is loaded.
+    sed -i 's/"branches": {}/"branches": {"main": {"remote": "origin"}}/' .dolt/repo_state.json
+
+    run dolt sql -q "call dolt_pull('origin')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "there is no tracking information for the current branch" ]] || false
+    [[ "$output" =~ "dolt push --set-upstream origin main" ]] || false
+
+    run dolt pull origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "there is no tracking information for the current branch" ]] || false
+    [[ "$output" =~ "dolt push --set-upstream origin main" ]] || false
+
+    # repo1 is at the same commit as the remote here, so the push succeeds in setting
+    # the upstream before repo2 advances the remote.
+    dolt push --set-upstream origin main
+
+    # Push a new commit from repo2 so repo1 has something to pull.
+    cd ../repo2
+    dolt sql -q "call dolt_pull('origin')"
+    dolt sql -q "insert into t1 values (99, 99)"
+    dolt commit -am "new commit for pull test"
+    dolt push origin main
+
+    cd ../repo1
+    run dolt sql -q "call dolt_pull('origin')"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select * from t1 where a = 99" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "99,99" ]] || false
 }

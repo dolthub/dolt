@@ -15,20 +15,11 @@
 package commands
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"unicode"
 )
-
-type statementScanner struct {
-	*bufio.Scanner
-	statementStartLine int // the line number of the first line of the last parsed statement
-	startLineNum       int // the line number we began parsing the most recent token at
-	lineNum            int // the current line number being parsed
-	Delimiter          string
-}
 
 const maxStatementBufferBytes = 100*1024*1024 + 4096
 const pageSize = 2 << 11
@@ -54,15 +45,15 @@ var delimPrefix = []byte("delimiter ")
 // span from the buffer beginning to |state.end|.
 type StreamScanner struct {
 	inp       io.Reader
-	buf       []byte
-	maxSize   int
-	i         int // leading byte
-	fill      int
 	err       error
-	isEOF     bool
-	delimiter []byte
-	lineNum   int
 	state     *qState
+	buf       []byte
+	delimiter []byte
+	maxSize   int
+	i         int // current byte pointer
+	fill      int
+	lineNum   int
+	isEOF     bool
 }
 
 // NewStreamScanner returns a new StreamScanner
@@ -72,14 +63,15 @@ func NewStreamScanner(r io.Reader) *StreamScanner {
 
 type qState struct {
 	start                          int
-	end                            int  // token end, usually i - len(delimiter)
+	end                            int // token end, usually i - len(delimiter)
+	numConsecutiveBackslashes      int // the number of consecutive backslashes encountered
+	numConsecutiveDelimiterMatches int // the consecutive number of characters that have been matched to the delimiter
+	statementStartLine             int
+	lineCommentStart               int
 	quoteChar                      byte // the opening quote character of the current quote being parsed, or 0 if the current parse location isn't inside a quoted string
 	lastChar                       byte // the last character parsed
 	ignoreNextChar                 bool // whether to ignore the next character
-	numConsecutiveBackslashes      int  // the number of consecutive backslashes encountered
 	seenNonWhitespaceChar          bool // whether we have encountered a non-whitespace character since we returned the last token
-	numConsecutiveDelimiterMatches int  // the consecutive number of characters that have been matched to the delimiter
-	statementStartLine             int
 	insideBlockComment             bool
 	insideLineComment              bool
 }
@@ -99,8 +91,6 @@ func (qs qState) ignoreDelimiters() bool {
 }
 
 func (s *StreamScanner) Scan() bool {
-	// truncate last query
-	s.truncate()
 	s.resetState()
 
 	if s.i >= s.fill {
@@ -273,10 +263,6 @@ func (s *StreamScanner) isDelimiterExpr() (error, bool) {
 }
 
 func (s *StreamScanner) seekDelimiter() (error, bool) {
-	if s.i >= s.fill {
-		return nil, false
-	}
-
 	for ; s.i < s.fill; s.i++ {
 		i := s.i
 		if !s.state.ignoreNextChar {
@@ -292,6 +278,7 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 				if s.state.numConsecutiveDelimiterMatches == len(s.delimiter) {
 					s.state.end = s.i - len(s.delimiter) + 1
 					s.i++
+					s.state.lastChar = 0
 					return nil, true
 				}
 				s.state.lastChar = s.buf[i]
@@ -302,12 +289,22 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 
 			switch s.buf[i] {
 			case newline:
-				s.state.insideLineComment = false
 				s.lineNum++
+				if s.state.insideLineComment {
+					s.state.insideLineComment = false
+					// if the entire statement is a line comment, truncate and return as empty
+					if s.state.start == s.state.lineCommentStart {
+						s.i++
+						s.truncate()
+						s.state.lastChar = 0
+						return nil, true
+					}
+				}
 			case hyphen:
 				// If inside quote or already inside comment, ignore. Otherwise, if previous character is also a hyphen,
 				// ie "--", begin line comment.
 				if !s.state.ignoreDelimiters() && s.state.lastChar == hyphen {
+					s.state.lineCommentStart = i - 1
 					s.state.insideLineComment = true
 				}
 			case asterisk:
@@ -318,7 +315,7 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 				}
 			case slash:
 				// If previous character is an asterisk, ie "*/", end block comment.
-				if s.state.lastChar == asterisk {
+				if s.state.insideBlockComment && s.state.lastChar == asterisk {
 					s.state.insideBlockComment = false
 				}
 			case backslash:

@@ -99,13 +99,56 @@ func getGCSafepointController(ctx context.Context) *gcctx.GCSafepointController 
 	return gcctx.GetGCSafepointController(ctx)
 }
 
-func loadAutoIncValue(sequences *sync.Map, tableName string) uint64 {
+func loadAutoIncValue(sequences *sync.Map, tableName string) (current uint64, hasCurrent bool) {
 	tableName = strings.ToLower(tableName)
-	current, hasCurrent := sequences.Load(tableName)
+	stored, hasCurrent := sequences.Load(tableName)
 	if !hasCurrent {
-		return 0
+		return 0, false
 	}
-	return current.(uint64)
+	return stored.(uint64), true
+}
+
+func (a *AutoIncrementTracker) initializeTableAutoIncrement(ctx *sql.Context, tableName string) (uint64, bool, error) {
+	sess := DSessFromSess(ctx.Session)
+	ws, err := sess.WorkingSet(ctx, a.dbName)
+	if err != nil {
+		return 0, false, err
+	}
+
+	table, _, ok, err := doltdb.GetTableInsensitive(ctx, ws.WorkingRoot(), doltdb.TableName{Name: tableName})
+	if err != nil || !ok {
+		return 0, false, err
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	if !schema.HasAutoIncrement(sch) {
+		return 0, false, nil
+	}
+
+	seq, err := table.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+
+	table, err = a.deepSet(ctx, tableName, table, ws.Ref(), seq)
+	if err != nil {
+		return 0, false, err
+	}
+
+	seq, ok = loadAutoIncValue(a.sequences, tableName)
+	if ok {
+		return seq, true, nil
+	}
+
+	seq, err = table.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	a.sequences.Store(strings.ToLower(tableName), seq)
+	return seq, true, nil
 }
 
 func (a *AutoIncrementTracker) Close() {
@@ -113,17 +156,21 @@ func (a *AutoIncrementTracker) Close() {
 	<-a.init
 }
 
-// Current returns the next value to be generated in the auto increment sequence for the table named
+// Current returns the next value to be generated in the auto increment sequence for |tableName|.
 func (a *AutoIncrementTracker) Current(tableName string) (uint64, error) {
 	err := a.waitForInit()
 	if err != nil {
 		return 0, err
 	}
-	return loadAutoIncValue(a.sequences, tableName), nil
+	seq, ok := loadAutoIncValue(a.sequences, tableName)
+	if !ok {
+		return 0, nil
+	}
+	return seq, nil
 }
 
-// Next returns the next auto increment value for the table named using the provided value from an insert (which may
-// be null or 0, in which case it will be generated from the sequence).
+// Next returns the next auto increment value for |tbl| using |insertVal| from an insert. If |insertVal| is
+// null or 0, it is generated from the sequence.
 func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal interface{}) (uint64, error) {
 	err := a.waitForInit()
 	if err != nil {
@@ -137,12 +184,36 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 		return 0, err
 	}
 
+	locked := false
 	if a.lockMode == LockMode_Interleaved {
 		release := a.mm.Lock(tbl)
 		defer release()
+		locked = true
 	}
 
-	curr := loadAutoIncValue(a.sequences, tbl)
+	curr, ok := loadAutoIncValue(a.sequences, tbl)
+	if !ok {
+		if !locked {
+			// Missing tracker state is unusual after initialization, but can happen when
+			// a running sql-server discovers a database restored after startup. Lock before
+			// rechecking so concurrent first users do not initialize the same table twice.
+			release := a.mm.Lock(tbl)
+			defer release()
+		}
+
+		curr, ok = loadAutoIncValue(a.sequences, tbl)
+		if !ok {
+			// The table metadata is the source of truth for a restored database that is
+			// missing from the in-memory tracker.
+			seq, found, err := a.initializeTableAutoIncrement(ctx, tbl)
+			if err != nil {
+				return 0, err
+			}
+			if found {
+				curr = seq
+			}
+		}
+	}
 
 	if given == 0 {
 		// |given| is 0 or NULL
@@ -211,7 +282,10 @@ func (a *AutoIncrementTracker) Set(ctx *sql.Context, tableName string, table *do
 	release := a.mm.Lock(tableName)
 	defer release()
 
-	existing := loadAutoIncValue(a.sequences, tableName)
+	existing, ok := loadAutoIncValue(a.sequences, tableName)
+	if !ok {
+		existing = 0
+	}
 	if newAutoIncVal > existing && a.validateAutoIncrementBounds(ctx, tableName, newAutoIncVal, true) {
 		a.sequences.Store(tableName, newAutoIncVal)
 		return table.SetAutoIncrementValue(ctx, newAutoIncVal)

@@ -21,6 +21,7 @@ import (
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -54,7 +55,7 @@ func (fact OCIFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
 
-	ociStore, err := nbs.NewNoConjoinBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
+	ociStore, err := nbs.NewNoConjoinBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
 	}

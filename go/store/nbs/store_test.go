@@ -684,7 +684,7 @@ func TestWaitForGC(t *testing.T) {
 			defer wg.Done()
 			nbs.mu.Lock()
 			defer nbs.mu.Unlock()
-			nbs.waitForGC(ctx)
+			nbs.waitForGC(ctx, nbs.gcCycleCounter)
 		}()
 	}
 	for _, c := range cancels {

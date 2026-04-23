@@ -7,6 +7,7 @@ setup() {
 }
 
 teardown() {
+    stop_sql_server 1
     teardown_common
 }
 
@@ -300,4 +301,30 @@ EOF
     rm -rf "$backup_dir"
 
     [ "$(lsof -n | grep "$backup_dir" | grep '(deleted)' | wc -l)" -eq 0 ]
+}
+
+@test "sql-backup: server sees restored auto_increment value for inserts after cli restore" {
+    skip_if_remote
+    backup_dir="$BATS_TEST_TMPDIR/ai_backup"
+    backup_url="file://$backup_dir"
+
+    dolt sql -q "create database ai_src"
+    start_sql_server
+
+    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db ai_src sql <<SQL
+create table t (id int primary key auto_increment, name varchar(20)) auto_increment=449;
+insert into t values (1, 'existing');
+call dolt_add('-A');
+call dolt_backup('sync-url', '$backup_url');
+SQL
+
+    dolt backup restore "$backup_url" ai_restored
+
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db ai_restored sql -q "show create table t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AUTO_INCREMENT=449" ]] || false
+
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db ai_restored sql -r csv -q "insert into t (name) values ('after_restore'); select * from t order by id"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "449,after_restore" ]] || false
 }

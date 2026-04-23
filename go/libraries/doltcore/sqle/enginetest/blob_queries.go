@@ -58,12 +58,26 @@ const (
 	AdaptiveEncodingTestType_Text
 )
 
+func (a AdaptiveEncodingTestColumnType) String() string {
+	if a == AdaptiveEncodingTestType_Blob {
+		return "Blob"
+	}
+	return "Text"
+}
+
 type AdaptiveEncodingTestPurpose byte
 
 const (
 	AdaptiveEncodingTestPurpose_Representation AdaptiveEncodingTestPurpose = iota
 	AdaptiveEncodingTestPurpose_Correctness
 )
+
+func (a AdaptiveEncodingTestPurpose) String() string {
+	if a == AdaptiveEncodingTestPurpose_Representation {
+		return "Representation"
+	}
+	return "Correctness"
+}
 
 func MakeBigAdaptiveEncodingQueriesSetup(columnType AdaptiveEncodingTestColumnType) []setup.SetupScript {
 	var typename string
@@ -154,13 +168,13 @@ func MakeBigAdaptiveEncodingQueries(columnType AdaptiveEncodingTestColumnType, t
 			WrapBehavior: wrapBehavior,
 		},
 		{
-			// When a tuple with multiple adaptive columns is too large, columns are moved out-of-band from left to right.
+			// When a tuple with multiple adaptive columns is too large, columns are moved out-of-band from largest to smallest.
 			// However, strings smaller than the address size (20 bytes) are never stored out-of-band.
 			Query:        "select i, b1, b2 from blobt2",
 			WrapBehavior: wrapBehavior,
 			Expected: []sql.Row{
 				{"FF", fullSizeOutOfLineRepr, fullSizeOutOfLineRepr},
-				{"HF", halfSizeOutOfLineRepr, fullSizeOutOfLineRepr},
+				{"HF", halfSize, fullSizeOutOfLineRepr},
 				{"TF", tiny, fullSizeOutOfLineRepr},
 				{"NF", nil, fullSizeOutOfLineRepr},
 				{"FH", fullSizeOutOfLineRepr, halfSize},
@@ -202,6 +216,35 @@ func MakeBigAdaptiveEncodingQueries(columnType AdaptiveEncodingTestColumnType, t
 			Expected:     []sql.Row{{"FH"}, {"HH"}, {"TH"}, {"NH"}},
 		},
 	}
+}
+
+var AdaptiveEncodingScripts = []queries.ScriptTest{
+	{
+		Name: "blob length function",
+		SetUpScript: []string{
+			`CREATE TABLE blobdata (                                                                                                                
+  pk          INT NOT NULL PRIMARY KEY,                                                                                                
+  c_varbinary VARBINARY(255),                                                                                                          
+  c_tinyblob  TINYBLOB,                                                                                                                
+  c_blob      BLOB,                                                                                                                    
+  c_medblob   MEDIUMBLOB,                                                                                                              
+  c_longblob  LONGBLOB                                                                                                                 
+);`,
+			`INSERT INTO blobdata VALUES                                                                                                            
+  (1, 'varbin-old-1', 'tiny-old-1', 'blob-old-1', 'med-old-1', 'long-old-1'),                                                          
+  (2, 'varbin-old-2', 'tiny-old-2', REPEAT('b', 60000), REPEAT('m', 70000), REPEAT('l', 90000));`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT LENGTH(c_medblob) FROM blobdata where pk = 2 order by 1",
+				Expected: []sql.Row{{70000}},
+			},
+			{
+				Query:    "SELECT LENGTH(c_varbinary), LENGTH(c_tinyblob), LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata where pk = 2 order by 1",
+				Expected: []sql.Row{{12, 10, 60000, 70000, 90000}},
+			},
+		},
+	},
 }
 
 func MakeBigAdaptiveEncodingWriteQueries(columnType AdaptiveEncodingTestColumnType, testPurpose AdaptiveEncodingTestPurpose) []queries.WriteQueryTest {

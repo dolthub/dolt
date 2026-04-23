@@ -240,10 +240,7 @@ SQL
     cd doltsql
     dolt init
 
-    run $BATS_TEST_DIRNAME/sql-delimiter.expect
-    [ "$status" -eq "0" ]
-    [[ ! "$output" =~ "Error" ]] || false
-    [[ ! "$output" =~ "error" ]] || false
+    $BATS_TEST_DIRNAME/sql-delimiter.expect
 
     run dolt sql -q "SELECT * FROM test ORDER BY 1" -r=csv
     [ "$status" -eq "0" ]

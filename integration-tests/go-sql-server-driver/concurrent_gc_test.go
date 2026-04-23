@@ -133,7 +133,9 @@ func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int)
 			return nil
 		}
 	} else if err != nil {
-		require.NotContains(t, err.Error(), "connection refused")
+		if !assert.NotContains(t, err.Error(), "connection refused") {
+			return err
+		}
 		t.Logf("err in Conn: %v", err)
 		return nil
 	}
@@ -194,7 +196,9 @@ func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) error {
 			return nil
 		}
 	} else if err != nil {
-		require.NotContains(t, err.Error(), "connection refused")
+		if !assert.NotContains(t, err.Error(), "connection refused") {
+			return err
+		}
 		t.Logf("err in Conn for dolt_gc: %v", err)
 		return nil
 	}
@@ -325,6 +329,6 @@ func (gct gcTest) run(t *testing.T) {
 	db.Close()
 	db, err = server.DB(driver.Connection{User: "root"})
 	require.NoError(t, err)
-
 	gct.finalize(t, context.Background(), db)
+	db.Close()
 }

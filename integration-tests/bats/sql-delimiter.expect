@@ -52,6 +52,58 @@ expect {
   timeout { exit 1; }
   failed { exit 1; }
 }
+
+# https://github.com/dolthub/dolt/issues/10841
+# line comment preceding setting delimiter should not be an issue
+expect {
+  "> " { send -- "-- comment\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "> " { send "DELIMITER //\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "> " { send "select null //\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+# delimiter statement in the middle of a undelimited statement should not set the delimiter
+expect {
+  "> " { send "select\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "      -> " { send "delimiter $$\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+# previous line should not be delimited. delimit here and expect an error
+expect {
+  "*> " {
+    send "//\r"
+  }
+  timeout { exit 1 }
+}
+
+expect {
+  -re "error|syntax error|Error" { }
+  timeout {
+    puts "expected error not found"
+    exit 1
+  }
+}
+
+# make sure delimiter is still //
+expect {
+  "> " { send "select null //\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+
 expect {
   "> " { send "DeLiMiTeR ;\r"; }
   timeout { exit 1; }

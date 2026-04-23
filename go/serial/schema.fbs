@@ -68,10 +68,14 @@ table Column {
 
   // sql on update value
   on_update_value:string;
-  
+
   // a marker value only written when the column uses adaptive encoding, which will force older clients to upgrade
   // before reading this data.
   uses_adaptive_encoding:bool;
+
+  // hidden system columns are not directly accessible or visible by users, and are used to
+  // store functional expression results for use in secondary indexes
+  hidden_system:bool;
 }
 
 table Index {

@@ -63,7 +63,7 @@ func testGoodJSONL(t *testing.T, getReader func(types.ValueReadWriter, schema.Sc
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 
-	sqlSch, err := sqlutil.FromDoltSchema("", "", sch)
+	sqlSch, err := sqlutil.FromDoltSchema(nil, "", "", sch)
 	require.NoError(t, err)
 
 	vrw := types.NewMemoryValueStore()

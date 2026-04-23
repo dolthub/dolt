@@ -48,7 +48,7 @@ func (n *prollyFkIndexer) String() string {
 }
 
 // Schema implements the interface sql.Table.
-func (n *prollyFkIndexer) Schema() sql.Schema {
+func (n *prollyFkIndexer) Schema(ctx *sql.Context) sql.Schema {
 	return n.writer.sqlSch
 }
 

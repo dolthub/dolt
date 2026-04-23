@@ -217,7 +217,7 @@ func setupFilterBranchTests(t *testing.T) *env.DoltEnv {
 func testFilterBranch(t *testing.T, test filterBranchTest) {
 	ctx := context.Background()
 	dEnv := setupFilterBranchTests(t)
-	defer dEnv.DoltDB(ctx).Close()
+	defer dEnv.Close()
 	cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
 	defer cliCtx.Close()
