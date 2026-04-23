@@ -729,16 +729,16 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				// The outlining threshold is a byte count (2048), not a character count.
 				Query: "SELECT pk, CHAR_LENGTH(t), LENGTH(t) FROM t_ae_text_enc ORDER BY pk",
 				Expected: []sql.Row{
-					{1, 2047, 2047},   // ASCII inline
-					{2, 2048, 2048},   // ASCII outlined
-					{3, 1023, 2046},   // 2-byte inline  (fewer chars than row 1, similar bytes)
-					{4, 1024, 2048},   // 2-byte outlined (same chars as ASCII 1024, but 2× bytes)
-					{5, 682, 2046},    // 3-byte inline
-					{6, 683, 2049},    // 3-byte outlined
-					{7, 511, 2044},    // 4-byte inline
-					{8, 512, 2048},    // 4-byte outlined
-					{9, 15, 15},       // tiny ASCII, always inline
-					{10, 10, 20},      // tiny 2-byte, always inline (20 bytes < 21-byte OOB cost)
+					{1, 2047, 2047}, // ASCII inline
+					{2, 2048, 2048}, // ASCII outlined
+					{3, 1023, 2046}, // 2-byte inline  (fewer chars than row 1, similar bytes)
+					{4, 1024, 2048}, // 2-byte outlined (same chars as ASCII 1024, but 2× bytes)
+					{5, 682, 2046},  // 3-byte inline
+					{6, 683, 2049},  // 3-byte outlined
+					{7, 511, 2044},  // 4-byte inline
+					{8, 512, 2048},  // 4-byte outlined
+					{9, 15, 15},     // tiny ASCII, always inline
+					{10, 10, 20},    // tiny 2-byte, always inline (20 bytes < 21-byte OOB cost)
 				},
 			},
 			{
@@ -846,7 +846,7 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 			},
 			{
 				// Row 1: all five columns outlined, all readable.
-				Query: "SELECT CHAR_LENGTH(t1), CHAR_LENGTH(t2), CHAR_LENGTH(t3), CHAR_LENGTH(t4), CHAR_LENGTH(t5) FROM t_ae_text_large WHERE pk = 1",
+				Query:    "SELECT CHAR_LENGTH(t1), CHAR_LENGTH(t2), CHAR_LENGTH(t3), CHAR_LENGTH(t4), CHAR_LENGTH(t5) FROM t_ae_text_large WHERE pk = 1",
 				Expected: []sql.Row{{15000, 15000, 15000, 15000, 15000}},
 			},
 			{
