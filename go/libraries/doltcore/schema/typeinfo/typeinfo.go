@@ -64,6 +64,9 @@ type TypeInfo interface {
 // FromSqlType takes in a sql.Type and returns the most relevant TypeInfo.
 func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	if gmsExtendedType, ok := sqlType.(sql.ExtendedType); ok {
+		if et, ok := gmsExtendedType.(ExtendedType); ok {
+			return et.TypeInfo(), nil
+		}
 		return CreateExtendedTypeFromSqlType(gmsExtendedType), nil
 	}
 	sqlType, err := fillInCollationWithDefault(sqlType)
