@@ -27,7 +27,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -510,12 +510,14 @@ func TestExternalProtocol(t *testing.T) {
 	assert.True(types.String("hi!").Equals(headVal))
 }
 
-// TestAWSConfigFromSpecOptionsChecksumValidation verifies that awsConfigFromSpecOptions
-// sets ResponseChecksumValidation to WhenRequired.
+// TestAWSConfigFromSpecOptionsChecksumValidation verifies that the S3 client sets
+// DisableLogOutputChecksumValidationSkipped to suppress the per-GetObject WARN
+// emitted when objects have no stored checksum.
 //
 // See https://github.com/dolthub/dolt/issues/10895
 func TestAWSConfigFromSpecOptionsChecksumValidation(t *testing.T) {
 	cfg, err := awsConfigFromSpecOptions(context.Background(), SpecOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, aws.ResponseChecksumValidationWhenRequired, cfg.ResponseChecksumValidation)
+	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
+	assert.True(t, s3c.Options().DisableLogOutputChecksumValidationSkipped)
 }

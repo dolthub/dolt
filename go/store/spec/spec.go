@@ -330,8 +330,6 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 
 func awsConfigFromSpecOptions(ctx context.Context, options SpecOptions) (aws.Config, error) {
 	var opts []func(*config.LoadOptions) error
-	// WhenRequired silences the per-GetObject WARN emitted when objects have no stored checksum.
-	opts = append(opts, config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired))
 	opts = append(opts, config.WithRegion(options.AwsRegionOrDefault()))
 
 	switch options.AWSCredSource {
@@ -383,7 +381,9 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	cfg, err := awsConfigFromSpecOptions(ctx, options)
 	d.PanicIfError(err)
 
-	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+	// DisableLogOutputChecksumValidationSkipped silences the per-GetObject WARN emitted when objects have no stored checksum.
+	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
+	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3c, dynamodb.NewFromConfig(cfg), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 	d.PanicIfError(err)
 
 	return cs
