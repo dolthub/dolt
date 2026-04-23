@@ -508,4 +508,3 @@ func TestExternalProtocol(t *testing.T) {
 	assert.True(ok)
 	assert.True(types.String("hi!").Equals(headVal))
 }
-
