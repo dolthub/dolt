@@ -84,13 +84,13 @@ func TestSingleQuery(t *testing.T) {
 		Expected: []sql.Row{
 			{"mytable",
 				"CREATE TABLE `mytable` (\n" +
-					"  `i` bigint NOT NULL,\n" +
-					"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
-					"  PRIMARY KEY (`i`),\n" +
-					"  KEY `idx_si` (`s`,`i`),\n" +
-					"  KEY `mytable_i_s` (`i`,`s`),\n" +
-					"  UNIQUE KEY `mytable_s` (`s`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+						"  `i` bigint NOT NULL,\n" +
+						"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
+						"  PRIMARY KEY (`i`),\n" +
+						"  KEY `idx_si` (`s`,`i`),\n" +
+						"  KEY `mytable_i_s` (`i`,`s`),\n" +
+						"  UNIQUE KEY `mytable_s` (`s`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 		},
 	}
 
@@ -105,7 +105,8 @@ func TestSchemaOverrides(t *testing.T) {
 // Provide additional test coverage for adaptive types by running Schema Override tests
 // using adaptive types instead of address types.
 func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
-	defer func() { typeinfo.UseAdaptiveEncoding = false }()
+	adaptiveEncoding := typeinfo.UseAdaptiveEncoding
+	defer func() { typeinfo.UseAdaptiveEncoding = adaptiveEncoding }()
 	typeinfo.UseAdaptiveEncoding = true
 	harness := newDoltEnginetestHarness(t)
 	RunSchemaOverridesTest(t, harness)
@@ -807,7 +808,8 @@ func TestBigBlobs(t *testing.T) {
 }
 
 func TestAdaptiveEncoding(t *testing.T) {
-	defer func() { typeinfo.UseAdaptiveEncoding = false }()
+	adaptiveEncoding := typeinfo.UseAdaptiveEncoding
+	defer func() { typeinfo.UseAdaptiveEncoding = adaptiveEncoding }()
 	typeinfo.UseAdaptiveEncoding = true
 
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Representation)
