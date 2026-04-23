@@ -631,6 +631,322 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// Tests that the adaptive encoding system correctly handles tuples whose combined
+		// tracked inline size is much greater than 64KB (the tuple format's hard limit).
+		// Each 30000-byte value individually exceeds 2048 and is immediately stored
+		// out-of-band; the combined tracked inline size is 5 × 30001 ≈ 150 KB.
+		// The second row mixes very large values with medium ones; after the three large
+		// columns bring the total below 2048, the two medium columns stay inline.
+		Name: "combined LONGBLOB values much greater than 64KB",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_large (
+				pk INT NOT NULL PRIMARY KEY,
+				b1 LONGBLOB,
+				b2 LONGBLOB,
+				b3 LONGBLOB,
+				b4 LONGBLOB,
+				b5 LONGBLOB
+			)`,
+			// Row 1: all five columns at 30000 bytes; combined tracked inline ≈ 150 KB.
+			`INSERT INTO t_ae_large VALUES
+				(1,
+				 REPEAT('a', 30000), REPEAT('b', 30000), REPEAT('c', 30000),
+				 REPEAT('d', 30000), REPEAT('e', 30000))`,
+			// Row 2: b1..b3 at 30000 bytes (immediately OOB); b4 at 1500 bytes and
+			// b5 at 100 bytes (initially inline). Combined tracked inline ≈ 91 KB.
+			// After outlining b1..b3 the total drops to ~1671 bytes ≤ 2048, so b4 and b5
+			// remain inline even though the combined size was far above the format limit.
+			`INSERT INTO t_ae_large VALUES
+				(2,
+				 REPEAT('a', 30000), REPEAT('b', 30000), REPEAT('c', 30000),
+				 REPEAT('d', 1500),  REPEAT('e', 100))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, LENGTH(b1), LENGTH(b2), LENGTH(b3), LENGTH(b4), LENGTH(b5) FROM t_ae_large ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 30000, 30000, 30000, 30000, 30000},
+					{2, 30000, 30000, 30000, 1500, 100},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_large WHERE b1 = REPEAT('a', 30000) ORDER BY pk",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				// b4 is inline for row 2; verify it is readable.
+				Query:    "SELECT pk FROM t_ae_large WHERE b4 = REPEAT('d', 1500)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// b5 is inline for row 2; verify it is readable.
+				Query:    "SELECT pk FROM t_ae_large WHERE b5 = REPEAT('e', 100)",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		// Tests that the outlining threshold is based on the storage byte length of a TEXT
+		// value, not its character count. The character 'ñ' (U+00F1) encodes as two UTF-8
+		// bytes. A string of 1024 'ñ' characters is 2048 bytes and is outlined, while a
+		// string of 2047 ASCII 'a' characters is 2047 bytes and stays inline — even though
+		// the ASCII string has nearly twice the character count.
+		// Additionally tests that 3-byte ('€', U+20AC) and 4-byte ('😀', U+1F600) UTF-8
+		// characters follow the same byte-length rule.
+		Name: "LONGTEXT outlining uses byte length not character count",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_text_enc (
+				pk INT NOT NULL PRIMARY KEY,
+				t  LONGTEXT CHARACTER SET utf8mb4
+			)`,
+			// Single-byte ASCII: 2047 chars = 2047 bytes → inline (2048 ≤ 2048).
+			`INSERT INTO t_ae_text_enc VALUES (1, REPEAT('a', 2047))`,
+			// Single-byte ASCII: 2048 chars = 2048 bytes → outlined (2049 > 2048).
+			`INSERT INTO t_ae_text_enc VALUES (2, REPEAT('a', 2048))`,
+			// 2-byte UTF-8 ('ñ'): 1023 chars = 2046 bytes → inline (2047 ≤ 2048).
+			// This has far fewer characters than row 1 but the same ballpark byte length.
+			`INSERT INTO t_ae_text_enc VALUES (3, REPEAT('ñ', 1023))`,
+			// 2-byte UTF-8 ('ñ'): 1024 chars = 2048 bytes → outlined (2049 > 2048).
+			// Same character count as an ASCII string that is well under the threshold,
+			// but outlined because its storage byte length crosses the 2048-byte limit.
+			`INSERT INTO t_ae_text_enc VALUES (4, REPEAT('ñ', 1024))`,
+			// 3-byte UTF-8 ('€'): 682 chars = 2046 bytes → inline (2047 ≤ 2048).
+			`INSERT INTO t_ae_text_enc VALUES (5, REPEAT('€', 682))`,
+			// 3-byte UTF-8 ('€'): 683 chars = 2049 bytes → outlined (2050 > 2048).
+			`INSERT INTO t_ae_text_enc VALUES (6, REPEAT('€', 683))`,
+			// 4-byte UTF-8 ('😀'): 511 chars = 2044 bytes → inline (2045 ≤ 2048).
+			`INSERT INTO t_ae_text_enc VALUES (7, REPEAT('😀', 511))`,
+			// 4-byte UTF-8 ('😀'): 512 chars = 2048 bytes → outlined (2049 > 2048).
+			`INSERT INTO t_ae_text_enc VALUES (8, REPEAT('😀', 512))`,
+			// Small values that are never outlined regardless of encoding.
+			`INSERT INTO t_ae_text_enc VALUES (9,  REPEAT('a', 15))`,
+			`INSERT INTO t_ae_text_enc VALUES (10, REPEAT('ñ', 10))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// CHAR_LENGTH returns character count; LENGTH returns storage byte count.
+				// The outlining threshold is a byte count (2048), not a character count.
+				Query: "SELECT pk, CHAR_LENGTH(t), LENGTH(t) FROM t_ae_text_enc ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 2047, 2047},   // ASCII inline
+					{2, 2048, 2048},   // ASCII outlined
+					{3, 1023, 2046},   // 2-byte inline  (fewer chars than row 1, similar bytes)
+					{4, 1024, 2048},   // 2-byte outlined (same chars as ASCII 1024, but 2× bytes)
+					{5, 682, 2046},    // 3-byte inline
+					{6, 683, 2049},    // 3-byte outlined
+					{7, 511, 2044},    // 4-byte inline
+					{8, 512, 2048},    // 4-byte outlined
+					{9, 15, 15},       // tiny ASCII, always inline
+					{10, 10, 20},      // tiny 2-byte, always inline (20 bytes < 21-byte OOB cost)
+				},
+			},
+			{
+				// pk=1 (2047 ASCII bytes, inline) and pk=4 (1024 ñ chars = 2048 bytes, outlined)
+				// both return correct values, demonstrating correct storage regardless of encoding.
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('a', 2047)",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('a', 2048)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('ñ', 1023)",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				// 1024 'ñ' characters = 2048 bytes: outlined because byte length ≥ 2048,
+				// even though 1024 ASCII characters would be far below the threshold.
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('ñ', 1024)",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('€', 682)",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('€', 683)",
+				Expected: []sql.Row{{6}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('😀', 511)",
+				Expected: []sql.Row{{7}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('😀', 512)",
+				Expected: []sql.Row{{8}},
+			},
+		},
+	},
+	{
+		// Tests multiple LONGTEXT columns containing multibyte UTF-8 characters where the
+		// combined storage size is much greater than 64KB. Also verifies interleaving with
+		// non-adaptive columns, that CHARACTER_LENGTH and LENGTH diverge for multibyte text,
+		// and that the selective outlining algorithm correctly handles a mix of immediately
+		// out-of-band values and medium inline values.
+		Name: "multiple LONGTEXT columns with multibyte characters and combined size much greater than 64KB",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_text_large (
+				pk INT NOT NULL PRIMARY KEY,
+				a  INT,
+				t1 LONGTEXT CHARACTER SET utf8mb4,
+				b  INT,
+				t2 LONGTEXT CHARACTER SET utf8mb4,
+				c  INT,
+				t3 LONGTEXT CHARACTER SET utf8mb4,
+				d  INT,
+				t4 LONGTEXT CHARACTER SET utf8mb4,
+				e  INT,
+				t5 LONGTEXT CHARACTER SET utf8mb4
+			)`,
+			// Row 1: five columns each with 15000 'ñ' characters = 30000 bytes.
+			// Combined tracked inline ≈ 5×30001 = 150005 bytes, much greater than 64 KB.
+			// All five are immediately stored out-of-band (30001 >> 2048).
+			`INSERT INTO t_ae_text_large VALUES
+				(1, 1,
+				 REPEAT('ñ', 15000), 2,
+				 REPEAT('ñ', 15000), 3,
+				 REPEAT('ñ', 15000), 4,
+				 REPEAT('ñ', 15000), 5,
+				 REPEAT('ñ', 15000))`,
+			// Row 2: t1..t3 at 15000 'ñ' chars (30000 bytes, immediately OOB),
+			// t4 at 1000 'ñ' chars (2000 bytes, initially inline),
+			// t5 at 100 'ñ' chars (200 bytes, inline).
+			// Combined tracked inline ≈ 3×30001 + 4 + 2001 + 4 + 201 = 92213 bytes.
+			// Outlining: t1..t3 first (largest savings), then t4.
+			// After outlining t1..t3+t4 the total drops below 2048; t5 stays inline.
+			`INSERT INTO t_ae_text_large VALUES
+				(2, 1,
+				 REPEAT('ñ', 15000), 2,
+				 REPEAT('ñ', 15000), 3,
+				 REPEAT('ñ', 15000), 4,
+				 REPEAT('ñ', 1000),  5,
+				 REPEAT('ñ', 100))`,
+			// Row 3: single large column to verify 3-byte characters at large scale.
+			// t1 = 10000 '€' chars = 30000 bytes; others small (tiny + NULL mix).
+			`INSERT INTO t_ae_text_large VALUES
+				(3, 1,
+				 REPEAT('€', 10000), 2,
+				 REPEAT('€', 100), 3,
+				 NULL, 4,
+				 REPEAT('€', 50), 5,
+				 REPEAT('a', 200))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// CHAR_LENGTH ≠ LENGTH for multibyte text: CHAR_LENGTH counts characters,
+				// LENGTH counts storage bytes (each 'ñ' is 2 bytes).
+				Query: "SELECT pk, CHAR_LENGTH(t1), LENGTH(t1), CHAR_LENGTH(t5), LENGTH(t5) FROM t_ae_text_large ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 15000, 30000, 15000, 30000},
+					{2, 15000, 30000, 100, 200},
+					{3, 10000, 30000, 200, 200},
+				},
+			},
+			{
+				// Row 1: all five columns outlined, all readable.
+				Query: "SELECT CHAR_LENGTH(t1), CHAR_LENGTH(t2), CHAR_LENGTH(t3), CHAR_LENGTH(t4), CHAR_LENGTH(t5) FROM t_ae_text_large WHERE pk = 1",
+				Expected: []sql.Row{{15000, 15000, 15000, 15000, 15000}},
+			},
+			{
+				// Row 2: t5 stays inline (100 'ñ' chars = 200 bytes).
+				Query:    "SELECT pk FROM t_ae_text_large WHERE t5 = REPEAT('ñ', 100)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// Row 2: t4 outlined in BuildPermissive; still readable.
+				Query:    "SELECT pk FROM t_ae_text_large WHERE t4 = REPEAT('ñ', 1000)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// Row 3: t1 has 10000 '€' chars = 30000 bytes; t3 is NULL.
+				Query:    "SELECT CHAR_LENGTH(t1), LENGTH(t1), CHAR_LENGTH(t2), LENGTH(t2), LENGTH(t3) FROM t_ae_text_large WHERE pk = 3",
+				Expected: []sql.Row{{10000, 30000, 100, 300, nil}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_large WHERE t1 = REPEAT('€', 10000)",
+				Expected: []sql.Row{{3}},
+			},
+		},
+	},
+	{
+		// Tests a table containing both LONGTEXT (StringAdaptiveEnc) and LONGBLOB
+		// (BytesAdaptiveEnc) adaptive columns interleaved with non-adaptive INT columns.
+		// Verifies that the two different adaptive encoding types coexist correctly in
+		// the same tuple and that multibyte text characters are handled as bytes.
+		Name: "mixed LONGTEXT and LONGBLOB adaptive columns with multibyte text",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_mixed (
+				pk INT NOT NULL PRIMARY KEY,
+				a  INT,
+				t  LONGTEXT CHARACTER SET utf8mb4,
+				b  INT,
+				bl LONGBLOB,
+				c  INT
+			)`,
+			// Value tuple: a(4), t(adaptive text), b(4), bl(adaptive blob), c(4).
+			// inlineSize = 4 + (1+byte_len_t) + 4 + (1+len_bl) + 4 = byte_len_t+len_bl+14.
+
+			// Both inline: t=1000 ASCII chars (1000 bytes), bl=1000 bytes.
+			// total = 1000+1000+14 = 2014 ≤ 2048.
+			`INSERT INTO t_ae_mixed VALUES (1, 1, REPEAT('a', 1000), 2, REPEAT('x', 1000), 3)`,
+
+			// t outlined (2-byte chars): t=1024 'ñ' chars = 2048 bytes, bl=100 bytes.
+			// total = 2048+100+14 = 2162 > 2048.
+			// savings t=2048, savings bl=80; t outlined first.
+			`INSERT INTO t_ae_mixed VALUES (2, 1, REPEAT('ñ', 1024), 2, REPEAT('x', 100), 3)`,
+
+			// bl outlined: t=100 ASCII chars (100 bytes), bl=3000 bytes.
+			// total = 100+3000+14 = 3114 > 2048.
+			// savings bl=2980, savings t=80; bl outlined first.
+			`INSERT INTO t_ae_mixed VALUES (3, 1, REPEAT('a', 100), 2, REPEAT('x', 3000), 3)`,
+
+			// Both outlined: t=3000 'ñ' chars (6000 bytes), bl=3000 bytes.
+			// Both immediately OOB (individual sizes >> 2048).
+			`INSERT INTO t_ae_mixed VALUES (4, 1, REPEAT('ñ', 3000), 2, REPEAT('x', 3000), 3)`,
+
+			// NULL text: only bl contributes to inline size.
+			`INSERT INTO t_ae_mixed VALUES (5, 1, NULL, 2, REPEAT('x', 1500), 3)`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, CHAR_LENGTH(t), LENGTH(t), LENGTH(bl) FROM t_ae_mixed ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 1000, 1000, 1000},
+					{2, 1024, 2048, 100},
+					{3, 100, 100, 3000},
+					{4, 3000, 6000, 3000},
+					{5, nil, nil, 1500},
+				},
+			},
+			{
+				// pk=2: t (2-byte chars, outlined) and bl (inline) both readable.
+				Query:    "SELECT pk FROM t_ae_mixed WHERE t = REPEAT('ñ', 1024) AND bl = REPEAT('x', 100)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// pk=3: bl (outlined) and t (inline) both readable.
+				Query:    "SELECT pk FROM t_ae_mixed WHERE bl = REPEAT('x', 3000) AND t = REPEAT('a', 100)",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				// pk=4: both t (6000 bytes, 3000 'ñ') and bl (3000 bytes) outlined.
+				Query:    "SELECT pk FROM t_ae_mixed WHERE t = REPEAT('ñ', 3000) AND bl = REPEAT('x', 3000)",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				// pk=5: NULL text does not interfere with bl outlining.
+				Query:    "SELECT pk FROM t_ae_mixed WHERE t IS NULL AND bl = REPEAT('x', 1500)",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				// Non-adaptive columns (a, b, c) are unaffected by adaptive encoding.
+				Query:    "SELECT a, b, c FROM t_ae_mixed WHERE pk = 2",
+				Expected: []sql.Row{{1, 2, 3}},
+			},
+		},
+	},
 }
 
 func MakeBigAdaptiveEncodingWriteQueries(columnType AdaptiveEncodingTestColumnType, testPurpose AdaptiveEncodingTestPurpose) []queries.WriteQueryTest {
