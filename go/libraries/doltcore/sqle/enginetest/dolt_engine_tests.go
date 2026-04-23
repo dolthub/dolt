@@ -357,6 +357,14 @@ func RunTestAdaptiveEncoding(t *testing.T, h DoltEnginetestHarness, columnType A
 	})
 }
 
+func RunAdaptiveEncodingScripts(t *testing.T, h DoltEnginetestHarness) {
+	defer h.Close()
+	h.Setup(setup.MydbData)
+	for _, tt := range AdaptiveEncodingScripts {
+		enginetest.TestScript(t, h, tt)
+	}
+}
+
 func RunDropEngineTest(t *testing.T, h DoltEnginetestHarness) {
 	func() {
 		h := h.NewHarness(t)

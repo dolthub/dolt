@@ -814,6 +814,8 @@ func TestAdaptiveEncoding(t *testing.T) {
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Correctness)
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Representation)
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Correctness)
+
+	RunAdaptiveEncodingScripts(t, newDoltHarness(t))
 }
 
 func TestDropDatabase(t *testing.T) {
