@@ -621,7 +621,7 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
-				Query: "SELECT LENGTH(b1), LENGTH(b2), LENGTH(b3), LENGTH(b4), LENGTH(b5) FROM t_ae_selective WHERE pk = 2",
+				Query:    "SELECT LENGTH(b1), LENGTH(b2), LENGTH(b3), LENGTH(b4), LENGTH(b5) FROM t_ae_selective WHERE pk = 2",
 				Expected: []sql.Row{{2000, 1000, 500, 200, 100}},
 			},
 			{
