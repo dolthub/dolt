@@ -2390,7 +2390,16 @@ func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, erro
 
 func (i *markAndSweeper) Close(ctx context.Context) (err error) {
 	if i.gcc != nil {
-		return i.gcc.cancel(ctx)
+		err = i.gcc.cancel(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	if i.incrementalGcc != nil {
+		err = i.incrementalGcc.cancel(ctx)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

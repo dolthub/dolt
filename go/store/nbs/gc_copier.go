@@ -295,3 +295,8 @@ func (gcc *rotatingGCCopier) waitForPendingChunkFiles() error {
 	}
 	return gcc.eg.Wait()
 }
+
+func (gcc *rotatingGCCopier) cancel(ctx context.Context) error {
+	gcc.specs.sourceSet.close()
+	return gcc.writer.Cancel()
+}
