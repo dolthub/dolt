@@ -18,8 +18,13 @@ setup() {
 }
 
 teardown() {
+    # Kill and wait the server before cd/rm so the process exits
+    # before its data directory is removed.
+    kill $SERVER_PID || :
+    wait $SERVER_PID || :
+    SERVER_PID=
     cd ..
-    teardown_dolt_repo
+    rm -rf $REPO_NAME
 
     # Check if postgresql is still running. If so stop it
     active=$(service postgresql status)
@@ -90,7 +95,8 @@ assert_mariadb_version_auth_and_db_selection() {
 
 @test "python replication client" {
     # Stop the server that setup launched
-    kill $SERVER_PID
+    kill $SERVER_PID || :
+    wait $SERVER_PID || :
 
     # Configure binlog replication settings
     dolt sql -q "SET @@PERSIST.log_bin=1;"

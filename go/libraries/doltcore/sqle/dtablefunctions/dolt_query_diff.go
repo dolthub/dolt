@@ -55,7 +55,7 @@ func (tf *QueryDiffTableFunction) NewInstance(ctx *sql.Context, database sql.Dat
 		ctx:      ctx,
 		database: database,
 	}
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.WithExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction,
 }
 
 func (tf *QueryDiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(tf.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(tf.Schema(ctx))
 	numRows, _, err := tf.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -150,7 +150,7 @@ func (tf *QueryDiffTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface
-func (tf *QueryDiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
+func (tf *QueryDiffTableFunction) WithExpressions(ctx *sql.Context, expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) != 2 {
 		return nil, sql.ErrInvalidArgumentNumber.New(tf.Name(), "2", len(expression))
 	}
@@ -312,7 +312,7 @@ func (tf *QueryDiffTableFunction) pkRowIter(ctx *sql.Context) (sql.RowIter, erro
 }
 
 // WithChildren implements the sql.Node interface
-func (tf *QueryDiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
+func (tf *QueryDiffTableFunction) WithChildren(ctx *sql.Context, node ...sql.Node) (sql.Node, error) {
 	if len(node) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -327,7 +327,7 @@ func (tf *QueryDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Priv
 }
 
 // Schema implements the sql.Node interface
-func (tf *QueryDiffTableFunction) Schema() sql.Schema {
+func (tf *QueryDiffTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	if !tf.Resolved() {
 		return nil
 	}

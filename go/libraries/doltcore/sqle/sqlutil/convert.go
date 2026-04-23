@@ -27,9 +27,10 @@ import (
 )
 
 // TODO: Many callers only care about field names and types, not the table or db names.
-// Those callers may be passing in "" for these values, or may be passing in incorrect values
-// that are currently unused.
-func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
+//
+//	Those callers may be passing in "" for these values, or may be passing in incorrect values
+//	that are currently unused.
+func FromDoltSchema(ctx context.Context, dbName, tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
 	cols := make(sql.Schema, sch.GetAllCols().Size())
 
 	var i int
@@ -65,6 +66,8 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 			Comment:        col.Comment,
 			Virtual:        col.Virtual,
 			Extra:          extra,
+			Hidden:         col.Hidden,
+			HiddenSystem:   col.SystemHidden,
 		}
 		i++
 		return false, nil
@@ -148,7 +151,7 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	var defaultVal, generatedVal, onUpdateVal string
 	if col.Default != nil {
 		defaultVal = col.Default.String()
-	} else {
+	} else if col.Generated != nil {
 		generatedVal = col.Generated.String()
 	}
 
@@ -169,6 +172,8 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		AutoIncrement: col.AutoIncrement,
 		Comment:       col.Comment,
 		Constraints:   constraints,
+		Hidden:        col.Hidden,
+		SystemHidden:  col.HiddenSystem,
 	}
 
 	err = schema.ValidateColumn(c)

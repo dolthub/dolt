@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 )
 
-func newCountAggregationKvIter(srcIter prolly.MapIter, sch schema.Schema, e sql.Expression) (sql.RowIter, bool, error) {
+func newCountAggregationKvIter(ctx *sql.Context, srcIter prolly.MapIter, sch schema.Schema, e sql.Expression) (sql.RowIter, bool, error) {
 	var nullable bool
 	var idx int
 	var isKeyRef bool

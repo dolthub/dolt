@@ -55,23 +55,23 @@ func (st *SchemaTable) String() string {
 	return doltdb.SchemasTableName
 }
 
-func (st *SchemaTable) Schema() sql.Schema {
+func (st *SchemaTable) Schema(ctx *sql.Context) sql.Schema {
 	if st.backingTable == nil {
 		// No backing table; return a current schema.
-		return SchemaTableSqlSchema().Schema
+		return SchemaTableSqlSchema(ctx).Schema
 	}
 
-	if !st.backingTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
+	if !st.backingTable.Schema(ctx).Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
 		// No Extra column; return an ancient schema.
-		return SchemaTableAncientSqlSchema()
+		return SchemaTableAncientSqlSchema(ctx)
 	}
 
-	if !st.backingTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
+	if !st.backingTable.Schema(ctx).Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
 		// No SQL_MODE column; return an old schema.
-		return SchemaTableV1SqlSchema()
+		return SchemaTableV1SqlSchema(ctx)
 	}
 
-	return SchemaTableSqlSchema().Schema
+	return SchemaTableSqlSchema(ctx).Schema
 }
 
 func (st *SchemaTable) Collation() sql.CollationID {
@@ -127,8 +127,8 @@ var _ sql.IndexAddressableTable = (*SchemaTable)(nil)
 var _ sql.UpdatableTable = (*SchemaTable)(nil)
 var _ WritableDoltTableWrapper = (*SchemaTable)(nil)
 
-func SchemaTableSqlSchema() sql.PrimaryKeySchema {
-	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.SchemasTableName, SchemaTableSchema())
+func SchemaTableSqlSchema(ctx *sql.Context) sql.PrimaryKeySchema {
+	sqlSchema, err := sqlutil.FromDoltSchema(ctx, "", doltdb.SchemasTableName, SchemaTableSchema())
 	if err != nil {
 		panic(err) // should never happen
 	}
@@ -152,7 +152,7 @@ func mustCreateStringType(baseType query.Type, length int64, collation sql.Colla
 }
 
 // dolt_schemas columns, for dolt_schemas of v1.0.0.
-func SchemaTableV1SqlSchema() sql.Schema {
+func SchemaTableV1SqlSchema(ctx *sql.Context) sql.Schema {
 	var schemasTableCols = schema.NewColCollection(
 		mustNewColWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
 		mustNewColWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
@@ -161,7 +161,7 @@ func SchemaTableV1SqlSchema() sql.Schema {
 	)
 
 	legacy := schema.MustSchemaFromCols(schemasTableCols)
-	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.SchemasTableName, legacy)
+	sqlSchema, err := sqlutil.FromDoltSchema(ctx, "", doltdb.SchemasTableName, legacy)
 	if err != nil {
 		panic(err) // should never happen
 	}
@@ -169,7 +169,7 @@ func SchemaTableV1SqlSchema() sql.Schema {
 }
 
 // dolt_schemas columns, for dolt_schemas <= 0.19.0.
-func SchemaTableAncientSqlSchema() sql.Schema {
+func SchemaTableAncientSqlSchema(ctx *sql.Context) sql.Schema {
 	var schemasTableCols = schema.NewColCollection(
 		mustNewColWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
 		mustNewColWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
@@ -177,7 +177,7 @@ func SchemaTableAncientSqlSchema() sql.Schema {
 	)
 
 	legacy := schema.MustSchemaFromCols(schemasTableCols)
-	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.SchemasTableName, legacy)
+	sqlSchema, err := sqlutil.FromDoltSchema(ctx, "", doltdb.SchemasTableName, legacy)
 	if err != nil {
 		panic(err) // should never happen
 	}
@@ -238,8 +238,8 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	if wrapper.backingTable != nil {
 		schemasTable := wrapper.backingTable
 
-		if !schemasTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) ||
-			!schemasTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
+		if !schemasTable.Schema(ctx).Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) ||
+			!schemasTable.Schema(ctx).Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
 			return migrateOldSchemasTableToNew(ctx, db, schemasTable)
 		} else {
 			return schemasTable, nil
@@ -276,11 +276,11 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 
 	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we
 	// need to get the column indexes from the current schema
-	nameIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
-	typeIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
-	fragmentIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesFragmentCol)
-	extraIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesExtraCol)
-	sqlModeIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesSqlModeCol)
+	nameIdx := schemasTable.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesNameCol)
+	typeIdx := schemasTable.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesTypeCol)
+	fragmentIdx := schemasTable.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	extraIdx := schemasTable.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesExtraCol)
+	sqlModeIdx := schemasTable.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, ctx *sql.Context) {
 		err := iter.Close(ctx)
@@ -377,8 +377,8 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 
 	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we
 	// need to get the column indexes from the current schema
-	nameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
-	typeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
+	nameIdx := tbl.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesNameCol)
+	typeIdx := tbl.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesTypeCol)
 
 	for {
 		sqlRow, err := iter.Next(ctx)
@@ -415,11 +415,11 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 
 	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we
 	// need to get the column indexes from the current schema
-	nameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
-	typeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
-	fragmentIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesFragmentCol)
-	extraIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesExtraCol)
-	sqlModeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesSqlModeCol)
+	nameIdx := tbl.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesNameCol)
+	typeIdx := tbl.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesTypeCol)
+	fragmentIdx := tbl.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	extraIdx := tbl.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesExtraCol)
+	sqlModeIdx := tbl.sqlSchema(ctx).IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, ctx *sql.Context) {
 		err := iter.Close(ctx)

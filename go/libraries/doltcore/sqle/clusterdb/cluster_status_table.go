@@ -110,7 +110,7 @@ func replicaStatusToRow(rs ReplicaStatus) sql.Row {
 	return ret
 }
 
-func (t ClusterStatusTable) Schema() sql.Schema {
+func (t ClusterStatusTable) Schema(ctx *sql.Context) sql.Schema {
 	return sql.Schema{
 		{Name: "database", Type: types.Text, Source: StatusTableName, PrimaryKey: true, Nullable: false},
 		{Name: "standby_remote", Type: types.Text, Source: StatusTableName, PrimaryKey: true, Nullable: false},

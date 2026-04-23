@@ -426,7 +426,19 @@ func (rcv *Column) MutateUsesAdaptiveEncoding(n bool) bool {
 	return rcv._tab.MutateBoolSlot(32, n)
 }
 
-const ColumnNumFields = 15
+func (rcv *Column) HiddenSystem() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(34))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateHiddenSystem(n bool) bool {
+	return rcv._tab.MutateBoolSlot(34, n)
+}
+
+const ColumnNumFields = 16
 
 func ColumnStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ColumnNumFields)
@@ -475,6 +487,9 @@ func ColumnAddOnUpdateValue(builder *flatbuffers.Builder, onUpdateValue flatbuff
 }
 func ColumnAddUsesAdaptiveEncoding(builder *flatbuffers.Builder, usesAdaptiveEncoding bool) {
 	builder.PrependBoolSlot(14, usesAdaptiveEncoding, false)
+}
+func ColumnAddHiddenSystem(builder *flatbuffers.Builder, hiddenSystem bool) {
+	builder.PrependBoolSlot(15, hiddenSystem, false)
 }
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

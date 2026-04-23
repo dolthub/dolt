@@ -33,7 +33,7 @@ type HashOfDatabase struct {
 }
 
 // NewHashOfDatabase creates a new HashOfDatabase expression.
-func NewHashOfDatabase(args ...sql.Expression) (sql.Expression, error) {
+func NewHashOfDatabase(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
 	if len(args) > 1 {
 		return nil, sql.ErrInvalidArgumentNumber.New(HashOfDatabaseFuncName, "0 or 1", len(args))
 	}
@@ -137,7 +137,7 @@ func (t *HashOfDatabase) Description() string {
 }
 
 // IsNullable implements the Expression interface.
-func (t *HashOfDatabase) IsNullable() bool {
+func (t *HashOfDatabase) IsNullable(ctx *sql.Context) bool {
 	return false
 }
 
@@ -147,11 +147,11 @@ func (*HashOfDatabase) Resolved() bool {
 }
 
 // WithChildren implements the Expression interface.
-func (t *HashOfDatabase) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	return NewHashOfDatabase(children...)
+func (t *HashOfDatabase) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+	return NewHashOfDatabase(ctx, children...)
 }
 
 // Type implements the Expression interface.
-func (t *HashOfDatabase) Type() sql.Type {
+func (t *HashOfDatabase) Type(ctx *sql.Context) sql.Type {
 	return types.Text
 }

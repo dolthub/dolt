@@ -41,7 +41,7 @@ type ProllyRowConverter struct {
 	nonPkTargetTypes []sql.Type
 }
 
-func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunction, ns tree.NodeStore) (ProllyRowConverter, error) {
+func NewProllyRowConverter(ctx *sql.Context, inSch, outSch schema.Schema, warnFn rowconv.WarnFunction, ns tree.NodeStore) (ProllyRowConverter, error) {
 	keyProj, valProj, err := schema.MapSchemaBasedOnTagAndName(inSch, outSch)
 	if err != nil {
 		return ProllyRowConverter{}, err

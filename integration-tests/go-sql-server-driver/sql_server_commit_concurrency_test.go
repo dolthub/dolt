@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
@@ -217,7 +218,7 @@ func testSQLRacingAmend(t *testing.T) {
 
 			if err == nil {
 				// If there are multiple updates, something went wrong.
-				require.True(t, atomicInt.CompareAndSwap(-1, int32(txn.txNum)))
+				assert.True(t, atomicInt.CompareAndSwap(-1, int32(txn.txNum)))
 			}
 			// Errors are expected.
 		}()

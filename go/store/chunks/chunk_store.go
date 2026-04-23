@@ -259,6 +259,16 @@ type ChunkStoreGarbageCollector interface {
 	IterateAllChunks(context.Context, func(chunk Chunk)) error
 }
 
+// TolerantChunkIterator is implemented by chunk stores that support fault-tolerant chunk
+// iteration for diagnostic purposes. Unlike IterateAllChunks, TolerantIterateAllChunks does
+// not halt on per-chunk errors; instead it reports them via errCb and continues iterating.
+// sourceFile identifies which physical file (table, archive, journal) the error came from.
+//
+// INTENDED FOR USE IN FSCK ONLY. The errors diagnosed by this method should result in application errors generally.
+type TolerantChunkIterator interface {
+	TolerantIterateAllChunks(ctx context.Context, cb func(chunk Chunk), errCb func(sourceFile string, err error))
+}
+
 type PrefixChunkStore interface {
 	ChunkStore
 

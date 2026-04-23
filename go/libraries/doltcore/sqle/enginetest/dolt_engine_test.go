@@ -772,6 +772,12 @@ func TestIndexes(t *testing.T) {
 	enginetest.TestIndexes(t, harness)
 }
 
+func TestIndexedExpressions(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	enginetest.TestIndexedExpressions(t, harness)
+}
+
 func TestVectorIndexes(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
@@ -808,6 +814,8 @@ func TestAdaptiveEncoding(t *testing.T) {
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Correctness)
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Representation)
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Correctness)
+
+	RunAdaptiveEncodingScripts(t, newDoltHarness(t))
 }
 
 func TestDropDatabase(t *testing.T) {
@@ -1116,10 +1124,15 @@ func TestConcurrentCreateDatabaseIfNotExists(t *testing.T) {
 	wg.Add(concurrency)
 	errs := make([]error, concurrency)
 
+	ctxs := make([]*sql.Context, concurrency)
+	for i := 0; i < concurrency; i++ {
+		ctxs[i] = enginetest.NewSession(harness)
+	}
+
 	for i := 0; i < concurrency; i++ {
 		go func(id int) {
 			defer wg.Done()
-			ctx := enginetest.NewSession(harness)
+			ctx := ctxs[id]
 			_, iter, _, err := engine.Query(ctx, "CREATE DATABASE IF NOT EXISTS newdb")
 			if err != nil {
 				errs[id] = err
@@ -1926,6 +1939,11 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 func TestDoltVerifyConstraints(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltVerifyConstraintsTests(t, harness)
+}
+
+func TestDoltForeignKeyTests(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltForeignKeyTests(t, harness)
 }
 
 func TestDoltStorageFormat(t *testing.T) {

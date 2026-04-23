@@ -108,7 +108,7 @@ func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb
 		return nil, err
 	}
 
-	sqlSch, err := sqlutil.FromDoltSchema(dbName, diffTblName, diffTableSchema)
+	sqlSch, err := sqlutil.FromDoltSchema(ctx, dbName, diffTblName, diffTableSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb
 }
 
 func (dt *DiffTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema(ctx))
 	numRows, _, err := dt.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -147,7 +147,7 @@ func (dt *DiffTable) String() string {
 	return doltdb.DoltDiffTablePrefix + dt.tableName.Name
 }
 
-func (dt *DiffTable) Schema() sql.Schema {
+func (dt *DiffTable) Schema(ctx *sql.Context) sql.Schema {
 	return dt.sqlSch.Schema
 }
 
@@ -255,7 +255,7 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 	case index.ToCommitIndexId:
 		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(ctx, lookup.Ranges))
 		}
 		hashes, commits, _ := index.HashesToCommits(ctx, dt.ddb, hs, dt.head, false)
 		if len(hashes) == 0 {
@@ -265,7 +265,7 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 	case index.FromCommitIndexId:
 		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(ctx, lookup.Ranges))
 		}
 		hashes, commits, _ := index.HashesToCommits(ctx, dt.ddb, hs, nil, false)
 		if len(hashes) == 0 {

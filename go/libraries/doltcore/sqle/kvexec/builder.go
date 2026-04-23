@@ -79,16 +79,16 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 				srcSchema,
 				dstIter.InputKeyDesc(),
 				ita.Expressions(),
-				ita.Index().ColumnExpressionTypes(),
+				ita.Index().ColumnExpressionTypes(ctx),
 				srcMap.NodeStore(),
 			)
-			if err != nil || !keyLookupMapper.valid() {
+			if err != nil || !keyLookupMapper.valid(ctx) {
 				return nil, nil
 			}
 
 			split := len(srcTags)
 			projections := append(srcTags, dstTags...)
-			rowJoiner := newRowJoiner([]schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
+			rowJoiner := newRowJoiner(ctx, []schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
 			return newLookupKvIter(
 				srcIter,
 				dstIter,
@@ -103,7 +103,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 		case n.Op.IsMerge():
 			if leftState, err := getMergeKv(ctx, n.Left()); err == nil {
 				if rightState, err := getMergeKv(ctx, n.Right()); err == nil {
-					filters := expression.SplitConjunction(n.Filter)
+					filters := expression.SplitConjunction(ctx, n.Filter)
 					projections := append(leftState.tags, rightState.tags...)
 					// - secondary indexes are source of comparison columns.
 					// - usually key tuple, but for keyless tables it's val tuple.
@@ -112,7 +112,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 					if lrCmp, llCmp, ok := mergeComparer(ctx, filters[0], leftState, rightState, projections); ok {
 						split := len(leftState.tags)
 						var rowJoiner *prollyToSqlJoiner
-						rowJoiner = newRowJoiner([]schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, leftState.idxMap.NodeStore())
+						rowJoiner = newRowJoiner(ctx, []schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, leftState.idxMap.NodeStore())
 						if iter, err := newMergeKvIter(leftState, rightState, rowJoiner, lrCmp, llCmp, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
 							iter.isReversed = n.IsReversed
 							return iter, nil
@@ -125,7 +125,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 		if len(n.GroupByExprs) == 0 && len(n.SelectDeps) == 1 {
 			if cnt, ok := n.SelectDeps[0].(*aggregation.Count); ok {
 				if _, srcIter, _, srcSchema, _, srcFilter, err := getSourceKv(ctx, n.Child, true); err == nil && srcSchema != nil && srcFilter == nil {
-					iter, ok, err := newCountAggregationKvIter(srcIter, srcSchema, cnt.Child)
+					iter, ok, err := newCountAggregationKvIter(ctx, srcIter, srcSchema, cnt.Child)
 					if ok && err == nil {
 						// (1) no grouping expressions (returns one row)
 						// (2) only one COUNT expression with a literal or field reference
@@ -185,7 +185,7 @@ type kvDesc struct {
 	valMappings []int
 }
 
-func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, ns tree.NodeStore) *prollyToSqlJoiner {
+func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, projections []uint64, ns tree.NodeStore) *prollyToSqlJoiner {
 	numPhysicalColumns := getPhysicalColCount(schemas, splits, projections)
 
 	// last kv pair can safely look ahead for its end range
@@ -419,7 +419,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
 			}
 		} else {
-			dstIter, _ = lb.NewSecondaryIter(n.IsStrictLookup(), len(n.Expressions()), n.NullMask())
+			dstIter, _ = lb.NewSecondaryIter(n.IsStrictLookup(ctx), len(n.Expressions()), n.NullMask())
 		}
 
 	case *plan.ResolvedTable:

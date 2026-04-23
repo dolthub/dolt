@@ -35,10 +35,15 @@ type UrlFactoryFunc func(error) (string, error)
 type StreamingResponse struct {
 	Body   io.Reader
 	cancel func()
+	done   <-chan struct{}
 }
 
+// Close cancels the outstanding download (if any) and blocks until the
+// producer goroutine has fully exited. After Close returns, no further
+// Health or Stats callbacks will fire for this response.
 func (r StreamingResponse) Close() error {
 	r.cancel()
+	<-r.done
 	return nil
 }
 
@@ -111,8 +116,14 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 	// This is the overall context for the operation, encompassing all of its retries. When StreamingResponse is closed, this is canceled.
 	ctx, cancel := context.WithCancel(ctx)
 
+	// |done| is closed when the producer goroutine below has fully exited.
+	// |StreamingResponse.Close| blocks on this to ensure no further Health
+	// or Stats callbacks will fire after Close returns.
+	done := make(chan struct{})
+
 	// This naked go routine makes retried HTTP requests for the byte range, writing the HTTP response bodies to |w|.
 	go func() {
+		defer close(done)
 		origOffset := req.Offset
 		// |offset| starts at |req.Offset| but may be updated if we
 		// make retries and have already delivered some bytes.
@@ -190,6 +201,21 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			cleanup()
 			// We successfully wrote this many bytes to |w|. Update |offset|.
 			offset += uint64(n)
+			if offset == req.Offset+req.Length {
+				// All requested bytes were delivered to the
+				// consumer. Treat this as success regardless of
+				// any error returned from io.Copy. With HTTP/2,
+				// Body.Read may not return io.EOF until an
+				// END_STREAM frame arrives; a consumer that
+				// closes the StreamingResponse right after
+				// reading its last byte races with that frame
+				// and surfaces here as context.Canceled even
+				// though the actual data transfer succeeded.
+				// Letting that fall through to RecordFailure
+				// erroneously halves fetch concurrency.
+				req.Health.RecordSuccess()
+				return nil
+			}
 			if err == nil {
 				// Success! We read until Body returned EOF.
 				req.Health.RecordSuccess()
@@ -198,7 +224,19 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 				// Reader closed; bail.
 				return backoff.Permanent(err)
 			} else {
-				if cerr := context.Cause(ctx); errors.Is(err, context.Canceled) && cerr != nil {
+				cerr := context.Cause(ctx)
+				if errors.Is(err, context.Canceled) && (cerr == nil || errors.Is(cerr, context.Canceled)) {
+					// The consumer closed the
+					// StreamingResponse (or the caller's
+					// context was canceled) before
+					// io.Copy returned. No cCause was
+					// set, so this isn't a transport
+					// failure — treat it the same as
+					// io.ErrClosedPipe: bail without
+					// recording a health signal.
+					return backoff.Permanent(err)
+				}
+				if errors.Is(err, context.Canceled) && cerr != nil {
 					// HTTP Body reader will return
 					// context.Canceled even if we cancel
 					// with a cause. Convert to the cause
@@ -226,6 +264,7 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			r.Close()
 			cancel()
 		},
+		done: done,
 	}
 }
 

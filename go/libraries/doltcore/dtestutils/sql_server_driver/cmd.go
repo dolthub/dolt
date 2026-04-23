@@ -208,6 +208,7 @@ type SqlServer struct {
 	Name        string
 	Done        chan struct{}
 	Cmd         *exec.Cmd
+	CmdWaitErr  error
 	Port        int
 	DebugPort   int
 	Output      *bytes.Buffer
@@ -309,7 +310,10 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 	}
 
 	go func() {
-		defer close(done)
+		defer func() {
+			server.CmdWaitErr = server.Cmd.Wait()
+			close(done)
+		}()
 		logw := server.LogWriter
 		if logw == nil {
 			logw = os.Stdout
@@ -338,7 +342,7 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 
 func (s *SqlServer) ErrorStop() error {
 	<-s.Done
-	return s.Cmd.Wait()
+	return s.CmdWaitErr
 }
 
 func multiCopyWithNamePrefix(stdout, captured io.Writer, in io.Reader, name string, visitor func(string)) {
@@ -395,10 +399,14 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	if err != nil {
 		return err
 	}
+	s.CmdWaitErr = nil
 	s.Cmd.Stderr = s.Cmd.Stdout
 	s.Done = make(chan struct{})
 	go func() {
-		defer close(s.Done)
+		defer func() {
+			s.CmdWaitErr = s.Cmd.Wait()
+			close(s.Done)
+		}()
 		logw := s.LogWriter
 		if logw == nil {
 			logw = os.Stdout

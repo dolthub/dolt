@@ -2453,6 +2453,23 @@ func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk c
 	return nil
 }
 
+func (nbs *NomsBlockStore) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) {
+	for _, v := range nbs.tables.novel {
+		fileName := v.hash().String() + v.suffix()
+		v.tolerantIterateAllChunks(ctx, cb, func(err error) { errCb(fileName, err) }, nbs.stats)
+		if ctx.Err() != nil {
+			return
+		}
+	}
+	for _, v := range nbs.tables.upstream {
+		fileName := v.hash().String() + v.suffix()
+		v.tolerantIterateAllChunks(ctx, cb, func(err error) { errCb(fileName, err) }, nbs.stats)
+		if ctx.Err() != nil {
+			return
+		}
+	}
+}
+
 func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mode chunks.GCMode, srcs chunkSourceSet) (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()

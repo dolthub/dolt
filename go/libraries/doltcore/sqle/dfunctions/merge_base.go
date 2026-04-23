@@ -35,7 +35,7 @@ type MergeBase struct {
 }
 
 // NewMergeBase returns a MergeBase sql function.
-func NewMergeBase(left, right sql.Expression) sql.Expression {
+func NewMergeBase(ctx *sql.Context, left, right sql.Expression) sql.Expression {
 	return &MergeBase{expression.BinaryExpressionStub{LeftChild: left, RightChild: right}}
 }
 
@@ -117,14 +117,14 @@ func (d MergeBase) String() string {
 }
 
 // Type implements the sql.Expression interface.
-func (d MergeBase) Type() sql.Type {
+func (d MergeBase) Type(ctx *sql.Context) sql.Type {
 	return types.Text
 }
 
 // WithChildren implements the sql.Expression interface.
-func (d MergeBase) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (d MergeBase) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 2 {
 		return nil, sql.ErrInvalidChildrenNumber.New(d, len(children), 2)
 	}
-	return NewMergeBase(children[0], children[1]), nil
+	return NewMergeBase(ctx, children[0], children[1]), nil
 }

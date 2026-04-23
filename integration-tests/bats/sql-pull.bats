@@ -356,6 +356,46 @@ SQL
     [[ "$output" =~ "behind 'origin/other' by 1 commit" ]] || false
 }
 
+@test "sql-pull: dolt_pull with specific branch does not fetch other branches" {
+    cd repo1
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+    dolt checkout main
+
+    cd ../repo2
+    dolt fetch
+    dolt checkout other
+    dolt checkout main
+
+    # Make changes on both branches in repo1
+    cd ../repo1
+    dolt sql -q "insert into t1 values (10, 10)"
+    dolt commit -am "new commit on main"
+    dolt push origin main
+    dolt checkout other
+    dolt commit --allow-empty -m "new commit on other"
+    dolt push origin other
+
+    # Pull only main in repo2
+    cd ../repo2
+    dolt sql -q "call dolt_pull('origin', 'main')"
+
+    # main should be updated
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new commit on main" ]] || false
+
+    # other's remote tracking ref should NOT be updated
+    dolt checkout other
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "new commit on other" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "behind" ]] || false
+}
+
 @test "sql-pull: dolt_pull commits successful merge on current branch" {
     cd repo1
     dolt checkout -b other
@@ -425,7 +465,7 @@ SQL
     dolt checkout main
 
     cd ../repo1
-    dolt pull origin main
+    dolt fetch origin b1
     dolt checkout b1
     dolt pull origin b1
 
@@ -485,7 +525,7 @@ SQL
     dolt checkout main
 
     cd ../repo1
-    dolt pull origin main
+    dolt fetch origin b1
     dolt checkout b1
     dolt pull origin b1
 

@@ -273,3 +273,7 @@ func (acs *archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chu
 
 	return acs.aRdr.iterate(ctx, ncb, stats)
 }
+
+func (acs *archiveChunkSource) tolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(error), stats *Stats) {
+	acs.aRdr.tolerantIterate(ctx, cb, errCb, stats)
+}

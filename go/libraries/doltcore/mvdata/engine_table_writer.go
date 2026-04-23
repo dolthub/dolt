@@ -76,12 +76,12 @@ func NewSqlEngineTableWriter(ctx *sql.Context, engine *sqle.Engine, createTableS
 		return nil, analyzererrors.ErrReadOnlyDatabase.New(ctx.GetCurrentDatabase())
 	}
 
-	doltCreateTableSchema, err := sqlutil.FromDoltSchema("", options.TableToWriteTo, createTableSchema)
+	doltCreateTableSchema, err := sqlutil.FromDoltSchema(ctx, "", options.TableToWriteTo, createTableSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	doltRowOperationSchema, err := sqlutil.FromDoltSchema("", options.TableToWriteTo, rowOperationSchema)
+	doltRowOperationSchema, err := sqlutil.FromDoltSchema(ctx, "", options.TableToWriteTo, rowOperationSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +389,7 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 	}
 
 	// Get the first insert (wrapped with the error handler)
-	transform.InspectWithOpaque(analyzed, func(node sql.Node) bool {
+	transform.InspectWithOpaque(s.sqlCtx, analyzed, func(ctx *sql.Context, node sql.Node) bool {
 		switch n := node.(type) {
 		case *plan.InsertInto:
 			analyzed = n

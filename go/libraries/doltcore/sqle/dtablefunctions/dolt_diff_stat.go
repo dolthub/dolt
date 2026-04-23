@@ -71,7 +71,7 @@ func (ds *DiffStatTableFunction) NewInstance(ctx *sql.Context, db sql.Database, 
 		database: db,
 	}
 
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.WithExpressions(ctx, expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (ds *DiffStatTableFunction) NewInstance(ctx *sql.Context, db sql.Database, 
 }
 
 func (ds *DiffStatTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
+	numBytesPerRow := schema.SchemaAvgLength(ds.Schema(ctx))
 	numRows, _, err := ds.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -143,7 +143,7 @@ func (ds *DiffStatTableFunction) String() string {
 }
 
 // Schema implements the sql.Node interface.
-func (ds *DiffStatTableFunction) Schema() sql.Schema {
+func (ds *DiffStatTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	return diffStatTableSchema
 }
 
@@ -153,7 +153,7 @@ func (ds *DiffStatTableFunction) Children() []sql.Node {
 }
 
 // WithChildren implements the sql.Node interface.
-func (ds *DiffStatTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (ds *DiffStatTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
@@ -164,8 +164,8 @@ func (ds *DiffStatTableFunction) WithChildren(children ...sql.Node) (sql.Node, e
 func (ds *DiffStatTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	baseDB, _ := doltdb.SplitRevisionDbName(ds.database.Name())
 	if ds.tableNameExpr != nil {
-		if !types.IsText(ds.tableNameExpr.Type()) {
-			return ExpressionIsDeferred(ds.tableNameExpr)
+		if !types.IsText(ds.tableNameExpr.Type(ctx)) {
+			return ExpressionIsDeferred(ctx, ds.tableNameExpr)
 		}
 
 		tableNameVal, err := ds.tableNameExpr.Eval(ds.ctx, nil)
@@ -210,7 +210,7 @@ func (ds *DiffStatTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface.
-func (ds *DiffStatTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+func (ds *DiffStatTableFunction) WithExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.Node, error) {
 	if len(exprs) < 1 {
 		return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 to 3", len(exprs))
 	}
@@ -247,20 +247,20 @@ func (ds *DiffStatTableFunction) WithExpressions(exprs ...sql.Expression) (sql.N
 
 	// validate the expressions
 	if newDstf.dotCommitExpr != nil {
-		if !types.IsText(newDstf.dotCommitExpr.Type()) && !expression.IsBindVar(newDstf.dotCommitExpr) {
+		if !types.IsText(newDstf.dotCommitExpr.Type(ctx)) && !expression.IsBindVar(newDstf.dotCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.dotCommitExpr.String())
 		}
 	} else {
-		if !types.IsText(newDstf.fromCommitExpr.Type()) && !expression.IsBindVar(newDstf.fromCommitExpr) {
+		if !types.IsText(newDstf.fromCommitExpr.Type(ctx)) && !expression.IsBindVar(newDstf.fromCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.fromCommitExpr.String())
 		}
-		if !types.IsText(newDstf.toCommitExpr.Type()) && !expression.IsBindVar(newDstf.toCommitExpr) {
+		if !types.IsText(newDstf.toCommitExpr.Type(ctx)) && !expression.IsBindVar(newDstf.toCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.toCommitExpr.String())
 		}
 	}
 
 	if newDstf.tableNameExpr != nil {
-		if !types.IsText(newDstf.tableNameExpr.Type()) && !expression.IsBindVar(newDstf.tableNameExpr) {
+		if !types.IsText(newDstf.tableNameExpr.Type(ctx)) && !expression.IsBindVar(newDstf.tableNameExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.tableNameExpr.String())
 		}
 	}

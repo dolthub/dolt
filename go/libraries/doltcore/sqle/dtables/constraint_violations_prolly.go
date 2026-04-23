@@ -101,7 +101,7 @@ func newProllyCVTable(ctx *sql.Context, tblName doltdb.TableName, root doltdb.Ro
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConstViolTablePrefix+tblName.Name, cvSch)
+	sqlSch, err := sqlutil.FromDoltSchema(ctx, "", doltdb.DoltConstViolTablePrefix+tblName.Name, cvSch)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (cvt *prollyConstraintViolationsTable) String() string {
 }
 
 // Schema implements the interface sql.Table.
-func (cvt *prollyConstraintViolationsTable) Schema() sql.Schema {
+func (cvt *prollyConstraintViolationsTable) Schema(ctx *sql.Context) sql.Schema {
 	return cvt.sqlSch.Schema
 }
 

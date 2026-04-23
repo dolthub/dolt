@@ -172,7 +172,7 @@ setup() {
 }
 
 teardown() {
-  stop_sql_server
+  stop_sql_server 1
 }
 
 teardown_file() {

@@ -30,7 +30,7 @@ const StorageFormatFuncName = "dolt_storage_format"
 type StorageFormat struct{}
 
 // NewStorageFormat creates a new StorageFormat expression.
-func NewStorageFormat() sql.Expression {
+func NewStorageFormat(ctx *sql.Context) sql.Expression {
 	return &StorageFormat{}
 }
 
@@ -65,7 +65,7 @@ func GetStorageFormatDisplayString(format *types.NomsBinFormat) string {
 }
 
 // IsNullable implements the Expression interface.
-func (*StorageFormat) IsNullable() bool {
+func (*StorageFormat) IsNullable(ctx *sql.Context) bool {
 	return false
 }
 
@@ -80,14 +80,14 @@ func (*StorageFormat) String() string {
 }
 
 // Type implements the Expression interface.
-func (*StorageFormat) Type() sql.Type {
+func (*StorageFormat) Type(ctx *sql.Context) sql.Type {
 	return gmstypes.Text
 }
 
 // WithChildren implements the Expression interface.
-func (v *StorageFormat) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (v *StorageFormat) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 0 {
 		return nil, sql.ErrInvalidChildrenNumber.New(v, len(children), 0)
 	}
-	return NewVersion(), nil
+	return NewVersion(ctx), nil
 }

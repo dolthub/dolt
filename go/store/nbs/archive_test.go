@@ -1376,6 +1376,10 @@ func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Ch
 	panic("never used")
 }
 
+func (tcs *testChunkSource) tolerantIterateAllChunks(_ context.Context, _ func(chunks.Chunk), _ func(error), _ *Stats) {
+	panic("never used")
+}
+
 // createTestArchive creates a test archive with the specified chunks and returns an archiveReader and the fake hashes
 // created for the chunks (in the same order).
 func createTestArchive(t *testing.T, prefix uint64, chunks [][]byte, metadata string) (archiveReader, []hash.Hash) {

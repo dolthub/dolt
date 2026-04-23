@@ -26,6 +26,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"sort"
 	"sync/atomic"
@@ -782,6 +783,12 @@ func (tr tableReader) clone() (tableReader, error) {
 	}, nil
 }
 
+type chunkRecord struct {
+	offset uint64
+	length uint32
+	hash   hash.Hash
+}
+
 func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk), stats *Stats) error {
 	count := tr.idx.chunkCount()
 	if count == 0 {
@@ -790,11 +797,6 @@ func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks
 
 	// Collect all chunk info then sort by offset.
 	// The index is sorted by prefix, but we need to process chunkRecs in storage order (by offset)
-	type chunkRecord struct {
-		offset uint64
-		length uint32
-		hash   hash.Hash
-	}
 	chunkRecs := make([]chunkRecord, 0, count)
 	for i := uint32(0); i < count; i++ {
 		var h hash.Hash
@@ -851,4 +853,73 @@ func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks
 	}
 
 	return nil
+}
+
+func (tr tableReader) tolerantIterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk), errCb func(error), stats *Stats) {
+	count := tr.idx.chunkCount()
+	if count == 0 {
+		return
+	}
+
+	chunkRecs := make([]chunkRecord, 0, count)
+	for i := uint32(0); i < count; i++ {
+		var h hash.Hash
+		ie, err := tr.idx.indexEntry(i, &h)
+		if err != nil {
+			errCb(fmt.Errorf("chunk index entry %d: %w", i, err))
+			continue
+		}
+		chunkRecs = append(chunkRecs, chunkRecord{
+			offset: ie.Offset(),
+			length: ie.Length(),
+			hash:   h,
+		})
+	}
+	if len(chunkRecs) == 0 {
+		return
+	}
+	sort.Slice(chunkRecs, func(i, j int) bool {
+		return chunkRecs[i].offset < chunkRecs[j].offset
+	})
+
+	lastChunk := chunkRecs[len(chunkRecs)-1]
+	totalDataSize := lastChunk.offset + uint64(lastChunk.length)
+
+	dataReader := io.NewSectionReader(&bridgeReaderAt{
+		rdr:   tr.r,
+		ctx:   ctx,
+		stats: stats,
+	}, int64(0), int64(totalDataSize))
+	bufReader := bufio.NewReader(dataReader)
+
+	buf := make([]byte, 4*1024*1024)
+	for _, chunk := range chunkRecs {
+		if ctx.Err() != nil {
+			return
+		}
+
+		_, readErr := io.ReadFull(bufReader, buf[:chunk.length])
+		chunkData := buf[:chunk.length]
+
+		if readErr != nil {
+			// Stream position is unknown after a read failure; cannot safely continue sequential read.
+			errCb(fmt.Errorf("chunk %s: read error: %w", chunk.hash.String(), readErr))
+			return
+		}
+
+		cchk, err := NewCompressedChunk(chunk.hash, chunkData)
+		if err != nil {
+			// Bytes were already consumed from the stream, so we can continue to the next chunk.
+			errCb(fmt.Errorf("chunk %s: %w", chunk.hash.String(), err))
+			continue
+		}
+
+		chk, err := cchk.ToChunk()
+		if err != nil {
+			errCb(fmt.Errorf("chunk %s: decompress error: %w", chunk.hash.String(), err))
+			continue
+		}
+
+		cb(chk)
+	}
 }

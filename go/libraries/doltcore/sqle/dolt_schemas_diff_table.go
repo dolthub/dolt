@@ -66,7 +66,7 @@ func (dsdt *doltSchemasDiffTable) String() string {
 }
 
 // Schema implements sql.Table
-func (dsdt *doltSchemasDiffTable) Schema() sql.Schema {
+func (dsdt *doltSchemasDiffTable) Schema(ctx *sql.Context) sql.Schema {
 	// Same schema as the regular diff table
 	return sql.Schema{
 		// TO columns
@@ -124,9 +124,9 @@ func (dsdt *doltSchemasDiffTable) PartitionRows(ctx *sql.Context, partition sql.
 }
 
 // PrimaryKeySchema implements sql.PrimaryKeyTable
-func (dsdt *doltSchemasDiffTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+func (dsdt *doltSchemasDiffTable) PrimaryKeySchema(ctx *sql.Context) sql.PrimaryKeySchema {
 	return sql.PrimaryKeySchema{
-		Schema:     dsdt.Schema(),
+		Schema:     dsdt.Schema(ctx),
 		PkOrdinals: []int{0, 1}, // to_type, to_name
 	}
 }
@@ -386,7 +386,7 @@ type doltSchemasDiffPartitionRowIter struct {
 func (dspri *doltSchemasDiffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if dspri.rows == nil && !dspri.done {
 		// Initialize diff rows for this specific commit pair
-		err := dspri.loadDiffRowsForCommitPair()
+		err := dspri.loadDiffRowsForCommitPair(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -401,21 +401,21 @@ func (dspri *doltSchemasDiffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, e
 	return row, nil
 }
 
-func (dspri *doltSchemasDiffPartitionRowIter) loadDiffRowsForCommitPair() error {
+func (dspri *doltSchemasDiffPartitionRowIter) loadDiffRowsForCommitPair(ctx *sql.Context) error {
 	// Build maps of schema rows for comparison
 	fromRows := make(map[string]sql.Row)
 	toRows := make(map[string]sql.Row)
 
 	// Read from table if it exists
 	if dspri.fromTable != nil && dspri.fromRoot != nil {
-		if err := dspri.readDoltSchemasRowsFromRoot(dspri.fromTable, dspri.fromRoot, fromRows); err != nil {
+		if err := dspri.readDoltSchemasRowsFromRoot(ctx, dspri.fromTable, dspri.fromRoot, fromRows); err != nil {
 			return err
 		}
 	}
 
 	// Read to table if it exists
 	if dspri.toTable != nil {
-		if err := dspri.readDoltSchemasRowsFromRoot(dspri.toTable, dspri.toRoot, toRows); err != nil {
+		if err := dspri.readDoltSchemasRowsFromRoot(ctx, dspri.toTable, dspri.toRoot, toRows); err != nil {
 			return err
 		}
 	}
@@ -453,7 +453,7 @@ func (dspri *doltSchemasDiffPartitionRowIter) loadDiffRowsForCommitPair() error 
 	return nil
 }
 
-func (dspri *doltSchemasDiffPartitionRowIter) readDoltSchemasRowsFromRoot(tbl *doltdb.Table, root doltdb.RootValue, rowMap map[string]sql.Row) error {
+func (dspri *doltSchemasDiffPartitionRowIter) readDoltSchemasRowsFromRoot(ctx *sql.Context, tbl *doltdb.Table, root doltdb.RootValue, rowMap map[string]sql.Row) error {
 	if tbl == nil {
 		return nil // Empty table, no rows to read
 	}
@@ -465,7 +465,7 @@ func (dspri *doltSchemasDiffPartitionRowIter) readDoltSchemasRowsFromRoot(tbl *d
 	}
 
 	// Create a DoltTable using the database reference we have
-	doltTable, err := NewDoltTable(doltdb.SchemasTableName, sch, tbl, dspri.db, editor.Options{})
+	doltTable, err := NewDoltTable(ctx, doltdb.SchemasTableName, sch, tbl, dspri.db, editor.Options{})
 	if err != nil {
 		return err
 	}
