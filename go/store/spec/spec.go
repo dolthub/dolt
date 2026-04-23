@@ -328,7 +328,15 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	}
 }
 
-func awsConfigFromSpecOptions(ctx context.Context, options SpecOptions) (aws.Config, error) {
+func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunks.ChunkStore {
+	fmt.Println(awsURL, options)
+
+	// earl has special handling for aws:// urls.
+	u, err := earl.ParseRawWithAWSSupport(awsURL)
+	d.PanicIfError(err)
+	parts := strings.SplitN(u.Hostname(), ":", 2) // [table] [, bucket]?
+	d.PanicIfFalse(len(parts) == 2)
+
 	var opts []func(*config.LoadOptions) error
 	opts = append(opts, config.WithRegion(options.AwsRegionOrDefault()))
 
@@ -363,22 +371,10 @@ func awsConfigFromSpecOptions(ctx context.Context, options SpecOptions) (aws.Con
 			opts = append(opts, opt)
 		}
 	default:
-		return aws.Config{}, fmt.Errorf("unsupported credential type")
+		panic("unsupported credential type")
 	}
 
-	return config.LoadDefaultConfig(ctx, opts...)
-}
-
-func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunks.ChunkStore {
-	fmt.Println(awsURL, options)
-
-	// earl has special handling for aws:// urls.
-	u, err := earl.ParseRawWithAWSSupport(awsURL)
-	d.PanicIfError(err)
-	parts := strings.SplitN(u.Hostname(), ":", 2) // [table] [, bucket]?
-	d.PanicIfFalse(len(parts) == 2)
-
-	cfg, err := awsConfigFromSpecOptions(ctx, options)
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	d.PanicIfError(err)
 
 	// DisableLogOutputChecksumValidationSkipped silences the per-GetObject WARN emitted when objects have no stored checksum.
