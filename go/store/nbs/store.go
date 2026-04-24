@@ -2429,12 +2429,14 @@ func (i *markAndSweeper) Close(ctx context.Context) (err error) {
 		if err != nil {
 			return err
 		}
+		i.gcc = nil
 	}
 	if i.incrementalGcc != nil {
 		err = i.incrementalGcc.cancel(ctx)
 		if err != nil {
 			return err
 		}
+		i.incrementalGcc = nil
 	}
 	return nil
 }

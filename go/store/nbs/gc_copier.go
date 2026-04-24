@@ -286,6 +286,7 @@ func (gcc *rotatingGCCopier) finalize(ctx context.Context) (*newlyWrittenSources
 		return nil, err
 	}
 	err = gcc.eg.Wait()
+	gcc.writer = nil
 	return &gcc.specs, err
 }
 
@@ -298,5 +299,12 @@ func (gcc *rotatingGCCopier) waitForPendingChunkFiles() error {
 
 func (gcc *rotatingGCCopier) cancel(ctx context.Context) error {
 	gcc.specs.sourceSet.close()
-	return gcc.writer.Cancel()
+	if gcc.writer != nil {
+		err := gcc.writer.Cancel()
+		if err != nil {
+			return err
+		}
+		gcc.writer = nil
+	}
+	return nil
 }
