@@ -122,7 +122,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 					flat = append(flat, h...)
 				}
 				id, token := dcs.getRepoId()
-				return &remotesapi.StreamChunkLocationsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: flat}
+				return &remotesapi.StreamChunkLocationsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: flat, ClientCapabilities: clientCapabilities}
 			})
 		})
 		eg.Go(func() error {
@@ -133,7 +133,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		eg.Go(func() error {
 			return fetcherHashSetToReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, func(hashes [][]byte) *remotesapi.GetDownloadLocsRequest {
 				id, token := dcs.getRepoId()
-				return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: hashes}
+				return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: hashes, ClientCapabilities: clientCapabilities}
 			})
 		})
 		eg.Go(func() error {
@@ -507,10 +507,11 @@ func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locati
 			},
 			RefreshAfter: rec.RefreshAfter,
 			RefreshRequest: &remotesapi.RefreshTableFileUrlRequest{
-				RepoId:    repoId,
-				RepoToken: repoToken,
-				RepoPath:  repoPath,
-				FileId:    rec.FileId,
+				RepoId:             repoId,
+				RepoToken:          repoToken,
+				RepoPath:           repoPath,
+				FileId:             rec.FileId,
+				ClientCapabilities: clientCapabilities,
 			},
 		})
 	}

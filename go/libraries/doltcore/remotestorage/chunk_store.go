@@ -569,6 +569,11 @@ func (r *locationRefresh) GetURL(ctx context.Context, lastError error, client re
 		wantsRefresh := now.After(r.RefreshAfter) || errors.Is(lastError, HttpError)
 		canRefresh := time.Since(r.lastRefresh) > refreshTableFileURLRetryDuration
 		if wantsRefresh && canRefresh {
+			// The request was prebuilt by the server (echo pattern);
+			// the client is authoritative for its own capability set
+			// and must stamp it at send time. See the ClientCapability
+			// enum comment in chunkstore.proto.
+			r.RefreshRequest.ClientCapabilities = clientCapabilities
 			ctx, cancel := context.WithTimeout(ctx, refreshTableFileURLTimeout)
 			resp, err := client.RefreshTableFileUrl(ctx, r.RefreshRequest)
 			cancel()
@@ -1154,7 +1159,7 @@ func (dcs *DoltChunkStore) PruneTableFiles(ctx context.Context) error {
 // and a list of only appendix table files
 func (dcs *DoltChunkStore) Sources(ctx context.Context) (chunks.TableFileSources, error) {
 	id, token := dcs.getRepoId()
-	req := &remotesapi.ListTableFilesRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token}
+	req := &remotesapi.ListTableFilesRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ClientCapabilities: clientCapabilities}
 	resp, err := dcs.csClient.ListTableFiles(ctx, req)
 	if err != nil {
 		return chunks.TableFileSources{}, NewRpcError(err, "ListTableFiles", dcs.host, req)
@@ -1245,7 +1250,12 @@ func sanitizeSignedUrl(url string) string {
 
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file.
 func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
-	if drtf.info.RefreshAfter != nil && time.Now().After(drtf.info.RefreshAfter.AsTime()) {
+	if drtf.info.RefreshRequest != nil && drtf.info.RefreshAfter != nil && time.Now().After(drtf.info.RefreshAfter.AsTime()) {
+		// The request was prebuilt by the server (echo pattern);
+		// the client is authoritative for its own capability set
+		// and must stamp it at send time. See the ClientCapability
+		// enum comment in chunkstore.proto.
+		drtf.info.RefreshRequest.ClientCapabilities = clientCapabilities
 		resp, err := drtf.dcs.csClient.RefreshTableFileUrl(ctx, drtf.info.RefreshRequest)
 		if err == nil {
 			drtf.info.Url = resp.Url
