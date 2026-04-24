@@ -139,6 +139,11 @@ message GetDownloadLocsRequest {
 
   string repo_token = 3;
   string repo_path = 4;
+
+  // Capabilities the calling client declares about itself. See the
+  // ClientCapability enum. Populated by the client on every outbound
+  // request; absent means "not capable."
+  repeated ClientCapability client_capabilities = 5;
 }
 
 message GetDownloadLocsResponse {
@@ -166,6 +171,15 @@ message StreamChunkLocationsRequest {
   // request in a 512-hash batch. Servers MUST reject requests
   // where len(chunk_hashes) is not a multiple of 20.
   bytes chunk_hashes = 4;
+
+  // Stream-scoped. The client's capability set does not change
+  // within a single server-side stream. Today every request on
+  // the stream MUST carry the full set (same rule as
+  // repo_id/token/path above); the reliable-RPC layer relies on
+  // this for replay correctness. A future protocol revision may
+  // allow omitting it after the first message; servers MUST
+  // continue to accept it on every message.
+  repeated ClientCapability client_capabilities = 5;
 }
 
 message StreamChunkLocationsResponse {
@@ -360,6 +374,38 @@ enum Feature {
   FEATURE_STREAM_CHUNK_LOCATIONS = 1;
 }
 
+// Capabilities the client declares about itself on every request
+// that the server may use to select alternative URL endpoints,
+// wire encodings, or response shapes. Missing value => not capable.
+// Servers SHOULD continue to serve clients that send no
+// capabilities; capability-gated behaviors are intended as
+// optional upgrades, not correctness boundaries.
+//
+// Populated by the client at send time. Servers that construct
+// prebuilt RefreshTableFileUrlRequest messages for echo-style
+// responses (see ListTableFiles, GetDownloadLocations) SHOULD
+// leave this field unset; the sending client overwrites it.
+//
+// Guidelines for growth:
+// - Add new values at the end; never reuse a removed value's
+//   number. Reserve retired numbers rather than repurposing them.
+// - CLIENT_CAPABILITY_UNSPECIFIED = 0 is never sent; presence of
+//   the zero value in a received list should be ignored.
+enum ClientCapability {
+  CLIENT_CAPABILITY_UNSPECIFIED = 0;
+
+  // The client's HTTP fetcher correctly handles HTTP/2 response
+  // bodies for chunk and table-file downloads. Servers MAY return
+  // signed URLs that resolve to HTTP/2 endpoints (e.g. CDN-fronted
+  // hosts) when this is set. When this is not set, servers SHOULD
+  // prefer URLs that resolve to HTTP/1.1 endpoints if such a
+  // choice is available. Servers without a separate HTTP/1.1
+  // option may return whatever URL they have; old clients
+  // generally succeed against HTTP/2 URLs but can see degraded
+  // performance under certain network conditions.
+  CLIENT_CAPABILITY_HTTP2_DOWNLOAD = 1;
+}
+
 message GetRepoMetadataResponse {
   // Version string of the noms binary format for this repository.
   // See types.NomsBinFormat.
@@ -392,6 +438,11 @@ message ListTableFilesRequest  {
 
   string repo_token = 3;
   string repo_path = 4;
+
+  // Capabilities the calling client declares about itself. See the
+  // ClientCapability enum. Populated by the client on every outbound
+  // request; absent means "not capable."
+  repeated ClientCapability client_capabilities = 5;
 }
 
 message TableFileInfo {
@@ -409,6 +460,15 @@ message RefreshTableFileUrlRequest {
 
   string repo_token = 3;
   string repo_path = 4;
+
+  // Capabilities the calling client declares about itself. See the
+  // ClientCapability enum. The client stamps this field at send
+  // time on every outbound request, including when it is sending
+  // a RefreshTableFileUrlRequest that the server previously
+  // prebuilt and embedded in a response (see TableFileInfo and
+  // DownloadLoc). Servers constructing prebuilt refresh requests
+  // SHOULD leave this field unset; the client overwrites it.
+  repeated ClientCapability client_capabilities = 5;
 }
 
 message RefreshTableFileUrlResponse {
