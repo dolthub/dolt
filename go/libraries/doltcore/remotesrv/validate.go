@@ -92,6 +92,16 @@ func ValidateGetDownloadLocsRequest(req *remotesapi.GetDownloadLocsRequest) erro
 	return validateHashes("chunk_hashes", req.ChunkHashes)
 }
 
+func ValidateStreamChunkLocationsRequest(req *remotesapi.StreamChunkLocationsRequest) error {
+	if err := validateRepoRequest(req); err != nil {
+		return err
+	}
+	if len(req.ChunkHashes)%hash.ByteLen != 0 {
+		return fmt.Errorf("expected chunk_hashes to be a multiple of %d bytes, was %d", hash.ByteLen, len(req.ChunkHashes))
+	}
+	return nil
+}
+
 func ValidateGetUploadLocsRequest(req *remotesapi.GetUploadLocsRequest) error {
 	if err := validateRepoRequest(req); err != nil {
 		return err

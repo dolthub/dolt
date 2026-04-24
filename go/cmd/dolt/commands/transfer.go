@@ -143,6 +143,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 		"http",
 		remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED,
 		sealer,
+		nil,
 	)
 
 	// gRPC for chunk store operations.

@@ -9,18 +9,42 @@ setup() {
     mkdir remotes-$$
     mkdir remotes-$$/empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
-    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
-    remotesrv_pid=$!
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
 }
 
 teardown() {
-    kill $remotesrv_pid
-    wait $remotesrv_pid || :
-    remotesrv_pid=""
+    if [ -n "$remotesrv_pid" ]; then
+        kill $remotesrv_pid
+        wait $remotesrv_pid || :
+        remotesrv_pid=""
+    fi
     teardown_common
     rm -rf $BATS_TMPDIR/remotes-$$
+}
+
+# Spawn remotesrv for the current @test, optionally suppressing
+# advertisement of a feature so the legacy-RPC fallback path is
+# exercised. Pass "" to use the server's default features, or the
+# name of a Feature enum value (e.g. "FEATURE_STREAM_CHUNK_LOCATIONS")
+# to suppress it. This used to live in setup(), but to let paired
+# @tests flip feature advertisement via DOLT_REMOTESAPI_DISABLED_FEATURES
+# we spawn remotesrv per-test instead. Every @test in this file that
+# hits http://localhost:50051 must call setup_remotesrv at its top.
+setup_remotesrv() {
+    local disabled_features="$1"
+    if [ -n "$disabled_features" ]; then
+        export DOLT_REMOTESAPI_DISABLED_FEATURES="$disabled_features"
+    else
+        unset DOLT_REMOTESAPI_DISABLED_FEATURES
+    fi
+    # Spawn from $BATS_TMPDIR so the `--dir ./remotes-$$` relative
+    # path resolves the same way it did under the old setup(), then
+    # return to the caller's cwd.
+    pushd "$BATS_TMPDIR" > /dev/null
+    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv_pid=$!
+    popd > /dev/null
 }
 
 @test "remotes-push-pull: pull also fetches" {
@@ -115,6 +139,7 @@ teardown() {
 }
 
 @test "remotes-push-pull: push and pull an unknown remote" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push poop main
     [ "$status" -eq 1 ]
@@ -125,6 +150,7 @@ teardown() {
 }
 
 @test "remotes-push-pull: push with only one argument" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote
     [ "$status" -eq 1 ]
@@ -136,6 +162,7 @@ teardown() {
 }
 
 @test "remotes-push-pull: push without set-upstream works with autoSetUpRemote set to true" {
+    setup_remotesrv ""
     dolt config --local --add push.autoSetUpRemote true
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote main
@@ -147,7 +174,8 @@ teardown() {
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
-@test "remotes-push-pull: push and pull main branch from a remote" {
+_do_push_and_pull_main_branch_from_remote_scenario() {
+    setup_remotesrv "$1"
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push --set-upstream test-remote main
     [ "$status" -eq 0 ]
@@ -157,7 +185,16 @@ teardown() {
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
+@test "remotes-push-pull: push and pull main branch from a remote, new RPC" {
+    _do_push_and_pull_main_branch_from_remote_scenario ""
+}
+
+@test "remotes-push-pull: push and pull main branch from a remote, legacy RPC" {
+    _do_push_and_pull_main_branch_from_remote_scenario "FEATURE_STREAM_CHUNK_LOCATIONS"
+}
+
 @test "remotes-push-pull: push and pull non-main branch from remote" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     run dolt push --set-upstream test-remote test-branch
@@ -167,7 +204,8 @@ teardown() {
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
-@test "remotes-push-pull: pull with explicit remote and branch" {
+_do_pull_with_explicit_remote_and_branch_scenario() {
+    setup_remotesrv "$1"
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     dolt sql -q "create table t1(c0 varchar(100));"
@@ -207,7 +245,16 @@ teardown() {
     [[ "$output" =~ "table with same name 't1' added in 2 commits can't be merged" ]] || false
 }
 
+@test "remotes-push-pull: pull with explicit remote and branch, new RPC" {
+    _do_pull_with_explicit_remote_and_branch_scenario ""
+}
+
+@test "remotes-push-pull: pull with explicit remote and branch, legacy RPC" {
+    _do_pull_with_explicit_remote_and_branch_scenario "FEATURE_STREAM_CHUNK_LOCATIONS"
+}
+
 @test "remotes-push-pull: push and pull from non-main branch and use --set-upstream" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     run dolt push --set-upstream test-remote test-branch
@@ -221,6 +268,7 @@ teardown() {
 }
 
 @test "remotes-push-pull: push output" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
@@ -232,6 +280,7 @@ teardown() {
 }
 
 @test "remotes-push-pull: push and pull with docs from remote" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
     dolt docs upload LICENSE.md LICENSE.md
@@ -269,6 +318,7 @@ teardown() {
 }
 
 @test "remotes-push-pull: push and pull tags to/from remote" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
@@ -293,6 +343,7 @@ SQL
 }
 
 @test "remotes-push-pull: tags are fetched when pulling" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
@@ -326,6 +377,7 @@ SQL
 }
 
 @test "remotes-push-pull: try to push a remote that is behind tip" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
     cd dolt-repo-clones
@@ -353,6 +405,7 @@ SQL
 }
 
 @test "remotes-push-pull: dolt_pull() with divergent head" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
     dolt sql <<SQL
@@ -390,6 +443,7 @@ SQL
 }
 
 @test "remotes-push-pull: dolt pull onto a dirty working set fails" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
@@ -420,6 +474,7 @@ SQL
 }
 
 @test "remotes-push-pull: force push to main" {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
 
@@ -487,6 +542,7 @@ SQL
 }
 
 @test "remotes-push-pull: push not specifying a branch throws error on default remote" {
+    setup_remotesrv ""
     dolt remote add origin http://localhost:50051/test-org/test-repo
     run dolt remote -v
     [[ "$output" =~  origin ]] || false
@@ -496,6 +552,7 @@ SQL
 }
 
 @test "remotes-push-pull: push not specifying a branch create new remote branch without setting upstream on non-default remote" {
+    setup_remotesrv ""
     dolt remote add origin http://localhost:50051/test-org/test-repo
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt remote -v
@@ -510,6 +567,7 @@ SQL
 }
 
 @test "remotes-push-pull: push not specifying a branch creates new remote branch and sets upstream on non-default remote when -u is used" {
+    setup_remotesrv ""
     dolt remote add origin http://localhost:50051/test-org/test-repo
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt remote -v
@@ -532,6 +590,7 @@ SQL
 }
 
 @test "remotes-push-pull: push --all with no remote or refspec specified" {
+    setup_remotesrv ""
     dolt remote add origin http://localhost:50051/test-org/test-repo
     run dolt remote -v
     [[ "$output" =~  origin ]] || false
@@ -687,6 +746,7 @@ SQL
 }
 
 @test "remotes-push-pull: push set upstream succeeds even if up to date" {
+    setup_remotesrv ""
     dolt remote add origin http://localhost:50051/test-org/test-repo
     dolt push origin main
     dolt checkout -b feature
@@ -771,6 +831,7 @@ SQL
 }
 
 @test "remotes-push-pull: validate that a config is needed for a pull." {
+    setup_remotesrv ""
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
     dolt fetch test-remote

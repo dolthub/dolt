@@ -183,6 +183,9 @@ func (f refreshClient) GetDownloadLocations(ctx context.Context, in *remotesapi.
 func (f refreshClient) StreamDownloadLocations(ctx context.Context, opts ...grpc.CallOption) (remotesapi.ChunkStoreService_StreamDownloadLocationsClient, error) {
 	return nil, nil
 }
+func (f refreshClient) StreamChunkLocations(ctx context.Context, opts ...grpc.CallOption) (remotesapi.ChunkStoreService_StreamChunkLocationsClient, error) {
+	return nil, nil
+}
 func (f refreshClient) GetUploadLocations(ctx context.Context, in *remotesapi.GetUploadLocsRequest, opts ...grpc.CallOption) (*remotesapi.GetUploadLocsResponse, error) {
 	return nil, nil
 }
@@ -204,4 +207,57 @@ func (f *refreshClient) RefreshTableFileUrl(ctx context.Context, in *remotesapi.
 }
 func (f refreshClient) AddTableFiles(ctx context.Context, in *remotesapi.AddTableFilesRequest, opts ...grpc.CallOption) (*remotesapi.AddTableFilesResponse, error) {
 	return nil, nil
+}
+
+func TestHasFeature(t *testing.T) {
+	const known = remotesapi.Feature_FEATURE_STREAM_CHUNK_LOCATIONS
+
+	t.Run("NilMetadata", func(t *testing.T) {
+		assert.False(t, hasFeature(nil, known))
+	})
+	t.Run("NilFeaturesList", func(t *testing.T) {
+		md := &remotesapi.GetRepoMetadataResponse{}
+		assert.False(t, hasFeature(md, known))
+	})
+	t.Run("FeaturePresent", func(t *testing.T) {
+		md := &remotesapi.GetRepoMetadataResponse{
+			Features: []remotesapi.Feature{known},
+		}
+		assert.True(t, hasFeature(md, known))
+	})
+	t.Run("FeatureAbsent", func(t *testing.T) {
+		md := &remotesapi.GetRepoMetadataResponse{
+			Features: []remotesapi.Feature{remotesapi.Feature_FEATURE_UNSPECIFIED},
+		}
+		assert.False(t, hasFeature(md, known))
+	})
+	t.Run("UnspecifiedAlwaysAbsent", func(t *testing.T) {
+		// Even if a server somehow sent FEATURE_UNSPECIFIED, the
+		// helper must report it as absent.
+		md := &remotesapi.GetRepoMetadataResponse{
+			Features: []remotesapi.Feature{remotesapi.Feature_FEATURE_UNSPECIFIED},
+		}
+		assert.False(t, hasFeature(md, remotesapi.Feature_FEATURE_UNSPECIFIED))
+	})
+	t.Run("DuplicateEntry", func(t *testing.T) {
+		md := &remotesapi.GetRepoMetadataResponse{
+			Features: []remotesapi.Feature{known, known},
+		}
+		assert.True(t, hasFeature(md, known))
+	})
+	t.Run("UnknownFutureEnumCoexistsWithKnown", func(t *testing.T) {
+		// An older client reading a newer server's response will
+		// see unknown enum values carried through as bare integers.
+		// The known feature must still be detected correctly.
+		md := &remotesapi.GetRepoMetadataResponse{
+			Features: []remotesapi.Feature{remotesapi.Feature(999), known},
+		}
+		assert.True(t, hasFeature(md, known))
+	})
+	t.Run("OnlyUnknownFutureEnum", func(t *testing.T) {
+		md := &remotesapi.GetRepoMetadataResponse{
+			Features: []remotesapi.Feature{remotesapi.Feature(999)},
+		}
+		assert.False(t, hasFeature(md, known))
+	})
 }
