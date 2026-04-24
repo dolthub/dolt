@@ -1097,7 +1097,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 	primaryCols := make(map[string]bool)
 	for _, index := range create.TableSpec.Indexes {
 		if index.Info.Primary {
-			for _, indexCol := range index.Columns {
+			for _, indexCol := range index.Fields {
 				primaryCols[indexCol.Column.Lowered()] = true
 			}
 			break
