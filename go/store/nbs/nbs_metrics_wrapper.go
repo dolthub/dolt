@@ -57,7 +57,7 @@ func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string
 }
 
 // AddTableFilesToManifest adds table files to the manifest
-func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
+func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry) error {
 	return nbsMW.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs)
 }
 
@@ -74,8 +74,8 @@ func (nbsMW *NBSMetricWrapper) EndGC(mode chunks.GCMode) {
 	nbsMW.nbs.EndGC(mode)
 }
 
-func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
-	return nbsMW.nbs.MarkAndSweepChunks(ctx, getAddrs, filter, dest, mode, cmp)
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
+	return nbsMW.nbs.MarkAndSweepChunks(ctx, getAddrs, filter, dest, gcConfig, incrementalUpdateManifest)
 }
 
 func (nbsMW *NBSMetricWrapper) Count() (uint32, error) {

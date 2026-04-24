@@ -269,7 +269,7 @@ func (gcs *GenerationalNBS) refCheck(recs []hasRecord) (hash.HashSet, error) {
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
+func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry) error {
 	return gcs.newGen.putChunk(ctx, c, getAddrs, gcs.refCheck)
 }
 
@@ -359,7 +359,7 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 	var putErr error
 	err = gcs.newGen.GetMany(ctx, notInOldGen, func(ctx context.Context, chunk *chunks.Chunk) {
 		if putErr == nil {
-			putErr = gcs.oldGen.Put(ctx, *chunk, func(c chunks.Chunk) chunks.GetAddrsCb {
+			putErr = gcs.oldGen.Put(ctx, *chunk, func(c chunks.Chunk) chunks.InsertAddrsCb {
 				return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error { return nil }
 			})
 		}
@@ -430,7 +430,7 @@ func (gcs *GenerationalNBS) WriteTableFile(ctx context.Context, fileId string, s
 }
 
 // AddTableFilesToManifest adds table files to the manifest of the newgen cs
-func (gcs *GenerationalNBS) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
+func (gcs *GenerationalNBS) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry) error {
 	return gcs.newGen.addTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs, gcs.refCheck, nil)
 }
 
@@ -537,8 +537,8 @@ func (gcs *GenerationalNBS) EndGC(mode chunks.GCMode) {
 	gcs.newGen.EndGC(mode)
 }
 
-func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
-	return markAndSweepChunks(ctx, gcs.newGen, gcs, dest, getAddrs, filter, mode, cmp)
+func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
+	return markAndSweepChunks(ctx, gcs.newGen, gcs, dest, getAddrs, filter, gcConfig, incrementalUpdateManifest)
 }
 
 func (gcs *GenerationalNBS) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {

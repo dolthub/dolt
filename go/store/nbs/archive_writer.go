@@ -753,6 +753,11 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 	return bytesWritten, asw.writer.stageZStdChunk(h, dictId, dataId)
 }
 
+// SeenChunk returns whether this writer has already written a certain chunk.
+func (asw *ArchiveStreamWriter) SeenChunk(h hash.Hash) bool {
+	return asw.writer.seenChunks.Has(h)
+}
+
 // conjoinAll combines two or more archiveReader instances into a single archive.
 // This method takes a slice of archiveReader instances and merges their contents
 // into the current archiveWriter.

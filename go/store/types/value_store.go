@@ -95,7 +95,20 @@ const (
 	gcState_Finalizing
 )
 
-func AddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) (err error) {
+// WalkAddrsFromNomsValue calls a callback function for each of a chunk's children, passing the hash of the child chunk.
+func WalkAddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, cb func(a hash.Hash) error) (err error) {
+	if NomsKind(c.Data()[0]) == SerialMessageKind {
+		err = SerialMessage(c.Data()).WalkAddrs(nbf, cb)
+	} else {
+		err = walkRefs(c.Data(), nbf, func(r Ref) error {
+			return cb(r.TargetHash())
+		})
+	}
+	return
+}
+
+// InsertAddrsFromNomsValue inserts the hashes of each of a chunk's children into the provided hash.HashSet
+func InsertAddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) (err error) {
 	if NomsKind(c.Data()[0]) == SerialMessageKind {
 		err = SerialMessage(c.Data()).WalkAddrs(nbf, func(a hash.Hash) error {
 			addrs.Insert(a)
@@ -111,10 +124,14 @@ func AddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) 
 	return
 }
 
-func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.InsertAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
-		return AddrsFromNomsValue(c, lvs.nbf, addrs)
+		return InsertAddrsFromNomsValue(c, lvs.nbf, addrs)
 	}
+}
+
+func (lvs *ValueStore) walkAddrs(c chunks.Chunk, cb func(a hash.Hash) error) error {
+	return WalkAddrsFromNomsValue(c, lvs.nbf, cb)
 }
 
 const (
@@ -540,13 +557,6 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 	return true, nil
 }
 
-type GCMode int
-
-const (
-	GCModeDefault GCMode = iota
-	GCModeFull
-)
-
 type GCSafepointController interface {
 	BeginGC(ctx context.Context, keeper func(h hash.Hash) bool) error
 	EstablishPreFinalizeSafepoint(context.Context) error
@@ -555,7 +565,7 @@ type GCSafepointController interface {
 }
 
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
-func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchiveLevel, oldGenRefs, newGenRefs hash.HashSet, safepoint GCSafepointController) error {
+func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenRefs, newGenRefs hash.HashSet, safepoint GCSafepointController) error {
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	lvs.transitionToOldGenGC()
@@ -564,30 +574,26 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 	gcs, gcsOK := lvs.cs.(chunks.GenerationalCS)
 	collector, collectorOK := lvs.cs.(chunks.ChunkStoreGarbageCollector)
 
-	var chksMode chunks.GCMode
-
 	if gcsOK && collectorOK {
 		oldGen := gcs.OldGen()
 		newGen := gcs.NewGen()
 
 		var oldGenHasMany chunks.HasManyFunc
-		switch mode {
-		case GCModeDefault:
+		switch gcConfig.Mode {
+		case chunks.GCMode_Default:
 			oldGenHasMany = gcs.OldGenGCFilter()
-			chksMode = chunks.GCMode_Default
-		case GCModeFull:
+		case chunks.GCMode_Full:
 			oldGenHasMany = unfilteredHashFunc
-			chksMode = chunks.GCMode_Full
 		default:
-			return fmt.Errorf("unsupported GCMode %v", mode)
+			return fmt.Errorf("unsupported GCMode %v", gcConfig.Mode)
 		}
 
 		err := func() error {
-			err := collector.BeginGC(lvs.gcAddChunk, chksMode)
+			err := collector.BeginGC(lvs.gcAddChunk, gcConfig.Mode)
 			if err != nil {
 				return err
 			}
-			defer collector.EndGC(chksMode)
+			defer collector.EndGC(gcConfig.Mode)
 
 			var callCancelSafepoint bool
 			if safepoint != nil {
@@ -612,12 +618,13 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 			}
 			newGenRefs.Insert(root)
 
+			incrementalUpdateManifest := gcConfig.Mode != chunks.GCMode_Full
 			var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
-			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, chksMode, cmp, collector, oldGen, nil, func() hash.HashSet {
+			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, gcConfig, collector, oldGen, nil, func() hash.HashSet {
 				n := lvs.transitionToNewGenGC()
 				newGenRefs.InsertAll(n)
 				return make(hash.HashSet)
-			})
+			}, incrementalUpdateManifest)
 			if err != nil {
 				if errors.Is(err, chunks.ErrNothingToCollect) {
 					// nothing to do. not an error.
@@ -634,13 +641,13 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 				return err
 			}
 
-			if mode == GCModeDefault {
+			if gcConfig.Mode == chunks.GCMode_Default {
 				oldGenHasMany = gcs.OldGenGCFilter()
 			} else {
 				oldGenHasMany = newFileHasMany
 			}
 
-			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, chksMode, cmp, collector, newGen, safepoint, lvs.transitionToFinalizingGC)
+			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, gcConfig, collector, newGen, safepoint, lvs.transitionToFinalizingGC, false)
 			if err != nil {
 				return err
 			}
@@ -652,7 +659,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 				return err
 			}
 
-			if mode == GCModeFull {
+			if gcConfig.Mode == chunks.GCMode_Full {
 				err = oldGenFinalizer.SwapChunksInStore(ctx)
 				if err != nil {
 					return err
@@ -701,7 +708,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 			newGenRefs.Insert(root)
 
 			var finalizer chunks.GCFinalizer
-			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, chunks.GCMode_Full, cmp, collector, collector, safepoint, lvs.transitionToFinalizingGC)
+			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, gcConfig, collector, collector, safepoint, lvs.transitionToFinalizingGC, false)
 			if err != nil {
 				return err
 			}
@@ -733,17 +740,17 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 func (lvs *ValueStore) gc(ctx context.Context,
 	toVisit hash.HashSet,
 	hashFilter chunks.HasManyFunc,
-	chksMode chunks.GCMode,
-	cmp chunks.GCArchiveLevel,
+	gcConfig chunks.GCConfig,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointController GCSafepointController,
-	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
-	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.getAddrs, hashFilter, dest, chksMode, cmp)
+	finalize func() hash.HashSet,
+	incrementalUpdateManifest bool) (chunks.GCFinalizer, error) {
+	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.walkAddrs, hashFilter, dest, gcConfig, incrementalUpdateManifest)
 	if err != nil {
 		return nil, err
 	}
 
-	err = sweeper.SaveHashes(ctx, toVisit.ToSlice())
+	err = sweeper.SaveHashes(ctx, toVisit)
 	if err != nil {
 		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(fmt.Errorf("Error in SaveHashes call: %w", err), cErr)
@@ -762,7 +769,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	// NewGenToVisit. NewGen -> Finalize is going to block writes until
 	// we are done, so its best to keep it as small as possible.
 	next := lvs.readAndResetNewGenToVisit()
-	err = sweeper.SaveHashes(ctx, next.ToSlice())
+	err = sweeper.SaveHashes(ctx, next)
 	if err != nil {
 		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
@@ -770,7 +777,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	next = nil
 
 	final := finalize()
-	err = sweeper.SaveHashes(ctx, final.ToSlice())
+	err = sweeper.SaveHashes(ctx, final)
 	if err != nil {
 		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)

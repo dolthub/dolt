@@ -211,7 +211,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	// add a chunk and flush to trigger a conjoin
 	c := chunks.NewChunk([]byte("it's a boy!"))
 	addrs := hash.NewHashSet()
-	ok, err := st.addChunk(ctx, c, func(c chunks.Chunk) chunks.GetAddrsCb {
+	ok, err := st.addChunk(ctx, c, func(c chunks.Chunk) chunks.InsertAddrsCb {
 		return func(ctx context.Context, _ hash.HashSet, _ chunks.PendingRefExists) error {
 			addrs.Insert(c.Hash())
 			return nil
@@ -348,13 +348,14 @@ func TestNBSCopyGC(t *testing.T) {
 	noopFilter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 		return hashes, nil
 	}
-	sweeper, err := st.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full, chunks.NoArchive)
+	gcConfig := chunks.NewGCConfig(chunks.GCMode_Full, chunks.NoArchive, chunks.IncrementalGCTablesDisabled)
+	sweeper, err := st.MarkAndSweepChunks(ctx, noopWalkAddrs, noopFilter, nil, gcConfig, false)
 	require.NoError(t, err)
 	keepersSlice := make([]hash.Hash, 0, len(keepers))
 	for h := range keepers {
 		keepersSlice = append(keepersSlice, h)
 	}
-	require.NoError(t, sweeper.SaveHashes(ctx, keepersSlice))
+	require.NoError(t, sweeper.SaveHashes(ctx, hash.NewHashSet(keepersSlice...)))
 	finalizer, err := sweeper.Finalize(ctx)
 	require.NoError(t, err)
 	require.NoError(t, sweeper.Close(ctx))

@@ -179,7 +179,12 @@ func TestGC(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(v2)
 
-	err = vs.GC(ctx, GCModeDefault, chunks.NoArchive, hash.HashSet{}, hash.HashSet{}, purgingSafepointController{vs})
+	gcConfig := chunks.GCConfig{
+		Mode:                chunks.GCMode_Default,
+		ArchiveLevel:        chunks.NoArchive,
+		IncrementalFileSize: chunks.IncrementalGCTablesDisabled,
+	}
+	err = vs.GC(ctx, gcConfig, hash.HashSet{}, hash.HashSet{}, purgingSafepointController{vs})
 	require.NoError(t, err)
 
 	v1, err = vs.ReadValue(ctx, h1) // non-nil

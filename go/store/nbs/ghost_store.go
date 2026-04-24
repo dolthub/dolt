@@ -163,7 +163,7 @@ func (g GhostBlockStore) refCheck(recs []hasRecord) (hash.HashSet, error) {
 	return absent, nil
 }
 
-func (g GhostBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
+func (g GhostBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry) error {
 	panic("GhostBlockStore does not support Put")
 }
 

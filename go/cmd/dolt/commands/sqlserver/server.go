@@ -301,13 +301,14 @@ func ConfigureServices(
 		InitF: func(context.Context) error {
 			// Having AutoGCBehavior == nil means that they are using default behavior, which is enabled.
 			if cfg.ServerConfig.AutoGCBehavior() == nil {
-				config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, sqle.NewGCScheduler(gcSch), lgr)
+				config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, chunks.IncrementalGCTablesDisabled, sqle.NewGCScheduler(gcSch), lgr)
 			} else if cfg.ServerConfig.AutoGCBehavior().Enable() {
 				cmp := chunks.GCArchiveLevel(cfg.ServerConfig.AutoGCBehavior().ArchiveLevel())
 				if cmp < chunks.NoArchive || cmp > chunks.MaxArchiveLevel {
 					return fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, cmp)
 				}
-				config.AutoGCController = sqle.NewAutoGCController(cmp, sqle.NewGCScheduler(gcSch), lgr)
+				incrementalArchiveSize := cfg.ServerConfig.AutoGCBehavior().IncrementalFileSize()
+				config.AutoGCController = sqle.NewAutoGCController(cmp, incrementalArchiveSize, sqle.NewGCScheduler(gcSch), lgr)
 			}
 			return nil
 		},

@@ -222,7 +222,7 @@ func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs hash.HashS
 	return nil
 }
 
-func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCurry) error {
+func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs InsertAddrsCurry) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -364,14 +364,14 @@ func (mgcf msvGcFinalizer) Close() error {
 type msvMarkAndSweeper struct {
 	ms *MemoryStoreView
 
-	getAddrs GetAddrsCurry
+	getAddrs GetAddrs
 	filter   HasManyFunc
 
 	keepers map[hash.Hash]Chunk
 }
 
-func (i *msvMarkAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) error {
-	newAddrs := hash.NewHashSet(hashes...)
+func (i *msvMarkAndSweeper) SaveHashes(ctx context.Context, hashes hash.HashSet) error {
+	newAddrs := hashes.Copy()
 	for {
 		for h := range i.keepers {
 			delete(newAddrs, h)
@@ -390,7 +390,10 @@ func (i *msvMarkAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) 
 				return err
 			}
 			i.keepers[h] = c
-			err = i.getAddrs(c)(ctx, newAddrs, NoopPendingRefExists)
+			err = i.getAddrs(c, func(a hash.Hash) error {
+				newAddrs.Insert(a)
+				return nil
+			})
 			if err != nil {
 				return err
 			}
@@ -407,7 +410,7 @@ func (i *msvMarkAndSweeper) Close(context.Context) error {
 	return nil
 }
 
-func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, _ GCMode, _ GCArchiveLevel) (MarkAndSweeper, error) {
+func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrs, filter HasManyFunc, dest ChunkStore, _ GCConfig, incrementalUpdateManifest bool) (MarkAndSweeper, error) {
 	if dest != ms {
 		panic("unsupported")
 	}

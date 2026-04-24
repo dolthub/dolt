@@ -60,7 +60,7 @@ type PullTableFileWriter struct {
 	newWriterCh chan nbs.GenericTableWriter
 	doneCh      chan struct{}
 
-	getAddrs chunks.GetAddrsCurry
+	getAddrs chunks.InsertAddrsCurry
 
 	bufferedSendBytes uint64
 	finishedSendBytes uint64
@@ -68,7 +68,7 @@ type PullTableFileWriter struct {
 
 type PullTableFileWriterConfig struct {
 	DestStore         DestTableFileStore
-	GetAddrs          chunks.GetAddrsCurry
+	GetAddrs          chunks.InsertAddrsCurry
 	TempDir           string
 	ConcurrentUploads int
 	// The approximate file size at which we will cut a file so
@@ -80,7 +80,7 @@ type PullTableFileWriterConfig struct {
 
 type DestTableFileStore interface {
 	WriteTableFile(ctx context.Context, id string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) (io.Closer, error)
-	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error
+	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry) error
 }
 
 type PullTableFileWriterStats struct {

@@ -18,7 +18,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -29,17 +33,19 @@ type gcCopier struct {
 	tfp    tableFilePersister
 }
 
-func newGarbageCollectionCopier(cmp chunks.GCArchiveLevel, tfp tableFilePersister) (*gcCopier, error) {
-	var writer GenericTableWriter
-	var err error
-	switch cmp {
+func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel) (GenericTableWriter, error) {
+	switch archiveLevel {
 	case chunks.SimpleArchive:
-		writer, err = NewArchiveStreamWriter("")
+		return NewArchiveStreamWriter("")
 	case chunks.NoArchive:
-		writer, err = NewCmpChunkTableWriter("")
+		return NewCmpChunkTableWriter("")
 	default:
-		return nil, fmt.Errorf("invalid archive level: %d", cmp)
+		return nil, fmt.Errorf("invalid archive level: %d", archiveLevel)
 	}
+}
+
+func newGarbageCollectionCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister) (*gcCopier, error) {
+	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -141,4 +147,164 @@ func fileNameToAddr(fileName string) (hash.Hash, bool) {
 		}
 	}
 	return hash.Hash{}, false
+}
+
+// newlyWrittenSources is a set of newly written chunk sources.
+// It can be written to by multiple goroutines concurrently,
+// so access is controlled by a mutex
+type newlyWrittenSources struct {
+	specs     []tableSpec
+	sourceSet chunkSourceSet
+	mu        sync.Mutex
+}
+
+func (sl *newlyWrittenSources) append(ctx context.Context, specs []tableSpec, nbs *NomsBlockStore) error {
+	sl.mu.Lock()
+	defer sl.mu.Unlock()
+	sl.specs = append(sl.specs, specs...)
+	for _, spec := range specs {
+		err := nbs.tables.insertIntoChunkSourceSet(ctx, sl.sourceSet, spec, nil, nbs.stats)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (sl *newlyWrittenSources) hasMany(ctx context.Context, toVisit hash.HashSet) (filtered hash.HashSet, err error) {
+	sl.mu.Lock()
+	defer sl.mu.Unlock()
+
+	return sl.sourceSet.hasMany(ctx, toVisit)
+}
+
+// rotatingGCCopier is a variant of gcCopier that writes to multiple output files. Once an output file exceeds
+// a threshold size, it finalizes the file and begins writing a new one.
+type rotatingGCCopier struct {
+	gcCopier
+	maxFileSize  uint64
+	bytesWritten uint64
+	archiveLevel chunks.GCArchiveLevel
+	dest         *NomsBlockStore
+	eg           errgroup.Group
+
+	specs newlyWrittenSources
+	// seenChunks is the set of chunks already written to the in-progress table
+	seenChunks hash.HashSet
+	// incrementalUpdateManifest determines whether to update the manifest as each new file is created.
+	// This is useful for resuming GC if it gets interrupted, but only if the manifest isn't going to be swapped at the end.
+	// Thus, this should be true only when oldGen is being GCed, when not in full mode
+	incrementalUpdateManifest bool
+}
+
+func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, fileSizeLimit uint64, incrementalUpdateManifest bool) (*rotatingGCCopier, error) {
+	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
+	if err != nil {
+		return nil, err
+	}
+	return &rotatingGCCopier{
+		gcCopier:     gcCopier{writer, tfp},
+		maxFileSize:  fileSizeLimit,
+		bytesWritten: 0,
+		archiveLevel: archiveLevel,
+		dest:         dest,
+		eg:           errgroup.Group{},
+		specs: newlyWrittenSources{
+			sourceSet: make(chunkSourceSet),
+		},
+		seenChunks:                hash.HashSet{},
+		incrementalUpdateManifest: incrementalUpdateManifest,
+	}, nil
+}
+
+func (gcc *rotatingGCCopier) addChunk(ctx context.Context, c ToChunker) error {
+	_, err := gcc.writer.AddChunk(c)
+	if err != nil {
+		return err
+	}
+	gcc.seenChunks.Insert(c.Hash())
+	gcc.bytesWritten += uint64(c.CompressedSize())
+	if gcc.bytesWritten >= gcc.maxFileSize {
+		return gcc.rotate(ctx)
+	}
+	return nil
+}
+
+// containsChunk checks whether the in-progress table file contains the provided chunk
+func (gcc *rotatingGCCopier) containsChunk(h hash.Hash) bool {
+	if gcc == nil {
+		return false
+	}
+	return gcc.seenChunks.Has(h)
+}
+
+func (gcc *rotatingGCCopier) finalizeChildWriter(ctx context.Context, copier gcCopier) error {
+
+	specs, pending, err := copier.copyTablesToDir(ctx)
+	if err != nil {
+		return err
+	}
+	defer pending.Close()
+
+	if gcc.incrementalUpdateManifest {
+		err = addTableFilesToManifest(ctx, gcc.dest, specs, gcc.specs.sourceSet)
+		if err != nil {
+			return err
+		}
+	}
+	if _, abort := os.LookupEnv("DOLT_TEST_ABORT_GC_AFTER_INCREMENTAL_FILE_WRITE"); abort {
+		return fmt.Errorf("GC aborting after writing incremental table file")
+	}
+
+	return gcc.specs.append(ctx, specs, gcc.dest)
+}
+
+// rotate replaces the table file writer with a new one, and creates an async goroutine to
+// finalize the original writer.
+func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
+	// Copy the state of gcc.gcCopier so that the child goroutine will use the current writer,
+	// even after gcc.gcCopier.writer gets reassigned below.
+	previousCopier := gcc.gcCopier
+	gcc.eg.Go(func() error {
+		return gcc.finalizeChildWriter(ctx, previousCopier)
+	})
+
+	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel)
+	if err != nil {
+		return err
+	}
+
+	gcc.gcCopier.writer = writer
+	gcc.seenChunks = hash.HashSet{}
+	gcc.bytesWritten = 0
+	return nil
+}
+
+func (gcc *rotatingGCCopier) finalize(ctx context.Context) (*newlyWrittenSources, error) {
+	err := gcc.finalizeChildWriter(ctx, gcc.gcCopier)
+	if err != nil {
+		return nil, err
+	}
+	err = gcc.eg.Wait()
+	gcc.writer = nil
+	return &gcc.specs, err
+}
+
+func (gcc *rotatingGCCopier) waitForPendingChunkFiles() error {
+	if gcc == nil {
+		return nil
+	}
+	return gcc.eg.Wait()
+}
+
+func (gcc *rotatingGCCopier) cancel(ctx context.Context) error {
+	gcc.specs.sourceSet.close()
+	if gcc.writer != nil {
+		err := gcc.writer.Cancel()
+		if err != nil {
+			return err
+		}
+		gcc.writer = nil
+	}
+	return nil
 }

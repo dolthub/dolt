@@ -55,13 +55,15 @@ const (
 
 var ErrNothingToCollect = errors.New("no changes since last gc")
 
-// GetAddrsCurry returns a function that will add a chunk's child
+// InsertAddrsCurry returns a function that will add a chunk's child
 // references to a HashSet. The intermediary lets us build a single
 // HashSet per memTable.
-type GetAddrsCurry func(c Chunk) GetAddrsCb
+type InsertAddrsCurry func(c Chunk) InsertAddrsCb
 
-// GetAddrsCb adds the refs for a pre-specified chunk to |addrs|
-type GetAddrsCb func(ctx context.Context, addrs hash.HashSet, exists PendingRefExists) error
+// InsertAddrsCb adds the refs for a pre-specified chunk to |addrs|
+type InsertAddrsCb func(ctx context.Context, addrs hash.HashSet, exists PendingRefExists) error
+
+type GetAddrs func(c Chunk, cb func(a hash.Hash) error) error
 
 type PendingRefExists func(hash.Hash) bool
 
@@ -92,7 +94,7 @@ type ChunkStore interface {
 	// to Flush(). Put may be called concurrently with other calls to Put(),
 	// Get(), GetMany(), Has() and HasMany(). Will return an error if the
 	// addrs returned by `getAddrs` are absent from the chunk store.
-	Put(ctx context.Context, c Chunk, getAddrs GetAddrsCurry) error
+	Put(ctx context.Context, c Chunk, getAddrs InsertAddrsCurry) error
 
 	// Returns the NomsBinFormat with which this ChunkSource is compatible.
 	Version() string
@@ -170,7 +172,7 @@ type MarkAndSweeper interface {
 	//
 	// A call to this function blocks until the entire transitive set of
 	// chunks is accessed and copied.
-	SaveHashes(context.Context, []hash.Hash) error
+	SaveHashes(context.Context, hash.HashSet) error
 
 	Finalize(context.Context) (GCFinalizer, error)
 
@@ -221,6 +223,24 @@ const (
 	MaxArchiveLevel = SimpleArchive // Currently GroupedArchives are not supported in GC.
 )
 
+// GCConfig describes the behavior of garbage collection.
+type GCConfig struct {
+	Mode                GCMode
+	ArchiveLevel        GCArchiveLevel
+	IncrementalFileSize uint64
+}
+
+// A value of 0 for IncrementalFileSize means that no incremental tables are written during GC.
+const IncrementalGCTablesDisabled uint64 = 0
+
+func NewGCConfig(mode GCMode, archiveLevel GCArchiveLevel, incrementalFileSize uint64) GCConfig {
+	return GCConfig{
+		Mode:                mode,
+		ArchiveLevel:        archiveLevel,
+		IncrementalFileSize: incrementalFileSize,
+	}
+}
+
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
 type ChunkStoreGarbageCollector interface {
 	ChunkStore
@@ -248,8 +268,9 @@ type ChunkStoreGarbageCollector interface {
 	// hashes which should be saved into |dest|. The hashes are
 	// filtered through the |filter| and their references are walked with
 	// |getAddrs|, each of those addresses being filtered and copied as
-	// well.
-	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode, cmp GCArchiveLevel) (MarkAndSweeper, error)
+	// well. If |incrementalUpdateManifest| is true and incremental GC is enabled,
+	// it will attempt to update the destination manifest as after it writes each incremental file.
+	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrs, filter HasManyFunc, dest ChunkStore, config GCConfig, incrementalUpdateManifest bool) (MarkAndSweeper, error)
 
 	// Count returns the number of chunks in the store.
 	Count() (uint32, error)
