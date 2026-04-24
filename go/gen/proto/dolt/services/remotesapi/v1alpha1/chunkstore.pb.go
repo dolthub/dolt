@@ -168,6 +168,78 @@ func (Feature) EnumDescriptor() ([]byte, []int) {
 	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{1}
 }
 
+// Capabilities the client declares about itself on every request
+// that the server may use to select alternative URL endpoints,
+// wire encodings, or response shapes. Missing value => not capable.
+// Servers SHOULD continue to serve clients that send no
+// capabilities; capability-gated behaviors are intended as
+// optional upgrades, not correctness boundaries.
+//
+// Populated by the client at send time. Servers that construct
+// prebuilt RefreshTableFileUrlRequest messages for echo-style
+// responses (see ListTableFiles, GetDownloadLocations) SHOULD
+// leave this field unset; the sending client overwrites it.
+//
+// Guidelines for growth:
+//   - Add new values at the end; never reuse a removed value's
+//     number. Reserve retired numbers rather than repurposing them.
+//   - CLIENT_CAPABILITY_UNSPECIFIED = 0 is never sent; presence of
+//     the zero value in a received list should be ignored.
+type ClientCapability int32
+
+const (
+	ClientCapability_CLIENT_CAPABILITY_UNSPECIFIED ClientCapability = 0
+	// The client's HTTP fetcher correctly handles HTTP/2 response
+	// bodies for chunk and table-file downloads. Servers MAY return
+	// signed URLs that resolve to HTTP/2 endpoints (e.g. CDN-fronted
+	// hosts) when this is set. When this is not set, servers SHOULD
+	// prefer URLs that resolve to HTTP/1.1 endpoints if such a
+	// choice is available. Servers without a separate HTTP/1.1
+	// option may return whatever URL they have; old clients
+	// generally succeed against HTTP/2 URLs but can see degraded
+	// performance under certain network conditions.
+	ClientCapability_CLIENT_CAPABILITY_HTTP2_DOWNLOAD ClientCapability = 1
+)
+
+// Enum value maps for ClientCapability.
+var (
+	ClientCapability_name = map[int32]string{
+		0: "CLIENT_CAPABILITY_UNSPECIFIED",
+		1: "CLIENT_CAPABILITY_HTTP2_DOWNLOAD",
+	}
+	ClientCapability_value = map[string]int32{
+		"CLIENT_CAPABILITY_UNSPECIFIED":    0,
+		"CLIENT_CAPABILITY_HTTP2_DOWNLOAD": 1,
+	}
+)
+
+func (x ClientCapability) Enum() *ClientCapability {
+	p := new(ClientCapability)
+	*p = x
+	return p
+}
+
+func (x ClientCapability) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ClientCapability) Descriptor() protoreflect.EnumDescriptor {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[2].Descriptor()
+}
+
+func (ClientCapability) Type() protoreflect.EnumType {
+	return &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[2]
+}
+
+func (x ClientCapability) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ClientCapability.Descriptor instead.
+func (ClientCapability) EnumDescriptor() ([]byte, []int) {
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{2}
+}
+
 type ManifestAppendixOption int32
 
 const (
@@ -201,11 +273,11 @@ func (x ManifestAppendixOption) String() string {
 }
 
 func (ManifestAppendixOption) Descriptor() protoreflect.EnumDescriptor {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[2].Descriptor()
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[3].Descriptor()
 }
 
 func (ManifestAppendixOption) Type() protoreflect.EnumType {
-	return &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[2]
+	return &file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes[3]
 }
 
 func (x ManifestAppendixOption) Number() protoreflect.EnumNumber {
@@ -214,7 +286,7 @@ func (x ManifestAppendixOption) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ManifestAppendixOption.Descriptor instead.
 func (ManifestAppendixOption) EnumDescriptor() ([]byte, []int) {
-	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{2}
+	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP(), []int{3}
 }
 
 // RepoId is how repositories are represented on dolthub, for example
@@ -800,13 +872,17 @@ type UploadLoc_HttpPost struct {
 func (*UploadLoc_HttpPost) isUploadLoc_Location() {}
 
 type GetDownloadLocsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RepoId        *RepoId                `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
-	ChunkHashes   [][]byte               `protobuf:"bytes,2,rep,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
-	RepoToken     string                 `protobuf:"bytes,3,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
-	RepoPath      string                 `protobuf:"bytes,4,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	RepoId      *RepoId                `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	ChunkHashes [][]byte               `protobuf:"bytes,2,rep,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
+	RepoToken   string                 `protobuf:"bytes,3,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
+	RepoPath    string                 `protobuf:"bytes,4,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
+	// Capabilities the calling client declares about itself. See the
+	// ClientCapability enum. Populated by the client on every outbound
+	// request; absent means "not capable."
+	ClientCapabilities []ClientCapability `protobuf:"varint,5,rep,packed,name=client_capabilities,json=clientCapabilities,proto3,enum=dolt.services.remotesapi.v1alpha1.ClientCapability" json:"client_capabilities,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *GetDownloadLocsRequest) Reset() {
@@ -865,6 +941,13 @@ func (x *GetDownloadLocsRequest) GetRepoPath() string {
 		return x.RepoPath
 	}
 	return ""
+}
+
+func (x *GetDownloadLocsRequest) GetClientCapabilities() []ClientCapability {
+	if x != nil {
+		return x.ClientCapabilities
+	}
+	return nil
 }
 
 type GetDownloadLocsResponse struct {
@@ -937,9 +1020,17 @@ type StreamChunkLocationsRequest struct {
 	// tag/length overhead of |repeated bytes| is ~10% of the whole
 	// request in a 512-hash batch. Servers MUST reject requests
 	// where len(chunk_hashes) is not a multiple of 20.
-	ChunkHashes   []byte `protobuf:"bytes,4,opt,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ChunkHashes []byte `protobuf:"bytes,4,opt,name=chunk_hashes,json=chunkHashes,proto3" json:"chunk_hashes,omitempty"`
+	// Stream-scoped. The client's capability set does not change
+	// within a single server-side stream. Today every request on
+	// the stream MUST carry the full set (same rule as
+	// repo_id/token/path above); the reliable-RPC layer relies on
+	// this for replay correctness. A future protocol revision may
+	// allow omitting it after the first message; servers MUST
+	// continue to accept it on every message.
+	ClientCapabilities []ClientCapability `protobuf:"varint,5,rep,packed,name=client_capabilities,json=clientCapabilities,proto3,enum=dolt.services.remotesapi.v1alpha1.ClientCapability" json:"client_capabilities,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *StreamChunkLocationsRequest) Reset() {
@@ -996,6 +1087,13 @@ func (x *StreamChunkLocationsRequest) GetRepoPath() string {
 func (x *StreamChunkLocationsRequest) GetChunkHashes() []byte {
 	if x != nil {
 		return x.ChunkHashes
+	}
+	return nil
+}
+
+func (x *StreamChunkLocationsRequest) GetClientCapabilities() []ClientCapability {
+	if x != nil {
+		return x.ClientCapabilities
 	}
 	return nil
 }
@@ -1909,11 +2007,15 @@ type ListTableFilesRequest struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	RepoId *RepoId                `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
 	// Deprecated: Marked as deprecated in dolt/services/remotesapi/v1alpha1/chunkstore.proto.
-	AppendixOnly  bool   `protobuf:"varint,2,opt,name=appendix_only,json=appendixOnly,proto3" json:"appendix_only,omitempty"`
-	RepoToken     string `protobuf:"bytes,3,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
-	RepoPath      string `protobuf:"bytes,4,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	AppendixOnly bool   `protobuf:"varint,2,opt,name=appendix_only,json=appendixOnly,proto3" json:"appendix_only,omitempty"`
+	RepoToken    string `protobuf:"bytes,3,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
+	RepoPath     string `protobuf:"bytes,4,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
+	// Capabilities the calling client declares about itself. See the
+	// ClientCapability enum. Populated by the client on every outbound
+	// request; absent means "not capable."
+	ClientCapabilities []ClientCapability `protobuf:"varint,5,rep,packed,name=client_capabilities,json=clientCapabilities,proto3,enum=dolt.services.remotesapi.v1alpha1.ClientCapability" json:"client_capabilities,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ListTableFilesRequest) Reset() {
@@ -1973,6 +2075,13 @@ func (x *ListTableFilesRequest) GetRepoPath() string {
 		return x.RepoPath
 	}
 	return ""
+}
+
+func (x *ListTableFilesRequest) GetClientCapabilities() []ClientCapability {
+	if x != nil {
+		return x.ClientCapabilities
+	}
+	return nil
 }
 
 type TableFileInfo struct {
@@ -2060,13 +2169,21 @@ func (x *TableFileInfo) GetSplitOffset() uint64 {
 }
 
 type RefreshTableFileUrlRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RepoId        *RepoId                `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
-	FileId        string                 `protobuf:"bytes,2,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
-	RepoToken     string                 `protobuf:"bytes,3,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
-	RepoPath      string                 `protobuf:"bytes,4,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RepoId    *RepoId                `protobuf:"bytes,1,opt,name=repo_id,json=repoId,proto3" json:"repo_id,omitempty"`
+	FileId    string                 `protobuf:"bytes,2,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
+	RepoToken string                 `protobuf:"bytes,3,opt,name=repo_token,json=repoToken,proto3" json:"repo_token,omitempty"`
+	RepoPath  string                 `protobuf:"bytes,4,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
+	// Capabilities the calling client declares about itself. See the
+	// ClientCapability enum. The client stamps this field at send
+	// time on every outbound request, including when it is sending
+	// a RefreshTableFileUrlRequest that the server previously
+	// prebuilt and embedded in a response (see TableFileInfo and
+	// DownloadLoc). Servers constructing prebuilt refresh requests
+	// SHOULD leave this field unset; the client overwrites it.
+	ClientCapabilities []ClientCapability `protobuf:"varint,5,rep,packed,name=client_capabilities,json=clientCapabilities,proto3,enum=dolt.services.remotesapi.v1alpha1.ClientCapability" json:"client_capabilities,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *RefreshTableFileUrlRequest) Reset() {
@@ -2125,6 +2242,13 @@ func (x *RefreshTableFileUrlRequest) GetRepoPath() string {
 		return x.RepoPath
 	}
 	return ""
+}
+
+func (x *RefreshTableFileUrlRequest) GetClientCapabilities() []ClientCapability {
+	if x != nil {
+		return x.ClientCapabilities
+	}
+	return nil
 }
 
 type RefreshTableFileUrlResponse struct {
@@ -2622,23 +2746,25 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x0ftable_file_hash\x18\x01 \x01(\fR\rtableFileHash\x12S\n" +
 	"\thttp_post\x18\x02 \x01(\v24.dolt.services.remotesapi.v1alpha1.HttpPostTableFileH\x00R\bhttpPostB\n" +
 	"\n" +
-	"\blocation\"\xbb\x01\n" +
+	"\blocation\"\xa1\x02\n" +
 	"\x16GetDownloadLocsRequest\x12B\n" +
 	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12!\n" +
 	"\fchunk_hashes\x18\x02 \x03(\fR\vchunkHashes\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x03 \x01(\tR\trepoToken\x12\x1b\n" +
-	"\trepo_path\x18\x04 \x01(\tR\brepoPath\"|\n" +
+	"\trepo_path\x18\x04 \x01(\tR\brepoPath\x12d\n" +
+	"\x13client_capabilities\x18\x05 \x03(\x0e23.dolt.services.remotesapi.v1alpha1.ClientCapabilityR\x12clientCapabilities\"|\n" +
 	"\x17GetDownloadLocsResponse\x12B\n" +
 	"\x04locs\x18\x01 \x03(\v2..dolt.services.remotesapi.v1alpha1.DownloadLocR\x04locs\x12\x1d\n" +
 	"\n" +
-	"repo_token\x18\x02 \x01(\tR\trepoToken\"\xc0\x01\n" +
+	"repo_token\x18\x02 \x01(\tR\trepoToken\"\xa6\x02\n" +
 	"\x1bStreamChunkLocationsRequest\x12B\n" +
 	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x02 \x01(\tR\trepoToken\x12\x1b\n" +
 	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x12!\n" +
-	"\fchunk_hashes\x18\x04 \x01(\fR\vchunkHashes\"\xce\x05\n" +
+	"\fchunk_hashes\x18\x04 \x01(\fR\vchunkHashes\x12d\n" +
+	"\x13client_capabilities\x18\x05 \x03(\x0e23.dolt.services.remotesapi.v1alpha1.ClientCapabilityR\x12clientCapabilities\"\xce\x05\n" +
 	"\x1cStreamChunkLocationsResponse\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x01 \x01(\tR\trepoToken\x12p\n" +
@@ -2727,13 +2853,14 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\vnbf_version\x18\x01 \x01(\tR\n" +
 	"nbfVersion\x12\x1f\n" +
 	"\vnbs_version\x18\x02 \x01(\tR\n" +
-	"nbsVersion\"\xc0\x01\n" +
+	"nbsVersion\"\xa6\x02\n" +
 	"\x15ListTableFilesRequest\x12B\n" +
 	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12'\n" +
 	"\rappendix_only\x18\x02 \x01(\bB\x02\x18\x01R\fappendixOnly\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x03 \x01(\tR\trepoToken\x12\x1b\n" +
-	"\trepo_path\x18\x04 \x01(\tR\brepoPath\"\xa5\x02\n" +
+	"\trepo_path\x18\x04 \x01(\tR\brepoPath\x12d\n" +
+	"\x13client_capabilities\x18\x05 \x03(\x0e23.dolt.services.remotesapi.v1alpha1.ClientCapabilityR\x12clientCapabilities\"\xa5\x02\n" +
 	"\rTableFileInfo\x12\x17\n" +
 	"\afile_id\x18\x01 \x01(\tR\x06fileId\x12\x1d\n" +
 	"\n" +
@@ -2741,13 +2868,14 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x03url\x18\x03 \x01(\tR\x03url\x12?\n" +
 	"\rrefresh_after\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\frefreshAfter\x12f\n" +
 	"\x0frefresh_request\x18\x05 \x01(\v2=.dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequestR\x0erefreshRequest\x12!\n" +
-	"\fsplit_offset\x18\x06 \x01(\x04R\vsplitOffset\"\xb5\x01\n" +
+	"\fsplit_offset\x18\x06 \x01(\x04R\vsplitOffset\"\x9b\x02\n" +
 	"\x1aRefreshTableFileUrlRequest\x12B\n" +
 	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12\x17\n" +
 	"\afile_id\x18\x02 \x01(\tR\x06fileId\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x03 \x01(\tR\trepoToken\x12\x1b\n" +
-	"\trepo_path\x18\x04 \x01(\tR\brepoPath\"\x8f\x01\n" +
+	"\trepo_path\x18\x04 \x01(\tR\brepoPath\x12d\n" +
+	"\x13client_capabilities\x18\x05 \x03(\x0e23.dolt.services.remotesapi.v1alpha1.ClientCapabilityR\x12clientCapabilities\"\x8f\x01\n" +
 	"\x1bRefreshTableFileUrlResponse\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12?\n" +
 	"\rrefresh_after\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\frefreshAfter\x12\x1d\n" +
@@ -2777,7 +2905,10 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"+PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET\x10\x02*F\n" +
 	"\aFeature\x12\x17\n" +
 	"\x13FEATURE_UNSPECIFIED\x10\x00\x12\"\n" +
-	"\x1eFEATURE_STREAM_CHUNK_LOCATIONS\x10\x01*\x89\x01\n" +
+	"\x1eFEATURE_STREAM_CHUNK_LOCATIONS\x10\x01*[\n" +
+	"\x10ClientCapability\x12!\n" +
+	"\x1dCLIENT_CAPABILITY_UNSPECIFIED\x10\x00\x12$\n" +
+	" CLIENT_CAPABILITY_HTTP2_DOWNLOAD\x10\x01*\x89\x01\n" +
 	"\x16ManifestAppendixOption\x12(\n" +
 	"$MANIFEST_APPENDIX_OPTION_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cMANIFEST_APPENDIX_OPTION_SET\x10\x01\x12#\n" +
@@ -2808,115 +2939,120 @@ func file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescGZIP() []byt
 	return file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescData
 }
 
-var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_goTypes = []any{
 	(PushConcurrencyControl)(0),                          // 0: dolt.services.remotesapi.v1alpha1.PushConcurrencyControl
 	(Feature)(0),                                         // 1: dolt.services.remotesapi.v1alpha1.Feature
-	(ManifestAppendixOption)(0),                          // 2: dolt.services.remotesapi.v1alpha1.ManifestAppendixOption
-	(*RepoId)(nil),                                       // 3: dolt.services.remotesapi.v1alpha1.RepoId
-	(*HasChunksRequest)(nil),                             // 4: dolt.services.remotesapi.v1alpha1.HasChunksRequest
-	(*HasChunksResponse)(nil),                            // 5: dolt.services.remotesapi.v1alpha1.HasChunksResponse
-	(*HttpGetChunk)(nil),                                 // 6: dolt.services.remotesapi.v1alpha1.HttpGetChunk
-	(*RangeChunk)(nil),                                   // 7: dolt.services.remotesapi.v1alpha1.RangeChunk
-	(*HttpGetRange)(nil),                                 // 8: dolt.services.remotesapi.v1alpha1.HttpGetRange
-	(*DownloadLoc)(nil),                                  // 9: dolt.services.remotesapi.v1alpha1.DownloadLoc
-	(*HttpPostTableFile)(nil),                            // 10: dolt.services.remotesapi.v1alpha1.HttpPostTableFile
-	(*UploadLoc)(nil),                                    // 11: dolt.services.remotesapi.v1alpha1.UploadLoc
-	(*GetDownloadLocsRequest)(nil),                       // 12: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
-	(*GetDownloadLocsResponse)(nil),                      // 13: dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
-	(*StreamChunkLocationsRequest)(nil),                  // 14: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest
-	(*StreamChunkLocationsResponse)(nil),                 // 15: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse
-	(*TableFileDetails)(nil),                             // 16: dolt.services.remotesapi.v1alpha1.TableFileDetails
-	(*GetUploadLocsRequest)(nil),                         // 17: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
-	(*GetUploadLocsResponse)(nil),                        // 18: dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
-	(*RebaseRequest)(nil),                                // 19: dolt.services.remotesapi.v1alpha1.RebaseRequest
-	(*RebaseResponse)(nil),                               // 20: dolt.services.remotesapi.v1alpha1.RebaseResponse
-	(*RootRequest)(nil),                                  // 21: dolt.services.remotesapi.v1alpha1.RootRequest
-	(*RootResponse)(nil),                                 // 22: dolt.services.remotesapi.v1alpha1.RootResponse
-	(*ChunkTableInfo)(nil),                               // 23: dolt.services.remotesapi.v1alpha1.ChunkTableInfo
-	(*CommitRequest)(nil),                                // 24: dolt.services.remotesapi.v1alpha1.CommitRequest
-	(*CommitResponse)(nil),                               // 25: dolt.services.remotesapi.v1alpha1.CommitResponse
-	(*GetRepoMetadataRequest)(nil),                       // 26: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
-	(*GetRepoMetadataResponse)(nil),                      // 27: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
-	(*ClientRepoFormat)(nil),                             // 28: dolt.services.remotesapi.v1alpha1.ClientRepoFormat
-	(*ListTableFilesRequest)(nil),                        // 29: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
-	(*TableFileInfo)(nil),                                // 30: dolt.services.remotesapi.v1alpha1.TableFileInfo
-	(*RefreshTableFileUrlRequest)(nil),                   // 31: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
-	(*RefreshTableFileUrlResponse)(nil),                  // 32: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
-	(*ListTableFilesResponse)(nil),                       // 33: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
-	(*AddTableFilesRequest)(nil),                         // 34: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
-	(*AddTableFilesResponse)(nil),                        // 35: dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
-	(*StreamChunkLocationsResponse_TableFileRecord)(nil), // 36: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
-	(*StreamChunkLocationsResponse_ChunkLocation)(nil),   // 37: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
-	(*timestamppb.Timestamp)(nil),                        // 38: google.protobuf.Timestamp
+	(ClientCapability)(0),                                // 2: dolt.services.remotesapi.v1alpha1.ClientCapability
+	(ManifestAppendixOption)(0),                          // 3: dolt.services.remotesapi.v1alpha1.ManifestAppendixOption
+	(*RepoId)(nil),                                       // 4: dolt.services.remotesapi.v1alpha1.RepoId
+	(*HasChunksRequest)(nil),                             // 5: dolt.services.remotesapi.v1alpha1.HasChunksRequest
+	(*HasChunksResponse)(nil),                            // 6: dolt.services.remotesapi.v1alpha1.HasChunksResponse
+	(*HttpGetChunk)(nil),                                 // 7: dolt.services.remotesapi.v1alpha1.HttpGetChunk
+	(*RangeChunk)(nil),                                   // 8: dolt.services.remotesapi.v1alpha1.RangeChunk
+	(*HttpGetRange)(nil),                                 // 9: dolt.services.remotesapi.v1alpha1.HttpGetRange
+	(*DownloadLoc)(nil),                                  // 10: dolt.services.remotesapi.v1alpha1.DownloadLoc
+	(*HttpPostTableFile)(nil),                            // 11: dolt.services.remotesapi.v1alpha1.HttpPostTableFile
+	(*UploadLoc)(nil),                                    // 12: dolt.services.remotesapi.v1alpha1.UploadLoc
+	(*GetDownloadLocsRequest)(nil),                       // 13: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
+	(*GetDownloadLocsResponse)(nil),                      // 14: dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
+	(*StreamChunkLocationsRequest)(nil),                  // 15: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest
+	(*StreamChunkLocationsResponse)(nil),                 // 16: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse
+	(*TableFileDetails)(nil),                             // 17: dolt.services.remotesapi.v1alpha1.TableFileDetails
+	(*GetUploadLocsRequest)(nil),                         // 18: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
+	(*GetUploadLocsResponse)(nil),                        // 19: dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
+	(*RebaseRequest)(nil),                                // 20: dolt.services.remotesapi.v1alpha1.RebaseRequest
+	(*RebaseResponse)(nil),                               // 21: dolt.services.remotesapi.v1alpha1.RebaseResponse
+	(*RootRequest)(nil),                                  // 22: dolt.services.remotesapi.v1alpha1.RootRequest
+	(*RootResponse)(nil),                                 // 23: dolt.services.remotesapi.v1alpha1.RootResponse
+	(*ChunkTableInfo)(nil),                               // 24: dolt.services.remotesapi.v1alpha1.ChunkTableInfo
+	(*CommitRequest)(nil),                                // 25: dolt.services.remotesapi.v1alpha1.CommitRequest
+	(*CommitResponse)(nil),                               // 26: dolt.services.remotesapi.v1alpha1.CommitResponse
+	(*GetRepoMetadataRequest)(nil),                       // 27: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
+	(*GetRepoMetadataResponse)(nil),                      // 28: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
+	(*ClientRepoFormat)(nil),                             // 29: dolt.services.remotesapi.v1alpha1.ClientRepoFormat
+	(*ListTableFilesRequest)(nil),                        // 30: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
+	(*TableFileInfo)(nil),                                // 31: dolt.services.remotesapi.v1alpha1.TableFileInfo
+	(*RefreshTableFileUrlRequest)(nil),                   // 32: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
+	(*RefreshTableFileUrlResponse)(nil),                  // 33: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
+	(*ListTableFilesResponse)(nil),                       // 34: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
+	(*AddTableFilesRequest)(nil),                         // 35: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
+	(*AddTableFilesResponse)(nil),                        // 36: dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
+	(*StreamChunkLocationsResponse_TableFileRecord)(nil), // 37: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
+	(*StreamChunkLocationsResponse_ChunkLocation)(nil),   // 38: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
+	(*timestamppb.Timestamp)(nil),                        // 39: google.protobuf.Timestamp
 }
 var file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_depIdxs = []int32{
-	3,  // 0: dolt.services.remotesapi.v1alpha1.HasChunksRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	7,  // 1: dolt.services.remotesapi.v1alpha1.HttpGetRange.ranges:type_name -> dolt.services.remotesapi.v1alpha1.RangeChunk
-	6,  // 2: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetChunk
-	8,  // 3: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get_range:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetRange
-	38, // 4: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_after:type_name -> google.protobuf.Timestamp
-	31, // 5: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
-	10, // 6: dolt.services.remotesapi.v1alpha1.UploadLoc.http_post:type_name -> dolt.services.remotesapi.v1alpha1.HttpPostTableFile
-	3,  // 7: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	9,  // 8: dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.DownloadLoc
-	3,  // 9: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	36, // 10: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.table_files:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
-	37, // 11: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.locations:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
-	3,  // 12: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	16, // 13: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.table_file_details:type_name -> dolt.services.remotesapi.v1alpha1.TableFileDetails
-	11, // 14: dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.UploadLoc
-	3,  // 15: dolt.services.remotesapi.v1alpha1.RebaseRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	3,  // 16: dolt.services.remotesapi.v1alpha1.RootRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	3,  // 17: dolt.services.remotesapi.v1alpha1.CommitRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	23, // 18: dolt.services.remotesapi.v1alpha1.CommitRequest.chunk_table_info:type_name -> dolt.services.remotesapi.v1alpha1.ChunkTableInfo
-	28, // 19: dolt.services.remotesapi.v1alpha1.CommitRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
-	3,  // 20: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	28, // 21: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
-	0,  // 22: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse.push_concurrency_control:type_name -> dolt.services.remotesapi.v1alpha1.PushConcurrencyControl
-	1,  // 23: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse.features:type_name -> dolt.services.remotesapi.v1alpha1.Feature
-	3,  // 24: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	38, // 25: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_after:type_name -> google.protobuf.Timestamp
-	31, // 26: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
-	3,  // 27: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	38, // 28: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse.refresh_after:type_name -> google.protobuf.Timestamp
-	30, // 29: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
-	30, // 30: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.appendix_table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
-	3,  // 31: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
-	28, // 32: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
-	23, // 33: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.chunk_table_info:type_name -> dolt.services.remotesapi.v1alpha1.ChunkTableInfo
-	2,  // 34: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.appendix_option:type_name -> dolt.services.remotesapi.v1alpha1.ManifestAppendixOption
-	38, // 35: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord.refresh_after:type_name -> google.protobuf.Timestamp
-	26, // 36: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:input_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
-	4,  // 37: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:input_type -> dolt.services.remotesapi.v1alpha1.HasChunksRequest
-	12, // 38: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
-	12, // 39: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
-	14, // 40: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:input_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest
-	17, // 41: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
-	19, // 42: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:input_type -> dolt.services.remotesapi.v1alpha1.RebaseRequest
-	21, // 43: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:input_type -> dolt.services.remotesapi.v1alpha1.RootRequest
-	24, // 44: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:input_type -> dolt.services.remotesapi.v1alpha1.CommitRequest
-	29, // 45: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
-	31, // 46: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:input_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
-	34, // 47: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
-	27, // 48: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:output_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
-	5,  // 49: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:output_type -> dolt.services.remotesapi.v1alpha1.HasChunksResponse
-	13, // 50: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
-	13, // 51: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
-	15, // 52: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:output_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse
-	18, // 53: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
-	20, // 54: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:output_type -> dolt.services.remotesapi.v1alpha1.RebaseResponse
-	22, // 55: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:output_type -> dolt.services.remotesapi.v1alpha1.RootResponse
-	25, // 56: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:output_type -> dolt.services.remotesapi.v1alpha1.CommitResponse
-	33, // 57: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
-	32, // 58: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:output_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
-	35, // 59: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
-	48, // [48:60] is the sub-list for method output_type
-	36, // [36:48] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	4,  // 0: dolt.services.remotesapi.v1alpha1.HasChunksRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	8,  // 1: dolt.services.remotesapi.v1alpha1.HttpGetRange.ranges:type_name -> dolt.services.remotesapi.v1alpha1.RangeChunk
+	7,  // 2: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetChunk
+	9,  // 3: dolt.services.remotesapi.v1alpha1.DownloadLoc.http_get_range:type_name -> dolt.services.remotesapi.v1alpha1.HttpGetRange
+	39, // 4: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_after:type_name -> google.protobuf.Timestamp
+	32, // 5: dolt.services.remotesapi.v1alpha1.DownloadLoc.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
+	11, // 6: dolt.services.remotesapi.v1alpha1.UploadLoc.http_post:type_name -> dolt.services.remotesapi.v1alpha1.HttpPostTableFile
+	4,  // 7: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	2,  // 8: dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest.client_capabilities:type_name -> dolt.services.remotesapi.v1alpha1.ClientCapability
+	10, // 9: dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.DownloadLoc
+	4,  // 10: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	2,  // 11: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest.client_capabilities:type_name -> dolt.services.remotesapi.v1alpha1.ClientCapability
+	37, // 12: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.table_files:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord
+	38, // 13: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.locations:type_name -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.ChunkLocation
+	4,  // 14: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	17, // 15: dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest.table_file_details:type_name -> dolt.services.remotesapi.v1alpha1.TableFileDetails
+	12, // 16: dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse.locs:type_name -> dolt.services.remotesapi.v1alpha1.UploadLoc
+	4,  // 17: dolt.services.remotesapi.v1alpha1.RebaseRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	4,  // 18: dolt.services.remotesapi.v1alpha1.RootRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	4,  // 19: dolt.services.remotesapi.v1alpha1.CommitRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	24, // 20: dolt.services.remotesapi.v1alpha1.CommitRequest.chunk_table_info:type_name -> dolt.services.remotesapi.v1alpha1.ChunkTableInfo
+	29, // 21: dolt.services.remotesapi.v1alpha1.CommitRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
+	4,  // 22: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	29, // 23: dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
+	0,  // 24: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse.push_concurrency_control:type_name -> dolt.services.remotesapi.v1alpha1.PushConcurrencyControl
+	1,  // 25: dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse.features:type_name -> dolt.services.remotesapi.v1alpha1.Feature
+	4,  // 26: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	2,  // 27: dolt.services.remotesapi.v1alpha1.ListTableFilesRequest.client_capabilities:type_name -> dolt.services.remotesapi.v1alpha1.ClientCapability
+	39, // 28: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_after:type_name -> google.protobuf.Timestamp
+	32, // 29: dolt.services.remotesapi.v1alpha1.TableFileInfo.refresh_request:type_name -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
+	4,  // 30: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	2,  // 31: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest.client_capabilities:type_name -> dolt.services.remotesapi.v1alpha1.ClientCapability
+	39, // 32: dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse.refresh_after:type_name -> google.protobuf.Timestamp
+	31, // 33: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
+	31, // 34: dolt.services.remotesapi.v1alpha1.ListTableFilesResponse.appendix_table_file_info:type_name -> dolt.services.remotesapi.v1alpha1.TableFileInfo
+	4,  // 35: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.repo_id:type_name -> dolt.services.remotesapi.v1alpha1.RepoId
+	29, // 36: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.client_repo_format:type_name -> dolt.services.remotesapi.v1alpha1.ClientRepoFormat
+	24, // 37: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.chunk_table_info:type_name -> dolt.services.remotesapi.v1alpha1.ChunkTableInfo
+	3,  // 38: dolt.services.remotesapi.v1alpha1.AddTableFilesRequest.appendix_option:type_name -> dolt.services.remotesapi.v1alpha1.ManifestAppendixOption
+	39, // 39: dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse.TableFileRecord.refresh_after:type_name -> google.protobuf.Timestamp
+	27, // 40: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:input_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest
+	5,  // 41: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:input_type -> dolt.services.remotesapi.v1alpha1.HasChunksRequest
+	13, // 42: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
+	13, // 43: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest
+	15, // 44: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:input_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest
+	18, // 45: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:input_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest
+	20, // 46: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:input_type -> dolt.services.remotesapi.v1alpha1.RebaseRequest
+	22, // 47: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:input_type -> dolt.services.remotesapi.v1alpha1.RootRequest
+	25, // 48: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:input_type -> dolt.services.remotesapi.v1alpha1.CommitRequest
+	30, // 49: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesRequest
+	32, // 50: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:input_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest
+	35, // 51: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:input_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesRequest
+	28, // 52: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetRepoMetadata:output_type -> dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse
+	6,  // 53: dolt.services.remotesapi.v1alpha1.ChunkStoreService.HasChunks:output_type -> dolt.services.remotesapi.v1alpha1.HasChunksResponse
+	14, // 54: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
+	14, // 55: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamDownloadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse
+	16, // 56: dolt.services.remotesapi.v1alpha1.ChunkStoreService.StreamChunkLocations:output_type -> dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse
+	19, // 57: dolt.services.remotesapi.v1alpha1.ChunkStoreService.GetUploadLocations:output_type -> dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse
+	21, // 58: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Rebase:output_type -> dolt.services.remotesapi.v1alpha1.RebaseResponse
+	23, // 59: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Root:output_type -> dolt.services.remotesapi.v1alpha1.RootResponse
+	26, // 60: dolt.services.remotesapi.v1alpha1.ChunkStoreService.Commit:output_type -> dolt.services.remotesapi.v1alpha1.CommitResponse
+	34, // 61: dolt.services.remotesapi.v1alpha1.ChunkStoreService.ListTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.ListTableFilesResponse
+	33, // 62: dolt.services.remotesapi.v1alpha1.ChunkStoreService.RefreshTableFileUrl:output_type -> dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse
+	36, // 63: dolt.services.remotesapi.v1alpha1.ChunkStoreService.AddTableFiles:output_type -> dolt.services.remotesapi.v1alpha1.AddTableFilesResponse
+	52, // [52:64] is the sub-list for method output_type
+	40, // [40:52] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_init() }
@@ -2936,7 +3072,7 @@ func file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc), len(file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc)),
-			NumEnums:      3,
+			NumEnums:      4,
 			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   1,
