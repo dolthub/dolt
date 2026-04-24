@@ -105,7 +105,8 @@ func TestSchemaOverrides(t *testing.T) {
 // Provide additional test coverage for adaptive types by running Schema Override tests
 // using adaptive types instead of address types.
 func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
-	defer func() { typeinfo.UseAdaptiveEncoding = false }()
+	adaptiveEncoding := typeinfo.UseAdaptiveEncoding
+	defer func() { typeinfo.UseAdaptiveEncoding = adaptiveEncoding }()
 	typeinfo.UseAdaptiveEncoding = true
 	harness := newDoltEnginetestHarness(t)
 	RunSchemaOverridesTest(t, harness)
@@ -807,7 +808,8 @@ func TestBigBlobs(t *testing.T) {
 }
 
 func TestAdaptiveEncoding(t *testing.T) {
-	defer func() { typeinfo.UseAdaptiveEncoding = false }()
+	adaptiveEncoding := typeinfo.UseAdaptiveEncoding
+	defer func() { typeinfo.UseAdaptiveEncoding = adaptiveEncoding }()
 	typeinfo.UseAdaptiveEncoding = true
 
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Representation)

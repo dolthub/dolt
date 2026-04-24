@@ -222,16 +222,16 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 	{
 		Name: "blob length function",
 		SetUpScript: []string{
-			`CREATE TABLE blobdata (                                                                                                                
-  pk          INT NOT NULL PRIMARY KEY,                                                                                                
-  c_varbinary VARBINARY(255),                                                                                                          
-  c_tinyblob  TINYBLOB,                                                                                                                
-  c_blob      BLOB,                                                                                                                    
-  c_medblob   MEDIUMBLOB,                                                                                                              
-  c_longblob  LONGBLOB                                                                                                                 
+			`CREATE TABLE blobdata (
+  pk          INT NOT NULL PRIMARY KEY,
+  c_varbinary VARBINARY(255),
+  c_tinyblob  TINYBLOB,
+  c_blob      BLOB,
+  c_medblob   MEDIUMBLOB,
+  c_longblob  LONGBLOB
 );`,
-			`INSERT INTO blobdata VALUES                                                                                                            
-  (1, 'varbin-old-1', 'tiny-old-1', 'blob-old-1', 'med-old-1', 'long-old-1'),                                                          
+			`INSERT INTO blobdata VALUES
+  (1, 'varbin-old-1', 'tiny-old-1', 'blob-old-1', 'med-old-1', 'long-old-1'),
   (2, 'varbin-old-2', 'tiny-old-2', REPEAT('b', 60000), REPEAT('m', 70000), REPEAT('l', 90000));`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -242,6 +242,575 @@ var AdaptiveEncodingScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT LENGTH(c_varbinary), LENGTH(c_tinyblob), LENGTH(c_blob), LENGTH(c_medblob), LENGTH(c_longblob) FROM blobdata where pk = 2 order by 1",
 				Expected: []sql.Row{{12, 10, 60000, 70000, 90000}},
+			},
+		},
+	},
+	{
+		Name: "single adaptive column interleaved with non-adaptive columns",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_single (
+				pk INT NOT NULL PRIMARY KEY,
+				a  INT,
+				b  LONGBLOB,
+				c  INT
+			)`,
+			`INSERT INTO t_ae_single VALUES
+				(1, 10, REPEAT('a', 100),  20),
+				(2, 10, REPEAT('a', 2039), 20),
+				(3, 10, REPEAT('a', 2040), 20),
+				(4, 10, REPEAT('a', 5000), 20),
+				(5, 10, NULL,              20),
+				(6, 10, REPEAT('a', 19),   20),
+				(7, 10, REPEAT('a', 240),  20),
+				(8, 10, REPEAT('a', 241),  20)`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, LENGTH(b) FROM t_ae_single ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 100},
+					{2, 2039},
+					{3, 2040},
+					{4, 5000},
+					{5, nil},
+					{6, 19},
+					{7, 240},
+					{8, 241},
+				},
+			},
+			{
+				Query:    "SELECT LENGTH(b) FROM t_ae_single WHERE b = REPEAT('a', 100)",
+				Expected: []sql.Row{{100}},
+			},
+			{
+				Query:    "SELECT LENGTH(b) FROM t_ae_single WHERE b = REPEAT('a', 2040)",
+				Expected: []sql.Row{{2040}},
+			},
+			{
+				Query:    "SELECT pk, a, c FROM t_ae_single WHERE pk = 3",
+				Expected: []sql.Row{{3, 10, 20}},
+			},
+		},
+	},
+	{
+		Name: "two adaptive columns interleaved with non-adaptive columns, largest outlined first",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_two (
+				pk INT NOT NULL PRIMARY KEY,
+				b1 LONGBLOB,
+				a  INT,
+				b2 LONGBLOB
+			)`,
+			`INSERT INTO t_ae_two VALUES
+				(1, REPEAT('a', 1000), 1, REPEAT('b', 1000)),
+				(2, REPEAT('a', 1500), 2, REPEAT('b', 1500)),
+				(3, REPEAT('a', 3000), 3, REPEAT('b',  100)),
+				(4, REPEAT('a',  100), 4, REPEAT('b', 3000)),
+				(5, REPEAT('a', 3000), 5, REPEAT('b', 3000)),
+				(6, NULL,              6, REPEAT('b', 1500))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, LENGTH(b1), LENGTH(b2) FROM t_ae_two ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 1000, 1000},
+					{2, 1500, 1500},
+					{3, 3000, 100},
+					{4, 100, 3000},
+					{5, 3000, 3000},
+					{6, nil, 1500},
+				},
+			},
+			{
+				Query:    "SELECT LENGTH(b1) FROM t_ae_two WHERE b2 = REPEAT('b', 1500) AND pk = 2",
+				Expected: []sql.Row{{1500}},
+			},
+			{
+				Query:    "SELECT LENGTH(b2) FROM t_ae_two WHERE b1 = REPEAT('a', 3000) AND pk = 3",
+				Expected: []sql.Row{{100}},
+			},
+			{
+				Query:    "SELECT LENGTH(b1) FROM t_ae_two WHERE b2 = REPEAT('b', 3000) AND pk = 4",
+				Expected: []sql.Row{{100}},
+			},
+			{
+				Query:    "SELECT LENGTH(b2) FROM t_ae_two WHERE pk = 6",
+				Expected: []sql.Row{{1500}},
+			},
+		},
+	},
+	{
+		Name: "three adaptive columns with non-adaptive columns between them",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_three (
+				pk INT NOT NULL PRIMARY KEY,
+				b1 LONGBLOB,
+				a1 INT,
+				b2 LONGBLOB,
+				a2 INT,
+				b3 LONGBLOB
+			)`,
+			`INSERT INTO t_ae_three VALUES
+				(1, REPEAT('a', 5000), 1, REPEAT('b', 1500), 1, REPEAT('c', 10)),
+				(2, REPEAT('a', 2000), 2, REPEAT('b', 2000), 2, REPEAT('c', 10)),
+				(3, REPEAT('a', 3000), 3, REPEAT('b', 3000), 3, REPEAT('c', 3000)),
+				(4, REPEAT('a', 5000), 4, REPEAT('b', 5000), 4, REPEAT('c', 10))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, LENGTH(b1), LENGTH(b2), LENGTH(b3) FROM t_ae_three ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 5000, 1500, 10},
+					{2, 2000, 2000, 10},
+					{3, 3000, 3000, 3000},
+					{4, 5000, 5000, 10},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_three WHERE b3 = REPEAT('c', 10) ORDER BY pk",
+				Expected: []sql.Row{{1}, {2}, {4}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_three WHERE b1 = REPEAT('a', 3000) AND b2 = REPEAT('b', 3000) AND b3 = REPEAT('c', 3000)",
+				Expected: []sql.Row{{3}},
+			},
+		},
+	},
+	{
+		Name: "adaptive encoding sizes at varint 1-to-2 byte encoding boundary",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_varint (
+				pk INT NOT NULL PRIMARY KEY,
+				b1 LONGBLOB,
+				b2 LONGBLOB,
+				b3 LONGBLOB,
+				b4 LONGBLOB,
+				b5 LONGBLOB,
+				b6 LONGBLOB,
+				b7 LONGBLOB,
+				b8 LONGBLOB,
+				b9 LONGBLOB
+			)`,
+			`INSERT INTO t_ae_varint VALUES
+				(1,
+				 REPEAT('a', 240), REPEAT('b', 240), REPEAT('c', 240),
+				 REPEAT('d', 240), REPEAT('e', 240), REPEAT('f', 240),
+				 REPEAT('g', 240), REPEAT('h', 240), REPEAT('i', 240))`,
+			`INSERT INTO t_ae_varint VALUES
+				(2,
+				 REPEAT('a', 241), REPEAT('b', 241), REPEAT('c', 241),
+				 REPEAT('d', 241), REPEAT('e', 241), REPEAT('f', 241),
+				 REPEAT('g', 241), REPEAT('h', 241), REPEAT('i', 241))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, LENGTH(b1), LENGTH(b9) FROM t_ae_varint ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 240, 240},
+					{2, 241, 241},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_varint WHERE b1 = REPEAT('a', 240)",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_varint WHERE b9 = REPEAT('i', 240)",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_varint WHERE b1 = REPEAT('a', 241)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_varint WHERE b9 = REPEAT('i', 241)",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "single adaptive column: 2047-byte value stays inline, 2048-byte value is outlined",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_threshold (pk INT NOT NULL PRIMARY KEY, b LONGBLOB)`,
+			`INSERT INTO t_ae_threshold VALUES
+				(1, REPEAT('x', 2046)),
+				(2, REPEAT('x', 2047)),
+				(3, REPEAT('x', 2048)),
+				(4, REPEAT('x', 2049))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, LENGTH(b) FROM t_ae_threshold ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 2046},
+					{2, 2047},
+					{3, 2048},
+					{4, 2049},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_threshold WHERE b = REPEAT('x', 2046) ORDER BY pk",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_threshold WHERE b = REPEAT('x', 2047) ORDER BY pk",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_threshold WHERE b = REPEAT('x', 2048) ORDER BY pk",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_threshold WHERE b = REPEAT('x', 2049) ORDER BY pk",
+				Expected: []sql.Row{{4}},
+			},
+		},
+	},
+	{
+		Name: "multiple large adaptive columns with combined inline size approaching 64KB",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_large_combined (
+				pk INT NOT NULL PRIMARY KEY,
+				b1 LONGBLOB,
+				b2 LONGBLOB,
+				b3 LONGBLOB,
+				b4 LONGBLOB,
+				b5 LONGBLOB
+			)`,
+			`INSERT INTO t_ae_large_combined VALUES
+				(1,
+				 REPEAT('a', 12000), REPEAT('b', 12000), REPEAT('c', 12000),
+				 REPEAT('d', 12000), REPEAT('e', 12000))`,
+			`INSERT INTO t_ae_large_combined VALUES
+				(2,
+				 REPEAT('a', 12000), REPEAT('b', 12000), REPEAT('c', 12000),
+				 REPEAT('d', 1000),  REPEAT('e', 1000))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, LENGTH(b1), LENGTH(b2), LENGTH(b3), LENGTH(b4), LENGTH(b5) FROM t_ae_large_combined ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 12000, 12000, 12000, 12000, 12000},
+					{2, 12000, 12000, 12000, 1000, 1000},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_large_combined WHERE b1 = REPEAT('a', 12000) ORDER BY pk",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_large_combined WHERE b5 = REPEAT('e', 12000)",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_large_combined WHERE b4 = REPEAT('d', 1000)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_large_combined WHERE b5 = REPEAT('e', 1000)",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "many medium adaptive columns with selective outlining",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_selective (
+				pk INT NOT NULL PRIMARY KEY,
+				b1 LONGBLOB,
+				b2 LONGBLOB,
+				b3 LONGBLOB,
+				b4 LONGBLOB,
+				b5 LONGBLOB
+			)`,
+			`INSERT INTO t_ae_selective VALUES
+				(1,
+				 REPEAT('a', 1500), REPEAT('b', 1500), REPEAT('c', 1500),
+				 REPEAT('d', 1500), REPEAT('e', 1500))`,
+			`INSERT INTO t_ae_selective VALUES
+				(2,
+				 REPEAT('a', 2000), REPEAT('b', 1000), REPEAT('c', 500),
+				 REPEAT('d', 200),  REPEAT('e', 100))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, LENGTH(b1), LENGTH(b2), LENGTH(b3), LENGTH(b4), LENGTH(b5) FROM t_ae_selective ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 1500, 1500, 1500, 1500, 1500},
+					{2, 2000, 1000, 500, 200, 100},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_selective WHERE b5 = REPEAT('e', 1500)",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_selective WHERE b1 = REPEAT('a', 1500) AND b4 = REPEAT('d', 1500)",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT LENGTH(b1), LENGTH(b2), LENGTH(b3), LENGTH(b4), LENGTH(b5) FROM t_ae_selective WHERE pk = 2",
+				Expected: []sql.Row{{2000, 1000, 500, 200, 100}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_selective WHERE b1 = REPEAT('a', 2000) AND b5 = REPEAT('e', 100)",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "combined LONGBLOB values much greater than 64KB",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_large (
+				pk INT NOT NULL PRIMARY KEY,
+				b1 LONGBLOB,
+				b2 LONGBLOB,
+				b3 LONGBLOB,
+				b4 LONGBLOB,
+				b5 LONGBLOB
+			)`,
+			`INSERT INTO t_ae_large VALUES
+				(1,
+				 REPEAT('a', 30000), REPEAT('b', 30000), REPEAT('c', 30000),
+				 REPEAT('d', 30000), REPEAT('e', 30000))`,
+			`INSERT INTO t_ae_large VALUES
+				(2,
+				 REPEAT('a', 30000), REPEAT('b', 30000), REPEAT('c', 30000),
+				 REPEAT('d', 1500),  REPEAT('e', 100))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, LENGTH(b1), LENGTH(b2), LENGTH(b3), LENGTH(b4), LENGTH(b5) FROM t_ae_large ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 30000, 30000, 30000, 30000, 30000},
+					{2, 30000, 30000, 30000, 1500, 100},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_large WHERE b1 = REPEAT('a', 30000) ORDER BY pk",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_large WHERE b4 = REPEAT('d', 1500)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_large WHERE b5 = REPEAT('e', 100)",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "LONGTEXT outlining uses byte length not character count",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_text_enc (
+				pk INT NOT NULL PRIMARY KEY,
+				t  LONGTEXT CHARACTER SET utf8mb4
+			)`,
+			// Single-byte ASCII: 2047 chars = 2047 bytes → inline (2048 ≤ 2048).
+			`INSERT INTO t_ae_text_enc VALUES (1, REPEAT('a', 2047))`,
+			// Single-byte ASCII: 2048 chars = 2048 bytes → outlined (2049 > 2048).
+			`INSERT INTO t_ae_text_enc VALUES (2, REPEAT('a', 2048))`,
+			// 2-byte UTF-8 ('ñ'): 1023 chars = 2046 bytes → inline (2047 ≤ 2048).
+			// This has far fewer characters than row 1 but the same ballpark byte length.
+			`INSERT INTO t_ae_text_enc VALUES (3, REPEAT('ñ', 1023))`,
+			// 2-byte UTF-8 ('ñ'): 1024 chars = 2048 bytes → outlined (2049 > 2048).
+			// Same character count as an ASCII string that is well under the threshold,
+			// but outlined because its storage byte length crosses the 2048-byte limit.
+			`INSERT INTO t_ae_text_enc VALUES (4, REPEAT('ñ', 1024))`,
+			// 3-byte UTF-8 ('€'): 682 chars = 2046 bytes → inline (2047 ≤ 2048).
+			`INSERT INTO t_ae_text_enc VALUES (5, REPEAT('€', 682))`,
+			// 3-byte UTF-8 ('€'): 683 chars = 2049 bytes → outlined (2050 > 2048).
+			`INSERT INTO t_ae_text_enc VALUES (6, REPEAT('€', 683))`,
+			// 4-byte UTF-8 ('😀'): 511 chars = 2044 bytes → inline (2045 ≤ 2048).
+			`INSERT INTO t_ae_text_enc VALUES (7, REPEAT('😀', 511))`,
+			// 4-byte UTF-8 ('😀'): 512 chars = 2048 bytes → outlined (2049 > 2048).
+			`INSERT INTO t_ae_text_enc VALUES (8, REPEAT('😀', 512))`,
+			// Small values that are never outlined regardless of encoding.
+			`INSERT INTO t_ae_text_enc VALUES (9,  REPEAT('a', 15))`,
+			`INSERT INTO t_ae_text_enc VALUES (10, REPEAT('ñ', 10))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// CHAR_LENGTH returns character count; LENGTH returns storage byte count.
+				// The outlining threshold is a byte count (2048), not a character count.
+				Query: "SELECT pk, CHAR_LENGTH(t), LENGTH(t) FROM t_ae_text_enc ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 2047, 2047}, // ASCII inline
+					{2, 2048, 2048}, // ASCII outlined
+					{3, 1023, 2046}, // 2-byte inline  (fewer chars than row 1, similar bytes)
+					{4, 1024, 2048}, // 2-byte outlined (same chars as ASCII 1024, but 2× bytes)
+					{5, 682, 2046},  // 3-byte inline
+					{6, 683, 2049},  // 3-byte outlined
+					{7, 511, 2044},  // 4-byte inline
+					{8, 512, 2048},  // 4-byte outlined
+					{9, 15, 15},     // tiny ASCII, always inline
+					{10, 10, 20},    // tiny 2-byte, always inline (20 bytes < 21-byte OOB cost)
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('a', 2047)",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('a', 2048)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('ñ', 1023)",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('ñ', 1024)",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('€', 682)",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('€', 683)",
+				Expected: []sql.Row{{6}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('😀', 511)",
+				Expected: []sql.Row{{7}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_enc WHERE t = REPEAT('😀', 512)",
+				Expected: []sql.Row{{8}},
+			},
+		},
+	},
+	{
+		Name: "multiple LONGTEXT columns with multibyte characters and combined size much greater than 64KB",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_text_large (
+				pk INT NOT NULL PRIMARY KEY,
+				a  INT,
+				t1 LONGTEXT CHARACTER SET utf8mb4,
+				b  INT,
+				t2 LONGTEXT CHARACTER SET utf8mb4,
+				c  INT,
+				t3 LONGTEXT CHARACTER SET utf8mb4,
+				d  INT,
+				t4 LONGTEXT CHARACTER SET utf8mb4,
+				e  INT,
+				t5 LONGTEXT CHARACTER SET utf8mb4
+			)`,
+			// Row 1: five columns each with 15000 'ñ' characters = 30000 bytes.
+			// Combined tracked inline ≈ 5×30001 = 150005 bytes, much greater than 64 KB.
+			// All five are immediately stored out-of-band (30001 >> 2048).
+			`INSERT INTO t_ae_text_large VALUES
+				(1, 1,
+				 REPEAT('ñ', 15000), 2,
+				 REPEAT('ñ', 15000), 3,
+				 REPEAT('ñ', 15000), 4,
+				 REPEAT('ñ', 15000), 5,
+				 REPEAT('ñ', 15000))`,
+			// Row 2: t1..t3 at 15000 'ñ' chars (30000 bytes, immediately OOB),
+			// t4 at 1000 'ñ' chars (2000 bytes, initially inline),
+			// t5 at 100 'ñ' chars (200 bytes, inline).
+			// Combined tracked inline ≈ 3×30001 + 4 + 2001 + 4 + 201 = 92213 bytes.
+			// Outlining: t1..t3 first (largest savings), then t4.
+			// After outlining t1..t3+t4 the total drops below 2048; t5 stays inline.
+			`INSERT INTO t_ae_text_large VALUES
+				(2, 1,
+				 REPEAT('ñ', 15000), 2,
+				 REPEAT('ñ', 15000), 3,
+				 REPEAT('ñ', 15000), 4,
+				 REPEAT('ñ', 1000),  5,
+				 REPEAT('ñ', 100))`,
+			// Row 3: single large column to verify 3-byte characters at large scale.
+			// t1 = 10000 '€' chars = 30000 bytes; others small (tiny + NULL mix).
+			`INSERT INTO t_ae_text_large VALUES
+				(3, 1,
+				 REPEAT('€', 10000), 2,
+				 REPEAT('€', 100), 3,
+				 NULL, 4,
+				 REPEAT('€', 50), 5,
+				 REPEAT('a', 200))`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// CHAR_LENGTH ≠ LENGTH for multibyte text: CHAR_LENGTH counts characters,
+				// LENGTH counts storage bytes (each 'ñ' is 2 bytes).
+				Query: "SELECT pk, CHAR_LENGTH(t1), LENGTH(t1), CHAR_LENGTH(t5), LENGTH(t5) FROM t_ae_text_large ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 15000, 30000, 15000, 30000},
+					{2, 15000, 30000, 100, 200},
+					{3, 10000, 30000, 200, 200},
+				},
+			},
+			{
+				Query:    "SELECT CHAR_LENGTH(t1), CHAR_LENGTH(t2), CHAR_LENGTH(t3), CHAR_LENGTH(t4), CHAR_LENGTH(t5) FROM t_ae_text_large WHERE pk = 1",
+				Expected: []sql.Row{{15000, 15000, 15000, 15000, 15000}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_large WHERE t5 = REPEAT('ñ', 100)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_large WHERE t4 = REPEAT('ñ', 1000)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT CHAR_LENGTH(t1), LENGTH(t1), CHAR_LENGTH(t2), LENGTH(t2), LENGTH(t3) FROM t_ae_text_large WHERE pk = 3",
+				Expected: []sql.Row{{10000, 30000, 100, 300, nil}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_text_large WHERE t1 = REPEAT('€', 10000)",
+				Expected: []sql.Row{{3}},
+			},
+		},
+	},
+	{
+		Name: "mixed LONGTEXT and LONGBLOB adaptive columns with multibyte text",
+		SetUpScript: []string{
+			`CREATE TABLE t_ae_mixed (
+				pk INT NOT NULL PRIMARY KEY,
+				a  INT,
+				t  LONGTEXT CHARACTER SET utf8mb4,
+				b  INT,
+				bl LONGBLOB,
+				c  INT
+			)`,
+			`INSERT INTO t_ae_mixed VALUES (1, 1, REPEAT('a', 1000), 2, REPEAT('x', 1000), 3)`,
+			`INSERT INTO t_ae_mixed VALUES (2, 1, REPEAT('ñ', 1024), 2, REPEAT('x', 100), 3)`,
+			`INSERT INTO t_ae_mixed VALUES (3, 1, REPEAT('a', 100), 2, REPEAT('x', 3000), 3)`,
+			`INSERT INTO t_ae_mixed VALUES (4, 1, REPEAT('ñ', 3000), 2, REPEAT('x', 3000), 3)`,
+			`INSERT INTO t_ae_mixed VALUES (5, 1, NULL, 2, REPEAT('x', 1500), 3)`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT pk, CHAR_LENGTH(t), LENGTH(t), LENGTH(bl) FROM t_ae_mixed ORDER BY pk",
+				Expected: []sql.Row{
+					{1, 1000, 1000, 1000},
+					{2, 1024, 2048, 100},
+					{3, 100, 100, 3000},
+					{4, 3000, 6000, 3000},
+					{5, nil, nil, 1500},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_mixed WHERE t = REPEAT('ñ', 1024) AND bl = REPEAT('x', 100)",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_mixed WHERE bl = REPEAT('x', 3000) AND t = REPEAT('a', 100)",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_mixed WHERE t = REPEAT('ñ', 3000) AND bl = REPEAT('x', 3000)",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT pk FROM t_ae_mixed WHERE t IS NULL AND bl = REPEAT('x', 1500)",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "SELECT a, b, c FROM t_ae_mixed WHERE pk = 2",
+				Expected: []sql.Row{{1, 2, 3}},
 			},
 		},
 	},
