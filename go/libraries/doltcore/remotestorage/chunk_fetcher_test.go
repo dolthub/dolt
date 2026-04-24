@@ -128,7 +128,7 @@ func testIdFunc() (*remotesapi.RepoId, string) {
 
 func testBuildDlReq(hashes [][]byte) *remotesapi.GetDownloadLocsRequest {
 	id, token := testIdFunc()
-	return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoToken: token, ChunkHashes: hashes}
+	return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoToken: token, ChunkHashes: hashes, ClientCapabilities: clientCapabilities}
 }
 
 // buildFlatHashBuf returns a |nHashes|*20-byte buffer where hash |i|
@@ -207,6 +207,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 		assert.Equal(t, "token", locs[0].RefreshRequest.RepoToken)
 		assert.Equal(t, repoPath, locs[0].RefreshRequest.RepoPath)
 		assert.Equal(t, "file-1", locs[0].RefreshRequest.FileId)
+		assert.Equal(t, clientCapabilities, locs[0].RefreshRequest.ClientCapabilities)
 	})
 
 	t.Run("CrossResponseReuse", func(t *testing.T) {

@@ -102,8 +102,9 @@ func TestDoltRemoteTableFile(t *testing.T) {
 					csClient: &csClient,
 				},
 				info: &remotesapi.TableFileInfo{
-					Url:          "http://localhost/example_url/fileid",
-					RefreshAfter: timestamppb.Now(),
+					Url:            "http://localhost/example_url/fileid",
+					RefreshAfter:   timestamppb.Now(),
+					RefreshRequest: &remotesapi.RefreshTableFileUrlRequest{FileId: "file-id"},
 				},
 			}
 			f.info.RefreshAfter.Seconds -= 10
@@ -111,6 +112,12 @@ func TestDoltRemoteTableFile(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, seenUrl, "http://localhost/example_url/fileid&refreshed")
 			require.Equal(t, f.info.RefreshAfter, csClient.resp.RefreshAfter)
+			// The client must stamp its capability set onto the
+			// server-echoed RefreshTableFileUrlRequest at send time,
+			// even though the echo arrived empty. See the
+			// ClientCapability enum comment in chunkstore.proto.
+			require.NotNil(t, csClient.lastIn)
+			require.Equal(t, clientCapabilities, csClient.lastIn.ClientCapabilities)
 		})
 		t.Run("404", func(t *testing.T) {
 			var buf bytes.Buffer
@@ -160,6 +167,39 @@ func TestDoltRemoteTableFile(t *testing.T) {
 	})
 }
 
+// TestLocationRefresh_StampsClientCapabilities covers the
+// locationRefresh.GetURL echo path: when the server-prebuilt
+// RefreshTableFileUrlRequest embedded in a DownloadLoc arrives with
+// ClientCapabilities empty, the client must stamp its own capability
+// set onto the request before making the refresh RPC.
+func TestLocationRefresh_StampsClientCapabilities(t *testing.T) {
+	var csClient refreshClient
+	csClient.resp = &remotesapi.RefreshTableFileUrlResponse{
+		Url:          "http://example.com/refreshed",
+		RefreshAfter: timestamppb.Now(),
+	}
+	csClient.resp.RefreshAfter.Seconds += 10
+
+	past := timestamppb.Now()
+	past.Seconds -= 10
+
+	r := &locationRefresh{
+		URL:          "http://example.com/original",
+		RefreshAfter: past.AsTime(),
+		// Empty ClientCapabilities mirrors a server that
+		// correctly leaves the field unset on the echoed
+		// RefreshRequest.
+		RefreshRequest: &remotesapi.RefreshTableFileUrlRequest{FileId: "file-id"},
+	}
+
+	url, err := r.GetURL(context.Background(), nil, &csClient)
+	require.NoError(t, err)
+	require.Equal(t, "http://example.com/refreshed", url)
+	require.True(t, csClient.called)
+	require.NotNil(t, csClient.lastIn)
+	require.Equal(t, clientCapabilities, csClient.lastIn.ClientCapabilities)
+}
+
 type fetcher func(*http.Request) (*http.Response, error)
 
 func (f fetcher) Do(req *http.Request) (*http.Response, error) {
@@ -168,6 +208,7 @@ func (f fetcher) Do(req *http.Request) (*http.Response, error) {
 
 type refreshClient struct {
 	called bool
+	lastIn *remotesapi.RefreshTableFileUrlRequest
 	resp   *remotesapi.RefreshTableFileUrlResponse
 }
 
@@ -203,6 +244,7 @@ func (f refreshClient) ListTableFiles(ctx context.Context, in *remotesapi.ListTa
 }
 func (f *refreshClient) RefreshTableFileUrl(ctx context.Context, in *remotesapi.RefreshTableFileUrlRequest, opts ...grpc.CallOption) (*remotesapi.RefreshTableFileUrlResponse, error) {
 	f.called = true
+	f.lastIn = in
 	return f.resp, nil
 }
 func (f refreshClient) AddTableFiles(ctx context.Context, in *remotesapi.AddTableFilesRequest, opts ...grpc.CallOption) (*remotesapi.AddTableFilesResponse, error) {
