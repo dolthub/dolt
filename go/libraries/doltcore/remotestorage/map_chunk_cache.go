@@ -28,8 +28,8 @@ type mapChunkCache struct {
 	has    *lru.TwoQueueCache[hash.Hash, struct{}]
 }
 
-const defaultCacheChunkCapacity = 32 * 1024
-const defaultCacheHasCapacity = 1024 * 1024
+const defaultCacheChunkCapacity = 128 * 1024
+const defaultCacheHasCapacity = 4096 * 1024
 
 func newMapChunkCache() *mapChunkCache {
 	return NewMapChunkCacheWithCapacity(defaultCacheChunkCapacity, defaultCacheHasCapacity)
