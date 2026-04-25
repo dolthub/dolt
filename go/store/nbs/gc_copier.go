@@ -60,6 +60,9 @@ func (gcc *gcCopier) addChunk(ctx context.Context, c ToChunker) error {
 // If the writer should be closed and deleted, instead of being used with
 // copyTablesToDir, call this method.
 func (gcc *gcCopier) cancel(_ context.Context) error {
+	if gcc.writer == nil {
+		return nil
+	}
 	err := gcc.writer.Cancel()
 	if err != nil {
 		return fmt.Errorf("gcCopier cancel err: %w", err)
@@ -79,6 +82,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, pendi
 
 	defer func() {
 		gcc.writer.Cancel()
+		gcc.writer = nil
 	}()
 
 	if gcc.writer.ChunkCount() == 0 {
@@ -239,7 +243,6 @@ func (gcc *rotatingGCCopier) containsChunk(h hash.Hash) bool {
 }
 
 func (gcc *rotatingGCCopier) finalizeChildWriter(ctx context.Context, copier gcCopier) error {
-
 	specs, pending, err := copier.copyTablesToDir(ctx)
 	if err != nil {
 		return err
