@@ -402,6 +402,13 @@ func (tx *DoltTransaction) doCommit(
 	}
 
 	// TODO: no-op if the working set hasn't changed since the transaction started
+	if commit == nil && workingAndStagedEqual(workingSet, startState) &&
+		!workingSet.MergeActive() && !startState.MergeActive() &&
+		!workingSet.RebaseActive() && !startState.RebaseActive() {
+		return workingSet, nil, nil
+	}
+
+	// TODO: how to get working set commit??
 
 	mergeOpts := branchState.EditOpts()
 
