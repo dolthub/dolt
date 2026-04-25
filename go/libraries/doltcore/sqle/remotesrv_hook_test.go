@@ -297,3 +297,203 @@ func TestReplicaWriteFiltersHooks(t *testing.T) {
 	assert.True(t, firedHook.calledFor("refs/heads/main"),
 		"hook with ExecuteForReplicaWrite()=true must fire on replica writes")
 }
+
+// TestRepairStaleWorkingSetAfterPush verifies the server-side repair path:
+// when an older client (pre-PR #10810) pushes by advancing the branch HEAD
+// without updating the corresponding working set ref, hooksFiringRemoteSrvStore
+// detects the stale state and advances the working set so subsequent pushes
+// succeed.
+func TestRepairStaleWorkingSetAfterPush(t *testing.T) {
+	ctx := t.Context()
+	dEnv := CreateTestEnv()
+	defer dEnv.Close()
+
+	ddb := dEnv.DoltDB(ctx)
+	branchRef := ref.NewBranchRef("main")
+	wsRef, err := ref.WorkingSetRefForHead(branchRef)
+	require.NoError(t, err)
+
+	// Establish an initial working set whose working/staged roots match the
+	// initial HEAD's root. Without this, there is no working set to leave
+	// stale and the repair is a no-op.
+	headCommit, err := ddb.ResolveCommitRef(ctx, branchRef)
+	require.NoError(t, err)
+	initialRoot, err := headCommit.GetRootValue(ctx)
+	require.NoError(t, err)
+	initialRootHash, err := initialRoot.HashOf()
+	require.NoError(t, err)
+
+	// CreateTestEnv may or may not have created a working set; use whatever
+	// hash is already there as |prevHash| for the CAS.
+	var initialPrevHash hash.Hash
+	if existingWs, err := ddb.ResolveWorkingSet(ctx, wsRef); err == nil {
+		initialPrevHash, err = existingWs.HashOf()
+		require.NoError(t, err)
+	}
+	initialWs := doltdb.EmptyWorkingSet(wsRef).
+		WithWorkingRoot(initialRoot).
+		WithStagedRoot(initialRoot)
+	err = ddb.UpdateWorkingSet(ctx, wsRef, initialWs, initialPrevHash, doltdb.TodoWorkingSetMeta(), nil)
+	require.NoError(t, err)
+
+	// Build a new root that differs from |initialRoot| by adding a table, so
+	// the staleness check (ws.staged != HEAD's root) actually fires.
+	tSchema := createTestSchema(t)
+	rowData := createTestRowData(t, ddb.ValueReadWriter(), ddb.NodeStore(), tSchema)
+	tbl, err := createHooksTestTable(ddb.ValueReadWriter(), ddb.NodeStore(), tSchema, rowData)
+	require.NoError(t, err)
+	newRoot, err := initialRoot.PutTable(ctx, doltdb.TableName{Name: "added"}, tbl)
+	require.NoError(t, err)
+	_, newRootHash, err := ddb.WriteRootValue(ctx, newRoot)
+	require.NoError(t, err)
+
+	rawDB := doltdb.ExposeDatabaseFromDoltDB(ddb)
+	cs := datas.ChunkStoreFromDatabase(rawDB)
+
+	// Snapshot the noms root before creating the stale state, so we can
+	// rewind and replay through hooksFiringRemoteSrvStore.Commit.
+	preCommitRoot, err := cs.Root(ctx)
+	require.NoError(t, err)
+
+	// ddb.Commit advances only the branch HEAD ref, leaving the working set
+	// ref pointing at the now-stale |initialWs|. This mirrors what older
+	// Dolt clients do during push.
+	meta, err := datas.NewCommitMeta("test", "test@test.com", "advance head only")
+	require.NoError(t, err)
+	_, err = ddb.Commit(ctx, newRootHash, branchRef, meta)
+	require.NoError(t, err)
+
+	staleCommitRoot, err := cs.Root(ctx)
+	require.NoError(t, err)
+	require.NotEqual(t, preCommitRoot, staleCommitRoot)
+
+	// Confirm the stale state is observable: ws.staged still points at
+	// |initialRootHash| even though HEAD has advanced.
+	staleWs, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	require.NoError(t, err)
+	staleStagedHash, err := staleWs.StagedRoot().HashOf()
+	require.NoError(t, err)
+	require.Equal(t, initialRootHash, staleStagedHash,
+		"setup precondition: working set staged root must still be at the initial root")
+
+	// Rewind the chunk store so we can replay the stale-creating commit
+	// through hooksFiringRemoteSrvStore.Commit.
+	rewound, err := cs.Commit(ctx, preCommitRoot, staleCommitRoot)
+	require.NoError(t, err)
+	require.True(t, rewound)
+
+	rss, ok := cs.(remotesrv.RemoteSrvStore)
+	require.True(t, ok)
+	store := hooksFiringRemoteSrvStore{RemoteSrvStore: rss, ddb: ddb}
+
+	committed, err := store.Commit(ctx, staleCommitRoot, preCommitRoot)
+	require.NoError(t, err)
+	require.True(t, committed)
+
+	// After the repair, ws.working and ws.staged must both point at the new
+	// HEAD's root.
+	repairedWs, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	require.NoError(t, err)
+	repairedWorkingHash, err := repairedWs.WorkingRoot().HashOf()
+	require.NoError(t, err)
+	repairedStagedHash, err := repairedWs.StagedRoot().HashOf()
+	require.NoError(t, err)
+	assert.Equal(t, newRootHash, repairedWorkingHash,
+		"after repair, ws.working must match the new HEAD's root")
+	assert.Equal(t, newRootHash, repairedStagedHash,
+		"after repair, ws.staged must match the new HEAD's root")
+}
+
+// TestRepairWorkingSetSkippedWhenClientUpdated verifies that the repair logic
+// is a no-op when the client included the working set update in its push
+// (modern client behavior).
+func TestRepairWorkingSetSkippedWhenClientUpdated(t *testing.T) {
+	ctx := t.Context()
+	dEnv := CreateTestEnv()
+	defer dEnv.Close()
+
+	ddb := dEnv.DoltDB(ctx)
+	branchRef := ref.NewBranchRef("main")
+	wsRef, err := ref.WorkingSetRefForHead(branchRef)
+	require.NoError(t, err)
+
+	headCommit, err := ddb.ResolveCommitRef(ctx, branchRef)
+	require.NoError(t, err)
+	initialRoot, err := headCommit.GetRootValue(ctx)
+	require.NoError(t, err)
+
+	// CreateTestEnv may or may not have created a working set; use whatever
+	// hash is already there as |prevHash| for the CAS.
+	var initialPrevHash hash.Hash
+	if existingWs, err := ddb.ResolveWorkingSet(ctx, wsRef); err == nil {
+		initialPrevHash, err = existingWs.HashOf()
+		require.NoError(t, err)
+	}
+	initialWs := doltdb.EmptyWorkingSet(wsRef).
+		WithWorkingRoot(initialRoot).
+		WithStagedRoot(initialRoot)
+	err = ddb.UpdateWorkingSet(ctx, wsRef, initialWs, initialPrevHash, doltdb.TodoWorkingSetMeta(), nil)
+	require.NoError(t, err)
+
+	rawDB := doltdb.ExposeDatabaseFromDoltDB(ddb)
+	cs := datas.ChunkStoreFromDatabase(rawDB)
+	preCommitRoot, err := cs.Root(ctx)
+	require.NoError(t, err)
+
+	// Modern client behavior: advance both HEAD and the working set ref. We
+	// simulate this by calling ddb.Commit (advances HEAD) and then
+	// UpdateWorkingSet (advances ws ref) before rewinding and replaying.
+	tSchema := createTestSchema(t)
+	rowData := createTestRowData(t, ddb.ValueReadWriter(), ddb.NodeStore(), tSchema)
+	tbl, err := createHooksTestTable(ddb.ValueReadWriter(), ddb.NodeStore(), tSchema, rowData)
+	require.NoError(t, err)
+	newRoot, err := initialRoot.PutTable(ctx, doltdb.TableName{Name: "added"}, tbl)
+	require.NoError(t, err)
+	_, newRootHash, err := ddb.WriteRootValue(ctx, newRoot)
+	require.NoError(t, err)
+
+	meta, err := datas.NewCommitMeta("test", "test@test.com", "advance both")
+	require.NoError(t, err)
+	_, err = ddb.Commit(ctx, newRootHash, branchRef, meta)
+	require.NoError(t, err)
+
+	// Update the working set to match the new HEAD (modern client behavior).
+	currWs, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	require.NoError(t, err)
+	currWsHash, err := currWs.HashOf()
+	require.NoError(t, err)
+	updatedWs := currWs.WithWorkingRoot(newRoot).WithStagedRoot(newRoot)
+	err = ddb.UpdateWorkingSet(ctx, wsRef, updatedWs, currWsHash, doltdb.TodoWorkingSetMeta(), nil)
+	require.NoError(t, err)
+
+	postCommitRoot, err := cs.Root(ctx)
+	require.NoError(t, err)
+
+	// Capture the working set hash that the modern client wrote — this is
+	// the value the repair must NOT overwrite.
+	expectedWs, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	require.NoError(t, err)
+	expectedWsHash, err := expectedWs.HashOf()
+	require.NoError(t, err)
+
+	// Rewind and replay through the hook.
+	rewound, err := cs.Commit(ctx, preCommitRoot, postCommitRoot)
+	require.NoError(t, err)
+	require.True(t, rewound)
+
+	rss, ok := cs.(remotesrv.RemoteSrvStore)
+	require.True(t, ok)
+	store := hooksFiringRemoteSrvStore{RemoteSrvStore: rss, ddb: ddb}
+
+	committed, err := store.Commit(ctx, postCommitRoot, preCommitRoot)
+	require.NoError(t, err)
+	require.True(t, committed)
+
+	// The working set should be unchanged from what the modern client wrote.
+	finalWs, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	require.NoError(t, err)
+	finalWsHash, err := finalWs.HashOf()
+	require.NoError(t, err)
+	assert.Equal(t, expectedWsHash, finalWsHash,
+		"repair must not overwrite a working set the client already updated")
+}

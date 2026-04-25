@@ -122,6 +122,10 @@ func (s hooksFiringRemoteSrvStore) Commit(ctx context.Context, current, last has
 		return nil
 	})
 
+	// Repair stale working sets left behind by older clients before firing
+	// hooks, so hooks see the consistent post-repair state.
+	s.repairStaleWorkingSets(ctx, oldAddrs, newAddrs)
+
 	executeHooks := s.ddb.ExecuteCommitHooks
 	if s.replicaWrite {
 		executeHooks = s.ddb.ExecuteReplicaCommitHooks
@@ -148,6 +152,102 @@ func (s hooksFiringRemoteSrvStore) Commit(ctx context.Context, current, last has
 	}
 
 	return true, nil
+}
+
+// repairStaleWorkingSets advances any working set ref whose corresponding
+// branch HEAD was updated by this commit but whose own value was unchanged.
+// Older Dolt clients (pre PR #10810) skip the working set update when pushing
+// to a remote whose working set has no diff from HEAD, leaving the server's
+// working set ref pointing at a working set object whose staged root no
+// longer matches HEAD. Subsequent pushes from any client then fail with
+// "target has uncommitted changes" until the working set is reset.
+//
+// Repairs are best-effort: failures are swallowed so the push response is
+// not affected. The next push that observes the staleness will retry the
+// repair (and the hard-reset workaround remains available).
+func (s hooksFiringRemoteSrvStore) repairStaleWorkingSets(
+	ctx context.Context,
+	oldAddrs, newAddrs map[string]hash.Hash,
+) {
+	for id, newHeadAddr := range newAddrs {
+		if !ref.IsRef(id) {
+			continue
+		}
+		dref, err := ref.Parse(id)
+		if err != nil || dref.GetType() != ref.BranchRefType {
+			continue
+		}
+
+		// Skip branches whose HEAD did not change in this commit.
+		if oldAddrs[id] == newHeadAddr {
+			continue
+		}
+
+		wsRef, err := ref.WorkingSetRefForHead(dref)
+		if err != nil {
+			continue
+		}
+		wsID := wsRef.String()
+
+		// If the client also updated the working set ref in this commit,
+		// it's a modern client and there is nothing to repair.
+		if oldAddrs[wsID] != newAddrs[wsID] {
+			continue
+		}
+
+		s.advanceWorkingSetToHead(ctx, wsRef, newHeadAddr)
+	}
+}
+
+// advanceWorkingSetToHead updates the working set at |wsRef| so that its
+// working and staged roots both match the root of the commit at |headAddr|.
+// No-op if the working set does not exist, has already been advanced, or
+// the CAS fails (e.g. due to a concurrent writer).
+func (s hooksFiringRemoteSrvStore) advanceWorkingSetToHead(
+	ctx context.Context,
+	wsRef ref.WorkingSetRef,
+	headAddr hash.Hash,
+) {
+	currWs, err := s.ddb.ResolveWorkingSet(ctx, wsRef)
+	if errors.Is(err, doltdb.ErrWorkingSetNotFound) || err != nil {
+		return
+	}
+	currWsHash, err := currWs.HashOf()
+	if err != nil {
+		return
+	}
+
+	optCmt, err := s.ddb.ReadCommit(ctx, headAddr)
+	if err != nil {
+		return
+	}
+	newCommit, ok := optCmt.ToCommit()
+	if !ok {
+		return
+	}
+	newRoot, err := newCommit.GetRootValue(ctx)
+	if err != nil {
+		return
+	}
+	newRootHash, err := newRoot.HashOf()
+	if err != nil {
+		return
+	}
+
+	currWorkingHash, err := currWs.WorkingRoot().HashOf()
+	if err != nil {
+		return
+	}
+	currStagedHash, err := currWs.StagedRoot().HashOf()
+	if err != nil {
+		return
+	}
+	if currWorkingHash == newRootHash && currStagedHash == newRootHash {
+		return
+	}
+
+	newWs := currWs.WithWorkingRoot(newRoot).WithStagedRoot(newRoot)
+	_ = s.ddb.UpdateWorkingSet(ctx, wsRef, newWs, currWsHash, doltdb.TodoWorkingSetMeta(), nil)
 }
 
 // In the SQL context, the database provider that we use to expose the
