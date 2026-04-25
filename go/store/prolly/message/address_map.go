@@ -74,7 +74,7 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 
 	if level > 0 {
 		serial.AddressMapAddSubtreeCounts(b, cardArr)
-		serial.AddressMapAddTreeCount(b, sumSubtrees(subtrees))
+		serial.AddressMapAddTreeCount(b, SumSubtrees(subtrees))
 	} else {
 		serial.AddressMapAddTreeCount(b, uint64(len(keys)))
 	}

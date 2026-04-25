@@ -18,9 +18,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/prolly/message"
-
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 type novelNode struct {
@@ -31,7 +31,7 @@ type novelNode struct {
 }
 
 func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *nodeBuilder[S]) (novelNode, error) {
-	node, err := bld.build()
+	node, treeCnt, err := bld.build()
 	if err != nil {
 		return novelNode{}, err
 	}
@@ -48,16 +48,11 @@ func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *
 		copy(lastKey, k)
 	}
 
-	cnt, err := node.TreeCount()
-	if err != nil {
-		return novelNode{}, err
-	}
-
 	return novelNode{
 		addr:      addr,
 		node:      node,
 		lastKey:   lastKey,
-		treeCount: uint64(cnt),
+		treeCount: treeCnt,
 	}, nil
 }
 
@@ -99,11 +94,17 @@ func (nb *nodeBuilder[S]) count() int {
 	return len(nb.keys)
 }
 
-func (nb *nodeBuilder[S]) build() (node *Node, err error) {
+func (nb *nodeBuilder[S]) build() (node *Node, treeCount uint64, err error) {
 	msg := nb.serializer.Serialize(nb.keys, nb.values, nb.subtrees, nb.level)
+	var fileID string
+	node, fileID, err = NodeFromBytes(msg)
+	if nb.level == 0 && fileID != serial.BlobFileID {
+		treeCount = uint64(len(nb.keys))
+	} else {
+		treeCount = message.SumSubtrees(nb.subtrees)
+	}
 	nb.recycleBuffers()
 	nb.size = 0
-	node, _, err = NodeFromBytes(msg)
 	return
 }
 
