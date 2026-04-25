@@ -744,24 +744,26 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointController GCSafepointController,
 	finalize func() hash.HashSet,
-	incrementalUpdateManifest bool) (chunks.GCFinalizer, error) {
+	incrementalUpdateManifest bool,
+) (_ chunks.GCFinalizer, retErr error) {
 	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.walkAddrs, hashFilter, dest, gcConfig, incrementalUpdateManifest)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		retErr = errors.Join(retErr, sweeper.Close(ctx))
+	}()
 
 	err = sweeper.SaveHashes(ctx, toVisit)
 	if err != nil {
-		cErr := sweeper.Close(ctx)
-		return nil, errors.Join(fmt.Errorf("Error in SaveHashes call: %w", err), cErr)
+		return nil, fmt.Errorf("Error in SaveHashes call: %w", err)
 	}
 	toVisit = nil
 
 	if safepointController != nil {
 		err = safepointController.EstablishPreFinalizeSafepoint(ctx)
 		if err != nil {
-			cErr := sweeper.Close(ctx)
-			return nil, errors.Join(err, cErr)
+			return nil, err
 		}
 	}
 
@@ -771,31 +773,28 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	next := lvs.readAndResetNewGenToVisit()
 	err = sweeper.SaveHashes(ctx, next)
 	if err != nil {
-		cErr := sweeper.Close(ctx)
-		return nil, errors.Join(err, cErr)
+		return nil, err
 	}
 	next = nil
 
 	final := finalize()
 	err = sweeper.SaveHashes(ctx, final)
 	if err != nil {
-		cErr := sweeper.Close(ctx)
-		return nil, errors.Join(err, cErr)
+		return nil, err
 	}
 	final = nil
 
 	if safepointController != nil {
 		err = safepointController.EstablishPostFinalizeSafepoint(ctx)
 		if err != nil {
-			cErr := sweeper.Close(ctx)
-			return nil, errors.Join(err, cErr)
+			return nil, err
 		}
 	}
 	finalizer, err := sweeper.Finalize(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return finalizer, sweeper.Close(ctx)
+	return finalizer, nil
 }
 
 func (lvs *ValueStore) PurgeCaches() {

@@ -2176,7 +2176,7 @@ func (nbs *NomsBlockStore) hasLocalGCNovelty() bool {
 	return false
 }
 
-func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
+func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
@@ -2251,6 +2251,10 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
 	// with a new writer.
 	incrementalGcc, err := newRotatingGCCopier(gcConfig.ArchiveLevel, tfp, destNBS, gcConfig.IncrementalFileSize, incrementalUpdateManifest)
+	if err != nil {
+		cErr := gcc.cancel(ctx)
+		return nil, errors.Join(err, cErr)
+	}
 
 	return &markAndSweeper{
 		src:            src,
@@ -2423,22 +2427,17 @@ func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, erro
 	}, nil
 }
 
-func (i *markAndSweeper) Close(ctx context.Context) (err error) {
+func (i *markAndSweeper) Close(ctx context.Context) error {
+	var err error
 	if i.gcc != nil {
-		err = i.gcc.cancel(ctx)
-		if err != nil {
-			return err
-		}
+		err = errors.Join(err, i.gcc.cancel(ctx))
 		i.gcc = nil
 	}
 	if i.incrementalGcc != nil {
-		err = i.incrementalGcc.cancel(ctx)
-		if err != nil {
-			return err
-		}
+		err = errors.Join(err, i.incrementalGcc.cancel(ctx))
 		i.incrementalGcc = nil
 	}
-	return nil
+	return err
 }
 
 type gcFinalizer struct {
