@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -281,6 +282,9 @@ type GitBlobstore struct {
 	// writeMu serializes operations that mutate shared git refs and/or perform
 	// remote-managed write workflows (commit + push + cache update).
 	writeMu sync.Mutex
+	// writeInProgress avoids fetch contention on slow remotes: syncForRead
+	// checks this flag instead of competing with an in-progress push.
+	writeInProgress atomic.Bool
 	// pendingMu guards pendingWrites, which may be appended to by non-manifest Put/Concatenate
 	// while being flushed by CheckAndPut("manifest").
 	pendingMu sync.Mutex
@@ -715,6 +719,11 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		}
 	}
 
+	// Concurrent fetches contend with an in-progress push on slow remotes.
+	if gbs.writeInProgress.Load() {
+		return nil
+	}
+
 	// Fetch remote ref into our remote-tracking ref.
 	err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef)
 	if err != nil {
@@ -783,7 +792,11 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 	}
 
 	gbs.writeMu.Lock()
-	defer gbs.writeMu.Unlock()
+	gbs.writeInProgress.Store(true)
+	defer func() {
+		gbs.writeInProgress.Store(false)
+		gbs.writeMu.Unlock()
+	}()
 
 	policy := gbs.casRetryPolicy(ctx)
 

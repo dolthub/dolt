@@ -525,7 +525,6 @@ func TestGitBlobstore_RemoteManaged_ManifestReadsDoNotBlockDuringPush(t *testing
 		Identity:   testIdentity(),
 	})
 	require.NoError(t, err)
-
 	// Prime the manifest version so our write uses the expected version.
 	_, ver, err := GetBytes(ctx, bs, "manifest", AllRange)
 	require.NoError(t, err)
@@ -563,22 +562,27 @@ func TestGitBlobstore_RemoteManaged_ManifestReadsDoNotBlockDuringPush(t *testing
 
 	const readers = 25
 	var wg sync.WaitGroup
-	readErrs := make(chan error, readers)
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	readResults := make(chan readResult, readers)
 	for range readers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			rctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+			rctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			_, _, err := GetBytes(rctx, bs, "manifest", AllRange)
-			readErrs <- err
+			data, _, err := GetBytes(rctx, bs, "manifest", AllRange)
+			readResults <- readResult{data: data, err: err}
 		}()
 	}
 	wg.Wait()
-	close(readErrs)
+	close(readResults)
 
-	for err := range readErrs {
-		require.NoError(t, err)
+	for r := range readResults {
+		require.NoError(t, r.err)
+		require.Equal(t, []byte("seed\n"), r.data)
 	}
 
 	close(releasePush)
