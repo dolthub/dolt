@@ -32,14 +32,30 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
+    - name: Generate coverage package list
+      working-directory: ./go/cmd/dolt
+      run: |
+        go list -f '{{if not .Standard}}{{.ImportPath}}{{end}}' -deps . | grep dolthub | paste -sd"," - > "$GITHUB_WORKSPACE/pkgs.txt"
+    - name: Create coverage directory
+      run: |
+        mkdir -p /tmp/coverdata/binlog
+        echo "GOCOVERDIR=/tmp/coverdata/binlog" >> $GITHUB_ENV
     - name: Test Binlog
       working-directory: ./go
       run: |
+        COV_PKGS=$(cat "$GITHUB_WORKSPACE/pkgs.txt")
         # Test binlog packages
-        go test -vet=off -timeout 60m ./libraries/doltcore/sqle/binlogreplication/...
+        go test -cover -coverpkg="$COV_PKGS" -vet=off -timeout 60m ./libraries/doltcore/sqle/binlogreplication/... -args -test.gocoverdir=/tmp/coverdata/binlog
       env:
         MATRIX_OS: ${{ matrix.os }}
         DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
+    - name: Upload coverage data
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-binlog-${{ matrix.adaptive_encoding }}
+        path: /tmp/coverdata
+        retention-days: 5
   binlog-race-test:
     name: Binlog tests - race
     defaults:
@@ -60,11 +76,27 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
+    - name: Generate coverage package list
+      working-directory: ./go/cmd/dolt
+      run: |
+        go list -f '{{if not .Standard}}{{.ImportPath}}{{end}}' -deps . | grep dolthub | paste -sd"," - > "$GITHUB_WORKSPACE/pkgs.txt"
+    - name: Create coverage directory
+      run: |
+        mkdir -p /tmp/coverdata/binlog-race
+        echo "GOCOVERDIR=/tmp/coverdata/binlog-race" >> $GITHUB_ENV
     - name: Test Binlog with Race
       working-directory: ./go
       run: |
+        COV_PKGS=$(cat "$GITHUB_WORKSPACE/pkgs.txt")
         # Test binlog packages with race detector
-        go test -vet=off -timeout 60m -race ./libraries/doltcore/sqle/binlogreplication/...
+        go test -cover -coverpkg="$COV_PKGS" -vet=off -timeout 60m -race ./libraries/doltcore/sqle/binlogreplication/... -args -test.gocoverdir=/tmp/coverdata/binlog-race
       env:
         MATRIX_OS: ${{ matrix.os }}
         DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
+    - name: Upload coverage data
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-binlog-race-${{ matrix.adaptive_encoding }}
+        path: /tmp/coverdata
+        retention-days: 5

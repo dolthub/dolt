@@ -28,9 +28,18 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
+    - name: Generate coverage package list
+      working-directory: ./go/cmd/dolt
+      run: |
+        go list -f '{{if not .Standard}}{{.ImportPath}}{{end}}' -deps . | grep dolthub | paste -sd"," - > "$GITHUB_WORKSPACE/pkgs.txt"
+    - name: Create coverage directory
+      run: |
+        mkdir -p /tmp/coverdata/unit-adaptive
+        echo "GOCOVERDIR=/tmp/coverdata/unit-adaptive" >> $GITHUB_ENV
     - name: Test All
       working-directory: ./go
       run: |
+        COV_PKGS=$(cat "$GITHUB_WORKSPACE/pkgs.txt")
         files=$(go list ./...)
         SAVEIFS=$IFS
         IFS=$'\n'
@@ -47,7 +56,7 @@ jobs:
 
           echo "Testing Package: ${file_arr[$i]}"
           if [[ "${file_arr[$i]}" != *enginetest* ]]; then
-            go test -vet=off -timeout 45m -race "${file_arr[$i]}"
+            go test -cover -coverpkg="$COV_PKGS" -vet=off -timeout 45m -race "${file_arr[$i]}" -args -test.gocoverdir=/tmp/coverdata/unit-adaptive
           else
             echo "skipping enginetests for -race"
           fi
@@ -57,6 +66,13 @@ jobs:
             exit 1;
           fi
         done
+    - name: Upload coverage data
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-go-tests-adaptive
+        path: /tmp/coverdata
+        retention-days: 5
   noracetest:
     name: Go tests - no race (adaptive encoding)
     defaults:
@@ -72,9 +88,25 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
+    - name: Generate coverage package list
+      working-directory: ./go/cmd/dolt
+      run: |
+        go list -f '{{if not .Standard}}{{.ImportPath}}{{end}}' -deps . | grep dolthub | paste -sd"," - > "$GITHUB_WORKSPACE/pkgs.txt"
+    - name: Create coverage directory
+      run: |
+        mkdir -p /tmp/coverdata/unit-adaptive-norace
+        echo "GOCOVERDIR=/tmp/coverdata/unit-adaptive-norace" >> $GITHUB_ENV
     - name: Test All
       working-directory: ./go
       run: |
-        go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
+        COV_PKGS=$(cat "$GITHUB_WORKSPACE/pkgs.txt")
+        go test -cover -coverpkg="$COV_PKGS" -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test -args -test.gocoverdir=/tmp/coverdata/unit-adaptive-norace
       env:
         DOLT_TEST_RUN_NON_RACE_TESTS: "true"
+    - name: Upload coverage data
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-go-tests-adaptive-norace
+        path: /tmp/coverdata
+        retention-days: 5
