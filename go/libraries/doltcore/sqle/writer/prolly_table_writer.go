@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
