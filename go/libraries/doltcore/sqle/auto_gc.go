@@ -52,18 +52,21 @@ func (noneGCScheduler) WaitForNextRun(context.Context) error {
 type loadAvgGCScheduler struct {
 	fs            procfs.FS
 	loadThreshold float64
+	skippedCount  uint8
 }
 
 func (s *loadAvgGCScheduler) WaitForNextRun(ctx context.Context) error {
 	for {
 		loadAvg, err := s.fs.LoadAvg()
-		if err != nil || loadAvg.Load1 <= s.loadThreshold {
+		if err != nil || s.skippedCount >= 30 || loadAvg.Load1 <= s.loadThreshold {
+			s.skippedCount = 0
 			return nil
 		}
 		select {
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case <-time.After(1 * time.Minute):
+			s.skippedCount++
 		}
 	}
 }
