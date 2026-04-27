@@ -16,8 +16,8 @@ package writer
 
 import (
 	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -202,18 +202,22 @@ func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Ha
 
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
+	eg := errgroup.Group{}
 	for _, wr := range w.secondary {
-		if err := wr.Update(ctx, oldRow, newRow); err != nil {
-			if uke, ok := err.(secondaryUniqueKeyError); ok {
+		eg.Go(func() error {
+			egErr := wr.Update(ctx, oldRow, newRow)
+			if uke, ok := egErr.(secondaryUniqueKeyError); ok {
 				return w.primary.(primaryIndexErrBuilder).errForSecondaryUniqueKeyError(ctx, uke)
 			}
-			return err
-		}
+			return egErr
+		})
 	}
-	if err := w.primary.Update(ctx, oldRow, newRow); err != nil {
+	eg.Go(func() error {
+		return w.primary.Update(ctx, oldRow, newRow)
+	})
+	if err = eg.Wait(); err != nil {
 		return err
 	}
-
 	w.setAutoIncrement = true
 	return nil
 }
