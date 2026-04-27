@@ -1407,9 +1407,9 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1, 2, "modified"}},
 			},
 			{
-				User:  "tester",
-				Host:  "localhost",
-				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM test limit 1', 'SELECT pk FROM test2 limit 1');",
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM test limit 1', 'SELECT pk FROM test2 limit 1');",
 				Expected: []sql.Row{{1, nil, "deleted"}, {nil, 1, "added"}},
 			},
 			{
@@ -1498,9 +1498,9 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 			},
 			// Cross-table query args -> now allowed
 			{
-				User:  "tester",
-				Host:  "localhost",
-				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM test limit 1', 'SELECT pk FROM test2 limit 1');",
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM test limit 1', 'SELECT pk FROM test2 limit 1');",
 				Expected: []sql.Row{{1, nil, "deleted"}, {nil, 1, "added"}},
 			},
 			// Subquery referencing test2 -> now allowed
