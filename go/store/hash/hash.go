@@ -47,9 +47,9 @@ package hash
 
 import (
 	"bytes"
-	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
+	"github.com/zeebo/blake3"
 	"regexp"
 	"strconv"
 	"strings"
@@ -91,7 +91,7 @@ func (h Hash) String() string {
 
 // Of computes a new Hash from data.
 func Of(data []byte) Hash {
-	r := sha512.Sum512(data)
+	r := blake3.Sum512(data)
 	h := Hash{}
 	copy(h[:], r[:ByteLen])
 	return h

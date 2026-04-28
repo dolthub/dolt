@@ -23,7 +23,7 @@ package nbs
 
 import (
 	"context"
-	"crypto/sha512"
+	"github.com/zeebo/blake3"
 	"hash/crc32"
 	"io"
 	"maps"
@@ -146,7 +146,7 @@ func crc(b []byte) uint32 {
 }
 
 func computeHashDefault(data []byte) hash.Hash {
-	r := sha512.Sum512(data)
+	r := blake3.Sum512(data)
 	return hash.New(r[:hash.ByteLen])
 }
 
