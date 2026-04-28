@@ -900,13 +900,46 @@ type bootstrapConfig struct {
 // contains all the parsed arguments and other configurations. If there is an error, |cfg| will be nil.
 // |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
 // |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
+// preScanDirFlag does a lightweight scan of raw args for -C/--directory before
+// the full arg parse runs, so cwdFs can be set before any filesystem operations.
+// Returns "" if neither flag is present. --chdir is handled separately in runMain.
+func preScanDirFlag(args []string) string {
+	for i, arg := range args {
+		switch arg {
+		case "-C", "--directory":
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+		}
+	}
+	return ""
+}
+
 func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
-	lfs := filesys.LocalFS
-	cwd, err := lfs.Abs("")
-	cwdFs, err := lfs.WithWorkingDir(cwd)
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
-		return nil, true, 1
+	var cwdFs filesys.Filesys
+
+	// Resolve working directory. -C/--directory changes it before any filesystem
+	// operations. --chdir (deprecated) is handled earlier in runMain via os.Chdir,
+	// so by this point the process cwd already reflects it.
+	if targetDir := preScanDirFlag(args); targetDir != "" {
+		var err error
+		cwdFs, err = filesys.LocalFilesysWithWorkingDir(targetDir)
+		if err != nil {
+			cli.PrintErrln(color.RedString("cannot change to directory %q: %v", targetDir, err))
+			return nil, true, 1
+		}
+	} else {
+		lfs := filesys.LocalFS
+		cwd, err := lfs.Abs("")
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+			return nil, true, 1
+		}
+		cwdFs, err = lfs.WithWorkingDir(cwd)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+			return nil, true, 1
+		}
 	}
 
 	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, "", doltversion.Version)
