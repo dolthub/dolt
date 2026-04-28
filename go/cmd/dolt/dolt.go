@@ -348,12 +348,14 @@ func runMain() int {
 			// This is a hack that allows a different working directory to be set after the application starts using
 			// chdir=<DIR>.  The syntax is not flexible and must match exactly this.
 			case chdirFlag:
-				err := os.Chdir(args[1])
-
-				if err != nil {
-					panic(err)
+				if len(args) < 2 {
+					cli.PrintErrln(color.RedString("--chdir requires a directory argument"))
+					return 1
 				}
-
+				if err := os.Chdir(args[1]); err != nil {
+					cli.PrintErrln(color.RedString("cannot change to directory %q: %v", args[1], err))
+					return 1
+				}
 				args = args[2:]
 
 			case stdInFlag:
