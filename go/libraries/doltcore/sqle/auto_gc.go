@@ -111,10 +111,13 @@ func NewGCScheduler(gcSchStr string) GCScheduler {
 	case "NONE":
 		return noneGCScheduler{}
 	default:
+		var stat procfs.Stat
 		if fs, err := procfs.NewDefaultFS(); err == nil {
-			return &loadAvgGCScheduler{
-				fs:            fs,
-				loadThreshold: 0.5,
+			if stat, err = fs.Stat(); err == nil {
+				return &loadAvgGCScheduler{
+					fs:            fs,
+					loadThreshold: 0.5 * float64(len(stat.CPU)),
+				}
 			}
 		}
 		return noneGCScheduler{}
