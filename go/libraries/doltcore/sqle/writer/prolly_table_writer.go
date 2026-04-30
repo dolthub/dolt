@@ -351,7 +351,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 
 func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err error) {
 	// flush primary row storage
-	pm, err := w.primary.Map(ctx)
+	pm, err := w.primary.Map(ctx) // TODO: what is the result when there are no edits?
 	if err != nil {
 		return nil, err
 	}

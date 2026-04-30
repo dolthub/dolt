@@ -31,12 +31,12 @@ type novelNode struct {
 }
 
 func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *nodeBuilder[S]) (novelNode, error) {
-	node, err := bld.build()
+	node, err := bld.build() // TODO: slow
 	if err != nil {
 		return novelNode{}, err
 	}
 
-	addr, err := ns.Write(ctx, node)
+	addr, err := ns.Write(ctx, node) // TODO: slow
 	if err != nil {
 		return novelNode{}, err
 	}

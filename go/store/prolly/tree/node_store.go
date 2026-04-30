@@ -163,7 +163,7 @@ func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]*Nod
 
 // Write implements NodeStore.
 func (ns *nodeStore) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
-	c := chunks.NewChunk(nd.bytes())
+	c := chunks.NewChunk(nd.bytes()) // TODO: slow
 	assertTrue(c.Size() > 0, "cannot write empty chunk to ChunkStore")
 
 	getAddrs := func(ch chunks.Chunk) chunks.InsertAddrsCb {

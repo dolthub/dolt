@@ -314,7 +314,7 @@ func (ts *tableSet) Size() int {
 func (ts *tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBehavior, mt *memTable, checker refCheck, keeper keeperF, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (*tableSet, gcBehavior, error) {
 	addrs := hash.NewHashSet()
 	for _, getAddrs := range mt.getChildAddrs {
-		getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Contains(h) })
+		getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Contains(h) }) // TODO: slow
 	}
 	mt.addChildRefs(addrs)
 

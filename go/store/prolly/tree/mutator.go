@@ -121,7 +121,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		}
 
 		// move |chkr| to the NextMutation mutation point
-		err = chkr.advanceTo(ctx, cur)
+		err = chkr.advanceTo(ctx, cur) // TODO: slow
 		if err != nil {
 			return nil, err
 		}

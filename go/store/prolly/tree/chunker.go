@@ -207,7 +207,7 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 		if err != nil {
 			return err
 		}
-		split, err = tc.append(ctx, tc.cur.CurrentKey(), tc.cur.currentValue(), sz)
+		split, err = tc.append(ctx, tc.cur.CurrentKey(), tc.cur.currentValue(), sz) // TODO: slow
 		if err != nil {
 			return err
 		}
@@ -239,7 +239,7 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 
 	// no more pending chunks at this level, recurse
 	// into parent
-	err = tc.parent.advanceTo(ctx, next.parent)
+	err = tc.parent.advanceTo(ctx, next.parent) // TODO: slow
 	if err != nil {
 		return err
 	}
@@ -349,7 +349,7 @@ func (tc *chunker[S]) append(ctx context.Context, key, value Item, subtree uint6
 
 	tc.builder.addItems(key, value, subtree)
 
-	err := tc.splitter.Append(key, value)
+	err := tc.splitter.Append(key, value) // TODO: slow
 	if err != nil {
 		return false, err
 	}
@@ -358,7 +358,7 @@ func (tc *chunker[S]) append(ctx context.Context, key, value Item, subtree uint6
 	degenerate = !tc.isLeaf() && tc.builder.count() == 1
 
 	if tc.splitter.CrossedBoundary() && !degenerate {
-		err := tc.handleChunkBoundary(ctx)
+		err := tc.handleChunkBoundary(ctx) // TODO: slow
 		if err != nil {
 			return false, err
 		}
