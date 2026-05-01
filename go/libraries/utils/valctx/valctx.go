@@ -26,6 +26,17 @@ func EnableContextValidation() {
 	enabled = true
 }
 
+// SetEnabledForTest sets the enabled flag and returns its previous value, so a
+// test can flip validation on for the duration of a single test and restore
+// the prior global state on cleanup. Production code should use
+// EnableContextValidation; SetEnabledForTest is intended for tests that need
+// to observe (or avoid) valctx behavior without leaking state to siblings.
+func SetEnabledForTest(v bool) bool {
+	prev := enabled
+	enabled = v
+	return prev
+}
+
 func IsEnabled() bool {
 	return enabled
 }
