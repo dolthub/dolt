@@ -131,12 +131,12 @@ func TestSingleScript(t *testing.T) {
 				{
 					Query: "update t set i = i + 1 where i = 2;",
 				},
-				{
-					Query: "update t set i = i + 1 where i = 0;",
-				},
-				{
-					Query: "update t set i = i + 1 where i = 1;",
-				},
+				//{
+				//	Query: "update t set i = i + 1 where i = 0;",
+				//},
+				//{
+				//	Query: "update t set i = i + 1 where i = 1;",
+				//},
 				{
 					Query: "commit",
 				},

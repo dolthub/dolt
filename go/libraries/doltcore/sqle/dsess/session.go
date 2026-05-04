@@ -458,6 +458,21 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 		return nil
 	}
 
+	// TODO: don't flush all databases cause that's dumb
+	for _, state := range d.dbStates {
+		for _, head := range state.heads {
+			writeSess := head.WriteSession()
+			newRoot, err := writeSess.Flush(ctx) // TODO: autoinc overrides?
+			if err != nil {
+				return err
+			}
+			err = d.SetWorkingRoot(ctx, state.dbName, newRoot.WorkingRoot())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	dirties := d.dirtyWorkingSets()
 	if len(dirties) == 0 {
 		return nil
