@@ -245,7 +245,7 @@ func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), 
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
 	if w.errEncountered == nil {
-		return w.flush(ctx)
+		//return w.flush(ctx)
 	}
 	return nil
 }
