@@ -385,7 +385,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "update dolt_rebase set rebase_order=1.0 where rebase_order=2.0;",
-				ExpectedErrStr: "duplicate primary key given: [1]",
+				ExpectedErrStr: "duplicate primary key given: [1.00]",
 			},
 			{
 				Query: "update dolt_rebase set action='squash';",

@@ -24,8 +24,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -443,31 +443,44 @@ func compareBit64(l, r uint64) int {
 	return compareUint64(l, r)
 }
 
-func readDecimal(val []byte) decimal.Decimal {
+func readDecimal(val []byte) apd.Decimal {
 	e := readInt32(val[:int32Size])
 	s := readInt8(val[int32Size : int32Size+int8Size])
 	b := big.NewInt(0).SetBytes(val[int32Size+int8Size:])
+	d := new(apd.Decimal)
+	d.Coeff.SetMathBigInt(b)
+	d.Exponent = e
 	if s < 0 {
-		b = b.Neg(b)
+		d = d.Neg(d)
 	}
-	return decimal.NewFromBigInt(b, e)
+	return *d
 }
 
-func writeDecimal(buf []byte, val decimal.Decimal) {
+func writeDecimal(buf []byte, val apd.Decimal) {
 	expectSize(buf, sizeOfDecimal(val))
-	writeInt32(buf[:int32Size], val.Exponent())
-	b := val.Coefficient()
-	writeInt8(buf[int32Size:int32Size+int8Size], int8(b.Sign()))
+	writeInt32(buf[:int32Size], val.Exponent)
+	b := val.Coeff.MathBigInt()
+	writeInt8(buf[int32Size:int32Size+int8Size], int8(val.Sign()))
 	b.FillBytes(buf[int32Size+int8Size:])
 }
 
-func sizeOfDecimal(val decimal.Decimal) ByteSize {
-	bsz := len(val.Coefficient().Bits()) * (bits.UintSize / 8)
+func sizeOfDecimal(val apd.Decimal) ByteSize {
+	bsz := len(val.Coeff.MathBigInt().Bits()) * (bits.UintSize / 8)
 	return int32Size + int8Size + ByteSize(bsz)
 }
 
-func compareDecimal(l, r decimal.Decimal) int {
-	return l.Cmp(r)
+func compareDecimal(l, r apd.Decimal) int {
+	if (l.Form == apd.NaN && r.Form == apd.NaN) ||
+		(l.Form == apd.Infinite && r.Form == apd.Infinite && l.Negative == r.Negative) {
+		return 0
+	}
+	if l.Form == apd.NaN {
+		return 1
+	}
+	if r.Form == apd.NaN {
+		return -1
+	}
+	return l.Cmp(&r)
 }
 
 const minYear int16 = 1901

@@ -23,11 +23,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/sqllogictest/go/logictest"
 	"github.com/dolthub/vitess/go/vt/proto/query"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
@@ -251,10 +252,13 @@ func toSqlString(ctx *sql.Context, val interface{}) (string, error) {
 	case float32, float64:
 		// exactly 3 decimal points for floats
 		return fmt.Sprintf("%.3f", v), nil
-	case decimal.Decimal:
+	case apd.Decimal:
 		// exactly 3 decimal points for floats
-		res, _ := v.Float64()
-		return fmt.Sprintf("%.3f", res), nil
+		d, err := sqltypes.DecimalRound(v, 3)
+		if err != nil {
+			return "", err
+		}
+		return d.Text('f'), nil
 	case int:
 		return strconv.Itoa(v), nil
 	case uint:

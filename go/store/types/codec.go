@@ -27,8 +27,9 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/cockroachdb/apd/v3"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -174,13 +175,11 @@ func (b *binaryNomsReader) ReadFloat(nbf *NomsBinFormat) float64 {
 	return math.Float64frombits(floatbits)
 }
 
-func (b *binaryNomsReader) ReadDecimal() (decimal.Decimal, error) {
+func (b *binaryNomsReader) ReadDecimal() (apd.Decimal, error) {
 	size := uint32(b.readUint16())
 	db := b.readBytes(size)
 
-	var dec decimal.Decimal
-	err := dec.GobDecode(db)
-	return dec, err
+	return types.DecimalGobDecode(db)
 }
 
 func (b *binaryNomsReader) ReadTimestamp() (time.Time, error) {

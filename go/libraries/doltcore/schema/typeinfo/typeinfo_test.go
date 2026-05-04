@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -157,11 +157,11 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 				types.Timestamp(time.Date(2000, 2, 28, 14, 38, 43, 583395000, time.UTC)),
 				types.Timestamp(time.Date(2038, 1, 19, 3, 14, 7, 999999000, time.UTC)),
 				types.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC))},
-			{types.Decimal(decimal.RequireFromString("0")), // Decimal
-				types.Decimal(decimal.RequireFromString("-1.5")),
-				types.Decimal(decimal.RequireFromString("4723245")),
-				types.Decimal(decimal.RequireFromString("-1076416.875")),
-				types.Decimal(decimal.RequireFromString("198728394234798423466321.27349757"))},
+			{types.Decimal(RequireDecimalFromString("0")), // Decimal
+				types.Decimal(RequireDecimalFromString("-1.5")),
+				types.Decimal(RequireDecimalFromString("4723245")),
+				types.Decimal(RequireDecimalFromString("-1076416.875")),
+				types.Decimal(RequireDecimalFromString("198728394234798423466321.27349757"))},
 			{types.Uint(1), types.Uint(3), types.Uint(5), types.Uint(7), types.Uint(8)},                                                    // Enum
 			{types.Float(1.0), types.Float(65513.75), types.Float(4293902592), types.Float(4.58e71), types.Float(7.172e285)},               // Float
 			{types.InlineBlob{0}, types.InlineBlob{21}, types.InlineBlob{1, 17}, types.InlineBlob{72, 42}, types.InlineBlob{21, 122, 236}}, // InlineBlob
@@ -182,4 +182,12 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 				types.String("abcdefghijklmnopqrstuvwxyz"), types.String("هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر")},
 			{types.Int(1901), types.Int(1950), types.Int(2000), types.Int(2080), types.Int(2155)}, // Year
 		}
+}
+
+func RequireDecimalFromString(s string) apd.Decimal {
+	dec, _, err := apd.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return *dec
 }

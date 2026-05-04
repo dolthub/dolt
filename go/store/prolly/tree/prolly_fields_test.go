@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -266,12 +266,12 @@ func mustParseJson(t *testing.T, s string) types.JSONDocument {
 	return types.JSONDocument{Val: v}
 }
 
-func mustParseDecimal(s string) decimal.Decimal {
-	d, err := decimal.NewFromString(s)
+func mustParseDecimal(s string) apd.Decimal {
+	d, _, err := apd.NewFromString(s)
 	if err != nil {
 		panic(err)
 	}
-	return d
+	return *d
 }
 
 func mustParseTime(t *testing.T, s string) types.Timespan {

@@ -28,7 +28,6 @@ require (
 	github.com/pkg/profile v1.5.0
 	github.com/rivo/uniseg v0.2.0
 	github.com/sergi/go-diff v1.1.0
-	github.com/shopspring/decimal v1.4.0
 	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/sirupsen/logrus v1.8.3
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
@@ -59,12 +58,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/cespare/xxhash/v2 v2.3.0
+	github.com/cockroachdb/apd/v3 v3.2.3
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/dolt-mcp v0.3.4
 	github.com/dolthub/eventsapi_schema v0.0.0-20260310172945-37a9265ade69
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20260501214944-8e27527885cc
+	github.com/dolthub/go-mysql-server v0.20.1-0.20260504175001-88c0b5084c8d
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
@@ -76,7 +76,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kylelemons/godebug v1.1.0
-	github.com/lib/pq v1.10.0
+	github.com/lib/pq v1.10.7
 	github.com/mohae/uvarint v0.0.0-20160208145430-c3f9e62bf2b0
 	github.com/oracle/oci-go-sdk/v65 v65.55.0
 	github.com/prometheus/client_golang v1.23.2

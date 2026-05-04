@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1422,12 +1422,12 @@ func mustTime(timeString string) time.Time {
 	return t
 }
 
-func mustDecimal(s string) decimal.Decimal {
-	d, err := decimal.NewFromString(s)
+func mustDecimal(s string) apd.Decimal {
+	d, _, err := apd.NewFromString(s)
 	if err != nil {
 		panic(err)
 	}
-	return d
+	return *d
 }
 
 func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {

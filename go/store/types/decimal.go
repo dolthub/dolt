@@ -17,12 +17,13 @@ package types
 import (
 	"context"
 
-	"github.com/shopspring/decimal"
+	"github.com/cockroachdb/apd/v3"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type Decimal decimal.Decimal
+type Decimal apd.Decimal
 
 func (v Decimal) Value(ctx context.Context) (Value, error) {
 	return v, nil
@@ -33,13 +34,16 @@ func (v Decimal) Equals(other Value) bool {
 	if !ok {
 		return false
 	}
-
-	return decimal.Decimal(v).Equal(decimal.Decimal(v2))
+	a := apd.Decimal(v)
+	b := apd.Decimal(v2)
+	return a.Cmp(&b) == 0
 }
 
 func (v Decimal) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Decimal); ok {
-		return decimal.Decimal(v).LessThan(decimal.Decimal(v2)), nil
+		a := apd.Decimal(v)
+		b := apd.Decimal(v2)
+		return a.Cmp(&b) < 0, nil
 	}
 	return DecimalKind < other.Kind(), nil
 }
@@ -69,7 +73,7 @@ func (v Decimal) valueReadWriter() ValueReadWriter {
 }
 
 func (v Decimal) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
-	encodedDecimal, err := decimal.Decimal(v).GobEncode()
+	encodedDecimal, err := sqltypes.DecimalGobEncode(apd.Decimal(v))
 	if err != nil {
 		return err
 	}
@@ -98,5 +102,6 @@ func (v Decimal) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 }
 
 func (v Decimal) HumanReadableString() string {
-	return decimal.Decimal(v).String()
+	val := apd.Decimal(v)
+	return val.Text('f')
 }

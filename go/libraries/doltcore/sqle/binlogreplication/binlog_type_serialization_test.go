@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -922,9 +922,9 @@ func TestDecimalSerializer(t *testing.T) {
 	t.Run("0", func(t *testing.T) {
 		typ := gmstypes.MustCreateDecimalType(14, 4)
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
-		dec, err := decimal.NewFromString("0")
+		dec, _, err := apd.NewFromString("0")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, dec)
+		tupleBuilder.PutDecimal(0, *dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -942,9 +942,9 @@ func TestDecimalSerializer(t *testing.T) {
 	t.Run("100", func(t *testing.T) {
 		typ := gmstypes.MustCreateDecimalType(14, 4)
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
-		dec, err := decimal.NewFromString("100")
+		dec, _, err := apd.NewFromString("100")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, dec)
+		tupleBuilder.PutDecimal(0, *dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -962,9 +962,9 @@ func TestDecimalSerializer(t *testing.T) {
 	t.Run("1.1", func(t *testing.T) {
 		typ := gmstypes.MustCreateDecimalType(14, 4)
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
-		dec, err := decimal.NewFromString("1.1")
+		dec, _, err := apd.NewFromString("1.1")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, dec)
+		tupleBuilder.PutDecimal(0, *dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -982,9 +982,9 @@ func TestDecimalSerializer(t *testing.T) {
 	t.Run("10", func(t *testing.T) {
 		typ := gmstypes.MustCreateDecimalType(19, 0)
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
-		dec, err := decimal.NewFromString("100")
+		dec, _, err := apd.NewFromString("100")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, dec)
+		tupleBuilder.PutDecimal(0, *dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -1002,9 +1002,9 @@ func TestDecimalSerializer(t *testing.T) {
 	t.Run("1234567890.1234", func(t *testing.T) {
 		typ := gmstypes.MustCreateDecimalType(14, 4)
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
-		dec, err := decimal.NewFromString("1234567890.1234")
+		dec, _, err := apd.NewFromString("1234567890.1234")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, dec)
+		tupleBuilder.PutDecimal(0, *dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -1022,9 +1022,9 @@ func TestDecimalSerializer(t *testing.T) {
 	t.Run("-1234567890.1234", func(t *testing.T) {
 		typ := gmstypes.MustCreateDecimalType(14, 4)
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
-		dec, err := decimal.NewFromString("-1234567890.1234")
+		dec, _, err := apd.NewFromString("-1234567890.1234")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, dec)
+		tupleBuilder.PutDecimal(0, *dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -1042,9 +1042,9 @@ func TestDecimalSerializer(t *testing.T) {
 	t.Run("1234567890.0001", func(t *testing.T) {
 		typ := gmstypes.MustCreateDecimalType(14, 4)
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
-		dec, err := decimal.NewFromString("1234567890.0001")
+		dec, _, err := apd.NewFromString("1234567890.0001")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, dec)
+		tupleBuilder.PutDecimal(0, *dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 

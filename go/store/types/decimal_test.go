@@ -17,18 +17,20 @@ package types
 import (
 	"testing"
 
-	"github.com/shopspring/decimal"
+	"github.com/cockroachdb/apd/v3"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 )
 
 func TestDecimalLibraryEncoding(t *testing.T) {
 	expectedBytes := []byte{255, 255, 255, 250, 3, 25, 222, 110, 95, 84, 132}
-	dec := decimal.RequireFromString("-28443125.175428")
-	bytes, err := dec.GobEncode()
+	dec, _, err := apd.NewFromString("-28443125.175428")
+	require.NoError(t, err)
+	bytes, err := gmstypes.DecimalGobEncode(*dec)
 	require.NoError(t, err)
 	require.Equal(t, expectedBytes, bytes)
-	expectedDec := decimal.Decimal{}
-	err = expectedDec.GobDecode(expectedBytes)
+
+	expectedDec, err := gmstypes.DecimalGobDecode(expectedBytes)
 	require.NoError(t, err)
-	require.True(t, expectedDec.Equal(dec))
+	require.True(t, expectedDec.Cmp(dec) == 0)
 }
