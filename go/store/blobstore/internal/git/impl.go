@@ -362,6 +362,22 @@ func (a *GitAPIImpl) PushRefWithLease(ctx context.Context, remote string, srcRef
 	return err
 }
 
+func (a *GitAPIImpl) ForcePushRef(ctx context.Context, remote, srcRef, dstRef string) error {
+	if remote == "" {
+		return fmt.Errorf("git push: remote is required")
+	}
+	if srcRef == "" {
+		return fmt.Errorf("git push: src ref is required")
+	}
+	if dstRef == "" {
+		return fmt.Errorf("git push: dst ref is required")
+	}
+	srcRef = strings.TrimPrefix(srcRef, "+")
+	refspec := srcRef + ":" + dstRef
+	_, err := a.r.Run(ctx, RunOptions{}, "push", "--force", remote, refspec)
+	return err
+}
+
 func isRefNotFoundErr(err error) bool {
 	var ce *CmdError
 	if !errors.As(err, &ce) {
