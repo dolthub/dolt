@@ -596,9 +596,10 @@ func roundTripDecimal(t *testing.T) {
 		buf := make([]byte, sizeOfDecimal(dec))
 		writeDecimal(buf, dec)
 		actual := readDecimal(buf)
-		assert.True(t, dec.Cmp(&actual) == 0, "%s != %s",
-			dec.String(), actual.String())
-		assert.Equal(t, dec, actual)
+		decStr := dec.Text('f')
+		actualStr := actual.Text('f')
+		assert.True(t, dec.Cmp(&actual) == 0, "%s != %s", decStr, actualStr)
+		assert.Equal(t, decStr, actualStr)
 		zero(buf)
 	}
 }

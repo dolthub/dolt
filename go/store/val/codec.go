@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
-	"math/big"
 	"math/bits"
 	"time"
 	"unsafe"
@@ -446,12 +445,11 @@ func compareBit64(l, r uint64) int {
 func readDecimal(val []byte) apd.Decimal {
 	e := readInt32(val[:int32Size])
 	s := readInt8(val[int32Size : int32Size+int8Size])
-	b := big.NewInt(0).SetBytes(val[int32Size+int8Size:])
 	d := new(apd.Decimal)
-	d.Coeff.SetMathBigInt(b)
+	d.Coeff.SetBytes(val[int32Size+int8Size:])
 	d.Exponent = e
 	if s < 0 {
-		d = d.Neg(d)
+		d.Negative = true
 	}
 	return *d
 }
@@ -459,9 +457,8 @@ func readDecimal(val []byte) apd.Decimal {
 func writeDecimal(buf []byte, val apd.Decimal) {
 	expectSize(buf, sizeOfDecimal(val))
 	writeInt32(buf[:int32Size], val.Exponent)
-	b := val.Coeff.MathBigInt()
 	writeInt8(buf[int32Size:int32Size+int8Size], int8(val.Sign()))
-	b.FillBytes(buf[int32Size+int8Size:])
+	val.Coeff.FillBytes(buf[int32Size+int8Size:])
 }
 
 func sizeOfDecimal(val apd.Decimal) ByteSize {

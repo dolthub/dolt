@@ -254,10 +254,7 @@ func toSqlString(ctx *sql.Context, val interface{}) (string, error) {
 		return fmt.Sprintf("%.3f", v), nil
 	case apd.Decimal:
 		// exactly 3 decimal points for floats
-		d, err := sqltypes.DecimalRound(v, 3)
-		if err != nil {
-			return "", err
-		}
+		d := sqltypes.DecimalTruncate(v, 3)
 		return d.Text('f'), nil
 	case int:
 		return strconv.Itoa(v), nil
