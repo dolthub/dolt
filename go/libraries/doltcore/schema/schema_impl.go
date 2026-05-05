@@ -503,18 +503,19 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 			}
 		} else {
 			// For key columns, even types that are typically stored out of band get an inline encoding, unless they're
-			// a hashed field in a unique index
-			if !contentHashedField && queryType == query.Type_BLOB {
+			// a hashed field in a unique index. Fields with a typeHandler (Doltgres types) aren't subject to this constraint.
+			shouldTruncateLongfields := !contentHashedField && !hasTypeHandler
+			if shouldTruncateLongfields && queryType == query.Type_BLOB {
 				t = val.Type{
 					Enc:      val.Encoding(encodingFromQueryType(query.Type_VARBINARY)),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
-			} else if !contentHashedField && queryType == query.Type_TEXT {
+			} else if shouldTruncateLongfields && queryType == query.Type_TEXT {
 				t = val.Type{
 					Enc:      val.Encoding(encodingFromQueryType(query.Type_VARCHAR)),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
-			} else if !contentHashedField && queryType == query.Type_GEOMETRY {
+			} else if shouldTruncateLongfields && queryType == query.Type_GEOMETRY {
 				t = val.Type{
 					Enc:      val.Encoding(serial.EncodingCell),
 					Nullable: columnMissingNotNullConstraint(col),

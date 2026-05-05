@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
@@ -788,7 +789,7 @@ func (di *doltIndex) HasContentHashedField() bool {
 			prefixLength = di.prefixLengths[i]
 		}
 
-		if sqltypes.IsTextBlob(col.TypeInfo.ToSqlType()) && prefixLength == 0 {
+		if isHashEncoded(col.TypeInfo) && prefixLength == 0 {
 			contentHashedField = true
 			return true, nil
 		}
@@ -797,6 +798,10 @@ func (di *doltIndex) HasContentHashedField() bool {
 	})
 
 	return contentHashedField
+}
+
+func isHashEncoded(ti typeinfo.TypeInfo) bool {
+	return val.IsAddrEncoding(ti.Encoding())
 }
 
 func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
