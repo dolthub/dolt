@@ -18,12 +18,13 @@ import (
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 )
 
-// clientCapabilities is the set of capabilities this dolt client
-// declares on every outbound remotesapi request that carries a
-// client_capabilities field. Centralized here so the answer to
-// "what does this client advertise?" lives in one place and
-// adding a new capability is a one-line change. Treat as
-// immutable once the package is loaded.
-var clientCapabilities = []remotesapi.ClientCapability{
+// defaultClientCapabilities is the set of capabilities this dolt
+// client declares on every outbound remotesapi request that carries
+// a client_capabilities field. Centralized here so the answer to
+// "what does this client advertise?" lives in one place and adding
+// a new capability is a one-line change. Treat as immutable once
+// the package is loaded; per-store overrides (e.g.
+// WithoutHTTP2DownloadCapability) clone before mutating.
+var defaultClientCapabilities = []remotesapi.ClientCapability{
 	remotesapi.ClientCapability_CLIENT_CAPABILITY_HTTP2_DOWNLOAD,
 }

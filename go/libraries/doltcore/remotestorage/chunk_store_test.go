@@ -99,7 +99,8 @@ func TestDoltRemoteTableFile(t *testing.T) {
 							StatusCode: 200,
 						}, nil
 					}),
-					csClient: &csClient,
+					csClient:           &csClient,
+					clientCapabilities: defaultClientCapabilities,
 				},
 				info: &remotesapi.TableFileInfo{
 					Url:            "http://localhost/example_url/fileid",
@@ -117,7 +118,7 @@ func TestDoltRemoteTableFile(t *testing.T) {
 			// even though the echo arrived empty. See the
 			// ClientCapability enum comment in chunkstore.proto.
 			require.NotNil(t, csClient.lastIn)
-			require.Equal(t, clientCapabilities, csClient.lastIn.ClientCapabilities)
+			require.Equal(t, defaultClientCapabilities, csClient.lastIn.ClientCapabilities)
 		})
 		t.Run("404", func(t *testing.T) {
 			var buf bytes.Buffer
@@ -189,7 +190,8 @@ func TestLocationRefresh_StampsClientCapabilities(t *testing.T) {
 		// Empty ClientCapabilities mirrors a server that
 		// correctly leaves the field unset on the echoed
 		// RefreshRequest.
-		RefreshRequest: &remotesapi.RefreshTableFileUrlRequest{FileId: "file-id"},
+		RefreshRequest:     &remotesapi.RefreshTableFileUrlRequest{FileId: "file-id"},
+		clientCapabilities: defaultClientCapabilities,
 	}
 
 	url, err := r.GetURL(context.Background(), nil, &csClient)
@@ -197,7 +199,7 @@ func TestLocationRefresh_StampsClientCapabilities(t *testing.T) {
 	require.Equal(t, "http://example.com/refreshed", url)
 	require.True(t, csClient.called)
 	require.NotNil(t, csClient.lastIn)
-	require.Equal(t, clientCapabilities, csClient.lastIn.ClientCapabilities)
+	require.Equal(t, defaultClientCapabilities, csClient.lastIn.ClientCapabilities)
 }
 
 type fetcher func(*http.Request) (*http.Response, error)

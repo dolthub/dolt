@@ -122,18 +122,18 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 					flat = append(flat, h...)
 				}
 				id, token := dcs.getRepoId()
-				return &remotesapi.StreamChunkLocationsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: flat, ClientCapabilities: clientCapabilities}
+				return &remotesapi.StreamChunkLocationsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: flat, ClientCapabilities: dcs.clientCapabilities}
 			})
 		})
 		eg.Go(func() error {
-			return fetcherRPCChunkLocationsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, storeRepoToken, ret.resCh, dcs.host, dcs.getRepoId, dcs.repoPath)
+			return fetcherRPCChunkLocationsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, storeRepoToken, ret.resCh, dcs.host, dcs.getRepoId, dcs.repoPath, dcs.clientCapabilities)
 		})
 	} else {
 		locsReqCh := make(chan *remotesapi.GetDownloadLocsRequest)
 		eg.Go(func() error {
 			return fetcherHashSetToReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, func(hashes [][]byte) *remotesapi.GetDownloadLocsRequest {
 				id, token := dcs.getRepoId()
-				return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: hashes, ClientCapabilities: clientCapabilities}
+				return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: hashes, ClientCapabilities: dcs.clientCapabilities}
 			})
 		})
 		eg.Go(func() error {
@@ -141,7 +141,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		})
 	}
 	eg.Go(func() error {
-		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
+		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh, dcs.clientCapabilities)
 	})
 	eg.Go(func() error {
 		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, dcs.params)
@@ -365,7 +365,7 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 // assignment and re-introduces any id it reuses with a fresh
 // TableFileRecord, which we overwrite into |tfByID| before resolving
 // any ChunkLocation that references it. See the proto file.
-func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.StreamChunkLocationsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.ToChunker, host string, getRepoId func() (*remotesapi.RepoId, string), repoPath string) error {
+func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.StreamChunkLocationsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.ToChunker, host string, getRepoId func() (*remotesapi.RepoId, string), repoPath string, clientCapabilities []remotesapi.ClientCapability) error {
 	stream, err := reliable.MakeCall(
 		ctx,
 		reliable.CallOptions[*remotesapi.StreamChunkLocationsRequest, *remotesapi.StreamChunkLocationsResponse]{
@@ -443,7 +443,7 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 				}
 			}
 
-			locs, err := translateChunkLocations(req, resp.Locations, tfByID, getRepoId, repoPath)
+			locs, err := translateChunkLocations(req, resp.Locations, tfByID, getRepoId, repoPath, clientCapabilities)
 			if err != nil {
 				return NewRpcError(err, "StreamChunkLocations", host, req)
 			}
@@ -465,7 +465,7 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 // file_id plus the DoltChunkStore's current (repo_id, repo_token,
 // repo_path) — the server no longer sends a per-DownloadLoc
 // RefreshTableFileUrlRequest.
-func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locations []*chunkLoc, tfByID map[uint32]*tableFileRec, getRepoId func() (*remotesapi.RepoId, string), repoPath string) ([]*remotesapi.DownloadLoc, error) {
+func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locations []*chunkLoc, tfByID map[uint32]*tableFileRec, getRepoId func() (*remotesapi.RepoId, string), repoPath string, clientCapabilities []remotesapi.ClientCapability) ([]*remotesapi.DownloadLoc, error) {
 	if len(locations) == 0 {
 		return nil, nil
 	}
@@ -582,14 +582,19 @@ type downloads struct {
 	// ranges that have gone into |chunkRanges|.
 	dictCache *dictionaryCache
 	refreshes map[string]*locationRefresh
+	// clientCapabilities is propagated onto every locationRefresh
+	// this set produces, so URL refreshes carry the per-store
+	// capability set.
+	clientCapabilities []remotesapi.ClientCapability
 }
 
-func newDownloads() downloads {
+func newDownloads(clientCapabilities []remotesapi.ClientCapability) downloads {
 	return downloads{
-		chunkRanges: ranges.NewTree(chunkAggDistance),
-		dictRanges:  ranges.NewTree(chunkAggDistance),
-		dictCache:   &dictionaryCache{},
-		refreshes:   make(map[string]*locationRefresh),
+		chunkRanges:        ranges.NewTree(chunkAggDistance),
+		dictRanges:         ranges.NewTree(chunkAggDistance),
+		dictCache:          &dictionaryCache{},
+		refreshes:          make(map[string]*locationRefresh),
+		clientCapabilities: clientCapabilities,
 	}
 }
 
@@ -599,7 +604,7 @@ func (d downloads) Add(resp *remotesapi.DownloadLoc) {
 	if v, ok := d.refreshes[path]; ok {
 		v.Add(resp)
 	} else {
-		refresh := new(locationRefresh)
+		refresh := &locationRefresh{clientCapabilities: d.clientCapabilities}
 		refresh.Add(resp)
 		d.refreshes[path] = refresh
 	}
@@ -637,8 +642,8 @@ const (
 )
 
 // Reads off |locCh| and assembles DownloadLocs into download ranges.
-func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.DownloadLoc, fetchReqCh chan fetchReq, doneCh chan struct{}) error {
-	downloads := newDownloads()
+func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.DownloadLoc, fetchReqCh chan fetchReq, doneCh chan struct{}, clientCapabilities []remotesapi.ClientCapability) error {
+	downloads := newDownloads(clientCapabilities)
 	for {
 		hasWork := downloads.dictRanges.Len() > 0 || downloads.chunkRanges.Len() > 0
 		if !hasWork && locCh == nil {

@@ -128,7 +128,7 @@ func testIdFunc() (*remotesapi.RepoId, string) {
 
 func testBuildDlReq(hashes [][]byte) *remotesapi.GetDownloadLocsRequest {
 	id, token := testIdFunc()
-	return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoToken: token, ChunkHashes: hashes, ClientCapabilities: clientCapabilities}
+	return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoToken: token, ChunkHashes: hashes, ClientCapabilities: defaultClientCapabilities}
 }
 
 // buildFlatHashBuf returns a |nHashes|*20-byte buffer where hash |i|
@@ -182,7 +182,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 	}
 
 	t.Run("EmptyLocations", func(t *testing.T) {
-		locs, err := translateChunkLocations(buildReq(0), nil, nil, getRepoId, repoPath)
+		locs, err := translateChunkLocations(buildReq(0), nil, nil, getRepoId, repoPath, defaultClientCapabilities)
 		require.NoError(t, err)
 		assert.Nil(t, locs)
 	})
@@ -196,7 +196,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			{TableFileId: 1, RequestIndex: 0, Offset: 0, Length: 10},
 			{TableFileId: 1, RequestIndex: 1, Offset: 10, Length: 20},
 		}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath, defaultClientCapabilities)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		hgr := locs[0].Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
@@ -207,7 +207,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 		assert.Equal(t, "token", locs[0].RefreshRequest.RepoToken)
 		assert.Equal(t, repoPath, locs[0].RefreshRequest.RepoPath)
 		assert.Equal(t, "file-1", locs[0].RefreshRequest.FileId)
-		assert.Equal(t, clientCapabilities, locs[0].RefreshRequest.ClientCapabilities)
+		assert.Equal(t, defaultClientCapabilities, locs[0].RefreshRequest.ClientCapabilities)
 	})
 
 	t.Run("CrossResponseReuse", func(t *testing.T) {
@@ -218,7 +218,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "urlA", FileId: "file-1"},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 0}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath, defaultClientCapabilities)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		hgr := locs[0].Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
@@ -235,7 +235,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "urlB", FileId: "file-1-b"},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 0}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath, defaultClientCapabilities)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		hgr := locs[0].Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
@@ -247,7 +247,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 		req := buildReq(1)
 		tfByID := map[uint32]*tableFileRec{}
 		locations := []*chunkLoc{{TableFileId: 42, RequestIndex: 0}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath, defaultClientCapabilities)
 		assert.Nil(t, locs)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "table_file_id 42")
@@ -259,7 +259,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "u"},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 2}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath, defaultClientCapabilities)
 		assert.Nil(t, locs)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "out of range")
@@ -277,7 +277,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			{TableFileId: 5, RequestIndex: 1},
 			{TableFileId: 7, RequestIndex: 2},
 		}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath, defaultClientCapabilities)
 		require.NoError(t, err)
 		require.Len(t, locs, 2)
 
@@ -297,7 +297,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "u", FileId: "f", RefreshAfter: now},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 0}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath, defaultClientCapabilities)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		assert.Equal(t, now, locs[0].RefreshAfter)
@@ -311,7 +311,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "u"},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 2, Offset: 0, Length: 10}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath, defaultClientCapabilities)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		hgr := locs[0].Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
@@ -417,7 +417,7 @@ func startRPCThread(t *testing.T) *rpcTestHarness {
 	getRepoId := func() (*remotesapi.RepoId, string) { return repoId, "tok" }
 	go func() {
 		defer close(h.done)
-		h.finalErr = fetcherRPCChunkLocationsThread(ctx, h.reqCh, h.resCh, client, func(string) {}, h.missingCh, "host", getRepoId, "repoPath")
+		h.finalErr = fetcherRPCChunkLocationsThread(ctx, h.reqCh, h.resCh, client, func(string) {}, h.missingCh, "host", getRepoId, "repoPath", defaultClientCapabilities)
 	}()
 
 	// Backstop: make sure the RPC goroutine is torn down no matter

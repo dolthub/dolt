@@ -134,6 +134,12 @@ type DoltChunkStore struct {
 	stats       cacheStats
 	logger      chunks.DebugLogger
 	wsValidate  bool
+	// clientCapabilities is what this store advertises in
+	// outbound requests' client_capabilities fields. Initialized
+	// to defaultClientCapabilities; per-store overrides (e.g.
+	// WithoutHTTP2DownloadCapability) return a clone with this
+	// field replaced.
+	clientCapabilities []remotesapi.ClientCapability
 }
 
 // hasFeature reports whether |f| appears in |md|'s advertised
@@ -184,19 +190,20 @@ func NewDoltChunkStoreFromPath(
 	}
 
 	cs := &DoltChunkStore{
-		repoId:      repoId,
-		repoPath:    path,
-		repoToken:   repoToken,
-		host:        host,
-		csClient:    csClient,
-		finalizer:   func() error { return nil },
-		cache:       newMapChunkCache(),
-		wb:          newMapWriteBuffer(),
-		metadata:    metadata,
-		nbf:         nbf,
-		httpFetcher: globalHttpFetcher,
-		params:      defaultRequestParams,
-		wsValidate:  wsval,
+		repoId:             repoId,
+		repoPath:           path,
+		repoToken:          repoToken,
+		host:               host,
+		csClient:           csClient,
+		finalizer:          func() error { return nil },
+		cache:              newMapChunkCache(),
+		wb:                 newMapWriteBuffer(),
+		metadata:           metadata,
+		nbf:                nbf,
+		httpFetcher:        globalHttpFetcher,
+		params:             defaultRequestParams,
+		wsValidate:         wsval,
+		clientCapabilities: defaultClientCapabilities,
 	}
 	err = cs.loadRoot(ctx)
 	if err != nil {
@@ -214,6 +221,24 @@ func (dcs *DoltChunkStore) clone() *DoltChunkStore {
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
 	ret := dcs.clone()
 	ret.httpFetcher = fetcher
+	return ret
+}
+
+// WithoutHTTP2DownloadCapability returns a clone of |dcs| whose
+// advertised client_capabilities omit
+// CLIENT_CAPABILITY_HTTP2_DOWNLOAD. Use it for clients whose HTTP
+// transport cannot satisfy HTTP/2-only download URLs and that need
+// the server to fall back to capability sets that exclude it.
+func (dcs *DoltChunkStore) WithoutHTTP2DownloadCapability() *DoltChunkStore {
+	ret := dcs.clone()
+	filtered := make([]remotesapi.ClientCapability, 0, len(dcs.clientCapabilities))
+	for _, c := range dcs.clientCapabilities {
+		if c == remotesapi.ClientCapability_CLIENT_CAPABILITY_HTTP2_DOWNLOAD {
+			continue
+		}
+		filtered = append(filtered, c)
+	}
+	ret.clientCapabilities = filtered
 	return ret
 }
 
@@ -536,8 +561,12 @@ type locationRefresh struct {
 	RefreshAfter   time.Time
 	RefreshRequest *remotesapi.RefreshTableFileUrlRequest
 	URL            string
-	lastRefresh    time.Time
-	mu             sync.Mutex
+	// clientCapabilities is the per-store capability set stamped
+	// onto RefreshRequest at send time. Carried on the refresh so
+	// GetURL does not need a back-pointer to the DoltChunkStore.
+	clientCapabilities []remotesapi.ClientCapability
+	lastRefresh        time.Time
+	mu                 sync.Mutex
 }
 
 func (r *locationRefresh) Add(resp *remotesapi.DownloadLoc) {
@@ -573,7 +602,7 @@ func (r *locationRefresh) GetURL(ctx context.Context, lastError error, client re
 			// the client is authoritative for its own capability set
 			// and must stamp it at send time. See the ClientCapability
 			// enum comment in chunkstore.proto.
-			r.RefreshRequest.ClientCapabilities = clientCapabilities
+			r.RefreshRequest.ClientCapabilities = r.clientCapabilities
 			ctx, cancel := context.WithTimeout(ctx, refreshTableFileURLTimeout)
 			resp, err := client.RefreshTableFileUrl(ctx, r.RefreshRequest)
 			cancel()
@@ -1159,7 +1188,7 @@ func (dcs *DoltChunkStore) PruneTableFiles(ctx context.Context) error {
 // and a list of only appendix table files
 func (dcs *DoltChunkStore) Sources(ctx context.Context) (chunks.TableFileSources, error) {
 	id, token := dcs.getRepoId()
-	req := &remotesapi.ListTableFilesRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ClientCapabilities: clientCapabilities}
+	req := &remotesapi.ListTableFilesRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ClientCapabilities: dcs.clientCapabilities}
 	resp, err := dcs.csClient.ListTableFiles(ctx, req)
 	if err != nil {
 		return chunks.TableFileSources{}, NewRpcError(err, "ListTableFiles", dcs.host, req)
@@ -1255,7 +1284,7 @@ func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, uint64
 		// the client is authoritative for its own capability set
 		// and must stamp it at send time. See the ClientCapability
 		// enum comment in chunkstore.proto.
-		drtf.info.RefreshRequest.ClientCapabilities = clientCapabilities
+		drtf.info.RefreshRequest.ClientCapabilities = drtf.dcs.clientCapabilities
 		resp, err := drtf.dcs.csClient.RefreshTableFileUrl(ctx, drtf.info.RefreshRequest)
 		if err == nil {
 			drtf.info.Url = resp.Url
