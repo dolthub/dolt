@@ -181,6 +181,13 @@ func generateNonCreateNonDropTableSqlSchemaDiff(ctx *sql.Context, formatter sql.
 		ddlStatements = append(ddlStatements, AlterTableCollateStmt(formatter, td.ToName.Name, fromCollation, toCollation))
 	}
 
+	// Handle adaptive encoding max row size changes
+	toTargetRowSize := toSch.GetTargetRowSize()
+	fromTargetRowSize := fromSch.GetTargetRowSize()
+	if toTargetRowSize != fromTargetRowSize {
+		ddlStatements = append(ddlStatements, fmt.Sprintf("ALTER TABLE %s TARGET_ROW_SIZE=%d;", formatter.QuoteIdentifier(td.ToName.Name), toTargetRowSize))
+	}
+
 	return ddlStatements, nil
 }
 

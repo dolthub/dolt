@@ -278,6 +278,9 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 	// Copy over the collation
 	newSch.SetCollation(sch.GetCollation())
 
+	// Copy over target row size
+	newSch.SetTargetRowSize(sch.GetTargetRowSize())
+
 	pkOrds, err := modifyPkOrdinals(sch, newSch)
 	if err != nil {
 		return nil, err

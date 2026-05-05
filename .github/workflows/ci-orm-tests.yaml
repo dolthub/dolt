@@ -32,6 +32,8 @@ jobs:
           file: dolt/integration-tests/orm-tests/Dockerfile
           tags: orm-tests:latest
           load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Test ORM integrations
         run: docker run --rm orm-tests:latest
       - name: Configure AWS Credentials

@@ -45,11 +45,13 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dses
 
 	keyDesc, valDesc := m.Descriptors()
 
+	adaptiveEncodingMaxRowSize := schState.DoltSchema.GetTargetRowSize()
+
 	return prollyIndexWriter{
 		mut:    m.Mutate(),
-		keyBld: val.NewTupleBuilder(keyDesc, m.NodeStore()),
+		keyBld: val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(adaptiveEncodingMaxRowSize),
 		keyMap: schState.PriIndex.KeyMapping,
-		valBld: val.NewTupleBuilder(valDesc, m.NodeStore()),
+		valBld: val.NewTupleBuilder(valDesc, m.NodeStore()).WithMaxRowSize(adaptiveEncodingMaxRowSize),
 		valMap: schState.PriIndex.ValMapping,
 		key:    make(sql.Row, keyDesc.Count()),
 	}, nil
@@ -68,10 +70,12 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schStat
 
 	keyDesc, valDesc := m.Descriptors()
 
+	targetRowSize := schState.DoltSchema.GetTargetRowSize()
+
 	return prollyKeylessWriter{
 		mut:    m.Mutate(),
-		keyBld: val.NewTupleBuilder(keyDesc, m.NodeStore()),
-		valBld: val.NewTupleBuilder(valDesc, m.NodeStore()),
+		keyBld: val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
+		valBld: val.NewTupleBuilder(valDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
 		valMap: schState.PriIndex.ValMapping,
 	}, nil
 }

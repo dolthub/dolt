@@ -473,7 +473,7 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 		td := NewTupleDescriptor(types...)
 		tb := NewTupleBuilder(td, vs)
 		t.Run("round trip inlined value", func(t *testing.T) {
-			shortByteArray := make([]byte, defaultTupleLengthTarget/2)
+			shortByteArray := make([]byte, DefaultTupleLengthTarget/2)
 			err := tb.PutAdaptiveBytesFromInline(ctx, 0, shortByteArray)
 			require.NoError(t, err)
 			tup, err := tb.Build(context.Background(), testPool)
@@ -485,7 +485,7 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 		})
 
 		t.Run("round trip out-of-band value", func(t *testing.T) {
-			longByteArray := make([]byte, defaultTupleLengthTarget*2)
+			longByteArray := make([]byte, DefaultTupleLengthTarget*2)
 			h, err := vs.WriteBytes(ctx, longByteArray)
 			require.NoError(t, err)
 			byteArray := NewByteArray(ctx, h, vs).WithMaxByteLength(int64(len(longByteArray)))
@@ -516,7 +516,7 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 			// In this test, only one of two equally sized columns needs to be stored out of band.
 			// Only the first column should be stored out-of-band.
 
-			columnSize := defaultTupleLengthTarget / 2
+			columnSize := DefaultTupleLengthTarget / 2
 			mediumByteArray := make([]byte, columnSize)
 			err := tb.PutAdaptiveBytesFromInline(ctx, 0, mediumByteArray)
 			require.NoError(t, err)
@@ -550,8 +550,8 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 			// Column 1: large value (the full target)
 			// Combined inline size exceeds the target, but only moving column 1
 			// out-of-band is sufficient to fit.
-			smallByteArray := make([]byte, defaultTupleLengthTarget/4)
-			largeByteArray := make([]byte, defaultTupleLengthTarget)
+			smallByteArray := make([]byte, DefaultTupleLengthTarget/4)
+			largeByteArray := make([]byte, DefaultTupleLengthTarget)
 			err := tb.PutAdaptiveBytesFromInline(ctx, 0, smallByteArray)
 			require.NoError(t, err)
 			err = tb.PutAdaptiveBytesFromInline(ctx, 1, largeByteArray)
@@ -598,9 +598,9 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 			// Column 2: large value (3/4 of target)
 			// Combined they exceed the target. Moving only column 2 (largest) out-of-band
 			// should be enough. Column 0 and 1 should remain inline.
-			smallByteArray := make([]byte, defaultTupleLengthTarget/4)
-			mediumByteArray := make([]byte, defaultTupleLengthTarget/3)
-			largeByteArray := make([]byte, defaultTupleLengthTarget*3/4)
+			smallByteArray := make([]byte, DefaultTupleLengthTarget/4)
+			mediumByteArray := make([]byte, DefaultTupleLengthTarget/3)
+			largeByteArray := make([]byte, DefaultTupleLengthTarget*3/4)
 
 			err := tb.PutAdaptiveBytesFromInline(ctx, 0, mediumByteArray)
 			require.NoError(t, err)

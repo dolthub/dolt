@@ -61,7 +61,7 @@ func (om OrdinalMapping) IsIdentityMapping() bool {
 	return true
 }
 
-var defaultTupleLengthTarget uint16 = (1 << 11)
+var DefaultTupleLengthTarget uint16 = (1 << 11)
 
 type TupleBuilder struct {
 	vs                ValueStore
@@ -80,8 +80,14 @@ func NewTupleBuilder(desc *TupleDesc, vs ValueStore) *TupleBuilder {
 		fields:            make([][]byte, len(desc.Types)),
 		buf:               make([]byte, builderBufferSize),
 		vs:                vs,
-		tupleLengthTarget: defaultTupleLengthTarget,
+		tupleLengthTarget: DefaultTupleLengthTarget,
 	}
+}
+
+func (tb *TupleBuilder) WithMaxRowSize(target uint16) *TupleBuilder {
+	other := *tb
+	other.tupleLengthTarget = target
+	return &other
 }
 
 // Build materializes a Tuple from the fields written to the TupleBuilder.

@@ -921,6 +921,12 @@ func RunDoltDdlScripts(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	harness.Setup()
 
+	for _, script := range CreateTableScripts {
+		e, err := harness.NewEngine(t)
+		require.NoError(t, err)
+		enginetest.TestScriptWithEngine(t, e, harness, script)
+	}
+
 	for _, script := range ModifyAndChangeColumnScripts {
 		e, err := harness.NewEngine(t)
 		require.NoError(t, err)

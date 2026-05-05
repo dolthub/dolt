@@ -80,6 +80,19 @@ var AllInitialSimpsonsCharacters = []sql.Row{
 	{5, "Barney", "Gumble", 0, 40, 4.0, "00000000-0000-0000-0000-000000000005", uint(555)},
 }
 
+var CreateTableScripts = []queries.ScriptTest{
+	{
+		Name:        "create table with too large target_row_size",
+		SetUpScript: nil,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "create table test_table(pk int primary key) target_row_size=70000",
+				ExpectedErrStr: "target_row_size 70000 exceeds maximum allowed value 65535",
+			},
+		},
+	},
+}
+
 var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 	{
 		Name:        "alter modify column reorder middle",

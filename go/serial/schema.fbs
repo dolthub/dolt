@@ -34,6 +34,9 @@ table TableSchema {
 
   // table comment
   comment:string;
+
+  // target row size (used with adaptive encoded columns)
+  target_row_size:uint16 = 2048;
 }
 
 table Column {

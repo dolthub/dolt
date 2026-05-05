@@ -46,6 +46,7 @@ type schemaImpl struct {
 	collation                  Collation
 	contentHashedFields        []uint64
 	comment                    string
+	targetRowSize              uint16
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -142,6 +143,7 @@ func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) S
 		checkCollection: NewCheckCollection(),
 		pkOrdinals:      []int{},
 		collation:       Collation_Default,
+		targetRowSize:   val.DefaultTupleLengthTarget,
 	}
 }
 
@@ -299,6 +301,17 @@ func (si *schemaImpl) GetComment() string {
 
 func (si *schemaImpl) SetComment(comment string) {
 	si.comment = comment
+}
+
+func (si *schemaImpl) GetTargetRowSize() uint16 {
+	if si.targetRowSize == 0 {
+		return val.DefaultTupleLengthTarget
+	}
+	return si.targetRowSize
+}
+
+func (si *schemaImpl) SetTargetRowSize(value uint16) {
+	si.targetRowSize = value
 }
 
 // GetAllCols gets the collection of all columns (pk and non-pk)

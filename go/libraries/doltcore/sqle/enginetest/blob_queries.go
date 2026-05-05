@@ -112,6 +112,14 @@ func MakeBigAdaptiveEncodingQueriesSetup(columnType AdaptiveEncodingTestColumnTy
     ('HN', LOAD_FILE('testdata/halfSize'), NULL),
     ('TN', LOAD_FILE('testdata/tinyFile'), NULL),
     ('NN', NULL, NULL)`,
+		fmt.Sprintf(`create table increased_row_size (i char(2) primary key, b1 %s, b2 %s) target_row_size=4096`, typename, typename),
+		`insert into increased_row_size values
+    ('FF', LOAD_FILE('testdata/fullSize'), LOAD_FILE('testdata/fullSize')),
+	('HH', LOAD_FILE('testdata/halfSize'), LOAD_FILE('testdata/halfSize'))`,
+		fmt.Sprintf(`create table decreased_row_size (i char(2) primary key, b1 %s, b2 %s) target_row_size=1024`, typename, typename),
+		`insert into decreased_row_size values
+    ('HH', LOAD_FILE('testdata/halfSize'), LOAD_FILE('testdata/halfSize')),
+	('HT', LOAD_FILE('testdata/halfSize'), LOAD_FILE('testdata/tinyFile'))`,
 	}}
 }
 
@@ -214,6 +222,24 @@ func MakeBigAdaptiveEncodingQueries(columnType AdaptiveEncodingTestColumnType, t
 			Query:        "select i from blobt2 where b2 = LOAD_FILE('testdata/halfSize')",
 			WrapBehavior: wrapBehavior,
 			Expected:     []sql.Row{{"FH"}, {"HH"}, {"TH"}, {"NH"}},
+		},
+		{
+			// When the max row size has been increased, we can fit more inline.
+			Query:        "select i, b1, b2 from increased_row_size",
+			WrapBehavior: wrapBehavior,
+			Expected: []sql.Row{
+				{"FF", fullSizeOutOfLineRepr, fullSize},
+				{"HH", halfSize, halfSize},
+			},
+		},
+		{
+			// When the max row size has been decreased, we move more columns out-of-band.
+			Query:        "select i, b1, b2 from decreased_row_size",
+			WrapBehavior: wrapBehavior,
+			Expected: []sql.Row{
+				{"HH", halfSizeOutOfLineRepr, halfSizeOutOfLineRepr},
+				{"HT", halfSizeOutOfLineRepr, tiny},
+			},
 		},
 	}
 }
