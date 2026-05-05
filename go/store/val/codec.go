@@ -668,27 +668,22 @@ func compareAddr(l, r hash.Hash) int {
 }
 
 func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue) int {
-	if bytes.Equal(l, r) {
-		return 0
-	}
-	if vs != nil {
-		lBytes, err := l.getUnderlyingBytes(ctx, vs)
-		if err != nil {
-			panic(fmt.Sprintf("compareAdaptiveValue: failed to load left value: %v", err))
-		}
-		rBytes, err := r.getUnderlyingBytes(ctx, vs)
-		if err != nil {
-			panic(fmt.Sprintf("compareAdaptiveValue: failed to load right value: %v", err))
-		}
-		return bytes.Compare(lBytes, rBytes)
-	}
-	// No ValueStore available; fall back to inline comparison if possible.
-	lBytes, lInline := InlineValueBytes(l)
-	rBytes, rInline := InlineValueBytes(r)
+	// If both values are inline we can compare their payloads without touching the ValueStore.
+	lPayload, lInline := InlineValueBytes(l)
+	rPayload, rInline := InlineValueBytes(r)
 	if lInline && rInline {
-		return bytes.Compare(lBytes, rBytes)
+		return bytes.Compare(lPayload, rPayload)
 	}
-	return bytes.Compare(l, r)
+	// At least one value is out-of-band; load both through the ValueStore.
+	lBytes, err := l.getUnderlyingBytes(ctx, vs)
+	if err != nil {
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to load left value: %v", err))
+	}
+	rBytes, err := r.getUnderlyingBytes(ctx, vs)
+	if err != nil {
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to load right value: %v", err))
+	}
+	return bytes.Compare(lBytes, rBytes)
 }
 
 func writeRaw(buf, val []byte) {
