@@ -11,6 +11,9 @@ concurrency:
   group: ci-bats-unix-remote${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Bats tests
@@ -18,11 +21,12 @@ jobs:
       run:
         shell: bash
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
     strategy:
       fail-fast: true
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
-    # We only run these as seaparte workflow if we do not have AWS credentials.
+    # We only run these as a separate workflow if we do not have AWS credentials.
     steps:
       - uses: actions/checkout@v6
         if: ${{ env.use_credentials != 'true' }}
@@ -37,6 +41,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+          cache: 'pip'
       - uses: actions/setup-node@v4
         if: ${{ env.use_credentials != 'true' }}
         with:
@@ -46,18 +51,24 @@ jobs:
         run: |
           mkdir -p ./.ci_bin
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+      - name: Cache bats
+        if: ${{ env.use_credentials != 'true' }}
+        id: bats_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/node_modules
+          key: bats-1-${{ runner.os }}
       - name: Install Bats
         if: ${{ env.use_credentials != 'true' }}
-        run: |
-          npm i bats
-          echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
+        run: |
+          if [ "${{ steps.bats_cache.outputs.cache-hit }}" != "true" ]; then
+            npm i bats
+          fi
+          echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
       - name: Install Python Deps
         if: ${{ env.use_credentials != 'true' }}
-        run: |
-          pip install mysql-connector-python
-          pip install pandas
-          pip install pyarrow
+        run: pip install -r integration-tests/bats/requirements.txt
       - name: Install Dolt
         if: ${{ env.use_credentials != 'true' }}
         working-directory: ./go
@@ -74,31 +85,58 @@ jobs:
       - name: Install expect
         if: ${{ env.use_credentials != 'true' }}
         run: sudo apt-get install -y expect
+      - name: Cache Maven
+        if: ${{ env.use_credentials != 'true' }}
+        id: maven_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/apache-maven-3.9.15
+          key: maven-3.9.15-${{ runner.os }}
       - name: Install Maven
         if: ${{ env.use_credentials != 'true' }}
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.15/binaries/apache-maven-3.9.15-bin.tar.gz
-          tar -xf apache-maven-3.9.15-bin.tar.gz
+          if [ "${{ steps.maven_cache.outputs.cache-hit }}" != "true" ]; then
+            curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.15/binaries/apache-maven-3.9.15-bin.tar.gz
+            tar -xf apache-maven-3.9.15-bin.tar.gz
+          fi
           echo "$(pwd)/apache-maven-3.9.15/bin" >> $GITHUB_PATH
+      - name: Cache Hadoop
+        if: ${{ env.use_credentials != 'true' }}
+        id: hadoop_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/hadoop-3.3.6
+          key: hadoop-3.3.6-${{ runner.os }}
       - name: Install Hadoop
         if: ${{ env.use_credentials != 'true' }}
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
-          tar xvf hadoop-3.3.6.tar.gz
+          if [ "${{ steps.hadoop_cache.outputs.cache-hit }}" != "true" ]; then
+            curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+            tar xvf hadoop-3.3.6.tar.gz
+          fi
           echo "$(pwd)/hadoop-3.3.6/bin" >> $GITHUB_PATH
+      - name: Cache parquet-cli
+        if: ${{ env.use_credentials != 'true' }}
+        id: parquet_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/parquet-cli-1.12.3-runtime.jar
+          key: parquet-cli-1.12.3-${{ runner.os }}
       - name: Install parquet-cli
         if: ${{ env.use_credentials != 'true' }}
         id: parquet_cli
         working-directory: ./.ci_bin
         run: |
-          curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
-          tar zxvf apache-parquet-1.12.3.tar.gz
-          cd parquet-java-apache-parquet-1.12.3/parquet-cli
-          mvn clean install -DskipTests
-          runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
-          echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
+          if [ "${{ steps.parquet_cache.outputs.cache-hit }}" != "true" ]; then
+            curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
+            tar zxvf apache-parquet-1.12.3.tar.gz
+            cd parquet-java-apache-parquet-1.12.3/parquet-cli
+            mvn clean install -DskipTests
+            cp target/parquet-cli-1.12.3-runtime.jar ..
+          fi
+          echo "runtime_jar=$(pwd)/parquet-cli-1.12.3-runtime.jar" >> $GITHUB_OUTPUT
       - name: Check expect
         if: ${{ env.use_credentials != 'true' }}
         run: expect -v

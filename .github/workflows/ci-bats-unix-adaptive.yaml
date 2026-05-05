@@ -12,13 +12,46 @@ concurrency:
   group: ci-bats-unix-adaptive-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  test:
-    name: Bats tests (adaptive encoding)
+  build:
+    name: Build binaries
     defaults:
       run:
         shell: bash
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+        id: go
+      - name: Build binaries
+        working-directory: ./go
+        run: |
+          mkdir -p ../.ci_bin
+          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+          go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
+          go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: dolt-binaries-adaptive
+          path: .ci_bin/
+          retention-days: 1
+
+  test:
+    name: Bats tests (adaptive encoding)
+    needs: build
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
     env:
       DOLT_USE_ADAPTIVE_ENCODING: "true"
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
@@ -55,15 +88,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 10800 # 3 hours D:
       - uses: actions/checkout@v6
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go/go.mod
-        id: go
       - name: Setup Python 3.x
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+          cache: 'pip'
       - uses: actions/setup-node@v4
         with:
           node-version: ^16
@@ -71,49 +100,66 @@ jobs:
         run: |
           mkdir -p ./.ci_bin
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: dolt-binaries-adaptive
+          path: .ci_bin/
+      - name: Make binaries executable
+        run: chmod +x .ci_bin/dolt .ci_bin/remotesrv .ci_bin/noms
+      - name: Cache bats
+        id: bats_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/node_modules
+          key: bats-1-${{ runner.os }}
       - name: Install Bats
-        run: |
-          npm i bats
-          echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
+        run: |
+          if [ "${{ steps.bats_cache.outputs.cache-hit }}" != "true" ]; then
+            npm i bats
+          fi
+          echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
       - name: Install Python Deps
-        run: |
-          pip install mysql-connector-python
-          pip install pandas
-          pip install pyarrow
-      - name: Install Dolt
-        working-directory: ./go
-        run: |
-          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
-
-          go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
-          go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
+        run: pip install -r integration-tests/bats/requirements.txt
       - name: Setup Dolt Config
         run: |
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
-      - name: Install expect
-        run: sudo apt-get install -y expect
-      - name: Install pcre2grep
-        run: sudo apt-get install -y pcre2-utils
-      - name: Install Maven
-        run: sudo apt-get install -y maven
+      - name: Install system packages
+        run: sudo apt-get install -y expect pcre2-utils maven
+      - name: Cache Hadoop
+        id: hadoop_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/hadoop-3.3.6
+          key: hadoop-3.3.6-${{ runner.os }}
       - name: Install Hadoop
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
-          tar xvf hadoop-3.3.6.tar.gz
+          if [ "${{ steps.hadoop_cache.outputs.cache-hit }}" != "true" ]; then
+            curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+            tar xvf hadoop-3.3.6.tar.gz
+          fi
           echo "$(pwd)/hadoop-3.3.6/bin" >> $GITHUB_PATH
+      - name: Cache parquet-cli
+        id: parquet_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/parquet-cli-1.12.3-runtime.jar
+          key: parquet-cli-1.12.3-${{ runner.os }}
       - name: Install parquet-cli
         id: parquet_cli
         working-directory: ./.ci_bin
         run: |
-          curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
-          tar zxvf apache-parquet-1.12.3.tar.gz
-          cd parquet-java-apache-parquet-1.12.3/parquet-cli
-          mvn clean install -DskipTests
-          runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
-          echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
+          if [ "${{ steps.parquet_cache.outputs.cache-hit }}" != "true" ]; then
+            curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
+            tar zxvf apache-parquet-1.12.3.tar.gz
+            cd parquet-java-apache-parquet-1.12.3/parquet-cli
+            mvn clean install -DskipTests
+            cp target/parquet-cli-1.12.3-runtime.jar ..
+          fi
+          echo "runtime_jar=$(pwd)/parquet-cli-1.12.3-runtime.jar" >> $GITHUB_OUTPUT
       - name: Check expect
         run: expect -v
       - name: Test all Unix
@@ -124,8 +170,121 @@ jobs:
         run: |
           bats --print-output-on-failure --tap $BATS_FILTER .
         working-directory: ./integration-tests/bats
+
+  test-remote:
+    name: Bats tests (adaptive encoding, remote-engine)
+    needs: build
+    if: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      DOLT_USE_ADAPTIVE_ENCODING: "true"
+    steps:
+      - name: Free disk space
+        run: |
+          NAME="DISK-CLEANUP"
+          echo "[${NAME}] Starting background cleanup..."
+          [ -d /usr/share/dotnet ] && sudo rm -rf /usr/share/dotnet &
+          [ -d /usr/local/lib/android ] && sudo rm -rf /usr/local/lib/android &
+          [ -d /opt/ghc ] && sudo rm -rf /opt/ghc &
+          [ -d /usr/local/share/boost ] && sudo rm -rf /usr/local/share/boost &
+
+      - name: Set ENV VARS for AWS tests
+        run: |
+          echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV
+          echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
+          echo "DOLT_BATS_AWS_TABLE=dolt-ci-bats-manifests-us-west-2" >> $GITHUB_ENV
+          echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
+          echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
+      - name: Configure filter tags for lambda bats
+        run: echo "BATS_FILTER=--filter-tags no_lambda" >> $GITHUB_ENV
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-duration-seconds: 10800 # 3 hours D:
+      - uses: actions/checkout@v6
+      - name: Setup Python 3.x
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: 'pip'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ^16
+      - name: Create CI Bin
+        run: |
+          mkdir -p ./.ci_bin
+          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: dolt-binaries-adaptive
+          path: .ci_bin/
+      - name: Make binaries executable
+        run: chmod +x .ci_bin/dolt .ci_bin/remotesrv .ci_bin/noms
+      - name: Cache bats
+        id: bats_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/node_modules
+          key: bats-1-${{ runner.os }}
+      - name: Install Bats
+        working-directory: ./.ci_bin
+        run: |
+          if [ "${{ steps.bats_cache.outputs.cache-hit }}" != "true" ]; then
+            npm i bats
+          fi
+          echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
+      - name: Install Python Deps
+        run: pip install -r integration-tests/bats/requirements.txt
+      - name: Setup Dolt Config
+        run: |
+          dolt config --global --add user.name 'Dolthub Actions'
+          dolt config --global --add user.email 'actions@dolthub.com'
+      - name: Install system packages
+        run: sudo apt-get install -y expect pcre2-utils maven
+      - name: Cache Hadoop
+        id: hadoop_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/hadoop-3.3.6
+          key: hadoop-3.3.6-${{ runner.os }}
+      - name: Install Hadoop
+        working-directory: ./.ci_bin
+        run: |
+          if [ "${{ steps.hadoop_cache.outputs.cache-hit }}" != "true" ]; then
+            curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+            tar xvf hadoop-3.3.6.tar.gz
+          fi
+          echo "$(pwd)/hadoop-3.3.6/bin" >> $GITHUB_PATH
+      - name: Cache parquet-cli
+        id: parquet_cache
+        uses: actions/cache@v4
+        with:
+          path: .ci_bin/parquet-cli-1.12.3-runtime.jar
+          key: parquet-cli-1.12.3-${{ runner.os }}
+      - name: Install parquet-cli
+        id: parquet_cli
+        working-directory: ./.ci_bin
+        run: |
+          if [ "${{ steps.parquet_cache.outputs.cache-hit }}" != "true" ]; then
+            curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
+            tar zxvf apache-parquet-1.12.3.tar.gz
+            cd parquet-java-apache-parquet-1.12.3/parquet-cli
+            mvn clean install -DskipTests
+            cp target/parquet-cli-1.12.3-runtime.jar ..
+          fi
+          echo "runtime_jar=$(pwd)/parquet-cli-1.12.3-runtime.jar" >> $GITHUB_OUTPUT
+      - name: Check expect
+        run: expect -v
       - name: Test all Unix, SQL_ENGINE=remote-engine
-        if: ${{ env.use_credentials == 'true' }}
         env:
           SQL_ENGINE: "remote-engine"
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
