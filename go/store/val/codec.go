@@ -470,9 +470,9 @@ func writeDecimal(buf []byte, val apd.Decimal) {
 		writeInt32(buf[:int32Size], types.DecimalNaN)
 	} else if val.Form == apd.Infinite {
 		if val.Negative {
-			writeInt32(buf[:int32Size], types.DecimalPosInf)
-		} else {
 			writeInt32(buf[:int32Size], types.DecimalNegInf)
+		} else {
+			writeInt32(buf[:int32Size], types.DecimalPosInf)
 		}
 	} else {
 		writeInt32(buf[:int32Size], val.Exponent)
