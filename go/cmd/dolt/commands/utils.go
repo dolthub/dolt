@@ -451,25 +451,6 @@ func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string,
 	return branchName, nil
 }
 
-func getTimestampColAsInt64(col interface{}) (int64, error) {
-	switch v := col.(type) {
-	case string:
-		t, err := time.Parse("2006-01-02 15:04:05.999", v)
-		if err != nil {
-			return 0, fmt.Errorf("error parsing timestamp %s: %w", v, err)
-		}
-		return t.UnixMilli(), nil
-	case int64:
-		return v, nil
-	case uint64:
-		return int64(v), nil
-	case time.Time:
-		return v.UnixMilli(), nil
-	default:
-		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or time.Time", v)
-	}
-}
-
 func getTimestampColAsUint64(col interface{}) (uint64, error) {
 	switch v := col.(type) {
 	case string:
@@ -617,7 +598,7 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, show
 	pager.Writer.Write([]byte(color.YellowString("commit %s ", chStr))) // Use Dim Yellow (33m)
 
 	// Show decoration
-	if decoration != "no" {
+	if decoration != cli.DecorateNo {
 		printRefs(pager, comm, decoration)
 	}
 
@@ -656,7 +637,7 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 	references := []string{}
 
 	for _, b := range comm.localBranchNames {
-		if decoration == "full" {
+		if decoration == cli.DecorateFull {
 			b = "refs/heads/" + b
 		}
 		// branch names are bright green (32;1m)
@@ -664,7 +645,7 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 		references = append(references, branchName)
 	}
 	for _, b := range comm.remoteBranchNames {
-		if decoration == "full" {
+		if decoration == cli.DecorateFull {
 			b = "refs/remotes/" + b
 		}
 		// remote names are bright red (31;1m)
@@ -672,7 +653,7 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 		references = append(references, branchName)
 	}
 	for _, t := range comm.tagNames {
-		if decoration == "full" {
+		if decoration == cli.DecorateFull {
 			t = "refs/tags/" + t
 		}
 		// tag names are bright yellow (33;1m)
@@ -694,50 +675,33 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 	pager.Writer.Write([]byte(yellow.Sprintf("%s) ", joinedReferences)))
 }
 
+// commitInfoOptions controls per-commit detail fetched by getCommitInfoWithOptions.
 type commitInfoOptions struct {
+	// showSignature requests the signature column be populated with gpg verifier output.
 	showSignature bool
 }
 
-// getCommitInfo returns the commit info for the given ref.
+// getCommitInfo reads the commit at |ref| through the dolt_log table function on |queryist|.
 func getCommitInfo(sqlCtx *sql.Context, queryist cli.Queryist, ref string) (*CommitInfo, error) {
 	return getCommitInfoWithOptions(sqlCtx, queryist, ref, commitInfoOptions{})
 }
 
-// getCommitInfoWithOptions reads the commit at |ref| through the dolt_log table function on
-// |queryist| and returns the parsed CommitInfo, applying the presentation flags in |opts| such
-// as whether to include the cryptographic signature. Works against servers that expose only
-// the committer columns and against newer servers that also expose the author columns; on
-// older servers the committer identity stands in for the author.
+// getCommitInfoWithOptions is getCommitInfo with caller-specified per-call options.
 func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	varRows, err := cli.GetRowsForSql(queryist, sqlCtx, "SHOW VARIABLES LIKE '"+dsess.DoltLogCommitterOnly+"'")
-	if err != nil {
-		return nil, err
-	}
-	hasAuthorColumns := len(varRows) > 0
-	if hasAuthorColumns {
-		if _, _, _, qErr := queryist.Query(sqlCtx, "SET @@SESSION."+dsess.DoltLogCommitterOnly+" = 0"); qErr != nil {
-			return nil, qErr
-		}
-	}
-
-	authorColumnsOffset := 0
-	var q string
+	// --parents fills the parents column so CommitInfo.parentHashes is non-nil. --show-signature
+	// is opt-in so unsigned-commit queries do not pay the gpg verify cost.
+	flags := "'--parents'"
 	if opts.showSignature {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
-		if err != nil {
-			return nil, fmt.Errorf("error interpolating query: %v", err)
-		}
-		authorColumnsOffset++
-	} else {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
-		if err != nil {
-			return nil, fmt.Errorf("error interpolating query: %v", err)
-		}
+		flags += ", '--show-signature'"
+	}
+	q, err := dbr.InterpolateForDialect("select * from dolt_log(?, "+flags+")", []interface{}{ref}, dialect.MySQL)
+	if err != nil {
+		return nil, fmt.Errorf("error interpolating query: %v", err)
 	}
 
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
@@ -745,13 +709,17 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
 	if len(rows) == 0 {
-		// No commit with this hash exists
 		return nil, nil
 	}
 
-	// Author-specific columns appear at the end of the dolt log schema to remain compatible with hard-coded indices of
-	// older dolt clients.
 	row := rows[0]
+	// The minimum column count this code reads positionally below. Hard-coded so a server
+	// that ships extra trailing columns in a future release stays forward-compatible.
+	const minCols = 12
+	if len(row) < minCols {
+		return nil, fmt.Errorf("dolt_log returned %d columns, expected at least %d. upgrade your dolt server", len(row), minCols)
+	}
+
 	commitHashStr, ok := row[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("unexpected type for commit hash: %T", row[0])
@@ -794,33 +762,31 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		parentHashStrs = strings.Split(parentStr, ", ")
 	}
 
+	// signature is NULL when --show-signature was not requested, so a non-string value here is
+	// expected; fall through with an empty default.
 	var signature string
-	if opts.showSignature {
-		signature = row[8].(string)
+	if s, ok := row[8].(string); ok {
+		signature = s
 	}
 
-	// Default author to committer identity; servers that expose author columns override these below.
-	authorName, authorEmail, authorDate := committerName, committerEmail, int64(committerDate)
-	if hasAuthorColumns {
-		authorName, ok = row[8+authorColumnsOffset].(string)
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColumnsOffset])
-		}
-		authorEmail, ok = row[9+authorColumnsOffset].(string)
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColumnsOffset])
-		}
-		authorDate, err = getTimestampColAsInt64(row[10+authorColumnsOffset])
-		if err != nil {
-			return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColumnsOffset], err)
-		}
+	authorName, ok := row[9].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for author name: %T", row[9])
+	}
+	authorEmail, ok := row[10].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for author email: %T", row[10])
+	}
+	authorDate, err := getTimestampColAsUint64(row[11])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[11], err)
 	}
 
 	commitMeta := &datas.CommitMeta{
 		Author: datas.CommitIdent{
 			Name:  authorName,
 			Email: authorEmail,
-			Date:  datas.CommitDateAt(time.UnixMilli(authorDate)),
+			Date:  datas.CommitDateAt(time.UnixMilli(int64(authorDate))),
 		},
 		Committer: datas.CommitIdent{
 			Name:  committerName,

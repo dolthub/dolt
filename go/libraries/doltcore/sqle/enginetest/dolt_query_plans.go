@@ -90,7 +90,8 @@ var DoltCommitPlanTests = []queries.QueryPlanTest{
 		Query: "select * from dolt_log order by commit_hash;",
 		ExpectedPlan: "Sort(dolt_log.commit_hash ASC)\n" +
 			" └─ Table\n" +
-			"     └─ name: dolt_log\n" +
+			"     ├─ name: dolt_log\n" +
+			"     └─ columns: [commit_hash committer email date message commit_order parents refs signature author author_email author_date]\n" +
 			"",
 	},
 	{

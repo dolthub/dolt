@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/google/uuid"
 
@@ -4661,8 +4662,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
 			},
 			{
-				Query:          "SELECT parents from dolt_log();",
-				ExpectedErrStr: `column "parents" could not be found in any table in scope`,
+				Query: "SELECT parents from dolt_log();",
+				// Without --parents the parents column is part of the schema and reads as NULL for every row.
+				Expected: []sql.Row{{nil}, {nil}, {nil}},
+			},
+			{
+				Query: "SELECT parents = @Commit1 from dolt_log('--parents') WHERE commit_hash = @Commit2;",
+				// With --parents the parents column carries the parent hashes joined by ", ".
+				Expected: []sql.Row{{true}},
 			},
 			{
 				Query:       "SELECT * from dolt_log('--decorate', 'invalid');",
@@ -4677,16 +4684,22 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:          "SELECT refs from dolt_log();",
-				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+				Query: "SELECT refs from dolt_log();",
+				// refs is always populated; only the head commit carries a ref name, others read as empty.
+				Expected: []sql.Row{{"HEAD -> main"}, {""}, {""}},
 			},
 			{
-				Query:          "SELECT refs from dolt_log('--decorate', 'auto');",
-				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+				Query: "SELECT refs from dolt_log('--decorate', 'no') WHERE commit_hash = @Commit2;",
+				// --decorate=no zeros the refs column even for the head commit.
+				Expected: []sql.Row{{""}},
 			},
 			{
-				Query:          "SELECT refs from dolt_log('--decorate', 'no');",
-				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+				Query: "SELECT refs from dolt_log('--decorate', 'auto') WHERE commit_hash = @Commit2;",
+				// auto has no defined meaning in SQL contexts; the server warns and downgrades to short.
+				Expected:                        []sql.Row{{"HEAD -> main"}},
+				ExpectedWarning:                 mysql.ERWarnDeprecatedSyntax,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "--decorate=auto has no defined meaning",
 			},
 		},
 	},
@@ -5274,6 +5287,11 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"Merge branch 'branch2' into main", true, true}}, // shows two parents for merge commit
 			},
 			{
+				Query: "SELECT parents IS NULL from dolt_log('main', '--merges') LIMIT 1;",
+				// Without --parents the parents column reads as NULL for every row.
+				Expected: []sql.Row{{true}},
+			},
+			{
 				Query:    "SELECT commit_hash = @Commit3, parents = @Commit1 from dolt_log('branch2', '--parents') LIMIT 1;", // shows one parent for non-merge commit
 				Expected: []sql.Row{{true, true}},
 			},
@@ -5305,12 +5323,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key);",
 			"call dolt_add('.')",
 			"set @Commit1 = '';",
+			"set @FeatureCommit = '';",
+			"set @MainCommit = '';",
 			"call dolt_commit_hash_out(@Commit1, '-am', 'commit 1');",
 			"call dolt_commit('--allow-empty', '-m', 'commit 2');",
 			"call dolt_checkout('-b', 'feature');",
-			"call dolt_commit('--allow-empty', '-m', 'feature commit');",
+			"call dolt_commit_hash_out(@FeatureCommit, '--allow-empty', '-m', 'feature commit');",
 			"call dolt_checkout('main');",
-			"call dolt_commit('--allow-empty', '-m', 'main commit');",
+			"call dolt_commit_hash_out(@MainCommit, '--allow-empty', '-m', 'main commit');",
 			"call dolt_merge('feature', '-m', 'merge feature');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -5323,9 +5343,12 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 					{"date", "datetime(3)", "NO", "", nil, ""},
 					{"message", "text", "NO", "", nil, ""},
 					{"commit_order", "bigint unsigned", "NO", "", nil, ""},
+					{"parents", "text", "YES", "", nil, ""},
+					{"refs", "text", "NO", "", nil, ""},
+					{"signature", "text", "YES", "", nil, ""},
 					{"author", "text", "NO", "", nil, ""},
 					{"author_email", "text", "NO", "", nil, ""},
-					{"author_date", "datetime", "NO", "", nil, ""},
+					{"author_date", "datetime(3)", "NO", "", nil, ""},
 				},
 			},
 			{
@@ -5333,6 +5356,26 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{uint64(2)},
 				},
+			},
+			{
+				Query: "select refs from dolt_log where message = 'commit 1';",
+				// Non-head commits have no ref pointing at them, so refs reads as the empty string.
+				Expected: []sql.Row{{""}},
+			},
+			{
+				Query: "select refs from dolt_log where commit_order = (select max(commit_order) from dolt_log);",
+				// The newest commit by commit_order is the HEAD of main, so refs carries its short name.
+				Expected: []sql.Row{{"HEAD -> main"}},
+			},
+			{
+				Query: "select parents = concat(@MainCommit, ', ', @FeatureCommit) from dolt_log where message = 'merge feature';",
+				// The merge commit carries both parent hashes joined by ", " in commit order: main first, then feature.
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query: "select signature from dolt_log where message = 'commit 1';",
+				// Unsigned commits return an empty string in the signature column when projected.
+				Expected: []sql.Row{{""}},
 			},
 			{
 				Query: "select commit_order from dolt_log() where message = 'commit 1';",
@@ -5426,7 +5469,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_log_committer_only=0 shows author columns and commiter columns",
+		Name: "dolt_log shows author and committer columns separately",
 		SetUpScript: []string{
 			"CREATE TABLE log_author_tbl (pk INT PRIMARY KEY);",
 			"CALL DOLT_COMMIT('-Am', 'author commit', '--author', 'Test Author <author@example.com>');",
@@ -5444,21 +5487,6 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 					{"Committer", "root@localhost", "Test Author", "author@example.com"},
 					{"Test Author", "author@example.com", "Test Author", "author@example.com"},
 				},
-			},
-		},
-	},
-	{
-		Name: "dolt_log_committer_only=1 hides author columns",
-		SetUpScript: []string{
-			"CREATE TABLE log_author_tbl (pk INT PRIMARY KEY);",
-			"CALL DOLT_ADD('.');",
-			"CALL DOLT_COMMIT('-m', 'author commit', '--author', 'Test Author <author@example.com>');",
-			"SET @@dolt_log_committer_only = 1;",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "SELECT author FROM dolt_log LIMIT 1;",
-				ExpectedErrStr: "column \"author\" could not be found in any table in scope",
 			},
 		},
 	},

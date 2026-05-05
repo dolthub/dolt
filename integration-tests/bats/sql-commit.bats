@@ -325,7 +325,7 @@ SQL
   run dolt sql -r csv -q "SELECT author, author_date, committer, date FROM dolt_log WHERE message = 'Commit with different committer timestamp'"
   [ "$status" -eq 0 ]
   [[ "$output" =~ author,author_date,committer,date ]] || false
-  [[ "$output" =~ "Date Author,2023-09-26 01:23:45,Date Committer,2023-09-26 12:34:56" ]] || false
+  [[ "$output" =~ "Date Author,2023-09-26 01:23:45.000,Date Committer,2023-09-26 12:34:56.000" ]] || false
 }
 
 @test "sql-commit: dolt_author_name and dolt_committer_name session variables set commit identity" {

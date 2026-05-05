@@ -597,7 +597,7 @@ teardown() {
     run dolt sql -r csv -q "SELECT committer, email, date, author, author_email, author_date FROM dolt_log WHERE message = 'commit with specific author'"
     [ $status -eq 0 ]
     [[ "${lines[0]}" == "committer,email,date,author,author_email,author_date" ]] || false
-    [[ "${lines[1]}" == "Bats Tests,bats@email.fake,2023-09-26 01:23:45.000,Original Author,original@example.com,2023-09-26 01:23:45" ]] || false
+    [[ "${lines[1]}" == "Bats Tests,bats@email.fake,2023-09-26 01:23:45.000,Original Author,original@example.com,2023-09-26 01:23:45.000" ]] || false
 }
 
 @test "cherry-pick: multiple authors preserved in sequence with merge workflow" {
@@ -761,5 +761,5 @@ teardown() {
   run dolt sql -r csv -q "SELECT author, author_date, committer, date FROM dolt_log WHERE message = 'Commit with different committer timestamp'"
   [ "$status" -eq 0 ]
   [[ "$output" =~ author,author_date,committer,date ]] || false
-  [[ "$output" =~ "Date Test Author,2023-09-26 01:23:45,Bats Tests,2023-09-26 12:34:56" ]] || false
+  [[ "$output" =~ "Date Test Author,2023-09-26 01:23:45.000,Bats Tests,2023-09-26 12:34:56.000" ]] || false
 }

@@ -1,4 +1,4 @@
-load helper/query-server-common
+source "${BASH_SOURCE[0]%/*}/query-server-common.bash"
 
 SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-spatial-types.bats~

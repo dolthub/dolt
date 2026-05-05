@@ -2,7 +2,8 @@
 # Tests that the current Dolt build can read, write, and alter tables containing
 # every supported MySQL type that were originally created by an older Dolt version.
 # Special emphasis on TEXT and BLOB variants, which may be stored out-of-band.
-load $BATS_TEST_DIRNAME/helper/common.bash
+bats_load_library common.bash
+bats_load_library compat-common.bash
 
 setup() {
     setup_common

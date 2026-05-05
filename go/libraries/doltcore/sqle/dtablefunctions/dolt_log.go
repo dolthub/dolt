@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/mysql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -29,25 +30,23 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const logTableDefaultRowCount = 10
 
-// LogTableFunctionArgs represents the information derived from arguments to DOLT_LOG(...)
-// It is created once at build time to determine the table schema (ignoring arguments that must be deferred)
-// It is created again at execution time, this time incorporating deferred arguments.
+// LogTableFunctionArgs represents the information derived from arguments to DOLT_LOG(...).
+// The schema is fixed; the parents and signature columns are populated only when --parents
+// and --show-signature are passed.
 type LogTableFunctionArgs struct {
-	decoration        string
-	revisionStrs      []string
-	notRevisionStrs   []string
-	tableNames        []string
-	minParents        int
-	showParents       bool
-	showSignature     bool
-	showCommitterOnly bool
+	revisionStrs    []string
+	notRevisionStrs []string
+	tableNames      []string
+	minParents      int
+	decoration      string
+	showParents     bool
+	showSignature   bool
 }
 
 // Name implements the sql.TableFunction interface
@@ -138,17 +137,24 @@ func (ltfa *LogTableFunctionArgs) addOptions(ctx *sql.Context, expressions []sql
 	}
 
 	ltfa.minParents = minParents
+
 	ltfa.showParents = apr.Contains(cli.ParentsFlag)
 	ltfa.showSignature = apr.Contains(cli.ShowSignatureFlag)
-	ltfa.showCommitterOnly, _ = dsess.GetBooleanSystemVar(ctx, dsess.DoltLogCommitterOnly)
 
-	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
-	switch decorateOption {
-	case "short", "full", "auto", "no":
-	default:
-		return sql.ErrInvalidArgumentDetails.New(ltfa.Name(), fmt.Sprintf("invalid --decorate option: %s", decorateOption))
+	// Default to short so ad-hoc SQL callers see refs without an extra flag. auto has no
+	// defined meaning here because the server has no tty signal, so accept it for back
+	// compatibility with older dolt clients but warn and downgrade to short.
+	ltfa.decoration = apr.GetValueOrDefault(cli.DecorateFlag, cli.DecorateShort)
+	if err := cli.ValidateDecorateOption(ltfa.decoration); err != nil {
+		return sql.ErrInvalidArgumentDetails.New(ltfa.Name(), err.Error())
 	}
-	ltfa.decoration = decorateOption
+	if ltfa.decoration == cli.DecorateAuto {
+		// Warn only on the execution pass so deferred-parse callers see exactly one warning.
+		if !deferExpressions {
+			ctx.Warn(mysql.ERWarnDeprecatedSyntax, "--%s=auto has no defined meaning in SQL contexts; defaulting to short", cli.DecorateFlag)
+		}
+		ltfa.decoration = cli.DecorateShort
+	}
 
 	// store revision strs directly from cli parse instead of mapping back exprs
 	// avoid circular conv expr -> str -> expr, downstream
@@ -259,12 +265,12 @@ func (ltf *LogTableFunction) getOptionsString() string {
 		options = append(options, fmt.Sprintf("--%s", cli.ParentsFlag))
 	}
 
-	if ltf.showSignature {
-		options = append(options, fmt.Sprintf("--%s", cli.ShowSignatureFlag))
+	if ltf.decoration != "" && ltf.decoration != cli.DecorateShort {
+		options = append(options, fmt.Sprintf("--%s %s", cli.DecorateFlag, ltf.decoration))
 	}
 
-	if len(ltf.decoration) > 0 && ltf.decoration != "auto" {
-		options = append(options, fmt.Sprintf("--%s %s", cli.DecorateFlag, ltf.decoration))
+	if ltf.showSignature {
+		options = append(options, fmt.Sprintf("--%s", cli.ShowSignatureFlag))
 	}
 
 	if len(ltf.tableNames) > 0 {
@@ -276,21 +282,7 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema(_ *sql.Context) sql.Schema {
-	logSchema := dtables.NewLogTableSchema(true)
-	if ltf.showParents {
-		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
-	}
-	if shouldDecorateWithRefs(ltf.decoration) {
-		logSchema = append(logSchema, &sql.Column{Name: "refs", Type: types.Text})
-	}
-	if ltf.showSignature {
-		logSchema = append(logSchema, &sql.Column{Name: "signature", Type: types.Text})
-	}
-	if !ltf.showCommitterOnly {
-		logSchema = append(logSchema, dtables.LogSchemaAuthorColumns...)
-	}
-
-	return logSchema
+	return dtables.LogTableSchema
 }
 
 // Children implements the sql.Node interface.
@@ -378,12 +370,8 @@ func isDeferredExpression(expr sql.Expression) bool {
 }
 
 // deferExpressions stores the input expressions for later evaluation during execution.
-// This table function violates SQL analyzer principles by evaluating expressions
-// during analysis. This is necessary because the schema changes based on what
-// arguments are supplied (e.g., --parent), and the schema needs to be known
-// during analysis time. Bind variables are skipped over during the initial analysis
-// of the prepared statement, and get fully resolved when they are bound when the
-// prepared statement is later executed.
+// Literal arguments are parsed during analysis so revision and filter validation can fail early.
+// Bind variables are skipped during analysis and re-parsed at execution time once they are bound.
 func (ltf *LogTableFunction) deferExpressions(ctx *sql.Context, expressions ...sql.Expression) (sql.Node, error) {
 	hasDeferredExpression := false
 	var err error
@@ -413,10 +401,8 @@ func (ltf *LogTableFunction) deferExpressions(ctx *sql.Context, expressions ...s
 	newLtf := *node.(*LogTableFunction)
 
 	// Parse literal arguments for schema determination during analysis phase
-	// getDoltArgs will skip bind variables and GetFields (can't evaluate them yet)
-	// only return errors if no bind variables exist (incomplete args are expected with bind vars)
-	// TODO: schema-affecting flags as bind variables don't add columns to schema
-	// this may be a common problem for dynamic table functions that need execution-time schema changes
+	// getDoltArgs skips bind variables and GetFields since they are not evaluable yet.
+	// Errors are surfaced only when no deferred expressions remain, since incomplete args are expected with bind vars.
 	err = newLtf.addOptions(ctx, newLtf.argumentExprs, nil, true)
 	if err != nil && !hasDeferredExpression {
 		return nil, err
@@ -485,7 +471,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return commit.NumParents() >= ltf.minParents, nil
 	}
 
-	cHashToRefs, err := getCommitHashToRefs(ctx, sqledb.DbData().Ddb, ltf.decoration)
+	cHashToRefs, err := dtables.GetCommitHashToRefs(ctx, sqledb.DbData().Ddb, args.decoration)
 	if err != nil {
 		return nil, err
 	}
@@ -569,83 +555,30 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 		notCommits = append(notCommits, mergeCommit)
 
-		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames)
+		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
 	}
 
 	if len(revisionValStrs) <= 1 && len(notRevisionValStrs) == 0 {
-		return ltf.NewLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits[0], matchFunc, cHashToRefs, ltf.tableNames)
+		return ltf.NewLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits[0], matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
 	}
 
-	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames)
+	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
 }
-
-// getCommitHashToRefs builds map of commit hashes to branch/tag names for decoration.
-func getCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string) (map[hash.Hash][]string, error) {
-	cHashToRefs := map[hash.Hash][]string{}
-
-	// Get all branches
-	branches, err := ddb.GetBranchesWithHashes(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, b := range branches {
-		refName := b.Ref.String()
-		if decoration != "full" {
-			refName = b.Ref.GetPath() // trim out "refs/heads/"
-		}
-		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
-	}
-
-	// Get all remote branches
-	remotes, err := ddb.GetRemotesWithHashes(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range remotes {
-		refName := r.Ref.String()
-		if decoration != "full" {
-			refName = r.Ref.GetPath() // trim out "refs/remotes/"
-		}
-		cHashToRefs[r.Hash] = append(cHashToRefs[r.Hash], refName)
-	}
-
-	// Get all tags
-	tags, err := ddb.GetTagRefsWithHashes(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range tags {
-		tagName := t.Ref.String()
-		if decoration != "full" {
-			tagName = t.Ref.GetPath() // trim out "refs/tags/"
-		}
-		tagName = fmt.Sprintf("tag: %s", tagName)
-		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], tagName)
-	}
-
-	return cHashToRefs, nil
-}
-
-//------------------------------------
-// logTableFunctionRowIter
-//------------------------------------
 
 var _ sql.RowIter = (*logTableFunctionRowIter)(nil)
 
 // logTableFunctionRowIter is a sql.RowIter implementation which iterates over each commit as if it's a row in the table.
 type logTableFunctionRowIter struct {
-	child             doltdb.CommitItr[*sql.Context]
-	cHashToRefs       map[hash.Hash][]string
-	decoration        string
-	tableNames        []string
-	headHash          hash.Hash
-	showParents       bool
-	showSignature     bool
-	showCommitterOnly bool
+	child       doltdb.CommitItr[*sql.Context]
+	cHashToRefs map[hash.Hash][]string
+	tableNames  []string
+	headHash    hash.Hash
+	rowOpts     dtables.LogRowOptions
 }
 
-// NewLogTableFunctionRowIter creates iterator for single commit history traversal.
-func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.OptionalCommit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
+// NewLogTableFunctionRowIter creates iterator for single commit history traversal. |rowOpts|
+// selects which opt-in columns the iterator should populate.
+func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.OptionalCommit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string, rowOpts dtables.LogRowOptions) (*logTableFunctionRowIter, error) {
 	h, err := commit.HashOf()
 	if err != nil {
 		return nil, err
@@ -657,19 +590,17 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 	}
 
 	return &logTableFunctionRowIter{
-		child:             child,
-		showParents:       ltf.showParents,
-		showSignature:     ltf.showSignature,
-		showCommitterOnly: ltf.showCommitterOnly,
-		decoration:        ltf.decoration,
-		cHashToRefs:       cHashToRefs,
-		headHash:          h,
-		tableNames:        tableNames,
+		child:       child,
+		cHashToRefs: cHashToRefs,
+		headHash:    h,
+		tableNames:  tableNames,
+		rowOpts:     rowOpts,
 	}, nil
 }
 
-// NewDotDotLogTableFunctionRowIter creates iterator for range queries with inclusion/exclusion commits.
-func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commits []*doltdb.Commit, excludingCommits []*doltdb.Commit, matchFn func(*doltdb.OptionalCommit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
+// NewDotDotLogTableFunctionRowIter creates iterator for range queries with inclusion/exclusion
+// commits. |rowOpts| selects which opt-in columns the iterator should populate.
+func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commits []*doltdb.Commit, excludingCommits []*doltdb.Commit, matchFn func(*doltdb.OptionalCommit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string, rowOpts dtables.LogRowOptions) (*logTableFunctionRowIter, error) {
 	hashes := make([]hash.Hash, len(commits))
 	for i, commit := range commits {
 		h, err := commit.HashOf()
@@ -700,28 +631,24 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 	}
 
 	return &logTableFunctionRowIter{
-		child:             child,
-		showParents:       ltf.showParents,
-		showSignature:     ltf.showSignature,
-		showCommitterOnly: ltf.showCommitterOnly,
-		decoration:        ltf.decoration,
-		cHashToRefs:       cHashToRefs,
-		headHash:          headHash,
-		tableNames:        tableNames,
+		child:       child,
+		cHashToRefs: cHashToRefs,
+		headHash:    headHash,
+		tableNames:  tableNames,
+		rowOpts:     rowOpts,
 	}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	var commitHash hash.Hash
 	var commit *doltdb.Commit
 	var optCmt *doltdb.OptionalCommit
 	var meta *datas.CommitMeta
 	var height uint64
 	var err error
 	for {
-		commitHash, optCmt, meta, height, err = itr.child.Next(ctx)
+		_, optCmt, meta, height, err = itr.child.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -808,82 +735,12 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	row := dtables.NewLogTableRow(commitHash, meta, height, true)
-
-	if itr.showParents {
-		prStr, err := getParentsString(ctx, commit)
-		if err != nil {
-			return nil, err
-		}
-		row = append(row, prStr)
-	}
-
-	if shouldDecorateWithRefs(itr.decoration) {
-		branchNames := itr.cHashToRefs[commitHash]
-		isHead := itr.headHash == commitHash
-		row = append(row, getRefsString(branchNames, isHead))
-	}
-
-	if itr.showSignature {
-		if len(meta.Signature) > 0 {
-			out, err := gpg.Verify(ctx, []byte(meta.Signature))
-			if err != nil {
-				return nil, err
-			}
-			row = append(row, string(out))
-		} else {
-			row = append(row, "")
-		}
-	}
-
-	if !itr.showCommitterOnly {
-		row = append(row, meta.Author.Name, meta.Author.Email, meta.Author.Date.Time())
-	}
-
-	return row, nil
+	return dtables.BuildLogTableRow(ctx, commit, meta, height, itr.cHashToRefs, itr.headHash, itr.rowOpts)
 }
 
 // Close releases any resources held by the iterator.
 func (itr *logTableFunctionRowIter) Close(_ *sql.Context) error {
 	return nil
-}
-
-// getRefsString formats branch names into display string with parentheses.
-func getRefsString(branchNames []string, isHead bool) string {
-	if len(branchNames) == 0 {
-		return ""
-	}
-	var refStr string
-	if isHead {
-		refStr += "HEAD -> "
-	}
-	refStr += strings.Join(branchNames, ", ")
-
-	return refStr
-}
-
-// getParentsString returns space-separated parent commit hashes.
-func getParentsString(ctx *sql.Context, cm *doltdb.Commit) (string, error) {
-	parents, err := cm.ParentHashes(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	var prStr string
-	for i, h := range parents {
-		prStr += h.String()
-		if i < len(parents)-1 {
-			prStr += ", "
-		}
-	}
-
-	return prStr, nil
-}
-
-// Default ("auto") for the dolt_log table function is "no"
-// shouldDecorateWithRefs returns true if decoration setting enables ref display.
-func shouldDecorateWithRefs(decoration string) bool {
-	return decoration == "full" || decoration == "short"
 }
 
 // didTableChangeBetweenRootValues checks if the given table changed between the two given root values.

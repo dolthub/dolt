@@ -195,6 +195,10 @@ _main() {
   # provides query-server-common and windows-compat.
   export BATS_LIB_PATH="$(pwd)/test_files/bats/helper:$(pwd)/../bats/helper"
 
+  # Tells the bats skip helpers which path is the freshly-built dolt so a version-literal
+  # match against a released binary does not skip the dev build.
+  export DOLT_DEV_BUILD_PATH="$(command -v dolt)"
+
   # make directories and cleanup when killed
   mkdir repos binaries
   trap cleanup "EXIT"

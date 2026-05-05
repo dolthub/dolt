@@ -327,7 +327,7 @@ func printLine(graph [][]string, col, row int, pager *outputpager.Pager, line st
 	emptySpace := strings.Repeat(" ", col-len(graph[row]))
 	pager.Writer.Write([]byte(fmt.Sprintf("%s%s %s", graphLine, emptySpace, line)))
 
-	if decoration != "no" {
+	if decoration != cli.DecorateNo {
 		printRefs(pager, &commit, decoration)
 	}
 	pager.Writer.Write([]byte("\n"))
@@ -341,12 +341,12 @@ func printCommitMetadata(graph [][]string, pager *outputpager.Pager, row, col in
 		printMergeInfo = 1
 	}
 	if printMergeInfo == 1 {
-		printLine(graph, col, row+1, pager, color.WhiteString("Merge: %s", strings.Join(commit.Commit.parentHashes, " ")), commit.Commit, "no")
+		printLine(graph, col, row+1, pager, color.WhiteString("Merge: %s", strings.Join(commit.Commit.parentHashes, " ")), commit.Commit, cli.DecorateNo)
 	}
 
-	printLine(graph, col, row+1+printMergeInfo, pager, color.WhiteString("Author: %s <%s>", commit.Commit.commitMeta.Author.Name, commit.Commit.commitMeta.Author.Email), commit.Commit, "no")
+	printLine(graph, col, row+1+printMergeInfo, pager, color.WhiteString("Author: %s <%s>", commit.Commit.commitMeta.Author.Name, commit.Commit.commitMeta.Author.Email), commit.Commit, cli.DecorateNo)
 
-	printLine(graph, col, row+2+printMergeInfo, pager, color.WhiteString("Date: %s", commit.Commit.commitMeta.FormatTS()), commit.Commit, "no")
+	printLine(graph, col, row+2+printMergeInfo, pager, color.WhiteString("Date: %s", commit.Commit.commitMeta.FormatTS()), commit.Commit, cli.DecorateNo)
 
 	pager.Writer.Write([]byte(strings.Join(graph[row+3+printMergeInfo], "")))
 	pager.Writer.Write([]byte("\n"))
@@ -375,10 +375,10 @@ func getHeightOfCommit(commit *commitInfoWithChildren) int {
 }
 
 func printOneLineGraph(graph [][]string, pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*commitInfoWithChildren) {
-	decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
+	decoration := apr.GetValueOrDefault(cli.DecorateFlag, cli.DecorateAuto)
 	// print the first commit
 	pager.Writer.Write([]byte(fmt.Sprintf("%s %s ", strings.Join(graph[commits[0].Row], ""), color.YellowString("commit %s", commits[0].Commit.commitHash))))
-	if decoration != "no" {
+	if decoration != cli.DecorateNo {
 		printRefs(pager, &commits[0].Commit, decoration)
 	}
 	pager.Writer.Write([]byte(color.WhiteString("%s\n", strings.Join(commits[0].formattedMessage, " "))))
@@ -392,7 +392,7 @@ func printOneLineGraph(graph [][]string, pager *outputpager.Pager, apr *argparse
 		}
 
 		pager.Writer.Write([]byte(fmt.Sprintf("%s %s ", strings.Join(graph[commits[i].Row], ""), color.YellowString("commit %s ", commits[i].Commit.commitHash))))
-		if decoration != "no" {
+		if decoration != cli.DecorateNo {
 			printRefs(pager, &commits[i].Commit, decoration)
 		}
 		pager.Writer.Write([]byte(color.WhiteString("%s\n", strings.Join(commits[i].formattedMessage, " "))))
@@ -402,7 +402,7 @@ func printOneLineGraph(graph [][]string, pager *outputpager.Pager, apr *argparse
 
 // printGraphAndCommitsInfo prints the commit messages in the graph matrix
 func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*commitInfoWithChildren) {
-	decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
+	decoration := apr.GetValueOrDefault(cli.DecorateFlag, cli.DecorateAuto)
 
 	for i := 0; i < len(commits)-1; i++ {
 		startRow := commits[i].Row

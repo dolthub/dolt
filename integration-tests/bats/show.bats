@@ -56,14 +56,16 @@ assert_has_key_value() {
 @test "show: log zero refs" {
     dolt commit --allow-empty -m "Commit One"
     dolt tag v1
-    run dolt show
+    # Pin --decorate=short because run captures stdout without a tty, which would otherwise
+    # resolve --decorate=auto to no and hide the tag annotation the test asserts on.
+    run dolt show --decorate=short
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit One" ]] || false
     [[ "$output" =~ "tag: v1" ]] || false
 
     dolt commit --allow-empty -m "Commit Two"
     dolt tag v2
-    run dolt show
+    run dolt show --decorate=short
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit Two" ]] || false
     [[ "$output" =~ "tag: v2" ]] || false
@@ -76,7 +78,7 @@ assert_has_key_value() {
     dolt commit --allow-empty -m "Commit Two"
     dolt tag v2
 
-    run dolt show v1
+    run dolt show --decorate=short v1
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit One" ]] || false
     [[ "$output" =~ "tag: v1" ]] || false
@@ -89,7 +91,7 @@ assert_has_key_value() {
     dolt commit --allow-empty -m "Commit Two"
     dolt tag v2
 
-    run dolt show v1 v2
+    run dolt show --decorate=short v1 v2
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit One" ]] || false
     [[ "$output" =~ "tag: v1" ]] || false
@@ -243,7 +245,7 @@ assert_has_key_value() {
     head=$(dolt show --no-pretty)
     parentHash=$(extract_value Parents "$head")
 
-    run dolt show "$parentHash"
+    run dolt show --decorate=short "$parentHash"
     [[ "$output" =~ "tag: v0" ]] || false
 }
 

@@ -8,6 +8,7 @@
 
 setup() {
     bats_load_library common.bash
+    bats_load_library compat-common.bash
     cp -Rpf $REPO_DIR bats_repo
     cd bats_repo
 }

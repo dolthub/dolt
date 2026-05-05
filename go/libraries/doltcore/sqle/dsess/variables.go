@@ -74,8 +74,6 @@ const (
 
 	DoltAutoGCEnabled = "dolt_auto_gc_enabled"
 
-	DoltLogCommitterOnly = "dolt_log_committer_only"
-
 	DoltAuthorName     = "dolt_author_name"
 	DoltAuthorEmail    = "dolt_author_email"
 	DoltAuthorDate     = "dolt_author_date"
@@ -243,7 +241,7 @@ func NewCommitStagedProps(ctx *sql.Context, message string) (commitStagedProps a
 	if err != nil {
 		return
 	} else if (nameSet || emailSet) && (committerName != authorName || authorEmail != committerEmail) {
-		// The user is setting the modifying the session variables in this scenario.
+		// The user is setting or modifying the session variables in this scenario.
 		committerSet = true
 	}
 

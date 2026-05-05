@@ -1122,50 +1122,57 @@ SQL
 }
 
 @test "system-tables: dolt_log table function with prepared statements" {
-    # Test for issue #9508: Can't prepare dolt_log procedure statement
+    # See https://github.com/dolthub/dolt/issues/9508
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "initial commit"
     dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
     dolt add test2
     dolt commit -m "second commit"
-    
-    # Test basic bind variable support - single parameter
+
     run dolt sql -q "prepare stmt1 from 'select count(*) from dolt_log(?)'; set @v1 = 'HEAD'; execute stmt1 using @v1;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]] || false  # Should have 3 commits (init + 2 commits)
-    
-    # Test multiple bind variables with range
+    [[ "$output" =~ "3" ]] || false
+
     run dolt sql -q "prepare stmt2 from 'select count(*) from dolt_log(?)'; set @v1 = 'HEAD~1..HEAD'; execute stmt2 using @v1;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false  # Should have 1 commit in the range
-    
-    # Test the original customer issue: dolt_log with --not flag and bind variables
+    [[ "$output" =~ "1" ]] || false
+
     run dolt sql -q "prepare stmt3 from 'select count(*) from dolt_log(?, \"--not\", ?)'; set @v1 = 'HEAD', @v2 = 'HEAD~1'; execute stmt3 using @v1, @v2;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false  # Should have 1 commit (HEAD excluding HEAD~1)
-    
-    # Test bind variables with other flags
-    run dolt sql -q "prepare stmt4 from 'select commit_hash from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt4 using @v1;"
+    [[ "$output" =~ "1" ]] || false
 
-    # Test that parents column is available when using --parents with bind variables
-    run dolt sql -q "prepare stmt5 from 'select commit_hash, parents from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt5 using @v1;"
+    # --parents flag is now accepted, so this query succeeds.
+    run dolt sql -r csv -q "prepare stmt4 from 'select count(*) as n from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt4 using @v1;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "parents" ]] || false
-    
-    # Test mixed literals and bind variables
+    [[ "${lines[0]}" == "n" ]] || false
+    [[ "${lines[1]}" == "3" ]] || false
+
+    # The parents column is populated for every commit when --parents is set; the initial
+    # commit has no parents and renders as the empty string.
+    run dolt sql -r csv -q "prepare stmt5 from 'select sum(parents = \"\") as empty_count from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt5 using @v1;"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == "empty_count" ]] || false
+    [[ "${lines[1]}" == "1" ]] || false
+
     run dolt sql -q "prepare stmt6 from 'select count(*) from dolt_log(?, \"--not\", \"HEAD~2\")'; set @v1 = 'HEAD'; execute stmt6 using @v1;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]] || false  # Should have 2 commits (HEAD excluding HEAD~2)
-    
-    # Test bind variable as option flag - schema-affecting flags as bind variables don't add columns to schema
-    run dolt sql -q "prepare stmt7 from 'select commit_hash from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt7 using @flag;"
+    [[ "$output" =~ "2" ]] || false
+
+    # The flag itself is a bind variable that resolves to --parents at execution time.
+    run dolt sql -r csv -q "prepare stmt7 from 'select count(*) as n from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt7 using @flag;"
     [ "$status" -eq 0 ]
-    
-    # Selecting optional columns when flag is bind variable fails during analysis
-    run dolt sql -q "prepare stmt_fail from 'select commit_hash, parents from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt_fail using @flag;"
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "column \"parents\" could not be found" ]] || false
+    [[ "${lines[0]}" == "n" ]] || false
+    [[ "${lines[1]}" == "3" ]] || false
+
+    # The parents column is now part of the fixed dolt_log schema, so selecting it succeeds
+    # even when the flag arrives via a bind variable. The initial commit has no parents and
+    # renders as the empty string.
+    run dolt sql -r csv -q "prepare stmt_fail from 'select sum(parents = \"\") as empty_count from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt_fail using @flag;"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == "empty_count" ]] || false
+    [[ "${lines[1]}" == "1" ]] || false
+
 }
 
 @test "system-tables: dolt_diff bind variable rejection - dynamic table function" {
@@ -1279,45 +1286,3 @@ SQL
     [[ "$output" =~ "dolt_status_ignored" ]] || false
 }
 
-assert_committer_only() {
-  local output="$1"
-  [[ ! "$output" =~ ,author, ]] || false
-  [[ ! "$output" =~ ,author_email, ]] || false
-  [[ ! "$output" =~ ,author_date ]] || false
-  [[ "$output" =~ ,committer, ]] || false
-  [[ "$output" =~ ,email, ]] || false
-}
-
-assert_committer_and_author() {
-  local output="$1"
-  [[ "$output" =~ ,author, ]] || false
-  [[ "$output" =~ ,author_email, ]] || false
-  [[ "$output" =~ ,author_date ]] || false
-  [[ "$output" =~ ,committer, ]] || false
-  [[ "$output" =~ ,email, ]] || false
-}
-
-@test "system-tables: dolt_log_committer_only session variable controls author columns" {
-  dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
-  dolt add test
-  dolt commit -m "Initial commit"
-
-  dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
-  dolt sql -q "CALL DOLT_ADD('test2')"
-  dolt sql -q "CALL DOLT_COMMIT('--author', 'Test Author <author@test.com>', '-m', 'Commit with different author and committer')"
-
-  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
-  [ "$status" -eq 0 ]
-  assert_committer_only "$output"
-
-  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
-  [ "$status" -eq 0 ]
-  assert_committer_and_author "$output"
-
-  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
-  assert_committer_only "$output"
-
-  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
-  [ $status -eq 0 ]
-  assert_committer_and_author "$output"
-}

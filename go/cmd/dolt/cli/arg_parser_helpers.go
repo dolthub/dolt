@@ -316,6 +316,26 @@ func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 	return ap
 }
 
+// Values accepted by the --decorate flag. DecorateShort trims ref prefixes,
+// DecorateFull keeps refs/heads/, refs/remotes/, and refs/tags/, DecorateNo
+// produces an empty refs column, and DecorateAuto resolves to DecorateShort
+// on a tty and DecorateNo otherwise.
+const (
+	DecorateAuto  = "auto"
+	DecorateShort = "short"
+	DecorateFull  = "full"
+	DecorateNo    = "no"
+)
+
+// ValidateDecorateOption returns nil when |value| is accepted by the --decorate flag.
+func ValidateDecorateOption(value string) error {
+	switch value {
+	case DecorateShort, DecorateFull, DecorateAuto, DecorateNo:
+		return nil
+	}
+	return fmt.Errorf("invalid --%s option: %q", DecorateFlag, value)
+}
+
 func CreateDiffArgParser(isTableFunction bool) *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("diff")
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
