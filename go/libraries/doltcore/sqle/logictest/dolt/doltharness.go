@@ -26,7 +26,6 @@ import (
 	"github.com/cockroachdb/apd/v3"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/sqllogictest/go/logictest"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
@@ -254,8 +253,8 @@ func toSqlString(ctx *sql.Context, val interface{}) (string, error) {
 		return fmt.Sprintf("%.3f", v), nil
 	case apd.Decimal:
 		// exactly 3 decimal points for floats
-		d := sqltypes.DecimalTruncate(v, 3)
-		return d.Text('f'), nil
+		res, _ := v.Float64()
+		return fmt.Sprintf("%.3f", res), nil
 	case int:
 		return strconv.Itoa(v), nil
 	case uint:

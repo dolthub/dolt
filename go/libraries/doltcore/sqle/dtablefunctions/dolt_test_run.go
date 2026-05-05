@@ -582,8 +582,9 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value *string, qu
 		return compareTestAssertion(comparison, float32(expectedFloat), actualValue, AssertionExpectedSingleValue), nil
 	case apd.Decimal:
 		expectedDecimal, _, err := apd.NewFromString(*value)
+		actualValueStr := actualValue.Text('f')
 		if err != nil {
-			return fmt.Sprintf("Could not compare non decimal value '%s', with %s", *value, actualValue), nil
+			return fmt.Sprintf("Could not compare non decimal value '%s', with %s", *value, actualValueStr), nil
 		}
 		return compareDecimals(comparison, *expectedDecimal, actualValue, AssertionExpectedSingleValue), nil
 	case time.Time:
