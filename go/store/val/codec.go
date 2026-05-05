@@ -443,6 +443,16 @@ func compareBit64(l, r uint64) int {
 }
 
 func readDecimal(val []byte) apd.Decimal {
+	if len(val) == int(int32Size) {
+		v := readInt32(val)
+		if v == int32(types.DecimalNaN) {
+			return apd.Decimal{Form: apd.NaN}
+		} else if v == int32(types.DecimalPosInf) {
+			return apd.Decimal{Form: apd.Infinite}
+		} else if v == int32(types.DecimalNegInf) {
+			return apd.Decimal{Form: apd.Infinite, Negative: true}
+		}
+	}
 	e := readInt32(val[:int32Size])
 	s := readInt8(val[int32Size : int32Size+int8Size])
 	d := new(apd.Decimal)
@@ -456,12 +466,25 @@ func readDecimal(val []byte) apd.Decimal {
 
 func writeDecimal(buf []byte, val apd.Decimal) {
 	expectSize(buf, sizeOfDecimal(val))
-	writeInt32(buf[:int32Size], val.Exponent)
-	writeInt8(buf[int32Size:int32Size+int8Size], int8(val.Sign()))
-	val.Coeff.FillBytes(buf[int32Size+int8Size:])
+	if val.Form == apd.NaN {
+		writeInt32(buf[:int32Size], types.DecimalNaN)
+	} else if val.Form == apd.Infinite {
+		if val.Negative {
+			writeInt32(buf[:int32Size], types.DecimalPosInf)
+		} else {
+			writeInt32(buf[:int32Size], types.DecimalNegInf)
+		}
+	} else {
+		writeInt32(buf[:int32Size], val.Exponent)
+		writeInt8(buf[int32Size:int32Size+int8Size], int8(val.Sign()))
+		val.Coeff.FillBytes(buf[int32Size+int8Size:])
+	}
 }
 
 func sizeOfDecimal(val apd.Decimal) ByteSize {
+	if val.Form == apd.NaN || val.Form == apd.Infinite {
+		return int32Size
+	}
 	bsz := len(val.Coeff.MathBigInt().Bits()) * (bits.UintSize / 8)
 	return int32Size + int8Size + ByteSize(bsz)
 }
