@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/big"
 	"math/bits"
@@ -666,7 +667,27 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-func compareAdaptiveValue(l, r AdaptiveValue) int {
+func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue) int {
+	if bytes.Equal(l, r) {
+		return 0
+	}
+	if vs != nil {
+		lBytes, err := l.getUnderlyingBytes(ctx, vs)
+		if err != nil {
+			panic(fmt.Sprintf("compareAdaptiveValue: failed to load left value: %v", err))
+		}
+		rBytes, err := r.getUnderlyingBytes(ctx, vs)
+		if err != nil {
+			panic(fmt.Sprintf("compareAdaptiveValue: failed to load right value: %v", err))
+		}
+		return bytes.Compare(lBytes, rBytes)
+	}
+	// No ValueStore available; fall back to inline comparison if possible.
+	lBytes, lInline := InlineValueBytes(l)
+	rBytes, rInline := InlineValueBytes(r)
+	if lInline && rInline {
+		return bytes.Compare(lBytes, rBytes)
+	}
 	return bytes.Compare(l, r)
 }
 

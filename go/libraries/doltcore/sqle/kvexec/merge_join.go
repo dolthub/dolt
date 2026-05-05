@@ -462,18 +462,18 @@ func mergeComparer(
 		lKeyDesc := lState.idxMap.KeyDesc()
 		lTyp = lKeyDesc.Types[lKeyIdx]
 		llCmp = func(leftKey, _, rightKey, _ val.Tuple) int {
-			return lKeyDesc.Comparator().CompareValues(ctx, 0, leftKey.GetField(lKeyIdx), rightKey.GetField(lKeyIdx), lTyp)
+			return lKeyDesc.Comparator().CompareValues(ctx, 0, leftKey.GetField(lKeyIdx), rightKey.GetField(lKeyIdx), lTyp, lKeyDesc.VS())
 		}
 		if rKeyOk {
 			rTyp = rState.idxMap.KeyDesc().Types[rKeyIdx]
 
 			lrCmp = func(leftKey, _, rightKey, _ val.Tuple) int {
-				return lKeyDesc.Comparator().CompareValues(ctx, 0, leftKey.GetField(lKeyIdx), rightKey.GetField(rKeyIdx), lTyp)
+				return lKeyDesc.Comparator().CompareValues(ctx, 0, leftKey.GetField(lKeyIdx), rightKey.GetField(rKeyIdx), lTyp, lKeyDesc.VS())
 			}
 		} else if rValOk {
 			rTyp = rState.idxMap.ValDesc().Types[rValIdx]
 			lrCmp = func(leftKey, _, _, rightVal val.Tuple) int {
-				return lKeyDesc.Comparator().CompareValues(ctx, 0, leftKey.GetField(lKeyIdx), rightVal.GetField(rValIdx), lTyp)
+				return lKeyDesc.Comparator().CompareValues(ctx, 0, leftKey.GetField(lKeyIdx), rightVal.GetField(rValIdx), lTyp, lKeyDesc.VS())
 			}
 		} else {
 			return nil, nil, false
@@ -482,17 +482,17 @@ func mergeComparer(
 		lValDesc := lState.idxMap.ValDesc()
 		lTyp = lValDesc.Types[lValIdx]
 		llCmp = func(_, leftVal, _, rightVal val.Tuple) int {
-			return lValDesc.Comparator().CompareValues(ctx, 0, leftVal.GetField(lValIdx), rightVal.GetField(lValIdx), lTyp)
+			return lValDesc.Comparator().CompareValues(ctx, 0, leftVal.GetField(lValIdx), rightVal.GetField(lValIdx), lTyp, lValDesc.VS())
 		}
 		if rKeyOk {
 			rTyp = rState.idxMap.KeyDesc().Types[rKeyIdx]
 			lrCmp = func(_, leftVal, rightKey, _ val.Tuple) int {
-				return lValDesc.Comparator().CompareValues(ctx, 0, leftVal.GetField(lValIdx), rightKey.GetField(rKeyIdx), lTyp)
+				return lValDesc.Comparator().CompareValues(ctx, 0, leftVal.GetField(lValIdx), rightKey.GetField(rKeyIdx), lTyp, lValDesc.VS())
 			}
 		} else if rValOk {
 			rTyp = rState.idxMap.ValDesc().Types[rValIdx]
 			lrCmp = func(_, leftVal, _, rightVal val.Tuple) int {
-				return lValDesc.Comparator().CompareValues(ctx, 0, leftVal.GetField(lValIdx), rightVal.GetField(rValIdx), lTyp)
+				return lValDesc.Comparator().CompareValues(ctx, 0, leftVal.GetField(lValIdx), rightVal.GetField(rValIdx), lTyp, lValDesc.VS())
 			}
 		} else {
 			return nil, nil, false

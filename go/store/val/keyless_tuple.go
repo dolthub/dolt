@@ -85,8 +85,8 @@ func (k *keylessCompare) Compare(ctx context.Context, left, right Tuple, desc *T
 }
 
 // CompareValues implements TupleComparator
-func (k *keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
-	return compare(typ, left, right)
+func (k *keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type, vs ValueStore) int {
+	return compare(ctx, typ, left, right, vs)
 }
 
 // Prefix implements TupleComparator

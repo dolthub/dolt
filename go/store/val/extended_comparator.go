@@ -34,7 +34,7 @@ func (c *ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple
 	var start, stop ByteSize
 	for i := 0; i < off; i++ {
 		stop = fast[i]
-		cmp = c.CompareValues(ctx, i, left[start:stop], right[start:stop], desc.Types[i])
+		cmp = c.CompareValues(ctx, i, left[start:stop], right[start:stop], desc.Types[i], desc.vs)
 		if cmp != 0 {
 			return cmp
 		}
@@ -43,7 +43,7 @@ func (c *ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = c.CompareValues(ctx, j, left.GetField(j), right.GetField(j), typ)
+		cmp = c.CompareValues(ctx, j, left.GetField(j), right.GetField(j), typ, desc.vs)
 		if cmp != 0 {
 			return cmp
 		}
@@ -52,7 +52,7 @@ func (c *ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple
 }
 
 // CompareValues implements the TupleComparator interface.
-func (c *ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
+func (c *ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type, vs ValueStore) int {
 	switch typ.Enc {
 	case ExtendedEnc, ExtendedAddrEnc, ExtendedAdaptiveEnc:
 		cmp, err := c.handlers[index].SerializedCompare(ctx, left, right)
@@ -61,7 +61,7 @@ func (c *ExtendedTupleComparator) CompareValues(ctx context.Context, index int, 
 		}
 		return cmp
 	default:
-		return compare(typ, left, right)
+		return compare(ctx, typ, left, right, vs)
 	}
 }
 

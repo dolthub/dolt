@@ -227,7 +227,7 @@ var _ TupleComparator = testCompare{}
 
 func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
 	for i, typ := range desc.Types {
-		cmp = compare(typ, left.GetField(i), right.GetField(i))
+		cmp = compare(ctx, typ, left.GetField(i), right.GetField(i), desc.vs)
 		if cmp != 0 {
 			break
 		}
@@ -235,8 +235,8 @@ func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *Tupl
 	return
 }
 
-func (tc testCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
-	return compare(typ, left, right)
+func (tc testCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type, vs ValueStore) int {
+	return compare(ctx, typ, left, right, vs)
 }
 
 func (tc testCompare) Prefix(n int) TupleComparator {

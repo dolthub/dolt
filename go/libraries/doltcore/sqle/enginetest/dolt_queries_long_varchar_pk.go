@@ -47,14 +47,9 @@ var LongVarcharPKScripts = []queries.ScriptTest{
 					{strings.Repeat("a", 9000)},
 					{strings.Repeat("b", 9000)},
 					{strings.Repeat("c", 9000)},
-				},
-			},
-			{
-				Query: "explain format=tree select pk FROM t_long_pk1 ORDER BY pk",
-				Expected: []sql.Row{
-					{strings.Repeat("a", 9000)},
-					{strings.Repeat("b", 9000)},
-					{strings.Repeat("c", 9000)},
+					{strings.Repeat("d", 9000)},
+					{strings.Repeat("e", 9000)},
+					{strings.Repeat("f", 9000)},
 				},
 			},
 		},

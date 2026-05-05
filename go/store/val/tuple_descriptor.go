@@ -48,6 +48,7 @@ type TupleDesc struct {
 	Handlers []TupleTypeHandler
 	cmp      TupleComparator
 	fast     FixedAccess
+	vs       ValueStore
 }
 
 // TupleTypeHandler is used to specifically handle types that use extended encoding. Such types are declared by GMS, and
@@ -204,12 +205,25 @@ func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup 
 	} else {
 		v = tup.GetField(i)
 	}
-	return td.cmp.CompareValues(ctx, i, value, v, td.Types[i])
+	return td.cmp.CompareValues(ctx, i, value, v, td.Types[i], td.vs)
 }
 
 // Comparator returns the TupleDescriptor's TupleComparator.
 func (td *TupleDesc) Comparator() TupleComparator {
 	return td.cmp
+}
+
+// VS returns the ValueStore associated with this TupleDesc.
+// The ValueStore is used when comparing adaptive-encoded values (e.g. TEXT, BLOB primary key columns).
+func (td *TupleDesc) VS() ValueStore {
+	return td.vs
+}
+
+// WithVS returns a shallow copy of this TupleDesc with the given ValueStore set.
+// The ValueStore is used when comparing adaptive-encoded values (e.g. TEXT, BLOB primary key columns).
+func (td TupleDesc) WithVS(vs ValueStore) *TupleDesc {
+	td.vs = vs
+	return &td
 }
 
 // Count returns the number of fields in the TupleDesc.

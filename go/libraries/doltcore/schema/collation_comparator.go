@@ -37,7 +37,7 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 	var start, stop val.ByteSize
 	for i := 0; i < off; i++ {
 		stop = fast[i]
-		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop])
+		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop], desc.VS())
 		if cmp != 0 {
 			return cmp
 		}
@@ -46,7 +46,7 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j))
+		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j), desc.VS())
 		if cmp != 0 {
 			return cmp
 		}
@@ -55,8 +55,8 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 }
 
 // CompareValues implements TupleComparator
-func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type) int {
-	return collationCompare(ctx, typ, c.Collations[index], left, right)
+func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type, vs val.ValueStore) int {
+	return collationCompare(ctx, typ, c.Collations[index], left, right, vs)
 }
 
 // Prefix implements TupleComparator
@@ -98,7 +98,7 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 	return CollationTupleComparator{Collations: newCollations}
 }
 
-func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte) int {
+func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte, vs val.ValueStore) int {
 	// order NULLs first
 	if left == nil || right == nil {
 		if bytes.Equal(left, right) {
@@ -113,7 +113,7 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 	if typ.Enc == val.StringEnc {
 		return compareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
 	} else {
-		return (&val.DefaultTupleComparator{}).CompareValues(ctx, 0, left, right, typ)
+		return (&val.DefaultTupleComparator{}).CompareValues(ctx, 0, left, right, typ, vs)
 	}
 }
 
