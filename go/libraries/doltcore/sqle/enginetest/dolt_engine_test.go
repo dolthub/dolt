@@ -820,6 +820,17 @@ func TestAdaptiveEncoding(t *testing.T) {
 	RunAdaptiveEncodingScripts(t, newDoltHarness(t))
 }
 
+func TestLongVarcharPKOrdering(t *testing.T) {
+	RunLongVarcharPKScripts(t, newDoltHarness(t))
+}
+
+func TestLongVarcharPKOrderingWithAdaptiveEncoding(t *testing.T) {
+	adaptiveEncoding := typeinfo.UseAdaptiveEncoding
+	defer func() { typeinfo.UseAdaptiveEncoding = adaptiveEncoding }()
+	typeinfo.UseAdaptiveEncoding = true
+	RunLongVarcharPKScripts(t, newDoltHarness(t))
+}
+
 func TestDropDatabase(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDropEngineTest(t, h)
