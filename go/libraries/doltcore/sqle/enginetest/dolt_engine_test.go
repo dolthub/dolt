@@ -120,7 +120,6 @@ func TestSingleScript(t *testing.T) {
 			Name: "testing",
 			SetUpScript: []string{
 				"create table t (pk int primary key, i int);",
-				"insert into t values (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);",
 				"create index idx on t(i);",
 				"set autocommit = 0;",
 			},
@@ -129,16 +128,48 @@ func TestSingleScript(t *testing.T) {
 					Query: "begin",
 				},
 				{
-					Query: "update t set i = i + 1 where i = 2;",
+					Query: "insert into t values (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);",
 				},
-				//{
-				//	Query: "update t set i = i + 1 where i = 0;",
-				//},
-				//{
-				//	Query: "update t set i = i + 1 where i = 1;",
-				//},
 				{
 					Query: "commit",
+				},
+				{
+					Query: "select * from t where pk = 0;",
+					Expected: []sql.Row{
+						{0, 0},
+					},
+				},
+
+				{
+					Query: "begin",
+				},
+				{
+					Query: "update t set i = i + 1 where pk = 0;",
+				},
+				{
+					Query: "select * from t where pk = 0;",
+					Expected: []sql.Row{
+						{0, 1},
+					},
+				},
+				{
+					Query: "update t set i = i + 1 where pk = 1;",
+				},
+				{
+					Query: "update t set i = i + 1 where pk = 2;",
+				},
+				{
+					Query: "commit",
+				},
+				{
+					Query: "select * from t order by pk;",
+					Expected: []sql.Row{
+						{0, 1},
+						{1, 1},
+						{2, 1},
+						{3, 0},
+						{4, 0},
+					},
 				},
 			},
 		},

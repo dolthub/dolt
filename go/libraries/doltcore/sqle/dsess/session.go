@@ -462,6 +462,9 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	for _, state := range d.dbStates {
 		for _, head := range state.heads {
 			writeSess := head.WriteSession()
+			if writeSess == nil {
+				continue
+			}
 			newRoot, err := writeSess.Flush(ctx) // TODO: autoinc overrides?
 			if err != nil {
 				return err
