@@ -1,0 +1,3 @@
+mysql-connector-python
+pandas
+pyarrow
