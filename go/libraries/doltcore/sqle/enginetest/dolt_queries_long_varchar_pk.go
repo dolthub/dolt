@@ -36,10 +36,21 @@ var LongVarcharPKScripts = []queries.ScriptTest{
 			`INSERT INTO t_long_pk1 VALUES (REPEAT('c', 9000))`,
 			`INSERT INTO t_long_pk1 VALUES (REPEAT('a', 9000))`,
 			`INSERT INTO t_long_pk1 VALUES (REPEAT('b', 9000))`,
+			`INSERT INTO t_long_pk1 VALUES (REPEAT('d', 9000))`,
+			`INSERT INTO t_long_pk1 VALUES (REPEAT('e', 9000))`,
+			`INSERT INTO t_long_pk1 VALUES (REPEAT('f', 9000))`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT pk FROM t_long_pk1 ORDER BY pk",
+				Expected: []sql.Row{
+					{strings.Repeat("a", 9000)},
+					{strings.Repeat("b", 9000)},
+					{strings.Repeat("c", 9000)},
+				},
+			},
+			{
+				Query: "explain format=tree select pk FROM t_long_pk1 ORDER BY pk",
 				Expected: []sql.Row{
 					{strings.Repeat("a", 9000)},
 					{strings.Repeat("b", 9000)},

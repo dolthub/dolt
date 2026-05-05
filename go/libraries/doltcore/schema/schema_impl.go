@@ -486,7 +486,8 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 		_, contentHashedField := contentHashedFields[tag]
 		typeHandler, hasTypeHandler := sqlType.(val.TupleTypeHandler)
 
-		if hasTypeHandler {
+		customEncoding := hasTypeHandler && val.IsExtendedEncoding(col.TypeInfo.Encoding())
+		if customEncoding {
 			encoding := col.TypeInfo.Encoding()
 			t = val.Type{
 				Enc:      encoding,
@@ -535,7 +536,11 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 			collations = append(collations, sql.Collation_Unspecified)
 		}
 
-		handlers = append(handlers, handler)
+		if customEncoding {
+			handlers = append(handlers, handler)
+		} else {
+			handlers = append(handlers, nil)
+		}
 
 		return
 	})
