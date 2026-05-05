@@ -438,15 +438,16 @@ func (d decimalSerializer) serialize(ctx context.Context, typ sql.Type, value in
 
 	// Load the value into a fully padded (to precision and scale) string format,
 	// so that we can process the digit groups for the binary encoding.
-	_, err = sql.DecimalCtx.Abs(&decimalValue, &decimalValue)
+	absDecimalVal := *new(apd.Decimal)
+	_, err = sql.DecimalCtx.Abs(&absDecimalVal, &decimalValue)
 	if err != nil {
 		return nil, err
 	}
-	decimalValue, err = gmstypes.DecimalRound(decimalValue, int32(scale))
+	absDecimalVal, err = gmstypes.DecimalRound(absDecimalVal, int32(scale))
 	if err != nil {
 		return nil, err
 	}
-	absStringVal := decimalValue.Text('f')
+	absStringVal := absDecimalVal.Text('f')
 	stringIntegerVal := absStringVal
 	stringFractionalVal := ""
 	if scale > 0 {
