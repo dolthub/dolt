@@ -970,7 +970,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		} else {
 			verr := diffUserTable(queryist, sqlCtx, delta, dArgs, dw)
 			if verr != nil {
-				cli.PrintErrf(verr.Verbose())
+				cli.PrintErrln(verr.Verbose())
 				diffErrors = append(diffErrors, verr)
 			}
 		}
@@ -1580,12 +1580,12 @@ func diffRows(
 	}
 
 	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
-		err := fmt.Errorf("Primary key sets differ between revisions for table '%s', skipping data diff\n", tableSummary.ToTableName)
+		err := fmt.Errorf("Primary key sets differ between revisions for table '%s', skipping data diff", tableSummary.ToTableName)
 		// When outputting SQL, it's an error if we can't generate a data diff. Otherwise we write to stderr and continue.
 		if dArgs.diffOutput == SQLDiffOutput {
 			return errhand.VerboseErrorFromError(err)
 		}
-		cli.PrintErr(err)
+		cli.PrintErrln(err)
 		return nil
 	}
 
@@ -1613,7 +1613,7 @@ func diffRows(
 	}
 
 	if dArgs.diffOutput == SQLDiffOutput && !areValueSetsDiffable(fromSch, toSch) {
-		return errhand.VerboseErrorFromError(fmt.Errorf("Incompatible schema change, skipping data diff for table '%s'\n", tableSummary.ToTableName))
+		return errhand.VerboseErrorFromError(fmt.Errorf("Incompatible schema change, skipping data diff for table '%s'", tableSummary.ToTableName))
 	}
 
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
