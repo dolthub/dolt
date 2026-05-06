@@ -38,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -496,9 +497,8 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			return fmt.Errorf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommitMessage, doltCommitMessageVar)
 		}
 
-		trimmedString := strings.TrimSpace(doltCommitMessageString)
-		if strings.TrimSpace(doltCommitMessageString) != "" {
-			message = trimmedString
+		if cleaned := datas.CleanCommitMessage(doltCommitMessageString); cleaned != "" {
+			message = cleaned
 		}
 
 		dbName := ctx.GetCurrentDatabase()
