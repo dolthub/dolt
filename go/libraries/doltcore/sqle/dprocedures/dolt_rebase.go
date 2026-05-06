@@ -770,6 +770,19 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 		return newRebaseError(err)
 	}
 
+	// Save the working/staged roots of the branch being rebased before copyABranch overwrites them.
+	// Tables that exist only in the working set and are absent from the index must be restored afterward.
+	rebaseBranchWSRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseBranch))
+	if err != nil {
+		return newRebaseError(err)
+	}
+	preRebaseWS, err := dbData.Ddb.ResolveWorkingSet(ctx, rebaseBranchWSRef)
+	if err != nil {
+		return newRebaseError(err)
+	}
+	preRebaseWorkingRoot := preRebaseWS.WorkingRoot()
+	preRebaseStagedRoot := preRebaseWS.StagedRoot()
+
 	// TODO: copyABranch (and the underlying call to doltdb.NewBranchAtCommit) has a race condition
 	//       where another session can set the branch head AFTER doltdb.NewBranchAtCommit updates
 	//       the branch head, but BEFORE doltdb.NewBranchAtCommit retrieves the working set for the
@@ -782,17 +795,29 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 	}
 
 	// Checkout the branch being rebased
-	previousBranchWorkingSetRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseBranchWorkingSet.RebaseState().Branch()))
-	if err != nil {
-		return newRebaseError(err)
-	}
-	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), previousBranchWorkingSetRef)
+	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), rebaseBranchWSRef)
 	if err != nil {
 		return newRebaseError(err)
 	}
 
-	// Start a new transaction so the session will see the changes to the branch pointer
+	// Start a new transaction so the session will see the changes to the branch pointer.
+	// StartTransaction clears in-memory session state, so restoration of working-root-only tables
+	// must happen after this point.
 	if _, err = doltSession.StartTransaction(ctx, sql.ReadWrite); err != nil {
+		return newRebaseError(err)
+	}
+
+	// Restore tables that existed only in the working set before the rebase overwrote it.
+	finalWS, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return newRebaseError(err)
+	}
+	restoredRoot, err := actions.RestoreUntrackedTables(ctx, preRebaseWorkingRoot, preRebaseStagedRoot, finalWS.WorkingRoot())
+	if err != nil {
+		return newRebaseError(err)
+	}
+	err = doltSession.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), finalWS.WithWorkingRoot(restoredRoot))
+	if err != nil {
 		return newRebaseError(err)
 	}
 

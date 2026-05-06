@@ -63,77 +63,79 @@ func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr str
 		}
 	}
 
-	// mirroring Git behavior, untracked tables are ignored on 'reset --hard',
-	// save the state of these tables and apply them to |newHead|'s root.
-	//
-	// as a special case, if an untracked table has a tag collision with any
-	// tables in |newHead| we silently drop it from the new working set.
-	// these tag collision is typically cause by table renames (bug #751).
-
-	untracked, err := doltdb.GetAllSchemas(ctx, roots.Working)
+	// Tables present only in the working root and absent from the index are left intact on reset --hard.
+	// Save the state of these tables and apply them to |newHead|'s root.
+	newWkRoot, err := RestoreUntrackedTables(ctx, roots.Working, roots.Staged, roots.Head)
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}
 
-	// untracked tables exist in |working| but not in |staged|
-	staged := GetAllTableNames(ctx, roots.Staged)
-	for _, name := range staged {
+	roots.Working = newWkRoot
+	roots.Staged = roots.Head // the index root must match HEAD because RestoreUntrackedTables only updates the working root
+
+	return newHead, roots, nil
+}
+
+// RestoreUntrackedTables copies tables that exist in |workingRoot| but not in |stagedRoot|
+// into |newRoot|. A table is absent from the index when it has never been added to |stagedRoot|.
+// Such tables are left intact across hard resets and rebases. Tables whose
+// column tags collide with a table already in |newRoot| are silently omitted to avoid schema
+// conflicts caused by table renames. Tables whose name already exists in |newRoot| are also
+// omitted to avoid overwriting tables added by the target commit.
+func RestoreUntrackedTables(ctx context.Context, workingRoot, stagedRoot, newRoot doltdb.RootValue) (doltdb.RootValue, error) {
+	untracked, err := doltdb.GetAllSchemas(ctx, workingRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	staged, err := doltdb.GetAllSchemas(ctx, stagedRoot)
+	if err != nil {
+		return nil, err
+	}
+	for name := range staged {
 		delete(untracked, name)
 	}
 
-	newWkRoot := roots.Head
-
-	ws, err := doltdb.GetAllSchemas(ctx, newWkRoot)
+	schemas, err := doltdb.GetAllSchemas(ctx, newRoot)
 	if err != nil {
-		return nil, doltdb.Roots{}, err
+		return nil, err
 	}
-	tags := mapColumnTags(ws)
+	// Column tags are stable cross-rename identifiers. A tag collision means this table's
+	// schema conflicts with a renamed table already in |newRoot|, so we drop it silently.
+	// TODO(elianddb): instead of dropping the table, reassign fresh tags to its columns so
+	// it can coexist with the renamed table, preserving the user's data.
+	tags := mapColumnTags(schemas)
 
 	for name, sch := range untracked {
-		for _, pk := range sch.GetAllCols().GetColumns() {
-			if _, ok := tags[pk.Tag]; ok {
-				// |pk.Tag| collides with a schema in |newWkRoot|
+		for _, col := range sch.GetAllCols().GetColumns() {
+			if _, ok := tags[col.Tag]; ok {
 				delete(untracked, name)
+				break
 			}
 		}
 	}
 
 	for name := range untracked {
-		tbl, exists, err := roots.Working.GetTable(ctx, name)
+		// Skip tables whose name is already occupied in |newRoot|. The tag check above handles
+		// conflicting schemas, but a table with entirely different tags and the same name must
+		// also be left alone to avoid overwriting it silently.
+		if _, exists := schemas[name]; exists {
+			continue
+		}
+		tbl, exists, err := workingRoot.GetTable(ctx, name)
 		if err != nil {
-			return nil, doltdb.Roots{}, err
+			return nil, err
 		}
 		if !exists {
-			return nil, doltdb.Roots{}, fmt.Errorf("untracked table %s does not exist in working set", name)
+			return nil, fmt.Errorf("untracked table %s does not exist in working set", name)
 		}
-
-		newWkRoot, err = newWkRoot.PutTable(ctx, name, tbl)
+		newRoot, err = newRoot.PutTable(ctx, name, tbl)
 		if err != nil {
-			return nil, doltdb.Roots{}, fmt.Errorf("failed to write table back to database: %s", err)
+			return nil, fmt.Errorf("failed to write table back to database: %s", err)
 		}
 	}
 
-	// need to save the state of files that aren't tracked
-	untrackedTables := make(map[doltdb.TableName]*doltdb.Table)
-	wTblNames := GetAllTableNames(ctx, roots.Working)
-
-	for _, tblName := range wTblNames {
-		untrackedTables[tblName], _, err = roots.Working.GetTable(ctx, tblName)
-
-		if err != nil {
-			return nil, doltdb.Roots{}, err
-		}
-	}
-
-	headTblNames := GetAllTableNames(ctx, roots.Staged)
-	for _, tblName := range headTblNames {
-		delete(untrackedTables, tblName)
-	}
-
-	roots.Working = newWkRoot
-	roots.Staged = roots.Head
-
-	return newHead, roots, nil
+	return newRoot, nil
 }
 
 func GetAllTableNames(ctx context.Context, root doltdb.RootValue) []doltdb.TableName {
