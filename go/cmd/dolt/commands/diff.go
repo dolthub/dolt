@@ -928,6 +928,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 	}
 
 	doltSchemasChanged := false
+	var diffErrors []error
 	for _, delta := range deltas {
 		if doltdb.IsFullTextTable(delta.TableName.Name) {
 			continue
@@ -969,7 +970,8 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		} else {
 			verr := diffUserTable(queryist, sqlCtx, delta, dArgs, dw)
 			if verr != nil {
-				return verr
+				cli.PrintErrf(verr.Verbose())
+				diffErrors = append(diffErrors, verr)
 			}
 		}
 	}
@@ -984,6 +986,14 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 	err = dw.Close(sqlCtx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
+	}
+
+	if len(diffErrors) > 0 {
+		errorBuilder := errhand.BuildDError("error: encountered errors during diff")
+		for _, diffError := range diffErrors {
+			errorBuilder.AddCause(diffError)
+		}
+		return errorBuilder.Build()
 	}
 
 	return nil
@@ -1504,43 +1514,6 @@ func diffDatabase(
 	return nil
 }
 
-// arePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
-// passed in schema are from the same table between commits.
-func arePrimaryKeySetsDiffable(fromSch, toSch schema.Schema) bool {
-	if fromSch == nil && toSch == nil {
-		return false
-		// Empty case
-	} else if fromSch == nil || fromSch.GetAllCols().Size() == 0 ||
-		toSch == nil || toSch.GetAllCols().Size() == 0 {
-		return true
-	}
-
-	// Keyless case for comparing
-	if schema.IsKeyless(fromSch) && schema.IsKeyless(toSch) {
-		return true
-	}
-
-	cc1 := fromSch.GetPKCols()
-	cc2 := toSch.GetPKCols()
-
-	if cc1.Size() != cc2.Size() {
-		return false
-	}
-
-	for i := 0; i < cc1.Size(); i++ {
-		c1 := cc1.GetByIndex(i)
-		c2 := cc2.GetByIndex(i)
-		if c1.IsPartOfPK != c2.IsPartOfPK {
-			return false
-		}
-		if !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
-			return false
-		}
-	}
-
-	return true
-}
-
 // areValueSetsDiffable checks if it's possible to meaningfully diff the tuples stored in a table
 // between two commits. This is possible for some schema changes but not others.
 func areValueSetsDiffable(fromSch, toSch schema.Schema) bool {
@@ -1563,6 +1536,7 @@ func areValueSetsDiffable(fromSch, toSch schema.Schema) bool {
 	for i := 0; i < fromCols.Size(); i++ {
 		fromCol := fromCols.GetByIndex(i)
 		toCol := toCols.GetByIndex(i)
+		// TODO: We might get more accurate results from calling MapSchemaBasedOnTagAndName
 		if fromCol.Name != toCol.Name {
 			// If fromCol.Tag == toCol.Tag, this will display a rename.
 			// We ought to be able to generate a data diff here, but we currently panic if a row has changed a value in this column.
@@ -1603,7 +1577,7 @@ func diffRows(
 		toSch = toTableInfo.Sch
 	}
 
-	if !arePrimaryKeySetsDiffable(fromSch, toSch) {
+	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
 		return errhand.VerboseErrorFromError(fmt.Errorf("Primary key sets differ between revisions for table '%s', skipping data diff\n", tableSummary.ToTableName))
 	}
 
