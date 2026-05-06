@@ -281,6 +281,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		// adaptive encoded field as a literal value.
 		if usesAdaptiveEncoding(col) {
 			serial.ColumnAddUsesAdaptiveEncoding(b, true)
+			serial.ColumnAddAdaptiveEncodingBreakingChange(b, true)
 		}
 
 		if col.Hidden {
@@ -683,7 +684,7 @@ func keylessSerialSchema(s *serial.TableSchema) (bool, error) {
 		return false, err
 	}
 	ok := id.Generated() && id.Hidden() &&
-		string(id.Name()) == keylessIdCol
+			string(id.Name()) == keylessIdCol
 	if !ok {
 		return false, nil
 	}
@@ -698,7 +699,7 @@ func keylessSerialSchema(s *serial.TableSchema) (bool, error) {
 		return false, err
 	}
 	return card.Generated() && card.Hidden() &&
-		string(card.Name()) == keylessCardCol, nil
+			string(card.Name()) == keylessCardCol, nil
 }
 
 func sqlTypeString(t typeinfo.TypeInfo) string {
