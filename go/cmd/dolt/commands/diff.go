@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typecompatibility"
 	"io"
 	"strconv"
 	"strings"
@@ -1505,16 +1506,7 @@ func diffDatabase(
 
 // arePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
 // passed in schema are from the same table between commits.
-func arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo *diff.TableInfo) bool {
-	var fromSch schema.Schema = nil
-	var toSch schema.Schema = nil
-	if fromTableInfo != nil {
-		fromSch = fromTableInfo.Sch
-	}
-	if toTableInfo != nil {
-		toSch = toTableInfo.Sch
-	}
-
+func arePrimaryKeySetsDiffable(fromSch, toSch schema.Schema) bool {
 	if fromSch == nil && toSch == nil {
 		return false
 		// Empty case
@@ -1549,6 +1541,51 @@ func arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo *diff.TableInfo) bool 
 	return true
 }
 
+// areValueSetsDiffable checks if it's possible to meaningfully diff the tuples stored in a table
+// between two commits. This is possible for some schema changes but not others.
+func areValueSetsDiffable(fromSch, toSch schema.Schema) bool {
+	if fromSch == nil || fromSch.GetAllCols().Size() == 0 ||
+		toSch == nil || toSch.GetAllCols().Size() == 0 {
+		// If one side doesn't have a schema, the diff is trivial.
+		return true
+	}
+
+	fromCols := fromSch.GetNonPKCols()
+	toCols := toSch.GetNonPKCols()
+
+	if fromCols.Size() != toCols.Size() {
+		// TODO: In limited cases where columns are dropped or added from the end of the schema,
+		// it may stil be possible to produce a meaningful data diff.
+		return false
+	}
+
+	compatChecker := typecompatibility.NewTypeCompatabilityChecker()
+	for i := 0; i < fromCols.Size(); i++ {
+		fromCol := fromCols.GetByIndex(i)
+		toCol := toCols.GetByIndex(i)
+		if fromCol.Name != toCol.Name {
+			// If fromCol.Tag == toCol.Tag, this will display a rename.
+			// We ought to be able to generate a data diff here, but we currently panic if a row has changed a value in this column.
+			// TODO: Generate SQL data diffs for renamed columns.
+
+			// If fromCol.Tag == toCol.Tag, this will display a drop and an add.
+			// In this case, we would need to generate an update statement for every row where this new column is not NULL.
+			// We cannot currently do this for rows whose bytes have not changed.
+			return false
+		}
+		typeChangeInfo := compatChecker.IsTypeChangeCompatible(fromCol.TypeInfo, toCol.TypeInfo)
+		binaryCompatible := typeChangeInfo.Compatible && !typeChangeInfo.RewriteRows
+		if !binaryCompatible {
+			// It is not possible to semantically compare the values of this column at these two commits.
+			// This means that it's possible for the column to have the same bytes at both commits, while not
+			// representing the same value. We do not have enough context to produce a correct data diff.
+			return false
+		}
+	}
+
+	return true
+}
+
 func diffRows(
 	queryist cli.Queryist,
 	sqlCtx *sql.Context,
@@ -1557,30 +1594,44 @@ func diffRows(
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	diffable := arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo)
-	canSqlDiff := !(toTableInfo == nil || (fromTableInfo != nil && !schema.SchemasAreEqual(fromTableInfo.Sch, toTableInfo.Sch)))
-
-	var toSch, fromSch sql.Schema
+	var fromSch schema.Schema = nil
+	var toSch schema.Schema = nil
 	if fromTableInfo != nil {
-		pkSch, err := sqlutil.FromDoltSchema(sqlCtx, sqlCtx.GetCurrentDatabase(), fromTableInfo.Name, fromTableInfo.Sch)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		fromSch = pkSch.Schema
+		fromSch = fromTableInfo.Sch
 	}
 	if toTableInfo != nil {
-		pkSch, err := sqlutil.FromDoltSchema(sqlCtx, sqlCtx.GetCurrentDatabase(), toTableInfo.Name, toTableInfo.Sch)
+		toSch = toTableInfo.Sch
+	}
+
+	if !arePrimaryKeySetsDiffable(fromSch, toSch) {
+		return errhand.VerboseErrorFromError(fmt.Errorf("Primary key sets differ between revisions for table '%s', skipping data diff\n", tableSummary.ToTableName))
+	}
+
+	var toSqlSch, fromSqlSch sql.Schema
+	if fromTableInfo != nil {
+		pkSch, err := sqlutil.FromDoltSchema(sqlCtx, sqlCtx.GetCurrentDatabase(), fromTableInfo.Name, fromSch)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-		toSch = pkSch.Schema
+		fromSqlSch = pkSch.Schema
+	}
+	if toTableInfo != nil {
+		pkSch, err := sqlutil.FromDoltSchema(sqlCtx, sqlCtx.GetCurrentDatabase(), toTableInfo.Name, toSch)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		toSqlSch = pkSch.Schema
 	}
 
 	var unionSch sql.Schema
-	if fromSch.Equals(toSch) {
-		unionSch = fromSch
+	if fromSqlSch.Equals(toSqlSch) {
+		unionSch = fromSqlSch
 	} else {
-		unionSch = unionSchemas(fromSch, toSch)
+		unionSch = unionSchemas(fromSqlSch, toSqlSch)
+	}
+
+	if dArgs.diffOutput == SQLDiffOutput && !areValueSetsDiffable(fromSch, toSch) {
+		return errhand.VerboseErrorFromError(fmt.Errorf("Incompatible schema change, skipping data diff for table '%s'\n", tableSummary.ToTableName))
 	}
 
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
@@ -1604,25 +1655,6 @@ func diffRows(
 		rowWriter = newLazyRowWriter(realWriter, onFirstWrite)
 	} else {
 		rowWriter = realWriter
-	}
-
-	// can't diff
-	if !diffable {
-		// TODO: this messes up some structured output if the user didn't redirect it
-		cli.PrintErrf("Primary key sets differ between revisions for table '%s', skipping data diff\n", tableSummary.ToTableName)
-		err = rowWriter.Close(sqlCtx)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		return nil
-	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
-		// TODO: this is overly broad, we can absolutely do better
-		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff for table '%s'\n", tableSummary.ToTableName)
-		err = rowWriter.Close(sqlCtx)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		return nil
 	}
 
 	// no data diff requested
