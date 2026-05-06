@@ -990,8 +990,10 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 
 	if len(diffErrors) > 0 {
 		errorBuilder := errhand.BuildDError("error: encountered errors during diff")
-		for _, diffError := range diffErrors {
-			errorBuilder.AddCause(diffError)
+		if len(diffErrors) == 1 {
+			errorBuilder.AddCause(diffErrors[0])
+		} else {
+			errorBuilder.AddCause(errors.Join(diffErrors...))
 		}
 		return errorBuilder.Build()
 	}
@@ -1578,7 +1580,13 @@ func diffRows(
 	}
 
 	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
-		return errhand.VerboseErrorFromError(fmt.Errorf("Primary key sets differ between revisions for table '%s', skipping data diff\n", tableSummary.ToTableName))
+		err := fmt.Errorf("Primary key sets differ between revisions for table '%s', skipping data diff\n", tableSummary.ToTableName)
+		// When outputting SQL, it's an error if we can't generate a data diff. Otherwise we write to stderr and continue.
+		if dArgs.diffOutput == SQLDiffOutput {
+			return errhand.VerboseErrorFromError(err)
+		}
+		cli.PrintErr(err)
+		return nil
 	}
 
 	var toSqlSch, fromSqlSch sql.Schema
