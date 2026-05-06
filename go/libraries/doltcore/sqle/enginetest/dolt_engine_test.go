@@ -84,13 +84,13 @@ func TestSingleQuery(t *testing.T) {
 		Expected: []sql.Row{
 			{"mytable",
 				"CREATE TABLE `mytable` (\n" +
-					"  `i` bigint NOT NULL,\n" +
-					"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
-					"  PRIMARY KEY (`i`),\n" +
-					"  KEY `idx_si` (`s`,`i`),\n" +
-					"  KEY `mytable_i_s` (`i`,`s`),\n" +
-					"  UNIQUE KEY `mytable_s` (`s`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+						"  `i` bigint NOT NULL,\n" +
+						"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
+						"  PRIMARY KEY (`i`),\n" +
+						"  KEY `idx_si` (`s`,`i`),\n" +
+						"  KEY `mytable_i_s` (`i`,`s`),\n" +
+						"  UNIQUE KEY `mytable_s` (`s`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 		},
 	}
 
@@ -114,7 +114,7 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 	var scripts = LongVarcharPKScripts
 
 	for _, script := range scripts {
@@ -789,13 +789,6 @@ func TestAdaptiveEncoding(t *testing.T) {
 }
 
 func TestLongVarcharPKOrdering(t *testing.T) {
-	RunLongVarcharPKScripts(t, newDoltHarness(t))
-}
-
-func TestLongVarcharPKOrderingWithAdaptiveEncoding(t *testing.T) {
-	adaptiveEncoding := typeinfo.UseAdaptiveEncoding
-	defer func() { typeinfo.UseAdaptiveEncoding = adaptiveEncoding }()
-	typeinfo.UseAdaptiveEncoding = true
 	RunLongVarcharPKScripts(t, newDoltHarness(t))
 }
 

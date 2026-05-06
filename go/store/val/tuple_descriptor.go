@@ -213,9 +213,7 @@ func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup 
 	return td.cmp.CompareValues(ctx, i, value, v, td.Types[i])
 }
 
-// Comparator returns this TupleDesc's TupleComparator. The returned comparator has any ValueStore
-// supplied to |NewTupleDescriptorWithArgs| already attached, so its |Compare| and |CompareValues|
-// methods can be invoked without further configuration.
+// Comparator returns this TupleDesc's TupleComparator.
 func (td *TupleDesc) Comparator() TupleComparator {
 	return td.cmp
 }
