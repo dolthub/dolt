@@ -37,7 +37,7 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 	var start, stop val.ByteSize
 	for i := 0; i < off; i++ {
 		stop = fast[i]
-		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop], desc.VS())
+		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop], desc.ValueStore())
 		if cmp != 0 {
 			return cmp
 		}
@@ -46,7 +46,7 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j), desc.VS())
+		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j), desc.ValueStore())
 		if cmp != 0 {
 			return cmp
 		}

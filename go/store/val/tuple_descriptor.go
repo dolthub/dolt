@@ -213,15 +213,15 @@ func (td *TupleDesc) Comparator() TupleComparator {
 	return td.cmp
 }
 
-// VS returns the ValueStore associated with this TupleDesc.
+// ValueStore returns the ValueStore associated with this TupleDesc.
 // The ValueStore is used when comparing adaptive-encoded values (e.g. TEXT, BLOB primary key columns).
-func (td *TupleDesc) VS() ValueStore {
+func (td *TupleDesc) ValueStore() ValueStore {
 	return td.vs
 }
 
-// WithVS returns a shallow copy of this TupleDesc with the given ValueStore set.
+// WithValueStore returns a shallow copy of this TupleDesc with the given ValueStore set.
 // The ValueStore is used when comparing adaptive-encoded values (e.g. TEXT, BLOB primary key columns).
-func (td TupleDesc) WithVS(vs ValueStore) *TupleDesc {
+func (td TupleDesc) WithValueStore(vs ValueStore) *TupleDesc {
 	td.vs = vs
 	return &td
 }
