@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -929,7 +930,7 @@ func createCherryPickOptionsForRebaseStep(
 		// Edit action is a straightforward cherry-pick, with a pause after.
 
 	case rebase.RebaseActionReword:
-		options.CommitMessage = planStep.CommitMsg
+		options.CommitMessage = datas.CleanCommitMessage(planStep.CommitMsg)
 
 	case rebase.RebaseActionSquash:
 		options.Amend = true

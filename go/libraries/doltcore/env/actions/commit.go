@@ -83,7 +83,6 @@ func GetCommitStaged(
 	db *doltdb.DoltDB,
 	props CommitStagedProps,
 ) (*doltdb.PendingCommit, error) {
-	props.Message = datas.CleanCommitMessage(props.Message)
 	if props.Message == "" {
 		return nil, datas.ErrEmptyCommitMessage
 	}

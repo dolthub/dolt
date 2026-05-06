@@ -497,8 +497,8 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			return fmt.Errorf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommitMessage, doltCommitMessageVar)
 		}
 
-		if cleaned := datas.CleanCommitMessage(doltCommitMessageString); cleaned != "" {
-			message = cleaned
+		if doltCommitMessageString != "" {
+			message = datas.CleanCommitMessage(doltCommitMessageString)
 		}
 
 		dbName := ctx.GetCurrentDatabase()

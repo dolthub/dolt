@@ -392,6 +392,18 @@ SQL
     [[ "$output" =~ "no-ff merge" ]] || false
 }
 
+@test "merge: trailing whitespace is stripped from a no-ff merge commit message" {
+    dolt checkout -b merge_branch
+    dolt SQL -q "INSERT INTO test1 values (0,1,2)"
+    dolt add test1
+    dolt commit -m "modify test1"
+
+    dolt checkout main
+    dolt merge merge_branch --no-ff -m "no-ff merge   "
+    stored=$(dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1" | tail -n 1)
+    [ "$stored" = "no-ff merge" ]
+}
+
 @test "merge: no-ff merge doesn't stomp working changes and doesn't fast forward" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
