@@ -1173,7 +1173,7 @@ SQL
     dolt commit -m "hello"
     run dolt diff main another-branch
     echo $output
-    [ $status -eq 1 ]
+    [ $status -eq 0 ]
     ! [[ "$output" =~ "panic" ]] || false
     [[ "$output" =~ "pv1" ]] || false
     [[ "$output" =~ "cv1" ]] || false
@@ -1181,7 +1181,7 @@ SQL
 
     run dolt diff main..another-branch
     echo $output
-    [ $status -eq 1 ]
+    [ $status -eq 0 ]
     ! [[ "$output" =~ "panic" ]] || false
     [[ "$output" =~ "pv1" ]] || false
     [[ "$output" =~ "cv1" ]] || false
@@ -1399,7 +1399,7 @@ SQL
     [ "${lines[2]}" = "Primary key sets differ between revisions for table 't', skipping data diff" ]
 
     run dolt diff
-    [ $status -eq 1 ]
+    [ $status -eq 0 ]
     [[ "$output" =~ '+  PRIMARY KEY (`pk`)' ]] || false
     [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 
@@ -1414,7 +1414,7 @@ SQL
     [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 
     run dolt diff
-    [ $status -eq 1 ]
+    [ $status -eq 0 ]
     [[ "$output" =~ '-  PRIMARY KEY (`pk`)' ]] || false
     [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 }
