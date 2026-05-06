@@ -48,7 +48,6 @@ type TupleDesc struct {
 	Handlers []TupleTypeHandler
 	cmp      TupleComparator
 	fast     FixedAccess
-	vs       ValueStore
 }
 
 // TupleTypeHandler is used to specifically handle types that use extended encoding. Such types are declared by GMS, and
@@ -73,6 +72,9 @@ type TupleTypeHandler interface {
 type TupleDescriptorArgs struct {
 	Comparator TupleComparator
 	Handlers   []TupleTypeHandler
+	// ValueStore, if non-nil, is attached to the TupleDesc's Comparator via |WithValueStore|.
+	// It is required when comparing tuples with adaptive-encoded fields.
+	ValueStore ValueStore
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
@@ -97,6 +99,9 @@ func NewTupleDescriptorWithArgs(args TupleDescriptorArgs, types ...Type) (td *Tu
 		innerCmp: args.Comparator,
 		handlers: args.Handlers,
 	}).Validated(types)
+	if args.ValueStore != nil {
+		args.Comparator = args.Comparator.WithValueStore(args.ValueStore)
+	}
 
 	td = &TupleDesc{
 		Types:    types,
@@ -205,25 +210,14 @@ func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup 
 	} else {
 		v = tup.GetField(i)
 	}
-	return td.cmp.CompareValues(ctx, i, value, v, td.Types[i], td.vs)
+	return td.cmp.CompareValues(ctx, i, value, v, td.Types[i])
 }
 
-// Comparator returns the TupleDescriptor's TupleComparator.
+// Comparator returns this TupleDesc's TupleComparator. The returned comparator has any ValueStore
+// supplied to |NewTupleDescriptorWithArgs| already attached, so its |Compare| and |CompareValues|
+// methods can be invoked without further configuration.
 func (td *TupleDesc) Comparator() TupleComparator {
 	return td.cmp
-}
-
-// ValueStore returns the ValueStore associated with this TupleDesc.
-// The ValueStore is used when comparing adaptive-encoded values (e.g. TEXT, BLOB primary key columns).
-func (td *TupleDesc) ValueStore() ValueStore {
-	return td.vs
-}
-
-// WithValueStore returns a shallow copy of this TupleDesc with the given ValueStore set.
-// The ValueStore is used when comparing adaptive-encoded values (e.g. TEXT, BLOB primary key columns).
-func (td TupleDesc) WithValueStore(vs ValueStore) *TupleDesc {
-	td.vs = vs
-	return &td
 }
 
 // Count returns the number of fields in the TupleDesc.

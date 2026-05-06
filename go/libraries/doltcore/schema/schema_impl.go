@@ -551,9 +551,9 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 			panic(fmt.Errorf("cannot create tuple descriptor from %d collations and %d types", len(collations), len(tt)))
 		}
 		cmp := CollationTupleComparator{Collations: collations}
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers, ValueStore: vs}, tt...)
 	} else {
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs}, tt...)
 	}
 }
 
@@ -610,9 +610,9 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 			panic(fmt.Errorf("cannot create tuple descriptor from %d collations and %d types", len(collations), len(tt)))
 		}
 		cmp := CollationTupleComparator{Collations: collations}
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers, ValueStore: vs}, tt...)
 	} else {
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs}, tt...)
 	}
 }
 

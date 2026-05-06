@@ -98,7 +98,7 @@ func (r Range) aboveStart(ctx context.Context, t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		cmp := order.CompareValues(ctx, i, field, bound.Value, typ, r.Desc.ValueStore())
+		cmp := order.CompareValues(ctx, i, field, bound.Value, typ)
 		if cmp < 0 {
 			// |field| is outside Range
 			return false
@@ -130,7 +130,7 @@ func (r Range) belowStop(ctx context.Context, t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		cmp := order.CompareValues(ctx, i, field, bound.Value, typ, r.Desc.ValueStore())
+		cmp := order.CompareValues(ctx, i, field, bound.Value, typ)
 		if cmp > 0 {
 			// |field| is outside Range
 			return false
@@ -159,7 +159,7 @@ func (r Range) Matches(ctx context.Context, t val.Tuple) bool {
 
 		if r.Fields[i].BoundsAreEqual {
 			v := r.Fields[i].Lo.Value
-			if order.CompareValues(ctx, i, field, v, typ, r.Desc.ValueStore()) == 0 {
+			if order.CompareValues(ctx, i, field, v, typ) == 0 {
 				continue
 			}
 			return false
@@ -167,7 +167,7 @@ func (r Range) Matches(ctx context.Context, t val.Tuple) bool {
 
 		lo := r.Fields[i].Lo
 		if lo.Binding {
-			cmp := order.CompareValues(ctx, i, field, lo.Value, typ, r.Desc.ValueStore())
+			cmp := order.CompareValues(ctx, i, field, lo.Value, typ)
 			if cmp < 0 || (cmp == 0 && !lo.Inclusive) {
 				return false
 			}
@@ -175,7 +175,7 @@ func (r Range) Matches(ctx context.Context, t val.Tuple) bool {
 
 		hi := r.Fields[i].Hi
 		if hi.Binding {
-			cmp := order.CompareValues(ctx, i, field, hi.Value, typ, r.Desc.ValueStore())
+			cmp := order.CompareValues(ctx, i, field, hi.Value, typ)
 			if cmp > 0 || (cmp == 0 && !hi.Inclusive) {
 				return false
 			}
@@ -387,7 +387,7 @@ func closedRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc
 	for i := range rng.Fields {
 		lo := desc.GetField(i, start)
 		hi := desc.GetField(i, stop)
-		isEq := order.CompareValues(ctx, i, lo, hi, desc.Types[i], desc.ValueStore()) == 0
+		isEq := order.CompareValues(ctx, i, lo, hi, desc.Types[i]) == 0
 		rng.Fields[i] = RangeField{
 			Lo:             Bound{Binding: true, Inclusive: true, Value: lo},
 			Hi:             Bound{Binding: true, Inclusive: true, Value: hi},

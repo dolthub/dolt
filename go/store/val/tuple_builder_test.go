@@ -221,13 +221,15 @@ func testBuildLargeTuple(t *testing.T) {
 	tb.PutByteString(11, []byte(s2))
 }
 
-type testCompare struct{}
+type testCompare struct {
+	vs ValueStore
+}
 
 var _ TupleComparator = testCompare{}
 
 func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
 	for i, typ := range desc.Types {
-		cmp = compare(ctx, typ, left.GetField(i), right.GetField(i), desc.vs)
+		cmp = compare(ctx, typ, left.GetField(i), right.GetField(i), tc.vs)
 		if cmp != 0 {
 			break
 		}
@@ -235,8 +237,8 @@ func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *Tupl
 	return
 }
 
-func (tc testCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type, vs ValueStore) int {
-	return compare(ctx, typ, left, right, vs)
+func (tc testCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
+	return compare(ctx, typ, left, right, tc.vs)
 }
 
 func (tc testCompare) Prefix(n int) TupleComparator {
@@ -249,6 +251,10 @@ func (tc testCompare) Suffix(n int) TupleComparator {
 
 func (tc testCompare) Validated(types []Type) TupleComparator {
 	return tc
+}
+
+func (tc testCompare) WithValueStore(vs ValueStore) TupleComparator {
+	return testCompare{vs: vs}
 }
 
 type TestValueStore struct {

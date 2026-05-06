@@ -39,8 +39,6 @@ var _ MapInterface = Map{}
 
 // NewMap creates a Map from the supplied root node
 func NewMap(node *tree.Node, ns tree.NodeStore, keyDesc, valDesc *val.TupleDesc) Map {
-	keyDesc = keyDesc.WithValueStore(ns)
-	valDesc = valDesc.WithValueStore(ns)
 	tuples := tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      node,
 		NodeStore: ns,

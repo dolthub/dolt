@@ -75,7 +75,9 @@ var KeylessCardType = Type{
 	Nullable: false,
 }
 
-type keylessCompare struct{}
+type keylessCompare struct {
+	vs ValueStore
+}
 
 var _ TupleComparator = &keylessCompare{}
 
@@ -85,8 +87,8 @@ func (k *keylessCompare) Compare(ctx context.Context, left, right Tuple, desc *T
 }
 
 // CompareValues implements TupleComparator
-func (k *keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type, vs ValueStore) int {
-	return compare(ctx, typ, left, right, vs)
+func (k *keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
+	return compare(ctx, typ, left, right, k.vs)
 }
 
 // Prefix implements TupleComparator
@@ -101,4 +103,9 @@ func (k *keylessCompare) Suffix(n int) TupleComparator {
 
 func (k *keylessCompare) Validated(types []Type) TupleComparator {
 	return k
+}
+
+// WithValueStore implements TupleComparator
+func (k *keylessCompare) WithValueStore(vs ValueStore) TupleComparator {
+	return &keylessCompare{vs: vs}
 }

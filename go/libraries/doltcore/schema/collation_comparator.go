@@ -26,6 +26,7 @@ import (
 
 type CollationTupleComparator struct {
 	Collations []sql.CollationID // CollationIDs are implemented as uint16
+	vs         val.ValueStore
 }
 
 var _ val.TupleComparator = CollationTupleComparator{}
@@ -37,7 +38,7 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 	var start, stop val.ByteSize
 	for i := 0; i < off; i++ {
 		stop = fast[i]
-		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop], desc.ValueStore())
+		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop], c.vs)
 		if cmp != 0 {
 			return cmp
 		}
@@ -46,7 +47,7 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j), desc.ValueStore())
+		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j), c.vs)
 		if cmp != 0 {
 			return cmp
 		}
@@ -55,22 +56,22 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 }
 
 // CompareValues implements TupleComparator
-func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type, vs val.ValueStore) int {
-	return collationCompare(ctx, typ, c.Collations[index], left, right, vs)
+func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type) int {
+	return collationCompare(ctx, typ, c.Collations[index], left, right, c.vs)
 }
 
 // Prefix implements TupleComparator
 func (c CollationTupleComparator) Prefix(n int) val.TupleComparator {
 	newCollations := make([]sql.CollationID, n)
 	copy(newCollations, c.Collations)
-	return CollationTupleComparator{newCollations}
+	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
 }
 
 // Suffix implements TupleComparator
 func (c CollationTupleComparator) Suffix(n int) val.TupleComparator {
 	newCollations := make([]sql.CollationID, n)
 	copy(newCollations, c.Collations[len(c.Collations)-n:])
-	return CollationTupleComparator{newCollations}
+	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
 }
 
 // Validated implements TupleComparator
@@ -95,7 +96,12 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 		}
 		newCollations[i] = sql.Collation_Unspecified
 	}
-	return CollationTupleComparator{Collations: newCollations}
+	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
+}
+
+// WithValueStore implements TupleComparator
+func (c CollationTupleComparator) WithValueStore(vs val.ValueStore) val.TupleComparator {
+	return CollationTupleComparator{Collations: c.Collations, vs: vs}
 }
 
 func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte, vs val.ValueStore) int {
@@ -113,7 +119,7 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 	if typ.Enc == val.StringEnc {
 		return compareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
 	} else {
-		return (&val.DefaultTupleComparator{}).CompareValues(ctx, 0, left, right, typ, vs)
+		return (&val.DefaultTupleComparator{}).WithValueStore(vs).CompareValues(ctx, 0, left, right, typ)
 	}
 }
 

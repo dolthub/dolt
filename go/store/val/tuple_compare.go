@@ -25,7 +25,7 @@ type TupleComparator interface {
 	Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) int
 
 	// CompareValues compares pairs of values. The index should match the index used to retrieve the type.
-	CompareValues(ctx context.Context, index int, left, right []byte, typ Type, vs ValueStore) int
+	CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int
 
 	// Prefix returns a TupleComparator for the first n types.
 	Prefix(n int) TupleComparator
@@ -36,9 +36,15 @@ type TupleComparator interface {
 	// Validated returns a new TupleComparator that is valid against the given slice of types. Panics f a valid
 	// TupleComparator cannot be returned.
 	Validated(types []Type) TupleComparator
+
+	// WithValueStore returns a copy of this TupleComparator that uses |vs| when comparing values that require
+	// loading content from a content-addressed store (e.g. adaptive-encoded TEXT/BLOB values).
+	WithValueStore(vs ValueStore) TupleComparator
 }
 
-type DefaultTupleComparator struct{}
+type DefaultTupleComparator struct {
+	vs ValueStore
+}
 
 var _ TupleComparator = &DefaultTupleComparator{}
 
@@ -48,7 +54,7 @@ func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple,
 	var start, stop ByteSize
 	for i := 0; i < off; i++ {
 		stop = desc.fast[i]
-		cmp = compare(ctx, desc.Types[i], left[start:stop], right[start:stop], desc.vs)
+		cmp = compare(ctx, desc.Types[i], left[start:stop], right[start:stop], d.vs)
 		if cmp != 0 {
 			return cmp
 		}
@@ -57,7 +63,7 @@ func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple,
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = compare(ctx, typ, left.GetField(j), right.GetField(j), desc.vs)
+		cmp = compare(ctx, typ, left.GetField(j), right.GetField(j), d.vs)
 		if cmp != 0 {
 			return cmp
 		}
@@ -66,8 +72,8 @@ func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple,
 }
 
 // CompareValues implements TupleComparator
-func (d *DefaultTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type, vs ValueStore) (cmp int) {
-	return compare(ctx, typ, left, right, vs)
+func (d *DefaultTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (cmp int) {
+	return compare(ctx, typ, left, right, d.vs)
 }
 
 // Prefix implements TupleComparator
@@ -83,6 +89,11 @@ func (d *DefaultTupleComparator) Suffix(n int) TupleComparator {
 // Validated implements TupleComparator
 func (d *DefaultTupleComparator) Validated(types []Type) TupleComparator {
 	return d
+}
+
+// WithValueStore implements TupleComparator
+func (d *DefaultTupleComparator) WithValueStore(vs ValueStore) TupleComparator {
+	return &DefaultTupleComparator{vs: vs}
 }
 
 func compare(ctx context.Context, typ Type, left, right []byte, vs ValueStore) int {

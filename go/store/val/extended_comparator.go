@@ -22,6 +22,7 @@ import (
 type ExtendedTupleComparator struct {
 	innerCmp TupleComparator
 	handlers []TupleTypeHandler
+	vs       ValueStore
 }
 
 // TODO: compare performance of rolling this logic into the DefaultTupleComparator (nil check or generic handlers that call compare)
@@ -34,7 +35,7 @@ func (c *ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple
 	var start, stop ByteSize
 	for i := 0; i < off; i++ {
 		stop = fast[i]
-		cmp = c.CompareValues(ctx, i, left[start:stop], right[start:stop], desc.Types[i], desc.vs)
+		cmp = c.CompareValues(ctx, i, left[start:stop], right[start:stop], desc.Types[i])
 		if cmp != 0 {
 			return cmp
 		}
@@ -43,7 +44,7 @@ func (c *ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = c.CompareValues(ctx, j, left.GetField(j), right.GetField(j), typ, desc.vs)
+		cmp = c.CompareValues(ctx, j, left.GetField(j), right.GetField(j), typ)
 		if cmp != 0 {
 			return cmp
 		}
@@ -52,7 +53,7 @@ func (c *ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple
 }
 
 // CompareValues implements the TupleComparator interface.
-func (c *ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type, vs ValueStore) int {
+func (c *ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
 	switch typ.Enc {
 	case ExtendedEnc, ExtendedAddrEnc, ExtendedAdaptiveEnc:
 		cmp, err := c.handlers[index].SerializedCompare(ctx, left, right)
@@ -61,18 +62,18 @@ func (c *ExtendedTupleComparator) CompareValues(ctx context.Context, index int, 
 		}
 		return cmp
 	default:
-		return compare(ctx, typ, left, right, vs)
+		return compare(ctx, typ, left, right, c.vs)
 	}
 }
 
 // Prefix implements the TupleComparator interface.
 func (c *ExtendedTupleComparator) Prefix(n int) TupleComparator {
-	return &ExtendedTupleComparator{c.innerCmp.Prefix(n), c.handlers[:n]}
+	return &ExtendedTupleComparator{innerCmp: c.innerCmp.Prefix(n), handlers: c.handlers[:n], vs: c.vs}
 }
 
 // Suffix implements the TupleComparator interface.
 func (c *ExtendedTupleComparator) Suffix(n int) TupleComparator {
-	return &ExtendedTupleComparator{c.innerCmp.Suffix(n), c.handlers[n:]}
+	return &ExtendedTupleComparator{innerCmp: c.innerCmp.Suffix(n), handlers: c.handlers[n:], vs: c.vs}
 }
 
 // Validated implements the TupleComparator interface.
@@ -103,5 +104,14 @@ func (c *ExtendedTupleComparator) Validated(types []Type) TupleComparator {
 	if !hasHandler {
 		return innerCmp
 	}
-	return &ExtendedTupleComparator{innerCmp, c.handlers}
+	return &ExtendedTupleComparator{innerCmp: innerCmp, handlers: c.handlers, vs: c.vs}
+}
+
+// WithValueStore implements the TupleComparator interface.
+func (c *ExtendedTupleComparator) WithValueStore(vs ValueStore) TupleComparator {
+	return &ExtendedTupleComparator{
+		innerCmp: c.innerCmp.WithValueStore(vs),
+		handlers: c.handlers,
+		vs:       vs,
+	}
 }
