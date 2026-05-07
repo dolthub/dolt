@@ -1,0 +1,50 @@
+name: 'Build dolt'
+description: 'Build dolt into ./.ci_bin/dolt. Optionally also build remotesrv and noms when those inputs are true. On Windows, builds run inside the msys2 shell (this action expects setup-go-toolchain to have been run first so that msys2 is installed).'
+
+inputs:
+  remotesrv:
+    description: 'Also build remotesrv into ./.ci_bin/remotesrv.'
+    required: false
+    default: 'false'
+  noms:
+    description: 'Also build noms into ./.ci_bin/noms.'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build dolt
+      if: runner.os != 'Windows'
+      shell: bash
+      working-directory: ./go
+      run: |
+        mkdir -p ../.ci_bin
+        go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+    - name: Build remotesrv
+      if: runner.os != 'Windows' && inputs.remotesrv == 'true'
+      shell: bash
+      working-directory: ./go
+      run: go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
+    - name: Build noms
+      if: runner.os != 'Windows' && inputs.noms == 'true'
+      shell: bash
+      working-directory: ./go
+      run: go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
+    - name: Build dolt (Windows)
+      if: runner.os == 'Windows'
+      shell: 'msys2 {0}'
+      working-directory: ./go
+      run: |
+        mkdir -p ../.ci_bin
+        go.exe build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+    - name: Build remotesrv (Windows)
+      if: runner.os == 'Windows' && inputs.remotesrv == 'true'
+      shell: 'msys2 {0}'
+      working-directory: ./go
+      run: go.exe build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
+    - name: Build noms (Windows)
+      if: runner.os == 'Windows' && inputs.noms == 'true'
+      shell: 'msys2 {0}'
+      working-directory: ./go
+      run: go.exe build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.

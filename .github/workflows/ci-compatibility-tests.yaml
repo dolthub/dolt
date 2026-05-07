@@ -38,10 +38,8 @@ jobs:
           npm i bats
           echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
-      - name: Install Dolt
-        working-directory: ./go
-        run: |
-          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+      - name: Build dolt
+        uses: ./.github/actions/build-dolt
       - name: Setup Dolt Config
         run: |
           dolt config --global --add user.name 'DoltHub Actions'

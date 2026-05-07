@@ -129,13 +129,11 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
-      - name: Install Dolt
-        working-directory: ./go
-        shell: msys2 {0}
-        run: |
-          go.exe build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
-          go.exe build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
-          go.exe build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
+      - name: Build dolt
+        uses: ./.github/actions/build-dolt
+        with:
+          remotesrv: 'true'
+          noms: 'true'
       - name: Setup Dolt Config
         run: |
           dolt config --global --add user.name 'Dolthub Actions'
