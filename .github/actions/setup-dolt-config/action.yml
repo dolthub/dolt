@@ -7,5 +7,6 @@ runs:
     - name: Configure dolt
       shell: bash
       run: |
+        dolt config --global --add metrics.disabled true
         dolt config --global --add user.name 'Dolthub Actions'
         dolt config --global --add user.email 'actions@dolthub.com'
