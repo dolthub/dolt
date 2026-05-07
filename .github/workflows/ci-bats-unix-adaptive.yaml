@@ -64,8 +64,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ^16
-      - name: Create CI Bin
-        run: mkdir -p ./.ci_bin
+      - name: Build dolt
+        uses: ./.github/actions/build-dolt
+        with:
+          remotesrv: 'true'
+          noms: 'true'
       - name: Install Bats
         run: |
           npm i bats
@@ -76,11 +79,6 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
-      - name: Build dolt
-        uses: ./.github/actions/build-dolt
-        with:
-          remotesrv: 'true'
-          noms: 'true'
       - name: Setup Dolt Config
         uses: ./.github/actions/setup-dolt-config
       - name: Install expect

@@ -38,9 +38,12 @@ jobs:
         if: ${{ env.use_credentials != 'true' }}
         with:
           node-version: ^16
-      - name: Create CI Bin
+      - name: Build dolt
         if: ${{ env.use_credentials != 'true' }}
-        run: mkdir -p ./.ci_bin
+        uses: ./.github/actions/build-dolt
+        with:
+          remotesrv: 'true'
+          noms: 'true'
       - name: Install Bats
         if: ${{ env.use_credentials != 'true' }}
         run: |
@@ -53,12 +56,6 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
-      - name: Build dolt
-        if: ${{ env.use_credentials != 'true' }}
-        uses: ./.github/actions/build-dolt
-        with:
-          remotesrv: 'true'
-          noms: 'true'
       - name: Setup Dolt Config
         if: ${{ env.use_credentials != 'true' }}
         uses: ./.github/actions/setup-dolt-config
