@@ -96,11 +96,8 @@ jobs:
         if: ${{ github.event_name == 'repository_dispatch' }}
         with:
           ref: ${{ github.event.client_payload.ref }}
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go/go.mod
-        id: go
+      - name: Set up Go toolchain
+        uses: ./.github/actions/setup-go-toolchain
       - name: Setup Python 3.x
         uses: actions/setup-python@v5
         with:
@@ -132,12 +129,6 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
-      - name: Install ICU4C (Windows)
-        uses: msys2/setup-msys2@v2
-        with:
-          path-type: inherit
-          msystem: UCRT64
-          pacboy: icu:p toolchain:p pkg-config:p
       - name: Install Dolt
         working-directory: ./go
         shell: msys2 {0}

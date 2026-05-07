@@ -26,12 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         if: ${{ env.use_credentials != 'true' }}
-      - name: Setup Go 1.x
+      - name: Set up Go toolchain
         if: ${{ env.use_credentials != 'true' }}
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go/go.mod
-        id: go
+        uses: ./.github/actions/setup-go-toolchain
       - name: Setup Python 3.x
         if: ${{ env.use_credentials != 'true' }}
         uses: actions/setup-python@v5
