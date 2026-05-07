@@ -59,11 +59,8 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 10800 # 3 hours D:
       - uses: actions/checkout@v6
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go/go.mod
-        id: go
+      - name: Set up Go toolchain
+        uses: ./.github/actions/setup-go-toolchain
       - name: Setup Python 3.x
         uses: actions/setup-python@v5
         with:
