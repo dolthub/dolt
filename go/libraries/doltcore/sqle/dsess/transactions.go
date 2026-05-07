@@ -398,16 +398,6 @@ func (tx *DoltTransaction) doCommit(
 		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
 	}
 
-	// TODO: this works probably, but we should write a new Flush() that replicates prollyTableWriter.Close()
-	//   It should call each prollyTableWriter.flush() so it uses the correct auto increment settings.
-	if branchState.writeSession != nil && branchState.writeSession.IsDirty() {
-		newWs, err := branchState.writeSession.Flush(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		workingSet = newWs
-	}
-
 	normalizedDbName := strings.ToLower(branchState.dbState.dbName)
 
 	// Load the start state for this working set from the noms root at tx start

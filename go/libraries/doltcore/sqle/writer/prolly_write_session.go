@@ -286,3 +286,16 @@ func (s *prollyWriteSession) IsDirty() bool {
 	}
 	return false
 }
+
+func (s *prollyWriteSession) FlushAll(ctx *sql.Context) error {
+	// TODO: mutex?
+	for _, writer := range s.tables {
+		if writer.changes == 0 {
+			continue
+		}
+		if err := writer.flush(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}

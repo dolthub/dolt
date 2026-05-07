@@ -458,6 +458,18 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 		return nil
 	}
 
+	// TODO: don't flush ALL working heads?
+	for _, branchState := range d.dbStates {
+		for _, head := range branchState.heads {
+			if head.writeSession == nil {
+				continue
+			}
+			if err = head.writeSession.FlushAll(ctx); err != nil {
+				return err
+			}
+		}
+	}
+
 	dirties := d.dirtyWorkingSets()
 	if len(dirties) == 0 {
 		return nil
@@ -1321,17 +1333,7 @@ func (d *DoltSession) FlushPendingWrites(ctx *sql.Context, dbName string) error 
 		return nil
 	}
 
-	newWs, err := ws.Flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	// TODO: d.SetWorkingSet makes an unnecessary d.lookupDbState()
-	err = d.SetWorkingSet(ctx, dbName, newWs)
-	if err != nil {
-		return err
-	}
-	return nil
+	return ws.FlushAll(ctx)
 }
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
