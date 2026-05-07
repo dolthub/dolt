@@ -133,9 +133,7 @@ jobs:
           remotesrv: 'true'
           noms: 'true'
       - name: Setup Dolt Config
-        run: |
-          dolt config --global --add user.name 'Dolthub Actions'
-          dolt config --global --add user.email 'actions@dolthub.com'
+        uses: ./.github/actions/setup-dolt-config
       - name: Test file
         run: bats --tap ${{ matrix.file }}
         working-directory: ./integration-tests/bats

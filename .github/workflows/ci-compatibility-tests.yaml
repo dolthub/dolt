@@ -39,9 +39,7 @@ jobs:
       - name: Build dolt
         uses: ./.github/actions/build-dolt
       - name: Setup Dolt Config
-        run: |
-          dolt config --global --add user.name 'DoltHub Actions'
-          dolt config --global --add user.email 'actions@dolthub.com'
+        uses: ./.github/actions/setup-dolt-config
       - name: Test all
         run: ./runner.sh
         working-directory: ./integration-tests/compatibility

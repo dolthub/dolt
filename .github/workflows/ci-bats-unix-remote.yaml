@@ -61,9 +61,7 @@ jobs:
           noms: 'true'
       - name: Setup Dolt Config
         if: ${{ env.use_credentials != 'true' }}
-        run: |
-          dolt config --global --add user.name 'Dolthub Actions'
-          dolt config --global --add user.email 'actions@dolthub.com'
+        uses: ./.github/actions/setup-dolt-config
       - name: Install expect
         if: ${{ env.use_credentials != 'true' }}
         run: sudo apt-get install -y expect
