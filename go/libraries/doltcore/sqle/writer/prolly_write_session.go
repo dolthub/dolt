@@ -280,7 +280,7 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 // IsDirty indicates if this prollyWriteSession has pending writes
 func (s *prollyWriteSession) IsDirty() bool {
 	for _, writer := range s.tables {
-		if writer.isDirty {
+		if writer.changes > 0 {
 			return true
 		}
 	}
