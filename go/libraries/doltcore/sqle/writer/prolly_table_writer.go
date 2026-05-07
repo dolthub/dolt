@@ -44,6 +44,7 @@ type prollyTableWriter struct {
 	tbl       *doltdb.Table
 	primary   indexWriter
 	secondary map[string]indexWriter
+	isDirty   bool
 
 	dbName  string
 	tblName doltdb.TableName
@@ -177,6 +178,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	// TODO: need schema name in ai tracker
 	w.aiSet = true
 	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow)
+	w.isDirty = true
 
 	return nil
 }
@@ -196,6 +198,7 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	}
 
 	w.aiSet = true
+	w.isDirty = true
 	return nil
 }
 
@@ -209,6 +212,7 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error)
 	if err := w.primary.Delete(ctx, sqlRow); err != nil {
 		return err
 	}
+	w.isDirty = true
 	return nil
 }
 
@@ -429,5 +433,6 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
+	w.isDirty = false
 	return w.setter(ctx, w.dbName, newRoot)
 }

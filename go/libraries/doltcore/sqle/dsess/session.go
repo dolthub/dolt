@@ -564,7 +564,7 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 	var dirtyStates []*branchState
 	for _, state := range d.dbStates {
 		for _, branchState := range state.heads {
-			if branchState.dirty {
+			if branchState.dirty || (branchState.writeSession != nil && branchState.writeSession.IsDirty()) {
 				dirtyStates = append(dirtyStates, branchState)
 			}
 		}
@@ -1305,6 +1305,33 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.Session.SetSessionVariable(ctx, key, value)
+}
+
+func (d *DoltSession) FlushPendingWrites(ctx *sql.Context, dbName string) error {
+	branchState, ok, err := d.lookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	ws := branchState.writeSession
+	if ws == nil || !ws.IsDirty() {
+		return nil
+	}
+
+	newWs, err := ws.Flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	// TODO: d.SetWorkingSet makes an unnecessary d.lookupDbState()
+	err = d.SetWorkingSet(ctx, dbName, newWs)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
