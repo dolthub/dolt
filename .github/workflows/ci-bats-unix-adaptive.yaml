@@ -65,9 +65,7 @@ jobs:
         with:
           node-version: ^16
       - name: Create CI Bin
-        run: |
-          mkdir -p ./.ci_bin
-          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+        run: mkdir -p ./.ci_bin
       - name: Install Bats
         run: |
           npm i bats

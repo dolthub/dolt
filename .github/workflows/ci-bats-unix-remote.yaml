@@ -40,9 +40,7 @@ jobs:
           node-version: ^16
       - name: Create CI Bin
         if: ${{ env.use_credentials != 'true' }}
-        run: |
-          mkdir -p ./.ci_bin
-          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+        run: mkdir -p ./.ci_bin
       - name: Install Bats
         if: ${{ env.use_credentials != 'true' }}
         run: |
