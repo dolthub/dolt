@@ -1528,18 +1528,26 @@ func areValueSetsDiffable(fromSch, toSch schema.Schema) bool {
 	fromCols := fromSch.GetNonPKCols()
 	toCols := toSch.GetNonPKCols()
 
-	if fromCols.Size() != toCols.Size() {
-		// TODO: In limited cases where columns are dropped or added from the end of the schema,
-		// it may stil be possible to produce a meaningful data diff.
-		return false
+	var sharedCols int
+	if fromCols.Size() < toCols.Size() {
+		sharedCols = fromCols.Size()
+		for i := fromCols.Size(); i < toCols.Size(); i++ {
+			if toCols.GetColumns()[i].Default != "" {
+				// If a column with a default value was added, it is not possible to generate a data diff
+				// without running the schema change in a SQL engine.
+				return false
+			}
+		}
+	} else {
+		sharedCols = toCols.Size()
 	}
 
 	compatChecker := typecompatibility.NewTypeCompatabilityChecker()
-	for i := 0; i < fromCols.Size(); i++ {
+	for i := 0; i < sharedCols; i++ {
 		fromCol := fromCols.GetByIndex(i)
 		toCol := toCols.GetByIndex(i)
 		// TODO: We might get more accurate results from calling MapSchemaBasedOnTagAndName
-		if fromCol.Name != toCol.Name {
+		if fromCol.Name != toCol.Name && fromCol.Tag != toCol.Tag {
 			// If fromCol.Tag == toCol.Tag, this will display a rename.
 			// We ought to be able to generate a data diff here, but we currently panic if a row has changed a value in this column.
 			// TODO: Generate SQL data diffs for renamed columns.
@@ -1610,6 +1618,11 @@ func diffRows(
 		unionSch = fromSqlSch
 	} else {
 		unionSch = unionSchemas(fromSqlSch, toSqlSch)
+	}
+	if dArgs.diffOutput == SQLDiffOutput {
+		// When generating SQL output, it doesn't make sense to generate a data diff for columns that no longer exist.
+		// Thus, we always use the schema on the target commit.
+		unionSch = toSqlSch
 	}
 
 	if dArgs.diffOutput == SQLDiffOutput && !areValueSetsDiffable(fromSch, toSch) {
