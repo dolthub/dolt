@@ -1587,16 +1587,6 @@ func diffRows(
 		toSch = toTableInfo.Sch
 	}
 
-	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
-		err := fmt.Errorf("Primary key sets differ between revisions for table '%s', skipping data diff", tableSummary.ToTableName)
-		// When outputting SQL, it's an error if we can't generate a data diff. Otherwise we write to stderr and continue.
-		if dArgs.diffOutput == SQLDiffOutput {
-			return errhand.VerboseErrorFromError(err)
-		}
-		cli.PrintErrln(err)
-		return nil
-	}
-
 	var toSqlSch, fromSqlSch sql.Schema
 	if fromTableInfo != nil {
 		pkSch, err := sqlutil.FromDoltSchema(sqlCtx, sqlCtx.GetCurrentDatabase(), fromTableInfo.Name, fromSch)
@@ -1614,19 +1604,14 @@ func diffRows(
 	}
 
 	var unionSch sql.Schema
-	if fromSqlSch.Equals(toSqlSch) {
-		unionSch = fromSqlSch
-	} else {
-		unionSch = unionSchemas(fromSqlSch, toSqlSch)
-	}
 	if dArgs.diffOutput == SQLDiffOutput {
 		// When generating SQL output, it doesn't make sense to generate a data diff for columns that no longer exist.
 		// Thus, we always use the schema on the target commit.
 		unionSch = toSqlSch
-	}
-
-	if dArgs.diffOutput == SQLDiffOutput && !areValueSetsDiffable(fromSch, toSch) {
-		return errhand.VerboseErrorFromError(fmt.Errorf("Incompatible schema change, skipping data diff for table '%s'", tableSummary.ToTableName))
+	} else if fromSqlSch.Equals(toSqlSch) {
+		unionSch = fromSqlSch
+	} else {
+		unionSch = unionSchemas(fromSqlSch, toSqlSch)
 	}
 
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
@@ -1652,6 +1637,28 @@ func diffRows(
 		rowWriter = realWriter
 	}
 
+	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+		err := rowWriter.Close(sqlCtx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		err = fmt.Errorf("Primary key sets differ between revisions for table '%s', skipping data diff", tableSummary.ToTableName)
+		// When outputting SQL, it's an error if we can't generate a data diff. Otherwise we write to stderr and continue.
+		if dArgs.diffOutput == SQLDiffOutput {
+			return errhand.VerboseErrorFromError(err)
+		}
+		cli.PrintErrln(err)
+		return nil
+	}
+
+	if dArgs.diffOutput == SQLDiffOutput && !areValueSetsDiffable(fromSch, toSch) {
+		err := rowWriter.Close(sqlCtx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return errhand.VerboseErrorFromError(fmt.Errorf("Incompatible schema change, skipping data diff for table '%s'", tableSummary.ToTableName))
+	}
+
 	// no data diff requested
 	if dArgs.diffParts&DataOnlyDiff == 0 {
 		err = rowWriter.Close(sqlCtx)
@@ -1675,6 +1682,8 @@ func diffRows(
 		}
 		return nil
 	}
+
+	defer rowWriter.Close(sqlCtx)
 
 	columnNames, format := getColumnNames(fromTableInfo, toTableInfo)
 	query := fmt.Sprintf("select %s ? from dolt_diff(?, ?, ?)", format)
@@ -1707,7 +1716,6 @@ func diffRows(
 	}
 
 	defer rowIter.Close(sqlCtx)
-	defer rowWriter.Close(sqlCtx)
 
 	var modifiedColNames map[string]bool
 	if dArgs.skinny {
