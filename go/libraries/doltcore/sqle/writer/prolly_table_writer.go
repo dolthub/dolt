@@ -219,6 +219,15 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error)
 	return nil
 }
 
+// ForceClose implements ForceCloser
+func (w *prollyTableWriter) ForceClose(ctx *sql.Context) error {
+	if w.errEncountered != nil {
+		return w.errEncountered
+	}
+	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
+	return w.flush(ctx)
+}
+
 // StatementBegin implements TableWriter.
 func (w *prollyTableWriter) StatementBegin(ctx *sql.Context) {
 	// Table writers are reused in a session, which means we need to reset the error state resulting from previous

@@ -2944,7 +2944,12 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	// Insert the new row into the db
 	inserter := tbl.Inserter(ctx)
 	defer func() {
-		cErr := inserter.Close(ctx)
+		var cErr error
+		if forcedCloser, ok := inserter.(sql.ForceCloser); ok {
+			cErr = forcedCloser.ForceClose(ctx)
+		} else {
+			cErr = inserter.Close(ctx)
+		}
 		if err == nil {
 			err = cErr
 		}
