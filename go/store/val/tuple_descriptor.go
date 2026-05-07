@@ -762,7 +762,7 @@ func (td *TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value
 		}
 		// for out of band values, we don't want to load the value just to format it, so we return a hex string of the bytes
 		// TODO: this is used in user-facing error messages like duplicate key errors, but in this Format method it's not
-		//  appropriate to make assumptions about what format is appropriate. We should find and fix places that use
+		//  appropriate to make assumptions about what format is correct. We should find and fix places that use
 		//  adaptive encoded values for user-facing messages and decide what string is best there.
 		return hex.EncodeToString(value[1:])
 	case BytesAdaptiveEnc:
@@ -771,7 +771,7 @@ func (td *TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value
 		}
 		// for out of band values, we don't want to load the value just to format it, so we return a hex string of the bytes
 		// TODO: this is used in user-facing error messages like duplicate key errors, but in this Format method it's not
-		//  appropriate to make assumptions about what format is appropriate. We should find and fix places that use
+		//  appropriate to make assumptions about what format is correct. We should find and fix places that use
 		//  adaptive encoded values for user-facing messages and decide what string is best there.
 		return hex.EncodeToString(value)
 	case ByteStringEnc:

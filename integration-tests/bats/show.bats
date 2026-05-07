@@ -255,21 +255,6 @@ assert_has_key_value() {
     [[ "$output" =~ "branch not found: branch1" ]] || false
 }
 
-@test "show: primary index leaf" {
-    if [ "$DOLT_USE_ADAPTIVE_ENCODING" = "true" ]; then
-        skip "adaptive encoding stores small values inline; see 'primary index leaf - adaptive encoding'"
-    fi
-    dolt sql <<EOF
-create table test(pk int primary key, t text, j json);
-insert into test values (0, "Hello", "{}"), (1, "World", "[]");
-EOF
-    run dolt show "#9heeqrj6idph7snnko484sqnobu2r46i"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "SerialMessage" ]] || false
-    [[ "$output" =~ "{ key: 00000000 value:  #0isi5776c0lu0d7rvsnfl80gsdisilsa,  #e6sucun84ck3bgc1p9lorkibp30mvd2f }" ]] || false
-    [[ "$output" =~ "{ key: 01000000 value:  #8scr7d6rtnafqovoa7d06em7jkpil9gg,  #8arugs9qup4pvpmqbf64lpkm9f6cdv74 }" ]] || false
-}
-
 @test "show: primary index leaf - adaptive encoding" {
     if [ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]; then
         skip "requires adaptive encoding; see 'primary index leaf'"
@@ -283,20 +268,6 @@ EOF
     [[ "$output" =~ "SerialMessage" ]] || false
     [[ "$output" =~ "{ key: 00000000 value: f90e805705317c7e38ec595c8152508bbb8160cb9247e6, f90aa00bbf6decf5e8d5529343ff1866e940905e30e685 }" ]] || false
     [[ "$output" =~ "{ key: 01000000 value: f90e80712c1adb322a6ed69f616964bd76ba20b6ec7a8d, f90a9c74faa5553fc209573262e1ea61748437af04a163 }" ]] || false
-}
-
-@test "show: blob leaf" {
-    if [ "$DOLT_USE_ADAPTIVE_ENCODING" = "true" ]; then
-        skip "adaptive encoding stores small values inline; see 'blob leaf - adaptive encoding'"
-    fi
-    dolt sql <<EOF
-create table test(pk int primary key, t text, j json);
-insert into test values (0, "Hello", "{}"), (1, "World", "[]");
-EOF
-    run dolt show "#0isi5776c0lu0d7rvsnfl80gsdisilsa"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "SerialMessage" ]] || false
-    [[ "$output" =~ "Blob - Hello" ]] || false
 }
 
 @test "show: blob leaf - adaptive encoding" {
