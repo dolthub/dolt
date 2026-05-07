@@ -40,11 +40,14 @@ type AutoIncrementGetter interface {
 	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
 }
 
+// FLUSH_THRESHOLD is the max number of writes before we force a flush
+const FLUSH_THRESHOLD = 1024
+
 type prollyTableWriter struct {
 	tbl       *doltdb.Table
 	primary   indexWriter
 	secondary map[string]indexWriter
-	isDirty   bool
+	changes   uint64
 
 	dbName  string
 	tblName doltdb.TableName
@@ -178,7 +181,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	// TODO: need schema name in ai tracker
 	w.aiSet = true
 	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow)
-	w.isDirty = true
+	w.changes++
 
 	return nil
 }
@@ -198,7 +201,7 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	}
 
 	w.aiSet = true
-	w.isDirty = true
+	w.changes++
 	return nil
 }
 
@@ -212,7 +215,7 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error)
 	if err := w.primary.Delete(ctx, sqlRow); err != nil {
 		return err
 	}
-	w.isDirty = true
+	w.changes++
 	return nil
 }
 
@@ -357,6 +360,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
+	w.changes++
 
 	return nil
 }
@@ -433,6 +437,6 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	w.isDirty = false
+	w.changes = 0
 	return w.setter(ctx, w.dbName, newRoot)
 }
