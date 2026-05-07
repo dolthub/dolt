@@ -800,7 +800,7 @@ func (di *doltIndex) HasContentHashedField() bool {
 }
 
 func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
-	if di.HasContentHashedField() {
+	if di.HasContentHashedField() || di.IsSpatial() {
 		return sql.IndexOrderNone
 	}
 
