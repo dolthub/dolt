@@ -756,23 +756,15 @@ func (td *TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value
 		return strconv.FormatUint(v, 10)
 	case StringEnc:
 		return readString(value)
-	case StringAdaptiveEnc:
+	case StringAdaptiveEnc, BytesAdaptiveEnc:
 		if b, isInline := InlineValueBytes(value); isInline {
 			return string(b)
 		}
 		// for out of band values, we don't want to load the value just to format it, so we return a hex string of the bytes
 		// TODO: this is used in user-facing error messages like duplicate key errors, but in this Format method it's not
-		//  appropriate to make assumptions about what format is correct. We should find and fix places that use
-		//  adaptive encoded values for user-facing messages and decide what string is best there.
-		return hex.EncodeToString(value[1:])
-	case BytesAdaptiveEnc:
-		if b, isInline := InlineValueBytes(value); isInline {
-			return string(b)
-		}
-		// for out of band values, we don't want to load the value just to format it, so we return a hex string of the bytes
-		// TODO: this is used in user-facing error messages like duplicate key errors, but in this Format method it's not
-		//  appropriate to make assumptions about what format is correct. We should find and fix places that use
-		//  adaptive encoded values for user-facing messages and decide what string is best there.
+		//  appropriate to make assumptions about what format is correct for specific use cases involving large values.
+		//  We should find places that use adaptive encoded values for user-facing messages and decide what format is
+		//  best there.
 		return hex.EncodeToString(value)
 	case ByteStringEnc:
 		return hex.EncodeToString(value)
