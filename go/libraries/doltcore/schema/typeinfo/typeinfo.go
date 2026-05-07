@@ -29,11 +29,11 @@ import (
 // UseAdaptiveEncoding indicates whether to use adaptive encoding for large/unbounded fields instead of address
 // encoding. Tests can set this variable to true in order to force Dolt to use adaptive encoding for TEXT and BLOB
 // columns. Extended types will always use adaptive encoding for TEXT and BLOB types regardless of this value.
-var UseAdaptiveEncoding = true
+var UseAdaptiveEncoding = false
 
 func init() {
-	if envVal, ok := os.LookupEnv("DOLT_USE_ADAPTIVE_ENCODING"); ok && envVal == "false" {
-		UseAdaptiveEncoding = false
+	if envVal, ok := os.LookupEnv("DOLT_USE_ADAPTIVE_ENCODING"); ok && envVal == "true" {
+		UseAdaptiveEncoding = true
 	}
 }
 
