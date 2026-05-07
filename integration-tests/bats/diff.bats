@@ -2331,9 +2331,8 @@ EOF
     [[ $output = '' ]] || false
 
     run dolt diff HEAD~1 -r sql --filter=modified
-    [ $status -eq 1 ]
+    [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` ADD `val2` int;' ]
-    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
 
     # Test filter with schema changes - modify column type
     dolt sql -q "ALTER TABLE t MODIFY COLUMN val2 varchar(255)"
@@ -2366,11 +2365,9 @@ EOF
     [ $status -eq 0 ]
     [[ $output = '' ]] || false
 
-    # TODO: We should be able to generate data diffs for renamed columns.
     run dolt diff HEAD~1 -r sql  --filter=modified
-    [ $status -eq 1 ]
+    [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `val2` TO `val3`;' ]
-    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
 
     # Test filter with schema changes - drop column
     dolt sql -q "ALTER TABLE t DROP COLUMN val3"
@@ -2386,9 +2383,8 @@ EOF
     [[ $output = '' ]] || false
 
     run dolt diff HEAD~1 -r sql  --filter=modified
-    [ $status -eq 1 ]
+    [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP `val3`;' ]
-    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
 }
 
 @test "diff: --filter with invalid value returns error" {
@@ -2509,23 +2505,13 @@ EOF
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
     dolt checkout start
 
-    # TODO: We should be able to generate data diffs for renamed columns.
-    # dolt checkout -b rename
-    # dolt sql -q "alter table t rename column val2 to val3"
-    # dolt add .
-    # dolt commit -am "rename"
-    # run dolt diff -r sql old
-    # [ $status -eq 0 ]
-    # [[ "$output" =~ 'UPDATE `t` SET `val3`='"'2'"' WHERE `pk`=1;' ]] || false
-    # dolt checkout start
-
-    dolt checkout -b drop_add
-    dolt sql -q "alter table t drop column val2, add column val3 varchar(10)"
+    dolt checkout -b rename
+    dolt sql -q "alter table t rename column val2 to val3"
     dolt add .
-    dolt commit -am "drop_add"
+    dolt commit -am "rename"
     run dolt diff -r sql old
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'UPDATE `t` SET `val3`='"'2'"' WHERE `pk`=1;' ]] || false
     dolt checkout start
 
     dolt checkout -b add
@@ -2539,6 +2525,7 @@ EOF
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
     dolt checkout start
 
+    # Dropping a column that isn't the last column leads to tuples that can't be diffed.
     dolt checkout -b drop
     dolt sql -q "alter table t drop column val1"
     dolt add .
