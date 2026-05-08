@@ -17,7 +17,6 @@ package datas
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	errors2 "gopkg.in/src-d/go-errors.v1"
@@ -210,38 +209,6 @@ func (*simpleCommitMetaGenerator) IsGoodCommit(*Commit) bool {
 
 func MakeCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {
 	return &simpleCommitMetaGenerator{name: name, email: email, timestamp: timestamp, message: defaultInitialCommitMessage, alreadyGenerated: false}
-}
-
-// CleanCommitMessage strips trailing spaces, tabs, and carriage returns from every line of |s|,
-// drops leading and trailing blank lines, collapses runs of multiple blank lines to one,
-// and preserves leading whitespace on non-blank lines. The result never has a trailing newline.
-//
-// TODO(elianddb): add an option to skip cleanup for callers that control the string themselves.
-// See [cleanup modes].
-//
-// [cleanup modes]: https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---cleanupltmodegt
-func CleanCommitMessage(s string) string {
-	lines := strings.Split(s, "\n")
-
-	for i, line := range lines {
-		lines[i] = strings.TrimRight(line, " \t\r")
-	}
-
-	out := lines[:0:0]
-	blanks := 0
-	for _, line := range lines {
-		if line == "" {
-			blanks++
-		} else {
-			if len(out) > 0 && blanks > 0 {
-				out = append(out, "")
-			}
-			blanks = 0
-			out = append(out, line)
-		}
-	}
-
-	return strings.Join(out, "\n")
 }
 
 // signaturePayloadV1 generates the legacy signature payload format that includes only author information.

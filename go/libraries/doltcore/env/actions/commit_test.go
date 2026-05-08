@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datas
+package actions
 
 import (
 	"testing"
@@ -20,11 +20,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCleanCommitMessage verifies that CleanCommitMessage cleans up commit message
-// whitespace: trailing whitespace is stripped per line, leading and trailing blank lines are
-// dropped, and consecutive internal blank lines are collapsed to one.
+// TestCleanCommitMessage covers the [CleanupStrip] rules.
+// See https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---cleanupltmodegt.
 func TestCleanCommitMessage(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name  string
 		input string
 		want  string
@@ -51,9 +50,17 @@ func TestCleanCommitMessage(t *testing.T) {
 		{"trailing carriage return stripped", "hello\r\nworld\r\n", "hello\nworld"},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, CleanCommitMessage(tc.input))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, cleanCommitMessage(tt.input))
 		})
 	}
+}
+
+// TestApplyCleanup verifies that CleanupStrip cleans the message and CleanupVerbatim passes it
+// through unchanged.
+func TestApplyCleanup(t *testing.T) {
+	dirty := "hello   \n\n\nworld   "
+	require.Equal(t, "hello\n\nworld", applyCleanup(CleanupStrip, dirty))
+	require.Equal(t, dirty, applyCleanup(CleanupVerbatim, dirty))
 }

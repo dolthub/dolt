@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -853,9 +852,11 @@ func commitManuallyStagedChangesForStep(ctx *sql.Context, step rebase.RebasePlan
 
 	// If the commit message wasn't set when we created the cherry-pick options, then set it to the step's commit
 	// message. For fixup commits, we don't use their commit message, so we keep it empty, and let the amend commit
-	// codepath use the previous commit's message.
+	// codepath use the previous commit's message. The step's message is the stored description of the commit
+	// being replayed, so preserve it verbatim.
 	if commitProps.Message == "" && step.Action != rebase.RebaseActionFixup {
 		commitProps.Message = step.CommitMsg
+		commitProps.CleanupMode = actions.CleanupVerbatim
 	}
 
 	roots, ok := doltSession.GetRoots(ctx, ctx.GetCurrentDatabase())
@@ -930,7 +931,7 @@ func createCherryPickOptionsForRebaseStep(
 		// Edit action is a straightforward cherry-pick, with a pause after.
 
 	case rebase.RebaseActionReword:
-		options.CommitMessage = datas.CleanCommitMessage(planStep.CommitMsg)
+		options.CommitMessage = planStep.CommitMsg
 
 	case rebase.RebaseActionSquash:
 		options.Amend = true

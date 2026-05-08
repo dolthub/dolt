@@ -127,7 +127,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	msg = datas.CleanCommitMessage(msg)
 	commitStagedProps, committerSet, err := dsess.NewCommitStagedProps(ctx, msg)
 	if err != nil {
 		return "", false, err

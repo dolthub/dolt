@@ -32,9 +32,57 @@ const CommitVerificationFailedPrefix = "commit verification failed:"
 
 var ErrCommitVerificationFailed = goerrors.NewKind(CommitVerificationFailedPrefix + " %s")
 
+// CleanupMode controls how a commit message is cleaned before it is stored.
+type CleanupMode int
+
+const (
+	// CleanupStrip strips trailing whitespace per line, drops leading and trailing blank
+	// lines, and collapses runs of multiple consecutive blank lines to one. This is the
+	// default. See [cleanup modes].
+	//
+	// [cleanup modes]: https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---cleanupltmodegt
+	CleanupStrip CleanupMode = iota
+	// CleanupVerbatim stores the message exactly as provided, with no whitespace changes.
+	// Use this when replaying an already-stored commit whose message should not be altered.
+	// See [cleanup modes].
+	CleanupVerbatim
+)
+
+// cleanCommitMessage implements [CleanupStrip] on |s|.
+func cleanCommitMessage(s string) string {
+	var out []string
+	blanks := 0
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimRight(line, " \t\r")
+		if line == "" {
+			blanks++
+			continue
+		}
+		if len(out) > 0 && blanks > 0 {
+			out = append(out, "")
+		}
+		blanks = 0
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+// TODO(elianddb): expose the remaining cleanup modes via a --cleanup flag on dolt commit and
+// dolt merge. See [cleanup modes].
+//
+// [cleanup modes]: https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---cleanupltmodegt
+func applyCleanup(mode CleanupMode, msg string) string {
+	if mode == CleanupStrip {
+		return cleanCommitMessage(msg)
+	}
+	return msg
+}
+
 // CommitStagedProps contains the parameters for a staged commit operation.
 type CommitStagedProps struct {
-	Message          string
+	Message string
+	// CleanupMode controls how Message is cleaned before storage.
+	CleanupMode      CleanupMode
 	AllowEmpty       bool
 	SkipEmpty        bool
 	Amend            bool
@@ -83,6 +131,7 @@ func GetCommitStaged(
 	db *doltdb.DoltDB,
 	props CommitStagedProps,
 ) (*doltdb.PendingCommit, error) {
+	props.Message = applyCleanup(props.CleanupMode, props.Message)
 	if props.Message == "" {
 		return nil, datas.ErrEmptyCommitMessage
 	}

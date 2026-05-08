@@ -178,7 +178,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 	}
 	msg := fmt.Sprintf("Merge branch '%s' into %s", branchName, headRef.GetPath())
 	if userMsg, mOk := apr.GetValue(cli.MessageArg); mOk {
-		msg = datas.CleanCommitMessage(userMsg)
+		msg = userMsg
 	}
 
 	ws, commit, conflicts, fastForward, message, err := performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg, apr.Contains(cli.SkipVerificationFlag))
