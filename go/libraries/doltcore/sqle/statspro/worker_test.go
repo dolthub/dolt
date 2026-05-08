@@ -123,6 +123,38 @@ func TestAnalyze(t *testing.T) {
 	}
 }
 
+// TestAnalyzeTableResultsNotOverwrittenByWorker verifies that ANALYZE TABLE
+// results are not overwritten by a background statistics worker that began
+// computing on an earlier table state.
+func TestAnalyzeTableResultsNotOverwrittenByWorker(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
+
+	genStart := sc.genCnt.Load()
+	staleStats, err := sc.newStatsForRoot(ctx, nil, true, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, staleStats.stats, "stale stats should not be empty")
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (500, 500)"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "analyze table xy"))
+
+	xyKey := tableIndexesKey{"mydb", "main", "xy", ""}
+	correctStats := sc.Stats.stats[xyKey]
+	require.NotEmpty(t, correctStats, "ANALYZE TABLE should produce stats for xy")
+	correctRowCnt := correctStats[0].RowCnt
+	require.Equal(t, uint64(501), correctRowCnt, "ANALYZE TABLE should count all 501 rows")
+
+	swapped, err := sc.trySwapStats(ctx, genStart, staleStats, nil)
+	require.NoError(t, err)
+	require.False(t, swapped, "a background worker that started before ANALYZE TABLE must not overwrite the results")
+
+	afterStats := sc.Stats.stats[xyKey]
+	require.NotEmpty(t, afterStats, "stats must not be cleared after a background worker runs")
+	require.Equal(t, correctRowCnt, afterStats[0].RowCnt, "ANALYZE TABLE row count must not be changed by a background worker")
+}
+
 func TestModifyColumn(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
