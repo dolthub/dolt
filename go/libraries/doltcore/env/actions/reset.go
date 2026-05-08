@@ -335,4 +335,3 @@ func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryru
 	roots.Working = newRoot
 	return roots, nil
 }
-
