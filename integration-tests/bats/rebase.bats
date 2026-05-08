@@ -192,6 +192,19 @@ message"
     [ "$stored" = "reworded" ]
 }
 
+@test "rebase: commit message survives the pick action" {
+    # See https://git-scm.com/docs/git-rebase#Documentation/git-rebase.txt-pick
+    dolt checkout b1
+    original=$(dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1" | tail -n 1)
+
+    setupCustomEditorScript
+    run dolt rebase -i main
+    [ $status -eq 0 ]
+
+    rebased=$(dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1" | tail -n 1)
+    [ "$rebased" = "$original" ]
+}
+
 @test "rebase: failed rebase will abort and clean up" {
     setupCustomEditorScript "invalidRebasePlan.txt"
     dolt checkout b1
