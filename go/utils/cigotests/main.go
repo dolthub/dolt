@@ -17,14 +17,14 @@
 // It reads config.yaml (embedded at build time) and supports two
 // subcommands:
 //
-//   list
-//     Prints a JSON array of {"os": "...", "shard": "..."} entries to
-//     stdout, one per matrix cell the workflow should run.
+//	list
+//	  Prints a JSON array of {"os": "...", "shard": "..."} entries to
+//	  stdout, one per matrix cell the workflow should run.
 //
-//   run --shard <name> --os <os> --event <github-event>
-//     Resolves the shard's package list, decides whether to enable -race
-//     based on the (os, event) pair, sets per-shard env vars, and execs
-//     `go test`. Cwd must be the Go module root (./go in this repo).
+//	run --shard <name> --os <os> --event <github-event>
+//	  Resolves the shard's package list, decides whether to enable -race
+//	  based on the (os, event) pair, sets per-shard env vars, and execs
+//	  `go test`. Cwd must be the Go module root (./go in this repo).
 //
 // Editing the matrix shape is a config-only operation: edit config.yaml
 // and the workflow re-discovers shards on the next run.
