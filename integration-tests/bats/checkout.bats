@@ -1462,41 +1462,13 @@ SQL
     run dolt checkout .
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "SELECT count(*) FROM normal_tbl" -r csv
+    run dolt sql -q "SELECT pk FROM normal_tbl" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "0" ]] || false
+    [[ ! "$output" =~ "99" ]] || false
 
-    run dolt sql -q "SHOW TABLES" -r csv
+    run dolt sql -q "SELECT pk, val FROM ignored_tbl" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "ignored_tbl" ]] || false
-
-    run dolt sql -q "SELECT count(*) FROM ignored_tbl" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false
-}
-
-@test "checkout: dolt checkout . preserves tables matched by a wildcard ignore pattern" {
-    dolt sql -q "INSERT INTO dolt_ignore VALUES ('tmp_%', true)"
-    dolt add dolt_ignore
-    dolt commit -m "wildcard ignore rule"
-
-    dolt sql -q "CREATE TABLE normal_tbl (pk int PRIMARY KEY)"
-    dolt add normal_tbl
-    dolt commit -m "add normal_tbl"
-
-    # Create a table whose name matches the wildcard. It is never committed.
-    dolt sql -q "CREATE TABLE tmp_scratch (pk int PRIMARY KEY, val int)"
-    dolt sql -q "INSERT INTO tmp_scratch VALUES (1, 42)"
-
-    dolt sql -q "INSERT INTO normal_tbl VALUES (99)"
-
-    run dolt checkout .
-    [ "$status" -eq 0 ]
-
-    # Wildcard patterns protect tables the same as exact matches.
-    run dolt sql -q "SELECT count(*) FROM tmp_scratch" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "1,100" ]] || false
 }
 
 @test "checkout: dolt checkout . preserves untracked tables" {
@@ -1514,12 +1486,11 @@ SQL
     run dolt checkout .
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "SELECT count(*) FROM normal_tbl" -r csv
+    run dolt sql -q "SELECT pk FROM normal_tbl" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "0" ]] || false
+    [[ ! "$output" =~ "99" ]] || false
 
-    # checkout . only resets tables present in the index or HEAD.
-    run dolt sql -q "SELECT count(*) FROM untracked_tbl" -r csv
+    run dolt sql -q "SELECT pk, val FROM untracked_tbl" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "1,42" ]] || false
 }

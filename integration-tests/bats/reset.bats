@@ -360,9 +360,78 @@ SQL
     run dolt reset --hard
     [ "$status" -eq 0 ]
 
-    # private_data must still exist. It was never committed and reset --hard
-    # must not delete working-tree tables that were never added to the index.
-    run dolt sql -q "SELECT count(*) FROM private_data" -r csv
+    run dolt sql -q "SELECT pk, secret FROM private_data" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "1,secret" ]] || false
+
+    run dolt sql -q "SELECT pk, val FROM mytable ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ ! "$output" =~ "2,20" ]] || false
+}
+
+@test "reset: --soft <rev> moves HEAD only and leaves staged tables untouched" {
+    # See https://git-scm.com/docs/git-reset
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, v int);"
+    dolt sql -q "INSERT INTO t VALUES (1, 10);"
+    dolt add .
+    dolt commit -m "c1"
+
+    dolt sql -q "INSERT INTO t VALUES (2, 20);"
+    dolt add .
+    dolt commit -m "c2"
+
+    dolt sql -q "INSERT INTO t VALUES (3, 30);"
+    dolt add .
+
+    run dolt reset --soft HEAD~
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk, v FROM t AS OF STAGED ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+
+    run dolt sql -q "SELECT pk, v FROM t ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+}
+
+@test "reset: <rev> moves HEAD, resets the index, and leaves the working tree alone" {
+    # See https://git-scm.com/docs/git-reset
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, v int);"
+    dolt sql -q "INSERT INTO t VALUES (1, 10);"
+    dolt add .
+    dolt commit -m "c1"
+
+    dolt sql -q "INSERT INTO t VALUES (2, 20);"
+    dolt add .
+    dolt commit -m "c2"
+
+    dolt sql -q "INSERT INTO t VALUES (3, 30);"
+    dolt add .
+    dolt sql -q "INSERT INTO t VALUES (4, 40);"
+
+    run dolt reset HEAD~
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk, v FROM t AS OF STAGED ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ ! "$output" =~ "2,20" ]] || false
+    [[ ! "$output" =~ "3,30" ]] || false
+
+    run dolt sql -q "SELECT pk, v FROM t ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+    [[ "$output" =~ "4,40" ]] || false
 }

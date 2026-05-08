@@ -789,7 +789,7 @@ message"
     run dolt rebase b1
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "SELECT count(*) FROM private_data" -r csv
+    run dolt sql -q "SELECT pk, secret FROM private_data" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "1,secret" ]] || false
 }
