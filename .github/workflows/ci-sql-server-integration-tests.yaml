@@ -25,11 +25,8 @@ jobs:
         adaptive_encoding: ["false", "true"]
     steps:
       - uses: actions/checkout@v6
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go/go.mod
-        id: go
+      - name: Set up Go toolchain
+        uses: ./.github/actions/setup-go-toolchain
       - name: Create CI Bin
         run: |
           mkdir -p ./.ci_bin

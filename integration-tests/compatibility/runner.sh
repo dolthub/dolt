@@ -77,6 +77,11 @@ function test_backward_compatibility() {
 
 function test_bidirectional_compatibility() {
   ver=$1
+
+  if [ -z $ver ]; then
+    return
+  fi
+  
   bin=`download_release "$ver"`
 
   DOLT_NEW=`which dolt`
@@ -94,6 +99,11 @@ function test_bidirectional_compatibility() {
 
 function test_bidirectional_remote_compatibility() {
   ver=$1
+
+  if [ -z $ver ]; then
+    return
+  fi
+
   bin=`download_release "$ver"`
 
   DOLT_NEW=`which dolt`
@@ -136,6 +146,11 @@ function list_2_0_forward_compatible_versions() {
 
 function test_forward_compatibility() {
   ver=$1
+
+  if [ -z $ver ]; then
+    return
+  fi
+  
   bin=`download_release "$ver"`
   DOLT_NEW_BIN=`which dolt`   # capture current dolt before PATH is prepended with old binary
 
