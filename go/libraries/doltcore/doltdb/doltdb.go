@@ -1925,50 +1925,28 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 // certain in-progress operations which cannot be finalized in a timely manner,
 // etc.
 func (ddb *DoltDB) GC(ctx context.Context, gcConfig chunks.GCConfig, safepointController types.GCSafepointController) error {
-	collector, ok := ddb.db.Database.(datas.GarbageCollector)
-	if !ok {
-		return fmt.Errorf("this database does not support garbage collection")
-	}
-
 	err := ddb.pruneUnreferencedDatasets(ctx)
 	if err != nil {
 		return err
 	}
 
-	datasets, err := ddb.db.Datasets(ctx)
-	if err != nil {
-		return err
+	return datas.CollectGarbage(ctx, ddb.db.Database, gcConfig, DoltRefClassifier, safepointController)
+}
+
+// DoltRefClassifier is a datas.RefClassifier that uses Dolt's ref conventions.
+// It classifies branches, remotes, and internal refs as old generation (stable,
+// long-lived) and everything else (tags, workspaces, stashes, etc.) as new
+// generation (ephemeral).
+func DoltRefClassifier(datasetID string) bool {
+	if !ref.IsRef(datasetID) {
+		return false
 	}
-
-	newGen := make(hash.HashSet)
-	oldGen := make(hash.HashSet)
-	err = datasets.IterAll(ctx, func(keyStr string, h hash.Hash) error {
-		var isOldGen bool
-		switch {
-		case ref.IsRef(keyStr):
-			parsed, err := ref.Parse(keyStr)
-			if err != nil && !errors.Is(err, ref.ErrUnknownRefType) {
-				return err
-			}
-
-			refType := parsed.GetType()
-			isOldGen = refType == ref.BranchRefType || refType == ref.RemoteRefType || refType == ref.InternalRefType
-		}
-
-		if isOldGen {
-			oldGen.Insert(h)
-		} else {
-			newGen.Insert(h)
-		}
-
-		return nil
-	})
-
+	parsed, err := ref.Parse(datasetID)
 	if err != nil {
-		return err
+		return false
 	}
-
-	return collector.GC(ctx, gcConfig, oldGen, newGen, safepointController)
+	refType := parsed.GetType()
+	return refType == ref.BranchRefType || refType == ref.RemoteRefType || refType == ref.InternalRefType
 }
 
 func (ddb *DoltDB) ShallowGC(ctx context.Context) error {
