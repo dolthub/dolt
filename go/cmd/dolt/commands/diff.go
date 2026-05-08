@@ -928,7 +928,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 	}
 
 	doltSchemasChanged := false
-	var diffErrors []error
+	var hasdiffErrors bool
 	for _, delta := range deltas {
 		if doltdb.IsFullTextTable(delta.TableName.Name) {
 			continue
@@ -971,7 +971,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			verr := diffUserTable(queryist, sqlCtx, delta, dArgs, dw)
 			if verr != nil {
 				cli.PrintErrln(verr.Verbose())
-				diffErrors = append(diffErrors, verr)
+				hasdiffErrors = true
 			}
 		}
 	}
@@ -988,13 +988,8 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	if len(diffErrors) > 0 {
+	if hasdiffErrors {
 		errorBuilder := errhand.BuildDError("error: encountered errors during diff")
-		if len(diffErrors) == 1 {
-			errorBuilder.AddCause(diffErrors[0])
-		} else {
-			errorBuilder.AddCause(errors.Join(diffErrors...))
-		}
 		return errorBuilder.Build()
 	}
 
