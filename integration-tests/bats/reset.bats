@@ -338,3 +338,100 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "9" ]] || false
 }
+
+@test "reset: dolt reset --hard preserves ignored tables when the ignore rule is committed" {
+    # Commit the ignore rule so it is tracked in HEAD
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('private_data', true)"
+    dolt add dolt_ignore
+    dolt commit -m "add ignore rule for private_data"
+
+    dolt sql -q "CREATE TABLE mytable (pk int PRIMARY KEY, val int)"
+    dolt sql -q "INSERT INTO mytable VALUES (1, 10)"
+    dolt add mytable
+    dolt commit -m "add mytable"
+
+    # Create private_data only in the working tree, never added to the index or committed
+    dolt sql -q "CREATE TABLE private_data (pk int PRIMARY KEY, secret varchar(100))"
+    dolt sql -q "INSERT INTO private_data VALUES (1, 'secret')"
+
+    # Make a working-tree change so there is something for reset --hard to discard
+    dolt sql -q "INSERT INTO mytable VALUES (2, 20)"
+
+    run dolt reset --hard
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk, secret FROM private_data" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,secret" ]] || false
+
+    run dolt sql -q "SELECT pk, val FROM mytable ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ ! "$output" =~ "2,20" ]] || false
+}
+
+@test "reset: --soft <rev> moves HEAD only and leaves staged tables untouched" {
+    # See https://git-scm.com/docs/git-reset
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, v int);"
+    dolt sql -q "INSERT INTO t VALUES (1, 10);"
+    dolt add .
+    dolt commit -m "c1"
+
+    dolt sql -q "INSERT INTO t VALUES (2, 20);"
+    dolt add .
+    dolt commit -m "c2"
+
+    dolt sql -q "INSERT INTO t VALUES (3, 30);"
+    dolt add .
+
+    run dolt reset --soft HEAD~
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk, v FROM t AS OF STAGED ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+
+    run dolt sql -q "SELECT pk, v FROM t ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+}
+
+@test "reset: <rev> moves HEAD, resets the index, and leaves the working tree alone" {
+    # See https://git-scm.com/docs/git-reset
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, v int);"
+    dolt sql -q "INSERT INTO t VALUES (1, 10);"
+    dolt add .
+    dolt commit -m "c1"
+
+    dolt sql -q "INSERT INTO t VALUES (2, 20);"
+    dolt add .
+    dolt commit -m "c2"
+
+    dolt sql -q "INSERT INTO t VALUES (3, 30);"
+    dolt add .
+    dolt sql -q "INSERT INTO t VALUES (4, 40);"
+
+    run dolt reset HEAD~
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk, v FROM t AS OF STAGED ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ ! "$output" =~ "2,20" ]] || false
+    [[ ! "$output" =~ "3,30" ]] || false
+
+    run dolt sql -q "SELECT pk, v FROM t ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+    [[ "$output" =~ "4,40" ]] || false
+}

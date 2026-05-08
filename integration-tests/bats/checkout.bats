@@ -1413,3 +1413,84 @@ SQL
     [ "$status" -eq 0 ]
 }
 
+@test "checkout: dolt checkout HEAD <table> leaves ignored tables unstaged" {
+    # Commit the ignore rule first so it is in effect
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('private_data', true)"
+    dolt add dolt_ignore
+    dolt commit -m "add ignore rule for private_data"
+
+    dolt sql -q "CREATE TABLE mytable (pk int PRIMARY KEY, val int)"
+    dolt sql -q "INSERT INTO mytable VALUES (1, 10)"
+    dolt add mytable
+    dolt commit -m "add mytable"
+
+    # Create private_data only in the working tree, never committed
+    dolt sql -q "CREATE TABLE private_data (pk int PRIMARY KEY, secret varchar(100))"
+    dolt sql -q "INSERT INTO private_data VALUES (1, 'secret')"
+
+    # Modify mytable so checkout HEAD -- mytable has something to restore
+    dolt sql -q "INSERT INTO mytable VALUES (2, 20)"
+
+    run dolt checkout HEAD -- mytable
+    [ "$status" -eq 0 ]
+
+    # dolt_status is queried directly because dolt status hides ignored tables
+    # regardless of whether they are in the index, so the CLI output cannot detect index state.
+    run dolt sql -q "SELECT table_name FROM dolt_status WHERE table_name = 'private_data'" -r csv
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "private_data" ]] || false
+}
+
+@test "checkout: dolt checkout . preserves ignored tables" {
+    # Commit the ignore rule so it is in effect
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('ignored_tbl', true)"
+    dolt add dolt_ignore
+    dolt commit -m "add ignore rule"
+
+    # Create a normal table and commit it so there is a HEAD to restore to
+    dolt sql -q "CREATE TABLE normal_tbl (pk int PRIMARY KEY)"
+    dolt add normal_tbl
+    dolt commit -m "add normal table"
+
+    # Create the ignored table in the working tree. It is never committed.
+    dolt sql -q "CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int)"
+    dolt sql -q "INSERT INTO ignored_tbl VALUES (1, 100)"
+
+    # Make a working-tree change to the normal table so checkout . has work to do
+    dolt sql -q "INSERT INTO normal_tbl VALUES (99)"
+
+    run dolt checkout .
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk FROM normal_tbl" -r csv
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "99" ]] || false
+
+    run dolt sql -q "SELECT pk, val FROM ignored_tbl" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,100" ]] || false
+}
+
+@test "checkout: dolt checkout . preserves untracked tables" {
+    dolt sql -q "CREATE TABLE normal_tbl (pk int PRIMARY KEY)"
+    dolt add normal_tbl
+    dolt commit -m "add normal_tbl"
+
+    # Create a table that has never been added to the index or committed
+    dolt sql -q "CREATE TABLE untracked_tbl (pk int PRIMARY KEY, val int)"
+    dolt sql -q "INSERT INTO untracked_tbl VALUES (1, 42)"
+
+    # Dirty normal_tbl so checkout . has something to restore
+    dolt sql -q "INSERT INTO normal_tbl VALUES (99)"
+
+    run dolt checkout .
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk FROM normal_tbl" -r csv
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "99" ]] || false
+
+    run dolt sql -q "SELECT pk, val FROM untracked_tbl" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,42" ]] || false
+}
