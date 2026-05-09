@@ -164,7 +164,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 func CreateResetArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("reset")
 	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since {{.LessThan}}commit{{.GreaterThan}} are discarded.")
-	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
+	ap.SupportsFlag(SoftResetParam, "", "Resets HEAD to the specified revision without touching the index or the working tables.")
 	return ap
 }
 
