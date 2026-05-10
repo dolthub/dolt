@@ -40,7 +40,9 @@ type AutoIncrementGetter interface {
 	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
 }
 
-// FLUSH_THRESHOLD is the max number of writes before we force a flush
+// FLUSH_THRESHOLD is the max number of writes before we force a flush.
+//
+//	This is to prevent overloading memory with a ton of changes.
 const FLUSH_THRESHOLD = 1024
 
 type prollyTableWriter struct {
@@ -217,15 +219,6 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error)
 	}
 	w.changes++
 	return nil
-}
-
-// ForceClose implements ForceCloser
-func (w *prollyTableWriter) ForceClose(ctx *sql.Context) error {
-	if w.errEncountered != nil {
-		return w.errEncountered
-	}
-	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
-	return w.flush(ctx)
 }
 
 // StatementBegin implements TableWriter.
@@ -448,4 +441,9 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	}
 	w.changes = 0
 	return w.setter(ctx, w.dbName, newRoot)
+}
+
+// SetLazy implements the sql.LazyTableEditor interface.
+func (w *prollyTableWriter) SetLazy(lazy bool) {
+	w.lazy = lazy // TODO: deref and return new
 }
