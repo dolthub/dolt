@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
