@@ -47,6 +47,7 @@ var EmptyColColl = &ColCollection{
 // ColCollection is a collection of columns. As a stand-alone collection, all columns in the collection must have unique
 // tags. To be instantiated as a schema for writing to the database, names must also be unique.
 // See schema.ValidateForInsert for details.
+// TODO: make these pointers
 type ColCollection struct {
 	cols []Column
 	// virtualColumns stores the indexes of any virtual columns in the collection

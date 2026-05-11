@@ -40,21 +40,26 @@ type AutoIncrementGetter interface {
 }
 
 type prollyTableWriter struct {
-	sch                    schema.Schema
-	errEncountered         error
-	primary                indexWriter
-	flusher                dsess.WriteSessionFlusher
-	aiTracker              globalstate.AutoIncrementTracker
-	nextAutoIncrementValue map[string]uint64
-	tbl                    *doltdb.Table
-	secondary              map[string]indexWriter
-	setter                 dsess.SessionRootSetter
-	tableName              doltdb.TableName
-	dbName                 string
-	aiCol                  schema.Column
-	sqlSch                 sql.Schema
-	setAutoIncrement       bool
-	targetStaging          bool
+	tbl       *doltdb.Table
+	primary   indexWriter
+	secondary map[string]indexWriter
+
+	dbName    string
+	tableName doltdb.TableName
+	sch       schema.Schema
+	sqlSch    sql.Schema
+
+	targetStaging bool
+	setter        dsess.SessionRootSetter
+	flusher       dsess.WriteSessionFlusher
+
+	autoIncCol       schema.Column
+	autoIncTracker   globalstate.AutoIncrementTracker
+	manualAutoIncVal uint64
+	manualAutoInc    bool // True when an ALTER TABLE affects the auto increment value
+	autoIncSet       bool // True when an INSERT/UPDATE affects the auto increment value
+
+	errEncountered error
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}
@@ -169,10 +174,11 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 		return err
 	}
 
-	w.setAutoIncrement = true
-
+	// TODO: why do we need w.autoIncSet when we already updated aiTracker?
 	// TODO: need schema name in ai tracker
-	w.aiTracker.Next(ctx, w.tableName.Name, sqlRow)
+	w.autoIncSet = true
+	w.autoIncTracker.Next(ctx, w.tableName.Name, sqlRow) // TODO: this errors all the time wtf? why?
+
 	return nil
 }
 
@@ -217,36 +223,36 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 		return err
 	}
 
-	w.setAutoIncrement = true
+	w.autoIncSet = true
 	return nil
 }
 
 // GetNextAutoIncrementValue implements TableWriter.
 func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return w.aiTracker.Next(ctx, w.tableName.Name, insertVal)
+	return w.autoIncTracker.Next(ctx, w.tableName.Name, insertVal)
 }
 
 // SetAutoIncrementValue implements AutoIncrementSetter.
 func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
+	seq, err := w.autoIncTracker.CoerceAutoIncrementValue(ctx, val)
 	if err != nil {
 		return err
 	}
 
-	w.nextAutoIncrementValue = make(map[string]uint64)
-	w.nextAutoIncrementValue[w.tableName.Name] = seq
+	w.manualAutoIncVal = seq
+	w.manualAutoInc = true
 
-	// The work above is persisted in flush
-	return w.flush(ctx)
+	// The work above is persisted in flushAllTables
+	return w.flush(ctx) // TODO: necessary??
 }
 
 func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
-	return w.aiTracker.AcquireTableLock(ctx, w.tableName.Name)
+	return w.autoIncTracker.AcquireTableLock(ctx, w.tableName.Name)
 }
 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
-	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
+	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
 	if w.errEncountered == nil {
 		return w.flush(ctx)
 	}
@@ -346,7 +352,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
 	w.secondary = newSecondaries
-	w.aiCol = schState.AutoIncCol
+	w.autoIncCol = schState.AutoIncCol
 	w.flusher = sess
 
 	return nil
@@ -392,11 +398,23 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	ws, err := w.flusher.FlushWithAutoIncrementOverrides(ctx, w.setAutoIncrement, w.nextAutoIncrementValue)
+	// TODO: the call stack here is weird...
+	//   This call prollyWriteSession.Flush that calls prollyTableWriter.table
+	//   The working set is updated in prollyWriteSession, but is set here?
+
+	// TODO: this should just flush this table and not every table
+	// TODO: is the only reason we use flusher because of autoinc tracker?
+	ws, err := w.flusher.FlushWithAutoIncrementOverrides(ctx, w.autoIncSet, map[string]uint64{
+		w.tableName.Name: w.manualAutoIncVal,
+	})
 	if err != nil {
 		return err
 	}
 
+	w.flusher.FlushTable(ctx, w.tableName, w.autoIncSet, w.manualAutoInc, w.manualAutoIncVal)
+
+	// TODO: what is targetStaging?
+	// why doesn't prollyWriteSession handle updating the root?
 	if w.targetStaging {
 		return w.setter(ctx, w.dbName, ws.StagedRoot())
 	} else {

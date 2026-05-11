@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -123,18 +122,18 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 	}
 
 	twr := &prollyTableWriter{
-		tableName:     tableName,
-		dbName:        db,
-		primary:       pw,
-		secondary:     sws,
-		tbl:           t,
-		sch:           schState.DoltSchema,
-		sqlSch:        schState.PkSchema.Schema,
-		aiCol:         schState.AutoIncCol,
-		aiTracker:     s.aiTracker,
-		flusher:       s,
-		setter:        setter,
-		targetStaging: targetStaging,
+		tableName:      tableName,
+		dbName:         db,
+		primary:        pw,
+		secondary:      sws,
+		tbl:            t,
+		sch:            schState.DoltSchema,
+		sqlSch:         schState.PkSchema.Schema,
+		autoIncCol:     schState.AutoIncCol,
+		autoIncTracker: s.aiTracker,
+		flusher:        s,
+		setter:         setter,
+		targetStaging:  targetStaging,
 	}
 	s.tables[tableName] = twr
 
@@ -145,13 +144,13 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	return s.flush(ctx, false, nil)
+	return s.flushAllTables(ctx, false, nil)
 }
 
 func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, autoIncSet bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	return s.flush(ctx, autoIncSet, autoIncrements)
+	return s.flushAllTables(ctx, autoIncSet, autoIncrements)
 }
 
 // SetWorkingSet implements WriteSession.
@@ -171,66 +170,76 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	return
 }
 
-// flush is the inner implementation for Flush that does not acquire any locks
-func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (*doltdb.WorkingSet, error) {
-	tables := make(map[doltdb.TableName]*doltdb.Table, len(s.tables))
-	mu := &sync.Mutex{}
-
-	eg, egCtx := errgroup.WithContext(ctx)
-	sqlEgCtx := ctx.WithContext(egCtx)
-
-	for name, wr := range s.tables {
-		eg.Go(func() error {
-			t, err := wr.table(sqlEgCtx)
-			if err != nil {
-				return err
-			}
-
-			// Update this table's auto increment value if it has one. This value comes from the global state unless an
-			// override was specified (e.g. if the next value was set explicitly)
-			if schema.HasAutoIncrement(wr.sch) {
-				// TODO: need schema name for auto increment
-				autoIncVal, err := s.aiTracker.Current(name.Name)
-				if err != nil {
-					return err
-				}
-				override, hasManuallySetAi := manualAutoIncrementsSettings[name.Name]
-				if hasManuallySetAi {
-					autoIncVal = override
-				}
-
-				// Update the table with the new auto-inc value if necessary. If it was set manually via an ALTER TABLE
-				// statement, we defer to the tracker to update the value itself, since this impacts the global state.
-				if hasManuallySetAi {
-					t, err = s.aiTracker.Set(sqlEgCtx, name.Name, t, s.workingSet.Ref(), autoIncVal)
-					if err != nil {
-						return err
-					}
-				} else if autoIncSet {
-					t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
-					if err != nil {
-						return err
-					}
-				}
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			tables[name] = t
-			return nil
-		})
-	}
-	if err := eg.Wait(); err != nil {
+func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, autoIncSet, manualAutoInc bool, manualAutoIncVal uint64) (*doltdb.Table, error) {
+	// Materialize table
+	tblWriter := s.tables[tblName] // TODO: unnecessary lookup that should be removed
+	tbl, err := tblWriter.table(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	var err error
-	flushed := s.workingSet.WorkingRoot()
+	// TODO: this logic should do inside of prollyTableWriter.table()...
+	if schema.HasAutoIncrement(tblWriter.sch) {
+		// TODO: need schema name for auto increment
+		if manualAutoInc {
+			// TODO: why tblWriter.autoIncTracker? is it different than s.aiTracker??
+			tbl, err = tblWriter.autoIncTracker.Set(ctx, tblName.Name, tbl, s.workingSet.Ref(), manualAutoIncVal)
+		} else if autoIncSet {
+			var aiVal uint64
+			aiVal, err = s.aiTracker.Current(tblName.Name)
+			if err != nil {
+				return nil, err
+			}
+			tbl, err = tbl.SetAutoIncrementValue(ctx, aiVal)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return tbl, nil
+}
+
+// flushAllTables is the inner implementation for Flush that does not acquire any locks
+func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (*doltdb.WorkingSet, error) {
+	type result struct {
+		tblName doltdb.TableName
+		tbl     *doltdb.Table
+		err     error
+	}
+
+	wg := sync.WaitGroup{}
+	results := make(chan result, 10)
+	for tblName := range s.tables {
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			manualAutoIncVal, manualAutoInc := manualAutoIncrementsSettings[tblName.Name]
+			tbl, err := s.FlushTable(ctx, tblName, autoIncSet, manualAutoInc, manualAutoIncVal)
+			results <- result{
+				tblName: tblName,
+				tbl:     tbl,
+				err:     err,
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	var flushed doltdb.RootValue
 	if s.targetStaging {
 		flushed = s.workingSet.StagedRoot()
+	} else {
+		flushed = s.workingSet.WorkingRoot()
 	}
-	for name, tbl := range tables {
-		flushed, err = flushed.PutTable(ctx, name, tbl)
+	var err error
+	for res := range results {
+		if res.err != nil {
+			return nil, res.err
+		}
+		flushed, err = flushed.PutTable(ctx, res.tblName, res.tbl)
 		if err != nil {
 			return nil, err
 		}
@@ -241,7 +250,6 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 	} else {
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
-
 	return s.workingSet, nil
 }
 
