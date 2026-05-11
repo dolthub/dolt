@@ -4674,6 +4674,84 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_reset('--hard') preserves untracked tables after resetting to a divergent branch",
+		SetUpScript: []string{
+			"call dolt_checkout('-b', 'feat');",
+			"create table bar (code varchar(64) primary key);",
+			"call dolt_commit('-Am', 'add bar');",
+			"call dolt_checkout('main');",
+			"create table users (name varchar(64) primary key);",
+			"insert into users values ('alice');",
+			"create table posts (title varchar(64) primary key);",
+			"insert into posts values ('hello');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard', 'feat');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select name from users;",
+				Expected: []sql.Row{{"alice"}},
+			},
+			{
+				Query:    "select title from posts;",
+				Expected: []sql.Row{{"hello"}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		// Both untracked tables happen to share the same internal column tag so each is at risk of being dropped.
+		Name: "dolt_reset('--hard') preserves two untracked tables that share a column tag",
+		SetUpScript: []string{
+			"call dolt_branch('empty');",
+			"create table c (raw varchar(64) primary key);",
+			"insert into c values ('c_data');",
+			"create table e (str varchar(64) primary key);",
+			"insert into e values ('e_data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard', 'empty');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select raw from c;",
+				Expected: []sql.Row{{"c_data"}},
+			},
+			{
+				Query:    "select str from e;",
+				Expected: []sql.Row{{"e_data"}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_reset('--hard') replaces an untracked table when the target has the same name",
+		SetUpScript: []string{
+			"call dolt_checkout('-b', 'feat');",
+			"create table overlap (code varchar(64) primary key);",
+			"insert into overlap values ('feat_data');",
+			"call dolt_commit('-Am', 'add overlap');",
+			"call dolt_checkout('main');",
+			"create table overlap (code varchar(64) primary key);",
+			"insert into overlap values ('main_data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard', 'feat');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select code from overlap;",
+				// The target branch version wins over the untracked copy.
+				Expected: []sql.Row{{"feat_data"}},
+			},
+		},
+	},
 }
 
 func gcSetup() []string {
