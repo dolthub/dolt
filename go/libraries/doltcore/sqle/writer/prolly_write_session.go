@@ -16,10 +16,10 @@ package writer
 
 import (
 	"context"
-	"golang.org/x/sync/errgroup"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
