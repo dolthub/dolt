@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cockroachdb/apd/v3"
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/store/d"
