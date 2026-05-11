@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"golang.org/x/sync/errgroup"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -208,11 +209,12 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, m
 		err     error
 	}
 
-	wg := sync.WaitGroup{}
+	// Start flushing each table, and send to results channel
 	results := make(chan result, 10)
+	wg := sync.WaitGroup{}
+	wg.Add(len(s.tables))
 	for tblName := range s.tables {
 		go func() {
-			wg.Add(1)
 			defer wg.Done()
 			manualAutoIncVal, manualAutoInc := manualAutoIncrementsSettings[tblName.Name]
 			tbl, err := s.FlushTable(ctx, tblName, autoIncSet, manualAutoInc, manualAutoIncVal)
@@ -228,21 +230,29 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, m
 		close(results)
 	}()
 
+	// Drain from results channel, updating RootValue each time
 	var flushed doltdb.RootValue
 	if s.targetStaging {
 		flushed = s.workingSet.StagedRoot()
 	} else {
 		flushed = s.workingSet.WorkingRoot()
 	}
-	var err error
-	for res := range results {
-		if res.err != nil {
-			return nil, res.err
+	eg := errgroup.Group{}
+	eg.Go(func() error {
+		for res := range results {
+			if res.err != nil {
+				return res.err
+			}
+			var err error
+			flushed, err = flushed.PutTable(ctx, res.tblName, res.tbl)
+			if err != nil {
+				return err
+			}
 		}
-		flushed, err = flushed.PutTable(ctx, res.tblName, res.tbl)
-		if err != nil {
-			return nil, err
-		}
+		return nil
+	})
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
 
 	if s.targetStaging {
