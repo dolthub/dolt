@@ -173,6 +173,30 @@ The two items most likely to slip the estimate:
 - The prolly artifact-map API gap (step 2). If a new prefix-cursor primitive is required rather than a thin helper, add ~1–2 days.
 - Eager-vs-lazy cache tuning (step 3). The threshold should be benchmark-driven; if benchmarks reveal a regression on the `Write`-permission path's branch predictor, add 0.5–1 day to refactor the short-circuit.
 
+### If Claude Code drives the implementation
+
+Active coding compresses to roughly **9–14 hours** of session time; the calendar still depends on review and test wall-clock.
+
+| Phase | Human days | AI active session |
+|---|---|---|
+| Semantics lock-down (step 1) | 0.5 | Bounded by user decisions, not implementation |
+| Helper + prolly API (step 2) | 1.0 | 1–2 hours |
+| Writer-gate split + cache (step 3) | 3.0 | 3–5 hours |
+| Permission relaxation (step 4) | 0.5 | ~30 min |
+| Surrounding-ops audit (step 5) | 1.0 | 1–2 hours |
+| Tests + benchmarks (step 6) | 2.0 | 2–4 hours active + test wall-clock |
+| Docs/changelog (step 7) | 1.0 | ~30 min (workbench coordination still user-bound) |
+
+What doesn't compress:
+
+- **User decisions in step 1.** Every mid-implementation round-trip adds latency.
+- **Test wall-clock.** Targeted enginetest `-run` is minutes; a full bats sweep is tens of minutes; full regression is hours. If 5–10 iterations are needed against failing tests, this dominates total time, not the coding.
+- **Human code review.** Per-row write-path changes will get careful review — expect 2–5 review rounds, calendar-bound by reviewers.
+- **Prolly API discovery.** Worst case adds a few hours of code-reading if a new cursor primitive is needed.
+- **Cache tuning.** Benchmark-driven loop is build → run at 10k/100k conflicts → analyze → adjust. Clock time, not effort.
+
+End-to-end with an active reviewer and same-day decisions: **~1–2 working days to "passing local tests, ready for review"**, **3–7 calendar days to merged**.
+
 ## Risks
 
 - **Per-row check cost on conflict-edit writers.** Covered above. The mitigation is the session-scoped cache and the eager-vs-lazy threshold; the residual risk is a pathological conflict-set size, which is bounded by the merge algorithm's own cost.
