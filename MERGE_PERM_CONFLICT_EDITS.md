@@ -147,6 +147,32 @@ Recommend starting with eager materialization gated on conflict count (e.g., <50
 
 This keeps the regression on `Write`-permission write paths to a single predictable branch.
 
+## Effort estimate
+
+Engineer-days for one engineer already familiar with the Dolt SQL layer and branch control. Assumes no major surprise in the prolly artifact-map API.
+
+| Step | Work | Days |
+|---|---|---|
+| 1 | Semantics lock-down (team sync, edge-case decisions) | 0.5 |
+| 2 | `CheckMergeConflictEditAccess` helper + `HasPKConflict` prolly addition | 1.0 |
+| 3 | Statement-level admit + `WriterState` conflict-edit flag | 1.0 |
+| 3 | Per-row check, eager-materialized cache | 1.5 |
+| 3 | Lazy fallback + size threshold | 0.5 |
+| 4 | Relax `dolt_conflicts_<t>` deletes + `DoDoltConflictsResolve` | 0.5 |
+| 5 | Surrounding-ops audit + glue (abort, commit, etc.) | 1.0 |
+| 6 | Unit/enginetest coverage + bats integration | 1.5 |
+| 6 | Benchmarks at 10k/100k conflict scale | 0.5 |
+| 7 | Docs, changelog, workbench coordination | 1.0 |
+| | **Subtotal** | **9.0** |
+| | Risk buffer (prolly cursor primitive, cache invalidation edges, review cycles) | +3–5 |
+| | **Total** | **12–14 engineer-days** |
+
+Calendar time: ~2.5–3 weeks for one engineer end-to-end, including review and workbench-side coordination. Could compress to ~2 weeks if steps 6 and 7 run in parallel with a separate reviewer/PM.
+
+The two items most likely to slip the estimate:
+- The prolly artifact-map API gap (step 2). If a new prefix-cursor primitive is required rather than a thin helper, add ~1–2 days.
+- Eager-vs-lazy cache tuning (step 3). The threshold should be benchmark-driven; if benchmarks reveal a regression on the `Write`-permission path's branch predictor, add 0.5–1 day to refactor the short-circuit.
+
 ## Risks
 
 - **Per-row check cost on conflict-edit writers.** Covered above. The mitigation is the session-scoped cache and the eager-vs-lazy threshold; the residual risk is a pathological conflict-set size, which is bounded by the merge algorithm's own cost.
