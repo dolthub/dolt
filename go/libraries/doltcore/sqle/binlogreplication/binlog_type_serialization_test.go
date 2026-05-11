@@ -926,7 +926,7 @@ func TestDecimalSerializer(t *testing.T) {
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
 		dec, _, err := apd.NewFromString("0")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, *dec)
+		tupleBuilder.PutDecimal(0, dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -946,7 +946,7 @@ func TestDecimalSerializer(t *testing.T) {
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
 		dec, _, err := apd.NewFromString("100")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, *dec)
+		tupleBuilder.PutDecimal(0, dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -966,7 +966,7 @@ func TestDecimalSerializer(t *testing.T) {
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
 		dec, _, err := apd.NewFromString("1.1")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, *dec)
+		tupleBuilder.PutDecimal(0, dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -986,7 +986,7 @@ func TestDecimalSerializer(t *testing.T) {
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
 		dec, _, err := apd.NewFromString("100")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, *dec)
+		tupleBuilder.PutDecimal(0, dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -1006,7 +1006,7 @@ func TestDecimalSerializer(t *testing.T) {
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
 		dec, _, err := apd.NewFromString("1234567890.1234")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, *dec)
+		tupleBuilder.PutDecimal(0, dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -1026,7 +1026,7 @@ func TestDecimalSerializer(t *testing.T) {
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
 		dec, _, err := apd.NewFromString("-1234567890.1234")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, *dec)
+		tupleBuilder.PutDecimal(0, dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 
@@ -1046,7 +1046,7 @@ func TestDecimalSerializer(t *testing.T) {
 		tupleDesc, tupleBuilder := newTupleBuilderForEncoding(val.DecimalEnc)
 		dec, _, err := apd.NewFromString("1234567890.0001")
 		require.NoError(t, err)
-		tupleBuilder.PutDecimal(0, *dec)
+		tupleBuilder.PutDecimal(0, dec)
 		tuple, err := tupleBuilder.Build(context.Background(), buffPool)
 		require.NoError(t, err)
 

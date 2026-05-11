@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/json"
@@ -663,36 +664,36 @@ var collationTests = []schemaMergeTest{
 		dataTests: []dataTest{
 			{
 				name:     "no data change",
-				ancestor: singleRow(1, 1, 1, "foo", sqltypes.DecimalFromInt64WithScale(8, 0)),
-				left:     singleRow(1, 1, 2, "foo", sqltypes.DecimalFromInt64WithScale(8, 0)),
-				right:    singleRow(1, 2, 1, "foo", sqltypes.DecimalFromInt64WithScale(8, 0)),
-				merged:   singleRow(1, 2, 2, "foo", sqltypes.DecimalFromInt64WithScale(8, 0)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(8, 0)),
+				left:     singleRow(1, 1, 2, "foo", apd.New(8, 0)),
+				right:    singleRow(1, 2, 1, "foo", apd.New(8, 0)),
+				merged:   singleRow(1, 2, 2, "foo", apd.New(8, 0)),
 			},
 			{
 				name:     "replace varchar with equal replacement",
-				ancestor: singleRow(1, 1, 1, "foo", sqltypes.DecimalFromInt64WithScale(100, 0)),
-				left:     singleRow(1, 1, 2, "FOO", sqltypes.DecimalFromInt64WithScale(100, 0)),
-				right:    singleRow(1, 2, 1, "foo", sqltypes.DecimalFromInt64WithScale(100, 0)),
-				merged:   singleRow(1, 2, 2, "foo", sqltypes.DecimalFromInt64WithScale(100, 0)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:     singleRow(1, 1, 2, "FOO", apd.New(100, 0)),
+				right:    singleRow(1, 2, 1, "foo", apd.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "foo", apd.New(100, 0)),
 			},
 			{
 				name:         "conflict removal and replace varchar with equal replacement",
-				ancestor:     singleRow(1, 1, 1, "foo", sqltypes.DecimalFromInt64WithScale(100, 0)),
-				left:         singleRow(1, 1, 2, "FOO", sqltypes.DecimalFromInt64WithScale(100, 0)),
+				ancestor:     singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:         singleRow(1, 1, 2, "FOO", apd.New(100, 0)),
 				right:        nil,
 				dataConflict: true,
 			},
 			{
 				name:     "replace decimal with equal replacement",
-				ancestor: singleRow(1, 1, 1, "foo", sqltypes.DecimalFromInt64WithScale(100, 0)),
-				left:     singleRow(1, 1, 2, "foo", sqltypes.DecimalFromInt64WithScale(1, 2)),
-				right:    singleRow(1, 2, 1, "foo", sqltypes.DecimalFromInt64WithScale(100, 0)),
-				merged:   singleRow(1, 2, 2, "foo", sqltypes.DecimalFromInt64WithScale(1, 2)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:     singleRow(1, 1, 2, "foo", apd.New(1, 2)),
+				right:    singleRow(1, 2, 1, "foo", apd.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "foo", apd.New(1, 2)),
 			},
 			{
 				name:     "conflict removal and replace decimal with equal replacement",
-				ancestor: singleRow(1, 1, 1, "foo", sqltypes.DecimalFromInt64WithScale(100, 0)),
-				left:     singleRow(1, 1, 1, "foo", sqltypes.DecimalFromInt64WithScale(1, 2)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:     singleRow(1, 1, 1, "foo", apd.New(1, 2)),
 				right:    nil,
 				merged:   nil,
 			},
