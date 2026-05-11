@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // resetHardTables resolves a new HEAD commit from a refSpec and updates working set roots by
@@ -70,11 +71,10 @@ func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr str
 	return newHead, doltdb.Roots{Head: roots.Head, Working: newWorking, Staged: roots.Head}, nil
 }
 
-// MoveUntrackedTables copies tables present in |sourceWorking| but absent from |sourceStaged|
-// onto |target|, returning the resulting root. Tables that name-collide with one already in
-// |target| are skipped so the target version wins. Tables whose column tags collide with one
-// in |target| are dropped silently.
-// TODO(elianddb): retag colliding columns instead of dropping the table.
+// MoveUntrackedTables copies tables that are in |sourceWorking| but not in |sourceStaged|
+// into |target| and returns the updated root. If a table shares a name with one already in
+// |target|, the version in |target| is kept. If a table has column tags that conflict with
+// those in |target|, the conflicting tags are replaced before the table is copied.
 func MoveUntrackedTables(ctx context.Context, sourceWorking, sourceStaged, target doltdb.RootValue) (doltdb.RootValue, error) {
 	untracked, err := doltdb.GetAllSchemas(ctx, sourceWorking)
 	if err != nil {
@@ -93,24 +93,17 @@ func MoveUntrackedTables(ctx context.Context, sourceWorking, sourceStaged, targe
 	if err != nil {
 		return nil, err
 	}
-	targetTags := make(map[uint64]struct{})
-	for _, sch := range targetSchemas {
-		for _, tag := range sch.GetAllCols().Tags {
-			targetTags[tag] = struct{}{}
+
+	// occupiedTags starts with all column tags in |target| and grows as each untracked
+	// table is processed so no two copied tables end up sharing a tag.
+	occupiedTags := make(schema.TagMapping)
+	for tblName, tsch := range targetSchemas {
+		for _, t := range tsch.GetAllCols().Tags {
+			occupiedTags.Add(t, tblName.Name)
 		}
 	}
 
 	for name, sch := range untracked {
-		for _, col := range sch.GetAllCols().GetColumns() {
-			if _, ok := targetTags[col.Tag]; ok {
-				delete(untracked, name)
-				break
-			}
-		}
-	}
-
-	for name := range untracked {
-		// Skip when target has a table of the same name so the target version wins.
 		if _, exists := targetSchemas[name]; exists {
 			continue
 		}
@@ -121,13 +114,46 @@ func MoveUntrackedTables(ctx context.Context, sourceWorking, sourceStaged, targe
 		if !exists {
 			return nil, fmt.Errorf("untracked table %s does not exist in working set", name)
 		}
+		tbl, err = retagCollidingColumns(ctx, tbl, sch, name.Name, occupiedTags)
+		if err != nil {
+			return nil, err
+		}
 		target, err = target.PutTable(ctx, name, tbl)
 		if err != nil {
-			return nil, fmt.Errorf("failed to write table back to database: %s", err)
+			return nil, fmt.Errorf("failed to write table back to database: %w", err)
 		}
 	}
 
 	return target, nil
+}
+
+// retagCollidingColumns returns |tbl| with any column tag that conflicts with |occupiedTags|
+// replaced by a new unique tag. |tableName| is passed to the tag generator as a seed input.
+// Every column's final tag (original or replacement) is registered in |occupiedTags| so that
+// subsequent calls in the same pass never collide with any tag belonging to this table.
+func retagCollidingColumns(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, tableName string, occupiedTags schema.TagMapping) (*doltdb.Table, error) {
+	columns := sch.GetAllCols().GetColumns()
+	var retagged bool
+	for idx, column := range columns {
+		if occupiedTags.Contains(column.Tag) {
+			precedingKinds := make([]types.NomsKind, idx)
+			for j, preceding := range columns[:idx] {
+				precedingKinds[j] = preceding.Kind
+			}
+			column.Tag = schema.AutoGenerateTag(occupiedTags, tableName, precedingKinds, column.Name, column.Kind)
+			columns[idx] = column
+			retagged = true
+		}
+		occupiedTags.Add(column.Tag, tableName)
+	}
+	if !retagged {
+		return tbl, nil
+	}
+	newSch, err := schema.RebuildWithColumns(sch, columns)
+	if err != nil {
+		return nil, err
+	}
+	return tbl.UpdateSchema(ctx, newSch)
 }
 
 func GetAllTableNames(ctx context.Context, root doltdb.RootValue) []doltdb.TableName {
