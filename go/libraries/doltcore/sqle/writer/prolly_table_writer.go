@@ -51,7 +51,7 @@ type prollyTableWriter struct {
 	sqlSch  sql.Schema
 
 	setter    dsess.SessionRootSetter
-	writeSess dsess.WriteSession
+	writeSess     dsess.WriteSession
 
 	aiCol      schema.Column
 	aiTracker  globalstate.AutoIncrementTracker
