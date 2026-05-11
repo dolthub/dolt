@@ -132,7 +132,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 		sqlSch:         schState.PkSchema.Schema,
 		autoIncCol:     schState.AutoIncCol,
 		autoIncTracker: s.aiTracker,
-		flusher:        s,
+		writeSess:      s,
 		setter:         setter,
 		targetStaging:  targetStaging,
 	}
@@ -171,7 +171,7 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	return
 }
 
-func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, autoIncSet, manualAutoInc bool, manualAutoIncVal uint64) (*doltdb.Table, error) {
+func (s *prollyWriteSession) MaterializeTable(ctx *sql.Context, tblName doltdb.TableName, autoIncSet, manualAutoInc bool, manualAutoIncVal uint64) (*doltdb.Table, error) {
 	// Materialize table
 	tblWriter := s.tables[tblName] // TODO: unnecessary lookup that should be removed
 	tbl, err := tblWriter.table(ctx)
@@ -201,6 +201,54 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 	return tbl, nil
 }
 
+func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, autoIncSet, manualAutoInc bool, manualAutoIncVal uint64) (*doltdb.WorkingSet, error) {
+	// Materialize table
+	tblWriter := s.tables[tblName] // TODO: unnecessary lookup that should be removed
+	tbl, err := tblWriter.table(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: this logic should do inside of prollyTableWriter.table()...
+	if schema.HasAutoIncrement(tblWriter.sch) {
+		// TODO: need schema name for auto increment
+		if manualAutoInc {
+			// TODO: why tblWriter.autoIncTracker? is it different than s.aiTracker??
+			tbl, err = tblWriter.autoIncTracker.Set(ctx, tblName.Name, tbl, s.workingSet.Ref(), manualAutoIncVal)
+		} else if autoIncSet {
+			var aiVal uint64
+			aiVal, err = s.aiTracker.Current(tblName.Name)
+			if err != nil {
+				return nil, err
+			}
+			tbl, err = tbl.SetAutoIncrementValue(ctx, aiVal)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var flushed doltdb.RootValue
+	if s.targetStaging {
+		flushed = s.workingSet.StagedRoot()
+	} else {
+		flushed = s.workingSet.WorkingRoot()
+	}
+
+	flushed, err = flushed.PutTable(ctx, tblName, tbl)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.targetStaging {
+		s.workingSet = s.workingSet.WithStagedRoot(flushed)
+	} else {
+		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
+	}
+
+	return s.workingSet, nil
+}
+
 // flushAllTables is the inner implementation for Flush that does not acquire any locks
 func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (*doltdb.WorkingSet, error) {
 	type result struct {
@@ -217,7 +265,7 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, m
 		go func() {
 			defer wg.Done()
 			manualAutoIncVal, manualAutoInc := manualAutoIncrementsSettings[tblName.Name]
-			tbl, err := s.FlushTable(ctx, tblName, autoIncSet, manualAutoInc, manualAutoIncVal)
+			tbl, err := s.MaterializeTable(ctx, tblName, autoIncSet, manualAutoInc, manualAutoIncVal)
 			results <- result{
 				tblName: tblName,
 				tbl:     tbl,

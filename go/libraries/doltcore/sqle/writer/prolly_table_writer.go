@@ -51,7 +51,7 @@ type prollyTableWriter struct {
 
 	targetStaging bool
 	setter        dsess.SessionRootSetter
-	flusher       dsess.WriteSessionFlusher
+	writeSess     dsess.WriteSession
 
 	autoIncCol       schema.Column
 	autoIncTracker   globalstate.AutoIncrementTracker
@@ -353,7 +353,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.autoIncCol = schState.AutoIncCol
-	w.flusher = sess
+	w.writeSess = sess
 
 	return nil
 }
@@ -398,20 +398,10 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	// TODO: the call stack here is weird...
-	//   This call prollyWriteSession.Flush that calls prollyTableWriter.table
-	//   The working set is updated in prollyWriteSession, but is set here?
-
-	// TODO: this should just flush this table and not every table
-	// TODO: is the only reason we use flusher because of autoinc tracker?
-	ws, err := w.flusher.FlushWithAutoIncrementOverrides(ctx, w.autoIncSet, map[string]uint64{
-		w.tableName.Name: w.manualAutoIncVal,
-	})
+	ws, err := w.writeSess.FlushTable(ctx, w.tableName, w.autoIncSet, w.manualAutoInc, w.manualAutoIncVal)
 	if err != nil {
 		return err
 	}
-
-	w.flusher.FlushTable(ctx, w.tableName, w.autoIncSet, w.manualAutoInc, w.manualAutoIncVal)
 
 	// TODO: what is targetStaging?
 	// why doesn't prollyWriteSession handle updating the root?
