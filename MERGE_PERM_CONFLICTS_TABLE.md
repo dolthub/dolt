@@ -11,30 +11,27 @@ Let a user who holds only `Permissions_Merge` on a branch resolve a merge that p
 
 ## How the conflicts table writes work today
 
-The UPDATE and DELETE paths are **asymmetric** in their current permission behavior, and the plan has to handle each differently.
+> **Prior change**: PR [#11030](https://github.com/dolthub/dolt/pull/11030) added an explicit `Permissions_Write` gate at `ProllyConflictsTable.Deleter` (closing the pre-existing bug where any session could `DELETE FROM dolt_conflicts_<t>`). The "today" section below reflects the post-#11030 state.
 
-**UPDATE on `dolt_conflicts_<t>` — gated by source-table `Write`:**
+UPDATE and DELETE are now both gated by `Permissions_Write`, but via different mechanisms:
 
-- `ProllyConflictsTable.Updater` (`go/libraries/doltcore/sqle/dtables/conflicts_tables_prolly.go:124`) returns a `prollyConflictOurTableUpdater`.
-- `newProllyConflictOurTableUpdater` (line 554-561) **eagerly constructs the source-table updater**: `ourUpdater := ct.sqlTable.Updater(ctx)` (line 555). That call goes through the source table's `Updater` factory in `tables.go` (~L1110), which runs `CheckAccessForDb(..., Permissions_Write)` at construction time.
+**UPDATE on `dolt_conflicts_<t>` — gated by source-table `Write` (via delegation):**
+
+- `ProllyConflictsTable.Updater` (`go/libraries/doltcore/sqle/dtables/conflicts_tables_prolly.go:124`) returns a `prollyConflictOurTableUpdater` — no check at this site.
+- `newProllyConflictOurTableUpdater` (line 555) **eagerly constructs the source-table updater**: `ourUpdater := ct.sqlTable.Updater(ctx)`. That call goes through the source-table `Updater` factory in `tables.go` (~L1110), which runs `CheckAccessForDb(..., Permissions_Write)` at construction time.
 - The `Update` method (line 564-577) then delegates row writes to `cu.srcUpdater.Update`.
-- Net: today an UPDATE on `dolt_conflicts_<t>` requires `Permissions_Write` on the underlying source table.
+- Net: an UPDATE on `dolt_conflicts_<t>` requires `Permissions_Write` on the underlying source table, enforced transitively.
 
-**DELETE on `dolt_conflicts_<t>` — ungated by branch control (verified, pre-existing bug):**
+**DELETE on `dolt_conflicts_<t>` — gated explicitly at the conflicts-table factory (post-#11030):**
 
-- `ProllyConflictsTable.Deleter` (line 128) returns a `prollyConflictDeleter`. No permission check.
-- `newProllyConflictDeleter` (line 614-640) does **not** construct any source-table writer. It opens an `ArtifactsEditor` directly: `ed := ct.artM.Editor()` (line 616) and writes only to the conflicts artifact map. No permission check.
-- The `Delete` method (line 644) operates on `cd.ed` and tuple builders only. No permission check.
-- Higher-up table resolution (`go/libraries/doltcore/sqle/database.go:551-582`, `getTableInsensitiveWithRoot` → `dtables.NewConflictsTable` at line 578) returns the conflicts table unwrapped; no analyzer-level or session-level interception fires.
-- Of the 31 `CheckAccessForDb` callsites in the sqle package, **none** are on the conflicts-table DELETE path.
-- Compare to `WritableDoltTable.Deleter` (`tables.go:973-981`) which gates on `Permissions_Write` via `sqlutil.NewStaticErrorEditor`. The conflicts-table `Deleter` was implemented without the corresponding check.
+- `ProllyConflictsTable.Deleter` (line 128) now runs `dsess.CheckAccessForDb(ctx, ct.db, Permissions_Write)` before returning the deleter, falling back to `sqlutil.NewStaticErrorEditor` on denial. Same pattern as `WritableDoltTable.Deleter` (`tables.go:973-981`).
+- `newProllyConflictDeleter` (line 614+) opens an `ArtifactsEditor` directly and writes only to the conflicts artifact map — does not touch the source-table writer.
+- Net: a DELETE on `dolt_conflicts_<t>` requires `Permissions_Write` on the branch, enforced directly.
 
-Net: today a `Permissions_Read`-only user can `DELETE FROM dolt_conflicts_<t>` and it succeeds. This is a pre-existing permission gap that the new feature will incidentally close.
+Consequences for this plan:
 
-Consequences for the implementation:
-
-- For UPDATE, gate at the conflicts-table factory **and** bypass the inner source-table `Write` check via a tightly-scoped context marker (the delegation chain still has to run).
-- For DELETE, **add** an explicit gate at the conflicts-table factory. No bypass is needed because the deleter never touches the source-table writer. Pattern after `WritableDoltTable.Deleter`'s use of `sqlutil.NewStaticErrorEditor`.
+- For **UPDATE**, the existing gate is buried inside the source-table `Updater` factory. To let merge-only users in, we need (a) an explicit factory-level gate at `ProllyConflictsTable.Updater` admitting `Write OR (Merge AND MergeActive)`, and (b) a context-scoped bypass marker so the inner `srcUpdater.Updater(ctx)` construction does not reject the already-admitted merge-only caller.
+- For **DELETE**, the gate is already at the right level. We just relax it: change the `Permissions_Write` check at `ProllyConflictsTable.Deleter` to `Write OR (Merge AND MergeActive)`. No bypass marker needed — the deleter never touches the source-table writer.
 
 ## Current state
 
@@ -42,7 +39,7 @@ Consequences for the implementation:
 - `go/libraries/doltcore/sqle/tables.go` (~L714 / L973 / L1110): the underlying-table `Inserter`/`Updater`/`Deleter` factories each call `dsess.CheckAccessForDb(ctx, db, Permissions_Write)` once per statement.
 - `dsess.CheckAccessForDb` (`dsess/branch_control.go:40`) is a cheap RWMutex-guarded match against a small ruleset.
 - `go/libraries/doltcore/sqle/dprocedures/dolt_conflicts_resolve.go:378`: `DoDoltConflictsResolve` requires `Permissions_Write` today.
-- `ProllyConflictsTable` (`dtables/conflicts_tables_prolly.go`) does **not** perform any branch-control check of its own. UPDATE inherits the source-table `Write` check via eager `srcUpdater` construction; DELETE has *no* branch-control gate today (verified — see "How the conflicts table writes work today" above). This means a `Permissions_Read`-only user can already `DELETE FROM dolt_conflicts_<t>` — a pre-existing bug the new feature will close.
+- `ProllyConflictsTable` (`dtables/conflicts_tables_prolly.go`): UPDATE inherits the source-table `Write` check via eager `srcUpdater` construction at the factory site (no explicit check on `ProllyConflictsTable.Updater`). DELETE has an explicit `Permissions_Write` check at `ProllyConflictsTable.Deleter` as of PR #11030 (post-fix; previously ungated).
 - After a merge with conflicts, `working_set.MergeActive()` is true and `dolt_conflicts_<table>` is populated.
 - `enginetest/branch_control_test.go:1450+` covers merge-permission semantics; line 1678 asserts merge-only users cannot resolve conflicts today.
 
@@ -68,12 +65,10 @@ After the merge is committed or aborted (no more `MergeActive`), the merge-only 
 
 ### 2. Gate the conflicts-table writers explicitly
 
-Add an explicit `dsess.CheckAccessForDb` call at both `ProllyConflictsTable.Updater` and `ProllyConflictsTable.Deleter` (`dtables/conflicts_tables_prolly.go:124,128`):
+Both factories should end up with the same admission rule: permit if `Permissions_Write`, **or** (`Permissions_Merge` AND `ws.MergeActive()` AND the conflicts artifact map for this table is non-empty). The path to get there differs between Updater and Deleter:
 
-- Permit if `Permissions_Write`, **or** (`Permissions_Merge` AND `ws.MergeActive()` AND the conflicts artifact map for this table is non-empty).
-- Otherwise return the existing access-denied error.
-
-For the **Updater**, this becomes the authoritative gate (replacing the inherited source-table check, which step 3 then neutralizes for this code path). For the **Deleter**, this is the *first* branch-control check on the path — strictly a tightening relative to today's behavior, where any session can DELETE from a conflicts table (see "How the conflicts table writes work today"). Use the same `sqlutil.NewStaticErrorEditor` pattern as `WritableDoltTable.Deleter` (`tables.go:973-975`) so a denied caller gets a clean error at execution time.
+- **`ProllyConflictsTable.Deleter`**: a `Permissions_Write` check already exists at this site (added in PR #11030). Relax it to `Write OR (Merge AND MergeActive)`. Keep the `sqlutil.NewStaticErrorEditor` denial pattern.
+- **`ProllyConflictsTable.Updater`**: no check exists at this site today; the gate lives inside the eager `srcUpdater` construction. Add a new `CheckAccessForDb` call here with the same admission rule, also using `sqlutil.NewStaticErrorEditor` on denial. This becomes the authoritative gate; step 3 then neutralizes the now-redundant inner source-table check for merge-only callers.
 
 ### 3. Bypass the source-table `Write` check for the UPDATE delegation chain
 
@@ -118,7 +113,8 @@ Extend `go/libraries/doltcore/sqle/enginetest/branch_control_test.go`:
 - After commit (no more `MergeActive`), same user **cannot** write to `dolt_conflicts_<t>`.
 - Negative: bypass marker does not allow writes on a different table — set up the marker for `t1`, attempt write on `t2`, confirm rejection.
 - Negative: schema conflicts and constraint violations still require `Write`.
-- **Tightening regression**: `Permissions_Read`-only user (no merge in flight) now *cannot* `DELETE FROM dolt_conflicts_<t>`. Today this succeeds — the test would fail against `main` and pass against the new code, confirming the bug is closed.
+
+(PR #11030 already covers the `Permissions_Read`-only user → DELETE rejected regression test in `branch_control_test.go`; this plan does not need to re-add it.)
 
 Add a bats integration test under `integration-tests/bats/branch-control.bats` for the end-to-end flow.
 
@@ -127,7 +123,7 @@ Add a bats integration test under `integration-tests/bats/branch-control.bats` f
 - Document the new behavior in branch control docs and in the workbench PR docs.
 - Coordinate with the workbench team: surface "edit via `dolt_conflicts_<t>` only" in the UI, using the existing `dolt_merge_status` table as the server signal.
 - Note the `DOLT_CONFLICTS_RESOLVE` permission relaxation in the changelog (strictly a loosening, no breakage).
-- Note that `DELETE FROM dolt_conflicts_<t>` now requires `Permissions_Write` or `Permissions_Merge` (during an active merge). Today the check is missing entirely — this is a security fix as well as a feature. Unlikely to break real callers since branch_control configurations grant Read-only users for read access, not for conflicts cleanup, but worth calling out.
+- Note that `DELETE FROM dolt_conflicts_<t>` now also accepts `Permissions_Merge` (during an active merge), on top of `Permissions_Write`. PR #11030 already added the security-fix changelog entry for tightening the prior gap; this PR is a further targeted loosening on top of it.
 
 ## Performance
 
@@ -148,18 +144,18 @@ Engineer-days for one Dolt-familiar engineer.
 | Step | Work | Days |
 |---|---|---|
 | 1 | Semantics lock-down | 0.5 |
-| 2 | Gate `ProllyConflictsTable.Updater`/`Deleter` | 0.5 |
+| 2 | Add gate at `ProllyConflictsTable.Updater`; relax gate at `Deleter` | 0.4 |
 | 3 | Bypass marker plumbing + source-table check (UPDATE path only) | 1.0 |
 | 4 | Relax `DoDoltConflictsResolve` | 0.25 |
 | 5 | Surrounding-ops audit | 0.5 |
-| 6 | Tests (enginetest + bats), incl. tightening regression | 1.25 |
+| 6 | Tests (enginetest + bats) — tightening regression already in #11030 | 1.0 |
 | 7 | Docs, changelog, workbench coordination | 0.5 |
-| | **Subtotal** | **4.5** |
+| | **Subtotal** | **4.15** |
 | | Risk buffer (deleter audit, review cycles) | +1.5–2.5 |
-| | **Total** | **6–7 engineer-days** |
+| | **Total** | **5.5–6.5 engineer-days** |
 
 Calendar time: ~1.5 weeks for one engineer end-to-end.
 
 ### If Claude Code drives the implementation
 
-Active coding compresses to roughly **4–6 hours** of session time. The same caveats from the prior plan apply (user decisions, test wall-clock, human review). End-to-end with an active reviewer: **~0.5–1 working day to "passing local tests, ready for review"**, **2–4 calendar days to merged**.
+Active coding compresses to roughly **4–5 hours** of session time. The same caveats from the prior plan apply (user decisions, test wall-clock, human review). End-to-end with an active reviewer: **~0.5–1 working day to "passing local tests, ready for review"**, **2–4 calendar days to merged**.
