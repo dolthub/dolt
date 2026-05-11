@@ -120,22 +120,20 @@ func TestSingleScript(t *testing.T) {
 			SetUpScript: []string{
 				"set @@autocommit = off",
 				"create table a (i int primary key)",
-				//"create table b (x int)",
 				"insert into a values (0)",
-				//"create trigger trig before update on a for each row insert into b values (new.i);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
+				//{
+				//	Query:    "insert into a values (0);",
+				//	Expected: []sql.Row{},
+				//},
+				//{
+				//	Query:    "insert into a values (0);",
+				//	Expected: []sql.Row{},
+				//},
 				{
-					Query: "update a set i = 1",
-					Expected: []sql.Row{
-						{gmstypes.OkResult{
-							RowsAffected: 1,
-							Info: plan.UpdateInfo{
-								Matched: 1,
-								Updated: 1,
-							},
-						}},
-					},
+					Query:    "update a set i = 100;",
+					Expected: []sql.Row{},
 				},
 				//{
 				//	Query: "select x from b",
