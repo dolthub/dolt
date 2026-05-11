@@ -394,7 +394,7 @@ func (d decimalSerializer) serialize(ctx context.Context, typ sql.Type, value in
 		return nil, err
 	}
 
-	decimalValue, ok := convertedValue.(apd.Decimal)
+	decimalValue, ok := convertedValue.(*apd.Decimal)
 	if !ok {
 		return nil, fmt.Errorf("unsupported type %T", convertedValue)
 	}
@@ -438,12 +438,8 @@ func (d decimalSerializer) serialize(ctx context.Context, typ sql.Type, value in
 
 	// Load the value into a fully padded (to precision and scale) string format,
 	// so that we can process the digit groups for the binary encoding.
-	absDecimalVal := *new(apd.Decimal)
-	_, err = sql.DecimalCtx.Abs(&absDecimalVal, &decimalValue)
-	if err != nil {
-		return nil, err
-	}
-	absDecimalVal, err = gmstypes.DecimalRound(absDecimalVal, int32(scale))
+	absDecimalVal := new(apd.Decimal)
+	absDecimalVal, err = sql.DecimalRound(absDecimalVal.Abs(decimalValue), int32(scale))
 	if err != nil {
 		return nil, err
 	}

@@ -251,7 +251,7 @@ func toSqlString(ctx *sql.Context, val interface{}) (string, error) {
 	case float32, float64:
 		// exactly 3 decimal points for floats
 		return fmt.Sprintf("%.3f", v), nil
-	case apd.Decimal:
+	case *apd.Decimal:
 		// exactly 3 decimal points for floats
 		res, _ := v.Float64()
 		return fmt.Sprintf("%.3f", res), nil

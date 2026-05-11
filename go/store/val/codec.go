@@ -442,15 +442,15 @@ func compareBit64(l, r uint64) int {
 	return compareUint64(l, r)
 }
 
-func readDecimal(val []byte) apd.Decimal {
+func readDecimal(val []byte) *apd.Decimal {
 	if len(val) == int(int32Size) {
 		v := readInt32(val)
 		if v == int32(types.DecimalNaN) {
-			return apd.Decimal{Form: apd.NaN}
+			return &apd.Decimal{Form: apd.NaN}
 		} else if v == int32(types.DecimalPosInf) {
-			return apd.Decimal{Form: apd.Infinite}
+			return &apd.Decimal{Form: apd.Infinite}
 		} else if v == int32(types.DecimalNegInf) {
-			return apd.Decimal{Form: apd.Infinite, Negative: true}
+			return &apd.Decimal{Form: apd.Infinite, Negative: true}
 		}
 	}
 	e := readInt32(val[:int32Size])
@@ -461,10 +461,10 @@ func readDecimal(val []byte) apd.Decimal {
 	if s < 0 {
 		d.Negative = true
 	}
-	return *d
+	return d
 }
 
-func writeDecimal(buf []byte, val apd.Decimal) {
+func writeDecimal(buf []byte, val *apd.Decimal) {
 	expectSize(buf, sizeOfDecimal(val))
 	if val.Form == apd.NaN {
 		writeInt32(buf[:int32Size], types.DecimalNaN)
@@ -481,7 +481,7 @@ func writeDecimal(buf []byte, val apd.Decimal) {
 	}
 }
 
-func sizeOfDecimal(val apd.Decimal) ByteSize {
+func sizeOfDecimal(val *apd.Decimal) ByteSize {
 	if val.Form == apd.NaN || val.Form == apd.Infinite {
 		return int32Size
 	}
@@ -489,7 +489,7 @@ func sizeOfDecimal(val apd.Decimal) ByteSize {
 	return int32Size + int8Size + ByteSize(bsz)
 }
 
-func compareDecimal(l, r apd.Decimal) int {
+func compareDecimal(l, r *apd.Decimal) int {
 	if (l.Form == apd.NaN && r.Form == apd.NaN) ||
 		(l.Form == apd.Infinite && r.Form == apd.Infinite && l.Negative == r.Negative) {
 		return 0
@@ -500,7 +500,7 @@ func compareDecimal(l, r apd.Decimal) int {
 	if r.Form == apd.NaN {
 		return -1
 	}
-	return l.Cmp(&r)
+	return l.Cmp(r)
 }
 
 const minYear int16 = 1901

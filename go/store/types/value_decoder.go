@@ -46,7 +46,6 @@ type CodecReader interface {
 	ReadString() string
 	ReadInlineBlob() []byte
 	ReadTimestamp() (time.Time, error)
-	ReadDecimal() (apd.Decimal, error)
 	ReadGeometry() (Geometry, error)
 	ReadPoint() (Point, error)
 	ReadLineString() (LineString, error)

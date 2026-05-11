@@ -580,13 +580,13 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value *string, qu
 			return fmt.Sprintf("Could not compare non float value '%s', with %f", *value, actualValue), nil
 		}
 		return compareTestAssertion(comparison, float32(expectedFloat), actualValue, AssertionExpectedSingleValue), nil
-	case apd.Decimal:
+	case *apd.Decimal:
 		expectedDecimal, _, err := apd.NewFromString(*value)
 		actualValueStr := actualValue.Text('f')
 		if err != nil {
 			return fmt.Sprintf("Could not compare non decimal value '%s', with %s", *value, actualValueStr), nil
 		}
-		return compareDecimals(comparison, *expectedDecimal, actualValue, AssertionExpectedSingleValue), nil
+		return compareDecimals(comparison, expectedDecimal, actualValue, AssertionExpectedSingleValue), nil
 	case time.Time:
 		expectedTime, format, err := parseTestsDate(*value)
 		if err != nil {
@@ -741,32 +741,32 @@ func compareDates(comparison string, expectedValue, realValue time.Time, format 
 // compareDecimals is a function used for comparing decimals.
 // It takes in a comparison string from one of: "==", "!=", "<", ">", "<=", ">="
 // It returns a string. The string is empty if the assertion passed, or has a message explaining the failure otherwise
-func compareDecimals(comparison string, expectedValue, realValue apd.Decimal, assertionType string) string {
+func compareDecimals(comparison string, expectedValue, realValue *apd.Decimal, assertionType string) string {
 	eVal := expectedValue.Text('f')
 	rVal := realValue.Text('f')
 	switch comparison {
 	case "==":
-		if expectedValue.Cmp(&realValue) != 0 {
+		if expectedValue.Cmp(realValue) != 0 {
 			return fmt.Sprintf("Assertion failed: %s equal to %s, got %s", assertionType, eVal, rVal)
 		}
 	case "!=":
-		if expectedValue.Cmp(&realValue) == 0 {
+		if expectedValue.Cmp(realValue) == 0 {
 			return fmt.Sprintf("Assertion failed: %s not equal to %s, got %s", assertionType, eVal, rVal)
 		}
 	case "<":
-		if realValue.Cmp(&expectedValue) >= 0 {
+		if realValue.Cmp(expectedValue) >= 0 {
 			return fmt.Sprintf("Assertion failed: %s less than %s, got %s", assertionType, eVal, rVal)
 		}
 	case "<=":
-		if realValue.Cmp(&expectedValue) > 0 {
+		if realValue.Cmp(expectedValue) > 0 {
 			return fmt.Sprintf("Assertion failed: %s less than or equal to %s, got %s", assertionType, eVal, rVal)
 		}
 	case ">":
-		if realValue.Cmp(&expectedValue) <= 0 {
+		if realValue.Cmp(expectedValue) <= 0 {
 			return fmt.Sprintf("Assertion failed: %s greater than %s, got %s", assertionType, eVal, rVal)
 		}
 	case ">=":
-		if realValue.Cmp(&expectedValue) < 0 {
+		if realValue.Cmp(expectedValue) < 0 {
 			return fmt.Sprintf("Assertion failed: %s greater than or equal to %s, got %s", assertionType, eVal, rVal)
 		}
 	default:

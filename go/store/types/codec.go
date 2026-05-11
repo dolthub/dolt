@@ -27,8 +27,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/cockroachdb/apd/v3"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -173,13 +171,6 @@ func (b *binaryNomsReader) skipCount() {
 func (b *binaryNomsReader) ReadFloat(nbf *NomsBinFormat) float64 {
 	floatbits := binary.BigEndian.Uint64(b.readBytes(8))
 	return math.Float64frombits(floatbits)
-}
-
-func (b *binaryNomsReader) ReadDecimal() (apd.Decimal, error) {
-	size := uint32(b.readUint16())
-	db := b.readBytes(size)
-
-	return types.DecimalGobDecode(db)
 }
 
 func (b *binaryNomsReader) ReadTimestamp() (time.Time, error) {

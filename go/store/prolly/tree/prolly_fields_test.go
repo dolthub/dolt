@@ -106,7 +106,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		{
 			name:  "decimal",
 			typ:   val.Type{Enc: val.DecimalEnc},
-			value: mustParseDecimal("0.263419374632932747932030573792"),
+			value: decimalFromString("0.263419374632932747932030573792"),
 		},
 		{
 			name:  "string",
@@ -266,12 +266,12 @@ func mustParseJson(t *testing.T, s string) types.JSONDocument {
 	return types.JSONDocument{Val: v}
 }
 
-func mustParseDecimal(s string) apd.Decimal {
+func decimalFromString(s string) *apd.Decimal {
 	d, _, err := apd.NewFromString(s)
 	if err != nil {
 		panic(err)
 	}
-	return *d
+	return d
 }
 
 func mustParseTime(t *testing.T, s string) types.Timespan {

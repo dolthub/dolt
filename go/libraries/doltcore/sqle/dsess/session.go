@@ -1863,7 +1863,7 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 		return config.SetFloat(conf, key, float64(v))
 	case float64:
 		return config.SetFloat(conf, key, v)
-	case apd.Decimal:
+	case *apd.Decimal:
 		f64, _ := v.Float64()
 		return config.SetFloat(conf, key, f64)
 	case string:

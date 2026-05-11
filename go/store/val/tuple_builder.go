@@ -336,7 +336,7 @@ func (tb *TupleBuilder) PutBit(i int, v uint64) {
 	tb.addSize(bit64Size)
 }
 
-func (tb *TupleBuilder) PutDecimal(i int, v apd.Decimal) {
+func (tb *TupleBuilder) PutDecimal(i int, v *apd.Decimal) {
 	tb.Desc.ExpectEncoding(i, DecimalEnc)
 	sz := sizeOfDecimal(v)
 	tb.ensureCapacity(sz)

@@ -3113,7 +3113,7 @@ func convertRowToRebasePlanStep(ctx context.Context, row sql.Row) (rebase.Rebase
 	}
 
 	return rebase.RebasePlanStep{
-		RebaseOrder: row[0].(apd.Decimal),
+		RebaseOrder: row[0].(*apd.Decimal),
 		Action:      rebaseAction,
 		CommitHash:  commitHash,
 		CommitMsg:   commitMsg,

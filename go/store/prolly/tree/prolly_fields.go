@@ -441,7 +441,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 	case val.Bit64Enc:
 		tb.PutBit(i, uint64(convUint(v)))
 	case val.DecimalEnc:
-		tb.PutDecimal(i, v.(apd.Decimal))
+		tb.PutDecimal(i, v.(*apd.Decimal))
 	case val.YearEnc:
 		tb.PutYear(i, v.(int16))
 	case val.DateEnc:

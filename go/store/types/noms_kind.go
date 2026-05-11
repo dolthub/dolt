@@ -94,7 +94,6 @@ func init() {
 	KindToType[NullKind] = NullValue
 	KindToType[InlineBlobKind] = InlineBlob{}
 	KindToType[TimestampKind] = Timestamp{}
-	KindToType[DecimalKind] = Decimal{}
 	KindToType[GeometryKind] = Geometry{}
 	KindToType[PointKind] = Point{}
 	KindToType[LineStringKind] = LineString{}

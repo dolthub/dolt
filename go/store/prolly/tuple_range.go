@@ -336,7 +336,7 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc *val.Tuple
 		if !ok {
 			return nil, false, nil
 		}
-		_, err := sql.DecimalCtx.Add(&v, &v, new(types.DecimalFromInt64(1)))
+		_, err := sql.DecimalCtx.Add(v, v, types.DecimalFromInt64(1))
 		if err != nil {
 			return nil, false, err
 		}
