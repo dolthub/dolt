@@ -1680,6 +1680,21 @@ var BranchControlTests = []BranchControlTest{
 				Query:       "CALL DOLT_CONFLICTS_RESOLVE('--ours', 'test');",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
+			// Merge permission alone does not allow direct writes to the conflicts table.
+			// DELETE is gated explicitly in ProllyConflictsTable.Deleter; UPDATE inherits the
+			// gate via the source-table updater that prollyConflictOurTableUpdater wraps.
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "DELETE FROM dolt_conflicts_test;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "UPDATE dolt_conflicts_test SET our_v1 = 999 WHERE our_pk = 1;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
 		},
 	},
 	{

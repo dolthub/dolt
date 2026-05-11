@@ -21,10 +21,12 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/zeebo/xxh3"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -38,6 +40,7 @@ import (
 func newProllyConflictsTable(
 	ctx *sql.Context,
 	tbl *doltdb.Table,
+	db dsess.SqlDatabase,
 	sourceUpdatableTbl sql.UpdatableTable,
 	tblName doltdb.TableName,
 	root doltdb.RootValue,
@@ -70,6 +73,7 @@ func newProllyConflictsTable(
 		theirSch:        theirSch,
 		root:            root,
 		tbl:             tbl,
+		db:              db,
 		rs:              rs,
 		artM:            m,
 		sqlTable:        sourceUpdatableTbl,
@@ -87,6 +91,7 @@ type ProllyConflictsTable struct {
 	rs              RootSetter
 	root            doltdb.RootValue
 	tbl             *doltdb.Table
+	db              dsess.SqlDatabase
 	sqlTable        sql.UpdatableTable
 	versionMappings *versionMappings
 	tblName         doltdb.TableName
@@ -126,6 +131,9 @@ func (ct ProllyConflictsTable) Updater(ctx *sql.Context) sql.RowUpdater {
 }
 
 func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
+	if err := dsess.CheckAccessForDb(ctx, ct.db, branch_control.Permissions_Write); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	return newProllyConflictDeleter(ctx, ct)
 }
 
