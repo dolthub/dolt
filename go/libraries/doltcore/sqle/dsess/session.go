@@ -478,6 +478,18 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	}
 
 	dirtyBranchState := dirties[0]
+
+	// Skip the dolt commit path for read-only transactions. When dolt_transaction_commit=1,
+	// every transaction close attempts PendingCommitAllStaged (which stages all tables and
+	// checks for changes). For read-only queries this is wasted work — there are never
+	// changes to commit. In high-frequency read workloads (e.g. monitoring agents polling
+	// every few seconds), this overhead compounds: each read-only query pays the cost of
+	// StageAllTables + newPendingCommit only to get nil back and fall through to
+	// commitWorkingSet anyway. Short-circuiting here avoids that entirely.
+	if dtx, ok := tx.(*DoltTransaction); ok && dtx.IsReadOnly() {
+		return d.commitWorkingSet(ctx, dirtyBranchState, tx)
+	}
+
 	if peformDoltCommitInt == 1 {
 		// if the dirty working set doesn't belong to the currently checked out branch, that's an error
 		err = d.validateDoltCommit(ctx, dirtyBranchState)
