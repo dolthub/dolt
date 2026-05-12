@@ -452,6 +452,7 @@ func readDecimal(val []byte) *apd.Decimal {
 		} else if v == int32(types.DecimalNegInf) {
 			return &apd.Decimal{Form: apd.Infinite, Negative: true}
 		}
+		panic("unable to read decimal value")
 	}
 	e := readInt32(val[:int32Size])
 	s := readInt8(val[int32Size : int32Size+int8Size])
