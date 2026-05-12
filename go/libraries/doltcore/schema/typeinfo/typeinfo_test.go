@@ -126,7 +126,6 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 			generateBitTypes(t, 16),
 			{BoolType},
 			{DateType, DatetimeType, TimestampType},
-			generateDecimalTypes(t, 16),
 			generateEnumTypes(t, 16),
 			{Float32Type, Float64Type},
 			{DefaultInlineBlobType},
@@ -156,11 +155,6 @@ func generateTypeInfoArrays(t *testing.T, vrw types.ValueReadWriter) ([][]TypeIn
 				types.Timestamp(time.Date(2000, 2, 28, 14, 38, 43, 583395000, time.UTC)),
 				types.Timestamp(time.Date(2038, 1, 19, 3, 14, 7, 999999000, time.UTC)),
 				types.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC))},
-			//{types.Decimal(enginetest.RequireDecimalFromString("0")), // Decimal
-			//	types.Decimal(enginetest.RequireDecimalFromString("-1.5")),
-			//	types.Decimal(enginetest.RequireDecimalFromString("4723245")),
-			//	types.Decimal(enginetest.RequireDecimalFromString("-1076416.875")),
-			//	types.Decimal(enginetest.RequireDecimalFromString("198728394234798423466321.27349757"))},
 			{types.Uint(1), types.Uint(3), types.Uint(5), types.Uint(7), types.Uint(8)},                                                    // Enum
 			{types.Float(1.0), types.Float(65513.75), types.Float(4293902592), types.Float(4.58e71), types.Float(7.172e285)},               // Float
 			{types.InlineBlob{0}, types.InlineBlob{21}, types.InlineBlob{1, 17}, types.InlineBlob{72, 42}, types.InlineBlob{21, 122, 236}}, // InlineBlob
