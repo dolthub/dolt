@@ -176,8 +176,8 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 	// TODO: need schema name in ai tracker
 	w.aiSet = true
-	w.autoIncSet = true
-	w.autoIncTracker.Next(ctx, w.tblName.Name, sqlRow) // TODO: this errors all the time wtf? why?
+	w.aiSet = true
+	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow) // TODO: this errors all the time wtf? why?
 
 	return nil
 }
@@ -353,7 +353,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
 	w.secondary = newSecondaries
-	w.autoIncCol = schState.AutoIncCol
+	w.aiCol = schState.AutoIncCol
 
 	return nil
 }
