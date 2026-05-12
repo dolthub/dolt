@@ -1,0 +1,12 @@
+name: 'Set up dolt config'
+description: 'Sets the global dolt user.name and user.email used by CI workflows. Requires the dolt binary to already be on PATH (e.g. via the build-dolt action).'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure dolt
+      shell: bash
+      run: |
+        dolt config --global --add metrics.disabled true
+        dolt config --global --add user.name 'Dolthub Actions'
+        dolt config --global --add user.email 'actions@dolthub.com'
