@@ -1674,25 +1674,155 @@ var BranchControlTests = []BranchControlTest{
 				Query:    "SELECT count(*) FROM dolt_conflicts;",
 				Expected: []sql.Row{{int64(1)}},
 			},
+			// Merge permission lets the user edit conflicted rows via
+			// dolt_conflicts_<t> and resolve them.
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "UPDATE dolt_conflicts_test SET our_v1 = 50 WHERE our_pk = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			// The UPDATE on the conflicts table writes through to the source
+			// table.
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT v1 FROM test WHERE pk = 1;",
+				Expected: []sql.Row{{int64(50)}},
+			},
+			// DOLT_CONFLICTS_RESOLVE clears the conflict marker.
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--ours', 'test');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT count(*) FROM dolt_conflicts;",
+				Expected: []sql.Row{{int64(0)}},
+			},
+			// And the merge-only user can finalize the merge.
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_COMMIT('-am', 'resolved');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			// Writes to the source table directly remain rejected — only the
+			// dolt_conflicts_<t> path is open to merge-permission callers.
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "UPDATE test SET v1 = 100 WHERE pk = 1;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
+	{
+		Name: "Merge permission allows DELETE from dolt_conflicts_<t> to resolve conflicts",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE test SET v1 = 100 WHERE pk = 1;",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit on other');",
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE test SET v1 = 200 WHERE pk = 1;",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'commit on main');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'merge');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SET @@dolt_allow_commit_conflicts = 1;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_MERGE('main');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			// Merge-only user can DELETE the conflict row directly. This keeps
+			// "our" values on the underlying table.
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "DELETE FROM dolt_conflicts_test;",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT count(*) FROM dolt_conflicts;",
+				Expected: []sql.Row{{int64(0)}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT v1 FROM test WHERE pk = 1;",
+				Expected: []sql.Row{{int64(100)}},
+			},
+		},
+	},
+	{
+		Name: "Merge permission does not allow conflicts writes outside an active merge",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'merge');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			// No merge is in flight, so the merge-only user cannot resolve
+			// conflicts via the procedure. (Direct UPDATE/DELETE on
+			// dolt_conflicts_<t> match zero rows when there are no conflicts,
+			// so they short-circuit before the writer factory's error
+			// surfaces — that's the same behavior as a no-op DELETE on a
+			// regular table under the existing WritableDoltTable gate.)
 			{
 				User:        "testuser",
 				Host:        "localhost",
 				Query:       "CALL DOLT_CONFLICTS_RESOLVE('--ours', 'test');",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
-			// Merge permission alone does not allow direct writes to the conflicts table.
-			// DELETE is gated explicitly in ProllyConflictsTable.Deleter; UPDATE inherits the
-			// gate via the source-table updater that prollyConflictOurTableUpdater wraps.
+			// Direct writes to the source table remain rejected.
 			{
 				User:        "testuser",
 				Host:        "localhost",
-				Query:       "DELETE FROM dolt_conflicts_test;",
-				ExpectedErr: branch_control.ErrIncorrectPermissions,
-			},
-			{
-				User:        "testuser",
-				Host:        "localhost",
-				Query:       "UPDATE dolt_conflicts_test SET our_v1 = 999 WHERE our_pk = 1;",
+				Query:       "INSERT INTO test VALUES (2, 2);",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
 		},

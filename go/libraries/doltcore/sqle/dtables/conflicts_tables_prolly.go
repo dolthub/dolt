@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/zeebo/xxh3"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -127,11 +126,14 @@ func (ct ProllyConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partitio
 }
 
 func (ct ProllyConflictsTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	if err := checkConflictsTableWriteAccess(ctx, ct.db, ct.artM); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	return newProllyConflictOurTableUpdater(ctx, ct)
 }
 
 func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
-	if err := dsess.CheckAccessForDb(ctx, ct.db, branch_control.Permissions_Write); err != nil {
+	if err := checkConflictsTableWriteAccess(ctx, ct.db, ct.artM); err != nil {
 		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return newProllyConflictDeleter(ctx, ct)
@@ -560,7 +562,17 @@ type prollyConflictOurTableUpdater struct {
 }
 
 func newProllyConflictOurTableUpdater(ctx *sql.Context, ct ProllyConflictsTable) *prollyConflictOurTableUpdater {
-	ourUpdater := ct.sqlTable.Updater(ctx)
+	// Set a bypass marker on the context for the duration of the source-table
+	// writer construction. The conflicts-table Updater already admitted the
+	// caller via checkConflictsTableWriteAccess; without this marker the inner
+	// source-table Updater factory would reject a merge-permission caller.
+	dbName, branch := doltdb.SplitRevisionDbName(ct.db.RevisionQualifiedName())
+	markedCtx := ctx.WithContext(dsess.WithConflictsBypass(ctx.Context, dsess.ConflictsBypassMarker{
+		DbName:  dbName,
+		Branch:  branch,
+		TblName: ct.tblName,
+	}))
+	ourUpdater := ct.sqlTable.Updater(markedCtx)
 	return &prollyConflictOurTableUpdater{
 		srcUpdater:      ourUpdater,
 		versionMappings: ct.versionMappings,
