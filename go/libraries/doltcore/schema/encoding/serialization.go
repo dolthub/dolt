@@ -281,6 +281,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		// adaptive encoded field as a literal value.
 		if usesAdaptiveEncoding(col) {
 			serial.ColumnAddUsesAdaptiveEncoding(b, true)
+			serial.ColumnAddAdaptiveEncodingBreakingChange(b, true)
 		}
 
 		if col.Hidden {

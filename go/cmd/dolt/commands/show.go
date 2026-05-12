@@ -289,12 +289,11 @@ func (cmd ShowCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 
 func parseShowArgs(apr *argparser.ArgParseResults) (*showOpts, error) {
 
-	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
-	switch decorateOption {
-	case "short", "full", "auto", "no":
-	default:
-		return nil, fmt.Errorf("fatal: invalid --decorate option: %s", decorateOption)
+	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, cli.DecorateAuto)
+	if err := cli.ValidateDecorateOption(decorateOption); err != nil {
+		return nil, fmt.Errorf("fatal: %v", err)
 	}
+	decorateOption = resolveDecorateAuto(decorateOption)
 
 	return &showOpts{
 		showParents: apr.Contains(cli.ParentsFlag),

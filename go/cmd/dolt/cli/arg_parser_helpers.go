@@ -164,7 +164,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 func CreateResetArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("reset")
 	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since {{.LessThan}}commit{{.GreaterThan}} are discarded.")
-	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
+	ap.SupportsFlag(SoftResetParam, "", "Resets HEAD to the specified revision without touching the index or the working tables.")
 	return ap
 }
 
@@ -314,6 +314,26 @@ func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 		ap.SupportsFlag(GraphFlag, "", "Shows the commit graph.")
 	}
 	return ap
+}
+
+// Values accepted by the --decorate flag. DecorateShort trims ref prefixes,
+// DecorateFull keeps refs/heads/, refs/remotes/, and refs/tags/, DecorateNo
+// produces an empty refs column, and DecorateAuto resolves to DecorateShort
+// on a tty and DecorateNo otherwise.
+const (
+	DecorateAuto  = "auto"
+	DecorateShort = "short"
+	DecorateFull  = "full"
+	DecorateNo    = "no"
+)
+
+// ValidateDecorateOption returns nil when |value| is accepted by the --decorate flag.
+func ValidateDecorateOption(value string) error {
+	switch value {
+	case DecorateShort, DecorateFull, DecorateAuto, DecorateNo:
+		return nil
+	}
+	return fmt.Errorf("invalid --%s option: %q", DecorateFlag, value)
 }
 
 func CreateDiffArgParser(isTableFunction bool) *argparser.ArgParser {

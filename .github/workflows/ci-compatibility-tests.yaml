@@ -19,38 +19,24 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-22.04 ]
-        adaptive_encoding: [ "false", "true" ]
     steps:
       - uses: actions/checkout@v6
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go/go.mod
-        id: go
+      - name: Set up Go toolchain
+        uses: ./.github/actions/setup-go-toolchain
       - uses: actions/setup-node@v4
         with:
           node-version: ^16
       - name: Install netcat
         run: sudo apt-get update && sudo apt-get install -y netcat-openbsd
-      - name: Create CI Bin
-        run: |
-          mkdir -p ./.ci_bin
-          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+      - name: Build dolt
+        uses: ./.github/actions/build-dolt
       - name: Install Bats
         run: |
           npm i bats
           echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
-      - name: Install Dolt
-        working-directory: ./go
-        run: |
-          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
       - name: Setup Dolt Config
-        run: |
-          dolt config --global --add user.name 'DoltHub Actions'
-          dolt config --global --add user.email 'actions@dolthub.com'
+        uses: ./.github/actions/setup-dolt-config
       - name: Test all
         run: ./runner.sh
         working-directory: ./integration-tests/compatibility
-        env:
-          DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}

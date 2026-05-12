@@ -375,9 +375,16 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 }
 
 func checkIsTerminal() bool {
+	// In tests that drive cli commands without InitIO the stdio swap helper is unset, so
+	// treat the absence as a non-terminal context to avoid dereferencing a nil function.
+	if cli.ExecuteWithStdioRestored == nil {
+		return false
+	}
 	isTerminal := false
 	cli.ExecuteWithStdioRestored(func() {
-		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv(dconfig.EnvTestForceOpenEditor) == "1" {
+		fd := os.Stdout.Fd()
+		// IsCygwinTerminal catches MSYS and Git Bash on Windows, where stdout is a named pipe.
+		if goisatty.IsTerminal(fd) || goisatty.IsCygwinTerminal(fd) || os.Getenv(dconfig.EnvTestForceOpenEditor) == "1" {
 			isTerminal = true
 		}
 	})

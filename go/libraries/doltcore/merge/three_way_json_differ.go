@@ -121,7 +121,7 @@ func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, e
 			// If the key existed at base, we can do a recursive three-way merge to resolve
 			// changes to the values.
 			// This shouldn't be necessary: if its an object on all three branches, the original diff is recursive.
-			mergedValue, conflict, err := mergeJSON(ctx, differ.ns, differ.leftCurrentDiff.From,
+			mergedValue, conflict, err := MergeJSON(ctx, differ.ns, differ.leftCurrentDiff.From,
 				differ.leftCurrentDiff.To,
 				differ.rightCurrentDiff.To)
 			if err != nil {

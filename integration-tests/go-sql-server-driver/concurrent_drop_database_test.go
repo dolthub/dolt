@@ -27,7 +27,7 @@ import (
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 )
 
-// TestconcurrentDropDatabase is a regression test for #10692.
+// TestConcurrentDropDatabase is a regression test for #10692.
 //
 // A lock-ordering bug between *DatabaseProvider and *DoltSession meant that
 // DROP DATABASE during concurrency could cause the DatabaseProvider to

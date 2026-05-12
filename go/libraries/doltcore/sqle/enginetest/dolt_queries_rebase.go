@@ -2059,6 +2059,35 @@ commit
 			},
 		},
 	},
+	{
+		Name: "dolt_rebase('--continue') preserves ignored tables in the working set",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY)",
+			"CALL dolt_commit('-Am', 'create t')",
+			"INSERT INTO dolt_ignore VALUES ('private_data', true)",
+			"CALL dolt_commit('-Am', 'add ignore rule')",
+			"INSERT INTO t VALUES (1)",
+			"CALL dolt_commit('-am', 'insert 1')",
+			"INSERT INTO t VALUES (2)",
+			"CALL dolt_commit('-am', 'insert 2')",
+			"CREATE TABLE private_data (pk int PRIMARY KEY, secret varchar(100))",
+			"INSERT INTO private_data VALUES (1, 'secret')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_rebase('-i', 'HEAD~2')",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_main; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"}},
+			},
+			{
+				Query:    "CALL dolt_rebase('--continue')",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/main"}},
+			},
+			{
+				Query:    "select pk, secret from private_data",
+				Expected: []sql.Row{{1, "secret"}},
+			},
+		},
+	},
 }
 
 var DoltRebaseMultiSessionScriptTests = []queries.ScriptTest{

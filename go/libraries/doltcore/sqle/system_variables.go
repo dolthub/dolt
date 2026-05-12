@@ -301,13 +301,6 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Default: "",
 	},
 	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltLogCommitterOnly,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Type:    types.NewSystemBoolType(dsess.DoltLogCommitterOnly),
-		Default: int8(0),
-	},
-	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltAuthorName,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
@@ -609,13 +602,6 @@ func AddDoltSystemVariables() {
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
 			Type:    types.NewSystemBoolType(dsess.AllowCICreation),
-			Default: int8(0),
-		},
-		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltLogCommitterOnly,
-			Dynamic: true,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-			Type:    types.NewSystemBoolType(dsess.DoltLogCommitterOnly),
 			Default: int8(0),
 		},
 		&sql.MysqlSystemVariable{

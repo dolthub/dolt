@@ -77,6 +77,11 @@ function test_backward_compatibility() {
 
 function test_bidirectional_compatibility() {
   ver=$1
+
+  if [ -z $ver ]; then
+    return
+  fi
+  
   bin=`download_release "$ver"`
 
   DOLT_NEW=`which dolt`
@@ -94,6 +99,11 @@ function test_bidirectional_compatibility() {
 
 function test_bidirectional_remote_compatibility() {
   ver=$1
+
+  if [ -z $ver ]; then
+    return
+  fi
+
   bin=`download_release "$ver"`
 
   DOLT_NEW=`which dolt`
@@ -136,6 +146,11 @@ function list_2_0_forward_compatible_versions() {
 
 function test_forward_compatibility() {
   ver=$1
+
+  if [ -z $ver ]; then
+    return
+  fi
+  
   bin=`download_release "$ver"`
   DOLT_NEW_BIN=`which dolt`   # capture current dolt before PATH is prepended with old binary
 
@@ -194,6 +209,10 @@ _main() {
   # depth-relative paths. The compat suite's helpers come first; the main bats suite
   # provides query-server-common and windows-compat.
   export BATS_LIB_PATH="$(pwd)/test_files/bats/helper:$(pwd)/../bats/helper"
+
+  # Tells the bats skip helpers which path is the freshly-built dolt so a version-literal
+  # match against a released binary does not skip the dev build.
+  export DOLT_DEV_BUILD_PATH="$(command -v dolt)"
 
   # make directories and cleanup when killed
   mkdir repos binaries

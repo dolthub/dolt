@@ -1,5 +1,5 @@
-load helper/windows-compat
-load helper/local-remote
+source "${BASH_SOURCE[0]%/*}/windows-compat.bash"
+source "${BASH_SOURCE[0]%/*}/local-remote.bash"
 
 if [ -z "$BATS_TMPDIR" ]; then
     export BATS_TMPDIR=$HOME/batstmp/

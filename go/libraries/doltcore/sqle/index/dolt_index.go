@@ -805,7 +805,7 @@ func isHashEncoded(ti typeinfo.TypeInfo) bool {
 }
 
 func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
-	if di.HasContentHashedField() {
+	if di.HasContentHashedField() || di.IsSpatial() {
 		return sql.IndexOrderNone
 	}
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
-load $BATS_TEST_DIRNAME/helper/common.bash
+bats_load_library common.bash
+bats_load_library compat-common.bash
 
 setup() {
     setup_common
