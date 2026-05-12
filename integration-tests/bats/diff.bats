@@ -2478,44 +2478,39 @@ EOF
     dolt commit -am "cm2"
 
     dolt branch start
-    dolt checkout -b widen
     dolt sql -q "alter table t modify column val2 varchar(20)"
     dolt add .
     dolt commit -am "widen"
     run dolt diff -r sql old
     [ $status -eq 0 ]
     [[ "$output" =~ 'UPDATE `t` SET `val2`='"'2'"' WHERE `pk`=1;' ]] || false
-    dolt checkout start
 
-    dolt checkout -b narrow
+    dolt reset --hard start
     dolt sql -q "alter table t modify column val2 varchar(5)"
     dolt add .
     dolt commit -am "narrow"
     run dolt diff -r sql old
     [ $status -eq 1 ]
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
-    dolt checkout start
 
-    dolt checkout -b typechange
+    dolt reset --hard start
     dolt sql -q "alter table t modify column val2 text"
     dolt add .
     dolt commit -am "typechange"
     run dolt diff -r sql old
     [ $status -eq 1 ]
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
-    dolt checkout start
 
-    dolt checkout -b rename
+    dolt reset --hard start
     dolt sql -q "alter table t rename column val2 to val3"
     dolt add .
     dolt commit -am "rename"
     run dolt diff -r sql old
     [ $status -eq 0 ]
     [[ "$output" =~ 'UPDATE `t` SET `val3`='"'2'"' WHERE `pk`=1;' ]] || false
-    dolt checkout start
 
-    dolt checkout -b add
     # A naive data diff would not know to emit the update statement.
+    dolt reset --hard start
     dolt sql -q "alter table t add column val3 varchar(10) default '3'"
     dolt sql -q "update t set val3 = NULL"
     dolt add .
@@ -2523,16 +2518,14 @@ EOF
     run dolt diff -r sql old
     [ $status -eq 1 ]
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
-    dolt checkout start
 
     # Dropping a column that isn't the last column leads to tuples that can't be diffed.
-    dolt checkout -b drop
+    dolt reset --hard start
     dolt sql -q "alter table t drop column val1"
     dolt add .
     dolt commit -am "drop"
     run dolt diff -r sql old
     [ $status -eq 1 ]
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
-    dolt checkout start
 
 }
