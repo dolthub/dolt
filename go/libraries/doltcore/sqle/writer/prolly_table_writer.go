@@ -51,7 +51,7 @@ type prollyTableWriter struct {
 	sqlSch  sql.Schema
 
 	setter    dsess.SessionRootSetter // TODO: shouldn't the write session be in charge of this and not the table?
-	writeSess     dsess.WriteSession
+	writeSess dsess.WriteSession
 
 	aiCol      schema.Column
 	aiTracker  globalstate.AutoIncrementTracker
@@ -176,7 +176,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 	// TODO: need schema name in ai tracker
 	w.aiSet = true
-	w.aiSet = true
 	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow) // TODO: this errors all the time wtf? why?
 
 	return nil
@@ -288,7 +287,7 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 	w.aiAltered = true
 
 	// The work above is persisted in flushAllTables
-	return w.flush(ctx)
+	return w.flush(ctx) // TODO: necessary??
 }
 
 // AcquireAutoIncrementLock implements AutoIncrementSetter.
@@ -395,7 +394,7 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 		return nil, err
 	}
 
-	if w.aiCol.AutoIncrement {
+	if schema.HasAutoIncrement(w.sch) {
 		if w.aiAltered {
 			tbl, err = w.aiTracker.Set(ctx, w.tblName.Name, tbl, w.writeSess.GetWorkingSet().Ref(), w.aiAlterVal)
 			if err != nil {
@@ -418,17 +417,21 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	tbl, err := w.table(ctx)
+	// TODO: this should be able to flush an individual table, but w.setter makes that really difficult
+	//tbl, err := w.table(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//newRoot, err := w.writeSess.FlushTable(ctx, w.tblName, tbl)
+	//if err != nil {
+	//	return err
+	//}
+	//return w.setter(ctx, w.dbName, newRoot)
+
+	newRoot, err := w.writeSess.FlushWithAutoIncrementOverrides(ctx, w.aiSet, map[string]uint64{w.tblName.Name: w.aiAlterVal})
 	if err != nil {
 		return err
 	}
-	newRoot, err := w.writeSess.FlushTable(ctx, w.tblName, tbl)
-	if err != nil {
-		return err
-	}
-	err = w.Reset(ctx, tbl)
-	if err != nil {
-		return err
-	}
-	return w.setter(ctx, w.dbName, newRoot)
+	return w.setter(ctx, w.dbName, newRoot) // TODO: fix this
+
 }

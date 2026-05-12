@@ -192,25 +192,24 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 	return flushed, nil
 }
 
-func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (*doltdb.WorkingSet, error) {
-	var flushed doltdb.RootValue
-	var err error
+func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (flushed doltdb.RootValue, err error) {
 	if s.targetStaging {
-		flushed, err = s.workingSet.StagedRoot().PutTable(ctx, tblName, tbl)
+		flushed = s.workingSet.StagedRoot()
+		flushed, err = flushed.PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return nil, err
 		}
 		s.workingSet = s.workingSet.WithStagedRoot(flushed)
 	} else {
-		flushed, err = s.workingSet.WorkingRoot().PutTable(ctx, tblName, tbl)
+		flushed = s.workingSet.WorkingRoot()
+		flushed, err = flushed.PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return nil, err
 		}
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
 
-	// TODO: setter is on prollyTableWriter
-	return s.workingSet, nil
+	return flushed, nil
 }
 
 // flushAllTables is the inner implementation for Flush that does not acquire any locks
