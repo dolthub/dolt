@@ -240,8 +240,8 @@ func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, incl
 
 func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, includeCommits bool) (indexes []sql.Index) {
 	return []sql.Index{
-		MakeDiffTableIndex(doltdb.DoltCommitDiffTablePrefix+tbl, "to", toSchema, includeCommits),
-		MakeDiffTableIndex(doltdb.DoltCommitDiffTablePrefix+tbl, "from", fromSchema, includeCommits),
+		MakeDiffTableIndex(tbl, "to", toSchema, includeCommits),
+		MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits),
 	}
 }
 
