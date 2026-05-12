@@ -349,11 +349,13 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 	}
 
 	sc.mu.Lock()
-	// Add/override with new stats
 	for k, v := range newStats.stats {
 		sc.Stats.stats[k] = v
 		sc.Stats.hashes[k] = newStats.hashes[k]
 	}
+	// Ensure the background worker does not overwrite these results if it
+	// started computing before this ANALYZE TABLE ran.
+	sc.genCnt.Add(1)
 	sc.mu.Unlock()
 
 	return err

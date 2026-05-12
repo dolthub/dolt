@@ -2,6 +2,8 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/sql-diff.bash
 
+bats_require_minimum_version 1.5.0
+
 setup() {
     setup_common
 }
@@ -479,10 +481,13 @@ SQL
 
     # confirm a difference exists
     run dolt diff -r sql firstbranch newbranch
-    [ "$status" -eq 0 ]
-    [ ! "$output" = "" ]
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 'newname'" ]] || false
 
-    dolt diff -r sql firstbranch newbranch > query
+    # capture only stdout and redirect to a file
+    run --separate-stderr dolt diff -r sql firstbranch newbranch
+    echo "$output" > query
+    cat query
     grep 'RENAME' query
     dolt checkout firstbranch
     cat query

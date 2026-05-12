@@ -3902,6 +3902,90 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_checkout('.') preserves untracked tables",
+		SetUpScript: []string{
+			"create table tracked (pk int primary key);",
+			"call dolt_commit('-Am', 'add tracked');",
+			"insert into tracked values (1);",
+			"create table untracked (pk int primary key);",
+			"insert into untracked values (9);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('.');",
+				Expected: []sql.Row{{0, ""}},
+			},
+			{
+				Query:    "select * from tracked;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from untracked;",
+				Expected: []sql.Row{{9}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout('.') preserves ignored tables",
+		SetUpScript: []string{
+			"insert into dolt_ignore values ('private_*', true);",
+			"call dolt_commit('-Am', 'commit ignore rule');",
+			"create table mytable (pk int primary key, val int);",
+			"insert into mytable values (1, 10);",
+			"call dolt_commit('-Am', 'add mytable');",
+			"create table private_data (pk int primary key, secret varchar(100));",
+			"insert into private_data values (1, 'secret');",
+			"insert into mytable values (2, 20);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('.');",
+				Expected: []sql.Row{{0, ""}},
+			},
+			{
+				Query:    "select pk, secret from private_data;",
+				Expected: []sql.Row{{1, "secret"}},
+			},
+			{
+				Query:    "select * from mytable;",
+				Expected: []sql.Row{{1, 10}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout('HEAD', table) does not stage other ignored tables",
+		SetUpScript: []string{
+			"insert into dolt_ignore values ('private_*', true);",
+			"call dolt_commit('-Am', 'commit ignore rule');",
+			"create table mytable (pk int primary key, val int);",
+			"insert into mytable values (1, 10);",
+			"call dolt_commit('-Am', 'add mytable');",
+			"create table private_data (pk int primary key, secret varchar(100));",
+			"insert into private_data values (1, 'secret');",
+			"update mytable set val = 99 where pk = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('HEAD', 'mytable');",
+				Expected: []sql.Row{{0, ""}},
+			},
+			{
+				Query:    "select * from mytable;",
+				Expected: []sql.Row{{1, 10}},
+			},
+			{
+				Query: "select staged from dolt_status where table_name = 'private_data';",
+				// Empty result confirms private_data was not staged as a side effect of the
+				// checkout that named only mytable.
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select pk, secret from private_data;",
+				Expected: []sql.Row{{1, "secret"}},
+			},
+		},
+	},
 }
 
 var DoltCheckoutReadOnlyScripts = []queries.ScriptTest{
@@ -4464,9 +4548,10 @@ var DoltResetTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// dolt_status should only show the unstaged table t being added
-				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", byte(0), "new table"}},
+				Query: "select * from dolt_status",
+				// The index is left untouched by --soft, so table t is still staged against the
+				// new HEAD which no longer contains it. See https://git-scm.com/docs/git-reset.
+				Expected: []sql.Row{{"t", byte(1), "new table"}},
 			},
 		},
 	},
@@ -4490,6 +4575,96 @@ var DoltResetTestScripts = []queries.ScriptTest{
 				// dolt_status should only show the unstaged table t being added
 				Query:    "select * from dolt_status",
 				Expected: []sql.Row{{"t", byte(0), "new table"}},
+			},
+		},
+	},
+	{
+		// See https://git-scm.com/docs/git-reset
+		Name: "dolt_reset(rev) moves HEAD, resets the index, and leaves the working tree alone",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, v int);",
+			"INSERT INTO t VALUES (1, 10);",
+			"call dolt_commit('-Am', 'c1');",
+			"INSERT INTO t VALUES (2, 20);",
+			"call dolt_commit('-am', 'c2');",
+			"INSERT INTO t VALUES (3, 30);",
+			"call dolt_add('.');",
+			"INSERT INTO t VALUES (4, 40);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('HEAD~');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "SELECT pk, v FROM t AS OF STAGED ORDER BY pk",
+				// Index resets to the new HEAD which only has pk=1.
+				Expected: []sql.Row{{1, 10}},
+			},
+			{
+				Query: "SELECT pk, v FROM t ORDER BY pk",
+				// Working tree is preserved across the reset, including the staged pk=3 and
+				// the unstaged pk=4 from before the reset.
+				Expected: []sql.Row{{1, 10}, {2, 20}, {3, 30}, {4, 40}},
+			},
+		},
+	},
+	{
+		// See https://git-scm.com/docs/git-reset
+		Name: "dolt_reset('--soft', rev) leaves staged tables untouched",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, v int);",
+			"INSERT INTO t VALUES (1, 10);",
+			"call dolt_commit('-Am', 'c1');",
+			"INSERT INTO t VALUES (2, 20);",
+			"call dolt_commit('-am', 'c2');",
+			"INSERT INTO t VALUES (3, 30);",
+			"call dolt_add('.');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--soft', 'HEAD~');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT pk FROM t AS OF STAGED ORDER BY pk",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
+				Query:    "SELECT pk FROM t ORDER BY pk",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
+				Query: "SELECT * FROM dolt_status",
+				// The byte indicates whether the table is staged (1) or unstaged (0).
+				Expected: []sql.Row{{"t", byte(1), "modified"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_reset('--hard') preserves ignored tables when ignore rule is committed",
+		SetUpScript: []string{
+			"insert into dolt_ignore values ('private_data', true);",
+			"call dolt_commit('-Am', 'add ignore rule');",
+			"create table mytable (pk int primary key, val int);",
+			"insert into mytable values (1, 10);",
+			"call dolt_commit('-Am', 'add mytable');",
+			"create table private_data (pk int primary key, secret varchar(100));",
+			"insert into private_data values (1, 'secret');",
+			"insert into mytable values (2, 20);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select pk, secret from private_data;",
+				Expected: []sql.Row{{1, "secret"}},
+			},
+			{
+				Query:    "select * from mytable;",
+				Expected: []sql.Row{{1, 10}},
 			},
 		},
 	},
