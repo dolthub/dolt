@@ -17,6 +17,7 @@ package val
 import (
 	"bytes"
 	"context"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/mohae/uvarint"
@@ -178,6 +179,48 @@ func (v AdaptiveValue) getUnderlyingBytes(ctx context.Context, vs ValueStore) ([
 	_, lengthBytes := uvarint.Uvarint(v)
 	addr := v[lengthBytes:]
 	return vs.ReadBytes(ctx, hash.New(addr))
+}
+
+// singleChunkReader is a ValueChunkReader that yields a single byte slice and then EOF. It is
+// used to expose null and inline AdaptiveValues through the same streaming interface as
+// out-of-band values.
+type singleChunkReader struct {
+	data []byte
+	done bool
+}
+
+func (r *singleChunkReader) NextChunk(_ context.Context) ([]byte, error) {
+	if r.done {
+		return nil, io.EOF
+	}
+	r.done = true
+	if len(r.data) == 0 {
+		return nil, io.EOF
+	}
+	return r.data, nil
+}
+
+// getChunkReader returns a ValueChunkReader that streams the underlying bytes of v. For null
+// and inline values this is a single-chunk reader over the in-memory payload. For out-of-band
+// values it asks the ValueStore for a chunked reader if it supports one, otherwise it falls
+// back to loading the entire value through ReadBytes.
+func (v AdaptiveValue) getChunkReader(ctx context.Context, vs ValueStore) (ValueChunkReader, error) {
+	if v.IsNull() {
+		return &singleChunkReader{done: true}, nil
+	}
+	if v.isInlined() {
+		return &singleChunkReader{data: v[1:]}, nil
+	}
+	_, lengthBytes := uvarint.Uvarint(v)
+	addr := hash.New(v[lengthBytes:])
+	if cvs, ok := vs.(ChunkedValueStore); ok {
+		return cvs.ReadBytesChunked(ctx, addr)
+	}
+	b, err := vs.ReadBytes(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	return &singleChunkReader{data: b}, nil
 }
 
 func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {

@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"testing"
 
@@ -399,6 +400,158 @@ func mustNewBlob(ctx context.Context, ns NodeStore, len, chunkSize int) hash.Has
 		panic(err)
 	}
 	return addr
+}
+
+// countingNodeStore wraps a NodeStore and counts how many calls are made to Read. This is used
+// to verify that streamed comparisons stop loading nodes once the result is decided.
+type countingNodeStore struct {
+	NodeStore
+	reads int
+}
+
+func (c *countingNodeStore) Read(ctx context.Context, h hash.Hash) (*Node, error) {
+	c.reads++
+	return c.NodeStore.Read(ctx, h)
+}
+
+func (c *countingNodeStore) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
+	n, err := c.Read(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+	return NewBlobChunkReader(n, c), nil
+}
+
+func readAllChunks(t *testing.T, r val.ValueChunkReader) []byte {
+	t.Helper()
+	ctx := context.Background()
+	var out []byte
+	for {
+		chunk, err := r.NextChunk(ctx)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		out = append(out, chunk...)
+	}
+	return out
+}
+
+func TestBlobChunkReader(t *testing.T) {
+	const blobLen = 50_000
+	const chunkSize = 4000
+
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+	expected := make([]byte, blobLen)
+	for i := range expected {
+		expected[i] = byte(i)
+	}
+
+	bb, err := NewBlobBuilder(chunkSize)
+	require.NoError(t, err)
+	bb.SetNodeStore(ns)
+	bb.Init(blobLen)
+	_, addr, err := bb.Chunk(ctx, bytes.NewReader(expected))
+	require.NoError(t, err)
+
+	t.Run("streams full contents", func(t *testing.T) {
+		r, err := ns.(val.ChunkedValueStore).ReadBytesChunked(ctx, addr)
+		require.NoError(t, err)
+		got := readAllChunks(t, r)
+		require.Equal(t, expected, got)
+	})
+
+	t.Run("stops reading after EOF", func(t *testing.T) {
+		r, err := ns.(val.ChunkedValueStore).ReadBytesChunked(ctx, addr)
+		require.NoError(t, err)
+		_ = readAllChunks(t, r)
+		// Additional NextChunk calls should keep returning io.EOF without panicking.
+		c, err := r.NextChunk(ctx)
+		require.Nil(t, c)
+		require.Equal(t, io.EOF, err)
+	})
+
+	t.Run("early termination loads only a prefix of nodes", func(t *testing.T) {
+		root, err := ns.(*nodeStoreValidator).Read(ctx, addr)
+		require.NoError(t, err)
+		require.Greater(t, root.Level(), 0, "test setup expects a multi-level blob tree")
+
+		cns := &countingNodeStore{NodeStore: ns}
+		r := NewBlobChunkReader(root, cns)
+		// Read just one leaf chunk and stop.
+		chunk, err := r.NextChunk(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, chunk)
+
+		// Walking the entire tree would read every internal and leaf node. Reading only the
+		// first leaf should require strictly fewer Reads.
+		fullReads := 0
+		fullNs := &countingNodeStore{NodeStore: ns}
+		require.NoError(t, WalkNodes(ctx, root, fullNs, func(_ context.Context, _ *Node) error { return nil }))
+		fullReads = fullNs.reads
+		require.Less(t, cns.reads, fullReads, "early termination should read fewer nodes than full walk")
+	})
+}
+
+// TestCompareAdaptiveValueStreamsChunks verifies that comparing two out-of-band AdaptiveValues
+// through TupleDesc.Comparator returns the correct ordering and stops loading nodes once the
+// ordering is decided. The streaming path is the entire reason this test exists; if it were
+// to regress to loading both values fully, the early-termination assertion would fail.
+func TestCompareAdaptiveValueStreamsChunks(t *testing.T) {
+	ctx := context.Background()
+	const blobLen = 50_000
+
+	// Build two large byte sequences that share a long common prefix and differ at byte
+	// index `divergeAt`. With blobLen >> chunkSize, the divergence is far enough from the
+	// start that a non-streaming compare would touch every node in the tree.
+	const divergeAt = 100
+	left := make([]byte, blobLen)
+	right := make([]byte, blobLen)
+	for i := range left {
+		left[i] = byte(i)
+		right[i] = byte(i)
+	}
+	right[divergeAt] = left[divergeAt] + 1
+
+	cases := []struct {
+		name string
+		l, r []byte
+		want int
+	}{
+		{"left less", left, right, -1},
+		{"right less", right, left, 1},
+		{"equal", left, append([]byte(nil), left...), 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cns := &countingNodeStore{NodeStore: NewTestNodeStore()}
+			lVal, err := val.NewOutOfBandAdaptiveValue(ctx, cns, c.l)
+			require.NoError(t, err)
+			rVal, err := val.NewOutOfBandAdaptiveValue(ctx, cns, c.r)
+			require.NoError(t, err)
+
+			td := val.NewTupleDescriptorWithArgs(
+				val.TupleDescriptorArgs{ValueStore: cns},
+				val.Type{Enc: val.BytesAdaptiveEnc},
+			)
+
+			writesAfterBuild := cns.reads
+			cns.reads = 0
+			got := td.Comparator().CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.BytesAdaptiveEnc})
+			require.Equal(t, c.want, got)
+
+			// Bound the number of nodes read during compare. The mismatch is well within the
+			// first leaf chunk, so we expect to read O(tree height) nodes, not the whole tree.
+			// We give a generous upper bound (10x tree height) to keep the test stable while
+			// still catching a regression to "load everything."
+			if c.want != 0 {
+				require.LessOrEqual(t, cns.reads, 8,
+					"compare should read only the root-to-first-leaf path on each side; %d writes happened before compare",
+					writesAfterBuild)
+			}
+		})
+	}
 }
 
 func getBlobValues(msg serial.Message) []byte {

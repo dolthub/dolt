@@ -230,9 +230,20 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 	return result, err
 }
 
+// ReadBytesChunked implements val.ChunkedValueStore. It returns a reader that yields the leaf
+// chunks of the blob tree at |h| one at a time so callers can stop after consuming a prefix.
+func (ns *nodeStore) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
+	n, err := ns.Read(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+	return NewBlobChunkReader(n, ns), nil
+}
+
 func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
 	_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
 	return h, err
 }
 
 var _ val.ValueStore = &nodeStore{}
+var _ val.ChunkedValueStore = &nodeStore{}

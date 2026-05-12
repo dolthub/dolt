@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"math/bits"
@@ -674,16 +675,68 @@ func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue
 	if lInline && rInline {
 		return bytes.Compare(lPayload, rPayload)
 	}
-	// At least one value is out-of-band; load both through the ValueStore.
-	lBytes, err := l.getUnderlyingBytes(ctx, vs)
+	// At least one value is out-of-band. Stream both sides chunk-by-chunk so that, for very
+	// large values, we can return as soon as the ordering is decided without loading either
+	// value fully into memory.
+	lReader, err := l.getChunkReader(ctx, vs)
 	if err != nil {
-		panic(fmt.Sprintf("compareAdaptiveValue: failed to load left value: %v", err))
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to open left value reader: %v", err))
 	}
-	rBytes, err := r.getUnderlyingBytes(ctx, vs)
+	rReader, err := r.getChunkReader(ctx, vs)
 	if err != nil {
-		panic(fmt.Sprintf("compareAdaptiveValue: failed to load right value: %v", err))
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to open right value reader: %v", err))
 	}
-	return bytes.Compare(lBytes, rBytes)
+	cmp, err := compareChunkReaders(ctx, lReader, rReader)
+	if err != nil {
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to read value chunks: %v", err))
+	}
+	return cmp
+}
+
+// compareChunkReaders compares the byte streams produced by two ValueChunkReaders, returning a
+// negative, zero, or positive int with the same semantics as bytes.Compare. It reads only as
+// many chunks as required to determine the result: the loop stops on the first mismatched byte
+// or when one stream is exhausted while the other still has data.
+func compareChunkReaders(ctx context.Context, l, r ValueChunkReader) (int, error) {
+	var lBuf, rBuf []byte
+	lDone, rDone := false, false
+	for {
+		if len(lBuf) == 0 && !lDone {
+			chunk, err := l.NextChunk(ctx)
+			if err == io.EOF {
+				lDone = true
+			} else if err != nil {
+				return 0, err
+			}
+			lBuf = chunk
+		}
+		if len(rBuf) == 0 && !rDone {
+			chunk, err := r.NextChunk(ctx)
+			if err == io.EOF {
+				rDone = true
+			} else if err != nil {
+				return 0, err
+			}
+			rBuf = chunk
+		}
+		switch {
+		case len(lBuf) == 0 && len(rBuf) == 0:
+			return 0, nil
+		case len(lBuf) == 0:
+			return -1, nil
+		case len(rBuf) == 0:
+			return 1, nil
+		}
+		n := len(lBuf)
+		if len(rBuf) < n {
+			n = len(rBuf)
+		}
+		if c := bytes.Compare(lBuf[:n], rBuf[:n]); c != 0 {
+			return c, nil
+		}
+		lBuf = lBuf[n:]
+		rBuf = rBuf[n:]
+	}
 }
 
 func writeRaw(buf, val []byte) {

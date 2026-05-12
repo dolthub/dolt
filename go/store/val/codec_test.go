@@ -15,6 +15,8 @@
 package val
 
 import (
+	"context"
+	"io"
 	"math"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCompare(t *testing.T) {
@@ -257,6 +260,112 @@ func TestCompare(t *testing.T) {
 			(&TupleDesc{}).formatValue(ctx, test.typ.Enc, 0, test.l),
 			fmtComparator(test.cmp),
 			(&TupleDesc{}).formatValue(ctx, test.typ.Enc, 0, test.r))
+	}
+}
+
+// fakeChunkReader yields a fixed list of byte chunks for testing compareChunkReaders. It also
+// records the number of chunks actually read so tests can assert that comparison stops early.
+type fakeChunkReader struct {
+	chunks [][]byte
+	read   int
+}
+
+func (r *fakeChunkReader) NextChunk(_ context.Context) ([]byte, error) {
+	if r.read >= len(r.chunks) {
+		return nil, io.EOF
+	}
+	c := r.chunks[r.read]
+	r.read++
+	return c, nil
+}
+
+func TestCompareChunkReaders(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name string
+		l, r [][]byte
+		want int
+		// minRead is the minimum number of chunks compareChunkReaders is expected to read from
+		// each side before deciding. It exists to verify that comparison stops early once the
+		// result is known.
+		minLRead, minRRead int
+		maxLRead, maxRRead int
+	}{
+		{
+			name:     "empty vs empty",
+			l:        nil,
+			r:        nil,
+			want:     0,
+			maxLRead: 0, maxRRead: 0,
+		},
+		{
+			name:     "empty vs non-empty",
+			l:        nil,
+			r:        [][]byte{[]byte("a")},
+			want:     -1,
+			maxLRead: 1, maxRRead: 1,
+		},
+		{
+			name:     "non-empty vs empty",
+			l:        [][]byte{[]byte("a")},
+			r:        nil,
+			want:     1,
+			maxLRead: 1, maxRRead: 1,
+		},
+		{
+			name:     "equal single-chunk",
+			l:        [][]byte{[]byte("hello")},
+			r:        [][]byte{[]byte("hello")},
+			want:     0,
+			maxLRead: 2, maxRRead: 2,
+		},
+		{
+			name:     "mismatch in first chunk stops early",
+			l:        [][]byte{[]byte("aaaa"), []byte("never read")},
+			r:        [][]byte{[]byte("aaab"), []byte("never read")},
+			want:     -1,
+			maxLRead: 1, maxRRead: 1,
+		},
+		{
+			name:     "prefix is less",
+			l:        [][]byte{[]byte("abc")},
+			r:        [][]byte{[]byte("abcd")},
+			want:     -1,
+		},
+		{
+			name:     "prefix is greater",
+			l:        [][]byte{[]byte("abcd")},
+			r:        [][]byte{[]byte("abc")},
+			want:     1,
+		},
+		{
+			name: "misaligned chunks, equal",
+			l:    [][]byte{[]byte("abcd"), []byte("efgh"), []byte("ij")},
+			r:    [][]byte{[]byte("ab"), []byte("cdefghi"), []byte("j")},
+			want: 0,
+		},
+		{
+			name: "misaligned chunks, mismatch deep in stream",
+			l:    [][]byte{[]byte("abcdef"), []byte("ghij")},
+			r:    [][]byte{[]byte("ab"), []byte("cd"), []byte("efgi"), []byte("j")},
+			want: -1,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			lr := &fakeChunkReader{chunks: c.l}
+			rr := &fakeChunkReader{chunks: c.r}
+			got, err := compareChunkReaders(ctx, lr, rr)
+			require.NoError(t, err)
+			assert.Equal(t, c.want, got)
+			if c.maxLRead > 0 {
+				assert.LessOrEqual(t, lr.read, c.maxLRead, "read too many chunks from left")
+			}
+			if c.maxRRead > 0 {
+				assert.LessOrEqual(t, rr.read, c.maxRRead, "read too many chunks from right")
+			}
+		})
 	}
 }
 
