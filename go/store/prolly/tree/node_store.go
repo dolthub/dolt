@@ -240,15 +240,11 @@ func (ns *nodeStore) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.Val
 	return NewBlobChunkReader(n, ns), nil
 }
 
-// ReadJsonChunked implements val.ChunkedJsonValueStore. JSON values may be stored either as a
-// plain blob tree (older adaptive-JSON path) or as a JSON-indexed prolly tree whose internal
-// nodes are address maps. The returned reader handles both shapes.
-func (ns *nodeStore) ReadJsonChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
-	n, err := ns.Read(ctx, h)
-	if err != nil {
-		return nil, err
-	}
-	return NewJsonChunkReader(n, ns), nil
+// CompareJsonAdaptiveValues implements val.JsonAdaptiveValueComparator. The work is done by
+// IndexedJsonDocument.Compare, which compares two JSON documents chunk-by-chunk and applies
+// MySQL's JSON ordering rules.
+func (ns *nodeStore) CompareJsonAdaptiveValues(ctx context.Context, l, r val.AdaptiveValue) (int, error) {
+	return compareJsonAdaptiveValues(ctx, ns, l, r)
 }
 
 func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
@@ -258,4 +254,4 @@ func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error
 
 var _ val.ValueStore = &nodeStore{}
 var _ val.ChunkedValueStore = &nodeStore{}
-var _ val.ChunkedJsonValueStore = &nodeStore{}
+var _ val.JsonAdaptiveValueComparator = &nodeStore{}

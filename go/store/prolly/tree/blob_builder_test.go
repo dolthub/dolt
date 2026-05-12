@@ -17,7 +17,6 @@ package tree
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -499,37 +497,6 @@ func TestBlobChunkReader(t *testing.T) {
 	})
 }
 
-// TestJsonChunkReader walks a JSON-indexed prolly tree (whose internal nodes are AddressMaps,
-// not Blob address arrays) and verifies the jsonChunkReader streams its leaf chunks correctly.
-func TestJsonChunkReader(t *testing.T) {
-	ctx := context.Background()
-	ns := NewTestNodeStore()
-
-	// Build a JSON document large enough to need an indexed tree.
-	doc := make(map[string]string, 2000)
-	for i := 0; i < 2000; i++ {
-		key := fmt.Sprintf("k%04d", i)
-		doc[key] = "this is a moderately long value that helps push the document over a single chunk"
-	}
-	js, err := json.Marshal(doc)
-	require.NoError(t, err)
-	root, err := SerializeJsonToAddr(ctx, ns, types.NewLazyJSONDocument(js))
-	require.NoError(t, err)
-
-	// Sanity: the test setup must actually exercise a multi-level indexed JSON tree, otherwise
-	// the test would just be re-running TestBlobChunkReader semantics.
-	require.Greater(t, root.Level(), 0)
-
-	r := NewJsonChunkReader(root, ns)
-	got := readAllChunks(t, r)
-
-	// The bytes streamed by the JSON reader should reconstruct the bytes the indexed JSON map
-	// would yield via its own walk — that is what makes a comparison over these chunks safe.
-	want, err := getBytesFromIndexedJsonMap(ctx, StaticJsonMap{Root: root, NodeStore: ns, Order: &jsonLocationOrdering{}})
-	require.NoError(t, err)
-	require.Equal(t, want, got)
-}
-
 // TestCompareAdaptiveValueStreamsChunks verifies that comparing two out-of-band AdaptiveValues
 // through TupleDesc.Comparator returns the correct ordering and stops loading nodes once the
 // ordering is decided. The streaming path is the entire reason this test exists; if it were
@@ -590,62 +557,81 @@ func TestCompareAdaptiveValueStreamsChunks(t *testing.T) {
 	}
 }
 
-// countingChunkedJsonStore wraps a NodeStore so we can verify which streaming path the
-// adaptive comparator picks. ReadJsonChunked is the only entry point this test cares about;
-// if compareAdaptiveValue ever stopped dispatching JSON values here we would see jsonReads
-// stay at zero.
-type countingChunkedJsonStore struct {
+// countingJsonComparatorStore wraps a NodeStore so we can verify that JsonAdaptiveEnc values
+// dispatch through the JSON comparator (which delegates to IndexedJsonDocument.Compare) rather
+// than the generic byte-streaming chunk reader. If compareAdaptiveValue ever stopped routing
+// JSON values through this method, jsonCmps would stay at zero.
+type countingJsonComparatorStore struct {
 	NodeStore
+	jsonCmps   int
 	bytesReads int
-	jsonReads  int
 }
 
-func (c *countingChunkedJsonStore) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
+func (c *countingJsonComparatorStore) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
 	c.bytesReads++
 	return c.NodeStore.(val.ChunkedValueStore).ReadBytesChunked(ctx, h)
 }
 
-func (c *countingChunkedJsonStore) ReadJsonChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
-	c.jsonReads++
-	return c.NodeStore.(val.ChunkedJsonValueStore).ReadJsonChunked(ctx, h)
+func (c *countingJsonComparatorStore) CompareJsonAdaptiveValues(ctx context.Context, l, r val.AdaptiveValue) (int, error) {
+	c.jsonCmps++
+	return c.NodeStore.(val.JsonAdaptiveValueComparator).CompareJsonAdaptiveValues(ctx, l, r)
 }
 
-// TestCompareAdaptiveJsonRoutesThroughJsonReader makes sure that JsonAdaptiveEnc values are
-// compared via the dedicated JSON reader path rather than the byte (blob) path. The
-// comparison result itself is still byte-wise today; the point of this test is to lock in
-// the dispatch so a future change to the JSON reader (e.g. JSON-aware semantic comparison)
-// only needs to update one location.
-func TestCompareAdaptiveJsonRoutesThroughJsonReader(t *testing.T) {
+// TestCompareAdaptiveJsonUsesIndexedJsonCompare verifies that JsonAdaptiveEnc values are
+// compared via IndexedJsonDocument.Compare (type-aware JSON ordering) rather than the
+// byte-streaming path used for the other adaptive encodings. The numeric-array case is the
+// crucial one: a byte-wise compare would observe `"4"` < `"40"` at position 7, but JSON
+// number ordering puts 4 < 40, so a positive routing through IndexedJsonDocument.Compare is
+// the only way to get this right.
+func TestCompareAdaptiveJsonUsesIndexedJsonCompare(t *testing.T) {
 	ctx := context.Background()
-	cjs := &countingChunkedJsonStore{NodeStore: NewTestNodeStore()}
 
-	// Two large JSON-shaped byte sequences that differ at a single byte. We don't have to
-	// build legal JSON for this test — compareAdaptiveValue treats the bytes opaquely.
-	const size = 20_000
-	left := make([]byte, size)
-	right := make([]byte, size)
-	for i := range left {
-		left[i] = byte(i)
-		right[i] = byte(i)
+	cases := []struct {
+		name string
+		l, r []byte
+		want int
+	}{
+		{
+			name: "identical objects",
+			l:    []byte(`{"a":1,"b":2}`),
+			r:    []byte(`{"a":1,"b":2}`),
+			want: 0,
+		},
+		{
+			name: "object with different value",
+			l:    []byte(`{"a":1,"b":2}`),
+			r:    []byte(`{"a":1,"b":3}`),
+			want: -1,
+		},
+		{
+			name: "numeric ordering in arrays beats lex ordering",
+			l:    []byte(`[1,2,4]`),
+			r:    []byte(`[1,2,40]`),
+			want: -1,
+		},
 	}
-	right[100] = left[100] + 1
 
-	lVal, err := val.NewOutOfBandAdaptiveValue(ctx, cjs, left)
-	require.NoError(t, err)
-	rVal, err := val.NewOutOfBandAdaptiveValue(ctx, cjs, right)
-	require.NoError(t, err)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cjs := &countingJsonComparatorStore{NodeStore: NewTestNodeStore()}
+			lVal, err := val.NewOutOfBandAdaptiveValue(ctx, cjs, c.l)
+			require.NoError(t, err)
+			rVal, err := val.NewOutOfBandAdaptiveValue(ctx, cjs, c.r)
+			require.NoError(t, err)
 
-	td := val.NewTupleDescriptorWithArgs(
-		val.TupleDescriptorArgs{ValueStore: cjs},
-		val.Type{Enc: val.JsonAdaptiveEnc},
-	)
+			td := val.NewTupleDescriptorWithArgs(
+				val.TupleDescriptorArgs{ValueStore: cjs},
+				val.Type{Enc: val.JsonAdaptiveEnc},
+			)
 
-	cjs.bytesReads = 0
-	cjs.jsonReads = 0
-	got := td.Comparator().CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.JsonAdaptiveEnc})
-	require.Equal(t, -1, got)
-	require.Equal(t, 0, cjs.bytesReads, "JSON adaptive compare must not use the blob reader path")
-	require.Equal(t, 2, cjs.jsonReads, "JSON adaptive compare should open a JSON reader per side")
+			cjs.bytesReads = 0
+			cjs.jsonCmps = 0
+			got := td.Comparator().CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.JsonAdaptiveEnc})
+			require.Equal(t, c.want, got)
+			require.Equal(t, 1, cjs.jsonCmps, "JsonAdaptiveEnc must dispatch through CompareJsonAdaptiveValues")
+			require.Equal(t, 0, cjs.bytesReads, "JSON compare must not fall back to the byte-streaming path")
+		})
+	}
 }
 
 // TestCompareAdaptiveTextWithCollation drives the full CollationTupleComparator → val

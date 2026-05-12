@@ -671,6 +671,18 @@ func compareAddr(l, r hash.Hash) int {
 }
 
 func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue, enc Encoding) int {
+	// JSON has type-aware ordering rules, not byte ordering, so delegate to the store's
+	// JSON comparator when available. The implementation in tree uses
+	// IndexedJsonDocument.Compare, which walks both documents chunk-by-chunk.
+	if enc == JsonAdaptiveEnc {
+		if jc, ok := vs.(JsonAdaptiveValueComparator); ok {
+			cmp, err := jc.CompareJsonAdaptiveValues(ctx, l, r)
+			if err != nil {
+				panic(fmt.Sprintf("compareAdaptiveValue: failed to compare JSON values: %v", err))
+			}
+			return cmp
+		}
+	}
 	// If both values are inline we can compare their payloads without touching the ValueStore.
 	lPayload, lInline := InlineValueBytes(l)
 	rPayload, rInline := InlineValueBytes(r)
@@ -679,14 +691,12 @@ func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue
 	}
 	// At least one value is out-of-band. Stream both sides chunk-by-chunk so that, for very
 	// large values, we can return as soon as the ordering is decided without loading either
-	// value fully into memory. The Encoding determines which kind of reader we open: JSON
-	// adaptive values may be stored in a tree whose internal nodes differ from blob trees,
-	// so they get a dedicated reader (see ChunkedJsonValueStore).
-	lReader, err := l.getChunkReader(ctx, vs, enc)
+	// value fully into memory.
+	lReader, err := l.getChunkReader(ctx, vs)
 	if err != nil {
 		panic(fmt.Sprintf("compareAdaptiveValue: failed to open left value reader: %v", err))
 	}
-	rReader, err := r.getChunkReader(ctx, vs, enc)
+	rReader, err := r.getChunkReader(ctx, vs)
 	if err != nil {
 		panic(fmt.Sprintf("compareAdaptiveValue: failed to open right value reader: %v", err))
 	}
@@ -710,58 +720,86 @@ func CompareAdaptiveStringsWithCollation(ctx context.Context, vs ValueStore, l, 
 	lPayload, lInline := InlineValueBytes(l)
 	rPayload, rInline := InlineValueBytes(r)
 	if lInline && rInline {
-		return compareCollatedStringBytes(collation, lPayload, rPayload), nil
+		return CompareCollatedStrings(collation, lPayload, rPayload), nil
 	}
-	lReader, err := l.getChunkReader(ctx, vs, StringAdaptiveEnc)
+	lReader, err := l.getChunkReader(ctx, vs)
 	if err != nil {
 		return 0, err
 	}
-	rReader, err := r.getChunkReader(ctx, vs, StringAdaptiveEnc)
+	rReader, err := r.getChunkReader(ctx, vs)
 	if err != nil {
 		return 0, err
 	}
 	return compareCollatedChunkReaders(ctx, lReader, rReader, collation)
 }
 
-// compareCollatedStringBytes mirrors the rune-by-rune logic used in CollationTupleComparator
-// (compareCollatedStrings) but operates on two []byte slices directly. It is the in-memory
-// fast path for adaptive strings that are both inlined.
-func compareCollatedStringBytes(collation sql.CollationID, left, right []byte) int {
-	getRuneWeight := collation.Sorter()
-	for len(left) > 0 && len(right) > 0 {
-		lr, lread := utf8.DecodeRune(left)
-		rr, rread := utf8.DecodeRune(right)
-		lErr := lr == utf8.RuneError && lread == 1
-		rErr := rr == utf8.RuneError && rread == 1
-		if lErr || rErr {
-			if lErr && !rErr {
-				return 1
-			}
-			if !lErr && rErr {
-				return -1
-			}
+// CompareCollatedStrings compares two UTF-8 byte slices using the given collation. It first
+// byte-compares the common prefix as a fast path (every code-point boundary in a well-formed
+// UTF-8 stream is also a byte boundary, so a matching byte prefix necessarily encodes the
+// same prefix of runes), then backs up to the first rune boundary on each side and continues
+// rune-by-rune, applying the collation's per-rune weight. Malformed strings sort after
+// well-formed ones and two malformed strings compare equal, matching MySQL's behavior.
+func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
+	i := 0
+	for i < len(left) && i < len(right) {
+		if left[i] != right[i] {
+			break
+		}
+		i++
+	}
+	if i >= len(left) || i >= len(right) {
+		if len(left) < len(right) {
+			return -1
+		} else if len(left) > len(right) {
+			return 1
+		} else {
 			return 0
 		}
-		if lr != rr {
-			lw := getRuneWeight(lr)
-			rw := getRuneWeight(rr)
-			if lw < rw {
+	}
+
+	li := i
+	for ; li > 0 && !utf8.RuneStart(left[li]); li-- {
+	}
+	left = left[li:]
+
+	ri := i
+	for ; ri > 0 && !utf8.RuneStart(right[ri]); ri-- {
+	}
+	right = right[ri:]
+
+	getRuneWeight := collation.Sorter()
+	for len(left) > 0 && len(right) > 0 {
+		leftRune, leftRead := utf8.DecodeRune(left)
+		rightRune, rightRead := utf8.DecodeRune(right)
+		if leftRead == utf8.RuneError || rightRead == utf8.RuneError {
+			if leftRead == utf8.RuneError && rightRead != utf8.RuneError {
+				return 1
+			} else if leftRead != utf8.RuneError && rightRead == utf8.RuneError {
 				return -1
+			} else {
+				return 0
 			}
-			if lw > rw {
+		}
+		if leftRune != rightRune {
+			leftWeight := getRuneWeight(leftRune)
+			rightWeight := getRuneWeight(rightRune)
+			if leftWeight < rightWeight {
+				return -1
+			} else if leftWeight > rightWeight {
 				return 1
 			}
 		}
-		left = left[lread:]
-		right = right[rread:]
+		left = left[leftRead:]
+		right = right[rightRead:]
 	}
+
 	if len(left) < len(right) {
 		return -1
-	}
-	if len(left) > len(right) {
+	} else if len(left) > len(right) {
 		return 1
+	} else {
+		return 0
 	}
-	return 0
 }
 
 // compareCollatedChunkReaders is the streaming version of compareCollatedStringBytes. It

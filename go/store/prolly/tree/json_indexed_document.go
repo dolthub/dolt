@@ -26,7 +26,6 @@ import (
 	sqljson "github.com/dolthub/go-mysql-server/sql/expression/function/json"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -137,55 +136,66 @@ func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []b
 	return bytes, err
 }
 
-// jsonChunkReader streams the leaf chunks of a JSON-indexed prolly tree in document order via
-// val.ValueChunkReader. The leaf layout (a single value per leaf node, holding a JSON
-// substring) matches the blob format, but a JSON tree's internal nodes are AddressMaps keyed
-// by jsonLocation rather than the contiguous address arrays used by blob trees. This reader
-// is kept separate from blobChunkReader so the two formats can evolve independently — for
-// example, a future implementation could align the emitted chunks to JSON value boundaries.
-type jsonChunkReader struct {
-	ns    NodeStore
-	stack []jsonChunkReaderFrame
-}
-
-type jsonChunkReaderFrame struct {
-	node *Node
-	idx  int
-}
-
-// NewJsonChunkReader returns a val.ValueChunkReader that yields the leaf chunks of the JSON
-// document rooted at |root| in document order. A nil or empty root produces an empty stream.
-// The reader works whether |root| is a single-leaf blob, a multi-level blob tree (older JSON
-// storage), or an AddressMap-rooted indexed JSON tree.
-func NewJsonChunkReader(root *Node, ns NodeStore) val.ValueChunkReader {
-	r := &jsonChunkReader{ns: ns}
-	if root != nil && !root.empty() {
-		r.stack = []jsonChunkReaderFrame{{node: root}}
+// openJsonAdaptiveValue resolves an adaptive JSON value to a sql.JSONWrapper. Inline values
+// are wrapped as LazyJSONDocuments over their in-memory payload; out-of-band values become
+// IndexedJsonDocuments (or, when the underlying tree predates the JSON-indexed format, fall
+// back to a LazyJSONDocument via JSONDoc.ToIndexedJSONDocument). NULL adaptive values return
+// (nil, nil) so the caller can apply NULL ordering.
+func openJsonAdaptiveValue(ctx context.Context, ns NodeStore, v val.AdaptiveValue) (sql.JSONWrapper, error) {
+	if v.IsNull() {
+		return nil, nil
 	}
-	return r
+	if bytes, ok := val.InlineValueBytes(v); ok {
+		return types.NewLazyJSONDocument(unescapeHTMLCodepoints(bytes)), nil
+	}
+	addr, err := val.OutOfBandAdaptiveValueAddr(v)
+	if err != nil {
+		return nil, err
+	}
+	return NewJSONDoc(addr, ns).ToIndexedJSONDocument(ctx)
 }
 
-func (r *jsonChunkReader) NextChunk(ctx context.Context) ([]byte, error) {
-	for len(r.stack) > 0 {
-		top := &r.stack[len(r.stack)-1]
-		if top.idx >= top.node.Count() {
-			r.stack = r.stack[:len(r.stack)-1]
-			continue
-		}
-		if top.node.IsLeaf() {
-			data := top.node.GetValue(top.idx)
-			top.idx++
-			return data, nil
-		}
-		addr := hash.New(top.node.GetValue(top.idx))
-		top.idx++
-		child, err := r.ns.Read(ctx, addr)
-		if err != nil {
-			return nil, err
-		}
-		r.stack = append(r.stack, jsonChunkReaderFrame{node: child})
+// compareJsonAdaptiveValues implements the JsonAdaptiveValueComparator contract from val.
+// It hands the heavy lifting to IndexedJsonDocument.Compare when possible, which walks both
+// documents chunk-by-chunk and stops at the first observed difference. For mixed cases (one
+// inline, one indexed) the indexed side's Compare method handles the other-as-JSONWrapper
+// fallback. When neither side is indexed (both inline) we still get correct MySQL JSON
+// ordering via types.CompareJSON.
+func compareJsonAdaptiveValues(ctx context.Context, ns NodeStore, l, r val.AdaptiveValue) (int, error) {
+	lWrapper, err := openJsonAdaptiveValue(ctx, ns, l)
+	if err != nil {
+		return 0, err
 	}
-	return nil, io.EOF
+	rWrapper, err := openJsonAdaptiveValue(ctx, ns, r)
+	if err != nil {
+		return 0, err
+	}
+	// Order NULLs first, matching the behavior at the tuple layer.
+	if lWrapper == nil || rWrapper == nil {
+		if lWrapper == nil && rWrapper == nil {
+			return 0, nil
+		}
+		if lWrapper == nil {
+			return -1, nil
+		}
+		return 1, nil
+	}
+	if li, ok := lWrapper.(IndexedJsonDocument); ok {
+		return li.Compare(ctx, rWrapper)
+	}
+	if ri, ok := rWrapper.(IndexedJsonDocument); ok {
+		cmp, err := ri.Compare(ctx, lWrapper)
+		return -cmp, err
+	}
+	lv, err := lWrapper.ToInterface(ctx)
+	if err != nil {
+		return 0, err
+	}
+	rv, err := rWrapper.ToInterface(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return types.CompareJSON(ctx, lv, rv)
 }
 
 func tryWithFallback(

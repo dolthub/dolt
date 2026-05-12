@@ -17,7 +17,6 @@ package schema
 import (
 	"bytes"
 	"context"
-	"unicode/utf8"
 
 	"github.com/dolthub/dolt/go/store/val"
 
@@ -126,7 +125,7 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 
 	switch typ.Enc {
 	case val.StringEnc:
-		return compareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
+		return val.CompareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
 	case val.StringAdaptiveEnc:
 		cmp, err := val.CompareAdaptiveStringsWithCollation(ctx, vs, left, right, collation)
 		if err != nil {
@@ -135,71 +134,5 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 		return cmp
 	default:
 		return (&val.DefaultTupleComparator{}).WithValueStore(vs).CompareValues(ctx, 0, left, right, typ)
-	}
-}
-
-func compareCollatedStrings(collation sql.CollationID, left, right []byte) int {
-	i := 0
-	for i < len(left) && i < len(right) {
-		if left[i] != right[i] {
-			break
-		}
-		i++
-	}
-	if i >= len(left) || i >= len(right) {
-		if len(left) < len(right) {
-			return -1
-		} else if len(left) > len(right) {
-			return 1
-		} else {
-			return 0
-		}
-	}
-
-	li := i
-	for ; li > 0 && !utf8.RuneStart(left[li]); li-- {
-	}
-	left = left[li:]
-
-	ri := i
-	for ; ri > 0 && !utf8.RuneStart(right[ri]); ri-- {
-	}
-	right = right[ri:]
-
-	getRuneWeight := collation.Sorter()
-	for len(left) > 0 && len(right) > 0 {
-		// Binary strings aren't handled through this function, so it is safe to use the utf8 functions
-		leftRune, leftRead := utf8.DecodeRune(left)
-		rightRune, rightRead := utf8.DecodeRune(right)
-		if leftRead == utf8.RuneError || rightRead == utf8.RuneError {
-			// Malformed strings sort after well-formed strings, and we consider two malformed strings to be equal
-			if leftRead == utf8.RuneError && rightRead != utf8.RuneError {
-				return 1
-			} else if leftRead != utf8.RuneError && rightRead == utf8.RuneError {
-				return -1
-			} else {
-				return 0
-			}
-		}
-		if leftRune != rightRune {
-			leftWeight := getRuneWeight(leftRune)
-			rightWeight := getRuneWeight(rightRune)
-			if leftWeight < rightWeight {
-				return -1
-			} else if leftWeight > rightWeight {
-				return 1
-			}
-		}
-		left = left[leftRead:]
-		right = right[rightRead:]
-	}
-
-	// Strings are equal up to the compared length, so shorter strings sort before longer strings
-	if len(left) < len(right) {
-		return -1
-	} else if len(left) > len(right) {
-		return 1
-	} else {
-		return 0
 	}
 }

@@ -53,13 +53,13 @@ type ChunkedValueStore interface {
 	ReadBytesChunked(ctx context.Context, h hash.Hash) (ValueChunkReader, error)
 }
 
-// ChunkedJsonValueStore is an optional interface implemented by ValueStores that can return
-// a JSON-encoded out-of-band value as a stream of chunks. JSON values may be stored in a
-// prolly tree whose internal nodes are address maps keyed by jsonLocation rather than a plain
-// blob tree, so a dedicated reader is provided to keep the abstraction explicit even if the
-// leaf-level wire format happens to coincide today.
-type ChunkedJsonValueStore interface {
-	ReadJsonChunked(ctx context.Context, h hash.Hash) (ValueChunkReader, error)
+// JsonAdaptiveValueComparator is an optional interface implemented by ValueStores that can
+// compare two JsonAdaptiveEnc values with JSON-aware semantics (MySQL JSON ordering rules,
+// not byte ordering). When the values are stored in a JSON-indexed prolly tree, the
+// implementation should walk the two trees chunk-by-chunk and short-circuit on the first
+// observable difference.
+type JsonAdaptiveValueComparator interface {
+	CompareJsonAdaptiveValues(ctx context.Context, l, r AdaptiveValue) (int, error)
 }
 
 // ImmutableValue represents a content-addressed value stored in a ValueStore.

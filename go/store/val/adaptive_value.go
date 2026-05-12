@@ -17,6 +17,7 @@ package val
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -202,11 +203,9 @@ func (r *singleChunkReader) NextChunk(_ context.Context) ([]byte, error) {
 
 // getChunkReader returns a ValueChunkReader that streams the underlying bytes of v. For null
 // and inline values this is a single-chunk reader over the in-memory payload. For out-of-band
-// values the reader is chosen based on |enc|: JsonAdaptiveEnc prefers ChunkedJsonValueStore so
-// it walks the JSON tree (which may have address-map internal nodes), while the other adaptive
-// encodings use ChunkedValueStore to walk a plain blob tree. If the store doesn't implement
-// the relevant interface we fall back to loading the entire value through ReadBytes.
-func (v AdaptiveValue) getChunkReader(ctx context.Context, vs ValueStore, enc Encoding) (ValueChunkReader, error) {
+// values it asks the ValueStore for a chunked reader if it supports one, otherwise it falls
+// back to loading the entire value through ReadBytes.
+func (v AdaptiveValue) getChunkReader(ctx context.Context, vs ValueStore) (ValueChunkReader, error) {
 	if v.IsNull() {
 		return &singleChunkReader{done: true}, nil
 	}
@@ -215,11 +214,7 @@ func (v AdaptiveValue) getChunkReader(ctx context.Context, vs ValueStore, enc En
 	}
 	_, lengthBytes := uvarint.Uvarint(v)
 	addr := hash.New(v[lengthBytes:])
-	if enc == JsonAdaptiveEnc {
-		if jvs, ok := vs.(ChunkedJsonValueStore); ok {
-			return jvs.ReadJsonChunked(ctx, addr)
-		}
-	} else if cvs, ok := vs.(ChunkedValueStore); ok {
+	if cvs, ok := vs.(ChunkedValueStore); ok {
 		return cvs.ReadBytesChunked(ctx, addr)
 	}
 	b, err := vs.ReadBytes(ctx, addr)
@@ -271,6 +266,19 @@ func (v AdaptiveValue) convertToJsonStorage(ctx context.Context, vs ValueStore) 
 	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
 	addr := hash.New(outOfBandValue[lengthBytes:])
 	return NewJsonStorageOutOfBand(addr, vs, int64(length)), nil
+}
+
+// OutOfBandAdaptiveValueAddr returns the content address embedded in an out-of-band
+// AdaptiveValue. It returns an error if v is NULL or inline.
+func OutOfBandAdaptiveValueAddr(v AdaptiveValue) (hash.Hash, error) {
+	if v.IsNull() {
+		return hash.Hash{}, fmt.Errorf("cannot get address from NULL adaptive value")
+	}
+	if v.isInlined() {
+		return hash.Hash{}, fmt.Errorf("cannot get address from inline adaptive value")
+	}
+	_, lengthBytes := uvarint.Uvarint(v)
+	return hash.New(v[lengthBytes:]), nil
 }
 
 // AdaptiveValueInlineBytes returns the inline encoding of the adaptive value given as a byte slice.
