@@ -242,21 +242,31 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, m
 // setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks (it's only called from a function that acquires locks???)
 func (s *prollyWriteSession) setWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
 	root := ws.WorkingRoot()
-	for tableName, tableWriter := range s.tables {
-		tbl, ok, err := root.GetTable(ctx, tableName)
-		if err != nil {
-			return err
-		}
+	rootHash, err := root.HashOf()
+	if err != nil {
+		return err
+	}
+	workingRootHash, err := s.workingSet.WorkingRoot().HashOf()
+	if err != nil {
+		return err
+	}
+	if rootHash != workingRootHash {
+		for tableName, tableWriter := range s.tables {
+			tbl, ok, err := root.GetTable(ctx, tableName)
+			if err != nil {
+				return err
+			}
 
-		// table was removed in newer root
-		if !ok {
-			delete(s.tables, tableName)
-			continue
-		}
+			// table was removed in newer root
+			if !ok {
+				delete(s.tables, tableName)
+				continue
+			}
 
-		err = tableWriter.Reset(ctx, tbl)
-		if err != nil {
-			return err
+			err = tableWriter.Reset(ctx, tbl)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	s.workingSet = ws
