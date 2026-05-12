@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"time"
 
@@ -119,8 +120,45 @@ func FindTableInRoots(ctx *sql.Context, roots doltdb.Roots, name string) (doltdb
 	return doltdb.TableName{}, nil, false, nil
 }
 
-// RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
-// returned roots struct has |Head| set to |branchRoot|.
+// CheckUntrackedConflicts returns ErrCheckoutWouldOverwrite if any table that is untracked
+// in |roots| (present in Working but absent from Head) would be overwritten by a committed
+// table of the same name on |targetRoot|.
+func CheckUntrackedConflicts(ctx context.Context, roots doltdb.Roots, targetRoot doltdb.RootValue) error {
+	workingSchemas, err := doltdb.GetAllSchemas(ctx, roots.Working)
+	if err != nil {
+		return err
+	}
+	headSchemas, err := doltdb.GetAllSchemas(ctx, roots.Head)
+	if err != nil {
+		return err
+	}
+
+	var conflicts []string
+	for name := range workingSchemas {
+		if _, isTracked := headSchemas[name]; isTracked {
+			continue
+		}
+		h, _, err := targetRoot.GetTableHash(ctx, name)
+		if err != nil {
+			return err
+		}
+		if !h.IsEmpty() {
+			conflicts = append(conflicts, name.Name)
+		}
+	}
+
+	if len(conflicts) > 0 {
+		sort.Strings(conflicts)
+		return ErrCheckoutWouldOverwrite{conflicts}
+	}
+	return nil
+}
+
+// RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the
+// pre-checkout head. The returned roots struct has |Head| set to |branchRoot|.
+//
+// Untracked tables (present in working or staged but absent from the old Head) are moved into
+// the new root via [MoveUntrackedTables], which resolves any column tag collisions.
 func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := doltdb.NewTableNameSet(nil)
 	if roots.Head == nil {
@@ -129,6 +167,11 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		roots.Head = branchRoot
 		return roots, nil
 	}
+
+	// Snapshot roots before the tracked-table merge so MoveUntrackedTables below has the original sources.
+	preCheckoutWorking := roots.Working
+	preCheckoutStaged := roots.Staged
+	preCheckoutHead := roots.Head
 
 	wrkTblHashes, err := moveModifiedTables(ctx, roots.Head, branchRoot, roots.Working, conflicts, force)
 	if err != nil {
@@ -144,12 +187,12 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		return doltdb.Roots{}, ErrCheckoutWouldOverwrite{conflicts.AsStringSlice()}
 	}
 
-	workingForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Working, force)
+	workingForeignKeys, err := MoveForeignKeys(ctx, roots.Head, branchRoot, roots.Working, force)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	stagedForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Staged, force)
+	stagedForeignKeys, err := MoveForeignKeys(ctx, roots.Head, branchRoot, roots.Staged, force)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -164,11 +207,28 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		return doltdb.Roots{}, err
 	}
 
+	// MoveUntrackedTables must run before PutForeignKeyCollection so remaps are available.
+	var workingRemaps, stagedRemaps map[doltdb.TableName]map[uint64]uint64
+	roots.Working, workingRemaps, err = MoveUntrackedTables(ctx, preCheckoutWorking, preCheckoutHead, roots.Working)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	roots.Staged, stagedRemaps, err = MoveUntrackedTables(ctx, preCheckoutStaged, preCheckoutHead, roots.Staged)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	if err = ApplyForeignKeyTagRemaps(workingForeignKeys, workingRemaps); err != nil {
+		return doltdb.Roots{}, err
+	}
 	roots.Working, err = roots.Working.PutForeignKeyCollection(ctx, workingForeignKeys)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
+	if err = ApplyForeignKeyTagRemaps(stagedForeignKeys, stagedRemaps); err != nil {
+		return doltdb.Roots{}, err
+	}
 	roots.Staged, err = roots.Staged.PutForeignKeyCollection(ctx, stagedForeignKeys)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -326,8 +386,9 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltd
 				return nil, err
 			}
 
+			// Untracked tables are carried forward by MoveUntrackedTables instead.
 			if oldHash == emptyHash {
-				resultMap[tblName] = changedHash
+				continue
 			} else if force {
 				resultMap[tblName] = oldHash
 			} else if oldHash != changedHash {
@@ -388,8 +449,8 @@ func CheckOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, bran
 	return nil
 }
 
-// moveForeignKeys returns the foreign key collection that should be used for the new working set.
-func moveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot doltdb.RootValue, force bool) (*doltdb.ForeignKeyCollection, error) {
+// MoveForeignKeys returns the foreign key collection that should be used for the new working set.
+func MoveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot doltdb.RootValue, force bool) (*doltdb.ForeignKeyCollection, error) {
 	oldFks, err := oldRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -429,6 +490,52 @@ func moveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot doltdb.R
 		// key collection.
 		return mergeForeignKeyChanges(ctx, oldFks, newRoot, newFks, changedRoot, changedFks, force)
 	}
+}
+
+// ApplyForeignKeyTagRemaps updates column tags in |fks| for any foreign key whose child or parent
+// table appears in |remaps|. It is called after MoveUntrackedTables to fix up tags that were
+// reassigned to avoid collisions during the table copy.
+func ApplyForeignKeyTagRemaps(fks *doltdb.ForeignKeyCollection, remaps map[doltdb.TableName]map[uint64]uint64) error {
+	if len(remaps) == 0 {
+		return nil
+	}
+
+	remapSlice := func(tags []uint64, remap map[uint64]uint64) []uint64 {
+		if len(remap) == 0 {
+			return tags
+		}
+		out := make([]uint64, len(tags))
+		for i, t := range tags {
+			if newTag, ok := remap[t]; ok {
+				out[i] = newTag
+			} else {
+				out[i] = t
+			}
+		}
+		return out
+	}
+
+	var toUpdate []doltdb.ForeignKey
+	err := fks.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
+		if len(remaps[fk.TableName]) == 0 && len(remaps[fk.ReferencedTableName]) == 0 {
+			return false, nil
+		}
+		toUpdate = append(toUpdate, fk)
+		return false, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, fk := range toUpdate {
+		fks.RemoveKeyByName(fk.Name, fk.TableName)
+		fk.TableColumns = remapSlice(fk.TableColumns, remaps[fk.TableName])
+		fk.ReferencedTableColumns = remapSlice(fk.ReferencedTableColumns, remaps[fk.ReferencedTableName])
+		if err = fks.AddKeys(fk); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // mergeForeignKeyChanges merges the foreign key changes from the old and changed roots into a new foreign key
