@@ -120,4 +120,3 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 	return commands.HandleVErrAndExitCode(nil, usage)
 }
-

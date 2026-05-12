@@ -4058,7 +4058,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "Switched to branch 'feat'"}},
 			},
 			{
-				Query:    "select id, name from parent order by id;",
+				Query: "select id, name from parent order by id;",
 				// The committed parent from feat replaces the untracked local copy.
 				Expected: []sql.Row{{1, "alice"}, {2, "bob"}},
 			},
@@ -5014,7 +5014,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "select id, name from parent order by id;",
+				Query: "select id, name from parent order by id;",
 				// The committed parent from feat replaces the untracked local copy.
 				Expected: []sql.Row{{1, "alice"}, {2, "bob"}},
 			},
@@ -5103,7 +5103,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "select code from overlap;",
+				Query: "select code from overlap;",
 				// The target branch version wins over the untracked copy.
 				Expected: []sql.Row{{"feat_data"}},
 			},

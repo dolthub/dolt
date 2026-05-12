@@ -550,21 +550,66 @@ func checkoutExistingBranch(
 			return err
 		}
 
-		if !overwriteIgnore {
-			if currentRoots, hasRoots := dSess.GetRoots(ctx, dbName); hasRoots {
-				branchHead, err := actions.BranchHeadRoot(ctx, ddb, branchName)
-				if err != nil {
-					return err
-				}
-				if err := actions.CheckOverwrittenIgnoredTables(ctx, currentRoots, branchHead, overwriteIgnore); err != nil {
-					return err
-				}
+		currentRoots, hasCurrentRoots := dSess.GetRoots(ctx, dbName)
+
+		if hasCurrentRoots {
+			branchHead, err := actions.BranchHeadRoot(ctx, ddb, branchName)
+			if err != nil {
+				return err
+			}
+
+			if err := actions.CheckOverwrittenIgnoredTables(ctx, currentRoots, branchHead, overwriteIgnore); err != nil {
+				return err
+			}
+
+			if err := actions.CheckUntrackedConflicts(ctx, currentRoots, branchHead); err != nil {
+				return err
 			}
 		}
 
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
 		if err != nil {
 			return err
+		}
+
+		if hasCurrentRoots {
+			ws, err := dSess.WorkingSet(ctx, dbName)
+			if err != nil {
+				return err
+			}
+			workingFKs, err := actions.MoveForeignKeys(ctx, currentRoots.Head, ws.WorkingRoot(), currentRoots.Working, false)
+			if err != nil {
+				return err
+			}
+			stagedFKs, err := actions.MoveForeignKeys(ctx, currentRoots.Head, ws.StagedRoot(), currentRoots.Staged, false)
+			if err != nil {
+				return err
+			}
+			newWorking, workingRemaps, err := actions.MoveUntrackedTables(ctx, currentRoots.Working, currentRoots.Head, ws.WorkingRoot())
+			if err != nil {
+				return err
+			}
+			newStaged, stagedRemaps, err := actions.MoveUntrackedTables(ctx, currentRoots.Staged, currentRoots.Head, ws.StagedRoot())
+			if err != nil {
+				return err
+			}
+			if err = actions.ApplyForeignKeyTagRemaps(workingFKs, workingRemaps); err != nil {
+				return err
+			}
+			if err = actions.ApplyForeignKeyTagRemaps(stagedFKs, stagedRemaps); err != nil {
+				return err
+			}
+			newWorking, err = newWorking.PutForeignKeyCollection(ctx, workingFKs)
+			if err != nil {
+				return err
+			}
+			newStaged, err = newStaged.PutForeignKeyCollection(ctx, stagedFKs)
+			if err != nil {
+				return err
+			}
+			if err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(newWorking).WithStagedRoot(newStaged)); err != nil {
+				return err
+			}
 		}
 	}
 
