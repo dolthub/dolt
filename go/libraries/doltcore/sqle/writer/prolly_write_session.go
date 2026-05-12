@@ -208,6 +208,8 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 		}
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
+
+	// TODO: setter is on prollyTableWriter
 	return s.workingSet, nil
 }
 

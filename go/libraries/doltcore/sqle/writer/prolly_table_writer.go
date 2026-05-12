@@ -50,7 +50,7 @@ type prollyTableWriter struct {
 	sch     schema.Schema
 	sqlSch  sql.Schema
 
-	setter    dsess.SessionRootSetter
+	setter    dsess.SessionRootSetter // TODO: shouldn't the write session be in charge of this and not the table?
 	writeSess     dsess.WriteSession
 
 	aiCol      schema.Column
