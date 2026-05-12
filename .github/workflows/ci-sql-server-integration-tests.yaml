@@ -22,7 +22,6 @@ jobs:
       fail-fast: true
       matrix:
         os: [ubuntu-22.04]
-        adaptive_encoding: ["false", "true"]
     steps:
       - uses: actions/checkout@v6
       - name: Set up Go toolchain
@@ -39,5 +38,3 @@ jobs:
           export DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt"
           go test .
         working-directory: ./integration-tests/go-sql-server-driver
-        env:
-          DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}

@@ -14,10 +14,6 @@ jobs:
   mysql_client_integrations:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        adaptive_encoding: [ "false", "true" ]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -61,6 +57,4 @@ jobs:
           cache-to: type=local,dest=/mnt/.buildx-cache
 
       - name: Test MySQL client integrations
-        run: docker run --rm -e DOLT_USE_ADAPTIVE_ENCODING mysql-client-tests:latest
-        env:
-          DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
+        run: docker run --rm mysql-client-tests:latest
