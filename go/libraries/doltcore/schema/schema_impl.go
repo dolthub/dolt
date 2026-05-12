@@ -131,36 +131,54 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	return sch, nil
 }
 
-// RebuildWithColumns returns a copy of |sch| that uses |cols| as its column set.
-// All schema-level metadata (comment, collation, primary key order, target row size,
-// content-hashed fields) is preserved. Secondary index tag references are remapped to
-// match any tag changes present in |cols| relative to |sch|. Check constraints are
-// preserved unchanged because they reference column names, not tags.
-func RebuildWithColumns(sch Schema, cols []Column) (Schema, error) {
-	tagRemap := buildColumnTagRemap(sch.GetAllCols().GetColumns(), cols)
+// WithUpdatedColumnTags returns a copy of |sch| with column and index tags remapped
+// according to |tagRemap| (old tag -> new tag). All other schema-level metadata
+// (comment, collation, primary key order, target row size) is preserved. Check
+// constraints are preserved unchanged because they reference column names, not tags.
+func WithUpdatedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, error) {
+	if len(tagRemap) == 0 {
+		return sch, nil
+	}
 
-	// Copy preserves all schema-level metadata fields including comment and
-	// contentHashedFields which are not exposed on the Schema interface.
-	cp := sch.Copy().(*schemaImpl)
-
-	newColColl := NewColCollection(cols...)
-	var pkCols, nonPKCols []Column
-	for _, col := range cols {
-		if col.IsPartOfPK {
-			pkCols = append(pkCols, col)
-		} else {
-			nonPKCols = append(nonPKCols, col)
+	allCols := sch.GetAllCols()
+	cols := allCols.GetColumns()
+	for oldTag, newTag := range tagRemap {
+		if idx, ok := allCols.TagToIdx[oldTag]; ok {
+			cols[idx].Tag = newTag
 		}
 	}
-	cp.allCols = newColColl
-	cp.pkCols = NewColCollection(pkCols...)
-	cp.nonPKCols = NewColCollection(nonPKCols...)
 
-	cp.indexCollection = NewIndexCollection(newColColl, cp.pkCols)
-	err := sch.Indexes().Iter(func(idx Index) (stop bool, err error) {
+	pkOrdinals := append([]int{}, sch.GetPkOrdinals()...)
+	newSch, err := NewSchema(NewColCollection(cols...), pkOrdinals, sch.GetCollation(), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	newSch.SetTargetRowSize(sch.GetTargetRowSize())
+	newSch.SetComment(sch.GetComment())
+
+	affected := make(map[string]struct{})
+	for oldTag := range tagRemap {
+		for _, idx := range sch.Indexes().IndexesWithTag(oldTag) {
+			affected[idx.Name()] = struct{}{}
+		}
+	}
+
+	err = sch.Indexes().Iter(func(idx Index) (stop bool, err error) {
+		tags := idx.IndexedColumnTags()
+		if _, ok := affected[idx.Name()]; ok {
+			remapped := make([]uint64, len(tags))
+			for i, t := range tags {
+				if newTag, ok := tagRemap[t]; ok {
+					remapped[i] = newTag
+				} else {
+					remapped[i] = t
+				}
+			}
+			tags = remapped
+		}
 		props := IndexProperties{
 			IsUnique:           idx.IsUnique(),
-			IsSpatial:         idx.IsSpatial(),
+			IsSpatial:          idx.IsSpatial(),
 			IsFullText:         idx.IsFullText(),
 			IsUserDefined:      idx.IsUserDefined(),
 			Comment:            idx.Comment(),
@@ -168,64 +186,29 @@ func RebuildWithColumns(sch Schema, cols []Column) (Schema, error) {
 			IsVector:           idx.IsVector(),
 			VectorProperties:   idx.VectorProperties(),
 		}
-		_, err = cp.indexCollection.AddIndexByColTags(idx.Name(), remapColumnTags(idx.IndexedColumnTags(), tagRemap), idx.PrefixLengths(), props)
+		_, err = newSch.Indexes().AddIndexByColTags(idx.Name(), tags, idx.PrefixLengths(), props)
 		return false, err
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return cp, nil
+	for _, chk := range sch.Checks().AllChecks() {
+		if _, err = newSch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced()); err != nil {
+			return nil, err
+		}
+	}
+
+	return newSch, nil
 }
 
 // UpdateColumnTag returns a copy of |sch| with the tag of the column named |name| set to |tag|.
 func UpdateColumnTag(sch Schema, name string, tag uint64) (Schema, error) {
-	columns := sch.GetAllCols().GetColumns()
-	var found bool
-	for i, col := range columns {
-		if col.Name == name {
-			col.Tag = tag
-			columns[i] = col
-			found = true
-			break
-		}
-	}
-	if !found {
+	col, ok := sch.GetAllCols().GetByName(name)
+	if !ok {
 		return nil, fmt.Errorf("column %s does not exist", name)
 	}
-	return RebuildWithColumns(sch, columns)
-}
-
-// buildColumnTagRemap returns a map from old tag to new tag for every position where
-// origCols[i].Tag differs from newCols[i].Tag.
-func buildColumnTagRemap(origCols, newCols []Column) map[uint64]uint64 {
-	var remap map[uint64]uint64
-	for i, col := range newCols {
-		if i < len(origCols) && origCols[i].Tag != col.Tag {
-			if remap == nil {
-				remap = make(map[uint64]uint64)
-			}
-			remap[origCols[i].Tag] = col.Tag
-		}
-	}
-	return remap
-}
-
-// remapColumnTags returns a copy of |tags| with each entry replaced by its value in
-// |remap|, falling back to the original tag when no mapping exists.
-// Returns |tags| unchanged when |remap| is nil or empty.
-func remapColumnTags(tags []uint64, remap map[uint64]uint64) []uint64 {
-	if len(remap) == 0 {
-		return tags
-	}
-	out := make([]uint64, len(tags))
-	for i, t := range tags {
-		out[i] = t
-		if r, ok := remap[t]; ok {
-			out[i] = r
-		}
-	}
-	return out
+	return WithUpdatedColumnTags(sch, map[uint64]uint64{col.Tag: tag})
 }
 
 // SchemaFromColCollections creates a schema from the three collections.
