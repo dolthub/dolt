@@ -164,7 +164,7 @@ func compare(ctx context.Context, typ Type, left, right []byte, vs ValueStore) i
 	case CellEnc:
 		return compareCell(readCell(left), readCell(right))
 	case BytesAdaptiveEnc, StringAdaptiveEnc, GeomAdaptiveEnc, JsonAdaptiveEnc:
-		return compareAdaptiveValue(ctx, vs, left, right)
+		return compareAdaptiveValue(ctx, vs, left, right, typ.Enc)
 	default:
 		panic("unknown encoding")
 	}

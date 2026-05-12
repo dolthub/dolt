@@ -369,6 +369,90 @@ func TestCompareChunkReaders(t *testing.T) {
 	}
 }
 
+func TestCompareCollatedChunkReaders(t *testing.T) {
+	ctx := context.Background()
+	utf8Default := sql.Collation_utf8mb4_0900_ai_ci
+
+	// Build the same input two different ways: as a single chunk vs. broken into
+	// tiny chunks that split UTF-8 runes across chunk boundaries. The comparator
+	// must produce the same result either way.
+	splitInto := func(s string, size int) [][]byte {
+		out := make([][]byte, 0)
+		b := []byte(s)
+		for len(b) > 0 {
+			n := size
+			if n > len(b) {
+				n = len(b)
+			}
+			out = append(out, b[:n:n])
+			b = b[n:]
+		}
+		return out
+	}
+
+	cases := []struct {
+		name      string
+		l, r      string
+		collation sql.CollationID
+		want      int
+	}{
+		{
+			name:      "case-insensitive equal",
+			l:         "Hello, world!",
+			r:         "HELLO, WORLD!",
+			collation: utf8Default,
+			want:      0,
+		},
+		{
+			name:      "case-insensitive differs",
+			l:         "Hello, world!",
+			r:         "Hello, zorld!",
+			collation: utf8Default,
+			want:      -1,
+		},
+		{
+			name:      "prefix is less",
+			l:         "abc",
+			r:         "abcd",
+			collation: utf8Default,
+			want:      -1,
+		},
+		{
+			name:      "binary collation, lowercase greater",
+			l:         "ABC",
+			r:         "abc",
+			collation: sql.Collation_utf8mb4_bin,
+			want:      -1,
+		},
+		{
+			name:      "multi-byte runes equal across boundaries",
+			l:         "café résumé naïve",
+			r:         "café résumé naïve",
+			collation: utf8Default,
+			want:      0,
+		},
+		{
+			name:      "multi-byte runes differ deep in stream",
+			l:         "café résumé naïve",
+			r:         "café résumé naïvf",
+			collation: utf8Default,
+			want:      -1,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, chunk := range []int{1, 2, 3, 7, 128} {
+				lr := &fakeChunkReader{chunks: splitInto(c.l, chunk)}
+				rr := &fakeChunkReader{chunks: splitInto(c.r, chunk)}
+				got, err := compareCollatedChunkReaders(ctx, lr, rr, c.collation)
+				require.NoError(t, err, "chunk size %d", chunk)
+				assert.Equal(t, c.want, got, "chunk size %d", chunk)
+			}
+		})
+	}
+}
+
 func fmtComparator(c int) string {
 	if c == 0 {
 		return "="

@@ -81,7 +81,7 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 	}
 	i := 0
 	for ; i < len(c.Collations); i++ {
-		if types[i].Enc == val.StringEnc && c.Collations[i] == sql.Collation_Unspecified {
+		if isCollatedStringEnc(types[i].Enc) && c.Collations[i] == sql.Collation_Unspecified {
 			c.Collations[i] = sql.Collation_Default
 		}
 	}
@@ -94,9 +94,17 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 		if types[i].Enc == val.StringEnc {
 			panic("string type encoding is missing its collation")
 		}
-		newCollations[i] = sql.Collation_Unspecified
+		if isCollatedStringEnc(types[i].Enc) {
+			newCollations[i] = sql.Collation_Default
+		} else {
+			newCollations[i] = sql.Collation_Unspecified
+		}
 	}
 	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
+}
+
+func isCollatedStringEnc(enc val.Encoding) bool {
+	return enc == val.StringEnc || enc == val.StringAdaptiveEnc
 }
 
 // WithValueStore implements TupleComparator
@@ -116,9 +124,16 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 		}
 	}
 
-	if typ.Enc == val.StringEnc {
+	switch typ.Enc {
+	case val.StringEnc:
 		return compareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
-	} else {
+	case val.StringAdaptiveEnc:
+		cmp, err := val.CompareAdaptiveStringsWithCollation(ctx, vs, val.AdaptiveValue(left), val.AdaptiveValue(right), collation)
+		if err != nil {
+			panic(err)
+		}
+		return cmp
+	default:
 		return (&val.DefaultTupleComparator{}).WithValueStore(vs).CompareValues(ctx, 0, left, right, typ)
 	}
 }

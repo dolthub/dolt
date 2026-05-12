@@ -24,8 +24,10 @@ import (
 	"math/big"
 	"math/bits"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 
@@ -668,7 +670,7 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue) int {
+func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue, enc Encoding) int {
 	// If both values are inline we can compare their payloads without touching the ValueStore.
 	lPayload, lInline := InlineValueBytes(l)
 	rPayload, rInline := InlineValueBytes(r)
@@ -677,12 +679,14 @@ func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue
 	}
 	// At least one value is out-of-band. Stream both sides chunk-by-chunk so that, for very
 	// large values, we can return as soon as the ordering is decided without loading either
-	// value fully into memory.
-	lReader, err := l.getChunkReader(ctx, vs)
+	// value fully into memory. The Encoding determines which kind of reader we open: JSON
+	// adaptive values may be stored in a tree whose internal nodes differ from blob trees,
+	// so they get a dedicated reader (see ChunkedJsonValueStore).
+	lReader, err := l.getChunkReader(ctx, vs, enc)
 	if err != nil {
 		panic(fmt.Sprintf("compareAdaptiveValue: failed to open left value reader: %v", err))
 	}
-	rReader, err := r.getChunkReader(ctx, vs)
+	rReader, err := r.getChunkReader(ctx, vs, enc)
 	if err != nil {
 		panic(fmt.Sprintf("compareAdaptiveValue: failed to open right value reader: %v", err))
 	}
@@ -691,6 +695,148 @@ func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue
 		panic(fmt.Sprintf("compareAdaptiveValue: failed to read value chunks: %v", err))
 	}
 	return cmp
+}
+
+// CompareAdaptiveStringsWithCollation compares two AdaptiveValue-encoded string values using
+// the given collation, streaming chunks from the ValueStore so very large values can
+// short-circuit as soon as the ordering is decided. When both values are inline this avoids
+// the streaming machinery entirely; otherwise it walks the underlying chunks rune-by-rune
+// (correctly handling UTF-8 sequences split across chunk boundaries) and applies the
+// collation's per-rune weight. Pass an unspecified collation to fall back to byte ordering.
+func CompareAdaptiveStringsWithCollation(ctx context.Context, vs ValueStore, l, r AdaptiveValue, collation sql.CollationID) (int, error) {
+	if collation == sql.Collation_Unspecified {
+		return compareAdaptiveValue(ctx, vs, l, r, StringAdaptiveEnc), nil
+	}
+	lPayload, lInline := InlineValueBytes(l)
+	rPayload, rInline := InlineValueBytes(r)
+	if lInline && rInline {
+		return compareCollatedStringBytes(collation, lPayload, rPayload), nil
+	}
+	lReader, err := l.getChunkReader(ctx, vs, StringAdaptiveEnc)
+	if err != nil {
+		return 0, err
+	}
+	rReader, err := r.getChunkReader(ctx, vs, StringAdaptiveEnc)
+	if err != nil {
+		return 0, err
+	}
+	return compareCollatedChunkReaders(ctx, lReader, rReader, collation)
+}
+
+// compareCollatedStringBytes mirrors the rune-by-rune logic used in CollationTupleComparator
+// (compareCollatedStrings) but operates on two []byte slices directly. It is the in-memory
+// fast path for adaptive strings that are both inlined.
+func compareCollatedStringBytes(collation sql.CollationID, left, right []byte) int {
+	getRuneWeight := collation.Sorter()
+	for len(left) > 0 && len(right) > 0 {
+		lr, lread := utf8.DecodeRune(left)
+		rr, rread := utf8.DecodeRune(right)
+		lErr := lr == utf8.RuneError && lread == 1
+		rErr := rr == utf8.RuneError && rread == 1
+		if lErr || rErr {
+			if lErr && !rErr {
+				return 1
+			}
+			if !lErr && rErr {
+				return -1
+			}
+			return 0
+		}
+		if lr != rr {
+			lw := getRuneWeight(lr)
+			rw := getRuneWeight(rr)
+			if lw < rw {
+				return -1
+			}
+			if lw > rw {
+				return 1
+			}
+		}
+		left = left[lread:]
+		right = right[rread:]
+	}
+	if len(left) < len(right) {
+		return -1
+	}
+	if len(left) > len(right) {
+		return 1
+	}
+	return 0
+}
+
+// compareCollatedChunkReaders is the streaming version of compareCollatedStringBytes. It
+// pulls chunks from each reader lazily, buffering only enough bytes to decode the next rune
+// on each side (a rune may straddle a chunk boundary, so the buffer can hold up to
+// utf8.UTFMax-1 leftover bytes between iterations). It returns as soon as the rune-by-rune
+// comparison resolves or one side runs out of input.
+func compareCollatedChunkReaders(ctx context.Context, l, r ValueChunkReader, collation sql.CollationID) (int, error) {
+	getRuneWeight := collation.Sorter()
+	var lBuf, rBuf []byte
+	lDone, rDone := false, false
+	fill := func(buf []byte, done *bool, src ValueChunkReader) ([]byte, error) {
+		// Read until we have at least one full rune in the buffer or we know the stream is
+		// exhausted. utf8.FullRune is false for an empty buffer, so this also pulls in the
+		// first byte after a chunk-reset.
+		for !*done && !utf8.FullRune(buf) {
+			chunk, err := src.NextChunk(ctx)
+			if err == io.EOF {
+				*done = true
+				break
+			}
+			if err != nil {
+				return buf, err
+			}
+			if len(chunk) == 0 {
+				continue
+			}
+			buf = append(buf, chunk...)
+		}
+		return buf, nil
+	}
+	for {
+		var err error
+		lBuf, err = fill(lBuf, &lDone, l)
+		if err != nil {
+			return 0, err
+		}
+		rBuf, err = fill(rBuf, &rDone, r)
+		if err != nil {
+			return 0, err
+		}
+		switch {
+		case len(lBuf) == 0 && len(rBuf) == 0:
+			return 0, nil
+		case len(lBuf) == 0:
+			return -1, nil
+		case len(rBuf) == 0:
+			return 1, nil
+		}
+		lr, lread := utf8.DecodeRune(lBuf)
+		rr, rread := utf8.DecodeRune(rBuf)
+		lErr := lr == utf8.RuneError && lread == 1
+		rErr := rr == utf8.RuneError && rread == 1
+		if lErr || rErr {
+			if lErr && !rErr {
+				return 1, nil
+			}
+			if !lErr && rErr {
+				return -1, nil
+			}
+			return 0, nil
+		}
+		if lr != rr {
+			lw := getRuneWeight(lr)
+			rw := getRuneWeight(rr)
+			if lw < rw {
+				return -1, nil
+			}
+			if lw > rw {
+				return 1, nil
+			}
+		}
+		lBuf = lBuf[lread:]
+		rBuf = rBuf[rread:]
+	}
 }
 
 // compareChunkReaders compares the byte streams produced by two ValueChunkReaders, returning a

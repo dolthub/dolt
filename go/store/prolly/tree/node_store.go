@@ -240,6 +240,17 @@ func (ns *nodeStore) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.Val
 	return NewBlobChunkReader(n, ns), nil
 }
 
+// ReadJsonChunked implements val.ChunkedJsonValueStore. JSON values may be stored either as a
+// plain blob tree (older adaptive-JSON path) or as a JSON-indexed prolly tree whose internal
+// nodes are address maps. The returned reader handles both shapes.
+func (ns *nodeStore) ReadJsonChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
+	n, err := ns.Read(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+	return NewJsonChunkReader(n, ns), nil
+}
+
 func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
 	_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
 	return h, err
@@ -247,3 +258,4 @@ func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error
 
 var _ val.ValueStore = &nodeStore{}
 var _ val.ChunkedValueStore = &nodeStore{}
+var _ val.ChunkedJsonValueStore = &nodeStore{}

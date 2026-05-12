@@ -47,9 +47,19 @@ type ValueChunkReader interface {
 // ChunkedValueStore is an optional interface implemented by ValueStores that can return an
 // out-of-band value as a stream of chunks instead of loading the entire value into memory at
 // once. Callers that don't need the whole value (for example, prefix comparisons) can read
-// only as many chunks as needed.
+// only as many chunks as needed. This reader treats the value as opaque bytes — it is the
+// right choice for BytesAdaptiveEnc, StringAdaptiveEnc, and GeomAdaptiveEnc.
 type ChunkedValueStore interface {
 	ReadBytesChunked(ctx context.Context, h hash.Hash) (ValueChunkReader, error)
+}
+
+// ChunkedJsonValueStore is an optional interface implemented by ValueStores that can return
+// a JSON-encoded out-of-band value as a stream of chunks. JSON values may be stored in a
+// prolly tree whose internal nodes are address maps keyed by jsonLocation rather than a plain
+// blob tree, so a dedicated reader is provided to keep the abstraction explicit even if the
+// leaf-level wire format happens to coincide today.
+type ChunkedJsonValueStore interface {
+	ReadJsonChunked(ctx context.Context, h hash.Hash) (ValueChunkReader, error)
 }
 
 // ImmutableValue represents a content-addressed value stored in a ValueStore.

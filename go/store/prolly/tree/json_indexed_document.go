@@ -25,6 +25,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	sqljson "github.com/dolthub/go-mysql-server/sql/expression/function/json"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type address = []byte
@@ -132,6 +135,57 @@ func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []b
 		return nil
 	})
 	return bytes, err
+}
+
+// jsonChunkReader streams the leaf chunks of a JSON-indexed prolly tree in document order via
+// val.ValueChunkReader. The leaf layout (a single value per leaf node, holding a JSON
+// substring) matches the blob format, but a JSON tree's internal nodes are AddressMaps keyed
+// by jsonLocation rather than the contiguous address arrays used by blob trees. This reader
+// is kept separate from blobChunkReader so the two formats can evolve independently — for
+// example, a future implementation could align the emitted chunks to JSON value boundaries.
+type jsonChunkReader struct {
+	ns    NodeStore
+	stack []jsonChunkReaderFrame
+}
+
+type jsonChunkReaderFrame struct {
+	node *Node
+	idx  int
+}
+
+// NewJsonChunkReader returns a val.ValueChunkReader that yields the leaf chunks of the JSON
+// document rooted at |root| in document order. A nil or empty root produces an empty stream.
+// The reader works whether |root| is a single-leaf blob, a multi-level blob tree (older JSON
+// storage), or an AddressMap-rooted indexed JSON tree.
+func NewJsonChunkReader(root *Node, ns NodeStore) val.ValueChunkReader {
+	r := &jsonChunkReader{ns: ns}
+	if root != nil && !root.empty() {
+		r.stack = []jsonChunkReaderFrame{{node: root}}
+	}
+	return r
+}
+
+func (r *jsonChunkReader) NextChunk(ctx context.Context) ([]byte, error) {
+	for len(r.stack) > 0 {
+		top := &r.stack[len(r.stack)-1]
+		if top.idx >= top.node.Count() {
+			r.stack = r.stack[:len(r.stack)-1]
+			continue
+		}
+		if top.node.IsLeaf() {
+			data := top.node.GetValue(top.idx)
+			top.idx++
+			return data, nil
+		}
+		addr := hash.New(top.node.GetValue(top.idx))
+		top.idx++
+		child, err := r.ns.Read(ctx, addr)
+		if err != nil {
+			return nil, err
+		}
+		r.stack = append(r.stack, jsonChunkReaderFrame{node: child})
+	}
+	return nil, io.EOF
 }
 
 func tryWithFallback(
