@@ -128,7 +128,7 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 	case val.StringEnc:
 		return compareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
 	case val.StringAdaptiveEnc:
-		cmp, err := val.CompareAdaptiveStringsWithCollation(ctx, vs, val.AdaptiveValue(left), val.AdaptiveValue(right), collation)
+		cmp, err := val.CompareAdaptiveStringsWithCollation(ctx, vs, left, right, collation)
 		if err != nil {
 			panic(err)
 		}

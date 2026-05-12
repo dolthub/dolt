@@ -135,7 +135,7 @@ func TestWriteImmutableTree(t *testing.T) {
 			ctx := context.Background()
 			r := bytes.NewReader(buf)
 			ns := NewTestNodeStore()
-			//serializer := message.NewBlobSerializer(ns.Pool())
+			// serializer := message.NewBlobSerializer(ns.Pool())
 
 			b, err := NewBlobBuilder(tt.chunkSize)
 			if tt.initErr != nil {
@@ -506,8 +506,8 @@ func TestJsonChunkReader(t *testing.T) {
 	ns := NewTestNodeStore()
 
 	// Build a JSON document large enough to need an indexed tree.
-	doc := make(map[string]string, 200)
-	for i := 0; i < 200; i++ {
+	doc := make(map[string]string, 2000)
+	for i := 0; i < 2000; i++ {
 		key := fmt.Sprintf("k%04d", i)
 		doc[key] = "this is a moderately long value that helps push the document over a single chunk"
 	}
