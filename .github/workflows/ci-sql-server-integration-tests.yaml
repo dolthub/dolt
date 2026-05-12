@@ -26,15 +26,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Set up Go toolchain
         uses: ./.github/actions/setup-go-toolchain
-      - name: Create CI Bin
-        run: |
-          mkdir -p ./.ci_bin
-      - name: Install Dolt
-        working-directory: ./go
-        run: |
-          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/
+      - name: Build dolt
+        uses: ./.github/actions/build-dolt
       - name: Test all
-        run: |
-          export DOLT_BIN_PATH="$(pwd)/../../.ci_bin/dolt"
-          go test .
+        run: go test .
         working-directory: ./integration-tests/go-sql-server-driver
