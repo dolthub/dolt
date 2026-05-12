@@ -123,18 +123,18 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 	}
 
 	twr := &prollyTableWriter{
-		tableName:      tableName,
-		dbName:         db,
-		primary:        pw,
-		secondary:      sws,
-		tbl:            t,
-		sch:            schState.DoltSchema,
-		sqlSch:         schState.PkSchema.Schema,
-		autoIncCol:     schState.AutoIncCol,
-		autoIncTracker: s.aiTracker,
-		writeSess:      s,
-		setter:         setter,
-		targetStaging:  targetStaging,
+		tblName:       tableName,
+		dbName:        db,
+		primary:       pw,
+		secondary:     sws,
+		tbl:           t,
+		sch:           schState.DoltSchema,
+		sqlSch:        schState.PkSchema.Schema,
+		aiCol:         schState.AutoIncCol,
+		aiTracker:     s.aiTracker,
+		writeSess:     s,
+		setter:        setter,
+		targetStaging: targetStaging,
 	}
 	s.tables[tableName] = twr
 
@@ -184,7 +184,7 @@ func (s *prollyWriteSession) MaterializeTable(ctx *sql.Context, tblName doltdb.T
 		// TODO: need schema name for auto increment
 		if manualAutoInc {
 			// TODO: why tblWriter.autoIncTracker? is it different than s.aiTracker??
-			tbl, err = tblWriter.autoIncTracker.Set(ctx, tblName.Name, tbl, s.workingSet.Ref(), manualAutoIncVal)
+			tbl, err = tblWriter.aiTracker.Set(ctx, tblName.Name, tbl, s.workingSet.Ref(), manualAutoIncVal)
 		} else if autoIncSet {
 			var aiVal uint64
 			aiVal, err = s.aiTracker.Current(tblName.Name)
@@ -201,51 +201,22 @@ func (s *prollyWriteSession) MaterializeTable(ctx *sql.Context, tblName doltdb.T
 	return tbl, nil
 }
 
-func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, autoIncSet, manualAutoInc bool, manualAutoIncVal uint64) (*doltdb.WorkingSet, error) {
-	// Materialize table
-	tblWriter := s.tables[tblName] // TODO: unnecessary lookup that should be removed
-	tbl, err := tblWriter.table(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: this logic should do inside of prollyTableWriter.table()...
-	if schema.HasAutoIncrement(tblWriter.sch) {
-		// TODO: need schema name for auto increment
-		if manualAutoInc {
-			// TODO: why tblWriter.autoIncTracker? is it different than s.aiTracker??
-			tbl, err = tblWriter.autoIncTracker.Set(ctx, tblName.Name, tbl, s.workingSet.Ref(), manualAutoIncVal)
-		} else if autoIncSet {
-			var aiVal uint64
-			aiVal, err = s.aiTracker.Current(tblName.Name)
-			if err != nil {
-				return nil, err
-			}
-			tbl, err = tbl.SetAutoIncrementValue(ctx, aiVal)
-		}
+func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (*doltdb.WorkingSet, error) {
+	var flushed doltdb.RootValue
+	var err error
+	if s.targetStaging {
+		flushed, err = s.workingSet.StagedRoot().PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	var flushed doltdb.RootValue
-	if s.targetStaging {
-		flushed = s.workingSet.StagedRoot()
-	} else {
-		flushed = s.workingSet.WorkingRoot()
-	}
-
-	flushed, err = flushed.PutTable(ctx, tblName, tbl)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.targetStaging {
 		s.workingSet = s.workingSet.WithStagedRoot(flushed)
 	} else {
+		flushed, err = s.workingSet.WorkingRoot().PutTable(ctx, tblName, tbl)
+		if err != nil {
+			return nil, err
+		}
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
-
 	return s.workingSet, nil
 }
 
@@ -311,28 +282,8 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, m
 	return s.workingSet, nil
 }
 
-// setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks
+// setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks (it's only called from a function that acquires locks???)
 func (s *prollyWriteSession) setWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
-	root := ws.WorkingRoot()
-	for tableName, tableWriter := range s.tables {
-		t, ok, err := root.GetTable(ctx, tableName)
-		if err != nil {
-			return err
-		}
-		if !ok { // table was removed in newer root
-			delete(s.tables, tableName)
-			continue
-		}
-		tSch, err := t.GetSchema(ctx)
-		if err != nil {
-			return err
-		}
-
-		err = tableWriter.Reset(ctx, s, t, tSch)
-		if err != nil {
-			return err
-		}
-	}
 	s.workingSet = ws
 	return nil
 }

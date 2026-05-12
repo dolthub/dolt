@@ -67,8 +67,8 @@ type WriteSessionFlusher interface {
 	// FlushWithAutoIncrementOverrides flushes the pending writes in the session, overriding the auto increment values
 	// for any tables provided in the map
 	FlushWithAutoIncrementOverrides(ctx *sql.Context, increment bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error)
-
-	FlushTable(ctx *sql.Context, tblName doltdb.TableName, autoIncSet, manualAutoInc bool, manualAutoIncVal uint64) (*doltdb.WorkingSet, error)
+	// FlushTable writes a materialized doltdb.Table to the RootValue
+	FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (*doltdb.WorkingSet, error)
 }
 
 // WriterState caches expensive objects required for writing rows.
