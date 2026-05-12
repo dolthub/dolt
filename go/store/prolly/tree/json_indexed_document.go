@@ -123,7 +123,7 @@ func getInterfaceFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (val i
 	return val, nil
 }
 
-// getInterfaceFromIndexedJsonMap extracts the JSON bytes from a StaticJsonMap
+// getBytesFromIndexedJsonMap extracts the JSON bytes from a StaticJsonMap
 func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []byte, err error) {
 	err = m.WalkNodes(ctx, func(ctx context.Context, n *Node) error {
 		if n.IsLeaf() {

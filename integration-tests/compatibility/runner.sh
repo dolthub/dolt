@@ -227,55 +227,30 @@ _main() {
   setup_repo HEAD
 
   # test forward compatibility
-  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
-      if [ -s "test_files/forward_compatible_versions.txt" ]; then
-          list_forward_compatible_versions | while IFS= read -r ver; do
-              test_forward_compatibility "$ver"
-          done
-      fi
-  else
-      # For now we only test that we break with an appropriate error message
-      if [ -s "test_files/2_0_breaking_versions.txt" ]; then
-          list_2_0_breaking_versions | while IFS= read -r ver; do
-              test_2_0_breaking_compatibility "$ver"
-          done
-      fi
+  # For now we only test that we break with an appropriate error message,
+  # we should change this when we have more 2.x releases.
+  if [ -s "test_files/2_0_breaking_versions.txt" ]; then
+    list_2_0_breaking_versions | while IFS= read -r ver; do
+      test_2_0_breaking_compatibility "$ver"
+    done
   fi
 
 
-  # # test bidirectional compatibility
-  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
-      echo "Testing pre-2.0 bi-directional compatible versions"
-      if [ -s "test_files/forward_compatible_versions.txt" ]; then
-          list_forward_compatible_versions | while IFS= read -r ver; do
-              test_bidirectional_compatibility "$ver"
-          done
-      fi
-  else
-      echo "Testing post-2.0 bi-directional compatible versions"
-      if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
-          list_2_0_forward_compatible_versions | while IFS= read -r ver; do
-              test_bidirectional_compatibility "$ver"
-          done
-      fi      
-  fi
+  # test bidirectional compatibility
+  echo "Testing post-2.0 bi-directional compatible versions"
+  if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+    list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+      test_bidirectional_compatibility "$ver"
+    done
+  fi      
 
   # test bidirectional remote compatibility: two versions add the same column independently,
   # insert disjoint data, and sync via a file remote. Same forward-compatibility limit applies.
-  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
-      echo "Testing pre-2.0 remote compatible versions"
-      if [ -s "test_files/forward_compatible_versions.txt" ]; then
-          list_forward_compatible_versions | while IFS= read -r ver; do
-              test_bidirectional_remote_compatibility "$ver"
-          done
-      fi
-  else
-      echo "Testing post-2.0 remote compatible versions"
-      if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
-          list_2_0_forward_compatible_versions | while IFS= read -r ver; do
-              test_bidirectional_remote_compatibility "$ver"
-          done
-      fi
+  echo "Testing post-2.0 remote compatible versions"
+  if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+    list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+      test_bidirectional_remote_compatibility "$ver"
+    done
   fi
  
   # sanity check: run tests against current version
