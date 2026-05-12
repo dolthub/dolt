@@ -110,6 +110,10 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return err
 	}
 
+	if err := actions.CheckUntrackedConflicts(ctx, initialRoots, branchHead); err != nil {
+		return err
+	}
+
 	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
 	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
 	// checkoutWouldStompWorkingSetChanges
