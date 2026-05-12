@@ -69,7 +69,7 @@ func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.H
 	return nil
 }
 
-// GetTableWriter implemented WriteSession.
+// GetTableWriter implements WriteSession
 func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.TableName, db string, setter dsess.SessionRootSetter, targetStaging bool) (dsess.TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
@@ -113,49 +113,65 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.Tab
 	return tblWriter, nil
 }
 
-// Flush implemented WriteSession.
+// SetWorkingSet implements WriteSession
+func (s *prollyWriteSession) SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	root := ws.WorkingRoot()
+	rootHash, err := root.HashOf()
+	if err != nil {
+		return err
+	}
+	workingRootHash, err := s.workingSet.WorkingRoot().HashOf()
+	if err != nil {
+		return err
+	}
+	if rootHash != workingRootHash {
+		var tbl *doltdb.Table
+		var ok bool
+		for tblName, tblWriter := range s.tables {
+			tbl, ok, err = root.GetTable(ctx, tblName)
+			if err != nil {
+				return err
+			}
+			// table was removed in newer root
+			if !ok {
+				delete(s.tables, tblName)
+				continue
+			}
+			err = tblWriter.Reset(ctx, tbl)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	s.workingSet = ws
+	return nil
+}
+
+// GetOptions implements WriteSession
+func (s *prollyWriteSession) GetOptions() editor.Options {
+	return editor.Options{}
+}
+
+// SetOptions implements WriteSession
+func (s *prollyWriteSession) SetOptions(opts editor.Options) {
+	return
+}
+
+// Flush implements WriteSessionFlusher
 func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	_, err := s.flushAllTables(ctx, false, nil)
+	_, err := s.flushAllTables(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return s.workingSet, nil
 }
 
-func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, autoIncSet bool, autoIncrements map[string]uint64) (doltdb.RootValue, error) {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-	return s.flushAllTables(ctx, autoIncSet, autoIncrements)
-}
-
-// SetWorkingSet implements WriteSession.
-func (s *prollyWriteSession) SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-	return s.setWorkingSet(ctx, ws)
-}
-
-// GetOptions implemented WriteSession.
-func (s *prollyWriteSession) GetOptions() editor.Options {
-	return editor.Options{}
-}
-
-// SetOptions implemented WriteSession.
-func (s *prollyWriteSession) SetOptions(opts editor.Options) {
-	return
-}
-
-func (s *prollyWriteSession) materializeTable(ctx *sql.Context, tblName doltdb.TableName, tblWriter *prollyTableWriter, autoIncSet, manualAutoInc bool, manualAutoIncVal uint64) (*doltdb.Table, error) {
-	// Materialize table
-	tbl, err := tblWriter.table(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return tbl, nil
-}
-
+// FlushTable puts the already materialized table into the working set
 func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (flushed doltdb.RootValue, err error) {
 	if s.targetStaging {
 		flushed = s.workingSet.StagedRoot()
@@ -177,57 +193,54 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 }
 
 // flushAllTables is the inner implementation for Flush that does not acquire any locks
-func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (doltdb.RootValue, error) {
-	type result struct {
+func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue, error) {
+	type flushedTable struct {
 		tblName doltdb.TableName
 		tbl     *doltdb.Table
 		err     error
 	}
 
-	// Start flushing each table, and send to results channel
-	results := make(chan result, 10)
+	// Flush each table and send results to the flushedTables channel
+	flushedTables := make(chan flushedTable, 10)
 	wg := sync.WaitGroup{}
 	wg.Add(len(s.tables))
 	for tblName, tblWriter := range s.tables {
 		go func() {
 			defer wg.Done()
-			//manualAutoIncVal, manualAutoInc := manualAutoIncrementsSettings[tblName.Name]
-			//tbl, err := s.materializeTable(ctx, tblName, autoIncSet, manualAutoInc, manualAutoIncVal)
 			tbl, err := tblWriter.table(ctx)
-			results <- result{
+			flushedTables <- flushedTable{
 				tblName: tblName,
 				tbl:     tbl,
 				err:     err,
 			}
 		}()
 	}
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
 
-	// Drain from results channel, updating RootValue each time
+	// Drain from the flushedTables channel, updating RootValue each time
 	var flushed doltdb.RootValue
 	if s.targetStaging {
 		flushed = s.workingSet.StagedRoot()
 	} else {
 		flushed = s.workingSet.WorkingRoot()
 	}
+	var err error
 	eg := errgroup.Group{}
 	eg.Go(func() error {
-		for res := range results {
-			if res.err != nil {
-				return res.err
+		for flushedTbl := range flushedTables {
+			if flushedTbl.err != nil {
+				return flushedTbl.err
 			}
-			var err error
-			flushed, err = flushed.PutTable(ctx, res.tblName, res.tbl)
+			flushed, err = flushed.PutTable(ctx, flushedTbl.tblName, flushedTbl.tbl)
 			if err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-	if err := eg.Wait(); err != nil {
+	wg.Wait()
+	close(flushedTables)
+
+	if err = eg.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -237,38 +250,4 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, m
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
 	return flushed, nil
-}
-
-// setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks (it's only called from a function that acquires locks???)
-func (s *prollyWriteSession) setWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
-	root := ws.WorkingRoot()
-	rootHash, err := root.HashOf()
-	if err != nil {
-		return err
-	}
-	workingRootHash, err := s.workingSet.WorkingRoot().HashOf()
-	if err != nil {
-		return err
-	}
-	if rootHash != workingRootHash {
-		for tableName, tableWriter := range s.tables {
-			tbl, ok, err := root.GetTable(ctx, tableName)
-			if err != nil {
-				return err
-			}
-
-			// table was removed in newer root
-			if !ok {
-				delete(s.tables, tableName)
-				continue
-			}
-
-			err = tableWriter.Reset(ctx, tbl)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	s.workingSet = ws
-	return nil
 }

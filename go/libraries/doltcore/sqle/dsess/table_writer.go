@@ -62,11 +62,8 @@ type SessionRootSetter func(ctx *sql.Context, dbName string, root doltdb.RootVal
 
 // WriteSessionFlusher is responsible for flushing any pending edits to the session
 type WriteSessionFlusher interface {
-	// Flush flushes the pending writes in the session.
+	// Flush flushes the pending writes in the session
 	Flush(ctx *sql.Context) (*doltdb.WorkingSet, error)
-	// FlushWithAutoIncrementOverrides flushes the pending writes in the session, overriding the auto increment values
-	// for any tables provided in the map
-	FlushWithAutoIncrementOverrides(ctx *sql.Context, increment bool, autoIncrements map[string]uint64) (doltdb.RootValue, error)
 	// FlushTable writes a materialized doltdb.Table to the RootValue
 	FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (doltdb.RootValue, error)
 }

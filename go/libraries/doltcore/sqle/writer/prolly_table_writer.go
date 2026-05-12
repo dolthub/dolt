@@ -176,7 +176,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 	// TODO: need schema name in ai tracker
 	w.aiSet = true
-	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow) // TODO: this errors all the time wtf? why?
+	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow)
 
 	return nil
 }
@@ -287,7 +287,7 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 	w.aiAltered = true
 
 	// The work above is persisted in flushAllTables
-	return w.flush(ctx) // TODO: necessary??
+	return w.flush(ctx)
 }
 
 // AcquireAutoIncrementLock implements AutoIncrementSetter.
@@ -394,7 +394,7 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 		return nil, err
 	}
 
-	if schema.HasAutoIncrement(w.sch) {
+	if w.aiCol.AutoIncrement {
 		if w.aiAltered {
 			tbl, err = w.aiTracker.Set(ctx, w.tblName.Name, tbl, w.writeSess.GetWorkingSet().Ref(), w.aiAlterVal)
 			if err != nil {
@@ -422,6 +422,10 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 		return err
 	}
 	newRoot, err := w.writeSess.FlushTable(ctx, w.tblName, tbl)
+	if err != nil {
+		return err
+	}
+	err = w.Reset(ctx, tbl)
 	if err != nil {
 		return err
 	}
