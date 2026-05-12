@@ -25,20 +25,22 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	barCodeTag    uint64 = 9815
+	usersNameTag  uint64 = 9815 // deliberate collision with barCodeTag
+	postsTitleTag uint64 = 13593
+)
+
 // TestMoveUntrackedTables verifies that MoveUntrackedTables correctly copies untracked tables
 // into the target root, retagging any column whose tag collides with an existing tag in the target.
-// See https://github.com/dolthub/dolt/issues/11007
 func TestMoveUntrackedTables(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11007
 	dEnv, _ := createTestEnv()
 	ctx := context.Background()
 	require.NoError(t, dEnv.InitRepo(ctx, types.Format_Default, "test user", "test@test.com", "main"))
 
 	emptyRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
-
-	const barCodeTag uint64 = 9815
-	const usersNameTag uint64 = 9815  // deliberate collision with barCodeTag
-	const postsTitleTag uint64 = 13593
 
 	mkSch := func(colName string, tag uint64) schema.Schema {
 		col := schema.NewColumn(colName, tag, types.StringKind, true, schema.NotNullConstraint{})
@@ -48,16 +50,23 @@ func TestMoveUntrackedTables(t *testing.T) {
 		return sch
 	}
 
+	mkSchWithIndex := func(colName string, tag uint64, indexName string) schema.Schema {
+		sch := mkSch(colName, tag)
+		_, err := sch.Indexes().AddIndexByColTags(indexName, []uint64{tag}, nil, schema.IndexProperties{IsUserDefined: true, IsUnique: true})
+		require.NoError(t, err)
+		return sch
+	}
+
 	target, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "bar"}, mkSch("code", barCodeTag))
 	require.NoError(t, err)
 
 	working := emptyRoot
-	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "users"}, mkSch("name", usersNameTag))
+	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "users"}, mkSchWithIndex("name", usersNameTag, "idx_name"))
 	require.NoError(t, err)
 	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "posts"}, mkSch("title", postsTitleTag))
 	require.NoError(t, err)
 
-	result, err := MoveUntrackedTables(ctx, working, emptyRoot, target)
+	result, allRemaps, err := MoveUntrackedTables(ctx, working, emptyRoot, target)
 	require.NoError(t, err)
 
 	t.Run("preserves tag on non-collision", func(t *testing.T) {
@@ -69,6 +78,22 @@ func TestMoveUntrackedTables(t *testing.T) {
 		col, ok := sch.GetAllCols().GetByName("title")
 		require.True(t, ok)
 		require.Equal(t, postsTitleTag, col.Tag, "posts.title tag must not change when there is no collision")
+	})
+
+	t.Run("WithUpdatedColumnTags preserves schema metadata", func(t *testing.T) {
+		col := schema.NewColumn("val", 100, types.StringKind, true, schema.NotNullConstraint{})
+		sch, err := schema.SchemaFromCols(schema.NewColCollection(col))
+		require.NoError(t, err)
+		require.NoError(t, sch.SetPkOrdinals([]int{0}))
+		sch.SetCollation(schema.Collation_utf8mb4_general_ci)
+		sch.SetComment("test comment")
+		sch.SetTargetRowSize(4096)
+
+		remapped, err := schema.WithUpdatedColumnTags(sch, map[uint64]uint64{100: 200})
+		require.NoError(t, err)
+		require.Equal(t, schema.Collation_utf8mb4_general_ci, remapped.GetCollation(), "collation must survive WithUpdatedColumnTags")
+		require.Equal(t, "test comment", remapped.GetComment(), "comment must survive WithUpdatedColumnTags")
+		require.Equal(t, uint16(4096), remapped.GetTargetRowSize(), "target row size must survive WithUpdatedColumnTags")
 	})
 
 	t.Run("retags colliding column", func(t *testing.T) {
@@ -83,5 +108,35 @@ func TestMoveUntrackedTables(t *testing.T) {
 		col, ok := sch.GetAllCols().GetByName("name")
 		require.True(t, ok)
 		require.Equal(t, wantTag, col.Tag, "users.name must be retagged to avoid colliding with bar.code")
+
+		idx, ok := sch.Indexes().GetByNameCaseInsensitive("idx_name")
+		require.True(t, ok, "idx_name must survive the retag")
+		require.Equal(t, []uint64{wantTag}, idx.IndexedColumnTags(), "idx_name must reference the retagged column, not the old tag")
+		require.True(t, idx.IsUnique(), "idx_name is unique and must remain so after retag")
+		require.True(t, idx.IsUserDefined(), "idx_name is user-defined and must remain so after retag")
+	})
+
+	t.Run("ApplyForeignKeyTagRemaps patches child side only when parent is committed", func(t *testing.T) {
+		// users.name and bar.code share tag 9815 so MoveUntrackedTables retagged users.name.
+		// The FK links users.name to bar.code so only the child side should change.
+		const wantTag uint64 = 12204
+
+		fks, err := doltdb.NewForeignKeyCollection(doltdb.ForeignKey{
+			Name:                   "fk_bar",
+			TableName:              doltdb.TableName{Name: "users"},
+			TableColumns:           []uint64{usersNameTag},
+			ReferencedTableName:    doltdb.TableName{Name: "bar"},
+			ReferencedTableColumns: []uint64{barCodeTag},
+		})
+		require.NoError(t, err)
+
+		require.NoError(t, ApplyForeignKeyTagRemaps(fks, allRemaps))
+
+		got, ok := fks.GetByNameCaseInsensitive("fk_bar", doltdb.TableName{Name: "users"})
+		require.True(t, ok)
+		require.Equal(t, []uint64{wantTag}, got.TableColumns,
+			"child column must be updated to the retagged value")
+		require.Equal(t, []uint64{barCodeTag}, got.ReferencedTableColumns,
+			"committed parent column tag must not change")
 	})
 }
