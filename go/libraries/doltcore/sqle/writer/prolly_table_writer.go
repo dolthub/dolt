@@ -50,9 +50,8 @@ type prollyTableWriter struct {
 	sch     schema.Schema
 	sqlSch  sql.Schema
 
-	targetStaging bool
-	setter        dsess.SessionRootSetter // TODO: shouldn't the write session be in charge of this and not the table?
-	writeSess     dsess.WriteSession
+	setter    dsess.SessionRootSetter // TODO: shouldn't the write session be in charge of this and not the table?
+	writeSess dsess.WriteSession
 
 	aiCol      schema.Column
 	aiTracker  globalstate.AutoIncrementTracker
@@ -299,10 +298,10 @@ func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
-	if w.errEncountered == nil {
-		return w.flush(ctx)
+	if w.errEncountered != nil {
+		return w.errEncountered
 	}
-	return nil
+	return w.flush(ctx)
 }
 
 func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
@@ -320,7 +319,7 @@ func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Ha
 }
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
-func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
+func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	schState, err := writerSchema(ctx, tbl, w.tblName.Name, w.dbName)
 	if err != nil {
 		return err
@@ -328,7 +327,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 
 	var newPrimary indexWriter
 	var newSecondaries map[string]indexWriter
-	if schema.IsKeyless(sch) {
+	if schema.IsKeyless(schState.DoltSchema) {
 		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, schState)
 		if err != nil {
 			return err
@@ -349,12 +348,11 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 	}
 
 	w.tbl = tbl
-	w.sch = sch
+	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
-	w.writeSess = sess
 
 	return nil
 }
@@ -419,28 +417,21 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	tbl, err := w.table(ctx)
+	// TODO: this should be able to flush an individual table, but w.setter makes that really difficult
+	//tbl, err := w.table(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//newRoot, err := w.writeSess.FlushTable(ctx, w.tblName, tbl)
+	//if err != nil {
+	//	return err
+	//}
+	//return w.setter(ctx, w.dbName, newRoot)
+
+	newRoot, err := w.writeSess.FlushWithAutoIncrementOverrides(ctx, w.aiSet, map[string]uint64{w.tblName.Name: w.aiAlterVal})
 	if err != nil {
 		return err
 	}
+	return w.setter(ctx, w.dbName, newRoot) // TODO: fix this
 
-	// TODO: it is weird that prollyTableWriter and prollyWriteSession have copies of the same flag
-	// We should just be passing around the Root rather than the set?
-	// It should be possible for prollyTableWriter to not care if we're updating Staged or Working? right?
-	ws, err := w.writeSess.FlushTable(ctx, w.tblName, tbl)
-	if err != nil {
-		return err
-	}
-
-	// TODO: update working set, but ensure that we only Reset the affected table
-	if w.targetStaging {
-		return w.setter(ctx, w.dbName, ws.StagedRoot())
-	} else {
-		return w.setter(ctx, w.dbName, ws.WorkingRoot())
-	}
-
-	// w.setter calls DoltSession.SetWorkingRoot
-	// This looks at the existingWorkingSet from the branchState (DoltSession.lookupDbState)
-	// existingWorkingSet.WorkingRoot is set to flushed.WorkingRoot
-	// This is required because we have to update the WorkingSet in the branchState
 }

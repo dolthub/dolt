@@ -22,7 +22,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -71,11 +70,11 @@ func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.H
 }
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter, targetStaging bool) (dsess.TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.TableName, db string, setter dsess.SessionRootSetter, targetStaging bool) (dsess.TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	if tw, ok := s.tables[tableName]; ok {
+	if tw, ok := s.tables[tblName]; ok {
 		return tw, nil
 	}
 
@@ -83,11 +82,14 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 	// fullTextRewriteEditor for one example, where the |ctx| maintains
 	// the old version of the data while fulltext indexes are rebuilt
 	// using this hidden empty workingSet.
-	root := s.workingSet.WorkingRoot()
+	var root doltdb.RootValue
 	if targetStaging {
 		root = s.workingSet.StagedRoot()
+	} else {
+		root = s.workingSet.WorkingRoot()
 	}
-	t, ok, err := root.GetTable(ctx, tableName)
+
+	tbl, ok, err := root.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -95,60 +97,34 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 		return nil, doltdb.ErrTableNotFound
 	}
 
-	schState, err := writerSchema(ctx, t, tableName.Name, db)
+	tblWriter := &prollyTableWriter{
+		tblName:   tblName,
+		dbName:    db,
+		aiTracker: s.aiTracker,
+		writeSess: s,
+		setter:    setter,
+	}
+	err = tblWriter.Reset(ctx, tbl)
 	if err != nil {
 		return nil, err
 	}
 
-	var pw indexWriter
-	var sws map[string]indexWriter
-	if schema.IsKeyless(schState.DoltSchema) {
-		pw, err = getPrimaryKeylessProllyWriter(ctx, t, schState)
-		if err != nil {
-			return nil, err
-		}
-		sws, err = getSecondaryKeylessProllyWriters(ctx, t, schState, pw.(prollyKeylessWriter))
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		pw, err = getPrimaryProllyWriter(ctx, t, schState)
-		if err != nil {
-			return nil, err
-		}
-		sws, err = getSecondaryProllyIndexWriters(ctx, t, schState)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	twr := &prollyTableWriter{
-		tblName:       tableName,
-		dbName:        db,
-		primary:       pw,
-		secondary:     sws,
-		tbl:           t,
-		sch:           schState.DoltSchema,
-		sqlSch:        schState.PkSchema.Schema,
-		aiCol:         schState.AutoIncCol,
-		aiTracker:     s.aiTracker,
-		writeSess:     s,
-		setter:        setter,
-		targetStaging: targetStaging,
-	}
-	s.tables[tableName] = twr
-
-	return twr, nil
+	s.tables[tblName] = tblWriter
+	return tblWriter, nil
 }
 
 // Flush implemented WriteSession.
 func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	return s.flushAllTables(ctx, false, nil)
+	_, err := s.flushAllTables(ctx, false, nil)
+	if err != nil {
+		return nil, err
+	}
+	return s.workingSet, nil
 }
 
-func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, autoIncSet bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, autoIncSet bool, autoIncrements map[string]uint64) (doltdb.RootValue, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.flushAllTables(ctx, autoIncSet, autoIncrements)
@@ -171,59 +147,37 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	return
 }
 
-func (s *prollyWriteSession) MaterializeTable(ctx *sql.Context, tblName doltdb.TableName, autoIncSet, manualAutoInc bool, manualAutoIncVal uint64) (*doltdb.Table, error) {
+func (s *prollyWriteSession) materializeTable(ctx *sql.Context, tblName doltdb.TableName, tblWriter *prollyTableWriter, autoIncSet, manualAutoInc bool, manualAutoIncVal uint64) (*doltdb.Table, error) {
 	// Materialize table
-	tblWriter := s.tables[tblName] // TODO: unnecessary lookup that should be removed
 	tbl, err := tblWriter.table(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: this logic should do inside of prollyTableWriter.table()...
-	if schema.HasAutoIncrement(tblWriter.sch) {
-		// TODO: need schema name for auto increment
-		if manualAutoInc {
-			// TODO: why tblWriter.autoIncTracker? is it different than s.aiTracker??
-			tbl, err = tblWriter.aiTracker.Set(ctx, tblName.Name, tbl, s.workingSet.Ref(), manualAutoIncVal)
-		} else if autoIncSet {
-			var aiVal uint64
-			aiVal, err = s.aiTracker.Current(tblName.Name)
-			if err != nil {
-				return nil, err
-			}
-			tbl, err = tbl.SetAutoIncrementValue(ctx, aiVal)
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return tbl, nil
 }
 
-func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (*doltdb.WorkingSet, error) {
-	var flushed doltdb.RootValue
-	var err error
+func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (flushed doltdb.RootValue, err error) {
 	if s.targetStaging {
-		flushed, err = s.workingSet.StagedRoot().PutTable(ctx, tblName, tbl)
+		flushed = s.workingSet.StagedRoot()
+		flushed, err = flushed.PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return nil, err
 		}
 		s.workingSet = s.workingSet.WithStagedRoot(flushed)
 	} else {
-		flushed, err = s.workingSet.WorkingRoot().PutTable(ctx, tblName, tbl)
+		flushed = s.workingSet.WorkingRoot()
+		flushed, err = flushed.PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return nil, err
 		}
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
 
-	// TODO: setter is on prollyTableWriter
-	return s.workingSet, nil
+	return flushed, nil
 }
 
 // flushAllTables is the inner implementation for Flush that does not acquire any locks
-func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (doltdb.RootValue, error) {
 	type result struct {
 		tblName doltdb.TableName
 		tbl     *doltdb.Table
@@ -234,11 +188,12 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, m
 	results := make(chan result, 10)
 	wg := sync.WaitGroup{}
 	wg.Add(len(s.tables))
-	for tblName := range s.tables {
+	for tblName, tblWriter := range s.tables {
 		go func() {
 			defer wg.Done()
-			manualAutoIncVal, manualAutoInc := manualAutoIncrementsSettings[tblName.Name]
-			tbl, err := s.MaterializeTable(ctx, tblName, autoIncSet, manualAutoInc, manualAutoIncVal)
+			//manualAutoIncVal, manualAutoInc := manualAutoIncrementsSettings[tblName.Name]
+			//tbl, err := s.materializeTable(ctx, tblName, autoIncSet, manualAutoInc, manualAutoIncVal)
+			tbl, err := tblWriter.table(ctx)
 			results <- result{
 				tblName: tblName,
 				tbl:     tbl,
@@ -281,11 +236,29 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context, autoIncSet bool, m
 	} else {
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
-	return s.workingSet, nil
+	return flushed, nil
 }
 
 // setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks (it's only called from a function that acquires locks???)
 func (s *prollyWriteSession) setWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
+	root := ws.WorkingRoot()
+	for tableName, tableWriter := range s.tables {
+		tbl, ok, err := root.GetTable(ctx, tableName)
+		if err != nil {
+			return err
+		}
+
+		// table was removed in newer root
+		if !ok {
+			delete(s.tables, tableName)
+			continue
+		}
+
+		err = tableWriter.Reset(ctx, tbl)
+		if err != nil {
+			return err
+		}
+	}
 	s.workingSet = ws
 	return nil
 }
