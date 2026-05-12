@@ -178,13 +178,15 @@ func applyNodePatch[K ~[]byte, O Ordering[K], S message.Serializer](
 		}
 	}
 
-	// TODO: Add SeekPast / AdvancePast functions
-	err = Seek(ctx, chkr.cur, K(toKey), order)
+	err = SeekPast(ctx, chkr.cur, K(toKey), order)
 	if err != nil {
 		return err
 	}
-	if chkr.cur.Valid() && order.Compare(ctx, K(toKey), K(chkr.cur.CurrentKey())) == 0 {
-		err = chkr.skip(ctx)
+	// SeekPast may leave the cursor past the end of its node when
+	// toKey is the last key in a chunk. Advance to the next node
+	// so the cursor is in a valid state for subsequent operations.
+	if !chkr.cur.Valid() && chkr.cur.parent != nil {
+		err = chkr.cur.advance(ctx)
 		if err != nil {
 			return err
 		}
