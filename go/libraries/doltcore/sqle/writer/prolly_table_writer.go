@@ -51,7 +51,7 @@ type prollyTableWriter struct {
 	sqlSch  sql.Schema
 
 	targetStaging bool
-	setter        dsess.SessionRootSetter
+	setter        dsess.SessionRootSetter // TODO: shouldn't the write session be in charge of this and not the table?
 	writeSess     dsess.WriteSession
 
 	aiCol      schema.Column
@@ -182,33 +182,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	return nil
 }
 
-// Delete implements TableWriter.
-func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
-	for _, wr := range w.secondary {
-		if err := wr.Delete(ctx, sqlRow); err != nil {
-			return err
-		}
-	}
-	if err := w.primary.Delete(ctx, sqlRow); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
-	err := w.primary.VisitGCRoots(ctx, roots)
-	if err != nil {
-		return err
-	}
-	for _, writer := range w.secondary {
-		err = writer.VisitGCRoots(ctx, roots)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
 	for _, wr := range w.secondary {
@@ -227,34 +200,15 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	return nil
 }
 
-// GetNextAutoIncrementValue implements TableWriter.
-func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return w.aiTracker.Next(ctx, w.tblName.Name, insertVal)
-}
-
-// SetAutoIncrementValue implements AutoIncrementSetter.
-func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
-	if err != nil {
-		return err
+// Delete implements TableWriter.
+func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	for _, wr := range w.secondary {
+		if err := wr.Delete(ctx, sqlRow); err != nil {
+			return err
+		}
 	}
-
-	w.aiAlterVal = seq
-	w.aiAltered = true
-
-	// The work above is persisted in flushAllTables
-	return w.flush(ctx) // TODO: necessary??
-}
-
-func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
-	return w.aiTracker.AcquireTableLock(ctx, w.tblName.Name)
-}
-
-// Close implements Closer
-func (w *prollyTableWriter) Close(ctx *sql.Context) error {
-	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
-	if w.errEncountered == nil {
-		return w.flush(ctx)
+	if err := w.primary.Delete(ctx, sqlRow); err != nil {
+		return err
 	}
 	return nil
 }
@@ -294,7 +248,16 @@ func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
 	return err
 }
 
-// GetIndexes implements sql.IndexAddressableTable.
+// IndexedAccess implements sql.IndexAddressable.
+func (w *prollyTableWriter) IndexedAccess(_ *sql.Context, i sql.IndexLookup) sql.IndexedTable {
+	idx := index.DoltIndexFromSqlIndex(i.Index)
+	return &prollyFkIndexer{
+		writer: w,
+		index:  idx,
+	}
+}
+
+// GetIndexes implements sql.IndexAddressable.
 func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	indexes := ctx.GetIndexRegistry().IndexesByTable(w.dbName, w.tblName.Name)
 	ret := make([]sql.Index, len(indexes))
@@ -304,17 +267,56 @@ func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return ret, nil
 }
 
+// PreciseMatch implements sql.IndexAddressable.
 func (w *prollyTableWriter) PreciseMatch() bool {
 	return true
 }
 
-// IndexedAccess implements sql.IndexAddressableTable.
-func (w *prollyTableWriter) IndexedAccess(_ *sql.Context, i sql.IndexLookup) sql.IndexedTable {
-	idx := index.DoltIndexFromSqlIndex(i.Index)
-	return &prollyFkIndexer{
-		writer: w,
-		index:  idx,
+// GetNextAutoIncrementValue implements TableWriter.
+func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
+	return w.aiTracker.Next(ctx, w.tblName.Name, insertVal)
+}
+
+// SetAutoIncrementValue implements AutoIncrementSetter.
+func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
+	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
+	if err != nil {
+		return err
 	}
+
+	w.aiAlterVal = seq
+	w.aiAltered = true
+
+	// The work above is persisted in flushAllTables
+	return w.flush(ctx) // TODO: necessary??
+}
+
+// AcquireAutoIncrementLock implements AutoIncrementSetter.
+func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
+	return w.aiTracker.AcquireTableLock(ctx, w.tblName.Name)
+}
+
+// Close implements Closer
+func (w *prollyTableWriter) Close(ctx *sql.Context) error {
+	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
+	if w.errEncountered == nil {
+		return w.flush(ctx)
+	}
+	return nil
+}
+
+func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	err := w.primary.VisitGCRoots(ctx, roots)
+	if err != nil {
+		return err
+	}
+	for _, writer := range w.secondary {
+		err = writer.VisitGCRoots(ctx, roots)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
@@ -325,7 +327,6 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 	}
 
 	var newPrimary indexWriter
-
 	var newSecondaries map[string]indexWriter
 	if schema.IsKeyless(sch) {
 		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, schState)
@@ -358,6 +359,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 	return nil
 }
 
+// table materializes all changes to the primary key, secondary keys, and auto increments to a new doltdb.Table
 func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err error) {
 	// flush primary row storage
 	priMap, err := w.primary.Map(ctx)
@@ -394,44 +396,43 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 		return nil, err
 	}
 
-	if !w.aiCol.AutoIncrement {
-		return tbl, nil
-	}
-
-	if w.aiAltered {
-		tbl, err = w.aiTracker.Set(ctx, w.tblName.Name, tbl, w.writeSess.GetWorkingSet().Ref(), w.aiAlterVal)
-		if err != nil {
-			return nil, err
-		}
-	} else if w.aiSet {
-		var aiVal uint64
-		aiVal, err = w.aiTracker.Current(w.tblName.Name)
-		if err != nil {
-			return nil, err
-		}
-		tbl, err = tbl.SetAutoIncrementValue(ctx, aiVal)
-		if err != nil {
-			return nil, err
+	if schema.HasAutoIncrement(w.sch) {
+		if w.aiAltered {
+			tbl, err = w.aiTracker.Set(ctx, w.tblName.Name, tbl, w.writeSess.GetWorkingSet().Ref(), w.aiAlterVal)
+			if err != nil {
+				return nil, err
+			}
+		} else if w.aiSet {
+			var aiVal uint64
+			aiVal, err = w.aiTracker.Current(w.tblName.Name)
+			if err != nil {
+				return nil, err
+			}
+			tbl, err = tbl.SetAutoIncrementValue(ctx, aiVal)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	// TODO: shouldn't this just update all the pointers rather than relying on Reset()?
 	return tbl, nil
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	//ws, err := w.writeSess.FlushWithAutoIncrementOverrides(ctx, w.aiSet, map[string]uint64{w.aiCol.Name: w.aiAlterVal})
-
 	tbl, err := w.table(ctx)
 	if err != nil {
 		return err
 	}
 
+	// TODO: it is weird that prollyTableWriter and prollyWriteSession have copies of the same flag
+	// We should just be passing around the Root rather than the set?
+	// It should be possible for prollyTableWriter to not care if we're updating Staged or Working? right?
 	ws, err := w.writeSess.FlushTable(ctx, w.tblName, tbl)
 	if err != nil {
 		return err
 	}
 
+	// TODO: update working set, but ensure that we only Reset the affected table
 	if w.targetStaging {
 		return w.setter(ctx, w.dbName, ws.StagedRoot())
 	} else {
