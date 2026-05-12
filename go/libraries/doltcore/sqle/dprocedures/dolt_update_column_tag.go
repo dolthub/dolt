@@ -96,4 +96,3 @@ func parseUpdateColumnTagArgs(args ...string) (tableName, columnName string, tag
 
 	return tableName, columnName, tag, nil
 }
-
