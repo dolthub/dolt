@@ -216,16 +216,16 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 		}()
 	}
 
-	// Drain from the flushedTables channel, updating RootValue each time
+	// Drain from the flushedTables channel and update RootValue with updated table
 	var flushed doltdb.RootValue
 	if s.targetStaging {
 		flushed = s.workingSet.StagedRoot()
 	} else {
 		flushed = s.workingSet.WorkingRoot()
 	}
-	var err error
 	eg := errgroup.Group{}
 	eg.Go(func() error {
+		var err error
 		for flushedTbl := range flushedTables {
 			if flushedTbl.err != nil {
 				return flushedTbl.err
@@ -237,10 +237,14 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 		}
 		return nil
 	})
+
+	// Wait for all tables to materialize before closing the flushedTables channel
+	// Additionally, we must start the drain goroutine before blocking
 	wg.Wait()
 	close(flushedTables)
 
-	if err = eg.Wait(); err != nil {
+	// Wait for all flushed tables to be put onto the working set
+	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
 
