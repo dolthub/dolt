@@ -288,7 +288,7 @@ func (s *prollyWriteSession) IsDirty() bool {
 }
 
 func (s *prollyWriteSession) FlushAll(ctx *sql.Context) error {
-	// TODO: mutex?
+	// TODO: use concurrency?
 	for _, writer := range s.tables {
 		if writer.changes == 0 {
 			continue

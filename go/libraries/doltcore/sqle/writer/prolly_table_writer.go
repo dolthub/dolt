@@ -50,6 +50,7 @@ type prollyTableWriter struct {
 	primary   indexWriter
 	secondary map[string]indexWriter
 	changes   uint64
+	lazy      bool
 
 	dbName  string
 	tblName doltdb.TableName
@@ -306,10 +307,13 @@ func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), 
 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
-	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
 	if w.errEncountered != nil {
 		return w.errEncountered
 	}
+	if w.lazy && w.changes < FLUSH_THRESHOLD {
+		return nil
+	}
+	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
 	return w.flush(ctx)
 }
 
