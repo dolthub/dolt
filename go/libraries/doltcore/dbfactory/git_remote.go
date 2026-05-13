@@ -25,6 +25,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/dolthub/fslock"
 
@@ -93,6 +95,30 @@ func (fact GitRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFo
 	}
 }
 
+// One shared GitBlobstore per (local db, URL, ref); key is cacheRepoPath.
+type gitRemoteCacheEntry struct {
+	db  datas.Database
+	vrw types.ValueReadWriter
+	ns  tree.NodeStore
+}
+
+var (
+	gitRemoteCacheMu sync.Mutex
+	gitRemoteCache   = map[string]gitRemoteCacheEntry{}
+)
+
+// gitBlobstoreSyncForReadTTLOverride, when non-zero, is passed as
+// GitBlobstoreOptions.SyncForReadTTL when constructing a new GitBlobstore.
+// Test seam only.
+var gitBlobstoreSyncForReadTTLOverride time.Duration
+
+// No-op Close so callers can defer Close() on a shared instance.
+type gitNoopCloseChunkStore struct {
+	*nbs.NomsBlockStore
+}
+
+func (gitNoopCloseChunkStore) Close() error { return nil }
+
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
 	if err != nil {
@@ -112,6 +138,13 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	gitRemoteCacheMu.Lock()
+	if entry, ok := gitRemoteCache[cacheRepo]; ok {
+		gitRemoteCacheMu.Unlock()
+		return entry.db, entry.vrw, entry.ns, nil
+	}
+	gitRemoteCacheMu.Unlock()
 
 	remoteName := resolveGitRemoteName(params)
 
@@ -144,14 +177,28 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	cs, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: remoteName, InfoBranch: blobstore.DefaultInfoBranch}, memlimit.MemtableSize(), q)
+	bsOpts := blobstore.GitBlobstoreOptions{
+		RemoteName:     remoteName,
+		InfoBranch:     blobstore.DefaultInfoBranch,
+		SyncForReadTTL: gitBlobstoreSyncForReadTTLOverride,
+	}
+	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
+	cs := gitNoopCloseChunkStore{NomsBlockStore: nbsCS}
 	vrw := types.NewValueStore(cs)
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
+
+	gitRemoteCacheMu.Lock()
+	if entry, ok := gitRemoteCache[cacheRepo]; ok {
+		gitRemoteCacheMu.Unlock()
+		return entry.db, entry.vrw, entry.ns, nil
+	}
+	gitRemoteCache[cacheRepo] = gitRemoteCacheEntry{db: db, vrw: vrw, ns: ns}
+	gitRemoteCacheMu.Unlock()
 	return db, vrw, ns, nil
 }
 
