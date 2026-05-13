@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	dolttable "github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -44,6 +45,9 @@ var ErrInvalidNonLiteralArgument = errors.NewKind("Invalid argument to %s: %s â€
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
 
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
+var _ sql.IndexedTable = (*DiffTableFunction)(nil)
+var _ sql.TableNode = (*DiffTableFunction)(nil)
+var _ sql.IndexAddressable = (*DiffTableFunction)(nil)
 var _ sql.ExecSourceRel = (*DiffTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*DiffTableFunction)(nil)
 
@@ -55,11 +59,42 @@ type DiffTableFunction struct {
 	tableNameExpr    sql.Expression
 	database         sql.Database
 	overriddenSchema schema.Schema
-	fromDate         *types.Timestamp
-	toDate           *types.Timestamp
+	fromRefDetails   *refDetails
+	toRefDetails     *refDetails
 	includeCols      map[string]struct{}
 	sqlSch           sql.Schema
 	showSkinny       bool
+}
+
+// CollationCoercibility implements the interface sql.CollationCoercible.
+func (dtf *DiffTableFunction) CollationCoercibility(ctx *sql.Context) (collation sql.CollationID, coercibility byte) {
+	return sql.Collation_binary, 7
+}
+
+func (dtf *DiffTableFunction) UnderlyingTable() sql.Table {
+	return dtf
+}
+
+func (dtf *DiffTableFunction) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
+	return dtf
+}
+
+// GetIndexes implements sql.IndexAddressable
+func (dtf *DiffTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return index.MakeDiffTableIndexes(dtf.Name(), dtf.tableDelta.ToSch, dtf.tableDelta.FromSch, false), nil
+}
+
+func (dtf *DiffTableFunction) PreciseMatch() bool {
+	return false
+}
+
+// Collation implements the sql.Table interface.
+func (dtf *DiffTableFunction) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
+func (dtf *DiffTableFunction) Partitions(*sql.Context) (sql.PartitionIter, error) {
+	return nil, nil
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -195,39 +230,31 @@ func (dtf *DiffTableFunction) Children() []sql.Node {
 	return nil
 }
 
+func (dtf *DiffTableFunction) getSchemas() (toSchema, fromSchema schema.Schema) {
+	if dtf.overriddenSchema != nil {
+		return dtf.overriddenSchema, dtf.overriddenSchema
+	}
+	return dtf.tableDelta.ToSch, dtf.tableDelta.FromSch
+}
+
 // RowIter implements the sql.Node interface
 func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
 	// Everything we need to start iterating was cached when we previously determined the schema of the result
 	// TODO: When we add support for joining on table functions, we'll need to evaluate this against the
 	//       specified row. That row is what has the left_table context in a join query.
 	//       This will expand the test cases we need to cover significantly.
-	fromCommitVal, toCommitVal, dotCommitVal, _, err := dtf.evaluateArguments(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	sqledb, ok := dtf.database.(dsess.SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unable to get dolt database")
 	}
-
-	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
-	if err != nil {
-		return nil, err
-	}
-
 	ddb := sqledb.DbData().Ddb
-
-	// Diff computation uses the original schemas obtained via [doltdb.Table.GetSchema]. Row converters map from the
-	// original schema to the overridden schema for output formatting.
-	fromSchForPartition := dtf.tableDelta.FromSch
-	toSchForPartition := dtf.tableDelta.ToSch
-	if dtf.overriddenSchema != nil {
-		fromSchForPartition = dtf.overriddenSchema
-		toSchForPartition = dtf.overriddenSchema
-	}
-
-	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toCommitStr, fromCommitStr, dtf.toDate, dtf.fromDate, toSchForPartition, fromSchForPartition, nil)
+	toSchema, fromSchema := dtf.getSchemas()
+	dp := dtables.NewDiffPartition(
+		dtf.tableDelta.ToTable, dtf.tableDelta.FromTable,
+		dtf.toRefDetails.refStr, dtf.fromRefDetails.refStr,
+		dtf.toRefDetails.commitTime, dtf.fromRefDetails.commitTime,
+		toSchema, fromSchema,
+		nil)
 
 	return dtables.NewDiffPartitionRowIter(dp, ddb), nil
 }
@@ -256,6 +283,7 @@ func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDel
 type refDetails struct {
 	root       doltdb.RootValue
 	commitTime *types.Timestamp
+	refStr     string
 	hashStr    string
 }
 
@@ -274,13 +302,13 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	if err != nil {
 		return nil, nil, err
 	}
-	fromDetails := &refDetails{root: fromRoot, hashStr: fromHashStr, commitTime: fromCommitTime}
+	fromDetails := &refDetails{root: fromRoot, refStr: fromCommitStr, hashStr: fromHashStr, commitTime: fromCommitTime}
 
 	toRoot, toCommitTime, toHashStr, err := sess.ResolveRootForRef(ctx, dbName, toCommitStr)
 	if err != nil {
 		return nil, nil, err
 	}
-	toDetails := &refDetails{root: toRoot, hashStr: toHashStr, commitTime: toCommitTime}
+	toDetails := &refDetails{root: toRoot, refStr: toCommitStr, hashStr: toHashStr, commitTime: toCommitTime}
 
 	return fromDetails, toDetails, nil
 }
@@ -561,6 +589,30 @@ func (dtf *DiffTableFunction) filterDeltaSchemaToSkinnyCols(ctx *sql.Context, de
 	return &skDelta, nil
 }
 
+func (dtf *DiffTableFunction) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	if part == nil {
+		return dtf.RowIter(ctx, nil)
+	}
+	dp := part.(*dtables.DiffPartition)
+	return dp.GetRowIter(ctx)
+}
+
+func (dtf *DiffTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	toSchema, fromSchema := dtf.getSchemas()
+	partition := dtables.NewDiffPartition(
+		dtf.tableDelta.ToTable, dtf.tableDelta.FromTable,
+		dtf.toRefDetails.refStr, dtf.fromRefDetails.refStr,
+		dtf.toRefDetails.commitTime, dtf.fromRefDetails.commitTime,
+		toSchema, fromSchema,
+		prollyRanges)
+	return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
+}
+
 func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string) error {
 	if !dtf.Resolved() {
 		return nil
@@ -694,8 +746,8 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 		return diff.TableDelta{}, err
 	}
 
-	dtf.fromDate = fromRefDetails.commitTime
-	dtf.toDate = toRefDetails.commitTime
+	dtf.fromRefDetails = fromRefDetails
+	dtf.toRefDetails = toRefDetails
 
 	delta := findMatchingDelta(deltas, tableName)
 

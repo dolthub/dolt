@@ -575,7 +575,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 			}
 			return dt, true, nil
 		}
-		dt, err := dtables.NewConflictsTable(ctx, tname, srcTable, root, dtables.RootSetter(db))
+		dt, err := dtables.NewConflictsTable(ctx, tname, db, srcTable, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}

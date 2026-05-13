@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -158,6 +159,11 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 		t.Skip("git not found on PATH")
 	}
 
+	// Extend the default 1s syncForRead TTL to 5s to account for slow CI machines.
+	prevTTL := gitBlobstoreSyncForReadTTLOverride
+	gitBlobstoreSyncForReadTTLOverride = 5 * time.Second
+	t.Cleanup(func() { gitBlobstoreSyncForReadTTLOverride = prevTTL })
+
 	ctx := context.Background()
 	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
 	require.NoError(t, err)
@@ -216,12 +222,18 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 	require.True(t, okCommitB)
 	require.NoError(t, dbB.Close())
 
-	// Client A re-opens and should see B's update.
+	// Cached blobstore: Rebase within syncForRead TTL skips upstream fetch.
 	dbA2, csA2 := open(cacheA)
 	require.NoError(t, csA2.Rebase(ctx))
 	rootA2, err := csA2.Root(ctx)
 	require.NoError(t, err)
-	require.Equal(t, cB.Hash(), rootA2)
+	require.Equal(t, cA.Hash(), rootA2)
+
+	time.Sleep(10 * time.Second)
+	require.NoError(t, csA2.Rebase(ctx))
+	rootA2After, err := csA2.Root(ctx)
+	require.NoError(t, err)
+	require.Equal(t, cB.Hash(), rootA2After)
 	gotB, err := csA2.Get(ctx, cB.Hash())
 	require.NoError(t, err)
 	require.Equal(t, "clientB\n", string(gotB.Data()))

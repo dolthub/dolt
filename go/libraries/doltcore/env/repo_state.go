@@ -54,7 +54,7 @@ type RepoStateReadWriter[C doltdb.Context] interface {
 
 // RemoteDbProvider is an interface for getting a database from a remote
 type RemoteDbProvider interface {
-	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error)
+	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote) (*doltdb.DoltDB, error)
 }
 type DbData[C doltdb.Context] struct {
 	Ddb *doltdb.DoltDB

@@ -386,6 +386,9 @@ type GitBlobstoreOptions struct {
 	// DOLT_REMOTE.md file after each successful data push. The value is the short
 	// branch name (e.g. "__dolt_remote_info__"). Overridden by DOLT_REMOTE_INFO_BRANCH env var.
 	InfoBranch string
+	// SyncForReadTTL overrides the read-side fetch dedup window. Zero means
+	// use defaultSyncForReadTTL.
+	SyncForReadTTL time.Duration
 }
 
 // NewGitBlobstoreWithOptions creates a GitBlobstore rooted at |gitDir| and |ref|.
@@ -412,6 +415,11 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 
 	infoBranch := ResolveInfoBranch(opts.InfoBranch)
 
+	syncForReadTTL := opts.SyncForReadTTL
+	if syncForReadTTL == 0 {
+		syncForReadTTL = defaultSyncForReadTTL
+	}
+
 	return &GitBlobstore{
 		gitDir:            gitDir,
 		remoteRef:         remoteRef,
@@ -424,7 +432,7 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		maxPartSize:       opts.MaxPartSize,
 		cacheObjects:      make(map[string]cachedGitObject),
 		cacheChildren:     make(map[string][]git.TreeEntry),
-		syncForReadTTL:    defaultSyncForReadTTL,
+		syncForReadTTL:    syncForReadTTL,
 		infoBranch:        infoBranch,
 	}, nil
 }
