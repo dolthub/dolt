@@ -798,4 +798,3 @@ func (fkc *ForeignKeyCollection) Copy() *ForeignKeyCollection {
 	}
 	return &ForeignKeyCollection{copiedForeignKeys}
 }
-
