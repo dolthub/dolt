@@ -805,18 +805,7 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 	if err != nil {
 		return newRebaseError(err)
 	}
-	fks, err := actions.MoveForeignKeys(ctx, preRebaseStagedRoot, postCopyWS.WorkingRoot(), preRebaseWorkingRoot, false)
-	if err != nil {
-		return newRebaseError(err)
-	}
-	restoredWorking, remaps, err := actions.MoveUntrackedTables(ctx, preRebaseWorkingRoot, preRebaseStagedRoot, postCopyWS.WorkingRoot())
-	if err != nil {
-		return newRebaseError(err)
-	}
-	if err = actions.ApplyForeignKeyTagRemaps(fks, remaps); err != nil {
-		return newRebaseError(err)
-	}
-	restoredWorking, err = restoredWorking.PutForeignKeyCollection(ctx, fks)
+	restoredWorking, err := actions.CarryUncommittedTables(ctx, preRebaseWorkingRoot, preRebaseStagedRoot, postCopyWS.WorkingRoot())
 	if err != nil {
 		return newRebaseError(err)
 	}

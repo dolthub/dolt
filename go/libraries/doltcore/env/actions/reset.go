@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // resetHardTables resolves a new HEAD commit from a refSpec and updates working set roots by
@@ -64,111 +63,11 @@ func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr str
 		}
 	}
 
-	fks, err := MoveForeignKeys(ctx, roots.Head, roots.Head, roots.Working, false)
-	if err != nil {
-		return nil, doltdb.Roots{}, err
-	}
-	newWorking, remaps, err := MoveUntrackedTables(ctx, roots.Working, roots.Staged, roots.Head)
-	if err != nil {
-		return nil, doltdb.Roots{}, err
-	}
-	if err = ApplyForeignKeyTagRemaps(fks, remaps); err != nil {
-		return nil, doltdb.Roots{}, err
-	}
-	newWorking, err = newWorking.PutForeignKeyCollection(ctx, fks)
+	newWorking, err := CarryUncommittedTables(ctx, roots.Working, roots.Staged, roots.Head)
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}
 	return newHead, doltdb.Roots{Head: roots.Head, Working: newWorking, Staged: roots.Head}, nil
-}
-
-// MoveUntrackedTables copies tables that are in |sourceWorking| but not in |sourceStaged|
-// into |target| and returns the updated root. If a table shares a name with one already in
-// |target|, the version in |target| is kept. If a table has column tags that conflict with
-// those in |target|, the conflicting tags are replaced before the table is copied. Foreign
-// key constraints declared on moved tables are also transferred to |target|, with column
-// tags updated to match any retagging that was applied.
-//
-// This is the shared implementation used by both dolt reset --hard ([ResetHardTables]) and
-// dolt checkout ([RootsForBranch]) to carry untracked tables across a root transition.
-func MoveUntrackedTables(ctx context.Context, sourceWorking, sourceStaged, target doltdb.RootValue) (doltdb.RootValue, map[doltdb.TableName]map[uint64]uint64, error) {
-	untracked, err := doltdb.GetAllSchemas(ctx, sourceWorking)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	stagedNames, err := sourceStaged.GetAllTableNames(ctx, false)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, name := range stagedNames {
-		delete(untracked, name)
-	}
-
-	targetSchemas, err := doltdb.GetAllSchemas(ctx, target)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// heldTags starts with all column tags in |target| and grows as each untracked
-	// table is processed so no two moved tables end up sharing a tag.
-	heldTags := make(schema.TagMapping)
-	for tblName, tsch := range targetSchemas {
-		for _, t := range tsch.GetAllCols().Tags {
-			heldTags.Add(t, tblName.Name)
-		}
-	}
-
-	allTagRemaps := make(map[doltdb.TableName]map[uint64]uint64)
-	for name, sch := range untracked {
-		if _, exists := targetSchemas[name]; exists {
-			continue
-		}
-		tbl, exists, err := sourceWorking.GetTable(ctx, name)
-		if err != nil {
-			return nil, nil, err
-		}
-		if !exists {
-			return nil, nil, fmt.Errorf("untracked table %s does not exist in working set", name)
-		}
-		tagRemap := collidingTagRemap(sch, name.Name, heldTags)
-		if len(tagRemap) > 0 {
-			allTagRemaps[name] = tagRemap
-			newSch, err := schema.WithUpdatedColumnTags(sch, tagRemap)
-			if err != nil {
-				return nil, nil, err
-			}
-			tbl, err = tbl.UpdateSchema(ctx, newSch)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		target, err = target.PutTable(ctx, name, tbl)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to write table back to database: %w", err)
-		}
-	}
-
-	return target, allTagRemaps, nil
-}
-
-// collidingTagRemap scans |sch| for column tags that collide with |heldTags| and returns
-// a map of old tag to new tag for each colliding column. The map is empty when no columns
-// collide. |heldTags| is updated in place with every column's final tag so that no two
-// tables moved in sequence end up sharing a tag. |tableName| seeds the tag generator.
-func collidingTagRemap(sch schema.Schema, tableName string, heldTags schema.TagMapping) map[uint64]uint64 {
-	columns := sch.GetAllCols().GetColumns()
-	tagRemap := make(map[uint64]uint64)
-	priorKinds := make([]types.NomsKind, 0, len(columns))
-	for _, column := range columns {
-		if heldTags.Contains(column.Tag) {
-			tagRemap[column.Tag] = schema.AutoGenerateTag(heldTags, tableName, priorKinds, column.Name, column.Kind)
-			column.Tag = tagRemap[column.Tag]
-		}
-		priorKinds = append(priorKinds, column.Kind)
-		heldTags.Add(column.Tag, tableName)
-	}
-	return tagRemap
 }
 
 func GetAllTableNames(ctx context.Context, root doltdb.RootValue) []doltdb.TableName {
