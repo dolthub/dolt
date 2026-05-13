@@ -46,7 +46,10 @@ func CarryUncommittedTables(ctx context.Context, src, baseline, dest doltdb.Root
 	return carryForeignKeys(ctx, src, dest, carried, tagRemaps)
 }
 
-// uncommittedSchemas returns the schemas of tables that are in |src| but not in |baseline|.
+// uncommittedSchemas returns the schemas of tables that are in |src| but not in |baseline|,
+// excluding system tables and tables that match a dolt_ignore pattern on |src|. System tables
+// hold per-branch configuration and ignored tables were never meant to be tracked, so neither
+// should cross branches during a carry.
 func uncommittedSchemas(ctx context.Context, src, baseline doltdb.RootValue) (map[doltdb.TableName]schema.Schema, error) {
 	untracked, err := doltdb.GetAllSchemas(ctx, src)
 	if err != nil {
@@ -59,7 +62,24 @@ func uncommittedSchemas(ctx context.Context, src, baseline doltdb.RootValue) (ma
 	for _, name := range baselineNames {
 		delete(untracked, name)
 	}
-	return untracked, nil
+	for name := range untracked {
+		if doltdb.IsSystemTable(name) {
+			delete(untracked, name)
+		}
+	}
+	candidates := make([]doltdb.TableName, 0, len(untracked))
+	for name := range untracked {
+		candidates = append(candidates, name)
+	}
+	kept, err := doltdb.ExcludeIgnoredTables(ctx, doltdb.Roots{Working: src, Staged: src, Head: src}, candidates)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[doltdb.TableName]schema.Schema, len(kept))
+	for _, name := range kept {
+		result[name] = untracked[name]
+	}
+	return result, nil
 }
 
 // carryTables copies each entry of |toCarry| from |src| into |dest|, retagging columns whose
