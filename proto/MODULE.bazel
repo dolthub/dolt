@@ -6,7 +6,10 @@ bazel_dep(name = "rules_go", version = "0.60.0")
 bazel_dep(name = "gazelle", version = "0.51.0")
 bazel_dep(name = "rules_shell", version = "0.8.0")
 bazel_dep(name = "protobuf", version = "34.1")
+bazel_dep(name = "rules_android", version = "0.7.2")
 
+# Override rules_android for 9.1.0. Protobuf pulls this in and it pulls
+# in one that is too old.
 bazel_dep(name = "bazelrc-preset.bzl", version = "1.9.2", dev_dependency = True)
 
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
