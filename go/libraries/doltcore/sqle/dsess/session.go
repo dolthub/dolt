@@ -464,7 +464,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			if head.writeSession == nil {
 				continue
 			}
-			if err = head.writeSession.FlushAll(ctx); err != nil {
+			if _, err = head.writeSession.Flush(ctx); err != nil {
 				return err
 			}
 		}
@@ -1333,7 +1333,8 @@ func (d *DoltSession) FlushPendingWrites(ctx *sql.Context, dbName string) error 
 		return nil
 	}
 
-	return ws.FlushAll(ctx)
+	_, err = ws.Flush(ctx)
+	return err
 }
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
