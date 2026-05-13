@@ -51,6 +51,7 @@ type WriteSession interface {
 	// IsDirty indicates if this WriteSession has writes that haven't been flushed yet.
 	IsDirty() bool
 
+	// TODO: Move to WriteSessionFlusher
 	FlushAll(ctx *sql.Context) error
 
 	WriteSessionFlusher
