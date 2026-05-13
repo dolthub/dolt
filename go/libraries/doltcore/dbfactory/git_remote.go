@@ -139,10 +139,8 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	cacheKey := cacheRepo
-
 	gitRemoteCacheMu.Lock()
-	if entry, ok := gitRemoteCache[cacheKey]; ok {
+	if entry, ok := gitRemoteCache[cacheRepo]; ok {
 		gitRemoteCacheMu.Unlock()
 		return entry.db, entry.vrw, entry.ns, nil
 	}
@@ -195,11 +193,11 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	db := datas.NewTypesDatabase(vrw, ns)
 
 	gitRemoteCacheMu.Lock()
-	if entry, ok := gitRemoteCache[cacheKey]; ok {
+	if entry, ok := gitRemoteCache[cacheRepo]; ok {
 		gitRemoteCacheMu.Unlock()
 		return entry.db, entry.vrw, entry.ns, nil
 	}
-	gitRemoteCache[cacheKey] = gitRemoteCacheEntry{db: db, vrw: vrw, ns: ns}
+	gitRemoteCache[cacheRepo] = gitRemoteCacheEntry{db: db, vrw: vrw, ns: ns}
 	gitRemoteCacheMu.Unlock()
 	return db, vrw, ns, nil
 }
