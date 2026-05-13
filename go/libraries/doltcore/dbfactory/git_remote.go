@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/fslock"
 
@@ -106,6 +107,11 @@ var (
 	gitRemoteCache   = map[string]gitRemoteCacheEntry{}
 )
 
+// gitBlobstoreSyncForReadTTLOverride, when non-zero, is passed as
+// GitBlobstoreOptions.SyncForReadTTL when constructing a new GitBlobstore.
+// Test seam only.
+var gitBlobstoreSyncForReadTTLOverride time.Duration
+
 // No-op Close so callers can defer Close() on a shared instance.
 type gitNoopCloseChunkStore struct {
 	*nbs.NomsBlockStore
@@ -173,7 +179,12 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: remoteName, InfoBranch: blobstore.DefaultInfoBranch}, memlimit.MemtableSize(), q)
+	bsOpts := blobstore.GitBlobstoreOptions{
+		RemoteName:     remoteName,
+		InfoBranch:     blobstore.DefaultInfoBranch,
+		SyncForReadTTL: gitBlobstoreSyncForReadTTLOverride,
+	}
+	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
 	}
