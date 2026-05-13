@@ -17,6 +17,7 @@ package schema
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -131,24 +132,26 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	return sch, nil
 }
 
-// WithUpdatedColumnTags returns a copy of |sch| with column and index tags remapped
-// according to |tagRemap| (old tag -> new tag). All other schema-level metadata
-// (comment, collation, primary key order, target row size) is preserved. Check
-// constraints are preserved unchanged because they reference column names, not tags.
-func WithUpdatedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, error) {
+// WithRemappedColumnTags returns a copy of |sch| with column and index tags remapped
+// according to |tagRemap| (old tag to new tag). All other schema-level metadata
+// (comment, collation, primary key order, target row size) is preserved. Indexes
+// referencing tags not in |tagRemap| are copied unchanged. Check constraints are
+// preserved unchanged because they reference column names, not tags. Returns |sch|
+// unchanged when |tagRemap| is empty.
+func WithRemappedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, error) {
 	if len(tagRemap) == 0 {
 		return sch, nil
 	}
 
 	allCols := sch.GetAllCols()
-	cols := allCols.GetColumns()
+	cols := slices.Clone(allCols.GetColumns())
 	for oldTag, newTag := range tagRemap {
 		if idx, ok := allCols.TagToIdx[oldTag]; ok {
 			cols[idx].Tag = newTag
 		}
 	}
 
-	pkOrdinals := append([]int{}, sch.GetPkOrdinals()...)
+	pkOrdinals := slices.Clone(sch.GetPkOrdinals())
 	newSch, err := NewSchema(NewColCollection(cols...), pkOrdinals, sch.GetCollation(), nil, nil)
 	if err != nil {
 		return nil, err
@@ -166,15 +169,7 @@ func WithUpdatedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, erro
 	err = sch.Indexes().Iter(func(idx Index) (stop bool, err error) {
 		tags := idx.IndexedColumnTags()
 		if _, ok := affected[idx.Name()]; ok {
-			remapped := make([]uint64, len(tags))
-			for i, t := range tags {
-				if newTag, ok := tagRemap[t]; ok {
-					remapped[i] = newTag
-				} else {
-					remapped[i] = t
-				}
-			}
-			tags = remapped
+			tags = RemapTags(tags, tagRemap)
 		}
 		props := IndexProperties{
 			IsUnique:           idx.IsUnique(),
@@ -202,13 +197,13 @@ func WithUpdatedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, erro
 	return newSch, nil
 }
 
-// UpdateColumnTag returns a copy of |sch| with the tag of the column named |name| set to |tag|.
-func UpdateColumnTag(sch Schema, name string, tag uint64) (Schema, error) {
+// WithUpdatedColumnTag returns a copy of |sch| with the tag of the column named |name| set to |tag|.
+func WithUpdatedColumnTag(sch Schema, name string, tag uint64) (Schema, error) {
 	col, ok := sch.GetAllCols().GetByName(name)
 	if !ok {
-		return nil, fmt.Errorf("column %s does not exist", name)
+		return nil, fmt.Errorf("column %q does not exist", name)
 	}
-	return WithUpdatedColumnTags(sch, map[uint64]uint64{col.Tag: tag})
+	return WithRemappedColumnTags(sch, map[uint64]uint64{col.Tag: tag})
 }
 
 // SchemaFromColCollections creates a schema from the three collections.
