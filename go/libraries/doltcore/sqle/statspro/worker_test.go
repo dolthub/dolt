@@ -998,13 +998,15 @@ func TestStatsBranchConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('"+branchName+"')"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add xy on "+branchName+"')"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 	}
 
 	dropBranch := func(dropCtx *sql.Context, branchName string) {
 		//log.Println("delete branch: ", branchName)
 		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-		del := "call dolt_branch('-d', '" + branchName + "')"
+		// Force delete because addData commits on each branch so the branch is no longer fully merged into main.
+		del := "call dolt_branch('-D', '" + branchName + "')"
 		require.NoError(t, executeQuery(ctx, sqlEng, del))
 	}
 
@@ -1078,7 +1080,8 @@ func TestStatsCacheGrowth(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('"+branchName+"')"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
-
+		// Commit so the table is tracked on this branch and does not carry to main on the next checkout.
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add xy on "+branchName+"')"))
 	}
 
 	iters := 20
