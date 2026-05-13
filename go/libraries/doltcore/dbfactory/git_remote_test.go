@@ -159,10 +159,10 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 		t.Skip("git not found on PATH")
 	}
 
-	// Override the default 1s syncForRead TTL with 5s so the stale-within-TTL
+	// Override the default 1s syncForRead TTL with 2s so the stale-within-TTL
 	// assertion below is deterministic regardless of platform speed.
 	prevTTL := gitBlobstoreSyncForReadTTLOverride
-	gitBlobstoreSyncForReadTTLOverride = 5 * time.Second
+	gitBlobstoreSyncForReadTTLOverride = 2 * time.Second
 	t.Cleanup(func() { gitBlobstoreSyncForReadTTLOverride = prevTTL })
 
 	ctx := context.Background()
@@ -230,7 +230,7 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, cA.Hash(), rootA2)
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(4 * time.Second)
 	require.NoError(t, csA2.Rebase(ctx))
 	rootA2After, err := csA2.Root(ctx)
 	require.NoError(t, err)
