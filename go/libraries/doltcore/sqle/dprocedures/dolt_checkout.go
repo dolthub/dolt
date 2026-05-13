@@ -550,7 +550,9 @@ func checkoutExistingBranch(
 			return err
 		}
 
-		currentRoots, hasCurrentRoots := dSess.GetRoots(ctx, dbName)
+		var currentRoots doltdb.Roots
+		var hasCurrentRoots bool
+		currentRoots, hasCurrentRoots = dSess.GetRoots(ctx, dbName)
 
 		if hasCurrentRoots {
 			branchHead, err := actions.BranchHeadRoot(ctx, ddb, branchName)
@@ -558,11 +560,14 @@ func checkoutExistingBranch(
 				return err
 			}
 
-			if err := actions.CheckOverwrittenIgnoredTables(ctx, currentRoots, branchHead, overwriteIgnore); err != nil {
-				return err
+			if !overwriteIgnore {
+				if err := actions.CheckOverwrittenIgnoredTables(ctx, currentRoots, branchHead, overwriteIgnore); err != nil {
+					return err
+				}
 			}
 
-			if err := actions.CheckUntrackedConflicts(ctx, currentRoots, branchHead); err != nil {
+			// Not gated on overwriteIgnore because --overwrite-ignore covers only the dolt_ignore check above and not uncommitted table clobbering.
+			if err := actions.CheckUncommittedConflicts(ctx, currentRoots, branchHead); err != nil {
 				return err
 			}
 		}
@@ -573,42 +578,27 @@ func checkoutExistingBranch(
 		}
 
 		if hasCurrentRoots {
-			ws, err := dSess.WorkingSet(ctx, dbName)
+			// Use the base name because dbName may include a revision qualifier that WorkingSet does not accept after SwitchWorkingSet.
+			baseName, _ := doltdb.SplitRevisionDbName(dbName)
+			ws, err := dSess.WorkingSet(ctx, baseName)
 			if err != nil {
 				return err
 			}
-			workingFKs, err := actions.MoveForeignKeys(ctx, currentRoots.Head, ws.WorkingRoot(), currentRoots.Working, false)
+			// Carry tables not in the pre-checkout HEAD to the new branch. The staged root is carried
+			// separately so staged tables keep their staged status.
+			newWorking, err := actions.CarryUncommittedTables(ctx, currentRoots.Working, currentRoots.Head, ws.WorkingRoot())
 			if err != nil {
 				return err
 			}
-			stagedFKs, err := actions.MoveForeignKeys(ctx, currentRoots.Head, ws.StagedRoot(), currentRoots.Staged, false)
+			newStaged, err := actions.CarryUncommittedTables(ctx, currentRoots.Staged, currentRoots.Head, ws.StagedRoot())
 			if err != nil {
 				return err
 			}
-			newWorking, workingRemaps, err := actions.MoveUntrackedTables(ctx, currentRoots.Working, currentRoots.Head, ws.WorkingRoot())
-			if err != nil {
-				return err
-			}
-			newStaged, stagedRemaps, err := actions.MoveUntrackedTables(ctx, currentRoots.Staged, currentRoots.Head, ws.StagedRoot())
-			if err != nil {
-				return err
-			}
-			if err = actions.ApplyForeignKeyTagRemaps(workingFKs, workingRemaps); err != nil {
-				return err
-			}
-			if err = actions.ApplyForeignKeyTagRemaps(stagedFKs, stagedRemaps); err != nil {
-				return err
-			}
-			newWorking, err = newWorking.PutForeignKeyCollection(ctx, workingFKs)
-			if err != nil {
-				return err
-			}
-			newStaged, err = newStaged.PutForeignKeyCollection(ctx, stagedFKs)
-			if err != nil {
-				return err
-			}
-			if err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(newWorking).WithStagedRoot(newStaged)); err != nil {
-				return err
+			// CarryUncommittedTables returns its target argument unchanged when nothing is carried, so pointer equality detects a no-op.
+			if newWorking != ws.WorkingRoot() || newStaged != ws.StagedRoot() {
+				if err = dSess.SetWorkingSet(ctx, baseName, ws.WithWorkingRoot(newWorking).WithStagedRoot(newStaged)); err != nil {
+					return err
+				}
 			}
 		}
 	}

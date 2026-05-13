@@ -110,7 +110,7 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return err
 	}
 
-	if err := actions.CheckUntrackedConflicts(ctx, initialRoots, branchHead); err != nil {
+	if err := actions.CheckUncommittedConflicts(ctx, initialRoots, branchHead); err != nil {
 		return err
 	}
 
