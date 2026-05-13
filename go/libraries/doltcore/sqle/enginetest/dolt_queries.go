@@ -444,8 +444,9 @@ var DoltScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored;",
-				Expected: []sql.Row{{"t", byte(0), "new table", false}},
+				Query: "SELECT table_name, staged, status, ignored FROM dolt_status_ignored;",
+				// abc was staged on branch1 and carried to main by the checkout, preserving its staged status.
+				Expected: []sql.Row{{"abc", byte(1), "new table", false}, {"t", byte(0), "new table", false}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_status_ignored AS OF 'tag1';",
@@ -4046,7 +4047,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			"insert into parent values (1, 'alice'), (2, 'bob');",
 			"call dolt_commit('-Am', 'add parent on feat');",
 			"call dolt_checkout('main');",
-			// A local copy of parent is needed for the FK definition; the committed version wins after checkout.
+			// A local copy of parent is needed for the FK definition. The committed version wins after checkout.
 			"create table parent (id int primary key, name varchar(64));",
 			"create table child (id int primary key, parent_id int, constraint fk_parent foreign key (parent_id) references parent(id));",
 			"insert into parent values (1, 'alice'), (2, 'bob');",
@@ -4084,7 +4085,6 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			"create table conflict_tbl (id int primary key, val int);",
 			"call dolt_commit('-Am', 'add conflict_tbl on feat');",
 			"call dolt_checkout('--move', 'main');",
-			// conflict_tbl is now an untracked table on main (not committed to main)
 			"create table conflict_tbl (id int primary key);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -4093,8 +4093,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				ExpectedErrStr: "Your local changes to the following tables would be overwritten by checkout:\n\tconflict_tbl\nPlease commit your changes or stash them before you switch branches.\nAborting",
 			},
 			{
-				// active_branch confirms the checkout was aborted before switching branches.
-				Query:    "select active_branch();",
+				Query: "select active_branch();",
+				// Still on main because the checkout aborted before switching branches.
 				Expected: []sql.Row{{"main"}},
 			},
 		},
@@ -4107,7 +4107,6 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			"create table conflict_tbl (id int primary key, val int);",
 			"call dolt_commit('-Am', 'add conflict_tbl on feat');",
 			"call dolt_checkout('--move', 'main');",
-			// conflict_tbl is staged on main but not yet committed
 			"create table conflict_tbl (id int primary key);",
 			"call dolt_add('conflict_tbl');",
 		},
@@ -4117,8 +4116,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				ExpectedErrStr: "Your local changes to the following tables would be overwritten by checkout:\n\tconflict_tbl\nPlease commit your changes or stash them before you switch branches.\nAborting",
 			},
 			{
-				// active_branch confirms the checkout was aborted before switching branches.
-				Query:    "select active_branch();",
+				Query: "select active_branch();",
+				// Still on main because the checkout aborted before switching branches.
 				Expected: []sql.Row{{"main"}},
 			},
 		},
@@ -4131,7 +4130,6 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			"create table conflict_tbl (id int primary key, val int);",
 			"call dolt_commit('-Am', 'add conflict_tbl on feat');",
 			"call dolt_checkout('main');",
-			// conflict_tbl is now an untracked table on main (not committed to main)
 			"create table conflict_tbl (id int primary key);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -4153,7 +4151,6 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			"create table conflict_tbl (id int primary key, val int);",
 			"call dolt_commit('-Am', 'add conflict_tbl on feat');",
 			"call dolt_checkout('main');",
-			// conflict_tbl is staged on main but not committed
 			"create table conflict_tbl (id int primary key);",
 			"call dolt_add('conflict_tbl');",
 		},
@@ -4165,6 +4162,108 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query:    "select active_branch();",
 				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_checkout('--move') with untracked FK table does not duplicate FK",
+		SetUpScript: []string{
+			"create table parent (id int primary key);",
+			"call dolt_commit('-Am', 'add parent');",
+			"call dolt_branch('other');",
+			"create table child (id int primary key, pid int, constraint fk_child foreign key (pid) references parent(id));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('--move', 'other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
+				Query:    "select table_name from information_schema.tables where table_schema = database() and table_name = 'child';",
+				Expected: []sql.Row{{"child"}},
+			},
+			{
+				Query:    "select constraint_name from information_schema.table_constraints where table_schema = database() and constraint_type = 'FOREIGN KEY' and table_name = 'child';",
+				Expected: []sql.Row{{"fk_child"}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_checkout rewrites carried FK referenced tags when parent column has a different tag on target",
+		SetUpScript: []string{
+			"create table parent (id int primary key, ref_col int unique);",
+			"call dolt_commit('-Am', 'add parent');",
+			"call dolt_branch('other');",
+			"call dolt_update_column_tag('parent', 'ref_col', 9999);",
+			"call dolt_commit('-am', 'set ref_col tag on main');",
+			"call dolt_checkout('other');",
+			"call dolt_update_column_tag('parent', 'ref_col', 7777);",
+			"call dolt_commit('-am', 'set ref_col tag on other');",
+			"call dolt_checkout('main');",
+			"insert into parent values (1, 100);",
+			"call dolt_commit('-am', 'insert into parent');",
+			"create table child (id int primary key, pid int, constraint fk_child foreign key (pid) references parent(ref_col));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
+				Query:    "call dolt_add('-A');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "call dolt_commit('-m', 'carry child to other');",
+				// Commit runs ValidateForeignKeysOnSchemas which looks up each FK column by tag in
+				// the referenced schema. The commit succeeds because the carry rewrote the referenced
+				// tag to target's value.
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "insert into parent values (1, 100);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "insert into child values (10, 100);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:       "insert into child values (99, 999);",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_checkout carries an untracked FK whose parent is missing on target and the next commit surfaces the broken state",
+		SetUpScript: []string{
+			"create table parent (id int primary key);",
+			"call dolt_commit('-Am', 'add parent');",
+			"call dolt_branch('no_parent');",
+			"call dolt_checkout('no_parent');",
+			"drop table parent;",
+			"call dolt_commit('-Am', 'drop parent on no_parent');",
+			"call dolt_checkout('main');",
+			"create table child (id int primary key, pid int, constraint fk_orphan foreign key (pid) references parent(id));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_checkout('no_parent');",
+				// The carry succeeds even when the referenced parent does not exist on the target.
+				Expected: []sql.Row{{0, "Switched to branch 'no_parent'"}},
+			},
+			{
+				Query:    "call dolt_add('-A');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "call dolt_commit('-m', 'carry orphan child');",
+				// Commit-time foreign key validation surfaces a clear error because the referenced
+				// parent table is missing on this branch.
+				ExpectedErrStr: "foreign key `fk_orphan` requires the referenced table `parent`",
 			},
 		},
 	},
@@ -5002,7 +5101,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			"insert into parent values (1, 'alice'), (2, 'bob');",
 			"call dolt_commit('-Am', 'add parent on feat');",
 			"call dolt_checkout('main');",
-			// A local copy of parent is needed for the FK definition; the committed version wins after reset.
+			// A local copy of parent is needed for the FK definition. The committed version wins after reset.
 			"create table parent (id int primary key, name varchar(64));",
 			"create table child (id int primary key, parent_id int, constraint fk_parent foreign key (parent_id) references parent(id));",
 			"insert into parent values (1, 'alice'), (2, 'bob');",

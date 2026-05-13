@@ -1494,3 +1494,41 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,42" ]] || false
 }
+
+@test "checkout: untracked table with foreign key is carried to target branch without error" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "CREATE TABLE parent (id INT PRIMARY KEY)"
+    dolt commit -Am "add parent"
+    dolt branch other
+
+    dolt sql -q "CREATE TABLE child (id INT PRIMARY KEY, pid INT, CONSTRAINT fk_child FOREIGN KEY (pid) REFERENCES parent(id))"
+
+    run dolt checkout other
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT table_name FROM information_schema.tables WHERE table_schema = database() AND table_name = 'child'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "child" ]] || false
+
+    run dolt sql -q "SELECT constraint_name FROM information_schema.table_constraints WHERE table_schema = database() AND constraint_type = 'FOREIGN KEY' AND table_name = 'child'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "fk_child" ]] || false
+}
+
+@test "checkout: aborts when untracked table conflicts with committed table on target branch" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt checkout -b feat
+    dolt sql -q "CREATE TABLE conflict_tbl (id INT PRIMARY KEY, val INT)"
+    dolt commit -Am "add conflict_tbl on feat"
+    dolt checkout main
+
+    dolt sql -q "CREATE TABLE conflict_tbl (id INT PRIMARY KEY)"
+
+    run dolt checkout feat
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "conflict_tbl" ]] || false
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+}
