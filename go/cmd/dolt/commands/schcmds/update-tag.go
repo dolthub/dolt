@@ -98,7 +98,7 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get schema").Build(), usage)
 	}
 
-	newSch, err := schema.UpdateColumnTag(sch, columnName, tag)
+	newSch, err := schema.WithUpdatedColumnTag(sch, columnName, tag)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to update column tag").AddCause(err).Build(), usage)
 	}

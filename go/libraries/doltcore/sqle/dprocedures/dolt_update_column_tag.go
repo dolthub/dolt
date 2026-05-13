@@ -57,7 +57,7 @@ func doltUpdateColumnTag(ctx *sql.Context, args ...string) (sql.RowIter, error) 
 		return nil, err
 	}
 
-	newSch, err := schema.UpdateColumnTag(sch, columnName, tag)
+	newSch, err := schema.WithUpdatedColumnTag(sch, columnName, tag)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update column tag: %w", err)
 	}
