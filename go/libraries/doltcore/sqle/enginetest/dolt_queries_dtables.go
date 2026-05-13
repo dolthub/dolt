@@ -59,12 +59,13 @@ var DoltStatusTableScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * FROM dolt_status;",
-				Expected: []sql.Row{{"t", byte(0), "new table"}},
+				Query: "SELECT * FROM dolt_status;",
+				// abc was staged on branch1 and carried to main by the checkout, preserving its staged status.
+				Expected: []sql.Row{{"abc", byte(1), "new table"}, {"t", byte(0), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM `mydb/main`.dolt_status;",
-				Expected: []sql.Row{{"t", byte(0), "new table"}},
+				Expected: []sql.Row{{"abc", byte(1), "new table"}, {"t", byte(0), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_status AS OF 'tag1';",
@@ -75,16 +76,17 @@ var DoltStatusTableScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				// HEAD is a special revision spec
+				// HEAD is a special revision spec that shows the current working and staged status.
 				Query:    "SELECT * FROM dolt_status AS OF 'head';",
-				Expected: []sql.Row{{"t", byte(0), "new table"}},
+				Expected: []sql.Row{{"abc", byte(1), "new table"}, {"t", byte(0), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_status AS OF 'HEAD~1';",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT * FROM dolt_status AS OF 'branch1';",
+				Query: "SELECT * FROM dolt_status AS OF 'branch1';",
+				// branch1 is unaffected by the carry, so abc remains staged there.
 				Expected: []sql.Row{{"abc", byte(1), "new table"}},
 			},
 			{

@@ -435,3 +435,25 @@ SQL
     [[ "$output" =~ "3,30" ]] || false
     [[ "$output" =~ "4,40" ]] || false
 }
+
+@test "reset: dolt reset --hard to a branch preserves untracked tables" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt checkout -b feat
+    dolt sql -q "CREATE TABLE committed_on_feat (id INT PRIMARY KEY)"
+    dolt commit -Am "add committed_on_feat"
+    dolt checkout main
+
+    dolt sql -q "CREATE TABLE untracked_tbl (pk INT PRIMARY KEY, val INT)"
+    dolt sql -q "INSERT INTO untracked_tbl VALUES (1, 42)"
+
+    run dolt reset --hard feat
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk, val FROM untracked_tbl" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,42" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "untracked_tbl" ]] || false
+}
