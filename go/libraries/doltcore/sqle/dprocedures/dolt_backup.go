@@ -228,7 +228,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		format = dbData.Ddb.Format()
 	}
 
-	remoteDb, err := dsess.Provider().GetRemoteDB(ctx, format, remote, false)
+	remoteDb, err := dsess.Provider().GetRemoteDB(ctx, format, remote)
 	if err != nil {
 		return err
 	}
@@ -304,7 +304,7 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	// We primarily use this to initialize the directory for file URLs without a directory.
 	_ = dbfactory.PrepareDB(ctx, dbData.Ddb.Format(), remote.Url, params)
 
-	destDb, err := dsess.Provider().GetRemoteDB(ctx, dbData.Ddb.Format(), remote, false)
+	destDb, err := dsess.Provider().GetRemoteDB(ctx, dbData.Ddb.Format(), remote)
 	if err != nil {
 		return err
 	}
