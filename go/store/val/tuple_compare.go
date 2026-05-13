@@ -36,9 +36,15 @@ type TupleComparator interface {
 	// Validated returns a new TupleComparator that is valid against the given slice of types. Panics f a valid
 	// TupleComparator cannot be returned.
 	Validated(types []Type) TupleComparator
+
+	// WithValueStore returns a copy of this TupleComparator that uses |vs| when comparing values that require
+	// loading content from a content-addressed store (e.g. adaptive-encoded TEXT/BLOB values).
+	WithValueStore(vs ValueStore) TupleComparator
 }
 
-type DefaultTupleComparator struct{}
+type DefaultTupleComparator struct {
+	vs ValueStore
+}
 
 var _ TupleComparator = &DefaultTupleComparator{}
 
@@ -48,7 +54,7 @@ func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple,
 	var start, stop ByteSize
 	for i := 0; i < off; i++ {
 		stop = desc.fast[i]
-		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
+		cmp = compare(ctx, desc.Types[i], left[start:stop], right[start:stop], d.vs)
 		if cmp != 0 {
 			return cmp
 		}
@@ -57,7 +63,7 @@ func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple,
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = compare(typ, left.GetField(j), right.GetField(j))
+		cmp = compare(ctx, typ, left.GetField(j), right.GetField(j), d.vs)
 		if cmp != 0 {
 			return cmp
 		}
@@ -67,7 +73,7 @@ func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple,
 
 // CompareValues implements TupleComparator
 func (d *DefaultTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (cmp int) {
-	return compare(typ, left, right)
+	return compare(ctx, typ, left, right, d.vs)
 }
 
 // Prefix implements TupleComparator
@@ -85,7 +91,12 @@ func (d *DefaultTupleComparator) Validated(types []Type) TupleComparator {
 	return d
 }
 
-func compare(typ Type, left, right []byte) int {
+// WithValueStore implements TupleComparator
+func (d *DefaultTupleComparator) WithValueStore(vs ValueStore) TupleComparator {
+	return &DefaultTupleComparator{vs: vs}
+}
+
+func compare(ctx context.Context, typ Type, left, right []byte, vs ValueStore) int {
 	// order NULLs first
 	if left == nil || right == nil {
 		if bytes.Equal(left, right) {
@@ -153,7 +164,7 @@ func compare(typ Type, left, right []byte) int {
 	case CellEnc:
 		return compareCell(readCell(left), readCell(right))
 	case BytesAdaptiveEnc, StringAdaptiveEnc, GeomAdaptiveEnc, JsonAdaptiveEnc:
-		return compareAdaptiveValue(left, right)
+		return compareAdaptiveValue(ctx, vs, left, right, typ.Enc)
 	default:
 		panic("unknown encoding")
 	}

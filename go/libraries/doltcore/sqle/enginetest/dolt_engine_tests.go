@@ -2297,3 +2297,11 @@ func RunDoltCommitVerificationScripts(t *testing.T, harness DoltEnginetestHarnes
 		harness.Close()
 	}
 }
+
+func RunLongVarcharPKScripts(t *testing.T, h DoltEnginetestHarness) {
+	defer h.Close()
+	h.Setup(setup.MydbData)
+	for _, tt := range LongVarcharPKScripts {
+		enginetest.TestScript(t, h, tt)
+	}
+}

@@ -15,6 +15,8 @@
 package val
 
 import (
+	"context"
+	"io"
 	"math"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCompare(t *testing.T) {
@@ -252,11 +255,201 @@ func TestCompare(t *testing.T) {
 
 	for _, test := range tests {
 		ctx := sql.NewEmptyContext()
-		act := compare(test.typ, test.l, test.r)
+		act := compare(ctx, test.typ, test.l, test.r, nil)
 		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
 			(&TupleDesc{}).formatValue(ctx, test.typ.Enc, 0, test.l),
 			fmtComparator(test.cmp),
 			(&TupleDesc{}).formatValue(ctx, test.typ.Enc, 0, test.r))
+	}
+}
+
+// fakeChunkReader yields a fixed list of byte chunks for testing compareChunkReaders. It also
+// records the number of chunks actually read so tests can assert that comparison stops early.
+type fakeChunkReader struct {
+	chunks [][]byte
+	read   int
+}
+
+func (r *fakeChunkReader) NextChunk(_ context.Context) ([]byte, error) {
+	if r.read >= len(r.chunks) {
+		return nil, io.EOF
+	}
+	c := r.chunks[r.read]
+	r.read++
+	return c, nil
+}
+
+func TestCompareChunkReaders(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name string
+		l, r [][]byte
+		want int
+		// minRead is the minimum number of chunks compareChunkReaders is expected to read from
+		// each side before deciding. It exists to verify that comparison stops early once the
+		// result is known.
+		minLRead, minRRead int
+		maxLRead, maxRRead int
+	}{
+		{
+			name:     "empty vs empty",
+			l:        nil,
+			r:        nil,
+			want:     0,
+			maxLRead: 0, maxRRead: 0,
+		},
+		{
+			name:     "empty vs non-empty",
+			l:        nil,
+			r:        [][]byte{[]byte("a")},
+			want:     -1,
+			maxLRead: 1, maxRRead: 1,
+		},
+		{
+			name:     "non-empty vs empty",
+			l:        [][]byte{[]byte("a")},
+			r:        nil,
+			want:     1,
+			maxLRead: 1, maxRRead: 1,
+		},
+		{
+			name:     "equal single-chunk",
+			l:        [][]byte{[]byte("hello")},
+			r:        [][]byte{[]byte("hello")},
+			want:     0,
+			maxLRead: 2, maxRRead: 2,
+		},
+		{
+			name:     "mismatch in first chunk stops early",
+			l:        [][]byte{[]byte("aaaa"), []byte("never read")},
+			r:        [][]byte{[]byte("aaab"), []byte("never read")},
+			want:     -1,
+			maxLRead: 1, maxRRead: 1,
+		},
+		{
+			name: "prefix is less",
+			l:    [][]byte{[]byte("abc")},
+			r:    [][]byte{[]byte("abcd")},
+			want: -1,
+		},
+		{
+			name: "prefix is greater",
+			l:    [][]byte{[]byte("abcd")},
+			r:    [][]byte{[]byte("abc")},
+			want: 1,
+		},
+		{
+			name: "misaligned chunks, equal",
+			l:    [][]byte{[]byte("abcd"), []byte("efgh"), []byte("ij")},
+			r:    [][]byte{[]byte("ab"), []byte("cdefghi"), []byte("j")},
+			want: 0,
+		},
+		{
+			name: "misaligned chunks, mismatch deep in stream",
+			l:    [][]byte{[]byte("abcdef"), []byte("ghij")},
+			r:    [][]byte{[]byte("ab"), []byte("cd"), []byte("efgi"), []byte("j")},
+			want: -1,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			lr := &fakeChunkReader{chunks: c.l}
+			rr := &fakeChunkReader{chunks: c.r}
+			got, err := compareChunkReaders(ctx, lr, rr)
+			require.NoError(t, err)
+			assert.Equal(t, c.want, got)
+			if c.maxLRead > 0 {
+				assert.LessOrEqual(t, lr.read, c.maxLRead, "read too many chunks from left")
+			}
+			if c.maxRRead > 0 {
+				assert.LessOrEqual(t, rr.read, c.maxRRead, "read too many chunks from right")
+			}
+		})
+	}
+}
+
+func TestCompareCollatedChunkReaders(t *testing.T) {
+	ctx := context.Background()
+	utf8Default := sql.Collation_utf8mb4_0900_ai_ci
+
+	// Build the same input two different ways: as a single chunk vs. broken into
+	// tiny chunks that split UTF-8 runes across chunk boundaries. The comparator
+	// must produce the same result either way.
+	splitInto := func(s string, size int) [][]byte {
+		out := make([][]byte, 0)
+		b := []byte(s)
+		for len(b) > 0 {
+			n := size
+			if n > len(b) {
+				n = len(b)
+			}
+			out = append(out, b[:n:n])
+			b = b[n:]
+		}
+		return out
+	}
+
+	cases := []struct {
+		name      string
+		l, r      string
+		collation sql.CollationID
+		want      int
+	}{
+		{
+			name:      "case-insensitive equal",
+			l:         "Hello, world!",
+			r:         "HELLO, WORLD!",
+			collation: utf8Default,
+			want:      0,
+		},
+		{
+			name:      "case-insensitive differs",
+			l:         "Hello, world!",
+			r:         "Hello, zorld!",
+			collation: utf8Default,
+			want:      -1,
+		},
+		{
+			name:      "prefix is less",
+			l:         "abc",
+			r:         "abcd",
+			collation: utf8Default,
+			want:      -1,
+		},
+		{
+			name:      "binary collation, lowercase greater",
+			l:         "ABC",
+			r:         "abc",
+			collation: sql.Collation_utf8mb4_bin,
+			want:      -1,
+		},
+		{
+			name:      "multi-byte runes equal across boundaries",
+			l:         "café résumé naïve",
+			r:         "café résumé naïve",
+			collation: utf8Default,
+			want:      0,
+		},
+		{
+			name:      "multi-byte runes differ deep in stream",
+			l:         "café résumé naïve",
+			r:         "café résumé naïvf",
+			collation: utf8Default,
+			want:      -1,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, chunk := range []int{1, 2, 3, 7, 128} {
+				lr := &fakeChunkReader{chunks: splitInto(c.l, chunk)}
+				rr := &fakeChunkReader{chunks: splitInto(c.r, chunk)}
+				got, err := compareCollatedChunkReaders(ctx, lr, rr, c.collation)
+				require.NoError(t, err, "chunk size %d", chunk)
+				assert.Equal(t, c.want, got, "chunk size %d", chunk)
+			}
+		})
 	}
 }
 

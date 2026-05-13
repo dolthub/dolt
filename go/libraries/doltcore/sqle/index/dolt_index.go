@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -794,7 +795,7 @@ func (di *doltIndex) HasContentHashedField() bool {
 			prefixLength = di.prefixLengths[i]
 		}
 
-		if sqltypes.IsTextBlob(col.TypeInfo.ToSqlType()) && prefixLength == 0 {
+		if isHashEncoded(col.TypeInfo) && prefixLength == 0 {
 			contentHashedField = true
 			return true, nil
 		}
@@ -803,6 +804,10 @@ func (di *doltIndex) HasContentHashedField() bool {
 	})
 
 	return contentHashedField
+}
+
+func isHashEncoded(ti typeinfo.TypeInfo) bool {
+	return val.IsAddrEncoding(ti.Encoding())
 }
 
 func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {

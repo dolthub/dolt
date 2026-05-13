@@ -242,6 +242,52 @@ func (b *BlobBuilder) write(ctx context.Context, keys, vals [][]byte, subtrees [
 	return h, nil
 }
 
+// blobChunkReader streams the leaf chunks of a blob tree in order via val.ValueChunkReader.
+// It walks the tree lazily — only the nodes on the current path from the root to the next
+// leaf chunk are loaded, so callers can stop early without materializing the whole blob.
+type blobChunkReader struct {
+	ns    NodeStore
+	stack []blobChunkReaderFrame
+}
+
+type blobChunkReaderFrame struct {
+	node *Node
+	idx  int
+}
+
+// NewBlobChunkReader returns a val.ValueChunkReader that yields the leaf chunks of the blob
+// rooted at |root| in storage order. A nil or empty root produces an empty stream.
+func NewBlobChunkReader(root *Node, ns NodeStore) val.ValueChunkReader {
+	r := &blobChunkReader{ns: ns}
+	if root != nil && !root.empty() {
+		r.stack = []blobChunkReaderFrame{{node: root}}
+	}
+	return r
+}
+
+func (r *blobChunkReader) NextChunk(ctx context.Context) ([]byte, error) {
+	for len(r.stack) > 0 {
+		top := &r.stack[len(r.stack)-1]
+		if top.idx >= top.node.Count() {
+			r.stack = r.stack[:len(r.stack)-1]
+			continue
+		}
+		if top.node.IsLeaf() {
+			data := top.node.GetValue(top.idx)
+			top.idx++
+			return data, nil
+		}
+		addr := top.node.getAddress(top.idx)
+		top.idx++
+		child, err := r.ns.Read(ctx, addr)
+		if err != nil {
+			return nil, err
+		}
+		r.stack = append(r.stack, blobChunkReaderFrame{node: child})
+	}
+	return nil, io.EOF
+}
+
 type JSONDoc struct {
 	val.ImmutableValue
 	ns NodeStore

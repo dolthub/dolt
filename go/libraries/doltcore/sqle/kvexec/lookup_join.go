@@ -221,7 +221,7 @@ func newLookupKeyMapping(
 	srcMapping := make(val.OrdinalMapping, len(keyExprs))
 	var litMappings val.OrdinalMapping
 	var litTypes []val.Type
-	tda := val.TupleDescriptorArgs{}
+	tda := val.TupleDescriptorArgs{ValueStore: ns}
 
 	for i, e := range keyExprs {
 		switch e := e.(type) {

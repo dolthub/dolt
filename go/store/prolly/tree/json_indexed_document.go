@@ -25,6 +25,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	sqljson "github.com/dolthub/go-mysql-server/sql/expression/function/json"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type address = []byte
@@ -132,6 +134,68 @@ func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []b
 		return nil
 	})
 	return bytes, err
+}
+
+// openJsonAdaptiveValue resolves an adaptive JSON value to a sql.JSONWrapper. Inline values
+// are wrapped as LazyJSONDocuments over their in-memory payload; out-of-band values become
+// IndexedJsonDocuments (or, when the underlying tree predates the JSON-indexed format, fall
+// back to a LazyJSONDocument via JSONDoc.ToIndexedJSONDocument). NULL adaptive values return
+// (nil, nil) so the caller can apply NULL ordering.
+func openJsonAdaptiveValue(ctx context.Context, ns NodeStore, v val.AdaptiveValue) (sql.JSONWrapper, error) {
+	if v.IsNull() {
+		return nil, nil
+	}
+	if bytes, ok := val.InlineValueBytes(v); ok {
+		return types.NewLazyJSONDocument(unescapeHTMLCodepoints(bytes)), nil
+	}
+	addr, err := val.OutOfBandAdaptiveValueAddr(v)
+	if err != nil {
+		return nil, err
+	}
+	return NewJSONDoc(addr, ns).ToIndexedJSONDocument(ctx)
+}
+
+// compareJsonAdaptiveValues implements the JsonAdaptiveValueComparator contract from val.
+// It hands the heavy lifting to IndexedJsonDocument.Compare when possible, which walks both
+// documents chunk-by-chunk and stops at the first observed difference. For mixed cases (one
+// inline, one indexed) the indexed side's Compare method handles the other-as-JSONWrapper
+// fallback. When neither side is indexed (both inline) we still get correct MySQL JSON
+// ordering via types.CompareJSON.
+func compareJsonAdaptiveValues(ctx context.Context, ns NodeStore, l, r val.AdaptiveValue) (int, error) {
+	lWrapper, err := openJsonAdaptiveValue(ctx, ns, l)
+	if err != nil {
+		return 0, err
+	}
+	rWrapper, err := openJsonAdaptiveValue(ctx, ns, r)
+	if err != nil {
+		return 0, err
+	}
+	// Order NULLs first, matching the behavior at the tuple layer.
+	if lWrapper == nil || rWrapper == nil {
+		if lWrapper == nil && rWrapper == nil {
+			return 0, nil
+		}
+		if lWrapper == nil {
+			return -1, nil
+		}
+		return 1, nil
+	}
+	if li, ok := lWrapper.(IndexedJsonDocument); ok {
+		return li.Compare(ctx, rWrapper)
+	}
+	if ri, ok := rWrapper.(IndexedJsonDocument); ok {
+		cmp, err := ri.Compare(ctx, lWrapper)
+		return -cmp, err
+	}
+	lv, err := lWrapper.ToInterface(ctx)
+	if err != nil {
+		return 0, err
+	}
+	rv, err := rWrapper.ToInterface(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return types.CompareJSON(ctx, lv, rv)
 }
 
 func tryWithFallback(

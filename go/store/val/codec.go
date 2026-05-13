@@ -18,12 +18,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"math/bits"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 
@@ -126,6 +130,17 @@ func IsAdaptiveEncoding(enc Encoding) bool {
 		ExtendedAdaptiveEnc,
 		GeomAdaptiveEnc,
 		JsonAdaptiveEnc:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsExtendedEncoding(enc Encoding) bool {
+	switch enc {
+	case ExtendedEnc,
+		ExtendedAdaptiveEnc,
+		ExtendedAddrEnc:
 		return true
 	default:
 		return false
@@ -655,8 +670,257 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-func compareAdaptiveValue(l, r AdaptiveValue) int {
-	return bytes.Compare(l, r)
+func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue, enc Encoding) int {
+	// JSON has type-aware ordering rules, not byte ordering, so delegate to the store's
+	// JSON comparator when available. The implementation in tree uses
+	// IndexedJsonDocument.Compare, which walks both documents chunk-by-chunk.
+	if enc == JsonAdaptiveEnc {
+		if jc, ok := vs.(JsonAdaptiveValueComparator); ok {
+			cmp, err := jc.CompareJsonAdaptiveValues(ctx, l, r)
+			if err != nil {
+				panic(fmt.Sprintf("compareAdaptiveValue: failed to compare JSON values: %v", err))
+			}
+			return cmp
+		}
+	}
+	// If both values are inline we can compare their payloads without touching the ValueStore.
+	lPayload, lInline := InlineValueBytes(l)
+	rPayload, rInline := InlineValueBytes(r)
+	if lInline && rInline {
+		return bytes.Compare(lPayload, rPayload)
+	}
+	// At least one value is out-of-band. Stream both sides chunk-by-chunk so that, for very
+	// large values, we can return as soon as the ordering is decided without loading either
+	// value fully into memory.
+	lReader, err := l.getChunkReader(ctx, vs)
+	if err != nil {
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to open left value reader: %v", err))
+	}
+	rReader, err := r.getChunkReader(ctx, vs)
+	if err != nil {
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to open right value reader: %v", err))
+	}
+	cmp, err := compareChunkReaders(ctx, lReader, rReader)
+	if err != nil {
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to read value chunks: %v", err))
+	}
+	return cmp
+}
+
+// CompareAdaptiveStringsWithCollation compares two AdaptiveValue-encoded string values using
+// the given collation, streaming chunks from the ValueStore so very large values can
+// short-circuit as soon as the ordering is decided. When both values are inline this avoids
+// the streaming machinery entirely; otherwise it walks the underlying chunks rune-by-rune
+// (correctly handling UTF-8 sequences split across chunk boundaries) and applies the
+// collation's per-rune weight. Pass an unspecified collation to fall back to byte ordering.
+func CompareAdaptiveStringsWithCollation(ctx context.Context, vs ValueStore, l, r AdaptiveValue, collation sql.CollationID) (int, error) {
+	if collation == sql.Collation_Unspecified {
+		return compareAdaptiveValue(ctx, vs, l, r, StringAdaptiveEnc), nil
+	}
+	lPayload, lInline := InlineValueBytes(l)
+	rPayload, rInline := InlineValueBytes(r)
+	if lInline && rInline {
+		return CompareCollatedStrings(collation, lPayload, rPayload), nil
+	}
+	lReader, err := l.getChunkReader(ctx, vs)
+	if err != nil {
+		return 0, err
+	}
+	rReader, err := r.getChunkReader(ctx, vs)
+	if err != nil {
+		return 0, err
+	}
+	return compareCollatedChunkReaders(ctx, lReader, rReader, collation)
+}
+
+// CompareCollatedStrings compares two UTF-8 byte slices using the given collation. It first
+// byte-compares the common prefix as a fast path (every code-point boundary in a well-formed
+// UTF-8 stream is also a byte boundary, so a matching byte prefix necessarily encodes the
+// same prefix of runes), then backs up to the first rune boundary on each side and continues
+// rune-by-rune, applying the collation's per-rune weight. Malformed strings sort after
+// well-formed ones and two malformed strings compare equal, matching MySQL's behavior.
+func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
+	i := 0
+	for i < len(left) && i < len(right) {
+		if left[i] != right[i] {
+			break
+		}
+		i++
+	}
+	if i >= len(left) || i >= len(right) {
+		if len(left) < len(right) {
+			return -1
+		} else if len(left) > len(right) {
+			return 1
+		} else {
+			return 0
+		}
+	}
+
+	li := i
+	for ; li > 0 && !utf8.RuneStart(left[li]); li-- {
+	}
+	left = left[li:]
+
+	ri := i
+	for ; ri > 0 && !utf8.RuneStart(right[ri]); ri-- {
+	}
+	right = right[ri:]
+
+	getRuneWeight := collation.Sorter()
+	for len(left) > 0 && len(right) > 0 {
+		leftRune, leftRead := utf8.DecodeRune(left)
+		rightRune, rightRead := utf8.DecodeRune(right)
+		if leftRead == utf8.RuneError || rightRead == utf8.RuneError {
+			if leftRead == utf8.RuneError && rightRead != utf8.RuneError {
+				return 1
+			} else if leftRead != utf8.RuneError && rightRead == utf8.RuneError {
+				return -1
+			} else {
+				return 0
+			}
+		}
+		if leftRune != rightRune {
+			leftWeight := getRuneWeight(leftRune)
+			rightWeight := getRuneWeight(rightRune)
+			if leftWeight < rightWeight {
+				return -1
+			} else if leftWeight > rightWeight {
+				return 1
+			}
+		}
+		left = left[leftRead:]
+		right = right[rightRead:]
+	}
+
+	if len(left) < len(right) {
+		return -1
+	} else if len(left) > len(right) {
+		return 1
+	} else {
+		return 0
+	}
+}
+
+// compareCollatedChunkReaders is the streaming version of compareCollatedStringBytes. It
+// pulls chunks from each reader lazily, buffering only enough bytes to decode the next rune
+// on each side (a rune may straddle a chunk boundary, so the buffer can hold up to
+// utf8.UTFMax-1 leftover bytes between iterations). It returns as soon as the rune-by-rune
+// comparison resolves or one side runs out of input.
+func compareCollatedChunkReaders(ctx context.Context, l, r ValueChunkReader, collation sql.CollationID) (int, error) {
+	getRuneWeight := collation.Sorter()
+	var lBuf, rBuf []byte
+	lDone, rDone := false, false
+	fill := func(buf []byte, done *bool, src ValueChunkReader) ([]byte, error) {
+		// Read until we have at least one full rune in the buffer or we know the stream is
+		// exhausted. utf8.FullRune is false for an empty buffer, so this also pulls in the
+		// first byte after a chunk-reset.
+		for !*done && !utf8.FullRune(buf) {
+			chunk, err := src.NextChunk(ctx)
+			if err == io.EOF {
+				*done = true
+				break
+			}
+			if err != nil {
+				return buf, err
+			}
+			if len(chunk) == 0 {
+				continue
+			}
+			buf = append(buf, chunk...)
+		}
+		return buf, nil
+	}
+	for {
+		var err error
+		lBuf, err = fill(lBuf, &lDone, l)
+		if err != nil {
+			return 0, err
+		}
+		rBuf, err = fill(rBuf, &rDone, r)
+		if err != nil {
+			return 0, err
+		}
+		switch {
+		case len(lBuf) == 0 && len(rBuf) == 0:
+			return 0, nil
+		case len(lBuf) == 0:
+			return -1, nil
+		case len(rBuf) == 0:
+			return 1, nil
+		}
+		lr, lread := utf8.DecodeRune(lBuf)
+		rr, rread := utf8.DecodeRune(rBuf)
+		lErr := lr == utf8.RuneError && lread == 1
+		rErr := rr == utf8.RuneError && rread == 1
+		if lErr || rErr {
+			if lErr && !rErr {
+				return 1, nil
+			}
+			if !lErr && rErr {
+				return -1, nil
+			}
+			return 0, nil
+		}
+		if lr != rr {
+			lw := getRuneWeight(lr)
+			rw := getRuneWeight(rr)
+			if lw < rw {
+				return -1, nil
+			}
+			if lw > rw {
+				return 1, nil
+			}
+		}
+		lBuf = lBuf[lread:]
+		rBuf = rBuf[rread:]
+	}
+}
+
+// compareChunkReaders compares the byte streams produced by two ValueChunkReaders, returning a
+// negative, zero, or positive int with the same semantics as bytes.Compare. It reads only as
+// many chunks as required to determine the result: the loop stops on the first mismatched byte
+// or when one stream is exhausted while the other still has data.
+func compareChunkReaders(ctx context.Context, l, r ValueChunkReader) (int, error) {
+	var lBuf, rBuf []byte
+	lDone, rDone := false, false
+	for {
+		if len(lBuf) == 0 && !lDone {
+			chunk, err := l.NextChunk(ctx)
+			if err == io.EOF {
+				lDone = true
+			} else if err != nil {
+				return 0, err
+			}
+			lBuf = chunk
+		}
+		if len(rBuf) == 0 && !rDone {
+			chunk, err := r.NextChunk(ctx)
+			if err == io.EOF {
+				rDone = true
+			} else if err != nil {
+				return 0, err
+			}
+			rBuf = chunk
+		}
+		switch {
+		case len(lBuf) == 0 && len(rBuf) == 0:
+			return 0, nil
+		case len(lBuf) == 0:
+			return -1, nil
+		case len(rBuf) == 0:
+			return 1, nil
+		}
+		n := len(lBuf)
+		if len(rBuf) < n {
+			n = len(rBuf)
+		}
+		if c := bytes.Compare(lBuf[:n], rBuf[:n]); c != 0 {
+			return c, nil
+		}
+		lBuf = lBuf[n:]
+		rBuf = rBuf[n:]
+	}
 }
 
 func writeRaw(buf, val []byte) {

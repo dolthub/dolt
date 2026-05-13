@@ -341,6 +341,18 @@ func (v *nodeStoreValidator) WriteBytes(ctx context.Context, val []byte) (hash.H
 	return h, err
 }
 
+func (v *nodeStoreValidator) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
+	n, err := v.Read(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+	return NewBlobChunkReader(n, v), nil
+}
+
+func (v *nodeStoreValidator) CompareJsonAdaptiveValues(ctx context.Context, l, r val.AdaptiveValue) (int, error) {
+	return compareJsonAdaptiveValues(ctx, v, l, r)
+}
+
 func (v *nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 	nd, err := v.ns.Read(ctx, ref)
 	if err != nil {

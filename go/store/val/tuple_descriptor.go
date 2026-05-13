@@ -72,6 +72,9 @@ type TupleTypeHandler interface {
 type TupleDescriptorArgs struct {
 	Comparator TupleComparator
 	Handlers   []TupleTypeHandler
+	// ValueStore, if non-nil, is attached to the TupleDesc's Comparator via |WithValueStore|.
+	// It is required when comparing tuples with adaptive-encoded fields.
+	ValueStore ValueStore
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
@@ -96,6 +99,9 @@ func NewTupleDescriptorWithArgs(args TupleDescriptorArgs, types ...Type) (td *Tu
 		innerCmp: args.Comparator,
 		handlers: args.Handlers,
 	}).Validated(types)
+	if args.ValueStore != nil {
+		args.Comparator = args.Comparator.WithValueStore(args.ValueStore)
+	}
 
 	td = &TupleDesc{
 		Types:    types,
@@ -207,7 +213,7 @@ func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup 
 	return td.cmp.CompareValues(ctx, i, value, v, td.Types[i])
 }
 
-// Comparator returns the TupleDescriptor's TupleComparator.
+// Comparator returns this TupleDesc's TupleComparator.
 func (td *TupleDesc) Comparator() TupleComparator {
 	return td.cmp
 }
