@@ -24,6 +24,7 @@ import (
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -188,6 +189,9 @@ func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 	if ctx.GetCurrentDatabase() == "" {
 		return 1, "", sql.ErrNoDatabaseSelected.New()
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return 1, "", err
 	}
 
 	apr, err := cli.CreateRebaseArgParser().Parse(args)
