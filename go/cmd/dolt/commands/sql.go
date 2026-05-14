@@ -403,6 +403,8 @@ func queryMode(
 	usage cli.UsagePrinter,
 	binaryAsHex bool,
 ) int {
+	warnIfLoneDoltCheckout(ctx, query)
+
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	input := strings.NewReader(query)
@@ -412,6 +414,36 @@ func queryMode(
 	}
 
 	return 0
+}
+
+// warnIfLoneDoltCheckout prints a warning to stderr when the user runs
+// `dolt sql -q "call dolt_checkout(...)"` as a single statement.
+// The checked-out branch only changes for the session that exits
+// immediately, which is a common source of confusion.
+func warnIfLoneDoltCheckout(ctx *sql.Context, query string) {
+	if isLoneDoltCheckoutCall(query) {
+		cli.PrintErrln(color.YellowString("Warning: dolt_checkout() only changes the branch for the current session."))
+		cli.PrintErrln(color.YellowString("Since `dolt sql -q` starts a new session for each invocation, the checked-out"))
+		cli.PrintErrln(color.YellowString("branch will not persist after this command exits."))
+		cli.PrintErrln(color.YellowString("To change the checked-out branch, use `dolt checkout <branch>` instead."))
+	}
+}
+
+// isLoneDoltCheckoutCall returns true when the query is a single
+// CALL dolt_checkout(...) statement with no other statements.
+func isLoneDoltCheckoutCall(query string) bool {
+	parsed, err := sqlparser.Parse(query)
+	if err != nil {
+		return false
+	}
+
+	call, ok := parsed.(*sqlparser.Call)
+	if !ok {
+		return false
+	}
+
+	procName := strings.ToLower(call.ProcName.Name.String())
+	return procName == "dolt_checkout"
 }
 
 func SaveQuery(ctx *sql.Context, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {

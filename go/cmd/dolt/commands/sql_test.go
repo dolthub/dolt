@@ -510,6 +510,72 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+func TestIsLoneDoltCheckoutCall(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected bool
+	}{
+		{
+			name:     "single dolt_checkout call",
+			query:    "call dolt_checkout('main')",
+			expected: true,
+		},
+		{
+			name:     "single dolt_checkout call with semicolon",
+			query:    "call dolt_checkout('main');",
+			expected: true,
+		},
+		{
+			name:     "dolt_checkout uppercase",
+			query:    "CALL DOLT_CHECKOUT('feature-branch')",
+			expected: true,
+		},
+		{
+			name:     "dolt_checkout mixed case",
+			query:    "Call Dolt_Checkout('dev')",
+			expected: true,
+		},
+		{
+			name:     "dolt_checkout with -b flag",
+			query:    "call dolt_checkout('-b', 'new-branch')",
+			expected: true,
+		},
+		{
+			name:     "not a call statement",
+			query:    "select * from people",
+			expected: false,
+		},
+		{
+			name:     "different procedure",
+			query:    "call dolt_commit('-m', 'test')",
+			expected: false,
+		},
+		{
+			name:     "checkout followed by another statement",
+			query:    "call dolt_checkout('main'); select * from people",
+			expected: false,
+		},
+		{
+			name:     "empty query",
+			query:    "",
+			expected: false,
+		},
+		{
+			name:     "bad syntax",
+			query:    "call dolt_checkout(",
+			expected: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := isLoneDoltCheckoutCall(test.query)
+			assert.Equal(t, test.expected, result)
+		})
+	}
+}
+
 // Tests of the delete SQL command, mostly a smoke test for errors in the command line handler. Most tests of
 // delete SQL command are in the sql package.
 func TestDelete(t *testing.T) {
