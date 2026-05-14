@@ -344,16 +344,18 @@ func runMain() int {
 					defer tp.Shutdown(context.Background())
 					args = args[1:]
 				}
-			// Currently goland doesn't support running with a different working directory when using go modules.
-			// This is a hack that allows a different working directory to be set after the application starts using
-			// chdir=<DIR>.  The syntax is not flexible and must match exactly this.
+			// --chdir is a GoLand IDE workaround retained for backward compatibility.
+			// Deprecated: will be removed in a future release. Use -C instead (see #10956).
 			case chdirFlag:
-				err := os.Chdir(args[1])
-
-				if err != nil {
-					panic(err)
+				if len(args) < 2 {
+					cli.PrintErrln(color.RedString("--chdir requires a directory argument"))
+					return 1
 				}
-
+				cli.PrintErrln(color.YellowString("Warning: --chdir is deprecated and will be removed in a future release. Use -C instead."))
+				if err := os.Chdir(args[1]); err != nil {
+					cli.PrintErrln(color.RedString("cannot change to directory %q: %v", args[1], err))
+					return 1
+				}
 				args = args[2:]
 
 			case stdInFlag:
