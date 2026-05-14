@@ -671,9 +671,6 @@ func compareAddr(l, r hash.Hash) int {
 }
 
 func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue, enc Encoding) int {
-	// JSON has type-aware ordering rules, not byte ordering, so delegate to the store's
-	// JSON comparator when available. The implementation in tree uses
-	// IndexedJsonDocument.Compare, which walks both documents chunk-by-chunk.
 	if enc == JsonAdaptiveEnc {
 		if jc, ok := vs.(JsonAdaptiveValueComparator); ok {
 			cmp, err := jc.CompareJsonAdaptiveValues(ctx, l, r)
@@ -683,6 +680,7 @@ func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue
 			return cmp
 		}
 	}
+	
 	// If both values are inline we can compare their payloads without touching the ValueStore.
 	lPayload, lInline := InlineValueBytes(l)
 	rPayload, rInline := InlineValueBytes(r)

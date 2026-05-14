@@ -801,7 +801,7 @@ func (di *doltIndex) HasContentHashedField() bool {
 }
 
 func isHashEncoded(ti typeinfo.TypeInfo) bool {
-	return val.IsAddrEncoding(ti.Encoding())
+	return val.IsAddrEncoding(ti.Encoding()) || val.IsAdaptiveEncoding(ti.Encoding())
 }
 
 func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
