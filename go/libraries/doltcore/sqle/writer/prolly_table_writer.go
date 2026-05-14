@@ -40,10 +40,17 @@ type AutoIncrementGetter interface {
 	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
 }
 
+// FLUSH_THRESHOLD is the max number of writes before we force a flush.
+//
+//	This is to prevent overloading memory with a ton of changes.
+const FLUSH_THRESHOLD = 1024
+
 type prollyTableWriter struct {
 	tbl       *doltdb.Table
 	primary   indexWriter
 	secondary map[string]indexWriter
+	changes   uint64
+	lazy      bool
 
 	dbName    string
 	tblName   doltdb.TableName
@@ -175,6 +182,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	// TODO: need schema name in ai tracker
 	w.aiSet = true
 	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow)
+	w.changes++
 
 	return nil
 }
@@ -194,6 +202,7 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	}
 
 	w.aiSet = true
+	w.changes++
 	return nil
 }
 
@@ -207,6 +216,7 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error)
 	if err := w.primary.Delete(ctx, sqlRow); err != nil {
 		return err
 	}
+	w.changes++
 	return nil
 }
 
@@ -295,10 +305,13 @@ func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), 
 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
-	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
 	if w.errEncountered != nil {
 		return w.errEncountered
 	}
+	if w.lazy && w.changes < FLUSH_THRESHOLD {
+		return nil
+	}
+	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
 	return w.flush(ctx)
 }
 
@@ -351,6 +364,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
+	w.changes++
 
 	return nil
 }
@@ -423,5 +437,11 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
+	w.changes = 0
 	return w.Reset(ctx, tbl)
+}
+
+// SetLazy implements the sql.LazyTableEditor interface.
+func (w *prollyTableWriter) SetLazy(lazy bool) {
+	w.lazy = lazy // TODO: deref and return new
 }

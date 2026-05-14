@@ -32,7 +32,7 @@ import (
 // locations that do not have a root at the time of this call. However, a root must be set through SetWorkingRoot before any
 // table editors are returned.
 func NewWriteSession(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, setter dsess.SessionRootSetter, opts editor.Options) dsess.WriteSession {
-	return &prollyWriteSession{
+	newWriteSess := &prollyWriteSession{
 		dbName:        dbName,
 		tables:        make(map[doltdb.TableName]*prollyTableWriter),
 		aiTracker:     aiTracker,
@@ -40,6 +40,7 @@ func NewWriteSession(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate
 		setter:        setter,
 		targetStaging: opts.TargetStaging,
 	}
+	return newWriteSess
 }
 
 // prollyWriteSession handles all edit operations on a table that may also update other tables.
@@ -255,4 +256,27 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 	// TODO: seems like we should call s.setter to update the working set in the branch state,
 	//  but doing so causes Binlog replication tests to fail?
 	return flushed, nil
+}
+
+// IsDirty indicates if this prollyWriteSession has pending writes
+func (s *prollyWriteSession) IsDirty() bool {
+	for _, writer := range s.tables {
+		if writer.changes > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *prollyWriteSession) FlushAll(ctx *sql.Context) error {
+	// TODO: use concurrency?
+	for _, writer := range s.tables {
+		if writer.changes == 0 {
+			continue
+		}
+		if err := writer.flush(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
