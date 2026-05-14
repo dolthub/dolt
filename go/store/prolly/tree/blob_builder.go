@@ -242,34 +242,63 @@ func (b *BlobBuilder) write(ctx context.Context, keys, vals [][]byte, subtrees [
 	return h, nil
 }
 
-// blobChunkReader streams the leaf chunks of a blob tree in order via val.ValueChunkReader.
-// It walks the tree lazily — only the nodes on the current path from the root to the next
-// leaf chunk are loaded, so callers can stop early without materializing the whole blob.
-type blobChunkReader struct {
-	ns    NodeStore
-	stack []blobChunkReaderFrame
+// blobChunkDiffer walks two blob trees (or in-memory buffers) in parallel and yields aligned
+// (left, right) leaf chunks to the caller via val.ChunkDiffer. Identical subtrees on the two
+// sides are skipped without descending into them — when an internal node on each side points
+// at the same content address the differ advances past both subtrees in one step. For
+// same-shaped trees with a localized difference this lets the comparator return after reading
+// only the divergent path, in time proportional to the tree's height.
+type blobChunkDiffer struct {
+	ns   NodeStore
+	l, r blobDiffSide
 }
 
-type blobChunkReaderFrame struct {
+// blobDiffSide tracks one side of a chunk diff. A side is either an in-memory buffer (for
+// inline or null adaptive values) or a stack of frames into a prolly tree (for out-of-band
+// values). Only one of |inline| / |stack| is non-empty at a time.
+type blobDiffSide struct {
+	stack    []blobDiffFrame
+	inline   []byte
+	consumed bool // true once an inline buffer has been emitted
+}
+
+type blobDiffFrame struct {
 	node *Node
 	idx  int
 }
 
-// NewBlobChunkReader returns a val.ValueChunkReader that yields the leaf chunks of the blob
-// rooted at |root| in storage order. A nil or empty root produces an empty stream.
-func NewBlobChunkReader(root *Node, ns NodeStore) val.ValueChunkReader {
-	r := &blobChunkReader{ns: ns}
-	if root != nil && !root.empty() {
-		r.stack = []blobChunkReaderFrame{{node: root}}
+func (s *blobDiffSide) popExhausted() {
+	for len(s.stack) > 0 {
+		top := &s.stack[len(s.stack)-1]
+		if top.idx < top.node.Count() {
+			return
+		}
+		s.stack = s.stack[:len(s.stack)-1]
 	}
-	return r
 }
 
-func (r *blobChunkReader) NextChunk(ctx context.Context) ([]byte, error) {
-	for len(r.stack) > 0 {
-		top := &r.stack[len(r.stack)-1]
+func (s *blobDiffSide) exhausted() bool {
+	if len(s.stack) > 0 {
+		return false
+	}
+	return s.inline == nil || s.consumed
+}
+
+// nextLeafBytes advances this side to the next leaf chunk and returns its bytes. Returns
+// nil when the side is exhausted; in that case the caller should also check exhausted().
+func (s *blobDiffSide) nextLeafBytes(ctx context.Context, ns NodeStore) ([]byte, error) {
+	if len(s.stack) == 0 {
+		if s.consumed || s.inline == nil {
+			return nil, nil
+		}
+		data := s.inline
+		s.consumed = true
+		return data, nil
+	}
+	for len(s.stack) > 0 {
+		top := &s.stack[len(s.stack)-1]
 		if top.idx >= top.node.Count() {
-			r.stack = r.stack[:len(r.stack)-1]
+			s.stack = s.stack[:len(s.stack)-1]
 			continue
 		}
 		if top.node.IsLeaf() {
@@ -279,13 +308,106 @@ func (r *blobChunkReader) NextChunk(ctx context.Context) ([]byte, error) {
 		}
 		addr := top.node.getAddress(top.idx)
 		top.idx++
-		child, err := r.ns.Read(ctx, addr)
+		child, err := ns.Read(ctx, addr)
 		if err != nil {
 			return nil, err
 		}
-		r.stack = append(r.stack, blobChunkReaderFrame{node: child})
+		s.stack = append(s.stack, blobDiffFrame{node: child})
 	}
-	return nil, io.EOF
+	return nil, nil
+}
+
+// trySkipMatchingSubtree skips both sides past the next pair of child subtrees if both sides
+// are currently at internal nodes and the two child addresses match. Skipping is safe because
+// equal content addresses imply equal contents (and therefore equal byte lengths), so both
+// sides advance over the same byte range. Returns true if a skip happened.
+func (d *blobChunkDiffer) trySkipMatchingSubtree() bool {
+	if len(d.l.stack) == 0 || len(d.r.stack) == 0 {
+		return false
+	}
+	lTop := &d.l.stack[len(d.l.stack)-1]
+	rTop := &d.r.stack[len(d.r.stack)-1]
+	if lTop.node.IsLeaf() || rTop.node.IsLeaf() {
+		return false
+	}
+	if lTop.idx >= lTop.node.Count() || rTop.idx >= rTop.node.Count() {
+		return false
+	}
+	if lTop.node.getAddress(lTop.idx) != rTop.node.getAddress(rTop.idx) {
+		return false
+	}
+	lTop.idx++
+	rTop.idx++
+	return true
+}
+
+func (d *blobChunkDiffer) Next(ctx context.Context) ([]byte, []byte, error) {
+	for {
+		d.l.popExhausted()
+		d.r.popExhausted()
+		if d.l.exhausted() && d.r.exhausted() {
+			return nil, nil, io.EOF
+		}
+		if d.trySkipMatchingSubtree() {
+			continue
+		}
+		lChunk, err := d.l.nextLeafBytes(ctx, d.ns)
+		if err != nil {
+			return nil, nil, err
+		}
+		rChunk, err := d.r.nextLeafBytes(ctx, d.ns)
+		if err != nil {
+			return nil, nil, err
+		}
+		if lChunk == nil && rChunk == nil {
+			return nil, nil, io.EOF
+		}
+		return lChunk, rChunk, nil
+	}
+}
+
+// newBlobChunkDiffer constructs a differ over two adaptive values. Either side may be inline
+// or NULL (in which case it shows up as an in-memory buffer) or out-of-band (in which case
+// the differ walks its prolly tree). When both sides are out-of-band with the same root
+// hash, the differ short-circuits to an empty stream.
+func newBlobChunkDiffer(ctx context.Context, ns NodeStore, l, r val.AdaptiveValue) (*blobChunkDiffer, error) {
+	d := &blobChunkDiffer{ns: ns}
+	if err := loadBlobDiffSide(ctx, ns, &d.l, l); err != nil {
+		return nil, err
+	}
+	if err := loadBlobDiffSide(ctx, ns, &d.r, r); err != nil {
+		return nil, err
+	}
+	// Fast path: identical out-of-band addresses imply identical contents.
+	if len(d.l.stack) == 1 && len(d.r.stack) == 1 {
+		lh := d.l.stack[0].node.HashOf()
+		rh := d.r.stack[0].node.HashOf()
+		if lh == rh {
+			d.l.stack = nil
+			d.r.stack = nil
+		}
+	}
+	return d, nil
+}
+
+func loadBlobDiffSide(ctx context.Context, ns NodeStore, side *blobDiffSide, v val.AdaptiveValue) error {
+	if payload, ok := val.InlineValueBytes(v); ok {
+		// Inline (or NULL — InlineValueBytes returns true with nil payload for NULL).
+		side.inline = payload
+		return nil
+	}
+	addr, err := v.OutOfBandAddr()
+	if err != nil {
+		return err
+	}
+	root, err := ns.Read(ctx, addr)
+	if err != nil {
+		return err
+	}
+	if root != nil && !root.empty() {
+		side.stack = []blobDiffFrame{{node: root}}
+	}
+	return nil
 }
 
 type JSONDoc struct {

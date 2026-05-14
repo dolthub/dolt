@@ -182,46 +182,39 @@ func (v AdaptiveValue) getUnderlyingBytes(ctx context.Context, vs ValueStore) ([
 	return vs.ReadBytes(ctx, hash.New(addr))
 }
 
-// singleChunkReader is a ValueChunkReader that yields a single byte slice and then EOF. It is
-// used to expose null and inline AdaptiveValues through the same streaming interface as
-// out-of-band values.
-type singleChunkReader struct {
-	data []byte
+// singlePairDiffer is a ChunkDiffer that yields a single (left, right) pair and then EOF. It
+// is used for in-memory fallback paths — both inline, or when the ValueStore doesn't implement
+// ChunkedValueStore so we must materialize both sides.
+type singlePairDiffer struct {
+	l, r []byte
 	done bool
 }
 
-func (r *singleChunkReader) NextChunk(_ context.Context) ([]byte, error) {
-	if r.done {
-		return nil, io.EOF
+func (d *singlePairDiffer) Next(_ context.Context) ([]byte, []byte, error) {
+	if d.done {
+		return nil, nil, io.EOF
 	}
-	r.done = true
-	if len(r.data) == 0 {
-		return nil, io.EOF
-	}
-	return r.data, nil
+	d.done = true
+	return d.l, d.r, nil
 }
 
-// getChunkReader returns a ValueChunkReader that streams the underlying bytes of v. For null
-// and inline values this is a single-chunk reader over the in-memory payload. For out-of-band
-// values it asks the ValueStore for a chunked reader if it supports one, otherwise it falls
-// back to loading the entire value through ReadBytes.
-func (v AdaptiveValue) getChunkReader(ctx context.Context, vs ValueStore) (ValueChunkReader, error) {
-	if v.IsNull() {
-		return &singleChunkReader{done: true}, nil
-	}
-	if v.isInlined() {
-		return &singleChunkReader{data: v[1:]}, nil
-	}
-	_, lengthBytes := uvarint.Uvarint(v)
-	addr := hash.New(v[lengthBytes:])
+// getChunkDiffer returns a ChunkDiffer that yields aligned (left, right) byte regions for
+// comparison. When the ValueStore supports ChunkedValueStore the differ walks both underlying
+// trees in parallel and can short-circuit on subtree-hash matches; otherwise it falls back to
+// loading each side fully and yielding a single pair.
+func getChunkDiffer(ctx context.Context, vs ValueStore, l, r AdaptiveValue) (ChunkDiffer, error) {
 	if cvs, ok := vs.(ChunkedValueStore); ok {
-		return cvs.ReadBytesChunked(ctx, addr)
+		return cvs.OpenChunkDiffer(ctx, l, r)
 	}
-	b, err := vs.ReadBytes(ctx, addr)
+	lBytes, err := l.getUnderlyingBytes(ctx, vs)
 	if err != nil {
 		return nil, err
 	}
-	return &singleChunkReader{data: b}, nil
+	rBytes, err := r.getUnderlyingBytes(ctx, vs)
+	if err != nil {
+		return nil, err
+	}
+	return &singlePairDiffer{l: lBytes, r: rBytes}, nil
 }
 
 func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {
@@ -268,9 +261,9 @@ func (v AdaptiveValue) convertToJsonStorage(ctx context.Context, vs ValueStore) 
 	return NewJsonStorageOutOfBand(addr, vs, int64(length)), nil
 }
 
-// OutOfBandAdaptiveValueAddr returns the content address embedded in an out-of-band
-// AdaptiveValue. It returns an error if v is NULL or inline.
-func OutOfBandAdaptiveValueAddr(v AdaptiveValue) (hash.Hash, error) {
+// OutOfBandAddr returns the content address embedded in an out-of-band AdaptiveValue. It
+// returns an error if v is NULL or inline.
+func (v AdaptiveValue) OutOfBandAddr() (hash.Hash, error) {
 	if v.IsNull() {
 		return hash.Hash{}, fmt.Errorf("cannot get address from NULL adaptive value")
 	}

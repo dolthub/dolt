@@ -148,7 +148,7 @@ func openJsonAdaptiveValue(ctx context.Context, ns NodeStore, v val.AdaptiveValu
 	if bytes, ok := val.InlineValueBytes(v); ok {
 		return types.NewLazyJSONDocument(unescapeHTMLCodepoints(bytes)), nil
 	}
-	addr, err := val.OutOfBandAdaptiveValueAddr(v)
+	addr, err := v.OutOfBandAddr()
 	if err != nil {
 		return nil, err
 	}

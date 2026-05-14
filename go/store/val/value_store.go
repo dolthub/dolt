@@ -37,20 +37,24 @@ type ValueStore interface {
 	WriteBytes(ctx context.Context, val []byte) (hash.Hash, error)
 }
 
-// ValueChunkReader streams a content-addressed value one chunk at a time, in order. After the
-// final chunk, NextChunk returns (nil, io.EOF). Returned slices are owned by the reader and must
-// not be retained or modified by callers across subsequent calls.
-type ValueChunkReader interface {
-	NextChunk(ctx context.Context) ([]byte, error)
+// ChunkDiffer streams aligned pairs of byte regions from two AdaptiveValues that need to be
+// compared. Each call to Next returns the next (left, right) pair of bytes to compare; an
+// implementation is free to skip regions that are known to be identical (for example, by
+// matching subtree hashes), so callers must not assume Next is called once per chunk in either
+// underlying value — only that, when the pairs are concatenated in order, they equal the
+// two input values. Next returns (nil, nil, io.EOF) when both streams are exhausted at
+// corresponding positions.
+type ChunkDiffer interface {
+	Next(ctx context.Context) (left, right []byte, err error)
 }
 
-// ChunkedValueStore is an optional interface implemented by ValueStores that can return an
-// out-of-band value as a stream of chunks instead of loading the entire value into memory at
-// once. Callers that don't need the whole value (for example, prefix comparisons) can read
-// only as many chunks as needed. This reader treats the value as opaque bytes — it is the
-// right choice for BytesAdaptiveEnc, StringAdaptiveEnc, and GeomAdaptiveEnc.
+// ChunkedValueStore is an optional interface implemented by ValueStores that can compare two
+// out-of-band AdaptiveValues by walking their underlying chunked storage in parallel. This
+// permits comparisons that short-circuit before loading either value fully, and lets the
+// implementation skip identical subtrees by hash. It is the right choice for the byte-oriented
+// adaptive encodings (BytesAdaptiveEnc, StringAdaptiveEnc, GeomAdaptiveEnc).
 type ChunkedValueStore interface {
-	ReadBytesChunked(ctx context.Context, h hash.Hash) (ValueChunkReader, error)
+	OpenChunkDiffer(ctx context.Context, l, r AdaptiveValue) (ChunkDiffer, error)
 }
 
 // JsonAdaptiveValueComparator is an optional interface implemented by ValueStores that can

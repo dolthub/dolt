@@ -671,6 +671,9 @@ func compareAddr(l, r hash.Hash) int {
 }
 
 func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue, enc Encoding) int {
+	// JSON has type-aware ordering rules, not byte ordering, so delegate to the store's
+	// JSON comparator when available. The implementation in tree uses
+	// IndexedJsonDocument.Compare, which walks both documents chunk-by-chunk.
 	if enc == JsonAdaptiveEnc {
 		if jc, ok := vs.(JsonAdaptiveValueComparator); ok {
 			cmp, err := jc.CompareJsonAdaptiveValues(ctx, l, r)
@@ -680,37 +683,33 @@ func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue
 			return cmp
 		}
 	}
-	
 	// If both values are inline we can compare their payloads without touching the ValueStore.
 	lPayload, lInline := InlineValueBytes(l)
 	rPayload, rInline := InlineValueBytes(r)
 	if lInline && rInline {
 		return bytes.Compare(lPayload, rPayload)
 	}
-	// At least one value is out-of-band. Stream both sides chunk-by-chunk so that, for very
-	// large values, we can return as soon as the ordering is decided without loading either
-	// value fully into memory.
-	lReader, err := l.getChunkReader(ctx, vs)
+	// At least one value is out-of-band. Open a chunk differ that walks both underlying trees
+	// in parallel; it may skip whole subtrees whose hashes match so a regression on a tiny
+	// slice of a huge value still short-circuits in O(tree height) reads.
+	differ, err := getChunkDiffer(ctx, vs, l, r)
 	if err != nil {
-		panic(fmt.Sprintf("compareAdaptiveValue: failed to open left value reader: %v", err))
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to open chunk differ: %v", err))
 	}
-	rReader, err := r.getChunkReader(ctx, vs)
+	cmp, err := compareChunkDiffer(ctx, differ)
 	if err != nil {
-		panic(fmt.Sprintf("compareAdaptiveValue: failed to open right value reader: %v", err))
-	}
-	cmp, err := compareChunkReaders(ctx, lReader, rReader)
-	if err != nil {
-		panic(fmt.Sprintf("compareAdaptiveValue: failed to read value chunks: %v", err))
+		panic(fmt.Sprintf("compareAdaptiveValue: failed to read chunk diff: %v", err))
 	}
 	return cmp
 }
 
 // CompareAdaptiveStringsWithCollation compares two AdaptiveValue-encoded string values using
-// the given collation, streaming chunks from the ValueStore so very large values can
-// short-circuit as soon as the ordering is decided. When both values are inline this avoids
-// the streaming machinery entirely; otherwise it walks the underlying chunks rune-by-rune
-// (correctly handling UTF-8 sequences split across chunk boundaries) and applies the
-// collation's per-rune weight. Pass an unspecified collation to fall back to byte ordering.
+// the given collation, walking the underlying chunked storage in parallel so very large
+// values can short-circuit as soon as the ordering is decided. When both values are inline
+// this avoids the streaming machinery entirely; otherwise it iterates the pair-wise diff
+// rune-by-rune (correctly handling UTF-8 sequences split across chunk boundaries) and applies
+// the collation's per-rune weight. Pass an unspecified collation to fall back to byte
+// ordering.
 func CompareAdaptiveStringsWithCollation(ctx context.Context, vs ValueStore, l, r AdaptiveValue, collation sql.CollationID) (int, error) {
 	if collation == sql.Collation_Unspecified {
 		return compareAdaptiveValue(ctx, vs, l, r, StringAdaptiveEnc), nil
@@ -720,15 +719,11 @@ func CompareAdaptiveStringsWithCollation(ctx context.Context, vs ValueStore, l, 
 	if lInline && rInline {
 		return CompareCollatedStrings(collation, lPayload, rPayload), nil
 	}
-	lReader, err := l.getChunkReader(ctx, vs)
+	differ, err := getChunkDiffer(ctx, vs, l, r)
 	if err != nil {
 		return 0, err
 	}
-	rReader, err := r.getChunkReader(ctx, vs)
-	if err != nil {
-		return 0, err
-	}
-	return compareCollatedChunkReaders(ctx, lReader, rReader, collation)
+	return compareCollatedChunkDiffer(ctx, differ, collation)
 }
 
 // CompareCollatedStrings compares two UTF-8 byte slices using the given collation. It first
@@ -800,43 +795,42 @@ func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 	}
 }
 
-// compareCollatedChunkReaders is the streaming version of compareCollatedStringBytes. It
-// pulls chunks from each reader lazily, buffering only enough bytes to decode the next rune
-// on each side (a rune may straddle a chunk boundary, so the buffer can hold up to
-// utf8.UTFMax-1 leftover bytes between iterations). It returns as soon as the rune-by-rune
-// comparison resolves or one side runs out of input.
-func compareCollatedChunkReaders(ctx context.Context, l, r ValueChunkReader, collation sql.CollationID) (int, error) {
+// compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings. It pulls
+// (left, right) pairs from the differ lazily, buffering enough bytes on each side to decode
+// the next rune (a rune may straddle a chunk boundary, so the buffer can hold up to
+// utf8.UTFMax-1 leftover bytes between iterations). The differ is free to skip identical
+// subtrees on both sides simultaneously — the byte-stream invariants stay correct because
+// each skipped region has the same length on both sides. The loop returns as soon as the
+// rune-by-rune comparison resolves or one side runs out of input.
+func compareCollatedChunkDiffer(ctx context.Context, d ChunkDiffer, collation sql.CollationID) (int, error) {
 	getRuneWeight := collation.Sorter()
 	var lBuf, rBuf []byte
 	lDone, rDone := false, false
-	fill := func(buf []byte, done *bool, src ValueChunkReader) ([]byte, error) {
-		// Read until we have at least one full rune in the buffer or we know the stream is
-		// exhausted. utf8.FullRune is false for an empty buffer, so this also pulls in the
-		// first byte after a chunk-reset.
-		for !*done && !utf8.FullRune(buf) {
-			chunk, err := src.NextChunk(ctx)
+	// pullFrom pulls (left, right) pairs from the differ and appends them to the buffers
+	// until both sides hold at least one full rune (or have been exhausted). Either side may
+	// reach EOF independently — we don't pull from it again once that happens.
+	pullFrom := func() error {
+		for (!lDone && !utf8.FullRune(lBuf)) || (!rDone && !utf8.FullRune(rBuf)) {
+			lChunk, rChunk, err := d.Next(ctx)
 			if err == io.EOF {
-				*done = true
-				break
+				lDone = true
+				rDone = true
+				return nil
 			}
 			if err != nil {
-				return buf, err
+				return err
 			}
-			if len(chunk) == 0 {
-				continue
+			if len(lChunk) > 0 {
+				lBuf = append(lBuf, lChunk...)
 			}
-			buf = append(buf, chunk...)
+			if len(rChunk) > 0 {
+				rBuf = append(rBuf, rChunk...)
+			}
 		}
-		return buf, nil
+		return nil
 	}
 	for {
-		var err error
-		lBuf, err = fill(lBuf, &lDone, l)
-		if err != nil {
-			return 0, err
-		}
-		rBuf, err = fill(rBuf, &rDone, r)
-		if err != nil {
+		if err := pullFrom(); err != nil {
 			return 0, err
 		}
 		switch {
@@ -875,31 +869,31 @@ func compareCollatedChunkReaders(ctx context.Context, l, r ValueChunkReader, col
 	}
 }
 
-// compareChunkReaders compares the byte streams produced by two ValueChunkReaders, returning a
-// negative, zero, or positive int with the same semantics as bytes.Compare. It reads only as
-// many chunks as required to determine the result: the loop stops on the first mismatched byte
-// or when one stream is exhausted while the other still has data.
-func compareChunkReaders(ctx context.Context, l, r ValueChunkReader) (int, error) {
+// compareChunkDiffer drains a ChunkDiffer and returns the byte ordering of the two underlying
+// values. Each (left, right) pair from the differ represents the next byte regions to compare;
+// the differ may yield regions of different sizes on the two sides when one value is shorter,
+// in which case the longer side sorts greater. Identical subtrees may be skipped, so this
+// runs in time proportional to the divergent prefix rather than the full value.
+func compareChunkDiffer(ctx context.Context, d ChunkDiffer) (int, error) {
 	var lBuf, rBuf []byte
 	lDone, rDone := false, false
 	for {
-		if len(lBuf) == 0 && !lDone {
-			chunk, err := l.NextChunk(ctx)
+		for (len(lBuf) == 0 && !lDone) || (len(rBuf) == 0 && !rDone) {
+			lChunk, rChunk, err := d.Next(ctx)
 			if err == io.EOF {
 				lDone = true
-			} else if err != nil {
-				return 0, err
-			}
-			lBuf = chunk
-		}
-		if len(rBuf) == 0 && !rDone {
-			chunk, err := r.NextChunk(ctx)
-			if err == io.EOF {
 				rDone = true
-			} else if err != nil {
+				break
+			}
+			if err != nil {
 				return 0, err
 			}
-			rBuf = chunk
+			if len(lChunk) > 0 {
+				lBuf = append(lBuf, lChunk...)
+			}
+			if len(rChunk) > 0 {
+				rBuf = append(rBuf, rChunk...)
+			}
 		}
 		switch {
 		case len(lBuf) == 0 && len(rBuf) == 0:

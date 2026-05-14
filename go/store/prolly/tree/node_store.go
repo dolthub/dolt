@@ -230,14 +230,11 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 	return result, err
 }
 
-// ReadBytesChunked implements val.ChunkedValueStore. It returns a reader that yields the leaf
-// chunks of the blob tree at |h| one at a time so callers can stop after consuming a prefix.
-func (ns *nodeStore) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
-	n, err := ns.Read(ctx, h)
-	if err != nil {
-		return nil, err
-	}
-	return NewBlobChunkReader(n, ns), nil
+// OpenChunkDiffer implements val.ChunkedValueStore. It walks the two adaptive values' chunked
+// storage in parallel so callers can compare them without materializing either value fully,
+// and so identical subtrees on the two sides are skipped by content address.
+func (ns *nodeStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (val.ChunkDiffer, error) {
+	return newBlobChunkDiffer(ctx, ns, l, r)
 }
 
 // CompareJsonAdaptiveValues implements val.JsonAdaptiveValueComparator. The work is done by

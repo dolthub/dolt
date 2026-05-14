@@ -263,68 +263,77 @@ func TestCompare(t *testing.T) {
 	}
 }
 
-// fakeChunkReader yields a fixed list of byte chunks for testing compareChunkReaders. It also
-// records the number of chunks actually read so tests can assert that comparison stops early.
-type fakeChunkReader struct {
-	chunks [][]byte
-	read   int
+// fakeChunkDiffer yields fixed lists of (left, right) byte chunks for testing the differ-based
+// comparison helpers. It records the number of Next calls so tests can verify the loop stops
+// early once the result is known. When the two chunk lists have different lengths the trailing
+// side is yielded as (chunk, nil) or (nil, chunk) until exhausted, then Next returns io.EOF.
+type fakeChunkDiffer struct {
+	lChunks, rChunks [][]byte
+	li, ri           int
+	calls            int
 }
 
-func (r *fakeChunkReader) NextChunk(_ context.Context) ([]byte, error) {
-	if r.read >= len(r.chunks) {
-		return nil, io.EOF
+func (d *fakeChunkDiffer) Next(_ context.Context) ([]byte, []byte, error) {
+	d.calls++
+	var l, r []byte
+	if d.li < len(d.lChunks) {
+		l = d.lChunks[d.li]
+		d.li++
 	}
-	c := r.chunks[r.read]
-	r.read++
-	return c, nil
+	if d.ri < len(d.rChunks) {
+		r = d.rChunks[d.ri]
+		d.ri++
+	}
+	if l == nil && r == nil {
+		return nil, nil, io.EOF
+	}
+	return l, r, nil
 }
 
-func TestCompareChunkReaders(t *testing.T) {
+func TestCompareChunkDiffer(t *testing.T) {
 	ctx := context.Background()
 	cases := []struct {
 		name string
 		l, r [][]byte
 		want int
-		// minRead is the minimum number of chunks compareChunkReaders is expected to read from
-		// each side before deciding. It exists to verify that comparison stops early once the
-		// result is known.
-		minLRead, minRRead int
-		maxLRead, maxRRead int
+		// maxCalls bounds the number of Next calls compareChunkDiffer is allowed to make. It
+		// exists to verify that comparison stops early once the result is known.
+		maxCalls int
 	}{
 		{
 			name:     "empty vs empty",
 			l:        nil,
 			r:        nil,
 			want:     0,
-			maxLRead: 0, maxRRead: 0,
+			maxCalls: 1,
 		},
 		{
 			name:     "empty vs non-empty",
 			l:        nil,
 			r:        [][]byte{[]byte("a")},
 			want:     -1,
-			maxLRead: 1, maxRRead: 1,
+			maxCalls: 2,
 		},
 		{
 			name:     "non-empty vs empty",
 			l:        [][]byte{[]byte("a")},
 			r:        nil,
 			want:     1,
-			maxLRead: 1, maxRRead: 1,
+			maxCalls: 2,
 		},
 		{
 			name:     "equal single-chunk",
 			l:        [][]byte{[]byte("hello")},
 			r:        [][]byte{[]byte("hello")},
 			want:     0,
-			maxLRead: 2, maxRRead: 2,
+			maxCalls: 2,
 		},
 		{
 			name:     "mismatch in first chunk stops early",
 			l:        [][]byte{[]byte("aaaa"), []byte("never read")},
 			r:        [][]byte{[]byte("aaab"), []byte("never read")},
 			want:     -1,
-			maxLRead: 1, maxRRead: 1,
+			maxCalls: 1,
 		},
 		{
 			name: "prefix is less",
@@ -354,22 +363,18 @@ func TestCompareChunkReaders(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			lr := &fakeChunkReader{chunks: c.l}
-			rr := &fakeChunkReader{chunks: c.r}
-			got, err := compareChunkReaders(ctx, lr, rr)
+			d := &fakeChunkDiffer{lChunks: c.l, rChunks: c.r}
+			got, err := compareChunkDiffer(ctx, d)
 			require.NoError(t, err)
 			assert.Equal(t, c.want, got)
-			if c.maxLRead > 0 {
-				assert.LessOrEqual(t, lr.read, c.maxLRead, "read too many chunks from left")
-			}
-			if c.maxRRead > 0 {
-				assert.LessOrEqual(t, rr.read, c.maxRRead, "read too many chunks from right")
+			if c.maxCalls > 0 {
+				assert.LessOrEqual(t, d.calls, c.maxCalls, "differ.Next called more than expected")
 			}
 		})
 	}
 }
 
-func TestCompareCollatedChunkReaders(t *testing.T) {
+func TestCompareCollatedChunkDiffer(t *testing.T) {
 	ctx := context.Background()
 	utf8Default := sql.Collation_utf8mb4_0900_ai_ci
 
@@ -443,9 +448,11 @@ func TestCompareCollatedChunkReaders(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			for _, chunk := range []int{1, 2, 3, 7, 128} {
-				lr := &fakeChunkReader{chunks: splitInto(c.l, chunk)}
-				rr := &fakeChunkReader{chunks: splitInto(c.r, chunk)}
-				got, err := compareCollatedChunkReaders(ctx, lr, rr, c.collation)
+				d := &fakeChunkDiffer{
+					lChunks: splitInto(c.l, chunk),
+					rChunks: splitInto(c.r, chunk),
+				}
+				got, err := compareCollatedChunkDiffer(ctx, d, c.collation)
 				require.NoError(t, err, "chunk size %d", chunk)
 				assert.Equal(t, c.want, got, "chunk size %d", chunk)
 			}

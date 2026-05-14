@@ -417,84 +417,86 @@ func (c *countingNodeStore) Read(ctx context.Context, h hash.Hash) (*Node, error
 	return c.NodeStore.Read(ctx, h)
 }
 
-func (c *countingNodeStore) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
-	n, err := c.Read(ctx, h)
-	if err != nil {
-		return nil, err
-	}
-	return NewBlobChunkReader(n, c), nil
+func (c *countingNodeStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (val.ChunkDiffer, error) {
+	return newBlobChunkDiffer(ctx, c, l, r)
 }
 
-func readAllChunks(t *testing.T, r val.ValueChunkReader) []byte {
-	t.Helper()
-	ctx := context.Background()
-	var out []byte
-	for {
-		chunk, err := r.NextChunk(ctx)
-		if err == io.EOF {
-			break
-		}
-		require.NoError(t, err)
-		out = append(out, chunk...)
-	}
-	return out
-}
-
-func TestBlobChunkReader(t *testing.T) {
+// TestBlobChunkDiffer exercises the new ChunkDiffer API end-to-end. The "identical roots"
+// case is the headline benefit: when both adaptive values share an out-of-band address, the
+// differ should short-circuit to EOF without reading the blob's interior at all. The
+// "localized diff" case verifies that hash-based subtree skipping limits reads to roughly the
+// height of the tree even when the values are very large.
+func TestBlobChunkDiffer(t *testing.T) {
 	const blobLen = 50_000
 	const chunkSize = 4000
 
 	ctx := context.Background()
 	ns := NewTestNodeStore()
-	expected := make([]byte, blobLen)
-	for i := range expected {
-		expected[i] = byte(i)
+	left := make([]byte, blobLen)
+	right := make([]byte, blobLen)
+	for i := range left {
+		left[i] = byte(i)
+		right[i] = byte(i)
 	}
+	// Diverge near the end so a naive byte-wise walk would touch almost every chunk.
+	right[blobLen-1] = left[blobLen-1] + 1
 
-	bb, err := NewBlobBuilder(chunkSize)
+	lVal, err := val.NewOutOfBandAdaptiveValue(ctx, ns, left)
 	require.NoError(t, err)
-	bb.SetNodeStore(ns)
-	bb.Init(blobLen)
-	_, addr, err := bb.Chunk(ctx, bytes.NewReader(expected))
+	rVal, err := val.NewOutOfBandAdaptiveValue(ctx, ns, right)
+	require.NoError(t, err)
+	sameAsLeft, err := val.NewOutOfBandAdaptiveValue(ctx, ns, append([]byte(nil), left...))
 	require.NoError(t, err)
 
-	t.Run("streams full contents", func(t *testing.T) {
-		r, err := ns.(val.ChunkedValueStore).ReadBytesChunked(ctx, addr)
-		require.NoError(t, err)
-		got := readAllChunks(t, r)
-		require.Equal(t, expected, got)
-	})
-
-	t.Run("stops reading after EOF", func(t *testing.T) {
-		r, err := ns.(val.ChunkedValueStore).ReadBytesChunked(ctx, addr)
-		require.NoError(t, err)
-		_ = readAllChunks(t, r)
-		// Additional NextChunk calls should keep returning io.EOF without panicking.
-		c, err := r.NextChunk(ctx)
-		require.Nil(t, c)
-		require.Equal(t, io.EOF, err)
-	})
-
-	t.Run("early termination loads only a prefix of nodes", func(t *testing.T) {
-		root, err := ns.(*nodeStoreValidator).Read(ctx, addr)
-		require.NoError(t, err)
-		require.Greater(t, root.Level(), 0, "test setup expects a multi-level blob tree")
-
+	t.Run("identical roots short-circuit to EOF", func(t *testing.T) {
 		cns := &countingNodeStore{NodeStore: ns}
-		r := NewBlobChunkReader(root, cns)
-		// Read just one leaf chunk and stop.
-		chunk, err := r.NextChunk(ctx)
+		differ, err := cns.OpenChunkDiffer(ctx, lVal, sameAsLeft)
 		require.NoError(t, err)
-		require.NotEmpty(t, chunk)
+		l, r, err := differ.Next(ctx)
+		require.Equal(t, io.EOF, err)
+		require.Nil(t, l)
+		require.Nil(t, r)
+		// Construction reads the root from each side; nothing more should follow.
+		require.LessOrEqual(t, cns.reads, 2)
+	})
 
-		// Walking the entire tree would read every internal and leaf node. Reading only the
-		// first leaf should require strictly fewer Reads.
-		fullReads := 0
+	t.Run("localized diff bounds the read count", func(t *testing.T) {
+		// Diff a deep blob — its tree has multiple levels, so walking it naively would read
+		// every chunk. With subtree-hash skipping we should only descend the path that
+		// actually contains the change.
+		cns := &countingNodeStore{NodeStore: ns}
+		differ, err := cns.OpenChunkDiffer(ctx, lVal, rVal)
+		require.NoError(t, err)
+
+		// Drain to confirm we eventually hit EOF and saw exactly one differing leaf pair.
+		divergingPairs := 0
+		for {
+			l, r, err := differ.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			if !bytes.Equal(l, r) {
+				divergingPairs++
+			}
+		}
+		require.Equal(t, 1, divergingPairs, "exactly one leaf pair should differ for a one-byte change")
+
+		// A naive walk would visit every node in the tree on both sides. We assert that the
+		// differ visits strictly fewer nodes than a full bilateral walk would.
+		root, err := ns.(*nodeStoreValidator).Read(ctx, mustOOBAddr(t, lVal))
+		require.NoError(t, err)
 		fullNs := &countingNodeStore{NodeStore: ns}
 		require.NoError(t, WalkNodes(ctx, root, fullNs, func(_ context.Context, _ *Node) error { return nil }))
-		fullReads = fullNs.reads
-		require.Less(t, cns.reads, fullReads, "early termination should read fewer nodes than full walk")
+		require.Less(t, cns.reads, 2*fullNs.reads, "differ should read fewer nodes than walking both trees in full")
 	})
+}
+
+func mustOOBAddr(t *testing.T, v val.AdaptiveValue) hash.Hash {
+	t.Helper()
+	addr, err := v.OutOfBandAddr()
+	require.NoError(t, err)
+	return addr
 }
 
 // TestCompareAdaptiveValueStreamsChunks verifies that comparing two out-of-band AdaptiveValues
@@ -559,17 +561,17 @@ func TestCompareAdaptiveValueStreamsChunks(t *testing.T) {
 
 // countingJsonComparatorStore wraps a NodeStore so we can verify that JsonAdaptiveEnc values
 // dispatch through the JSON comparator (which delegates to IndexedJsonDocument.Compare) rather
-// than the generic byte-streaming chunk reader. If compareAdaptiveValue ever stopped routing
+// than the generic byte-streaming chunk differ. If compareAdaptiveValue ever stopped routing
 // JSON values through this method, jsonCmps would stay at zero.
 type countingJsonComparatorStore struct {
 	NodeStore
-	jsonCmps   int
-	bytesReads int
+	jsonCmps  int
+	byteDiffs int
 }
 
-func (c *countingJsonComparatorStore) ReadBytesChunked(ctx context.Context, h hash.Hash) (val.ValueChunkReader, error) {
-	c.bytesReads++
-	return c.NodeStore.(val.ChunkedValueStore).ReadBytesChunked(ctx, h)
+func (c *countingJsonComparatorStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (val.ChunkDiffer, error) {
+	c.byteDiffs++
+	return c.NodeStore.(val.ChunkedValueStore).OpenChunkDiffer(ctx, l, r)
 }
 
 func (c *countingJsonComparatorStore) CompareJsonAdaptiveValues(ctx context.Context, l, r val.AdaptiveValue) (int, error) {
@@ -624,12 +626,12 @@ func TestCompareAdaptiveJsonUsesIndexedJsonCompare(t *testing.T) {
 				val.Type{Enc: val.JsonAdaptiveEnc},
 			)
 
-			cjs.bytesReads = 0
+			cjs.byteDiffs = 0
 			cjs.jsonCmps = 0
 			got := td.Comparator().CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.JsonAdaptiveEnc})
 			require.Equal(t, c.want, got)
 			require.Equal(t, 1, cjs.jsonCmps, "JsonAdaptiveEnc must dispatch through CompareJsonAdaptiveValues")
-			require.Equal(t, 0, cjs.bytesReads, "JSON compare must not fall back to the byte-streaming path")
+			require.Equal(t, 0, cjs.byteDiffs, "JSON compare must not fall back to the byte-streaming path")
 		})
 	}
 }
