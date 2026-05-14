@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -46,7 +45,6 @@ type CodecReader interface {
 	ReadString() string
 	ReadInlineBlob() []byte
 	ReadTimestamp() (time.Time, error)
-	ReadDecimal() (decimal.Decimal, error)
 	ReadGeometry() (Geometry, error)
 	ReadPoint() (Point, error)
 	ReadLineString() (LineString, error)

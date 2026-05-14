@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -1863,7 +1863,7 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 		return config.SetFloat(conf, key, float64(v))
 	case float64:
 		return config.SetFloat(conf, key, v)
-	case decimal.Decimal:
+	case *apd.Decimal:
 		f64, _ := v.Float64()
 		return config.SetFloat(conf, key, f64)
 	case string:

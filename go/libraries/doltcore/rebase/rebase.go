@@ -18,8 +18,9 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shopspring/decimal"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
@@ -57,7 +58,7 @@ type RebasePlan struct {
 // RebasePlanStep describes a single step in a rebase plan, such as dropping a
 // commit, squashing a commit into the previous commit, etc.
 type RebasePlanStep struct {
-	RebaseOrder decimal.Decimal
+	RebaseOrder *apd.Decimal
 	Action      string
 	CommitHash  string
 	CommitMsg   string
@@ -98,7 +99,7 @@ func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *dolt
 		}
 
 		plan.Steps = append(plan.Steps, RebasePlanStep{
-			RebaseOrder: decimal.NewFromFloat32(float32(len(commits) - idx)),
+			RebaseOrder: types.DecimalFromFloat32(float32(len(commits) - idx)),
 			Action:      RebaseActionPick,
 			CommitHash:  hash.String(),
 			CommitMsg:   meta.Description,
@@ -116,7 +117,7 @@ func ValidateRebasePlan(ctx *sql.Context, plan *RebasePlan) error {
 	for i, step := range plan.Steps {
 		// As a sanity check, make sure the rebase order is ascending. This shouldn't EVER happen because the
 		// results are sorted from the database query, but double check while we're validating the plan.
-		if i > 0 && plan.Steps[i-1].RebaseOrder.GreaterThanOrEqual(step.RebaseOrder) {
+		if i > 0 && plan.Steps[i-1].RebaseOrder.Cmp(step.RebaseOrder) >= 0 {
 			return fmt.Errorf("invalid rebase plan: rebase order must be ascending")
 		}
 

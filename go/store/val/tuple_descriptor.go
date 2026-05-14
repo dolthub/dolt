@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shopspring/decimal"
+	"github.com/cockroachdb/apd/v3"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -379,7 +379,7 @@ func (td *TupleDesc) GetBit(i int, tup Tuple) (v uint64, ok bool) {
 
 // GetDecimal reads a float64 from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
-func (td *TupleDesc) GetDecimal(i int, tup Tuple) (v decimal.Decimal, ok bool) {
+func (td *TupleDesc) GetDecimal(i int, tup Tuple) (v *apd.Decimal, ok bool) {
 	td.ExpectEncoding(i, DecimalEnc)
 	b := td.GetField(i, tup)
 	if b != nil {

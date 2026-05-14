@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
@@ -32,7 +33,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -3113,7 +3113,7 @@ func convertRowToRebasePlanStep(ctx context.Context, row sql.Row) (rebase.Rebase
 	}
 
 	return rebase.RebasePlanStep{
-		RebaseOrder: row[0].(decimal.Decimal),
+		RebaseOrder: row[0].(*apd.Decimal),
 		Action:      rebaseAction,
 		CommitHash:  commitHash,
 		CommitMsg:   commitMsg,
