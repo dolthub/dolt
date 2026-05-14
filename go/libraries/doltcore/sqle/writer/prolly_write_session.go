@@ -32,13 +32,14 @@ import (
 // locations that do not have a root at the time of this call. However, a root must be set through SetWorkingRoot before any
 // table editors are returned.
 func NewWriteSession(ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) dsess.WriteSession {
-	return &prollyWriteSession{
+	newWriteSess := &prollyWriteSession{
 		workingSet:    ws,
 		tables:        make(map[doltdb.TableName]*prollyTableWriter),
 		aiTracker:     aiTracker,
 		mut:           &sync.RWMutex{},
 		targetStaging: opts.TargetStaging,
 	}
+	return newWriteSess
 }
 
 // prollyWriteSession handles all edit operations on a table that may also update other tables.
@@ -254,4 +255,27 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
 	return flushed, nil
+}
+
+// IsDirty indicates if this prollyWriteSession has pending writes
+func (s *prollyWriteSession) IsDirty() bool {
+	for _, writer := range s.tables {
+		if writer.changes > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *prollyWriteSession) FlushAll(ctx *sql.Context) error {
+	// TODO: use concurrency?
+	for _, writer := range s.tables {
+		if writer.changes == 0 {
+			continue
+		}
+		if err := writer.flush(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }

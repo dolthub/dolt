@@ -397,6 +397,7 @@ func (tx *DoltTransaction) doCommit(
 	if !ok {
 		return nil, nil, fmt.Errorf("database %s unknown to transaction, this is a bug", dbName)
 	}
+
 	normalizedDbName := strings.ToLower(branchState.dbState.dbName)
 
 	// Load the start state for this working set from the noms root at tx start

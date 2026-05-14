@@ -48,6 +48,9 @@ type WriteSession interface {
 	// SetOptions sets the editor.Options for this session.
 	SetOptions(opts editor.Options)
 
+	// IsDirty indicates if this WriteSession has writes that haven't been flushed yet.
+	IsDirty() bool
+
 	WriteSessionFlusher
 }
 
