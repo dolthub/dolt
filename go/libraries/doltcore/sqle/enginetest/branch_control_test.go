@@ -33,7 +33,6 @@ import (
 // in the SetUpScript.
 type BranchControlTest struct {
 	Name        string
-	SkipMessage string
 	SetUpScript []string
 	Assertions  []BranchControlTestAssertion
 }
@@ -1444,13 +1443,14 @@ var BranchControlTests = []BranchControlTest{
 		},
 	},
 	{
-		// Confirms that every dolt procedure currently gated with Permissions_Write
-		// rejects a merge-only user. Existing "Merge permission allows merge but
-		// blocks other writes" already covers dolt_add/dolt_reset/dolt_clean/
-		// dolt_revert; this case rounds out the rest of the Write-gated set whose
-		// MySQL privilege requirements are satisfied by GRANT ALL minus SUPER.
-		// All assertions should pass on main today; if any starts failing it
-		// means a previously-gated procedure was inadvertently un-gated.
+		// Each branch-level dolt procedure gated with Permissions_Write should
+		// reject a merge-only user. The existing "Merge permission allows merge
+		// but blocks other writes" case already covers dolt_add / dolt_reset /
+		// dolt_clean / dolt_revert; this case rounds out the rest of the
+		// Write-gated procedures whose MySQL privilege requirements are
+		// satisfied by GRANT ALL minus SUPER. dolt_undrop is intentionally not
+		// listed — it operates on databases, not branches, and is gated by
+		// MySQL SUPER at the grants layer rather than by branch_control.
 		Name: "Merge permission blocks Write-gated dolt procedures (no SUPER)",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
@@ -1474,7 +1474,19 @@ var BranchControlTests = []BranchControlTest{
 			{
 				User:        "testuser",
 				Host:        "localhost",
+				Query:       "CALL DOLT_REBASE('--interactive', 'HEAD');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
 				Query:       "CALL DOLT_RM('test');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_STASH('push');",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
 			{
@@ -1486,10 +1498,10 @@ var BranchControlTests = []BranchControlTest{
 		},
 	},
 	{
-		// Procedures that require the MySQL SUPER privilege would otherwise
-		// reject the testuser at the grants layer before branch_control fires.
-		// Grant SUPER here so the branch_control gate is what produces the
-		// error, then assert it produces ErrIncorrectPermissions.
+		// Same as the case above, but the procedures here require MySQL SUPER
+		// in addition to their branch_control gate. Grant SUPER in the setup
+		// so the rejection comes from branch_control rather than the MySQL
+		// grants layer.
 		Name: "Merge permission blocks Write-gated dolt procedures (SUPER required)",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
@@ -1539,6 +1551,12 @@ var BranchControlTests = []BranchControlTest{
 				Query:       "CALL DOLT_REMOTE('add', 'r1', 'http://example.com/r1');",
 				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_UPDATE_COLUMN_TAG('test', 'v1', 99999);",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
 		},
 	},
 	{
@@ -1564,77 +1582,6 @@ var BranchControlTests = []BranchControlTest{
 				Host:     "localhost",
 				Query:    "CALL DOLT_COUNT_COMMITS('--from', 'HEAD', '--to', 'HEAD');",
 				Expected: []sql.Row{{uint64(0), uint64(0)}},
-			},
-		},
-	},
-	{
-		// Procedures below mutate branch or working-set state but are NOT
-		// currently gated by branch_control. Each assertion documents the
-		// expected behavior — they will FAIL on main until the corresponding
-		// procedure is gated with Permissions_Write.
-		Name:        "Branch control gaps: merge permission should block these procedures (no SUPER)",
-		SkipMessage: "Documents branch_control gap. Remove skip once dolt_rebase and dolt_stash are gated with Permissions_Write.",
-		SetUpScript: []string{
-			"DELETE FROM dolt_branch_control WHERE user = '%';",
-			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
-			"CREATE USER testuser@localhost;",
-			"GRANT ALL ON *.* TO testuser@localhost;",
-			"REVOKE SUPER ON *.* FROM testuser@localhost;",
-			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
-			"INSERT INTO test VALUES (1, 1);",
-			"CALL DOLT_ADD('-A');",
-			"CALL DOLT_COMMIT('-m', 'initial commit');",
-			"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge');",
-		},
-		Assertions: []BranchControlTestAssertion{
-			// dolt_rebase mutates the active rebase plan / working set.
-			{
-				User:        "testuser",
-				Host:        "localhost",
-				Query:       "CALL DOLT_REBASE('--interactive', 'HEAD');",
-				ExpectedErr: branch_control.ErrIncorrectPermissions,
-			},
-			// dolt_stash writes a stash entry referencing working-set state.
-			{
-				User:        "testuser",
-				Host:        "localhost",
-				Query:       "CALL DOLT_STASH('push');",
-				ExpectedErr: branch_control.ErrIncorrectPermissions,
-			},
-		},
-	},
-	{
-		// Same as above but the procedures here require MySQL SUPER privilege
-		// in addition to whatever branch_control gate they should have. Grant
-		// SUPER so the test fails only because of the missing branch_control
-		// gate, not the unrelated MySQL grant.
-		Name:        "Branch control gaps: merge permission should block these procedures (SUPER required)",
-		SkipMessage: "Documents branch_control gap. Remove skip once dolt_undrop and dolt_update_column_tag are gated with Permissions_Write.",
-		SetUpScript: []string{
-			"DELETE FROM dolt_branch_control WHERE user = '%';",
-			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
-			"CREATE USER testuser@localhost;",
-			"GRANT ALL ON *.* TO testuser@localhost;",
-			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
-			"INSERT INTO test VALUES (1, 1);",
-			"CALL DOLT_ADD('-A');",
-			"CALL DOLT_COMMIT('-m', 'initial commit');",
-			"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge');",
-		},
-		Assertions: []BranchControlTestAssertion{
-			// dolt_undrop restores a dropped table, writing to the working set.
-			{
-				User:        "testuser",
-				Host:        "localhost",
-				Query:       "CALL DOLT_UNDROP('test');",
-				ExpectedErr: branch_control.ErrIncorrectPermissions,
-			},
-			// dolt_update_column_tag mutates the table's schema.
-			{
-				User:        "testuser",
-				Host:        "localhost",
-				Query:       "CALL DOLT_UPDATE_COLUMN_TAG('test', 'v1', 99999);",
-				ExpectedErr: branch_control.ErrIncorrectPermissions,
 			},
 		},
 	},
@@ -2220,9 +2167,6 @@ func TestBranchControl(t *testing.T) {
 		harness := newDoltHarness(t)
 		defer harness.Close()
 		t.Run(test.Name, func(t *testing.T) {
-			if test.SkipMessage != "" {
-				t.Skip(test.SkipMessage)
-			}
 			engine, err := harness.NewEngine(t)
 			require.NoError(t, err)
 			defer engine.Close()
