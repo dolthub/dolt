@@ -1586,6 +1586,94 @@ var BranchControlTests = []BranchControlTest{
 		},
 	},
 	{
+		// Writes to user-space dolt system tables (dolt_docs, dolt_ignore,
+		// dolt_query_catalog, dolt_tests) all flow through
+		// createWriteableSystemTable, which is gated by Permissions_Write.
+		// dolt_workspace_<t> and dolt_constraint_violations_<t> are also
+		// gated but require a complex setup to populate non-empty rows; they
+		// are intentionally not exercised here.
+		Name: "Merge permission blocks writes to user-space dolt system tables",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_docs VALUES ('README', '# hello');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_ignore VALUES ('tmp_*', true);",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_query_catalog VALUES ('q1', 1, 'count', 'SELECT count(*) FROM test', '');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_tests VALUES ('t1', NULL, 'SELECT 1', 'expected_single_value', '==', '1');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
+	{
+		// Effectively read-only system tables: their writers always return a
+		// "read-only" error from Insert/Update/Delete, regardless of
+		// branch_control. This case pins that behavior so a refactor that
+		// accidentally makes them writable would also have to add a proper
+		// branch_control gate to pass.
+		Name: "Read-only dolt system tables reject writes for merge permission",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:           "testuser",
+				Host:           "localhost",
+				Query:          "INSERT INTO dolt_branches (name, hash) SELECT 'newbranch', hash FROM dolt_branches WHERE name = 'main';",
+				ExpectedErrStr: "the dolt_branches table is read-only; use the dolt_branch stored procedure to edit remotes",
+			},
+			{
+				User:           "testuser",
+				Host:           "localhost",
+				Query:          "DELETE FROM dolt_branches WHERE name = 'other';",
+				ExpectedErrStr: "the dolt_branches table is read-only; use the dolt_branch stored procedure to edit remotes",
+			},
+			{
+				User:           "testuser",
+				Host:           "localhost",
+				Query:          "INSERT INTO dolt_remotes (name, url, fetch_specs, params) VALUES ('r1', 'http://example.com/r1', '[]', '{}');",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
+			},
+		},
+	},
+	{
 		Name: "Merge permission allows merge but blocks other writes",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
