@@ -1625,6 +1625,93 @@ var BranchControlTests = []BranchControlTest{
 		},
 	},
 	{
+		// DOLT_CHECKOUT has two forms:
+		//   DOLT_CHECKOUT('<branch>') — switches the current session's branch (read-ish)
+		//   DOLT_CHECKOUT('<table>')  — restores <table>'s working set from HEAD, discarding
+		//                               uncommitted changes (a write to the working set)
+		// A user with only read or merge permission on main should be able to switch
+		// branches, but should not be able to clear working-set changes on main.
+		Name: "Merge permission allows DOLT_CHECKOUT('<branch>') but blocks DOLT_CHECKOUT('<table>')",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			// Dirty working set on main that a checkout-of-table would clear.
+			"UPDATE test SET v1 = 2 WHERE pk = 1;",
+			// testuser has only merge permission on main.
+			"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			// Switching branches is allowed.
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			// Clearing a table's working-set changes is a write — should be rejected.
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_CHECKOUT('test');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
+	{
+		// Same scenario as the merge-permission case above, but with read-only
+		// permission. Switching branches should still work; clearing working-set
+		// changes on a table should still be rejected.
+		Name: "Read permission allows DOLT_CHECKOUT('<branch>') but blocks DOLT_CHECKOUT('<table>')",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			"UPDATE test SET v1 = 2 WHERE pk = 1;",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'read');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_CHECKOUT('test');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
+	{
 		Name: "Merge permission allows merge with conflicts",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
