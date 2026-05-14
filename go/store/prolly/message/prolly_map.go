@@ -98,7 +98,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	} else {
 		serial.ProllyTreeNodeAddAddressArray(b, refArr)
 		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
-		serial.ProllyTreeNodeAddTreeCount(b, sumSubtrees(subtrees))
+		serial.ProllyTreeNodeAddTreeCount(b, SumSubtrees(subtrees))
 	}
 	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)

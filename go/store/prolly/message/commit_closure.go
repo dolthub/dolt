@@ -167,7 +167,7 @@ func (s CommitClosureSerializer) Serialize(keys, addrs [][]byte, subtrees []uint
 	if level > 0 {
 		serial.CommitClosureAddAddressArray(b, addrArr)
 		serial.CommitClosureAddSubtreeCounts(b, cardArr)
-		serial.CommitClosureAddTreeCount(b, sumSubtrees(subtrees))
+		serial.CommitClosureAddTreeCount(b, SumSubtrees(subtrees))
 	} else {
 		serial.CommitClosureAddTreeCount(b, uint64(len(keys)))
 	}

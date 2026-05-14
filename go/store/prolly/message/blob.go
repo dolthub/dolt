@@ -61,7 +61,7 @@ func (s BlobSerializer) Serialize(keys, values [][]byte, subtrees []uint64, leve
 		serial.BlobAddAddressArray(b, addrs)
 		serial.BlobAddSubtreeSizes(b, cards)
 	}
-	serial.BlobAddTreeSize(b, sumSubtrees(subtrees))
+	serial.BlobAddTreeSize(b, SumSubtrees(subtrees))
 	serial.BlobAddTreeLevel(b, uint8(level))
 	return serial.FinishMessage(b, serial.BlobEnd(b), blobFileID)
 }
