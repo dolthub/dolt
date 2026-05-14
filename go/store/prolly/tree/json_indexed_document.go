@@ -708,8 +708,18 @@ func (i IndexedJsonDocument) Compare(ctx context.Context, other interface{}) (in
 	case jsonTypeNull:
 		return 0, nil
 	case jsonTypeArray, jsonTypeObject:
-		// To compare two values that are both arrays or both objects, we must locate the first location
-		// where they differ.
+		// To compare two values that are both arrays or both objects, we walk both documents in lex (byte) order
+		// over their keys/indices and look at the first location where they differ. The ordering rules are:
+		//   * If both sides have a value at the same path that differs, compare those values recursively (this is
+		//     reported as a ModifiedDiff).
+		//   * If the two sides reach different next-keys at the same scope and neither is yet at end-of-scope, the
+		//     side with the smaller key is the smaller document. The IndexedJsonDiffer records this case via
+		//     lastDiffAtEndOfScope == false.
+		//   * If one side has reached end-of-scope and the other still has values to emit (i.e., one document is a
+		//     strict prefix of the other in the canonical walk), the shorter document is the smaller. The differ
+		//     records this case via lastDiffAtEndOfScope == true.
+		// This matches the lex-sorted-walk algorithm implemented in go-mysql-server's CompareJSON for JsonObject
+		// and JsonArray values, so chunked indexed documents and in-memory documents compare consistently.
 		jsonDiffer, err := NewIndexedJsonDiffer(ctx, i, otherIndexedDocument)
 		if err != nil {
 			return 0, err
@@ -724,10 +734,19 @@ func (i IndexedJsonDocument) Compare(ctx context.Context, other interface{}) (in
 		}
 		switch firstDiff.Type {
 		case AddedDiff:
-			// A key is present in other but not this.
-			return -1, nil
-		case RemovedDiff:
+			if jsonDiffer.lastDiffAtEndOfScope {
+				// Case 4: `this` reached end-of-scope; `other` has a remaining value. `this` is shorter.
+				return -1, nil
+			}
+			// Case 3: both sides at start-of-value, `other`'s next key is smaller. `other` < `this`.
 			return 1, nil
+		case RemovedDiff:
+			if jsonDiffer.lastDiffAtEndOfScope {
+				// Case 4: `other` reached end-of-scope; `this` has a remaining value. `this` is longer.
+				return 1, nil
+			}
+			// Case 3: both sides at start-of-value, `this`'s next key is smaller. `this` < `other`.
+			return -1, nil
 		case ModifiedDiff:
 			// Since both modified values have already been loaded into memory,
 			// We can just compare them.
