@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -134,6 +135,12 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 					}
 				}
 			}
+		}
+	// TODO: this feels hacky...
+	case *plan.UpdateSource:
+		// If this table is dirty, use the MutableMap instead of the table in RootValue
+		sess := dsess.DSessFromSess(ctx.Session)
+		if sess == nil {
 		}
 	default:
 		return nil, nil

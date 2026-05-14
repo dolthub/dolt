@@ -1814,18 +1814,26 @@ func (db Database) GetRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 // a null pointer. In the future, we should replace all uses of dbState.WorkingSet, including this, with a new interface
 // where users avoid handling the WorkingSet directly.
 func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	dbName := db.RevisionQualifiedName()
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
+	err := sess.FlushPendingWrites(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, fmt.Errorf("no root value found in session")
 	}
-	if dbState.WorkingSet() == nil {
+
+	ws := dbState.WorkingSet()
+	if ws == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
-	return dbState.WorkingSet(), nil
+	return ws, nil
 }
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
@@ -1863,7 +1871,8 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	_, tblExists, err := db.checkForPgCatalogTable(ctx, tableName)
 	if err != nil {
 		return err
-	} else if tblExists {
+	}
+	if tblExists {
 		return sql.ErrDropTableNotSupported.New("pg_catalog")
 	}
 
@@ -1879,15 +1888,19 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	root := ws.WorkingRoot()
-	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, doltdb.TableName{Schema: db.schemaName, Name: tableName})
+	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, doltdb.TableName{
+		Schema: db.schemaName,
+		Name:   tableName,
+	})
 	if err != nil {
 		return err
-	} else if !tblExists {
+	}
+	if !tblExists {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	tableName = tblName.Name
 	// for remainder of this operation, all db operations will use the name resolved here
+	tableName = tblName.Name
 	db.schemaName = tblName.Schema
 
 	newRoot, err := root.RemoveTables(ctx, true, false, tblName)
