@@ -604,6 +604,10 @@ _init_repo_with_remote() {
     run dolt push origin main
     [ "$status" -eq 0 ]
     [ -f "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND" ]
+    # The wrapper running does not prove the value was passed through unchanged.
+    # Compare the recorded bytes against the exported value to catch a fix that
+    # appends, prepends, or rewrites the user's GIT_SSH_COMMAND.
+    [ "$(cat $BATS_TMPDIR/git_env_GIT_SSH_COMMAND)" = "$GIT_SVC_WRAPPER" ]
 }
 
 # bats test_tags=no_lambda
@@ -655,6 +659,38 @@ _init_repo_with_remote() {
 
     run dolt push origin main
     [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: ssh push does not invoke SSH_ASKPASS helper" {
+    # See https://github.com/dolthub/dolt/issues/11027.
+    setup_git_repo
+    setup_git_sshd
+    gen_ssh_key "$BATS_TMPDIR/ssh_key_locked" "test_passphrase"
+
+    # Sleep duration must outlast the 15s timeout below so a hang reliably
+    # trips it, but stay short enough that the orphaned ssh chain unwinds
+    # promptly when timeout kills dolt.
+    cat > "$BATS_TMPDIR/hang_askpass" <<'HANG'
+#!/usr/bin/env bash
+exec sleep 25
+HANG
+    chmod +x "$BATS_TMPDIR/hang_askpass"
+
+    export DISPLAY=":99"
+    export SSH_ASKPASS="$BATS_TMPDIR/hang_askpass"
+    # GIT_SSH_COMMAND beats core.sshCommand in git so any fix that only sets
+    # the config value will silently lose to this env var.
+    export GIT_SSH_COMMAND="ssh -i $BATS_TMPDIR/ssh_key_locked -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    # SSH_ASKPASS_REQUIRE=never on hardened CI images would make ssh skip
+    # askpass on its own and mask regressions on unfixed dolt.
+    unset SSH_AUTH_SOCK SSH_AGENT_PID SSH_ASKPASS_REQUIRE
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+
+    # -k 5 sends SIGKILL 5s after SIGTERM in case dolt delays exit on TERM.
+    run timeout -k 5 15 dolt push origin main
+    [ "$status" -ne 124 ] || (echo "dolt push hung past 15s" >&2; false)
+    [ "$status" -ne 0 ]
 }
 
 
