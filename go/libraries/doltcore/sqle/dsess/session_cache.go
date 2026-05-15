@@ -24,13 +24,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
-// CacheableDoltTable what tables that lands in SessionCache.tables
-// implement. The cache is keyed only by root hash + table name +
-// schema, but each table implementation carries more state, and in
-// particular a sqle.Database that's captured at construction time.
-// RebindDatabase returns an instance whose db references match the
-// caller's view. getTable calls this to rebind the cached instance to
-// the correct Database instance.
+// CacheableDoltTable is implemented by tables in SessionCache.tables.
+// The cache is keyed only by root hash + table name + schema, but
+// each table implementation carries more state, and in particular a
+// sqle.Database that's captured at construction time.  RebindDatabase
+// returns an instance whose db references match the caller's
+// view. getTable calls this to rebind the cached instance to the
+// correct Database instance.
 type CacheableDoltTable interface {
 	sql.Table
 	RebindDatabase(ctx *sql.Context, newDb SqlDatabase) (CacheableDoltTable, error)
