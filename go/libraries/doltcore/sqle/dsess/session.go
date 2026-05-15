@@ -25,8 +25,8 @@ import (
 
 	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
@@ -1970,7 +1970,7 @@ func findPersistedGlobalVars(dEnv *env.DoltEnv) (persistedGlobalVars []sql.Syste
 
 		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
 		for _, k := range missingKeys {
-			cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
+			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
 		}
 	}
 
@@ -1984,12 +1984,12 @@ func findPersistedGlobalVars(dEnv *env.DoltEnv) (persistedGlobalVars []sql.Syste
 
 		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
 		for _, k := range missingKeys {
-			cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
+			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
 		}
 	}
 
 	if !foundConfig {
-		cli.Println("warning: no local or global Dolt configuration found; session is not persistable")
+		logrus.Warn("no local or global Dolt configuration found; session is not persistable")
 	}
 
 	return persistedGlobalVars, nil
