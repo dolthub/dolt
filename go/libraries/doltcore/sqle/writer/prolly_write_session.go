@@ -194,6 +194,17 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 
 // flushAllTables is the inner implementation for Flush that does not acquire any locks
 func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue, error) {
+	for _, tblWriter := range s.tables {
+		err := tblWriter.flush(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s.workingSet.WorkingRoot(), nil
+}
+
+// flushAllTables is the inner implementation for Flush that does not acquire any locks
+func (s *prollyWriteSession) flushAllTablesOld(ctx *sql.Context) (doltdb.RootValue, error) {
 	type flushedTable struct {
 		tblName doltdb.TableName
 		tbl     *doltdb.Table
