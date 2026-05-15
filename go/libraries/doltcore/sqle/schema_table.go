@@ -112,9 +112,16 @@ func (st *SchemaTable) PreciseMatch() bool {
 	return true
 }
 
-// Updater implements sql.UpdatableTable. The SchemaTable is only every modified by using it's wrapped backing table.
+// Updater implements sql.UpdatableTable. Internal schema modifications go
+// through the wrapped backing table directly (see UnWrap); a direct
+// UPDATE dolt_schemas reaches here. Delegate to the backing table so the
+// write is branch_control-gated like any other table write, rather than
+// panicking (which an unprivileged user could otherwise trigger).
 func (st *SchemaTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	panic("Runtime error: SchemaTable.Updater() should never be called")
+	if st.backingTable == nil {
+		return sqlutil.NewStaticErrorEditor(fmt.Errorf("%s table does not exist", doltdb.SchemasTableName))
+	}
+	return st.backingTable.Updater(ctx)
 }
 
 func (st *SchemaTable) UnWrap() *WritableDoltTable {

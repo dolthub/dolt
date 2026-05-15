@@ -335,6 +335,21 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{
+		// A direct UPDATE on dolt_schemas reaches SchemaTable.Updater, which
+		// delegates to the gated backing table. (It used to panic, which an
+		// unprivileged user could trigger.) INSERT/DELETE aren't covered
+		// because SchemaTable only implements sql.UpdatableTable — the engine
+		// rejects those as unsupported, not a branch_control concern. The
+		// real view/trigger paths are covered by the CREATE/DROP VIEW/TRIGGER
+		// cases above.
+		Name: "UPDATE dolt_schemas",
+		SetUpScript: []string{
+			"CREATE VIEW v1 AS SELECT 1;",
+		},
+		Query:       "UPDATE dolt_schemas SET name = 'v9' WHERE name = 'v1';",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
 		Name:        "CREATE EVENT",
 		Query:       "CREATE EVENT ev1 ON SCHEDULE EVERY 1 DAY DO INSERT INTO test VALUES (99, 99);",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
