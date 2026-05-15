@@ -1586,6 +1586,158 @@ var BranchControlTests = []BranchControlTest{
 		},
 	},
 	{
+		// Writes to user-space dolt system tables (dolt_docs, dolt_ignore,
+		// dolt_query_catalog, dolt_tests) all flow through
+		// createWriteableSystemTable, which is gated by Permissions_Write.
+		// dolt_workspace_<t> and dolt_constraint_violations_<t> are also
+		// gated but require a complex setup to populate non-empty rows; they
+		// are intentionally not exercised here.
+		Name: "Merge permission blocks writes to user-space dolt system tables",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_docs VALUES ('README', '# hello');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_ignore VALUES ('tmp_*', true);",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_query_catalog VALUES ('q1', 1, 'count', 'SELECT count(*) FROM test', '');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_tests VALUES ('t1', NULL, 'SELECT 1', 'expected_single_value', '==', '1');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
+	{
+		// dolt_workspace_<t> and dolt_constraint_violations_<t> have distinct
+		// per-method writer logic (not the createWriteableSystemTable shared
+		// helper), so each writer factory needs its own assertion. Rows must
+		// be present for the static-error to surface, so the setup creates
+		// real workspace entries and a real constraint violation first.
+		// ConflictRootObjectTable.Deleter/Updater are also gated with
+		// Permissions_Write but are not exercised here — constructing a
+		// root-object conflict (vs a row conflict) needs setup that doesn't
+		// exist in the core engine tests. The gate matches the pattern used
+		// by the other writers in this case, so a regression on root-object
+		// writers would still be caught by code review against this file.
+		Name: "Merge permission blocks writes to per-table artifact system tables",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			// Constraint-violation setup: a unique-index conflict produced by
+			// a merge with @@dolt_force_transaction_commit so the violation
+			// persists. Done first because the merge resets the working set.
+			"CREATE TABLE cv (a INT, b INT, UNIQUE INDEX (a));",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial');",
+			"CALL DOLT_CHECKOUT('-b', 'side');",
+			"INSERT INTO cv VALUES (1, 2);",
+			"CALL DOLT_COMMIT('-am', 'cv side');",
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO cv VALUES (1, 3);",
+			"CALL DOLT_COMMIT('-am', 'cv main');",
+			"CALL DOLT_CHECKOUT('side');",
+			"SET @@dolt_force_transaction_commit = 1;",
+			"CALL DOLT_MERGE('main');", // produces dolt_constraint_violations_cv rows
+			// Now create an unstaged change so dolt_workspace_test has rows.
+			"INSERT INTO test VALUES (2, 2);",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'testuser', 'localhost', 'merge');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			// dolt_workspace_<t>.Deleter
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "DELETE FROM dolt_workspace_test WHERE id = 0;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// dolt_workspace_<t>.Updater
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "UPDATE dolt_workspace_test SET staged = TRUE WHERE id = 0;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			// dolt_constraint_violations_<t>.Deleter (only writer this table has)
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "DELETE FROM dolt_constraint_violations_cv;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
+	{
+		// Effectively read-only system tables: their writers always return a
+		// "read-only" error from Insert/Update/Delete, regardless of
+		// branch_control. This case pins that behavior so a refactor that
+		// accidentally makes them writable would also have to add a proper
+		// branch_control gate to pass.
+		Name: "Read-only dolt system tables reject writes for merge permission",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"REVOKE SUPER ON *.* FROM testuser@localhost;",
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO test VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-m', 'initial commit');",
+			"CALL DOLT_BRANCH('other');",
+			"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:           "testuser",
+				Host:           "localhost",
+				Query:          "INSERT INTO dolt_branches (name, hash) SELECT 'newbranch', hash FROM dolt_branches WHERE name = 'main';",
+				ExpectedErrStr: "the dolt_branches table is read-only; use the dolt_branch stored procedure to edit remotes",
+			},
+			{
+				User:           "testuser",
+				Host:           "localhost",
+				Query:          "DELETE FROM dolt_branches WHERE name = 'other';",
+				ExpectedErrStr: "the dolt_branches table is read-only; use the dolt_branch stored procedure to edit remotes",
+			},
+			{
+				User:           "testuser",
+				Host:           "localhost",
+				Query:          "INSERT INTO dolt_remotes (name, url, fetch_specs, params) VALUES ('r1', 'http://example.com/r1', '[]', '{}');",
+				ExpectedErrStr: "the dolt_remotes table is read-only; use the dolt_remote stored procedure to edit remotes",
+			},
+		},
+	},
+	{
 		Name: "Merge permission allows merge but blocks other writes",
 		SetUpScript: []string{
 			"DELETE FROM dolt_branch_control WHERE user = '%';",
