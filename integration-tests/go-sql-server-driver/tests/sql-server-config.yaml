@@ -28,7 +28,7 @@ tests:
       args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
       dynamic_port: repo1
       log_matches:
-      - "warning: persisted system variable unknown was not loaded since its definition does not exist."
+      - "persisted system variable unknown was not loaded since its definition does not exist."
   connections:
   - on: repo1
 - name: invalid persisted global variable value throws warning on server startup, but does not crash
