@@ -309,6 +309,52 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		Query:       "DROP PROCEDURE testabc;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
+	{
+		Name:        "INSERT SELECT",
+		Query:       "INSERT INTO test SELECT pk + 100, v1 FROM test;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "INSERT ON DUPLICATE KEY UPDATE",
+		Query:       "INSERT INTO test VALUES (1, 1) ON DUPLICATE KEY UPDATE v1 = 50;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "UPDATE with JOIN",
+		Query:       "UPDATE test t1 JOIN test t2 ON t1.pk = t2.pk SET t1.v1 = 5;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "DELETE with JOIN",
+		Query:       "DELETE t1 FROM test t1 JOIN test t2 ON t1.pk = t2.pk;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "ALTER TABLE CONVERT TO CHARACTER SET",
+		Query:       "ALTER TABLE test CONVERT TO CHARACTER SET utf8mb4;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name:        "CREATE EVENT",
+		Query:       "CREATE EVENT ev1 ON SCHEDULE EVERY 1 DAY DO INSERT INTO test VALUES (99, 99);",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "DROP EVENT",
+		SetUpScript: []string{
+			"CREATE EVENT ev1 ON SCHEDULE EVERY 1 DAY DO INSERT INTO test VALUES (99, 99);",
+		},
+		Query:       "DROP EVENT ev1;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		Name: "ALTER EVENT",
+		SetUpScript: []string{
+			"CREATE EVENT ev1 ON SCHEDULE EVERY 1 DAY DO INSERT INTO test VALUES (99, 99);",
+		},
+		Query:       "ALTER EVENT ev1 DISABLE;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
 	// Dolt Procedures
 	{
 		Name: "DOLT_ADD",
