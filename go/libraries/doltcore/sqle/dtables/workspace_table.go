@@ -24,6 +24,7 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -402,7 +403,10 @@ func validateWorkspaceUpdate(old, new sql.Row) (valid, staged bool) {
 	return true, isStaged
 }
 
-func (wt *WorkspaceTable) Deleter(_ *sql.Context) sql.RowDeleter {
+func (wt *WorkspaceTable) Deleter(ctx *sql.Context) sql.RowDeleter {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	cols := wt.headSchema.GetAllCols().Size()
 	modifier := WorkspaceTableModifier{
 		tableName:          wt.userTblName,
@@ -419,7 +423,10 @@ func (wt *WorkspaceTable) Deleter(_ *sql.Context) sql.RowDeleter {
 	}
 }
 
-func (wt *WorkspaceTable) Updater(_ *sql.Context) sql.RowUpdater {
+func (wt *WorkspaceTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	cols := wt.headSchema.GetAllCols().Size()
 	modifier := WorkspaceTableModifier{
 		tableName:          wt.userTblName,
