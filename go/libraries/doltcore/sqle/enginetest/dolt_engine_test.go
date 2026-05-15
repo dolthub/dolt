@@ -118,39 +118,17 @@ func TestSingleScript(t *testing.T) {
 		{
 			Name: "trigger before update, reverts insert when query fails",
 			SetUpScript: []string{
-				"set @@autocommit = off",
-				"create table a (i int primary key)",
-				"insert into a values (0)",
+				"create table t (i int primary key)",
+				"set autocommit = 0",
+				"insert into t values (0)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
-				//{
-				//	Query:    "insert into a values (0);",
-				//	Expected: []sql.Row{},
-				//},
-				//{
-				//	Query:    "insert into a values (0);",
-				//	Expected: []sql.Row{},
-				//},
 				{
-					Query:    "update a set i = 100;",
-					Expected: []sql.Row{},
+					Query: "select * from t",
+					Expected: []sql.Row{
+						{0},
+					},
 				},
-				//{
-				//	Query: "select x from b",
-				//	Expected: []sql.Row{
-				//		{1},
-				//	},
-				//},
-				//{
-				//	Query:          "update a set i = 'not int'",
-				//	ExpectedErrStr: "error: 'not int' is not a valid value for 'int'",
-				//},
-				//{
-				//	Query: "select * from b",
-				//	Expected: []sql.Row{
-				//		{1},
-				//	},
-				//},
 			},
 		},
 	}

@@ -576,7 +576,7 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 	var dirtyStates []*branchState
 	for _, state := range d.dbStates {
 		for _, branchState := range state.heads {
-			if branchState.dirty || (branchState.writeSession != nil && branchState.writeSession.IsDirty()) {
+			if branchState.dirty /*|| (branchState.writeSession != nil && branchState.writeSession.IsDirty())*/ {
 				dirtyStates = append(dirtyStates, branchState)
 			}
 		}
@@ -1333,7 +1333,16 @@ func (d *DoltSession) FlushPendingWrites(ctx *sql.Context, dbName string) error 
 		return nil
 	}
 
-	_, err = ws.Flush(ctx)
+	newWs, err := ws.Flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	// TODO: d.SetWorkingSet makes an unnecessary d.lookupDbState()
+	err = d.SetWorkingSet(ctx, dbName, newWs)
+	if err != nil {
+		return err
+	}
 	return err
 }
 
