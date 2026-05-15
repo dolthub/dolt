@@ -364,7 +364,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
-	w.changes++
+	w.changes = 0
 
 	return nil
 }
@@ -437,7 +437,6 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	w.changes = 0
 	return w.Reset(ctx, tbl)
 }
 

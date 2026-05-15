@@ -1799,8 +1799,13 @@ func filterDoltInternalTables(tblNames []string, schemaName string, includeWrite
 
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (doltdb.RootValue, error) {
+	dbName := db.RevisionQualifiedName()
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
+	err := sess.FlushPendingWrites(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}

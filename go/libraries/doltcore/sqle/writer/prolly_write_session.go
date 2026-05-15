@@ -190,12 +190,25 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 	return flushed, nil
 }
 
-// flushAllTables is the inner implementation for Flush that does not acquire any locks
 func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue, error) {
+	// TODO: it is strange that prollyTableWriter.setter is required to update the DoltSession.dbState
+	// Flush each table and send results to the flushedTables channel
+	for _, tblWriter := range s.tables {
+		err := tblWriter.flush(ctx) // this will call FlushTable and update s.workingSet for us
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s.workingSet.WorkingRoot(), nil
+}
+
+// flushAllTables is the inner implementation for Flush that does not acquire any locks
+func (s *prollyWriteSession) flushAllTablesOld(ctx *sql.Context) (doltdb.RootValue, error) {
 	type flushedTable struct {
 		tblName doltdb.TableName
 		tbl     *doltdb.Table
-		err     error
+
+		err error
 	}
 
 	// Flush each table and send results to the flushedTables channel
@@ -206,6 +219,7 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 		go func() {
 			defer wg.Done()
 			tbl, err := tblWriter.table(ctx)
+			_ = tblWriter.Reset(ctx, tbl)
 			flushedTables <- flushedTable{
 				tblName: tblName,
 				tbl:     tbl,
@@ -266,17 +280,4 @@ func (s *prollyWriteSession) IsDirty() bool {
 		}
 	}
 	return false
-}
-
-func (s *prollyWriteSession) FlushAll(ctx *sql.Context) error {
-	// TODO: use concurrency?
-	for _, writer := range s.tables {
-		if writer.changes == 0 {
-			continue
-		}
-		if err := writer.flush(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
 }
