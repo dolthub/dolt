@@ -134,7 +134,7 @@ func (dt *CommitDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	return index.MakeDiffTableIndexes(doltdb.DoltCommitDiffTablePrefix+dt.tableName.Name, sch, sch, true), nil
+	return index.MakeDiffTableIndexes(doltdb.DoltCommitDiffTablePrefix+dt.tableName.Name, sch, sch, dt.table.NodeStore(), true), nil
 }
 
 // IndexedAccess implements sql.IndexAddressable

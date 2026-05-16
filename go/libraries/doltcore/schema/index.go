@@ -14,6 +14,8 @@
 
 package schema
 
+import "github.com/dolthub/dolt/go/store/val"
+
 type Index interface {
 	// AllTags returns the tags of the columns in the entire index, including the primary keys.
 	// If we imagined a dolt index as being a standard dolt table, then the tags would represent the schema columns.
@@ -59,6 +61,33 @@ type Index interface {
 }
 
 var _ Index = (*indexImpl)(nil)
+
+// OrdinalToPKOrdinal produces a mapping from the ordinals of a secondary index to the ordinals of the table's primary keys.
+func OrdinalToPKOrdinal(idx Index) val.OrdinalMapping {
+	pkTags := idx.PrimaryKeyTags()
+	allTags := idx.AllTags()
+	pkMap := make(val.OrdinalMapping, len(pkTags))
+	for i, pk := range pkTags {
+		for j, tag := range allTags {
+			if tag == pk {
+				pkMap[i] = j
+				break
+			}
+		}
+	}
+	return pkMap
+}
+
+// OrdinalToPrimaryOrdinal produces a mapping from the ordinals of a secondary index to the ordinals of the table's primary index.
+func OrdinalToPrimaryOrdinal(sch Schema, idx Index) val.OrdinalMapping {
+	schemaTags := sch.GetAllCols().TagToIdx
+	indexTags := idx.AllTags()
+	ordinalMap := make(val.OrdinalMapping, len(indexTags))
+	for i, pk := range indexTags {
+		ordinalMap[i] = schemaTags[pk]
+	}
+	return ordinalMap
+}
 
 type indexImpl struct {
 	name             string
