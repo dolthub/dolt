@@ -164,10 +164,8 @@ var NonlocalScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "show tables",
-				// aliased_table was untracked on main and is carried to other by the checkout.
-				// table_alias_1, table_alias_2, and table_alias_wild_3 come from the nonlocal entries.
-				Expected: []sql.Row{{"aliased_table"}, {"table_alias_1"}, {"table_alias_2"}, {"table_alias_wild_3"}},
+				Query:    "show tables",
+				Expected: []sql.Row{{"table_alias_1"}, {"table_alias_2"}, {"table_alias_wild_3"}},
 			},
 		},
 	},

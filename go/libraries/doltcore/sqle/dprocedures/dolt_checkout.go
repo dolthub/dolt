@@ -549,56 +549,21 @@ func checkoutExistingBranch(
 			return err
 		}
 
-		var currentRoots doltdb.Roots
-		var hasCurrentRoots bool
-		currentRoots, hasCurrentRoots = dSess.GetRoots(ctx, dbName)
-
-		if hasCurrentRoots {
-			branchHead, err := actions.BranchHeadRoot(ctx, ddb, branchName)
-			if err != nil {
-				return err
-			}
-
-			if !overwriteIgnore {
+		if !overwriteIgnore {
+			if currentRoots, hasRoots := dSess.GetRoots(ctx, dbName); hasRoots {
+				branchHead, err := actions.BranchHeadRoot(ctx, ddb, branchName)
+				if err != nil {
+					return err
+				}
 				if err := actions.CheckOverwrittenIgnoredTables(ctx, currentRoots, branchHead, overwriteIgnore); err != nil {
 					return err
 				}
-			}
-
-			// Not gated on overwriteIgnore because --overwrite-ignore covers only the dolt_ignore check above and not uncommitted table clobbering.
-			if err := actions.CheckUncommittedConflicts(ctx, currentRoots, branchHead); err != nil {
-				return err
 			}
 		}
 
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
 		if err != nil {
 			return err
-		}
-
-		if hasCurrentRoots {
-			// Use the base name because dbName may include a revision qualifier that WorkingSet does not accept after SwitchWorkingSet.
-			baseName, _ := doltdb.SplitRevisionDbName(dbName)
-			ws, err := dSess.WorkingSet(ctx, baseName)
-			if err != nil {
-				return err
-			}
-			// Carry tables not in the pre-checkout HEAD to the new branch. The staged root is carried
-			// separately so staged tables keep their staged status.
-			newWorking, err := actions.CarryUncommittedTables(ctx, currentRoots.Working, currentRoots.Head, ws.WorkingRoot())
-			if err != nil {
-				return err
-			}
-			newStaged, err := actions.CarryUncommittedTables(ctx, currentRoots.Staged, currentRoots.Head, ws.StagedRoot())
-			if err != nil {
-				return err
-			}
-			// CarryUncommittedTables returns its target argument unchanged when nothing is carried, so pointer equality detects a no-op.
-			if newWorking != ws.WorkingRoot() || newStaged != ws.StagedRoot() {
-				if err = dSess.SetWorkingSet(ctx, baseName, ws.WithWorkingRoot(newWorking).WithStagedRoot(newStaged)); err != nil {
-					return err
-				}
-			}
 		}
 	}
 
