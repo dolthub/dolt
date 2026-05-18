@@ -7,6 +7,8 @@ bazel_dep(name = "gazelle", version = "0.51.0")
 bazel_dep(name = "rules_shell", version = "0.8.0")
 bazel_dep(name = "protobuf", version = "34.1")
 
+bazel_dep(name = "rules_android", version = "0.7.2")
+
 bazel_dep(name = "bazelrc-preset.bzl", version = "1.9.2", dev_dependency = True)
 
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
