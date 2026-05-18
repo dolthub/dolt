@@ -115,18 +115,30 @@ func GetTablesForError(err error) []doltdb.TableName {
 	return te.tables
 }
 
+// ErrCheckoutWouldOverwrite reports the conflicting tables a checkout would overwrite.
+// |LocalChangeTables| lists tables with tracked or staged changes the user can commit or stash.
+// |UntrackedTables| lists tables present only in the working set the user must move or remove.
 type ErrCheckoutWouldOverwrite struct {
-	tables []string
+	LocalChangeTables []string
+	UntrackedTables   []string
 }
 
 func (cwo ErrCheckoutWouldOverwrite) Error() string {
 	var buffer bytes.Buffer
-	buffer.WriteString("Your local changes to the following tables would be overwritten by checkout:\n")
-	for _, tbl := range cwo.tables {
-		buffer.WriteString("\t" + tbl + "\n")
+	if len(cwo.LocalChangeTables) > 0 {
+		buffer.WriteString("Your local changes to the following tables would be overwritten by checkout:\n")
+		for _, tbl := range cwo.LocalChangeTables {
+			buffer.WriteString("\t" + tbl + "\n")
+		}
+		buffer.WriteString("Please commit your changes or stash them before you switch branches.\n")
 	}
-
-	buffer.WriteString("Please commit your changes or stash them before you switch branches.\n")
+	if len(cwo.UntrackedTables) > 0 {
+		buffer.WriteString("The following untracked tables would be overwritten by checkout:\n")
+		for _, tbl := range cwo.UntrackedTables {
+			buffer.WriteString("\t" + tbl + "\n")
+		}
+		buffer.WriteString("Please move or remove them before you switch branches.\n")
+	}
 	buffer.WriteString("Aborting")
 	return buffer.String()
 }
@@ -134,16 +146,6 @@ func (cwo ErrCheckoutWouldOverwrite) Error() string {
 func IsCheckoutWouldOverwrite(err error) bool {
 	_, ok := err.(ErrCheckoutWouldOverwrite)
 	return ok
-}
-
-func CheckoutWouldOverwriteTables(err error) []string {
-	cwo, ok := err.(ErrCheckoutWouldOverwrite)
-
-	if !ok {
-		panic("Must validate with IsCheckoutWouldOverwrite before calling CheckoutWouldOverwriteTables")
-	}
-
-	return cwo.tables
 }
 
 var ErrCheckoutWouldOverwriteIgnoredTables = goerrors.NewKind(

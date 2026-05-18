@@ -334,7 +334,7 @@ func updateRootWithNewColumnTag(ctx context.Context, root doltdb.RootValue, tabl
 	}
 
 	// Update the column tag in the schema
-	updatedSchema, err := updateColumnTag(sch, columnName, tag)
+	updatedSchema, err := schema.WithUpdatedColumnTag(sch, columnName, tag)
 	if err != nil {
 		return nil, err
 	}

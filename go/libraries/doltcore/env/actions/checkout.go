@@ -16,6 +16,8 @@ package actions
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -119,8 +121,64 @@ func FindTableInRoots(ctx *sql.Context, roots doltdb.Roots, name string) (doltdb
 	return doltdb.TableName{}, nil, false, nil
 }
 
-// RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
-// returned roots struct has |Head| set to |branchRoot|.
+// CheckoutWouldOverwriteUncommittedTables returns ErrCheckoutWouldOverwrite when any table
+// in |roots.Working| but absent from |roots.Head| differs from the committed version on
+// |targetRoot|. Tables also present in |roots.Staged| are reported as local changes, while
+// tables only in |roots.Working| are reported as untracked.
+func CheckoutWouldOverwriteUncommittedTables(ctx context.Context, roots doltdb.Roots, targetRoot doltdb.RootValue) error {
+	workingNames, err := roots.Working.GetAllTableNames(ctx, false)
+	if err != nil {
+		return err
+	}
+	headNames, err := roots.Head.GetAllTableNames(ctx, false)
+	if err != nil {
+		return err
+	}
+	stagedNames, err := roots.Staged.GetAllTableNames(ctx, false)
+	if err != nil {
+		return err
+	}
+	headNamesSet := doltdb.NewTableNameSet(headNames)
+	stagedNamesSet := doltdb.NewTableNameSet(stagedNames)
+
+	var localChange, untracked []string
+	for _, name := range workingNames {
+		if headNamesSet.Contains(name) || doltdb.IsSystemTable(name) {
+			continue
+		}
+		targetHash, _, err := targetRoot.GetTableHash(ctx, name)
+		if err != nil {
+			return err
+		}
+		if targetHash.IsEmpty() {
+			continue
+		}
+		workingHash, _, err := roots.Working.GetTableHash(ctx, name)
+		if err != nil {
+			return err
+		}
+		if workingHash == targetHash {
+			continue
+		}
+		if stagedNamesSet.Contains(name) {
+			localChange = append(localChange, name.Name)
+		} else {
+			untracked = append(untracked, name.Name)
+		}
+	}
+
+	if len(localChange) > 0 || len(untracked) > 0 {
+		slices.Sort(localChange)
+		slices.Sort(untracked)
+		return ErrCheckoutWouldOverwrite{LocalChangeTables: localChange, UntrackedTables: untracked}
+	}
+	return nil
+}
+
+// RootsForBranch returns the roots for checking out a branch whose head is |branchRoot|.
+// |roots.Head| must be the pre-checkout head. Uncommitted tables, those present in working
+// or staged but absent from the old head, are moved into the new root via
+// [CarryUncommittedTables] so any column tag collisions are resolved.
 func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := doltdb.NewTableNameSet(nil)
 	if roots.Head == nil {
@@ -130,26 +188,38 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		return roots, nil
 	}
 
-	wrkTblHashes, err := moveModifiedTables(ctx, roots.Head, branchRoot, roots.Working, conflicts, force)
+	if !force {
+		if err := CheckoutWouldOverwriteUncommittedTables(ctx, roots, branchRoot); err != nil {
+			return doltdb.Roots{}, err
+		}
+	}
+	// |force| skips the conflict check. The carry step below drops source tables whose name
+	// already exists on the destination so the destination version wins.
+
+	// Snapshot the pre-checkout roots before the three-way merge below reassigns roots.Working
+	// and roots.Staged so the carry step still sees the original values.
+	preCheckout := roots
+
+	wrkTblHashes, err := threeWayMergeTableHashes(ctx, roots.Head, branchRoot, roots.Working, conflicts, force)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	stgTblHashes, err := moveModifiedTables(ctx, roots.Head, branchRoot, roots.Staged, conflicts, force)
+	stgTblHashes, err := threeWayMergeTableHashes(ctx, roots.Head, branchRoot, roots.Staged, conflicts, force)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
 	if conflicts.Size() > 0 {
-		return doltdb.Roots{}, ErrCheckoutWouldOverwrite{conflicts.AsStringSlice()}
+		return doltdb.Roots{}, ErrCheckoutWouldOverwrite{LocalChangeTables: conflicts.AsStringSlice()}
 	}
 
-	workingForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Working, force)
+	workingForeignKeys, err := threeWayMergeForeignKeys(ctx, roots.Head, branchRoot, roots.Working, force)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	stagedForeignKeys, err := moveForeignKeys(ctx, roots.Head, branchRoot, roots.Staged, force)
+	stagedForeignKeys, err := threeWayMergeForeignKeys(ctx, roots.Head, branchRoot, roots.Staged, force)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -164,6 +234,7 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		return doltdb.Roots{}, err
 	}
 
+	// Put the merged collections first so CarryUncommittedTables layers untracked keys on top.
 	roots.Working, err = roots.Working.PutForeignKeyCollection(ctx, workingForeignKeys)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -174,11 +245,23 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		return doltdb.Roots{}, err
 	}
 
+	// Ignored tables stay on the source branch because dolt_ignore is branch-scoped.
+	roots.Working, err = CarryUncommittedTables(ctx, preCheckout.Working, preCheckout.Head, roots.Working, ExcludeIgnored)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	roots.Staged, err = CarryUncommittedTables(ctx, preCheckout.Staged, preCheckout.Head, roots.Staged, ExcludeIgnored)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
 	roots.Head = branchRoot
 	return roots, nil
 }
 
-// CleanOldWorkingSet resets the source branch's working set to the branch head, leaving the source branch unchanged
+// CleanOldWorkingSet resets the source branch's working set to its head so uncommitted
+// changes do not remain after a checkout has moved them onto the destination branch.
 func CleanOldWorkingSet(
 	ctx *sql.Context,
 	dbData env.DbData[*sql.Context],
@@ -216,8 +299,9 @@ func CleanOldWorkingSet(
 		Staged:  workingSet.StagedRoot(),
 	}
 
-	// we also have to do a clean, because we the ResetHard won't touch any new tables (tables only in the working set)
-	newRoots, err := CleanUntracked(ctx, resetRoots, []string{}, false, true, false)
+	// we also have to do a clean, because we the ResetHard won't touch any new tables (tables only in the working set).
+	// Respect ignore rules so dolt_ignore-matched tables stay on the source branch per the documented policy.
+	newRoots, err := CleanUntracked(ctx, resetRoots, []string{}, false, true, true)
 	if err != nil {
 		return err
 	}
@@ -271,11 +355,12 @@ func BranchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (dolt
 	return branchRoot, nil
 }
 
-// moveModifiedTables handles working set changes during a branch change.
-// When moving between branches, changes in the working set should travel with you.
-// Working set changes cannot be moved if the table differs between the old and new head,
-// in this case, we throw a conflict and error (as per Git).
-func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltdb.RootValue, conflicts *doltdb.TableNameSet, force bool) (map[doltdb.TableName]hash.Hash, error) {
+// threeWayMergeTableHashes performs a 3-way merge of per-table hashes across |oldRoot|,
+// |newRoot|, and |changedRoot|. Each table picks the side that changed against |oldRoot|, or
+// |newRoot| when |force| is true. Tables changed on both sides go into |conflicts| so the
+// caller can surface ErrCheckoutWouldOverwrite. Uncommitted tables are skipped here and
+// handled by [CarryUncommittedTables].
+func threeWayMergeTableHashes(ctx context.Context, oldRoot, newRoot, changedRoot doltdb.RootValue, conflicts *doltdb.TableNameSet, force bool) (map[doltdb.TableName]hash.Hash, error) {
 	resultMap := make(map[doltdb.TableName]hash.Hash)
 	tblNames, err := doltdb.UnionTableNames(ctx, newRoot)
 	if err != nil {
@@ -326,8 +411,12 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltd
 				return nil, err
 			}
 
+			// Skip uncommitted tables here so CarryUncommittedTables can pick them up after
+			// the merged tracked state lands on the destination. Carry needs that final state
+			// to detect column tag collisions and to rewrite foreign key references against
+			// the destination's parent schemas.
 			if oldHash == emptyHash {
-				resultMap[tblName] = changedHash
+				continue
 			} else if force {
 				resultMap[tblName] = oldHash
 			} else if oldHash != changedHash {
@@ -388,8 +477,10 @@ func CheckOverwrittenIgnoredTables(ctx context.Context, roots doltdb.Roots, bran
 	return nil
 }
 
-// moveForeignKeys returns the foreign key collection that should be used for the new working set.
-func moveForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot doltdb.RootValue, force bool) (*doltdb.ForeignKeyCollection, error) {
+// threeWayMergeForeignKeys performs a 3-way merge of the foreign key collections from |oldRoot|,
+// |newRoot|, and |changedRoot|. If one side did not change the collection it returns the other,
+// and otherwise delegates to [mergeForeignKeyChanges] to merge changes from both sides.
+func threeWayMergeForeignKeys(ctx context.Context, oldRoot, newRoot, changedRoot doltdb.RootValue, force bool) (*doltdb.ForeignKeyCollection, error) {
 	oldFks, err := oldRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -511,7 +602,7 @@ func mergeForeignKeyChanges(
 	}
 
 	if conflicts.Size() > 0 {
-		return nil, ErrCheckoutWouldOverwrite{conflicts.AsStringSlice()}
+		return nil, ErrCheckoutWouldOverwrite{LocalChangeTables: conflicts.AsStringSlice()}
 	}
 
 	fks := make([]doltdb.ForeignKey, 0)
@@ -556,47 +647,96 @@ func writeTableHashes(ctx context.Context, head doltdb.RootValue, tblHashes map[
 	return head, nil
 }
 
-// CheckoutWouldStompWorkingSetChanges checks that the current working set is "compatible" with the dest working set.
-// This means that if both working sets are present (ie there are changes on both source and dest branches),
-// we check if the changes are identical before allowing a clobbering checkout.
-// Working set errors are ignored by this function, because they are properly handled elsewhere.
-func CheckoutWouldStompWorkingSetChanges(ctx context.Context, sourceRoots, destRoots doltdb.Roots) (bool, error) {
-
-	wouldStomp := doRootsHaveIncompatibleChanges(sourceRoots, destRoots)
-
-	if !wouldStomp {
-		return false, nil
-	}
-
-	// In some cases, a working set differs from its head only by the feature version.
-	// If this is the case, moving the working set is safe.
-	modifiedSourceRoots, err := ClearFeatureVersion(ctx, sourceRoots)
+// CheckoutWouldOverwriteWorkingSetChanges reports whether a checkout would overwrite
+// uncommitted changes on the destination. System and dolt_ignore-matched tables are excluded.
+func CheckoutWouldOverwriteWorkingSetChanges(ctx context.Context, sourceRoots, destRoots doltdb.Roots) (bool, error) {
+	srcTracked, err := buildTrackedPredicate(ctx, sourceRoots.Working)
 	if err != nil {
-		return true, err
+		return false, err
 	}
-
-	modifiedDestRoots, err := ClearFeatureVersion(ctx, destRoots)
+	sourceHas, err := rootsHaveTrackedChanges(ctx, sourceRoots, srcTracked)
+	if err != nil || !sourceHas {
+		return false, err
+	}
+	destTracked, err := buildTrackedPredicate(ctx, destRoots.Working)
 	if err != nil {
-		return true, err
+		return false, err
 	}
-
-	return doRootsHaveIncompatibleChanges(modifiedSourceRoots, modifiedDestRoots), nil
+	return rootsHaveTrackedChanges(ctx, destRoots, destTracked)
 }
 
-func doRootsHaveIncompatibleChanges(sourceRoots, destRoots doltdb.Roots) bool {
-	sourceHasChanges, sourceWorkingHash, sourceStagedHash, err := RootHasUncommittedChanges(sourceRoots)
+// buildTrackedPredicate returns a closure that reports whether a table is tracked for the
+// purpose of detecting uncommitted-change conflicts. The closure returns false for system
+// tables and for tables matched by a dolt_ignore pattern on |root|. Patterns are read once so
+// callers can reuse the closure across multiple roots.
+func buildTrackedPredicate(ctx context.Context, root doltdb.RootValue) (func(doltdb.TableName) (bool, error), error) {
+	names, err := root.GetAllTableNames(ctx, false)
 	if err != nil {
-		return false
+		return nil, err
 	}
-
-	destHasChanges, destWorkingHash, destStagedHash, err := RootHasUncommittedChanges(destRoots)
+	schemas := doltdb.GetUniqueSchemaNamesFromTableNames(names)
+	patternsBySchema, err := doltdb.GetIgnoredTablePatterns(ctx, doltdb.Roots{Working: root, Staged: root, Head: root}, schemas)
 	if err != nil {
-		return false
+		return nil, err
 	}
+	return func(n doltdb.TableName) (bool, error) {
+		if doltdb.IsSystemTable(n) {
+			return false, nil
+		}
+		patterns := patternsBySchema[n.Schema]
+		result, ignoreErr := patterns.IsTableNameIgnored(n)
+		if doltdb.AsDoltIgnoreInConflict(ignoreErr) != nil {
+			return true, nil
+		}
+		if ignoreErr != nil {
+			return false, ignoreErr
+		}
+		return result != doltdb.Ignore, nil
+	}, nil
+}
 
-	// This is a stomping checkout operation if both the source and dest have uncommitted changes, and they're not the
-	// same uncommitted changes
-	return sourceHasChanges && destHasChanges && (sourceWorkingHash != destWorkingHash || sourceStagedHash != destStagedHash)
+// rootsHaveTrackedChanges reports whether |roots| have uncommitted changes on any table that
+// |isTracked| accepts. Working differing from head, or staged differing from head, on at least
+// one tracked table returns true.
+func rootsHaveTrackedChanges(ctx context.Context, roots doltdb.Roots, isTracked func(doltdb.TableName) (bool, error)) (bool, error) {
+	hashes := func(root doltdb.RootValue) (map[doltdb.TableName]hash.Hash, error) {
+		names, err := root.GetAllTableNames(ctx, false)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[doltdb.TableName]hash.Hash, len(names))
+		for _, n := range names {
+			tracked, err := isTracked(n)
+			if err != nil {
+				return nil, err
+			}
+			if !tracked {
+				continue
+			}
+			h, _, err := root.GetTableHash(ctx, n)
+			if err != nil {
+				return nil, err
+			}
+			out[n] = h
+		}
+		return out, nil
+	}
+	working, err := hashes(roots.Working)
+	if err != nil {
+		return false, err
+	}
+	head, err := hashes(roots.Head)
+	if err != nil {
+		return false, err
+	}
+	if !maps.Equal(working, head) {
+		return true, nil
+	}
+	staged, err := hashes(roots.Staged)
+	if err != nil {
+		return false, err
+	}
+	return !maps.Equal(staged, head), nil
 }
 
 // ClearFeatureVersion creates a new version of the provided roots where all three roots have the same
