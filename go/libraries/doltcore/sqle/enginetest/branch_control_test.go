@@ -2592,3 +2592,81 @@ func TestBranchControlBlocks(t *testing.T) {
 		})
 	}
 }
+
+// TestInformationSchemaDoesNotBypassBranchControl is a regression
+// test for a cache pollution bug where a SELECT against
+// information_schema in a fresh user session would let the next write
+// in that session bypass branch_control.
+//
+// The root cause was that a select against information_Schema.columns
+// or tables would DoltDatabaseProvider.AllDatabases and would
+// populate the session cache with sqle.DoltTable instances that
+// embedded the wrong Database instance (non revision-scoped). This
+// was fixed by rebinding Table values to the correct Database
+// instance anytime we pull them out of the cache.
+//
+// The setup must run in a separate session from the writer's session
+// so that the table cache is genuinely cold when the writer queries
+// information_schema. Otherwise the SetUpScript's CREATE TABLE warms
+// the cache with the revisioned db and the pollution path is never
+// exercised.  TestBranchControl shares a session between setup and
+// assertions, so this test doesn't fit that harness.
+func TestInformationSchemaDoesNotBypassBranchControl(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+
+	engine, err := harness.NewEngine(t)
+	require.NoError(t, err)
+	defer engine.Close()
+
+	rootCtx := enginetest.NewContext(harness)
+	rootCtx.WithClient(sql.Client{User: "root", Address: "localhost"})
+	engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+	engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+
+	setup := []string{
+		"DELETE FROM dolt_branch_control WHERE user = '%';",
+		"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+		"CREATE USER testuser@localhost;",
+		"GRANT SELECT, INSERT, UPDATE, DELETE ON *.* TO testuser@localhost;",
+		"CREATE TABLE vals (id INT PRIMARY KEY, val INT);",
+	}
+	for _, q := range setup {
+		enginetest.RunQueryWithContext(t, engine, harness, rootCtx, q)
+	}
+
+	// Cases differ only in which information_schema table primes the cache;
+	// both produce the same un-revisioned WritableDoltTable for `vals` in
+	// the session cache. Each case gets its own fresh writer session so
+	// nothing pre-warms the cache with a revisioned db.
+	cases := []struct {
+		name      string
+		readQuery string
+	}{
+		{"information_schema.columns", "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'mydb' AND table_name = 'vals';"},
+		{"information_schema.tables", "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'mydb' AND table_name = 'vals';"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			userCtx := enginetest.NewContextWithClient(harness, sql.Client{
+				User:    "testuser",
+				Address: "localhost",
+			})
+
+			// Read first to make the cache pollution happen.
+			_, iter, _, err := engine.Query(userCtx, c.readQuery)
+			require.NoError(t, err)
+			_, err = sql.RowIterToRows(userCtx, iter)
+			require.NoError(t, err)
+
+			// Pre-fix the first write silently succeeded.
+			enginetest.AssertErrWithCtx(t, engine, harness, userCtx,
+				"INSERT INTO vals VALUES (1, 1);", nil, branch_control.ErrIncorrectPermissions)
+			// Control: the second write at the (now-changed) root would
+			// have been caught even pre-fix. Asserting it pins behavior
+			// against future regressions that flip the polarity.
+			enginetest.AssertErrWithCtx(t, engine, harness, userCtx,
+				"INSERT INTO vals VALUES (2, 2);", nil, branch_control.ErrIncorrectPermissions)
+		})
+	}
+}
