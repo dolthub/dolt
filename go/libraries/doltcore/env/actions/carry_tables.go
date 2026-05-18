@@ -23,18 +23,35 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// CarryUncommittedTables copies tables that are in |src| but not in |baseline| into |dest|,
-// resolving column tag collisions, and carries forward the foreign key entries for those tables
-// from |src| into |dest|'s FK collection. Tables already present in |dest| are kept unchanged.
-// Callers choose |baseline| to control what counts as "untracked": pass the staged root for
-// true untracked semantics or the head root to also include staged-but-uncommitted tables.
-func CarryUncommittedTables(ctx context.Context, src, baseline, dest doltdb.RootValue) (doltdb.RootValue, error) {
-	untracked, err := uncommittedSchemas(ctx, src, baseline)
+// CarryPolicy selects which uncommitted tables CarryUncommittedTables copies.
+type CarryPolicy int
+
+const (
+	// CarryAll carries every uncommitted table including those matched by dolt_ignore.
+	CarryAll CarryPolicy = iota
+	// ExcludeIgnored skips tables matched by the source's dolt_ignore patterns.
+	ExcludeIgnored
+)
+
+// CarryUncommittedTables copies tables present in |src| but not in |baseline| into |dest|,
+// resolving column tag collisions and carrying their foreign keys. Tables already on |dest|
+// are kept unchanged. |policy| filters which uncommitted tables are eligible; see CarryPolicy.
+func CarryUncommittedTables(ctx context.Context, src, baseline, dest doltdb.RootValue, policy CarryPolicy) (doltdb.RootValue, error) {
+	srcSchemas, err := doltdb.GetAllSchemas(ctx, src)
+	if err != nil {
+		return nil, err
+	}
+	destSchemas, err := doltdb.GetAllSchemas(ctx, dest)
 	if err != nil {
 		return nil, err
 	}
 
-	dest, carried, tagRemaps, err := carryTables(ctx, src, dest, untracked)
+	uncommitted, err := uncommittedTableSchemas(ctx, src, srcSchemas, baseline, policy)
+	if err != nil {
+		return nil, err
+	}
+
+	dest, carried, tagRemaps, err := carryTables(ctx, src, dest, uncommitted, destSchemas)
 	if err != nil {
 		return nil, err
 	}
@@ -43,56 +60,57 @@ func CarryUncommittedTables(ctx context.Context, src, baseline, dest doltdb.Root
 		return dest, nil
 	}
 
-	return carryForeignKeys(ctx, src, dest, carried, tagRemaps)
+	return carryForeignKeys(ctx, src, dest, carried, tagRemaps, srcSchemas, destSchemas)
 }
 
-// uncommittedSchemas returns the schemas of tables that are in |src| but not in |baseline|,
-// excluding system tables and tables that match a dolt_ignore pattern on |src|. System tables
-// hold per-branch configuration and ignored tables were never meant to be tracked, so neither
-// should cross branches during a carry.
-func uncommittedSchemas(ctx context.Context, src, baseline doltdb.RootValue) (map[doltdb.TableName]schema.Schema, error) {
-	untracked, err := doltdb.GetAllSchemas(ctx, src)
-	if err != nil {
-		return nil, err
-	}
+// uncommittedTableSchemas returns the subset of |srcSchemas| whose names are absent from
+// |baseline| and are not dolt system tables. When |policy| is ExcludeIgnored, names matched
+// by |src|'s dolt_ignore patterns are also removed. Pattern conflicts on |src| fall through
+// to the caller so CheckOverwrittenIgnoredTables can surface them.
+func uncommittedTableSchemas(ctx context.Context, src doltdb.RootValue, srcSchemas map[doltdb.TableName]schema.Schema, baseline doltdb.RootValue, policy CarryPolicy) (map[doltdb.TableName]schema.Schema, error) {
 	baselineNames, err := baseline.GetAllTableNames(ctx, false)
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range baselineNames {
-		delete(untracked, name)
-	}
-	for name := range untracked {
-		if doltdb.IsSystemTable(name) {
-			delete(untracked, name)
+	baselineSet := doltdb.NewTableNameSet(baselineNames)
+
+	var patternsBySchema map[string]doltdb.IgnorePatterns
+	if policy == ExcludeIgnored && len(srcSchemas) > 0 {
+		names := make([]doltdb.TableName, 0, len(srcSchemas))
+		for n := range srcSchemas {
+			names = append(names, n)
+		}
+		patternsBySchema, err = doltdb.GetIgnoredTablePatterns(ctx, doltdb.Roots{Working: src, Staged: src, Head: src}, doltdb.GetUniqueSchemaNamesFromTableNames(names))
+		if err != nil {
+			return nil, err
 		}
 	}
-	candidates := make([]doltdb.TableName, 0, len(untracked))
-	for name := range untracked {
-		candidates = append(candidates, name)
+
+	uncommitted := make(map[doltdb.TableName]schema.Schema, len(srcSchemas))
+	for name, sch := range srcSchemas {
+		if baselineSet.Contains(name) || doltdb.IsSystemTable(name) {
+			continue
+		}
+		if patternsBySchema != nil {
+			patterns := patternsBySchema[name.Schema]
+			result, ignoreErr := patterns.IsTableNameIgnored(name)
+			if doltdb.AsDoltIgnoreInConflict(ignoreErr) == nil && ignoreErr != nil {
+				return nil, ignoreErr
+			}
+			if result == doltdb.Ignore {
+				continue
+			}
+		}
+		uncommitted[name] = sch
 	}
-	kept, err := doltdb.ExcludeIgnoredTables(ctx, doltdb.Roots{Working: src, Staged: src, Head: src}, candidates)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[doltdb.TableName]schema.Schema, len(kept))
-	for _, name := range kept {
-		result[name] = untracked[name]
-	}
-	return result, nil
+	return uncommitted, nil
 }
 
 // carryTables copies each entry of |toCarry| from |src| into |dest|, retagging columns whose
-// tag collides with one already in |dest| or with one assigned to an earlier carried table.
-// Tables whose name already exists in |dest| are skipped so the dest version wins. Returns
-// the updated |dest|, the names that were carried, and the tag remaps applied per table for
-// downstream FK fixup.
-func carryTables(ctx context.Context, src, dest doltdb.RootValue, toCarry map[doltdb.TableName]schema.Schema) (doltdb.RootValue, []doltdb.TableName, map[doltdb.TableName]map[uint64]uint64, error) {
-	destSchemas, err := doltdb.GetAllSchemas(ctx, dest)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
+// tag collides with one held by |dest| or by an earlier carried table. Names already on |dest|
+// are skipped so the dest version wins. Returns the updated |dest|, the names that were
+// carried, and the per-table tag remaps so the caller can fix up foreign keys.
+func carryTables(ctx context.Context, src, dest doltdb.RootValue, toCarry map[doltdb.TableName]schema.Schema, destSchemas map[doltdb.TableName]schema.Schema) (doltdb.RootValue, []doltdb.TableName, map[doltdb.TableName]map[uint64]uint64, error) {
 	heldTags := make(schema.TagMapping)
 	for tblName, tblSch := range destSchemas {
 		for _, t := range tblSch.GetAllCols().Tags {
@@ -111,7 +129,7 @@ func carryTables(ctx context.Context, src, dest doltdb.RootValue, toCarry map[do
 			return nil, nil, nil, err
 		}
 		if !exists {
-			return nil, nil, nil, fmt.Errorf("table %s does not exist in src root", name)
+			return nil, nil, nil, fmt.Errorf("table %q does not exist in src root", name)
 		}
 		columns := sch.GetAllCols().GetColumns()
 		tagRemap := make(map[uint64]uint64)
@@ -138,7 +156,7 @@ func carryTables(ctx context.Context, src, dest doltdb.RootValue, toCarry map[do
 		}
 		dest, err = dest.PutTable(ctx, name, tbl)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to write table back to database: %w", err)
+			return nil, nil, nil, err
 		}
 		carried = append(carried, name)
 	}
@@ -146,13 +164,12 @@ func carryTables(ctx context.Context, src, dest doltdb.RootValue, toCarry map[do
 }
 
 // carryForeignKeys copies foreign keys from |src| whose child table is in |carried| into
-// |dest|'s FK collection, applies |tagRemaps| so retagged column references are updated, and
-// returns the updated |dest|. Foreign keys already present in |dest| (e.g. pre-merged by an
-// upstream step) are skipped to avoid ErrForeignKeyDuplicateName. When a carried foreign key
-// references a parent table that already exists on |dest|, the referenced column tags are
-// re-resolved against |dest|'s parent schema by column name so the foreign key remains valid
-// even when the same parent column has a different internal tag on |src| and |dest|.
-func carryForeignKeys(ctx context.Context, src, dest doltdb.RootValue, carried []doltdb.TableName, tagRemaps map[doltdb.TableName]map[uint64]uint64) (doltdb.RootValue, error) {
+// |dest|'s FK collection and applies |tagRemaps| so retagged child columns stay consistent.
+// Keys already present on |dest| are skipped so a pre-merged FK is not duplicated. When a
+// carried key references a parent that already lives on |dest|, the referenced column tags
+// are re-resolved by column name against |destSchemas| so the same column can carry a
+// different internal tag on each branch and the foreign key stays valid.
+func carryForeignKeys(ctx context.Context, src, dest doltdb.RootValue, carried []doltdb.TableName, tagRemaps map[doltdb.TableName]map[uint64]uint64, srcSchemas, destSchemas map[doltdb.TableName]schema.Schema) (doltdb.RootValue, error) {
 	destFks, err := dest.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -161,27 +178,19 @@ func carryForeignKeys(ctx context.Context, src, dest doltdb.RootValue, carried [
 	if err != nil {
 		return nil, err
 	}
-	srcSchs, err := doltdb.GetAllSchemas(ctx, src)
-	if err != nil {
-		return nil, err
-	}
-	destSchs, err := doltdb.GetAllSchemas(ctx, dest)
-	if err != nil {
-		return nil, err
-	}
 	carriedSet := doltdb.NewTableNameSet(carried)
 	err = srcFks.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
 		if !carriedSet.Contains(fk.TableName) {
 			return false, nil
 		}
-		if _, exists := destFks.GetByNameCaseInsensitive(fk.Name, fk.TableName); exists {
+		if destFks.Contains(fk.Name, fk.TableName) {
 			return false, nil
 		}
 		fk.TableColumns = schema.RemapTags(fk.TableColumns, tagRemaps[fk.TableName])
 		if carriedSet.Contains(fk.ReferencedTableName) {
 			fk.ReferencedTableColumns = schema.RemapTags(fk.ReferencedTableColumns, tagRemaps[fk.ReferencedTableName])
 		} else {
-			fk.ReferencedTableColumns = remapTagsByColumnName(fk.ReferencedTableColumns, srcSchs[fk.ReferencedTableName], destSchs[fk.ReferencedTableName])
+			fk.ReferencedTableColumns = schema.RemapTagsByColumnName(fk.ReferencedTableColumns, srcSchemas[fk.ReferencedTableName], destSchemas[fk.ReferencedTableName])
 		}
 		return false, destFks.AddKeys(fk)
 	})
@@ -189,27 +198,4 @@ func carryForeignKeys(ctx context.Context, src, dest doltdb.RootValue, carried [
 		return nil, err
 	}
 	return dest.PutForeignKeyCollection(ctx, destFks)
-}
-
-// remapTagsByColumnName returns |tags| rewritten so each tag points at the same-named column
-// on |destSch| instead of |srcSch|. When either schema is nil or any tag cannot be
-// resolved on both sides, the original |tags| are returned so the caller can proceed and let
-// downstream validation surface any genuine breakage.
-func remapTagsByColumnName(tags []uint64, srcSch, destSch schema.Schema) []uint64 {
-	if srcSch == nil || destSch == nil {
-		return tags
-	}
-	out := make([]uint64, len(tags))
-	for i, srcTag := range tags {
-		srcCol, ok := srcSch.GetAllCols().GetByTag(srcTag)
-		if !ok {
-			return tags
-		}
-		destCol, ok := destSch.GetAllCols().GetByName(srcCol.Name)
-		if !ok {
-			return tags
-		}
-		out[i] = destCol.Tag
-	}
-	return out
 }

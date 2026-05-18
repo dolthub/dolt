@@ -63,7 +63,7 @@ func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr str
 		}
 	}
 
-	newWorking, err := CarryUncommittedTables(ctx, roots.Working, roots.Staged, roots.Head)
+	newWorking, err := CarryUncommittedTables(ctx, roots.Working, roots.Staged, roots.Head, CarryAll)
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}
