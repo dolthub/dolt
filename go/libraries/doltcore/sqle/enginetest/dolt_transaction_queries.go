@@ -2445,6 +2445,208 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_checkout without --move is session-local across every uncommitted-state variant",
+		SetUpScript: []string{
+			"create table tracked_tbl (x int primary key)",
+			"insert into tracked_tbl values (0)",
+			"call dolt_commit('-Am', 'add tracked_tbl with row 0')",
+			"call dolt_branch('feat')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "/* client b */ select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "/* client a */ create table untracked_tbl (x int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into untracked_tbl values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ create table staged_tbl (x int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into staged_tbl values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ call dolt_add('staged_tbl')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ insert into tracked_tbl values (3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_checkout('feat')",
+				Expected: []sql.Row{{0, "Switched to branch 'feat'"}},
+			},
+			{
+				Query:    "/* client b */ select active_branch()",
+				Expected: []sql.Row{{"feat"}},
+			},
+			{
+				Query: "/* client b */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'untracked_tbl'",
+				// The untracked variant stays on main because the no-carry contract
+				// applies to bare dolt_checkout without --move.
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "/* client b */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'staged_tbl'",
+				// The staged variant stays on main for the same reason.
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "/* client b */ select x from tracked_tbl order by x",
+				// tracked_tbl exists on both branches and feat sees only its own HEAD row,
+				// so the pending row A inserted on main does not appear.
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "/* client a */ select x from untracked_tbl",
+				// Client A is still on main and keeps full visibility into all three pending
+				// variants because B's checkout never touched main's working set.
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ select x from staged_tbl",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "/* client a */ select x from tracked_tbl order by x",
+				Expected: []sql.Row{{0}, {3}},
+			},
+			{
+				Query: "/* client b */ select x from `mydb/main`.untracked_tbl",
+				// The pending state was left behind on main rather than destroyed, so
+				// revision-qualified access from feat still reaches it.
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select x from `mydb/main`.staged_tbl",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "/* client b */ select x from `mydb/main`.tracked_tbl order by x",
+				Expected: []sql.Row{{0}, {3}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		// See https://docs.dolthub.com/sql-reference/version-control/branches for
+		// transaction-start snapshot semantics.
+		Name: "dolt_checkout without --move respects transaction-start snapshot semantics",
+		SetUpScript: []string{
+			"create table tracked_tbl (x int primary key)",
+			"call dolt_commit('-Am', 'add tracked_tbl')",
+			"call dolt_branch('feat')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Client B starts first so its snapshot is pinned before A makes any
+				// changes, which is the precondition the rest of the test exercises.
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ create table untracked_tbl (x int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into untracked_tbl values (42)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ call dolt_checkout('feat')",
+				Expected: []sql.Row{{0, "Switched to branch 'feat'"}},
+			},
+			{
+				Query: "/* client b */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'untracked_tbl'",
+				// B's snapshot pre-dates A's commit, and the no-carry contract means feat
+				// does not pick up A's untracked_tbl even inside an open transaction.
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client b */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'untracked_tbl'",
+				// A fresh transaction refreshes B's snapshot, and untracked_tbl still belongs
+				// to main rather than feat because the no-carry contract holds across sessions.
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "/* client b */ select x from `mydb/main`.untracked_tbl",
+				// Revision-qualified access from feat reaches main's state regardless of which
+				// branch the session is currently on.
+				Expected: []sql.Row{{42}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_checkout('--move') still carries uncommitted state for the calling client only",
+		SetUpScript: []string{
+			"create table tracked_tbl (x int primary key)",
+			"call dolt_commit('-Am', 'add tracked_tbl')",
+			"call dolt_branch('feat')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ create table moves_with_b (x int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ insert into moves_with_b values (7)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_checkout('--move', 'feat')",
+				Expected: []sql.Row{{0, "Switched to branch 'feat'"}},
+			},
+			{
+				Query: "/* client b */ select x from moves_with_b",
+				// The --move flag carried the untracked table onto feat together with B's
+				// pending row.
+				Expected: []sql.Row{{7}},
+			},
+			{
+				Query:    "/* client a */ select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query: "/* client a */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'moves_with_b'",
+				// --move cleaned main's working set on behalf of client B, so the carried
+				// table is no longer visible to client A on main.
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 var MultiDbTransactionTests = []queries.ScriptTest{
