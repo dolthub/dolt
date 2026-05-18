@@ -68,29 +68,25 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return err
 	}
 
+	initialRoots, hasRoots := dSess.GetRoots(ctx, dbName)
+	if !hasRoots {
+		return fmt.Errorf("unable to resolve roots for %s", dbName)
+	}
+
 	if !force {
-		currentRoots, hasRoots := dSess.GetRoots(ctx, dbName)
-		if !hasRoots {
-			return fmt.Errorf("unable to resolve roots for %s", dbName)
-		}
 		newBranchRoots, err := db.ResolveBranchRoots(ctx, branchRef)
 		if err != nil {
 			return err
 		}
 		if !isNewBranch {
-			wouldStomp, err := actions.CheckoutWouldStompWorkingSetChanges(ctx, currentRoots, newBranchRoots)
+			wouldOverwrite, err := actions.CheckoutWouldOverwriteWorkingSetChanges(ctx, initialRoots, newBranchRoots)
 			if err != nil {
 				return err
 			}
-			if wouldStomp {
+			if wouldOverwrite {
 				return actions.ErrWorkingSetsOnBothBranches
 			}
 		}
-	}
-
-	initialRoots, hasRoots := dSess.GetRoots(ctx, dbName)
-	if !hasRoots {
-		return fmt.Errorf("unable to get roots")
 	}
 
 	hasChanges := false
@@ -110,13 +106,9 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return err
 	}
 
-	if err := actions.CheckUncommittedConflicts(ctx, initialRoots, branchHead); err != nil {
-		return err
-	}
-
 	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
 	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
-	// checkoutWouldStompWorkingSetChanges
+	// CheckoutWouldOverwriteWorkingSetChanges.
 	if hasChanges {
 		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force)
 		if err != nil {

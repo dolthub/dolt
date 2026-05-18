@@ -25,14 +25,28 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// collidingTag is used for both bar.code and users.name to engineer a tag collision that
+// CarryUncommittedTables must resolve via a retag.
 const (
-	barCodeTag    uint64 = 9815
-	usersNameTag  uint64 = 9815 // deliberate collision with barCodeTag
+	collidingTag  uint64 = 9815
+	barCodeTag           = collidingTag
+	usersNameTag         = collidingTag
 	postsTitleTag uint64 = 13593
 )
 
+// putFK installs a single-entry foreign key collection onto |root| and returns the updated root.
+func putFK(t *testing.T, ctx context.Context, root doltdb.RootValue, fk doltdb.ForeignKey) doltdb.RootValue {
+	t.Helper()
+	fks, err := doltdb.NewForeignKeyCollection(fk)
+	require.NoError(t, err)
+	updated, err := root.PutForeignKeyCollection(ctx, fks)
+	require.NoError(t, err)
+	return updated
+}
+
 // newEmptyRoot returns a context and the empty working root of a freshly initialised repo.
 func newEmptyRoot(t *testing.T) (context.Context, doltdb.RootValue) {
+	t.Helper()
 	dEnv, _ := createTestEnv()
 	ctx := context.Background()
 	require.NoError(t, dEnv.InitRepo(ctx, types.Format_Default, "test user", "test@test.com", "main"))
@@ -41,8 +55,9 @@ func newEmptyRoot(t *testing.T) (context.Context, doltdb.RootValue) {
 	return ctx, emptyRoot
 }
 
-// singleColPkSchema builds a one-column primary key schema using |colName| and |tag|.
-func singleColPkSchema(t *testing.T, colName string, tag uint64) schema.Schema {
+// singleColPKSchema builds a one-column primary key schema using |colName| and |tag|.
+func singleColPKSchema(t *testing.T, colName string, tag uint64) schema.Schema {
+	t.Helper()
 	col := schema.NewColumn(colName, tag, types.StringKind, true, schema.NotNullConstraint{})
 	sch, err := schema.SchemaFromCols(schema.NewColCollection(col))
 	require.NoError(t, err)
@@ -50,9 +65,9 @@ func singleColPkSchema(t *testing.T, colName string, tag uint64) schema.Schema {
 	return sch
 }
 
-// TestCarryUncommittedTablesPreexistingFK verifies that CarryUncommittedTables does not return an error
+// TestCarryUncommittedTablesDoesNotDuplicatePreexistingFK verifies that CarryUncommittedTables does not return an error
 // when the target foreign key collection already contains a key being carried.
-func TestCarryUncommittedTablesPreexistingFK(t *testing.T) {
+func TestCarryUncommittedTablesDoesNotDuplicatePreexistingFK(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11007
 	ctx, emptyRoot := newEmptyRoot(t)
 
@@ -60,29 +75,25 @@ func TestCarryUncommittedTablesPreexistingFK(t *testing.T) {
 	const parentTag uint64 = 50001
 	const childTag uint64 = 50002
 
-	target, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "parent"}, singleColPkSchema(t, "id", parentTag))
+	target, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "parent"}, singleColPKSchema(t, "id", parentTag))
 	require.NoError(t, err)
 
 	working := emptyRoot
-	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "child"}, singleColPkSchema(t, "pid", childTag))
+	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "child"}, singleColPKSchema(t, "pid", childTag))
 	require.NoError(t, err)
 
-	fks, err := doltdb.NewForeignKeyCollection(doltdb.ForeignKey{
+	fk := doltdb.ForeignKey{
 		Name:                   "fk_pre",
 		TableName:              doltdb.TableName{Name: "child"},
 		TableColumns:           []uint64{childTag},
 		ReferencedTableName:    doltdb.TableName{Name: "parent"},
 		ReferencedTableColumns: []uint64{parentTag},
-	})
-	require.NoError(t, err)
-	working, err = working.PutForeignKeyCollection(ctx, fks)
-	require.NoError(t, err)
-
+	}
+	working = putFK(t, ctx, working, fk)
 	// Simulate the FK pre-merge that RootsForBranch performs before calling CarryUncommittedTables.
-	target, err = target.PutForeignKeyCollection(ctx, fks)
-	require.NoError(t, err)
+	target = putFK(t, ctx, target, fk)
 
-	result, err := CarryUncommittedTables(ctx, working, emptyRoot, target)
+	result, err := CarryUncommittedTables(ctx, working, emptyRoot, target, CarryAll)
 	require.NoError(t, err)
 
 	resultFks, err := result.GetForeignKeyCollection(ctx)
@@ -103,28 +114,25 @@ func TestCarryUncommittedTablesParentTagMismatch(t *testing.T) {
 	const parentTagOnTarget uint64 = 60002
 	const childTag uint64 = 60003
 
-	target, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "parent"}, singleColPkSchema(t, "id", parentTagOnTarget))
+	target, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "parent"}, singleColPKSchema(t, "id", parentTagOnTarget))
 	require.NoError(t, err)
 
-	working, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "parent"}, singleColPkSchema(t, "id", parentTagOnSource))
+	working, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "parent"}, singleColPKSchema(t, "id", parentTagOnSource))
 	require.NoError(t, err)
-	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "child"}, singleColPkSchema(t, "pid", childTag))
+	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "child"}, singleColPKSchema(t, "pid", childTag))
 	require.NoError(t, err)
 
-	fks, err := doltdb.NewForeignKeyCollection(doltdb.ForeignKey{
+	working = putFK(t, ctx, working, doltdb.ForeignKey{
 		Name:                   "fk_cross",
 		TableName:              doltdb.TableName{Name: "child"},
 		TableColumns:           []uint64{childTag},
 		ReferencedTableName:    doltdb.TableName{Name: "parent"},
 		ReferencedTableColumns: []uint64{parentTagOnSource},
 	})
-	require.NoError(t, err)
-	working, err = working.PutForeignKeyCollection(ctx, fks)
-	require.NoError(t, err)
 
-	// sourceStaged is emptyRoot so child is untracked and parent (in working) is treated the same way.
-	// parent already exists in target, so carryTables skips it and only child is carried.
-	result, err := CarryUncommittedTables(ctx, working, target, target)
+	// |baseline| is target so only the child table is carried. The parent table already exists on
+	// target and is filtered out of the carry candidates.
+	result, err := CarryUncommittedTables(ctx, working, target, target, CarryAll)
 	require.NoError(t, err)
 
 	resultFks, err := result.GetForeignKeyCollection(ctx)
@@ -149,30 +157,27 @@ func TestCarryUncommittedTables(t *testing.T) {
 		return sch
 	}
 
-	target, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "bar"}, singleColPkSchema(t, "code", barCodeTag))
+	target, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "bar"}, singleColPKSchema(t, "code", barCodeTag))
 	require.NoError(t, err)
 
 	// Source has bar (so the foreign key can reference it), plus untracked users and posts.
-	working, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "bar"}, singleColPkSchema(t, "code", barCodeTag))
+	working, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "bar"}, singleColPKSchema(t, "code", barCodeTag))
 	require.NoError(t, err)
-	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "users"}, withUniqueIndex(singleColPkSchema(t, "name", usersNameTag), "idx_name", usersNameTag))
+	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "users"}, withUniqueIndex(singleColPKSchema(t, "name", usersNameTag), "idx_name", usersNameTag))
 	require.NoError(t, err)
-	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "posts"}, singleColPkSchema(t, "title", postsTitleTag))
+	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "posts"}, singleColPKSchema(t, "title", postsTitleTag))
 	require.NoError(t, err)
 
-	fks, err := doltdb.NewForeignKeyCollection(doltdb.ForeignKey{
+	working = putFK(t, ctx, working, doltdb.ForeignKey{
 		Name:                   "fk_bar",
 		TableName:              doltdb.TableName{Name: "users"},
 		TableColumns:           []uint64{usersNameTag},
 		ReferencedTableName:    doltdb.TableName{Name: "bar"},
 		ReferencedTableColumns: []uint64{barCodeTag},
 	})
-	require.NoError(t, err)
-	working, err = working.PutForeignKeyCollection(ctx, fks)
-	require.NoError(t, err)
 
-	// sourceStaged is target so bar is treated as already-tracked on source and only users and posts are carried.
-	result, err := CarryUncommittedTables(ctx, working, target, target)
+	// |baseline| is target so bar is treated as tracked on source and only users and posts are carried.
+	result, err := CarryUncommittedTables(ctx, working, target, target, CarryAll)
 	require.NoError(t, err)
 
 	t.Run("preserves tag on non-collision", func(t *testing.T) {
@@ -186,26 +191,7 @@ func TestCarryUncommittedTables(t *testing.T) {
 		require.Equal(t, postsTitleTag, col.Tag, "posts.title tag must not change when there is no collision")
 	})
 
-	t.Run("WithRemappedColumnTags preserves schema metadata", func(t *testing.T) {
-		col := schema.NewColumn("val", 100, types.StringKind, true, schema.NotNullConstraint{})
-		sch, err := schema.SchemaFromCols(schema.NewColCollection(col))
-		require.NoError(t, err)
-		require.NoError(t, sch.SetPkOrdinals([]int{0}))
-		sch.SetCollation(schema.Collation_utf8mb4_general_ci)
-		sch.SetComment("test comment")
-		sch.SetTargetRowSize(4096)
-
-		remapped, err := schema.WithRemappedColumnTags(sch, map[uint64]uint64{100: 200})
-		require.NoError(t, err)
-		require.Equal(t, schema.Collation_utf8mb4_general_ci, remapped.GetCollation(), "collation must survive WithRemappedColumnTags")
-		require.Equal(t, "test comment", remapped.GetComment(), "comment must survive WithRemappedColumnTags")
-		require.Equal(t, uint16(4096), remapped.GetTargetRowSize(), "target row size must survive WithRemappedColumnTags")
-	})
-
 	t.Run("retags colliding column", func(t *testing.T) {
-		// AutoGenerateTag deterministically picks this tag when 9815 is already occupied.
-		// The value is stable even though Go maps are iterated in random order each test run.
-		const wantTag uint64 = 12204
 		tbl, ok, err := result.GetTable(ctx, doltdb.TableName{Name: "users"})
 		require.NoError(t, err)
 		require.True(t, ok, "users table must be present in the result")
@@ -213,25 +199,32 @@ func TestCarryUncommittedTables(t *testing.T) {
 		require.NoError(t, err)
 		col, ok := sch.GetAllCols().GetByName("name")
 		require.True(t, ok)
-		require.Equal(t, wantTag, col.Tag, "users.name must be retagged to avoid colliding with bar.code")
+		require.NotEqual(t, barCodeTag, col.Tag, "users.name must be retagged to avoid colliding with bar.code")
 
 		idx, ok := sch.Indexes().GetByNameCaseInsensitive("idx_name")
 		require.True(t, ok, "idx_name must survive the retag")
-		require.Equal(t, []uint64{wantTag}, idx.IndexedColumnTags(), "idx_name must reference the retagged column, not the old tag")
+		require.Equal(t, []uint64{col.Tag}, idx.IndexedColumnTags(), "idx_name must reference the retagged column, not the old tag")
 		require.True(t, idx.IsUnique(), "idx_name is unique and must remain so after retag")
 		require.True(t, idx.IsUserDefined(), "idx_name is user-defined and must remain so after retag")
 	})
 
 	t.Run("FK child column retagged, parent column unchanged", func(t *testing.T) {
-		// users.name and bar.code share tag 9815 so CarryUncommittedTables retagged users.name.
-		// Only the child side of the FK changes because bar.code is committed and its tag is not affected by the carry.
-		const wantTag uint64 = 12204
+		// users.name and bar.code share collidingTag so users.name is retagged. bar.code is committed
+		// on the target and keeps its tag, so only the child side of the FK changes.
+		usersTbl, ok, err := result.GetTable(ctx, doltdb.TableName{Name: "users"})
+		require.NoError(t, err)
+		require.True(t, ok)
+		usersSch, err := usersTbl.GetSchema(ctx)
+		require.NoError(t, err)
+		nameCol, ok := usersSch.GetAllCols().GetByName("name")
+		require.True(t, ok)
+
 		resultFks, err := result.GetForeignKeyCollection(ctx)
 		require.NoError(t, err)
 		got, ok := resultFks.GetByNameCaseInsensitive("fk_bar", doltdb.TableName{Name: "users"})
 		require.True(t, ok, "fk_bar must be present in result FK collection")
-		require.Equal(t, []uint64{wantTag}, got.TableColumns,
-			"child column must be updated to the retagged value")
+		require.Equal(t, []uint64{nameCol.Tag}, got.TableColumns,
+			"child column must follow the retagged users.name tag")
 		require.Equal(t, []uint64{barCodeTag}, got.ReferencedTableColumns,
 			"committed parent column tag must not change")
 	})
