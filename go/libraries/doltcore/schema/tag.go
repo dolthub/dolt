@@ -76,8 +76,8 @@ func (tm TagMapping) Size() int {
 	return len(tm)
 }
 
-// RemapTags returns |tags| with each entry replaced by |remap[t]| if present. Returns |tags|
-// unchanged when |remap| is empty.
+// RemapTags returns a new slice with each entry of |tags| replaced by its value in |remap|,
+// or kept unchanged when absent. The input is returned aliased when |remap| is empty.
 func RemapTags(tags []uint64, remap map[uint64]uint64) []uint64 {
 	if len(remap) == 0 {
 		return tags
@@ -89,6 +89,28 @@ func RemapTags(tags []uint64, remap map[uint64]uint64) []uint64 {
 		} else {
 			out[i] = t
 		}
+	}
+	return out
+}
+
+// RemapTagsByColumnName returns |tags| rewritten so each tag points at the same-named column
+// on |destSch| instead of |srcSch|. When either schema is nil or a tag cannot be resolved on
+// both sides, the original |tags| are returned unchanged.
+func RemapTagsByColumnName(tags []uint64, srcSch, destSch Schema) []uint64 {
+	if srcSch == nil || destSch == nil {
+		return tags
+	}
+	out := make([]uint64, len(tags))
+	for i, srcTag := range tags {
+		srcCol, ok := srcSch.GetAllCols().GetByTag(srcTag)
+		if !ok {
+			return tags
+		}
+		destCol, ok := destSch.GetAllCols().GetByName(srcCol.Name)
+		if !ok {
+			return tags
+		}
+		out[i] = destCol.Tag
 	}
 	return out
 }

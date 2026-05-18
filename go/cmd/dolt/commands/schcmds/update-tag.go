@@ -87,7 +87,7 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 	tbl, tName, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: tableName})
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get table").Build(), usage)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get table").AddCause(err).Build(), usage)
 	}
 	if !ok {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("table %s does not exist", tableName).Build(), usage)
@@ -95,7 +95,7 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get schema").Build(), usage)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get schema").AddCause(err).Build(), usage)
 	}
 
 	newSch, err := schema.WithUpdatedColumnTag(sch, columnName, tag)

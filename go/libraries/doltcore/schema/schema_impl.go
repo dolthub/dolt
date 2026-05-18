@@ -132,19 +132,16 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	return sch, nil
 }
 
-// WithRemappedColumnTags returns a copy of |sch| with column and index tags remapped
-// according to |tagRemap| (old tag to new tag). All other schema-level metadata
-// (comment, collation, primary key order, target row size) is preserved. Indexes
-// referencing tags not in |tagRemap| are copied unchanged. Check constraints are
-// preserved unchanged because they reference column names, not tags. Returns |sch|
-// unchanged when |tagRemap| is empty.
+// WithRemappedColumnTags returns a copy of |sch| with column and index tags rewritten via
+// |tagRemap|. Schema metadata and check constraints are preserved. Returns |sch| unchanged
+// when |tagRemap| is empty.
 func WithRemappedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, error) {
 	if len(tagRemap) == 0 {
 		return sch, nil
 	}
 
 	allCols := sch.GetAllCols()
-	cols := slices.Clone(allCols.GetColumns())
+	cols := allCols.GetColumns()
 	for oldTag, newTag := range tagRemap {
 		if idx, ok := allCols.TagToIdx[oldTag]; ok {
 			cols[idx].Tag = newTag
@@ -152,25 +149,15 @@ func WithRemappedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, err
 	}
 
 	pkOrdinals := slices.Clone(sch.GetPkOrdinals())
-	newSch, err := NewSchema(NewColCollection(cols...), pkOrdinals, sch.GetCollation(), nil, nil)
+	newSch, err := NewSchema(NewColCollection(cols...), pkOrdinals, sch.GetCollation(), nil, sch.Checks().Copy())
 	if err != nil {
 		return nil, err
 	}
 	newSch.SetTargetRowSize(sch.GetTargetRowSize())
 	newSch.SetComment(sch.GetComment())
 
-	affected := make(map[string]struct{})
-	for oldTag := range tagRemap {
-		for _, idx := range sch.Indexes().IndexesWithTag(oldTag) {
-			affected[idx.Name()] = struct{}{}
-		}
-	}
-
 	err = sch.Indexes().Iter(func(idx Index) (stop bool, err error) {
-		tags := idx.IndexedColumnTags()
-		if _, ok := affected[idx.Name()]; ok {
-			tags = RemapTags(tags, tagRemap)
-		}
+		tags := RemapTags(idx.IndexedColumnTags(), tagRemap)
 		props := IndexProperties{
 			IsUnique:           idx.IsUnique(),
 			IsSpatial:          idx.IsSpatial(),
@@ -186,12 +173,6 @@ func WithRemappedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, err
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	for _, chk := range sch.Checks().AllChecks() {
-		if _, err = newSch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced()); err != nil {
-			return nil, err
-		}
 	}
 
 	return newSch, nil
