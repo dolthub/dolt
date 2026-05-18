@@ -710,8 +710,7 @@ func (i IndexedJsonDocument) Compare(ctx context.Context, other interface{}) (in
 	case jsonTypeArray, jsonTypeObject:
 		// To compare two values that are both arrays or both objects, we walk both documents in lex (byte) order
 		// over their keys/indices and look at the first location where they differ. The ordering rules are:
-		//   * If both sides have a value at the same path that differs, compare those values recursively (this is
-		//     reported as a ModifiedDiff).
+		//   * If both sides have a value at the same path that differs, compare those values recursively
 		//   * If the two sides reach different next-keys at the same scope and neither is yet at end-of-scope, the
 		//     side with the smaller key is the smaller document. The IndexedJsonDiffer records this case via
 		//     lastDiffAtEndOfScope == false.

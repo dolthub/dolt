@@ -32,11 +32,7 @@ type IndexedJsonDiffer struct {
 
 	// lastDiffAtEndOfScope records whether the most recent Added/Removed diff was
 	// emitted because the *opposite* side had fully walked its current object/array
-	// scope ("case 4" in the walker), rather than because the two sides simply
-	// disagreed on the next key at the same scope ("case 3"). Compare uses this to
-	// pick the right ordering: a case-4 add/remove means one side is a prefix of
-	// the other (shorter is smaller), whereas a case-3 add/remove means the side
-	// with the smaller key is smaller.
+	// scope
 	lastDiffAtEndOfScope bool
 }
 

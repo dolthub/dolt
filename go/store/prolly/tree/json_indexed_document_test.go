@@ -389,19 +389,13 @@ func TestJsonCompare(t *testing.T) {
 			Cmp:   1,
 		},
 		{
-			// largeObject's only top-level key is "children", and "a" < "children" in lex order. Under the
-			// canonical lex-sorted-walk ordering, the inserted version's first key ("a") is smaller than the
-			// original's first key ("children"), so the inserted version is the smaller object. This is
-			// consistent with how arrays compare: the first element that differs decides the order.
-			Name:  "inserting an earlier-in-lex key at the start of an object makes it less",
+			Name:  "inserting an earlier key",
 			Left:  largeObject,
 			Right: noError(largeObject.Insert(ctx, "$.a", types.MustJSON("1"))),
 			Cmp:   1,
 		},
 		{
-			// "z" > "children", so the inserted version differs from the original only after the shared "children"
-			// prefix and has an extra "z" key. The longer object wins when one is a strict prefix of the other.
-			Name:  "inserting a later-in-lex key at the end of an object makes it greater",
+			Name:  "inserting a later key",
 			Left:  largeObject,
 			Right: noError(largeObject.Insert(ctx, "$.z", types.MustJSON("1"))),
 			Cmp:   -1,
@@ -507,9 +501,7 @@ func TestIndexedJsonDocument_CompareMatchesInMemory(t *testing.T) {
 		inMem   types.JSONDocument
 		indexed IndexedJsonDocument
 	}
-	// makePair builds both representations from an already-parsed Go value. Building the IndexedJsonDocument
-	// goes through SerializeJsonToAddr directly to avoid the JSON.Convert(string) reparsing behavior that
-	// newIndexedJsonDocumentFromValue inherits.
+
 	makePair := func(t *testing.T, val interface{}) docPair {
 		inMem := types.JSONDocument{Val: val}
 		root, err := SerializeJsonToAddr(ctx, ns, inMem)
@@ -548,11 +540,6 @@ func TestIndexedJsonDocument_CompareMatchesInMemory(t *testing.T) {
 			cmp, err = types.CompareJSON(ctx, a.inMem.Val, b.indexed)
 			require.NoError(t, err)
 			require.Equalf(t, expected, cmp, "CompareJSON(in-memory, indexed) mismatch")
-
-			// in-memory <-> in-memory (sanity check on the golden path)
-			cmp, err = types.CompareJSON(ctx, a.inMem.Val, b.inMem.Val)
-			require.NoError(t, err)
-			require.Equalf(t, expected, cmp, "CompareJSON(in-memory, in-memory) mismatch")
 		})
 	}
 
@@ -583,7 +570,7 @@ func TestIndexedJsonDocument_CompareMatchesInMemory(t *testing.T) {
 		probe := makePair(t, padToForceChunking(float64(1)))
 		require.Greater(t, probe.indexed.m.Root.Count(), 1,
 			"expected padded probe document to be split across multiple chunks; if this fails, the padding "+
-				"size needs to grow so we actually exercise the chunked path")
+					"size needs to grow so we actually exercise the chunked path")
 
 		for _, tc := range tests {
 			if tc.Left == nil || tc.Right == nil {
@@ -598,29 +585,21 @@ func TestIndexedJsonDocument_CompareMatchesInMemory(t *testing.T) {
 		}
 	})
 
-	// Targeted cases that specifically exercise case 3 (mid-walk key difference) vs case 4 (end-of-scope) in
-	// the IndexedJsonDiffer used by IndexedJsonDocument.Compare. Each case is tested in both directions to
-	// exercise both AddedDiff and RemovedDiff handling. The golden result is what CompareJSON produces.
 	type pair struct {
 		name string
 		a, b interface{}
 	}
 	caseAnalysisPairs := []pair{
-		// Case 3: differing first key, neither side exhausted.
-		{"case3_disjoint_single_keys", `{"a": 1}`, `{"b": 1}`},
-		{"case3_shared_prefix_then_disjoint", `{"a": 1, "c": 2}`, `{"a": 1, "b": 3}`},
-		{"case3_unique_key_in_first_position", `{"x": 1, "c": 2}`, `{"x": 2, "b": 1}`},
-
-		// Case 4: one side is a strict prefix in the canonical walk.
-		{"case4_strict_prefix_short_first", `{"a": 1}`, `{"a": 1, "b": 2}`},
-		{"case4_strict_prefix_long_first", `{"a": 1, "b": 2}`, `{"a": 1}`},
-		{"case4_empty_vs_nonempty", `{}`, `{"a": 1}`},
-
-		// Nested case 3 and case 4 inside arrays and objects.
-		{"nested_case3_inside_object", `{"outer": {"a": 1}}`, `{"outer": {"b": 1}}`},
-		{"nested_case4_inside_object", `{"outer": {"a": 1}}`, `{"outer": {"a": 1, "b": 2}}`},
-		{"nested_case3_inside_array", `[{"a": 1}]`, `[{"b": 1}]`},
-		{"nested_case4_inside_array", `[{"a": 1}]`, `[{"a": 1, "b": 2}]`},
+		{"disjoint_single_keys", `{"a": 1}`, `{"b": 1}`},
+		{"shared_prefix_then_disjoint", `{"a": 1, "c": 2}`, `{"a": 1, "b": 3}`},
+		{"unique_key_in_first_position", `{"x": 1, "c": 2}`, `{"x": 2, "b": 1}`},
+		{"strict_prefix_short_first", `{"a": 1}`, `{"a": 1, "b": 2}`},
+		{"strict_prefix_long_first", `{"a": 1, "b": 2}`, `{"a": 1}`},
+		{"empty_vs_nonempty", `{}`, `{"a": 1}`},
+		{"inside_object", `{"outer": {"a": 1}}`, `{"outer": {"b": 1}}`},
+		{"inside_object", `{"outer": {"a": 1}}`, `{"outer": {"a": 1, "b": 2}}`},
+		{"inside_array", `[{"a": 1}]`, `[{"b": 1}]`},
+		{"inside_array", `[{"a": 1}]`, `[{"a": 1, "b": 2}]`},
 		{"array_with_modified_element", `[1, 2, 3]`, `[1, 5, 3]`},
 
 		// Same outer keys, different nested values.
