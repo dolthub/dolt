@@ -4060,7 +4060,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "Switched to branch 'feat'"}},
 			},
 			{
-				Query:    "select column_name from information_schema.columns where table_schema = database() and table_name = 'conflict_tbl' order by ordinal_position;",
+				Query: "select column_name from information_schema.columns where table_schema = database() and table_name = 'conflict_tbl' order by ordinal_position;",
 				// feat sees its own committed two-column schema.
 				Expected: []sql.Row{{"id"}, {"val"}},
 			},
