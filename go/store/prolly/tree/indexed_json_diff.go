@@ -29,6 +29,11 @@ type IndexedJsonDiffer struct {
 	currentToCursor   *JsonCursor
 	differ            Differ[jsonLocationKey, *jsonLocationOrdering]
 	started           bool
+
+	// lastDiffAtEndOfScope records whether the most recent Added/Removed diff was
+	// emitted because the *opposite* side had fully walked its current object/array
+	// scope
+	lastDiffAtEndOfScope bool
 }
 
 var _ JsonDiffer = &IndexedJsonDiffer{}
@@ -309,10 +314,12 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			case -1:
 				// Case 3: A value has been removed from an object
 				key := fromCurrentLocation.Clone().key
+				jd.lastDiffAtEndOfScope = false
 				return newRemovedDiff(key)
 			case 1:
 				// Case 3: A value has been added to an object
 				key := toCurrentLocation.Clone().key
+				jd.lastDiffAtEndOfScope = false
 				return newAddedDiff(key)
 			}
 		}
@@ -323,6 +330,7 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			}
 			// Case 4: A value has been inserted at the end of an object or array.
 			key := toCurrentLocation.Clone().key
+			jd.lastDiffAtEndOfScope = true
 			return newAddedDiff(key)
 		}
 
@@ -332,6 +340,7 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			}
 			// Case 4: A value has been removed from the end of an object or array.
 			key := fromCurrentLocation.Clone().key
+			jd.lastDiffAtEndOfScope = true
 			return newRemovedDiff(key)
 		}
 	}
