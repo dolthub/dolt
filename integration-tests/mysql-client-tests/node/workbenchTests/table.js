@@ -138,7 +138,7 @@ export const tableTests = [
         COLUMN_NAME: "test_pk",
         ORDINAL_POSITION: 1,
         POSITION_IN_UNIQUE_CONSTRAINT: 1,
-        REFERENCED_TABLE_SCHEMA: dbName,
+        REFERENCED_TABLE_SCHEMA: `${dbName}/main`,
         REFERENCED_TABLE_NAME: "test",
         REFERENCED_COLUMN_NAME: "pk",
       },

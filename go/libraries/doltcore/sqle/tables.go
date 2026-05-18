@@ -3220,6 +3220,47 @@ func (t *WritableDoltTable) SetWriteSession(session dsess.WriteSession) {
 	t.pinnedWriteSession = session
 }
 
+var _ dsess.CacheableDoltTable = (*DoltTable)(nil)
+var _ dsess.CacheableDoltTable = (*WritableDoltTable)(nil)
+var _ dsess.CacheableDoltTable = (*AlterableDoltTable)(nil)
+
+// RebindDatabase implements dsess.CacheableDoltTable.
+// Shallow-copies the table and refreshes the db-derived fields.
+func (t *DoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (dsess.CacheableDoltTable, error) {
+	db := newDb.(Database)
+	sqlSch, err := sqlutil.FromDoltSchema(ctx, db.Name(), t.tableName, t.sch)
+	if err != nil {
+		return nil, err
+	}
+	cp := *t
+	cp.db = db
+	cp.opts = db.editOpts
+	cp.sqlSch = sqlSch
+	return &cp, nil
+}
+
+// RebindDatabase implements dsess.CacheableDoltTable.
+func (t *WritableDoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (dsess.CacheableDoltTable, error) {
+	db := newDb.(Database)
+	inner, err := t.DoltTable.RebindDatabase(ctx, newDb)
+	if err != nil {
+		return nil, err
+	}
+	cp := *t
+	cp.DoltTable = inner.(*DoltTable)
+	cp.db = db
+	return &cp, nil
+}
+
+// RebindDatabase implements dsess.CacheableDoltTable.
+func (t *AlterableDoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (dsess.CacheableDoltTable, error) {
+	inner, err := t.WritableDoltTable.RebindDatabase(ctx, newDb)
+	if err != nil {
+		return nil, err
+	}
+	return &AlterableDoltTable{WritableDoltTable: *inner.(*WritableDoltTable)}, nil
+}
+
 func FindIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, bool, error) {
 	type idxWithLen struct {
 		schema.Index
