@@ -1279,6 +1279,12 @@ var DoltScripts = []queries.ScriptTest{
 					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
 				},
 			},
+			{
+				// dolt_schemas is not directly modifiable; a direct UPDATE
+				// must return a clean error, not panic.
+				Query:          "UPDATE dolt_schemas SET name = 'x' WHERE name = 'view1'",
+				ExpectedErrStr: "the dolt_schemas table cannot be modified directly",
+			},
 		},
 	},
 	{
