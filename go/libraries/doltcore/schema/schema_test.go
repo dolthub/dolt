@@ -417,3 +417,21 @@ func validateCols(t *testing.T, cols []Column, colColl *ColCollection, msg strin
 		t.Error()
 	}
 }
+
+// TestWithRemappedColumnTagsPreservesMetadata verifies that WithRemappedColumnTags carries
+// collation, comment, and target row size onto the returned schema.
+func TestWithRemappedColumnTagsPreservesMetadata(t *testing.T) {
+	col := NewColumn("val", 100, types.StringKind, true, NotNullConstraint{})
+	sch, err := SchemaFromCols(NewColCollection(col))
+	require.NoError(t, err)
+	require.NoError(t, sch.SetPkOrdinals([]int{0}))
+	sch.SetCollation(Collation_utf8mb4_general_ci)
+	sch.SetComment("test comment")
+	sch.SetTargetRowSize(4096)
+
+	remapped, err := WithRemappedColumnTags(sch, map[uint64]uint64{100: 200})
+	require.NoError(t, err)
+	require.Equal(t, Collation_utf8mb4_general_ci, remapped.GetCollation(), "collation must survive WithRemappedColumnTags")
+	require.Equal(t, "test comment", remapped.GetComment(), "comment must survive WithRemappedColumnTags")
+	require.Equal(t, uint16(4096), remapped.GetTargetRowSize(), "target row size must survive WithRemappedColumnTags")
+}
