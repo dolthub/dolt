@@ -1532,3 +1532,27 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "main" ]] || false
 }
+
+@test "checkout: ignored tables stay on the source branch" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('generated_*', 1)"
+    dolt commit -Am "ignore generated_*"
+    dolt branch other
+
+    dolt sql -q "CREATE TABLE generated_x (pk INT PRIMARY KEY)"
+    dolt sql -q "INSERT INTO generated_x VALUES (1)"
+
+    run dolt checkout other
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT count(*) FROM information_schema.tables WHERE table_name = 'generated_x'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0" ]] || false
+
+    run dolt checkout main
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk FROM generated_x" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}
