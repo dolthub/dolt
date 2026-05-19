@@ -76,7 +76,10 @@ var _ manifest = &ChunkJournal{}
 var _ manifestGCGenUpdater = &ChunkJournal{}
 var _ io.Closer = &ChunkJournal{}
 
-func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister, warningsCb func(error)) (*ChunkJournal, error) {
+// |behavior| controls how fatal errors encountered during bootstrapping are handled; the
+// NomsBlockStore is not yet constructed at this point, so callers pass FatalBehaviorError to
+// fail store creation rather than crash the process.
+func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister, behavior dherrors.FatalBehavior, warningsCb func(error)) (*ChunkJournal, error) {
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
@@ -92,7 +95,7 @@ func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifes
 	} else if ok {
 		// only bootstrap journalWriter if the journal file exists,
 		// otherwise we wait to open in case we're cloning
-		if err = j.bootstrapJournalWriter(ctx, warningsCb); err != nil {
+		if err = j.bootstrapJournalWriter(ctx, behavior, warningsCb); err != nil {
 			return nil, err
 		}
 	}
@@ -143,9 +146,12 @@ func reflogBufferSize() int {
 // As we process journal records, we keep track of the latest root hash record we see
 // and update the manifest file with the last root hash we saw.
 //
+// |behavior| controls how fatal errors encountered while writing to the journal or manifest are
+// handled (returned as an error vs. crashing the process); see dherrors.FatalBehavior.
+//
 // |warningsCb| is a callback function invoked if a recoverable parse error is encountered. Usually used
 // for printing an error message to the user, but also used for fsck to report the error and exit with an error.
-func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb func(error)) (err error) {
+func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dherrors.FatalBehavior, warningsCb func(error)) (err error) {
 	var ok bool
 	ok, err = fileExists(j.path)
 	if err != nil {
@@ -172,9 +178,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb fu
 		}
 		if ok {
 			// write the current root hash to the journal file
-			// FatalBehaviorError here reflects the fact that we should fail the create, not
-			// crash the entire process, assuming this database is not already opened for write.
-			if err = j.wr.commitRootHash(ctx, dherrors.FatalBehaviorError, contents.root); err != nil {
+			if err = j.wr.commitRootHash(ctx, behavior, contents.root); err != nil {
 				return
 			}
 			j.contents = contents
@@ -195,7 +199,32 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb fu
 		return err
 	}
 
-	mc, err := trueUpBackingManifest(ctx, dherrors.FatalBehaviorError, root, j.backing)
+	if root.IsEmpty() {
+		// The journal file exists but contains no root hash record. This can
+		// happen if the process crashed after the journal file was created but
+		// before its first root hash record was committed. In this case the
+		// journal is not yet a source of truth for the root hash, so we fall
+		// back to the root hash recorded in the manifest rather than truing-up
+		// the manifest to the empty root.
+		var contents manifestContents
+		ok, contents, err = j.backing.ParseIfExists(ctx, &Stats{}, nil)
+		if err != nil {
+			return err
+		}
+		if ok {
+			if canCreate {
+				// commit the manifest root to the journal so that it becomes a
+				// valid source of truth for subsequent bootstraps.
+				if err = j.wr.commitRootHash(ctx, behavior, contents.root); err != nil {
+					return err
+				}
+			}
+			j.contents = contents
+		}
+		return
+	}
+
+	mc, err := trueUpBackingManifest(ctx, behavior, root, j.backing)
 	if err != nil {
 		return err
 	}
@@ -263,7 +292,7 @@ func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) er
 func (j *ChunkJournal) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	if j.backing.readOnly() {
 		return nil, gcBehavior_Continue, errReadOnlyManifest
-	} else if err := j.maybeInit(ctx, JournalParserLoggingWarningsCb); err != nil {
+	} else if err := j.maybeInit(ctx, behavior, JournalParserLoggingWarningsCb); err != nil {
 		return nil, gcBehavior_Continue, err
 	}
 
@@ -301,7 +330,9 @@ func (j *ChunkJournal) ConjoinAll(ctx context.Context, behavior dherrors.FatalBe
 // Open implements tablePersister.
 func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	if name == journalAddr {
-		if err := j.maybeInit(ctx, JournalParserLoggingWarningsCb); err != nil {
+		// Open is a tablePersister method with no FatalBehavior parameter; if it has to
+		// bootstrap the journal, fail with an error rather than crashing the process.
+		if err := j.maybeInit(ctx, dherrors.FatalBehaviorError, JournalParserLoggingWarningsCb); err != nil {
 			return nil, err
 		}
 		return journalChunkSource{journal: j.wr}, nil
@@ -477,9 +508,9 @@ func (j *ChunkJournal) ParseIfExists(ctx context.Context, stats *Stats, readHook
 	return
 }
 
-func (j *ChunkJournal) maybeInit(ctx context.Context, warningsCb func(error)) (err error) {
+func (j *ChunkJournal) maybeInit(ctx context.Context, behavior dherrors.FatalBehavior, warningsCb func(error)) (err error) {
 	if j.wr == nil {
-		err = j.bootstrapJournalWriter(ctx, warningsCb)
+		err = j.bootstrapJournalWriter(ctx, behavior, warningsCb)
 	}
 	return
 }
