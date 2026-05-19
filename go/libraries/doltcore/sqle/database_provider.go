@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/sirupsen/logrus"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -142,7 +143,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 	for _, db := range databases {
 		dbNameLower := strings.ToLower(db.Name())
 		if _, exists := dbs[dbNameLower]; exists {
-			cli.Printf("warning: duplicate database name '%s' found. Only one will be accessible. Consider renaming databases to avoid conflicts.\n", db.Name())
+			logrus.Warnf("duplicate database name %q detected; only one will be accessible", db.Name())
 		}
 		dbs[dbNameLower] = db
 	}
