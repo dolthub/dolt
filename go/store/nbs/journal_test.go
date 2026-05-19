@@ -43,7 +43,7 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFSTablePersister(dir, q, false)
 	nbf := types.Format_Default.VersionString()
-	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister), nil)
+	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { j.Close() })
 	return j
@@ -55,7 +55,7 @@ func openTestChunkJournal(t *testing.T, dir string) *ChunkJournal {
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFSTablePersister(dir, q, false)
 	nbf := types.Format_Default.VersionString()
-	j, err := newChunkJournal(t.Context(), nbf, dir, m, p.(*fsTablePersister), nil)
+	j, err := newChunkJournal(t.Context(), nbf, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { j.Close() })
 	return j
