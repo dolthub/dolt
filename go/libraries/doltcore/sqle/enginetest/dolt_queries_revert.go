@@ -550,6 +550,24 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_revert() refuses when a disjoint table has staged changes",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c0 int);",
+			"create table meta (pk int primary key, note varchar(100));",
+			"call dolt_commit('-Am', 'seed schema');",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-am', 'add row to t');",
+			"insert into meta values (1, 'side');",
+			"call dolt_add('meta');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_revert('HEAD');",
+				ExpectedErrStr: "error: Your local changes would be overwritten by revert.\nhint: Please commit your changes before you revert.",
+			},
+		},
+	},
+	{
 		Name: "dolt_revert() proceeds with untracked tables disjoint from revert target",
 		SetUpScript: []string{
 			"create table test (pk int primary key, c0 int)",

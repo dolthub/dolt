@@ -90,14 +90,24 @@ func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail stri
 }
 
 // dirtyTablesConflictWithRevert reports whether the working set has uncommitted changes
-// to a table that the revert of |commit| would touch. Mirrors git's file-level granularity
-// at the table level: a dirty table that the revert does not touch is allowed.
+// that prevent the revert of |commit| from proceeding. Matches git's behavior:
+// any staged change refuses the revert, and an unstaged change to a table the revert
+// would touch refuses it.
 func dirtyTablesConflictWithRevert(ctx context.Context, roots doltdb.Roots, ddb *doltdb.DoltDB, commit *doltdb.Commit) (bool, error) {
-	dirty, err := dirtyWorkingSetTables(ctx, roots)
+	staged, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return false, err
 	}
-	if len(dirty) == 0 {
+
+	if len(staged) > 0 {
+		return true, nil
+	}
+
+	unstagedDirty, err := unstagedNonIgnoredTables(ctx, roots, unstaged)
+	if err != nil {
+		return false, err
+	}
+	if len(unstagedDirty) == 0 {
 		return false, nil
 	}
 
@@ -125,42 +135,25 @@ func dirtyTablesConflictWithRevert(ctx context.Context, roots doltdb.Roots, ddb 
 		return false, err
 	}
 	for _, d := range revertDeltas {
-		if d.ToName.Name != "" && dirty[d.ToName] {
+		if d.ToName.Name != "" && unstagedDirty[d.ToName] {
 			return true, nil
 		}
-		if d.FromName.Name != "" && dirty[d.FromName] {
+		if d.FromName.Name != "" && unstagedDirty[d.FromName] {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-// dirtyWorkingSetTables returns the set of tables with uncommitted changes (staged or
-// unstaged) excluding tables that are new and ignored via dolt_ignore.
-func dirtyWorkingSetTables(ctx context.Context, roots doltdb.Roots) (map[doltdb.TableName]bool, error) {
-	staged, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
-	if err != nil {
-		return nil, err
-	}
-
+// unstagedNonIgnoredTables filters |unstaged| down to the table names that should
+// count as dirty for revert: tables that are not new-and-ignored via dolt_ignore.
+func unstagedNonIgnoredTables(ctx context.Context, roots doltdb.Roots, unstaged []diff.TableDelta) (map[doltdb.TableName]bool, error) {
 	schemas := diff.GetUniqueSchemaNamesFromTableDeltas(unstaged)
 	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
 	if err != nil {
 		return nil, err
 	}
-
 	dirty := make(map[doltdb.TableName]bool)
-	addNames := func(d diff.TableDelta) {
-		if d.ToName.Name != "" {
-			dirty[d.ToName] = true
-		}
-		if d.FromName.Name != "" {
-			dirty[d.FromName] = true
-		}
-	}
-	for _, d := range staged {
-		addNames(d)
-	}
 	for _, d := range unstaged {
 		if d.IsAdd() {
 			patterns := ignorePatternMap[d.ToName.Schema]
@@ -172,7 +165,12 @@ func dirtyWorkingSetTables(ctx context.Context, roots doltdb.Roots) (map[doltdb.
 				continue
 			}
 		}
-		addNames(d)
+		if d.ToName.Name != "" {
+			dirty[d.ToName] = true
+		}
+		if d.FromName.Name != "" {
+			dirty[d.FromName] = true
+		}
 	}
 	return dirty, nil
 }
@@ -575,6 +573,9 @@ func stageRevertedTables(ctx *sql.Context, mergeStats map[doltdb.TableName]*merg
 	tablesToAdd := make([]doltdb.TableName, 0, len(mergeStats))
 	for tableName, stats := range mergeStats {
 		if stats.HasArtifacts() {
+			continue
+		}
+		if stats.Operation == merge.TableUnmodified {
 			continue
 		}
 		if stats.Operation == merge.TableRemoved {
