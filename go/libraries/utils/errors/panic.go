@@ -15,8 +15,10 @@
 package errors
 
 import (
+	stderrors "errors"
 	"fmt"
 	"runtime/debug"
+	"syscall"
 	"time"
 )
 
@@ -34,8 +36,20 @@ const (
 // be entering an unsafe state due to the encountered error. If |behavior| is
 // FatalBehaviorCrash, this function will never return. Otherwise, an error value is
 // returned, built with fmt.Errorf on |msg| and |args|.
+//
+// As a special case, even when |behavior| is FatalBehaviorCrash, if any of |args|
+// is an error whose chain contains syscall.ENOSPC, Fatalf returns the error
+// instead of crashing the process. Disk-exhaustion is operator-recoverable by
+// freeing space; crashing under ENOSPC and being auto-restarted by a supervisor
+// triggers another write attempt against the still-full filesystem, which
+// fails identically and can leave additional partial files behind. Surfacing
+// the error to the caller lets the failure be reported cleanly without the
+// recovery cycle amplifying it. See https://github.com/dolthub/dolt/issues/11068.
 func Fatalf(behavior FatalBehavior, msg string, args ...any) error {
 	if behavior == FatalBehaviorCrash {
+		if anyArgIsEnospc(args) {
+			return fmt.Errorf("fatal error: "+msg, args...)
+		}
 		stack := string(debug.Stack())
 		args := append([]any{stack}, args...)
 		go func() {
@@ -47,4 +61,16 @@ func Fatalf(behavior FatalBehavior, msg string, args ...any) error {
 	} else {
 		return fmt.Errorf("fatal error: "+msg, args...)
 	}
+}
+
+// anyArgIsEnospc reports whether any of |args| is an error whose unwrap chain
+// contains syscall.ENOSPC. Used by Fatalf to distinguish disk-exhaustion from
+// other fatal conditions.
+func anyArgIsEnospc(args []any) bool {
+	for _, a := range args {
+		if e, ok := a.(error); ok && stderrors.Is(e, syscall.ENOSPC) {
+			return true
+		}
+	}
+	return false
 }
