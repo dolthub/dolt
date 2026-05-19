@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -77,7 +76,7 @@ type DoltSession struct {
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
-var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
+var _ SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
@@ -148,6 +147,12 @@ func (d *DoltSession) GenericProvider() sql.MutableDatabaseProvider {
 // StatsProvider returns the sql.StatsProvider for this session.
 func (d *DoltSession) StatsProvider() sql.StatsProvider {
 	return d.statsProv
+}
+
+// SessionDbProvider is implemented by DoltSession and allows expranalysis to
+// access the database provider without a direct import of this package.
+type SessionDbProvider interface {
+	GenericProvider() sql.MutableDatabaseProvider
 }
 
 // DSessFromSess retrieves a dolt session from a standard sql.Session
