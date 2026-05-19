@@ -15,6 +15,7 @@
 package revert
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -52,14 +53,6 @@ func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail stri
 		return "", nil, fmt.Errorf("failed to get roots for current session")
 	}
 
-	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
-	if err != nil {
-		return "", nil, err
-	}
-	if !wsOnlyHasIgnoredTables {
-		return "", nil, ErrRevertUncommittedChanges
-	}
-
 	ddb, ok := doltSession.GetDoltDB(ctx, dbName)
 	if !ok {
 		return "", nil, fmt.Errorf("failed to get dolt database")
@@ -85,7 +78,103 @@ func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail stri
 		return "", nil, doltdb.ErrGhostCommitEncountered
 	}
 
+	conflicts, err := dirtyTablesConflictWithRevert(ctx, roots, ddb, commit)
+	if err != nil {
+		return "", nil, err
+	}
+	if conflicts {
+		return "", nil, ErrRevertUncommittedChanges
+	}
+
 	return applySingleRevert(ctx, dbName, doltSession, commit, commitSpecStr, seriesHeadCommit, pendingHashes, authorName, authorEmail)
+}
+
+// dirtyTablesConflictWithRevert reports whether the working set has uncommitted changes
+// to a table that the revert of |commit| would touch. Mirrors git's file-level granularity
+// at the table level: a dirty table that the revert does not touch is allowed.
+func dirtyTablesConflictWithRevert(ctx context.Context, roots doltdb.Roots, ddb *doltdb.DoltDB, commit *doltdb.Commit) (bool, error) {
+	dirty, err := dirtyWorkingSetTables(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+	if len(dirty) == 0 {
+		return false, nil
+	}
+
+	if len(commit.DatasParents()) == 0 {
+		return true, nil
+	}
+	optCmt, err := ddb.ResolveParent(ctx, commit, 0)
+	if err != nil {
+		return false, err
+	}
+	parentCM, ok := optCmt.ToCommit()
+	if !ok {
+		return false, doltdb.ErrGhostCommitEncountered
+	}
+	commitRoot, err := commit.GetRootValue(ctx)
+	if err != nil {
+		return false, err
+	}
+	parentRoot, err := parentCM.GetRootValue(ctx)
+	if err != nil {
+		return false, err
+	}
+	revertDeltas, err := diff.GetTableDeltas(ctx, parentRoot, commitRoot)
+	if err != nil {
+		return false, err
+	}
+	for _, d := range revertDeltas {
+		if d.ToName.Name != "" && dirty[d.ToName] {
+			return true, nil
+		}
+		if d.FromName.Name != "" && dirty[d.FromName] {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// dirtyWorkingSetTables returns the set of tables with uncommitted changes (staged or
+// unstaged) excluding tables that are new and ignored via dolt_ignore.
+func dirtyWorkingSetTables(ctx context.Context, roots doltdb.Roots) (map[doltdb.TableName]bool, error) {
+	staged, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
+	if err != nil {
+		return nil, err
+	}
+
+	schemas := diff.GetUniqueSchemaNamesFromTableDeltas(unstaged)
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
+	if err != nil {
+		return nil, err
+	}
+
+	dirty := make(map[doltdb.TableName]bool)
+	addNames := func(d diff.TableDelta) {
+		if d.ToName.Name != "" {
+			dirty[d.ToName] = true
+		}
+		if d.FromName.Name != "" {
+			dirty[d.FromName] = true
+		}
+	}
+	for _, d := range staged {
+		addNames(d)
+	}
+	for _, d := range unstaged {
+		if d.IsAdd() {
+			patterns := ignorePatternMap[d.ToName.Schema]
+			isIgnored, err := patterns.IsTableNameIgnored(d.ToName)
+			if err != nil {
+				return nil, err
+			}
+			if isIgnored == doltdb.Ignore {
+				continue
+			}
+		}
+		addNames(d)
+	}
+	return dirty, nil
 }
 
 // ContinueRevert continues an in-progress revert after conflicts have been resolved. It checks that all conflicts
