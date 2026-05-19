@@ -30,7 +30,7 @@ import (
 // It's responsible for creating and managing the lifecycle of TableWriter's.
 type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
-	GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter SessionRootSetter, targetStaging bool) (TableWriter, error)
+	GetTableWriter(ctx *sql.Context, table doltdb.TableName) (TableWriter, error)
 
 	// GetWorkingSet returns the session's current working set.
 	GetWorkingSet() *doltdb.WorkingSet

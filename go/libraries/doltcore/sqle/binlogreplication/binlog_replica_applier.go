@@ -839,12 +839,11 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 		return nil, nil, err
 	}
 
-	writeSession := writer.NewWriteSession(ws, tracker, sqlDatabase.EditOptions())
-
 	ds := dsess.DSessFromSess(ctx.Session)
 	setter := ds.SetWorkingRoot
+	writeSession := writer.NewWriteSession(databaseName, ws, tracker, setter, sqlDatabase.EditOptions())
 
-	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: tableName}, databaseName, setter, false)
+	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return nil, nil, err
 	}
