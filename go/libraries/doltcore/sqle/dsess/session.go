@@ -97,7 +97,38 @@ func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSessi
 	}
 }
 
+// NewDetachedSession returns a DoltSession whose embedded sql.Session is a
+// fresh sql.BaseSession not bound to any specific client connection. Use this
+// when another external session manager (eg DumoboDB) owns the
+// DoltSession's lifecycle and individual SQL requests will run against a
+// *sql.Context that points at this session rather than a per-connection one.
+//
+// Identical to NewDoltSession but inverts the dependency on a caller-supplied
+// sql.BaseSession.
+func NewDetachedSession(
+	pro DoltDatabaseProvider,
+	conf config.ReadWriteConfig,
+	branchController *branch_control.Controller,
+	statsProvider sql.StatsProvider,
+	writeSessProv WriteSessFunc,
+	gcSafepointController *gcctx.GCSafepointController,
+	branchActivityTracker *doltdb.BranchActivityTracker,
+) (*DoltSession, error) {
+	return NewDoltSession(
+		sql.NewBaseSession(),
+		pro,
+		conf,
+		branchController,
+		statsProvider,
+		writeSessProv,
+		gcSafepointController,
+		branchActivityTracker,
+	)
+}
+
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
+// sqlSess may be any *sql.BaseSession; pass sql.NewBaseSession() (or use NewDetachedSession) when the
+// session is not bound to a single client connection.
 func NewDoltSession(
 	sqlSess *sql.BaseSession,
 	pro DoltDatabaseProvider,
