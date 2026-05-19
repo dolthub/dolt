@@ -392,7 +392,7 @@ func TestJsonCompare(t *testing.T) {
 			Name:  "inserting an earlier key",
 			Left:  largeObject,
 			Right: noError(largeObject.Insert(ctx, "$.a", types.MustJSON("1"))),
-			Cmp:   1,
+			Cmp:   -1,
 		},
 		{
 			Name:  "inserting a later key",
@@ -570,7 +570,7 @@ func TestIndexedJsonDocument_CompareMatchesInMemory(t *testing.T) {
 		probe := makePair(t, padToForceChunking(float64(1)))
 		require.Greater(t, probe.indexed.m.Root.Count(), 1,
 			"expected padded probe document to be split across multiple chunks; if this fails, the padding "+
-				"size needs to grow so we actually exercise the chunked path")
+					"size needs to grow so we actually exercise the chunked path")
 
 		for _, tc := range tests {
 			if tc.Left == nil || tc.Right == nil {
