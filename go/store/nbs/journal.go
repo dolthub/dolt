@@ -195,6 +195,31 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb fu
 		return err
 	}
 
+	if root.IsEmpty() {
+		// The journal file exists but contains no root hash record. This can
+		// happen if the process crashed after the journal file was created but
+		// before its first root hash record was committed. In this case the
+		// journal is not yet a source of truth for the root hash, so we fall
+		// back to the root hash recorded in the manifest rather than truing-up
+		// the manifest to the empty root.
+		var contents manifestContents
+		ok, contents, err = j.backing.ParseIfExists(ctx, &Stats{}, nil)
+		if err != nil {
+			return err
+		}
+		if ok {
+			if canCreate {
+				// commit the manifest root to the journal so that it becomes a
+				// valid source of truth for subsequent bootstraps.
+				if err = j.wr.commitRootHash(ctx, dherrors.FatalBehaviorError, contents.root); err != nil {
+					return err
+				}
+			}
+			j.contents = contents
+		}
+		return
+	}
+
 	mc, err := trueUpBackingManifest(ctx, dherrors.FatalBehaviorError, root, j.backing)
 	if err != nil {
 		return err
