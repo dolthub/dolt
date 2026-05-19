@@ -550,7 +550,7 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_revert() fails with untracked tables",
+		Name: "dolt_revert() proceeds with untracked tables disjoint from revert target",
 		SetUpScript: []string{
 			"create table test (pk int primary key, c0 int)",
 			"insert into test values (1,1),(2,2),(3,3)",
@@ -562,8 +562,16 @@ var RevertScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_revert('HEAD')",
-				ExpectedErrStr: "error: Your local changes would be overwritten by revert.\nhint: Please commit your changes before you revert.",
+				Query:    "call dolt_revert('HEAD')",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select pk, c0 from test where pk = 2",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:    "select pk from dont_track",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
