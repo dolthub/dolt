@@ -1416,13 +1416,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			if err != nil {
 				return err
 			}
-			var setter SessionRootSetter
-			if editOpts.TargetStaging {
-				setter = d.SetStagingRoot
-			} else {
-				setter = d.SetWorkingRoot
-			}
-			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchState.workingSet, tracker, setter, editOpts)
+			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchState.workingSet, tracker, d.SetWorkingRoot, editOpts)
 		}
 	}
 
