@@ -68,14 +68,8 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 
 	cs, err := nbs.NewLocalStore(context.Background(), types.Format_DOLT.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 
-	var golden1, golden2 string
-	switch types.Format_DOLT {
-	case types.Format_DOLT:
-		golden1 = "c7g244286kom2a1326kkgs85pi97cjs7"
-		golden2 = "rn7dsl1146qr2n4chtg41n24n0jqgnte"
-	default:
-		s.Fail("no golden values exist for NBF %s", types.Format_DOLT.VersionString())
-	}
+	golden1 := "c7g244286kom2a1326kkgs85pi97cjs7"
+	golden2 := "rn7dsl1146qr2n4chtg41n24n0jqgnte"
 
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
