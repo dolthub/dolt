@@ -30,8 +30,8 @@ import (
 )
 
 // resetHardTables resolves a new HEAD commit from a refSpec and updates working set roots by
-// resetting the table contexts for tracked tables. New tables are ignored. Returns new HEAD
-// Commit and Roots.
+// resetting tracked tables to that HEAD. Uncommitted tables are carried forward onto the new
+// HEAD via CarryUncommittedTables. Returns the new HEAD Commit and Roots.
 func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr

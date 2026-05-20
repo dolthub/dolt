@@ -457,3 +457,43 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "untracked_tbl" ]] || false
 }
+
+@test "reset: dolt reset --hard retags an untracked table that collides with the target" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    # bar.code and users.name both auto-generate tag 9815 since each branch assigns tags
+    # without seeing the other, so the carry must retag users.name to keep both tables.
+    dolt checkout -b feat
+    dolt sql -q "CREATE TABLE bar (code varchar(64) PRIMARY KEY);"
+    dolt add .
+    dolt commit -m "add bar"
+
+    run dolt schema tags -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "bar,code,9815" ]] || false
+
+    dolt checkout main
+    dolt sql -q "CREATE TABLE users (name varchar(64) PRIMARY KEY);"
+    dolt sql -q "INSERT INTO users VALUES ('alice');"
+
+    run dolt schema tags -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "users,name,9815" ]] || false
+
+    run dolt reset --hard feat
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT name FROM users" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "alice" ]] || false
+
+    run dolt schema tags -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "bar,code,9815" ]] || false
+    [[ "$output" =~ "users,name,12204" ]] || false
+
+    dolt sql -q "INSERT INTO users VALUES ('bob');"
+    run dolt sql -q "SELECT name FROM users ORDER BY name" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "alice" ]] || false
+    [[ "$output" =~ "bob" ]] || false
+}

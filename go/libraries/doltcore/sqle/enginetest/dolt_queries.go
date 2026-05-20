@@ -3994,7 +3994,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/11007
-		Name: "dolt_checkout via SQL leaves untracked tables with secondary indexes and foreign keys on the source branch",
+		Name: "dolt_checkout leaves untracked tables with secondary indexes and foreign keys on the source branch",
 		SetUpScript: []string{
 			"call dolt_branch('empty');",
 			"create table parent (id int primary key, name varchar(64));",
@@ -4010,7 +4010,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "Switched to branch 'empty'"}},
 			},
 			{
-				Query: "select count(*) from information_schema.tables where table_schema = database() and table_name in ('parent', 'child');",
+				Query:   "select count(*) from information_schema.tables where table_schema = database() and table_name in ('parent', 'child');",
+				Dialect: "mysql",
 				// Bare SQL checkout does not carry uncommitted tables, so empty stays empty.
 				Expected: []sql.Row{{0}},
 			},
@@ -4027,7 +4028,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{10, 1, "c_val"}},
 			},
 			{
-				Query: "select index_name, non_unique, seq_in_index, column_name from information_schema.statistics where table_schema = database() and table_name = 'child' and index_name = 'idx_val';",
+				// TODO(elianddb): the information_schema assertions in these carry tests are gated
+				// to mysql because Doltgres does not populate information_schema.statistics yet, so
+				// index lookups return no rows. Remove the Dialect gates once Doltgres supports it.
+				Query:   "select index_name, non_unique, seq_in_index, column_name from information_schema.statistics where table_schema = database() and table_name = 'child' and index_name = 'idx_val';",
+				Dialect: "mysql",
 				// The unique index survived the round trip because main's working set was
 				// never touched.
 				Expected: []sql.Row{{"idx_val", 0, 1, "val"}},
@@ -4038,17 +4043,19 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select constraint_name, table_name from information_schema.table_constraints where table_schema = database() and constraint_type = 'FOREIGN KEY' and table_name = 'child';",
+				Dialect:  "mysql",
 				Expected: []sql.Row{{"fk_parent", "child"}},
 			},
 			{
 				Query:       "insert into child values (99, 999, 'orphan');",
+				Dialect:     "mysql",
 				ExpectedErr: sql.ErrForeignKeyChildViolation,
 			},
 		},
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/11007
-		Name: "dolt_checkout via SQL does not abort when the source has an untracked table that conflicts with the target",
+		Name: "dolt_checkout does not abort when the source has an untracked table that conflicts with the target",
 		SetUpScript: []string{
 			"call dolt_branch('feat');",
 			"call dolt_checkout('--move', 'feat');",
@@ -4065,7 +4072,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "Switched to branch 'feat'"}},
 			},
 			{
-				Query:    "select column_name from information_schema.columns where table_schema = database() and table_name = 'conflict_tbl' order by ordinal_position;",
+				Query:   "select column_name from information_schema.columns where table_schema = database() and table_name = 'conflict_tbl' order by ordinal_position;",
+				Dialect: "mysql",
 				// feat sees its own committed two-column schema.
 				Expected: []sql.Row{{"id"}, {"val"}},
 			},
@@ -4074,7 +4082,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
-				Query: "select column_name from information_schema.columns where table_schema = database() and table_name = 'conflict_tbl' order by ordinal_position;",
+				Query:   "select column_name from information_schema.columns where table_schema = database() and table_name = 'conflict_tbl' order by ordinal_position;",
+				Dialect: "mysql",
 				// main's untracked one-column copy is still there because bare SQL did not
 				// touch its working set.
 				Expected: []sql.Row{{"id"}},
@@ -4083,7 +4092,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/11007
-		Name: "dolt_checkout via SQL keeps an untracked foreign key on the source even when the parent is missing on the target",
+		Name: "dolt_checkout keeps an untracked foreign key on the source even when the parent is missing on the target",
 		SetUpScript: []string{
 			"create table parent (id int primary key);",
 			"call dolt_commit('-Am', 'add parent');",
@@ -4100,7 +4109,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "Switched to branch 'no_parent'"}},
 			},
 			{
-				Query: "select count(*) from information_schema.tables where table_schema = database() and table_name = 'child';",
+				Query:   "select count(*) from information_schema.tables where table_schema = database() and table_name = 'child';",
+				Dialect: "mysql",
 				// child stayed on main, so no foreign key exists on no_parent.
 				Expected: []sql.Row{{0}},
 			},
@@ -4109,7 +4119,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
-				Query: "select constraint_name from information_schema.table_constraints where table_schema = database() and constraint_type = 'FOREIGN KEY' and table_name = 'child';",
+				Query:   "select constraint_name from information_schema.table_constraints where table_schema = database() and constraint_type = 'FOREIGN KEY' and table_name = 'child';",
+				Dialect: "mysql",
 				// child still references parent on main, where parent exists.
 				Expected: []sql.Row{{"fk_orphan"}},
 			},
@@ -4822,6 +4833,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'users' and index_name = 'idx_email';",
+				Dialect:  "mysql",
 				Expected: []sql.Row{{"idx_email", 1, 1, "email", "YES", "BTREE", ""}},
 			},
 			{
@@ -4860,7 +4872,8 @@ var DoltResetTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"c_data"}},
 			},
 			{
-				Query: "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'c' and index_name = 'idx_code';",
+				Query:   "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'c' and index_name = 'idx_code';",
+				Dialect: "mysql",
 				// non_unique=0 confirms the UNIQUE flag survived the retag.
 				Expected: []sql.Row{{"idx_code", 0, 1, "code", "YES", "BTREE", ""}},
 			},
@@ -4870,6 +4883,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:       "insert into c values ('bad', 'x_bad');",
+				Dialect:     "mysql",
 				ExpectedErr: sql.ErrCheckConstraintViolated,
 			},
 			{
@@ -4878,6 +4892,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'e' and index_name = 'idx_label';",
+				Dialect:  "mysql",
 				Expected: []sql.Row{{"idx_label", 1, 1, "label", "YES", "BTREE", ""}},
 			},
 			{
@@ -4885,7 +4900,8 @@ var DoltResetTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"e_data"}},
 			},
 			{
-				Query: "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'e' and index_name = 'idx_composite' order by seq_in_index;",
+				Query:   "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'e' and index_name = 'idx_composite' order by seq_in_index;",
+				Dialect: "mysql",
 				// Two rows verify both column positions of the composite index were remapped correctly.
 				Expected: []sql.Row{{"idx_composite", 1, 1, "label", "YES", "BTREE", ""}, {"idx_composite", 1, 2, "tag", "YES", "BTREE", ""}},
 			},
@@ -4899,6 +4915,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'kl' and index_name = 'idx_val';",
+				Dialect:  "mysql",
 				Expected: []sql.Row{{"idx_val", 1, 1, "val", "YES", "BTREE", ""}},
 			},
 			{
@@ -4938,10 +4955,12 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select constraint_name, table_name from information_schema.table_constraints where table_schema = database() and constraint_type = 'FOREIGN KEY' and table_name = 'child';",
+				Dialect:  "mysql",
 				Expected: []sql.Row{{"fk_parent", "child"}},
 			},
 			{
 				Query:       "insert into child values (99, 999);",
+				Dialect:     "mysql",
 				ExpectedErr: sql.ErrForeignKeyChildViolation,
 			},
 		},
@@ -4949,6 +4968,9 @@ var DoltResetTestScripts = []queries.ScriptTest{
 	{
 		// See https://github.com/dolthub/dolt/issues/11007
 		Name: "dolt_reset('--hard') preserves untracked table schema properties",
+		// Auto-increment, table comment/collation, and generated columns are MySQL-dialect, which
+		// Doltgres handles differently, so this whole script is gated to the mysql harness.
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"call dolt_branch('empty');",
 			"create table ai (id int auto_increment primary key, val varchar(64));",
