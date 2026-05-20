@@ -2497,8 +2497,8 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'untracked_tbl'",
-				// The untracked variant stays on main because the no-carry contract
-				// applies to bare dolt_checkout without --move.
+				// The untracked variant stays on main because bare dolt_checkout without
+				// --move does not carry uncommitted tables.
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -2582,7 +2582,7 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'untracked_tbl'",
-				// B's snapshot pre-dates A's commit, and the no-carry contract means feat
+				// B's snapshot pre-dates A's commit, and bare checkout does not carry, so feat
 				// does not pick up A's untracked_tbl even inside an open transaction.
 				Expected: []sql.Row{{0}},
 			},
@@ -2597,7 +2597,7 @@ var BranchIsolationTests = []queries.TransactionTest{
 			{
 				Query: "/* client b */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'untracked_tbl'",
 				// A fresh transaction refreshes B's snapshot, and untracked_tbl still belongs
-				// to main rather than feat because the no-carry contract holds across sessions.
+				// to main rather than feat because bare checkout never carries it.
 				Expected: []sql.Row{{0}},
 			},
 			{

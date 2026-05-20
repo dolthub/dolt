@@ -49,7 +49,7 @@ func newEmptyRoot(t *testing.T) (context.Context, doltdb.RootValue) {
 	t.Helper()
 	dEnv, _ := createTestEnv()
 	ctx := context.Background()
-	require.NoError(t, dEnv.InitRepo(ctx, types.Format_Default, "test user", "test@test.com", "main"))
+	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "test user", "test@test.com", "main"))
 	emptyRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 	return ctx, emptyRoot
@@ -71,7 +71,7 @@ func TestCarryUncommittedTablesDoesNotDuplicatePreexistingFK(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11007
 	ctx, emptyRoot := newEmptyRoot(t)
 
-	// Use non-colliding tags so no retag happens. This isolates the duplicate-FK guard.
+	// Use non-colliding tags so no retag happens.
 	const parentTag uint64 = 50001
 	const childTag uint64 = 50002
 

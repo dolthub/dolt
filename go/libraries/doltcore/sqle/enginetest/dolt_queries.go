@@ -4011,8 +4011,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select count(*) from information_schema.tables where table_schema = database() and table_name in ('parent', 'child');",
-				// Bare SQL checkout is a session pointer flip and does not carry uncommitted
-				// tables, so empty stays empty.
+				// Bare SQL checkout does not carry uncommitted tables, so empty stays empty.
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -4061,8 +4060,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "call dolt_checkout('feat');",
-				// Bare SQL flips the session to feat without trying to carry main's local
-				// conflict_tbl, so the overwrite check never fires.
+				// Bare SQL switches to feat without carrying main's local conflict_tbl, so
+				// nothing on feat would be overwritten.
 				Expected: []sql.Row{{0, "Switched to branch 'feat'"}},
 			},
 			{
@@ -4102,8 +4101,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select count(*) from information_schema.tables where table_schema = database() and table_name = 'child';",
-				// child stayed on main, so no orphan foreign key exists on no_parent and
-				// the next commit on this branch has nothing to surface.
+				// child stayed on main, so no foreign key exists on no_parent.
 				Expected: []sql.Row{{0}},
 			},
 			{

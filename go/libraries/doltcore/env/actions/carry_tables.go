@@ -64,9 +64,9 @@ func CarryUncommittedTables(ctx context.Context, src, baseline, dest doltdb.Root
 }
 
 // uncommittedTableSchemas returns the subset of |srcSchemas| whose names are absent from
-// |baseline| and are not dolt system tables. When |policy| is ExcludeIgnored, names matched
-// by |src|'s dolt_ignore patterns are also removed. Pattern conflicts on |src| fall through
-// to the caller so CheckOverwrittenIgnoredTables can surface them.
+// |baseline| and are not read-only dolt system tables. When |policy| is ExcludeIgnored, names
+// matched by |src|'s dolt_ignore patterns are also removed. A table matched by conflicting
+// dolt_ignore patterns is treated as not ignored and kept.
 func uncommittedTableSchemas(ctx context.Context, src doltdb.RootValue, srcSchemas map[doltdb.TableName]schema.Schema, baseline doltdb.RootValue, policy CarryPolicy) (map[doltdb.TableName]schema.Schema, error) {
 	baselineNames, err := baseline.GetAllTableNames(ctx, false)
 	if err != nil {
@@ -88,16 +88,17 @@ func uncommittedTableSchemas(ctx context.Context, src doltdb.RootValue, srcSchem
 
 	uncommitted := make(map[doltdb.TableName]schema.Schema, len(srcSchemas))
 	for name, sch := range srcSchemas {
-		if baselineSet.Contains(name) || doltdb.IsSystemTable(name) {
+		if baselineSet.Contains(name) || doltdb.IsReadOnlySystemTable(name) {
 			continue
 		}
 		if patternsBySchema != nil {
 			patterns := patternsBySchema[name.Schema]
 			result, ignoreErr := patterns.IsTableNameIgnored(name)
-			if doltdb.AsDoltIgnoreInConflict(ignoreErr) == nil && ignoreErr != nil {
+			if doltdb.AsDoltIgnoreInConflict(ignoreErr) != nil {
+				// Conflicting patterns: keep the table rather than guess at the intent.
+			} else if ignoreErr != nil {
 				return nil, ignoreErr
-			}
-			if result == doltdb.Ignore {
+			} else if result == doltdb.Ignore {
 				continue
 			}
 		}
@@ -129,7 +130,7 @@ func carryTables(ctx context.Context, src, dest doltdb.RootValue, toCarry map[do
 			return nil, nil, nil, err
 		}
 		if !exists {
-			return nil, nil, nil, fmt.Errorf("table %q does not exist in src root", name)
+			return nil, nil, nil, fmt.Errorf("table %q does not exist in src root", name.String())
 		}
 		columns := sch.GetAllCols().GetColumns()
 		tagRemap := make(map[uint64]uint64)

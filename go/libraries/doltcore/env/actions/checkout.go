@@ -143,7 +143,7 @@ func CheckoutWouldOverwriteUncommittedTables(ctx context.Context, roots doltdb.R
 
 	var localChange, untracked []string
 	for _, name := range workingNames {
-		if headNamesSet.Contains(name) || doltdb.IsSystemTable(name) {
+		if headNamesSet.Contains(name) || doltdb.IsReadOnlySystemTable(name) {
 			continue
 		}
 		targetHash, _, err := targetRoot.GetTableHash(ctx, name)
@@ -193,8 +193,8 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 			return doltdb.Roots{}, err
 		}
 	}
-	// |force| skips the conflict check. The carry step below drops source tables whose name
-	// already exists on the destination so the destination version wins.
+	// The carry step below drops source tables whose name already exists on the destination,
+	// so the destination version wins when |force| skipped the conflict check.
 
 	// Snapshot the pre-checkout roots before the three-way merge below reassigns roots.Working
 	// and roots.Staged so the carry step still sees the original values.
@@ -649,56 +649,34 @@ func writeTableHashes(ctx context.Context, head doltdb.RootValue, tblHashes map[
 
 // CheckoutWouldOverwriteWorkingSetChanges reports whether a checkout would overwrite
 // uncommitted changes on the destination. System and dolt_ignore-matched tables are excluded.
+// When both sides hold the same uncommitted changes the checkout would not lose anything, so
+// it is not reported as an overwrite.
 func CheckoutWouldOverwriteWorkingSetChanges(ctx context.Context, sourceRoots, destRoots doltdb.Roots) (bool, error) {
-	srcTracked, err := buildTrackedPredicate(ctx, sourceRoots.Working)
+	srcW, srcS, srcH, err := trackedRootHashes(ctx, sourceRoots)
 	if err != nil {
 		return false, err
 	}
-	sourceHas, err := rootsHaveTrackedChanges(ctx, sourceRoots, srcTracked)
-	if err != nil || !sourceHas {
-		return false, err
+	if maps.Equal(srcW, srcH) && maps.Equal(srcS, srcH) {
+		return false, nil
 	}
-	destTracked, err := buildTrackedPredicate(ctx, destRoots.Working)
+	destW, destS, destH, err := trackedRootHashes(ctx, destRoots)
 	if err != nil {
 		return false, err
 	}
-	return rootsHaveTrackedChanges(ctx, destRoots, destTracked)
+	if maps.Equal(destW, destH) && maps.Equal(destS, destH) {
+		return false, nil
+	}
+	return !maps.Equal(srcW, destW) || !maps.Equal(srcS, destS), nil
 }
 
-// buildTrackedPredicate returns a closure that reports whether a table is tracked for the
-// purpose of detecting uncommitted-change conflicts. The closure returns false for system
-// tables and for tables matched by a dolt_ignore pattern on |root|. Patterns are read once so
-// callers can reuse the closure across multiple roots.
-func buildTrackedPredicate(ctx context.Context, root doltdb.RootValue) (func(doltdb.TableName) (bool, error), error) {
-	names, err := root.GetAllTableNames(ctx, false)
+// trackedRootHashes returns name to hash maps for working, staged, and head of |roots|, keeping
+// only the tables that buildTrackedPredicate accepts. Read-only system tables and dolt_ignore
+// matched tables are excluded, while writable system tables such as dolt_ignore are kept.
+func trackedRootHashes(ctx context.Context, roots doltdb.Roots) (working, staged, head map[doltdb.TableName]hash.Hash, err error) {
+	isTracked, err := buildTrackedPredicate(ctx, roots.Working)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	schemas := doltdb.GetUniqueSchemaNamesFromTableNames(names)
-	patternsBySchema, err := doltdb.GetIgnoredTablePatterns(ctx, doltdb.Roots{Working: root, Staged: root, Head: root}, schemas)
-	if err != nil {
-		return nil, err
-	}
-	return func(n doltdb.TableName) (bool, error) {
-		if doltdb.IsSystemTable(n) {
-			return false, nil
-		}
-		patterns := patternsBySchema[n.Schema]
-		result, ignoreErr := patterns.IsTableNameIgnored(n)
-		if doltdb.AsDoltIgnoreInConflict(ignoreErr) != nil {
-			return true, nil
-		}
-		if ignoreErr != nil {
-			return false, ignoreErr
-		}
-		return result != doltdb.Ignore, nil
-	}, nil
-}
-
-// rootsHaveTrackedChanges reports whether |roots| have uncommitted changes on any table that
-// |isTracked| accepts. Working differing from head, or staged differing from head, on at least
-// one tracked table returns true.
-func rootsHaveTrackedChanges(ctx context.Context, roots doltdb.Roots, isTracked func(doltdb.TableName) (bool, error)) (bool, error) {
 	hashes := func(root doltdb.RootValue) (map[doltdb.TableName]hash.Hash, error) {
 		names, err := root.GetAllTableNames(ctx, false)
 		if err != nil {
@@ -721,22 +699,50 @@ func rootsHaveTrackedChanges(ctx context.Context, roots doltdb.Roots, isTracked 
 		}
 		return out, nil
 	}
-	working, err := hashes(roots.Working)
+	working, err = hashes(roots.Working)
 	if err != nil {
-		return false, err
+		return nil, nil, nil, err
 	}
-	head, err := hashes(roots.Head)
+	staged, err = hashes(roots.Staged)
 	if err != nil {
-		return false, err
+		return nil, nil, nil, err
 	}
-	if !maps.Equal(working, head) {
-		return true, nil
-	}
-	staged, err := hashes(roots.Staged)
+	head, err = hashes(roots.Head)
 	if err != nil {
-		return false, err
+		return nil, nil, nil, err
 	}
-	return !maps.Equal(staged, head), nil
+	return working, staged, head, nil
+}
+
+// buildTrackedPredicate returns a function that reports whether a table is tracked for the
+// purpose of detecting uncommitted-change conflicts. It returns false for read-only system
+// tables and for tables matched by a dolt_ignore pattern on |root|. Writable system tables
+// such as dolt_ignore are tracked so the conflict check covers the same tables the carry step
+// acts on.
+func buildTrackedPredicate(ctx context.Context, root doltdb.RootValue) (func(doltdb.TableName) (bool, error), error) {
+	names, err := root.GetAllTableNames(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	schemas := doltdb.GetUniqueSchemaNamesFromTableNames(names)
+	patternsBySchema, err := doltdb.GetIgnoredTablePatterns(ctx, doltdb.Roots{Working: root, Staged: root, Head: root}, schemas)
+	if err != nil {
+		return nil, err
+	}
+	return func(n doltdb.TableName) (bool, error) {
+		if doltdb.IsReadOnlySystemTable(n) {
+			return false, nil
+		}
+		patterns := patternsBySchema[n.Schema]
+		result, ignoreErr := patterns.IsTableNameIgnored(n)
+		if doltdb.AsDoltIgnoreInConflict(ignoreErr) != nil {
+			return true, nil
+		}
+		if ignoreErr != nil {
+			return false, ignoreErr
+		}
+		return result != doltdb.Ignore, nil
+	}, nil
 }
 
 // ClearFeatureVersion creates a new version of the provided roots where all three roots have the same
