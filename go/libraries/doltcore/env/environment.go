@@ -243,7 +243,7 @@ func LoadDoltDB(ctx context.Context, dEnv *DoltEnv) {
 				params[k] = v
 			}
 		}
-		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, dEnv.urlStr, dEnv.FS, params)
+		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_DOLT, dEnv.urlStr, dEnv.FS, params)
 		dEnv.doltDB = ddb
 		dEnv.DBLoadError = dbLoadErr
 

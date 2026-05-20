@@ -18,7 +18,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-22.04 ]
-        dolt_fmt: [ "__DOLT__" ]
     steps:
     - uses: actions/checkout@v6
     - name: Set up Go toolchain
@@ -27,8 +26,6 @@ jobs:
       working-directory: ./go
       run: |
         DOLT_SKIP_PREPARED_ENGINETESTS=1 go test -vet=off -v -race -timeout 30m github.com/dolthub/dolt/go/libraries/doltcore/sqle/enginetest
-      env:
-        DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}
     - name: Test concurrentmap
       working-directory: ./go
       run: |

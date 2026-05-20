@@ -42,7 +42,7 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	require.NoError(t, err)
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFSTablePersister(dir, q, false)
-	nbf := types.Format_Default.VersionString()
+	nbf := types.Format_DOLT.VersionString()
 	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { j.Close() })
@@ -54,7 +54,7 @@ func openTestChunkJournal(t *testing.T, dir string) *ChunkJournal {
 	require.NoError(t, err)
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFSTablePersister(dir, q, false)
-	nbf := types.Format_Default.VersionString()
+	nbf := types.Format_DOLT.VersionString()
 	j, err := newChunkJournal(t.Context(), nbf, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { j.Close() })
@@ -65,7 +65,7 @@ func TestChunkJournalBlockStoreSuite(t *testing.T) {
 	cacheOnce.Do(makeGlobalCaches)
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
 		q := NewUnlimitedMemQuotaProvider()
-		nbf := types.Format_Default.VersionString()
+		nbf := types.Format_DOLT.VersionString()
 		return NewLocalJournalingStore(ctx, nbf, dir, q, false, nil)
 	}
 	suite.Run(t, &BlockStoreSuite{
@@ -121,7 +121,7 @@ func TestChunkJournalReadOnly(t *testing.T) {
 func TestChunkJournalBootstrapMissingRootRecord(t *testing.T) {
 	cacheOnce.Do(makeGlobalCaches)
 	ctx := context.Background()
-	nbf := types.Format_Default.VersionString()
+	nbf := types.Format_DOLT.VersionString()
 
 	// setup creates a journaling store in |dir|, commits a root, and returns it.
 	setup := func(t *testing.T, dir string) hash.Hash {

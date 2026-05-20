@@ -60,9 +60,6 @@ func doDoltStash(ctx *sql.Context, args []string) (int, error) {
 	if !ok {
 		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
 	}
-	if !dbData.Ddb.Format().UsesFlatbuffers() {
-		return cmdFailure, fmt.Errorf("stash is not supported for old storage format")
-	}
 
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {

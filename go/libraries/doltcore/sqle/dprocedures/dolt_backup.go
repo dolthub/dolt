@@ -222,13 +222,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 
 	remote := env.NewRemote(DoltBackupParamRestore, remoteUrl, remoteParams)
 
-	// Use default format if no database context is available (e.g., when run from invalid directory).
-	format := types.Format_Default
-	if dbData.Ddb != nil {
-		format = dbData.Ddb.Format()
-	}
-
-	remoteDb, err := dsess.Provider().GetRemoteDB(ctx, format, remote)
+	remoteDb, err := dsess.Provider().GetRemoteDB(ctx, types.Format_DOLT, remote)
 	if err != nil {
 		return err
 	}
