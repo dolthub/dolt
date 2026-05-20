@@ -36,7 +36,6 @@ func NewWriteSession(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate
 		dbName:        dbName,
 		tables:        make(map[doltdb.TableName]*prollyTableWriter),
 		aiTracker:     aiTracker,
-		mut:           &sync.RWMutex{},
 		workingSet:    ws,
 		setter:        setter,
 		targetStaging: opts.TargetStaging,
@@ -49,7 +48,6 @@ type prollyWriteSession struct {
 	dbName        string
 	tables        map[doltdb.TableName]*prollyTableWriter
 	aiTracker     globalstate.AutoIncrementTracker
-	mut           *sync.RWMutex
 	workingSet    *doltdb.WorkingSet
 	setter        dsess.SessionRootSetter
 	targetStaging bool
@@ -62,8 +60,6 @@ func (s *prollyWriteSession) GetWorkingSet() *doltdb.WorkingSet {
 }
 
 func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
-	s.mut.RLock()
-	defer s.mut.RUnlock()
 	for _, writer := range s.tables {
 		err := writer.VisitGCRoots(ctx, roots)
 		if err != nil {
@@ -75,8 +71,6 @@ func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.H
 
 // GetTableWriter implements WriteSession
 func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.TableName) (dsess.TableWriter, error) {
-	s.mut.RLock()
-	defer s.mut.RUnlock()
 	if tw, ok := s.tables[tblName]; ok {
 		return tw, nil
 	}
@@ -117,8 +111,6 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.Tab
 
 // SetWorkingSet implements WriteSession
 func (s *prollyWriteSession) SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
 	root := ws.WorkingRoot()
 	rootHash, err := root.HashOf()
 	if err != nil {
@@ -172,7 +164,6 @@ func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error)
 
 // FlushTable puts the already materialized table into the working set
 func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (flushed doltdb.RootValue, err error) {
-	s.mut.Lock()
 	if s.targetStaging {
 		flushed = s.workingSet.StagedRoot()
 		flushed, err = flushed.PutTable(ctx, tblName, tbl)
@@ -188,9 +179,6 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 		}
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
-	// Need to unlock here because s.setter() is DoltSession.SetWorkingSet(), which calls
-	// prollyWriteSession.SetWorkingSet(), and we don't want to double lock.
-	s.mut.Unlock()
 	err = s.setter(ctx, s.dbName, flushed)
 	if err != nil {
 		return nil, err
@@ -223,7 +211,6 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 	}
 
 	var flushed doltdb.RootValue
-	s.mut.Lock()
 	if s.targetStaging {
 		flushed = s.workingSet.StagedRoot()
 	} else {
@@ -262,11 +249,7 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
 
-	// Need to unlock here because s.setter() is DoltSession.SetWorkingSet(), which calls
-	// prollyWriteSession.SetWorkingSet(), and we don't want to double lock.
-	s.mut.Unlock()
-	//if err := s.setter(ctx, s.dbName, flushed); err != nil {
-	//	return nil, err
-	//}
+	// TODO: seems like we should call s.setter to update the working set in the branch state,
+	//  but doing so causes Binlog replication tests to fail?
 	return flushed, nil
 }
