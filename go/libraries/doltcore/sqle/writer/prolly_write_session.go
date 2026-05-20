@@ -36,7 +36,7 @@ func NewWriteSession(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate
 		dbName:        dbName,
 		tables:        make(map[doltdb.TableName]*prollyTableWriter),
 		aiTracker:     aiTracker,
-		mut:           &sync.Mutex{},
+		mut:           &sync.RWMutex{},
 		workingSet:    ws,
 		setter:        setter,
 		targetStaging: opts.TargetStaging,
