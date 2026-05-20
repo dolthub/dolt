@@ -145,12 +145,15 @@ func (s *prollyWriteSession) SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingS
 
 // GetOptions implements WriteSession
 func (s *prollyWriteSession) GetOptions() editor.Options {
-	return editor.Options{} // TODO: remove?
+	return editor.Options{
+		TargetStaging: s.targetStaging,
+	}
 }
 
 // SetOptions implements WriteSession
 func (s *prollyWriteSession) SetOptions(opts editor.Options) {
-	return // TODO: remove?
+	s.targetStaging = opts.TargetStaging
+	return
 }
 
 // Flush implements WriteSessionFlusher
