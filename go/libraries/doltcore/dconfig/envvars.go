@@ -27,7 +27,6 @@ const (
 	EnvDoltRootPath                  = "DOLT_ROOT_PATH"
 	EnvRemoteVersionDownloadStats    = "DOLT_REMOTE_VERBOSE_DOWNLOAD_STATS"
 	EnvPushLog                       = "PUSH_LOG"
-	EnvDefaultBinFormat              = "DOLT_DEFAULT_BIN_FORMAT"
 	EnvTestForceOpenEditor           = "DOLT_TEST_FORCE_OPEN_EDITOR"
 	EnvDisableChunkJournal           = "DOLT_DISABLE_CHUNK_JOURNAL"
 	EnvDisableReflog                 = "DOLT_DISABLE_REFLOG"

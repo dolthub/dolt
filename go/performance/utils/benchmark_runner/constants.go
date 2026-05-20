@@ -120,7 +120,6 @@ const (
 	doltInitCommand       = "init"
 	dbName                = "test"
 	bigEmptyRepo          = "max-hoffman/big-empty"
-	nbfEnvVar             = "DOLT_DEFAULT_BIN_FORMAT"
 
 	postgresDriver         = "postgres"
 	doltgresUser           = "postgres"

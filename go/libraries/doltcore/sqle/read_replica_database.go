@@ -68,7 +68,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default, dEnv)
+	srcDB, err := remote.GetRemoteDB(ctx, types.Format_DOLT, dEnv)
 	if err != nil {
 		return EmptyReadReplica, err
 	}

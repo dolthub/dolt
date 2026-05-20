@@ -108,7 +108,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 		config.UserEmailKey: email,
 	})
 
-	err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email, DefaultInitBranch)
+	err = dEnv.InitRepo(context.Background(), types.Format_DOLT, name, email, DefaultInitBranch)
 	require.NoError(t, err)
 
 	return Load(context.Background(), hdp, fs, urlStr, "test")

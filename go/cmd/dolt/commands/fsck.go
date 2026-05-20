@@ -130,7 +130,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	params := make(map[string]interface{})
 	params[dbfactory.ChunkJournalParam] = struct{}{}
 	dbFact := dbfactory.FileFactory{}
-	ddb, _, _, err := dbFact.CreateDbNoCache(ctx, types.Format_Default, u, params, func(vErr error) {
+	ddb, _, _, err := dbFact.CreateDbNoCache(ctx, types.Format_DOLT, u, params, func(vErr error) {
 		report.ScanErrs.AppendE(vErr)
 	})
 	if err != nil {

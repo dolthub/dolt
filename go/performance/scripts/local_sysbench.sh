@@ -16,7 +16,7 @@ while test $# -gt 0
 do
     case "$1" in
 
-        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
+        --new-new) true # ignored; used to control NomsBinFormat
             ;;
 
         --no-exchange) export SINGLE_THREAD_FEATURE_FLAG=true
@@ -133,7 +133,6 @@ sysbench \
   "$SYSBENCH_TEST" run
 
 unset DOLT_ENABLE_CHUNK_JOURNAL
-unset DOLT_DEFAULT_BIN_FORMAT
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
 

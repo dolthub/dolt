@@ -60,12 +60,12 @@ func (s *nomsRootTestSuite) TestBasic() {
 	db := ds.Database()
 
 	var goldenHello, goldenGoodbye string
-	switch types.Format_Default {
+	switch types.Format_DOLT {
 	case types.Format_DOLT:
 		goldenHello = "sf173aaa57qjoakme0iufkg4c17beoqe\n"
 		goldenGoodbye = "gjcehnn4v0sbtt1hste082hfv1kg0hqv\n"
 	default:
-		s.Fail("no golden values exist for NBF %s", types.Format_Default.VersionString())
+		s.Fail("no golden values exist for NBF %s", types.Format_DOLT.VersionString())
 	}
 
 	ds, _ = db.Commit(context.Background(), ds, types.String("hello!"), datas.CommitOptions{Meta: meta})

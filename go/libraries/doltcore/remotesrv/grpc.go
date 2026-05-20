@@ -875,7 +875,7 @@ func (rs *RemoteChunkStore) getAddrs(version string) chunks.InsertAddrsCurry {
 }
 
 func (rs *RemoteChunkStore) getStore(ctx context.Context, logger *logrus.Entry, repoPath string) (RemoteSrvStore, error) {
-	return rs.getOrCreateStore(ctx, logger, repoPath, types.Format_Default.VersionString())
+	return rs.getOrCreateStore(ctx, logger, repoPath, types.Format_DOLT.VersionString())
 }
 
 func (rs *RemoteChunkStore) getOrCreateStore(ctx context.Context, logger *logrus.Entry, repoPath, nbfVerStr string) (RemoteSrvStore, error) {
