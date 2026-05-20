@@ -114,6 +114,7 @@ func (t *TextStorage) WithMaxByteLength(maxByteLength int64) *TextStorage {
 	return &TextStorage{
 		ImmutableValue: NewImmutableValue(t.Addr, t.vs),
 		maxByteLength:  maxByteLength,
+		ctx:            t.ctx,
 	}
 }
 
@@ -136,7 +137,14 @@ func (t *TextStorage) Hash() interface{} {
 
 // Value implements driver.Valuer for interoperability with other go libraries
 func (t *TextStorage) Value() (driver.Value, error) {
-	buf, err := t.GetBytes(t.ctx)
+	ctx := t.ctx
+	if ctx == nil {
+		// Defensive: any construction path that fails to populate ctx must not
+		// produce a nil-ctx GetBytes call — that propagates to NomsBlockStore.Get
+		// and panics in OTEL tracing (gastownhall/beads#4049).
+		ctx = context.Background()
+	}
+	buf, err := t.GetBytes(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -225,12 +233,20 @@ func (b *ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
 	return &ByteArray{
 		ImmutableValue: b.ImmutableValue,
 		maxByteLength:  maxByteLength,
+		ctx:            b.ctx,
 	}
 }
 
 // Value implements driver.Valuer for interoperability with other go libraries
 func (b *ByteArray) Value() (driver.Value, error) {
-	return b.GetBytes(b.ctx)
+	ctx := b.ctx
+	if ctx == nil {
+		// Defensive: any construction path that fails to populate ctx must not
+		// produce a nil-ctx GetBytes call — that propagates to NomsBlockStore.Get
+		// and panics in OTEL tracing (gastownhall/beads#4049).
+		ctx = context.Background()
+	}
+	return b.GetBytes(ctx)
 }
 
 // GeometryStorage is a sql.AnyWrapper for geometry values.
