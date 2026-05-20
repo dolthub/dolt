@@ -2460,13 +2460,19 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 		}
 	}
 
-	ret, err := creation.CreateIndex(ctx, table, t.Name(), idx.Name, columns, allocatePrefixLengths(idx.Columns), schema.IndexProperties{
+	var predicateStr string
+	if idx.Predicate != nil {
+		predicateStr = idx.Predicate.String()
+	}
+
+	idxProperties := schema.IndexProperties{
 		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
 		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
 		IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
 		IsVector:      idx.Constraint == sql.IndexConstraint_Vector,
 		IsUserDefined: true,
 		Comment:       idx.Comment,
+		Predicate:     predicateStr,
 		FullTextProperties: schema.FullTextProperties{
 			ConfigTable:      tableNames.Config,
 			PositionTable:    tableNames.Position,
@@ -2478,7 +2484,9 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 			KeyPositions:     keyPositions,
 		},
 		VectorProperties: vectorProperties,
-	}, t.opts)
+	}
+
+	ret, err := creation.CreateIndex(ctx, table, t.Name(), idx.Name, columns, allocatePrefixLengths(idx.Columns), idxProperties, t.opts, idx.Predicate)
 	if err != nil {
 		return err
 	}
@@ -2877,7 +2885,7 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 		IsVector:      false,
 		IsUserDefined: false,
 		Comment:       "",
-	}, t.opts)
+	}, t.opts, nil)
 	if err != nil {
 		return err
 	}

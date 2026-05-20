@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -95,6 +96,13 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 			IsUnique:      def.IsUnique(),
 			IsSpatial:     def.IsSpatial(),
 			PrefixLengths: def.PrefixLengths(),
+		}
+		if predStr := def.Predicate(); predStr != "" {
+			predExpr, err := expranalysis.ResolvePredicateExpression(ctx, tableName, schState.DoltSchema, predStr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to compile partial index predicate for %s: %w", def.Name(), err)
+			}
+			idxState.Predicate = predExpr
 		}
 		schState.SecIndexes = append(schState.SecIndexes, idxState)
 	}
