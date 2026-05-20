@@ -265,8 +265,8 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 	// Need to unlock here because s.setter() is DoltSession.SetWorkingSet(), which calls
 	// prollyWriteSession.SetWorkingSet(), and we don't want to double lock.
 	s.mut.Unlock()
-	if err := s.setter(ctx, s.dbName, flushed); err != nil {
-		return nil, err
-	}
+	//if err := s.setter(ctx, s.dbName, flushed); err != nil {
+	//	return nil, err
+	//}
 	return flushed, nil
 }
