@@ -348,7 +348,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string, commitBecomesEmptyHandl
 		return fmt.Errorf("unable to get db datata for database %s", ctx.GetCurrentDatabase())
 	}
 
-	db, err := doltSession.Provider().Database(ctx, ctx.GetCurrentDatabase())
+	db, err := doltSession.GenericProvider().Database(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
 		return err
 	}
@@ -544,7 +544,7 @@ func validateNoConflicts(ctx *sql.Context) error {
 // loadRebasePlan loads the rebase plan from the current database for the current session and validates it.
 func loadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	db, err := doltSession.Provider().Database(ctx, ctx.GetCurrentDatabase())
+	db, err := doltSession.GenericProvider().Database(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
 		return nil, err
 	}

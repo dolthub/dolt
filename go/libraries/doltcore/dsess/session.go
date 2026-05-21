@@ -172,7 +172,11 @@ func (d *DoltSession) Provider() DoltDatabaseProvider {
 // GenericProvider returns the sql.MutableDatabaseProvider for this session. This allows access to the provider without
 // incurring import cycles in some cases.
 func (d *DoltSession) GenericProvider() sql.MutableDatabaseProvider {
-	return d.provider
+	// dsess.DoltDatabaseProvider does not embed sql.MutableDatabaseProvider
+	// (that surface lives on sqle.DatabaseProvider). Concrete providers in
+	// production (sqle.DoltDatabaseProvider) satisfy both; callers of this
+	// method exist only on the SQL path.
+	return d.provider.(sql.MutableDatabaseProvider)
 }
 
 // StatsProvider returns the sql.StatsProvider for this session.
