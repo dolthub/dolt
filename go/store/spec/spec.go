@@ -311,7 +311,7 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	case "oci":
 		return parseOCISpec(ctx, sp.Href(), sp.Options)
 	case "nbs":
-		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
+		cs, err := nbs.NewLocalStore(ctx, types.Format_DOLT.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
 		d.PanicIfError(err)
 		return cs
 	case "mem":
@@ -379,7 +379,7 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 
 	// DisableLogOutputChecksumValidationSkipped silences the per-GetObject WARN emitted when objects have no stored checksum.
 	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
-	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3c, dynamodb.NewFromConfig(cfg), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+	cs, err := nbs.NewAWSStore(ctx, types.Format_DOLT.VersionString(), parts[0], u.Path, parts[1], s3c, dynamodb.NewFromConfig(cfg), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 	d.PanicIfError(err)
 
 	return cs
@@ -400,7 +400,7 @@ func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunk
 		panic("Could not create GCSBlobstore")
 	}
 
-	cs, err := nbs.NewGCSStore(ctx, types.Format_Default.VersionString(), bucket, path, gcs, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+	cs, err := nbs.NewGCSStore(ctx, types.Format_DOLT.VersionString(), bucket, path, gcs, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 
 	d.PanicIfError(err)
 
@@ -423,7 +423,7 @@ func parseOCISpec(ctx context.Context, ociURL string, options SpecOptions) chunk
 		panic("Could not create OCIBlobstore")
 	}
 
-	cs, err := nbs.NewOCISStore(ctx, types.Format_Default.VersionString(), bucket, path, provider, client, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+	cs, err := nbs.NewOCISStore(ctx, types.Format_DOLT.VersionString(), bucket, path, provider, client, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 	d.PanicIfError(err)
 
 	return cs
@@ -508,12 +508,12 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 			return getStandardLocalStore(ctx, sp.DatabaseName)
 		}
 
-		newGenSt, err := nbs.NewLocalJournalingStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, nbs.NewUnlimitedMemQuotaProvider(), false, nbs.JournalParserLoggingWarningsCb)
+		newGenSt, err := nbs.NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), sp.DatabaseName, nbs.NewUnlimitedMemQuotaProvider(), false, nbs.JournalParserLoggingWarningsCb)
 
 		// If the journaling store can't be created, fall back to a standard local store
 		if err != nil {
 			var localErr error
-			newGenSt, localErr = nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
+			newGenSt, localErr = nbs.NewLocalStore(ctx, types.Format_DOLT.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
 			if localErr != nil {
 				d.PanicIfError(err)
 			}
@@ -549,7 +549,7 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 func getStandardLocalStore(ctx context.Context, dbName string) (datas.Database, types.ValueReadWriter, tree.NodeStore) {
 	os.Mkdir(dbName, 0777)
 
-	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dbName, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
+	cs, err := nbs.NewLocalStore(ctx, types.Format_DOLT.VersionString(), dbName, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
 	d.PanicIfError(err)
 
 	vrw := types.NewValueStore(cs)

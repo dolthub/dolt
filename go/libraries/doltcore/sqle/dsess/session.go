@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
@@ -1863,7 +1863,7 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 		return config.SetFloat(conf, key, float64(v))
 	case float64:
 		return config.SetFloat(conf, key, v)
-	case decimal.Decimal:
+	case *apd.Decimal:
 		f64, _ := v.Float64()
 		return config.SetFloat(conf, key, f64)
 	case string:
@@ -1970,7 +1970,7 @@ func findPersistedGlobalVars(dEnv *env.DoltEnv) (persistedGlobalVars []sql.Syste
 
 		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
 		for _, k := range missingKeys {
-			cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
+			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
 		}
 	}
 
@@ -1984,12 +1984,12 @@ func findPersistedGlobalVars(dEnv *env.DoltEnv) (persistedGlobalVars []sql.Syste
 
 		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
 		for _, k := range missingKeys {
-			cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
+			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
 		}
 	}
 
 	if !foundConfig {
-		cli.Println("warning: no local or global Dolt configuration found; session is not persistable")
+		logrus.Warn("no local or global Dolt configuration found; session is not persistable")
 	}
 
 	return persistedGlobalVars, nil

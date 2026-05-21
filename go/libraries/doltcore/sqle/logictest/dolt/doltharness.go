@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/sqllogictest/go/logictest"
 	"github.com/dolthub/vitess/go/vt/proto/query"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
@@ -136,12 +136,12 @@ func (h *DoltHarness) GetTimeout() int64 {
 func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	ctx := context.Background()
 	if !dEnv.HasDoltDir() {
-		err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
+		err := dEnv.InitRepoWithTime(context.Background(), types.Format_DOLT, name, email, env.DefaultInitBranch, time.Now())
 		if err != nil {
 			return err
 		}
 	} else {
-		err := dEnv.InitDBAndRepoState(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
+		err := dEnv.InitDBAndRepoState(context.Background(), types.Format_DOLT, name, email, env.DefaultInitBranch, time.Now())
 		if err != nil {
 			return err
 		}
@@ -251,7 +251,7 @@ func toSqlString(ctx *sql.Context, val interface{}) (string, error) {
 	case float32, float64:
 		// exactly 3 decimal points for floats
 		return fmt.Sprintf("%.3f", v), nil
-	case decimal.Decimal:
+	case *apd.Decimal:
 		// exactly 3 decimal points for floats
 		res, _ := v.Float64()
 		return fmt.Sprintf("%.3f", res), nil

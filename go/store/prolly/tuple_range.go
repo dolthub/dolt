@@ -19,7 +19,8 @@ import (
 	"math"
 	"sort"
 
-	"github.com/shopspring/decimal"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -335,7 +336,11 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc *val.Tuple
 		if !ok {
 			return nil, false, nil
 		}
-		tb.PutDecimal(n, v.Add(decimal.New(1, 0)))
+		_, err := sql.DecimalCtx.Add(v, v, types.DecimalFromInt64(1))
+		if err != nil {
+			return nil, false, err
+		}
+		tb.PutDecimal(n, v)
 	default:
 		return nil, false, nil
 	}

@@ -244,7 +244,7 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 	if strings.TrimSpace(cloneRoot) != "" {
 		dialer = remoteDialerWithGitCacheRoot{GRPCDialProvider: dEnv, root: cloneRoot}
 	}
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default, dialer)
+	ddb, err := r.GetRemoteDB(ctx, types.Format_DOLT, dialer)
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
 		return env.NoRemote, nil, bdr.Build()

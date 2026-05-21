@@ -1109,7 +1109,15 @@ func copyConstraintViolationsAndConflicts(ctx context.Context, from, to *doltdb.
 // Updater implements sql.UpdatableTable
 func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
-		return sqlutil.NewStaticErrorEditor(err)
+		// A conflicts-table writer delegating into this source-table writer
+		// will set a bypass marker on the context after admitting the caller
+		// through its own check. Honor that marker so a merge-permission
+		// caller is not rejected here. The marker is keyed by (db, branch,
+		// table), so a marker for a different table will not match.
+		dbName, branch := doltdb.SplitRevisionDbName(t.db.RevisionQualifiedName())
+		if !dsess.ConflictsBypassFor(ctx, dbName, branch, t.TableName()) {
+			return sqlutil.NewStaticErrorEditor(err)
+		}
 	}
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
@@ -3210,6 +3218,47 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 
 func (t *WritableDoltTable) SetWriteSession(session dsess.WriteSession) {
 	t.pinnedWriteSession = session
+}
+
+var _ dsess.CacheableDoltTable = (*DoltTable)(nil)
+var _ dsess.CacheableDoltTable = (*WritableDoltTable)(nil)
+var _ dsess.CacheableDoltTable = (*AlterableDoltTable)(nil)
+
+// RebindDatabase implements dsess.CacheableDoltTable.
+// Shallow-copies the table and refreshes the db-derived fields.
+func (t *DoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (dsess.CacheableDoltTable, error) {
+	db := newDb.(Database)
+	sqlSch, err := sqlutil.FromDoltSchema(ctx, db.Name(), t.tableName, t.sch)
+	if err != nil {
+		return nil, err
+	}
+	cp := *t
+	cp.db = db
+	cp.opts = db.editOpts
+	cp.sqlSch = sqlSch
+	return &cp, nil
+}
+
+// RebindDatabase implements dsess.CacheableDoltTable.
+func (t *WritableDoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (dsess.CacheableDoltTable, error) {
+	db := newDb.(Database)
+	inner, err := t.DoltTable.RebindDatabase(ctx, newDb)
+	if err != nil {
+		return nil, err
+	}
+	cp := *t
+	cp.DoltTable = inner.(*DoltTable)
+	cp.db = db
+	return &cp, nil
+}
+
+// RebindDatabase implements dsess.CacheableDoltTable.
+func (t *AlterableDoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (dsess.CacheableDoltTable, error) {
+	inner, err := t.WritableDoltTable.RebindDatabase(ctx, newDb)
+	if err != nil {
+		return nil, err
+	}
+	return &AlterableDoltTable{WritableDoltTable: *inner.(*WritableDoltTable)}, nil
 }
 
 func FindIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, bool, error) {

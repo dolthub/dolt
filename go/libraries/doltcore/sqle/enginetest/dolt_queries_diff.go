@@ -1169,6 +1169,23 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				// Use index when to_pk is specified.
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit1, @Commit4, 't') where to_pk = 2;",
+				Expected: []sql.Row{
+					{2, "two", "three", nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"commits_to"},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit1, @Commit4, 't') where from_pk IS NULL;",
+				Expected: []sql.Row{
+					{1, "uno", "dos", nil, nil, nil, "added"},
+					{2, "two", "three", nil, nil, nil, "added"},
+					{3, "three", "four", nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"commits_from"},
+			},
+			{
 				// Reverse the to/from commits to see the diff from the other direction
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T');",
 				Expected: []sql.Row{
@@ -1176,6 +1193,23 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 					{nil, nil, nil, 2, "two", "three", "removed"},
 					{nil, nil, nil, 3, "three", "four", "removed"},
 				},
+			},
+			{
+				// Use index when from_pk is specified.
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T') where from_pk = 2;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 2, "two", "three", "removed"},
+				},
+				ExpectedIndexes: []string{"commits_from"},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T') where to_pk IS NULL;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, "uno", "dos", "removed"},
+					{nil, nil, nil, 2, "two", "three", "removed"},
+					{nil, nil, nil, 3, "three", "four", "removed"},
+				},
+				ExpectedIndexes: []string{"commits_to"},
 			},
 			{
 				Query: `
@@ -5287,12 +5321,12 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "base case: insert, update, delete",
 		SetUpScript: []string{
-			"set @Commit0 = HASHOF('HEAD');",
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit0, '-am', 'creating table t');",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
 			"set @Commit1 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'populating table t');",
 
 			"update t set c2=0 where pk=1",
 			"set @Commit2 = '';",
@@ -5373,6 +5407,20 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_commit_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 AND to_pk = 1;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"commits_to"},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_commit_DIFF_t WHERE TO_COMMIT=@Commit0 and FROM_COMMIT=@Commit1 AND from_pk = 1;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 2, 3, "removed"},
+				},
+				ExpectedIndexes: []string{"commits_from"},
 			},
 		},
 	},

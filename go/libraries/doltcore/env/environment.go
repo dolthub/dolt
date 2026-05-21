@@ -152,12 +152,8 @@ func IncompleteEnv(FS filesys.Filesys) *DoltEnv {
 	}
 }
 
-func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error) {
-	if withCaching {
-		return r.GetRemoteDB(ctx, format, dEnv)
-	} else {
-		return r.GetRemoteDBWithoutCaching(ctx, format, dEnv)
-	}
+func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote) (*doltdb.DoltDB, error) {
+	return r.GetRemoteDBWithoutCaching(ctx, format, dEnv)
 }
 
 func (dEnv *DoltEnv) GetConfig() config.ReadableConfig {
@@ -247,7 +243,7 @@ func LoadDoltDB(ctx context.Context, dEnv *DoltEnv) {
 				params[k] = v
 			}
 		}
-		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, dEnv.urlStr, dEnv.FS, params)
+		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_DOLT, dEnv.urlStr, dEnv.FS, params)
 		dEnv.doltDB = ddb
 		dEnv.DBLoadError = dbLoadErr
 
