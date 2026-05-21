@@ -507,7 +507,7 @@ func sizeOfDecimal(val *apd.Decimal) ByteSize {
 
 func compareDecimal(l, r *apd.Decimal) int {
 	if (l.Form == apd.NaN && r.Form == apd.NaN) ||
-			(l.Form == apd.Infinite && r.Form == apd.Infinite && l.Negative == r.Negative) {
+		(l.Form == apd.Infinite && r.Form == apd.Infinite && l.Negative == r.Negative) {
 		return 0
 	}
 	if l.Form == apd.NaN {
