@@ -98,7 +98,7 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 			PrefixLengths: def.PrefixLengths(),
 		}
 		if predStr := def.Predicate(); predStr != "" {
-			predExpr, err := expranalysis.ResolvePredicateExpression(ctx, tableName, schState.DoltSchema, predStr)
+			predExpr, err := expranalysis.ResolvePredicateExpression(ctx, tableName, predStr)
 			if err != nil {
 				return nil, fmt.Errorf("failed to compile partial index predicate for %s: %w", def.Name(), err)
 			}

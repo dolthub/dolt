@@ -76,10 +76,9 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 	return nil, fmt.Errorf("unable to find check expression")
 }
 
-// ResolvePredicateExpression compiles a predicate string (MySQL SQL expression) into
-// a sql.Expression resolved against the given table schema. Used to re-hydrate partial
-// index predicates from their string representation during DML writer setup.
-func ResolvePredicateExpression(ctx *sql.Context, tableName string, sch schema.Schema, predicateStr string) (sql.Expression, error) {
+// ResolvePredicateExpression compiles a predicate string into a sql.Expression resolved.
+// Used to re-hydrate partial index predicates from their string representation during DML writer setup.
+func ResolvePredicateExpression(ctx *sql.Context, tableName string, predicateStr string) (sql.Expression, error) {
 	parsed, err := parseQuery(ctx, fmt.Sprintf("SELECT %s FROM %s", predicateStr, tableName))
 	if err != nil {
 		return nil, err

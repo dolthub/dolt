@@ -272,16 +272,16 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 	}
 
 	if writer.unique {
-		skipUniqueCheck := false
+		performUniqueCheck := false
 		if writer.predicate != nil {
+			// do unique check only if predicate result is TRUE.
 			res, err := writer.predicate.Eval(ctx.(*sql.Context), sqlRow)
 			if err != nil {
 				return err
 			}
-			skipUniqueCheck = res.(bool)
+			performUniqueCheck = res.(bool)
 		}
-
-		if skipUniqueCheck {
+		if performUniqueCheck {
 			prefixKey, err := writer.prefixBld.Build(ctx, sharePool)
 			if err != nil {
 				return err
