@@ -102,7 +102,7 @@ type savepoint struct {
 
 func NewDoltTransaction(
 	ctx *sql.Context,
-	dbs []SqlDatabase,
+	dbs []VersionedDatabase,
 	tCharacteristic sql.TransactionCharacteristic,
 ) (*DoltTransaction, error) {
 

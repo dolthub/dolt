@@ -225,7 +225,7 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context) e
 		return fmt.Errorf("table function not resolved")
 	}
 
-	sqledb, ok := pm.database.(dsess.SqlDatabase)
+	sqledb, ok := pm.database.(dsess.VersionedDatabase)
 	if !ok {
 		return fmt.Errorf("unexpected database type: %T", pm.database)
 	}

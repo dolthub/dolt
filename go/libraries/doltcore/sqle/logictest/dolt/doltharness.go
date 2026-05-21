@@ -59,7 +59,7 @@ func (h *DoltHarness) Close() {
 		// Close the sql-layer database resources (global state, background threads, etc).
 		// Do NOT close the underlying DoltDB here; this harness reuses a shared *env.DoltEnv
 		// across multiple init/teardown cycles (see doltharness_test.go).
-		db.(dsess.SqlDatabase).Close()
+		db.(dsql.SqlDatabase).Close()
 	}
 }
 

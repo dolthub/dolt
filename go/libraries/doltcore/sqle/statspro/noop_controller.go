@@ -59,7 +59,7 @@ func (s StatsNoop) CancelRefreshThread(string) {
 	return
 }
 
-func (s StatsNoop) StartRefreshThread(*sql.Context, dsess.DoltDatabaseProvider, string, *env.DoltEnv, dsess.SqlDatabase) error {
+func (s StatsNoop) StartRefreshThread(*sql.Context, dsess.DoltDatabaseProvider, string, *env.DoltEnv, dsess.VersionedDatabase) error {
 	return nil
 }
 

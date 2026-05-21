@@ -97,12 +97,12 @@ type DoltDatabaseProvider interface {
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, depth int, remoteParams map[string]string) error
 	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base
 	// database.
-	SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error)
+	SessionDatabase(ctx *sql.Context, dbName string) (VersionedDatabase, bool, error)
 	// BaseDatabase returns the base database for the specified database name. Meant for informational purposes when
 	// managing the session initialization only. Use SessionDatabase for normal database retrieval.
-	BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool)
+	BaseDatabase(ctx *sql.Context, dbName string) (VersionedDatabase, bool)
 	// DoltDatabases returns all databases known to this provider.
-	DoltDatabases() []SqlDatabase
+	DoltDatabases() []VersionedDatabase
 	// UndropDatabase attempts to restore the database |dbName| that was previously dropped.
 	// The restored database will appear identically when accessed through the SQL
 	// interface, but may be stored in a slightly different location on disk
@@ -127,34 +127,4 @@ type DoltDatabaseProvider interface {
 type SessionDatabaseBranchSpec struct {
 	RepoState env.RepoStateReadWriter[*sql.Context]
 	Branch    string
-}
-
-// SqlDatabase is the composite interface for databases exposed through
-// the SQL engine. It embeds VersionedDatabase (the data-layer surface
-// dsess itself uses) together with the go-mysql-server interfaces a
-// SQL-queryable database must satisfy.
-type SqlDatabase interface {
-	VersionedDatabase
-
-	sql.Database
-	sql.SchemaDatabase
-	sql.DatabaseSchema
-	sql.AliasedDatabase
-
-	// WithBranchRevision returns a copy of this database with the revision set to the given branch revision, and the
-	// database name set to the given name.
-	WithBranchRevision(requestedName string, branchSpec SessionDatabaseBranchSpec) (SqlDatabase, error)
-
-	// TODO: get rid of this, it's managed by the session, not the DB
-	GetRoot(*sql.Context) (doltdb.RootValue, error)
-	// Schema returns the schema of the database.
-	Schema() string
-
-	// Clean up any global resources associated with the
-	// SqlDatabase itself.  For DoltDatabases, this notably does
-	// not close the DoltDB, for example, but should shut down
-	// background threads not managed through
-	// sql.BackgroundThreads but which could be accessing or
-	// mutating database state.
-	Close()
 }

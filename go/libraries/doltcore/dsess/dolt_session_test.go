@@ -268,15 +268,15 @@ func (e emptyRevisionDatabaseProvider) PurgeDroppedDatabases(ctx *sql.Context) e
 	return nil
 }
 
-func (e emptyRevisionDatabaseProvider) BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool) {
+func (e emptyRevisionDatabaseProvider) BaseDatabase(ctx *sql.Context, dbName string) (VersionedDatabase, bool) {
 	return nil, false
 }
 
-func (e emptyRevisionDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error) {
+func (e emptyRevisionDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (VersionedDatabase, bool, error) {
 	return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 }
 
-func (e emptyRevisionDatabaseProvider) DoltDatabases() []SqlDatabase {
+func (e emptyRevisionDatabaseProvider) DoltDatabases() []VersionedDatabase {
 	return nil
 }
 

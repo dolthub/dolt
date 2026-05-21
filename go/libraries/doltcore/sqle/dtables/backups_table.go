@@ -28,13 +28,13 @@ import (
 )
 
 type BackupsTable struct {
-	db        dsess.SqlDatabase
+	db        dsess.VersionedDatabase
 	tableName string
 }
 
 var _ sql.Table = (*BackupsTable)(nil)
 
-func NewBackupsTable(db dsess.SqlDatabase, tableName string) *BackupsTable {
+func NewBackupsTable(db dsess.VersionedDatabase, tableName string) *BackupsTable {
 	return &BackupsTable{db: db, tableName: tableName}
 }
 

@@ -87,7 +87,7 @@ type Database struct {
 	revType       dsess.RevisionType
 }
 
-var _ dsess.SqlDatabase = Database{}
+var _ SqlDatabase = Database{}
 var _ dsess.RevisionDatabase = Database{}
 var _ globalstate.GlobalStateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
@@ -130,7 +130,7 @@ type ReadOnlyDatabase struct {
 }
 
 var _ sql.ReadOnlyDatabase = ReadOnlyDatabase{}
-var _ dsess.SqlDatabase = ReadOnlyDatabase{}
+var _ SqlDatabase = ReadOnlyDatabase{}
 
 func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
@@ -140,7 +140,7 @@ func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState
 	return initialDBState(ctx, r, r.revision)
 }
 
-func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (SqlDatabase, error) {
 	revDb, err := r.Database.WithBranchRevision(requestedName, branchSpec)
 	if err != nil {
 		return nil, err
@@ -154,7 +154,7 @@ func (db Database) GetTableResolver() doltdb.TableResolver {
 	return TableResolver{db}
 }
 
-func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (SqlDatabase, error) {
 	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
 	db.revision = branchSpec.Branch
 	db.revName = db.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch
@@ -239,7 +239,7 @@ func (d forwardCtxDbData) CWBHeadRef(ctx *sql.Context) (ref.DoltRef, error) {
 
 // initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should
 // implement their own method for an initial db state and not rely on this method.
-func initialDBState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dsess.InitialDbState, error) {
+func initialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	if len(db.Revision()) > 0 {
 		return initialStateForRevisionDb(ctx, db)
 	}

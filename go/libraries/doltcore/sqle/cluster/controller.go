@@ -246,7 +246,7 @@ func (c *Controller) ManageSystemVariables(variables sqlvars) {
 	c.refreshSystemVars()
 }
 
-func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, dbs ...dsess.SqlDatabase) error {
+func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, dbs ...sqle.SqlDatabase) error {
 	if c == nil {
 		return nil
 	}
