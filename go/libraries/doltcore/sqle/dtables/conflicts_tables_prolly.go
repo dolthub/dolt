@@ -39,7 +39,7 @@ import (
 func newProllyConflictsTable(
 	ctx *sql.Context,
 	tbl *doltdb.Table,
-	db dsess.SqlDatabase,
+	db dsess.VersionedDatabase,
 	sourceUpdatableTbl sql.UpdatableTable,
 	tblName doltdb.TableName,
 	root doltdb.RootValue,
@@ -90,7 +90,7 @@ type ProllyConflictsTable struct {
 	rs              RootSetter
 	root            doltdb.RootValue
 	tbl             *doltdb.Table
-	db              dsess.SqlDatabase
+	db              dsess.VersionedDatabase
 	sqlTable        sql.UpdatableTable
 	versionMappings *versionMappings
 	tblName         doltdb.TableName

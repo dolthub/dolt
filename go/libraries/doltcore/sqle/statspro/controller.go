@@ -221,7 +221,7 @@ func (sc *StatsController) newGcTicker() *time.Ticker {
 	return time.NewTicker(sc.gcInterval)
 }
 
-func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys, rotateOk bool) error {
+func (sc *StatsController) AddFs(ctx *sql.Context, db sqle.SqlDatabase, fs filesys.Filesys, rotateOk bool) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -336,7 +336,7 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 	}
 
 	db, err := sc.pro.Database(ctx, dbName)
-	sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), branch, branch+"/"+dbName)
+	sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(sqle.SqlDatabase), branch, branch+"/"+dbName)
 	if err != nil {
 		return err
 	}

@@ -33,7 +33,7 @@ import (
 // correct Database instance.
 type CacheableDoltTable interface {
 	sql.Table
-	RebindDatabase(ctx *sql.Context, newDb SqlDatabase) (CacheableDoltTable, error)
+	RebindDatabase(ctx *sql.Context, newDb VersionedDatabase) (CacheableDoltTable, error)
 }
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
@@ -64,7 +64,7 @@ type SessionCache struct {
 // handles to data or state, but always defer to the session. Keys in the secondary map are revision specifier strings
 type DatabaseCache struct {
 	// revisionDbs caches databases by name. The name is always lower case and revision qualified
-	revisionDbs map[revisionDbCacheKey]SqlDatabase
+	revisionDbs map[revisionDbCacheKey]VersionedDatabase
 	// initialDbStates caches the initial state of databases by name for a given noms root, which is the primary key.
 	// The secondary key is the lower-case revision-qualified database name.
 	initialDbStates map[doltdb.DataCacheKey]map[string]InitialDbState
@@ -399,7 +399,7 @@ func (c *SessionCache) GetCachedTriggers(key doltdb.DataCacheKey, schema string)
 }
 
 // GetCachedRevisionDb returns the cached revision database named, and whether the cache was present
-func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string, requestedName string) (SqlDatabase, bool) {
+func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string, requestedName string) (VersionedDatabase, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -415,12 +415,12 @@ func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string, requestedName
 }
 
 // CacheRevisionDb caches the revision database named
-func (c *DatabaseCache) CacheRevisionDb(database SqlDatabase) {
+func (c *DatabaseCache) CacheRevisionDb(database VersionedDatabase) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.revisionDbs == nil {
-		c.revisionDbs = make(map[revisionDbCacheKey]SqlDatabase)
+		c.revisionDbs = make(map[revisionDbCacheKey]VersionedDatabase)
 	}
 
 	if len(c.revisionDbs) > maxCachedKeys {
@@ -506,6 +506,6 @@ func (c *DatabaseCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.sessionVars = make(map[string]sessionVarCacheKey)
-	c.revisionDbs = make(map[revisionDbCacheKey]SqlDatabase)
+	c.revisionDbs = make(map[revisionDbCacheKey]VersionedDatabase)
 	c.initialDbStates = make(map[doltdb.DataCacheKey]map[string]InitialDbState)
 }

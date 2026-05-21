@@ -34,7 +34,7 @@ type UserSpaceDatabase struct {
 	editOpts editor.Options
 }
 
-var _ dsess.SqlDatabase = (*UserSpaceDatabase)(nil)
+var _ SqlDatabase = (*UserSpaceDatabase)(nil)
 
 func NewUserSpaceDatabase(root doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
 	return &UserSpaceDatabase{RootValue: root, editOpts: editOpts}
@@ -100,7 +100,7 @@ func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbSt
 	}, nil
 }
 
-func (db *UserSpaceDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+func (db *UserSpaceDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (SqlDatabase, error) {
 	// Nothing to do here, we don't support changing branch revisions
 	return db, nil
 }

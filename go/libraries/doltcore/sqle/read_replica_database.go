@@ -43,7 +43,7 @@ type ReadReplicaDatabase struct {
 	Database
 }
 
-var _ dsess.SqlDatabase = ReadReplicaDatabase{}
+var _ SqlDatabase = ReadReplicaDatabase{}
 var _ sql.VersionedDatabase = ReadReplicaDatabase{}
 var _ sql.TableDropper = ReadReplicaDatabase{}
 var _ sql.TableCreator = ReadReplicaDatabase{}
@@ -87,7 +87,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 	}, nil
 }
 
-func (rrd ReadReplicaDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+func (rrd ReadReplicaDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (SqlDatabase, error) {
 	rrd.rsr, rrd.rsw = branchSpec.RepoState, branchSpec.RepoState
 	rrd.revision = branchSpec.Branch
 	rrd.revName = rrd.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch

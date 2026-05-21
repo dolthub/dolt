@@ -82,7 +82,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 // configured through sql SystemVariables. This is called both at
 // startup, for the entire set of databases, and is called when
 // we create new databases through |registerNewDatabases|.
-func applyReadReplicationConfigToDatabase(ctx context.Context, dEnv *env.DoltEnv, db dsess.SqlDatabase) (dsess.SqlDatabase, error) {
+func applyReadReplicationConfigToDatabase(ctx context.Context, dEnv *env.DoltEnv, db SqlDatabase) (SqlDatabase, error) {
 	if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
 		remoteName, ok := remote.(string)
 		if !ok {
@@ -98,8 +98,8 @@ func applyReadReplicationConfigToDatabase(ctx context.Context, dEnv *env.DoltEnv
 	return db, nil
 }
 
-func ApplyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs ...dsess.SqlDatabase) ([]dsess.SqlDatabase, RunAsyncThreads, error) {
-	outputDbs := make([]dsess.SqlDatabase, len(dbs))
+func ApplyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs ...SqlDatabase) ([]SqlDatabase, RunAsyncThreads, error) {
+	outputDbs := make([]SqlDatabase, len(dbs))
 	asyncRunners := make([]RunAsyncThreads, len(dbs))
 	for i, db := range dbs {
 		dEnv := mrEnv.GetEnv(db.Name())

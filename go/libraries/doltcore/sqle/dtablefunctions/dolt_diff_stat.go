@@ -275,7 +275,7 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		return nil, err
 	}
 
-	sqledb, ok := ds.database.(dsess.SqlDatabase)
+	sqledb, ok := ds.database.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
 	}

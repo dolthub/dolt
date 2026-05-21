@@ -29,7 +29,7 @@ import (
 )
 
 func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads) sqle.InitDatabaseHook {
-	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv, db dsess.SqlDatabase) error {
+	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv, db sqle.SqlDatabase) error {
 		dialprovider := controller.gRPCDialProvider(denv)
 		var remoteDBs []func(context.Context) (*doltdb.DoltDB, error)
 		var remoteUrls []string

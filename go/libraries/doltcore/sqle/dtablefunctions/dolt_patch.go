@@ -125,7 +125,7 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 		return nil, err
 	}
 
-	sqledb, ok := p.database.(dsess.SqlDatabase)
+	sqledb, ok := p.database.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unable to get dolt database")
 	}
