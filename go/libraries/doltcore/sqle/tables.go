@@ -1856,6 +1856,9 @@ func fullTextRewriteEditor(
 		return nil, err
 	}
 
+	// We need our own write session for the rewrite operation. The connection's session must continue to return rows of
+	// the table as it existed before the rewrite operation began until it completes, at which point we update the
+	// session with the rewritten table.
 	writeSession := writer.NewWriteSession(t.db.RevisionQualifiedName(), newWs, ait, sess.SetWorkingRoot, dbState.WriteSession().GetOptions())
 	parentEditor, err := writeSession.GetTableWriter(ctx, t.TableName())
 	if err != nil {
