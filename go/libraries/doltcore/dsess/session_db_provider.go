@@ -129,13 +129,17 @@ type SessionDatabaseBranchSpec struct {
 	Branch    string
 }
 
+// SqlDatabase is the composite interface for databases exposed through
+// the SQL engine. It embeds VersionedDatabase (the data-layer surface
+// dsess itself uses) together with the go-mysql-server interfaces a
+// SQL-queryable database must satisfy.
 type SqlDatabase interface {
+	VersionedDatabase
+
 	sql.Database
 	sql.SchemaDatabase
 	sql.DatabaseSchema
 	sql.AliasedDatabase
-	SessionDatabase
-	RevisionDatabase
 
 	// WithBranchRevision returns a copy of this database with the revision set to the given branch revision, and the
 	// database name set to the given name.
@@ -143,14 +147,8 @@ type SqlDatabase interface {
 
 	// TODO: get rid of this, it's managed by the session, not the DB
 	GetRoot(*sql.Context) (doltdb.RootValue, error)
-	// TODO: remove ddb from the below, it's separable and is 95% of the uses of this method
-	DbData() env.DbData[*sql.Context]
-	// DoltDatabases returns all underlying DoltDBs for this database.
-	DoltDatabases() []*doltdb.DoltDB
 	// Schema returns the schema of the database.
 	Schema() string
-
-	GetTableResolver() doltdb.TableResolver
 
 	// Clean up any global resources associated with the
 	// SqlDatabase itself.  For DoltDatabases, this notably does
