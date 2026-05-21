@@ -272,9 +272,9 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 	}
 
 	if writer.unique {
-		performUniqueCheck := false
+		performUniqueCheck := true
 		if writer.predicate != nil {
-			// do unique check only if predicate result is TRUE.
+			// do not unique check if predicate result is FALSE.
 			res, err := writer.predicate.Eval(ctx.(*sql.Context), sqlRow)
 			if err != nil {
 				return err
