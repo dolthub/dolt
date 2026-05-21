@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	revertpkg "github.com/dolthub/dolt/go/libraries/doltcore/revert"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 )
 
 // doltRevertSchema matches the return schema for merge and cherry-pick to report
