@@ -47,7 +47,7 @@ import (
 )
 
 type DoltHarness struct {
-	provider              dsess.DoltDatabaseProvider
+	provider              sqle.DatabaseProvider
 	engine                *gms.Engine
 	t                     *testing.T
 	multiRepoEnv          *env.MultiRepoEnv

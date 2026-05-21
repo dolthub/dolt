@@ -29,6 +29,11 @@ func init() {
 }
 
 // EngineOverridesFromContext is defined here due to import cycles.
+//
+// EngineOverrides is a SQL-engine concern -- it lives on
+// sqle.DatabaseProvider, not on dsess.DoltDatabaseProvider. Dsess
+// reaches it via a structural type-assert here so dsess itself stays
+// free of SQL-engine dependency.
 func EngineOverridesFromContext(ctx context.Context) sql.EngineOverrides {
 	if ctx == nil {
 		return sql.EngineOverrides{}
@@ -41,5 +46,11 @@ func EngineOverridesFromContext(ctx context.Context) sql.EngineOverrides {
 	if !ok || dsess == nil {
 		return sql.EngineOverrides{}
 	}
-	return dsess.provider.EngineOverrides()
+	op, ok := dsess.provider.(interface {
+		EngineOverrides() sql.EngineOverrides
+	})
+	if !ok {
+		return sql.EngineOverrides{}
+	}
+	return op.EngineOverrides()
 }
