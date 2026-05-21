@@ -129,7 +129,7 @@ func NewDoltTransaction(
 
 // AddDb adds the database named to the transaction. Only necessary in the case when new databases are added to an
 // existing transaction (as when cloning a database on a read replica when it is first referenced).
-func (tx DoltTransaction) AddDb(ctx *sql.Context, db SqlDatabase) error {
+func (tx DoltTransaction) AddDb(ctx *sql.Context, db VersionedDatabase) error {
 	nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
 	if err != nil {
 		return err

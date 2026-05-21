@@ -1345,7 +1345,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
+func (d *DoltSession) addDB(ctx *sql.Context, db VersionedDatabase) error {
 	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
 	baseName, _ := doltdb.SplitRevisionDbName(revisionQualifiedName)
 
@@ -1421,9 +1421,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	branchState.dbData.Rsr = adapter
 	branchState.dbData.Rsw = adapter
 
-	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
-	// Or better yet, get rid of EditOptions from the database, it's a session setting
-	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
+	editOpts := db.EditOptions()
 
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
@@ -1440,13 +1438,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if dbState.WorkingSet != nil {
 			branchState.workingSet = dbState.WorkingSet
 
-			// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
-			//  that's hard to express with the current types
-			stateProvider, ok := db.(globalstate.GlobalStateProvider)
-			if !ok {
-				return fmt.Errorf("database does not contain global state store")
-			}
-			sessionState.globalState = stateProvider.GetGlobalState()
+			sessionState.globalState = db.GetGlobalState()
 
 			tracker, err := sessionState.globalState.AutoIncrementTracker(ctx)
 			if err != nil {
@@ -1775,13 +1767,12 @@ func (d *DoltSession) GCSafepointController() *gcctx.GCSafepointController {
 // does not have a working set yet, then a new, empty working set is created and set in |dbState|.
 // If |db| is NOT a branch revision database, or |dbState| already has a working set, then this
 // function will not do anything.
-func initializeBranchWorkingSet(ctx *sql.Context, db SqlDatabase, dbState *InitialDbState) error {
-	revisionDb, isRevisionDb := db.(RevisionDatabase)
-	if !isRevisionDb || revisionDb.RevisionType() != RevisionTypeBranch || dbState.WorkingSet != nil {
+func initializeBranchWorkingSet(ctx *sql.Context, db VersionedDatabase, dbState *InitialDbState) error {
+	if db.RevisionType() != RevisionTypeBranch || dbState.WorkingSet != nil {
 		return nil
 	}
 
-	branchRef := ref.NewBranchRef(revisionDb.Revision())
+	branchRef := ref.NewBranchRef(db.Revision())
 	wsRef, err := ref.WorkingSetRefForHead(branchRef)
 	if err != nil {
 		return err
@@ -1800,7 +1791,7 @@ func initializeBranchWorkingSet(ctx *sql.Context, db SqlDatabase, dbState *Initi
 	dbState.WorkingSet = doltdb.EmptyWorkingSet(wsRef).
 		WithWorkingRoot(headRoot).WithStagedRoot(headRoot)
 
-	ctx.GetLogger().Warnf("initializing empty working set for branch %s", revisionDb.Revision())
+	ctx.GetLogger().Warnf("initializing empty working set for branch %s", db.Revision())
 
 	return dbState.DbData.Ddb.UpdateWorkingSet(ctx, wsRef, dbState.WorkingSet,
 		hash.Hash{}, doltdb.TodoWorkingSetMeta(), nil)
@@ -2062,7 +2053,7 @@ func persistServerUuid(persistedGlobalVars []sql.SystemVariable, globalConfig co
 }
 
 // TransactionRoot returns the noms root for the given database in the current transaction
-func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
+func TransactionRoot(ctx *sql.Context, db VersionedDatabase) (hash.Hash, error) {
 	tx, ok := ctx.GetTransaction().(*DoltTransaction)
 	// We don't have a real transaction in some cases (esp. PREPARE), in which case we need to use the tip of the data
 	if !ok {
@@ -2078,7 +2069,7 @@ func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
 }
 
 // DefaultHead returns the head for the database given when one isn't specified
-func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, error) {
+func DefaultHead(ctx *sql.Context, baseName string, db VersionedDatabase) (string, error) {
 	head := ""
 
 	// First check the global variable for the default branch
