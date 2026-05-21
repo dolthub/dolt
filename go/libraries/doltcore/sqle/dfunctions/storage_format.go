@@ -21,7 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

@@ -37,7 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"

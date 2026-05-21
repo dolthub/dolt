@@ -22,7 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"

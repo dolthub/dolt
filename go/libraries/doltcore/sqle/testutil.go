@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"

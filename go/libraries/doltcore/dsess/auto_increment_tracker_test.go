@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess/mutexmap"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess/mutexmap"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 

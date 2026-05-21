@@ -19,7 +19,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 )
 
 func NewInitDatabaseHook(sc *StatsController) sqle.InitDatabaseHook {
