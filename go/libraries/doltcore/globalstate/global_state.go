@@ -27,3 +27,13 @@ type GlobalState interface {
 type GlobalStateProvider interface {
 	GetGlobalState() GlobalState
 }
+
+// NoOp is a GlobalState implementation for databases that do not maintain
+// per-database shared state (e.g. read-only detached-head databases). The
+// AutoIncrementTracker it returns has no registered tables; any
+// per-table lookup will reflect that.
+type NoOp struct{}
+
+func (NoOp) AutoIncrementTracker(*sql.Context) (AutoIncrementTracker, error) {
+	return nil, nil
+}
