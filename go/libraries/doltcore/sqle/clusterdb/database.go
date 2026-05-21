@@ -38,7 +38,7 @@ type database struct {
 }
 
 var _ sql.Database = database{}
-var _ dsess.SqlDatabase = database{}
+var _ dsess.VersionedDatabase = database{}
 
 const StatusTableName = "dolt_cluster_status"
 
@@ -125,7 +125,7 @@ func (db database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error
 	}, nil
 }
 
-func (db database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+func (db database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.VersionedDatabase, error) {
 	// Nothing to do here, we don't support changing branch revisions
 	return db, nil
 }

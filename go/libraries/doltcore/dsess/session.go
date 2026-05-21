@@ -393,7 +393,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	// Take a snapshot of the current noms root for every database under management
 	doltDatabases := d.provider.DoltDatabases()
-	txDbs := make([]SqlDatabase, 0, len(doltDatabases))
+	txDbs := make([]VersionedDatabase, 0, len(doltDatabases))
 	for _, db := range doltDatabases {
 		// TODO: this nil check is only necessary to support UserSpaceDatabase and clusterDatabase, come up with a better set of
 		//  interfaces to capture these capabilities

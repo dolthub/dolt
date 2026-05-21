@@ -60,7 +60,7 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 		}
 	}
 
-	sdb, ok := db.(dsess.SqlDatabase)
+	sdb, ok := db.(SqlDatabase)
 	if !ok {
 		return nil, remotesrv.ErrUnimplemented
 	}

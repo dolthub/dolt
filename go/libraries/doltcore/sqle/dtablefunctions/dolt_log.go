@@ -454,7 +454,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	revisionValStrs, notRevisionValStrs, threeDot := args.evaluateArguments()
 
-	sqledb, ok := ltf.database.(dsess.SqlDatabase)
+	sqledb, ok := ltf.database.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", ltf.database)
 	}

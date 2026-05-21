@@ -275,7 +275,7 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbName := db.Name()
 
-	sqledb, ok := ds.database.(dsess.SqlDatabase)
+	sqledb, ok := ds.database.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", ds.database)
 	}

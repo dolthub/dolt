@@ -117,7 +117,7 @@ func (b *BranchStatusTableFunction) WithChildren(ctx *sql.Context, children ...s
 
 // RowIter implements the sql.Node interface
 func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	sqlDb, ok := b.db.(dsess.SqlDatabase)
+	sqlDb, ok := b.db.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unable to get dolt database")
 	}
