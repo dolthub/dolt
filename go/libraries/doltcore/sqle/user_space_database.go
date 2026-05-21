@@ -20,8 +20,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 )
@@ -122,6 +123,10 @@ func (db *UserSpaceDatabase) DbData() env.DbData[*sql.Context] {
 
 func (db *UserSpaceDatabase) EditOptions() editor.Options {
 	return db.editOpts
+}
+
+func (db *UserSpaceDatabase) GetGlobalState() globalstate.GlobalState {
+	return globalstate.NoOp{}
 }
 
 func (db *UserSpaceDatabase) Revision() string {
