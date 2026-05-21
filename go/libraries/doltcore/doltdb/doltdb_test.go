@@ -153,7 +153,7 @@ func TestSystemTableTags(t *testing.T) {
 }
 
 func TestEmptyInMemoryRepoCreation(t *testing.T) {
-	ddb, err := LoadDoltDB(context.Background(), types.Format_Default, InMemDoltDB, filesys.LocalFS)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, InMemDoltDB, filesys.LocalFS)
 
 	if err != nil {
 		t.Fatal("Failed to load db")
@@ -191,7 +191,7 @@ func TestLoadNonExistentLocalFSRepo(t *testing.T) {
 		panic("Couldn't change the working directory to the test directory.")
 	}
 
-	ddb, err := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
 	assert.Nil(t, ddb, "Should return nil when loading a non-existent data dir")
 	assert.Error(t, err, "Should see an error here")
 }
@@ -206,7 +206,7 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	contents := []byte("not a directory")
 	os.WriteFile(filepath.Join(testDir, dbfactory.DoltDataDir), contents, 0644)
 
-	ddb, err := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
 	assert.Nil(t, ddb, "Should return nil when loading a non-directory data dir file")
 	assert.Error(t, err, "Should see an error here")
 }
@@ -229,7 +229,7 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create noms directory")
 		}
 
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
 		err = ddb.WriteEmptyRepo(context.Background(), "master", committerName, committerEmail)
 
 		if err != nil {
@@ -241,7 +241,7 @@ func TestLDNoms(t *testing.T) {
 	var valHash hash.Hash
 	var tbl *Table
 	{
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
 		cs, _ := NewCommitSpec("master")
 		optCmt, err := ddb.Resolve(context.Background(), cs, nil)
 		if err != nil {

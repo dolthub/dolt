@@ -1517,7 +1517,11 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 
 		cachedTable, ok := dbState.SessionCache().GetCachedTable(key, dsess.TableCacheKey{Name: tableName, Schema: db.schemaName})
 		if ok {
-			return cachedTable, true, nil
+			rebound, err := cachedTable.RebindDatabase(ctx, db)
+			if err != nil {
+				return nil, false, err
+			}
+			return rebound, true, nil
 		}
 	}
 
@@ -1664,14 +1668,14 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	return tableName, tbl, true, nil
 }
 
-func (db Database) newDoltTable(ctx *sql.Context, tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
+func (db Database) newDoltTable(ctx *sql.Context, tableName string, sch schema.Schema, tbl *doltdb.Table) (dsess.CacheableDoltTable, error) {
 	readonlyTable, err := NewDoltTable(ctx, tableName, sch, tbl, db, db.editOpts)
 	if err != nil {
 		return nil, err
 	}
 
 	tname := doltdb.TableName{Name: tableName, Schema: db.schemaName}
-	var table sql.Table
+	var table dsess.CacheableDoltTable
 	if doltdb.IsReadOnlySystemTable(tname) {
 		table = readonlyTable
 	} else if doltdb.IsDoltCITable(tableName) && !doltdb.IsFullTextTable(tableName) {

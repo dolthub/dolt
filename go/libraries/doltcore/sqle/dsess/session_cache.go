@@ -24,12 +24,24 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
+// CacheableDoltTable is implemented by tables in SessionCache.tables.
+// The cache is keyed only by root hash + table name + schema, but
+// each table implementation carries more state, and in particular a
+// sqle.Database that's captured at construction time.  RebindDatabase
+// returns an instance whose db references match the caller's
+// view. getTable calls this to rebind the cached instance to the
+// correct Database instance.
+type CacheableDoltTable interface {
+	sql.Table
+	RebindDatabase(ctx *sql.Context, newDb SqlDatabase) (CacheableDoltTable, error)
+}
+
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
 type SessionCache struct {
 	// indexes is keyed by table schema hash
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
 	// tables is keyed by table root value
-	tables map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
+	tables map[doltdb.DataCacheKey]map[TableCacheKey]CacheableDoltTable
 	// tableMaps is keyed by a digest of the table list of table names
 	tableMaps map[uint64]map[string]string
 
@@ -128,13 +140,13 @@ func (c *SessionCache) GetTableIndexesCache(key doltdb.DataCacheKey, table strin
 	return indexes, ok
 }
 
-// CacheTable caches a sql.Table implementation for the table named
-func (c *SessionCache) CacheTable(key doltdb.DataCacheKey, tableName TableCacheKey, table sql.Table) {
+// CacheTable caches a CacheableDoltTable implementation for the table named
+func (c *SessionCache) CacheTable(key doltdb.DataCacheKey, tableName TableCacheKey, table CacheableDoltTable) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.tables == nil {
-		c.tables = make(map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table)
+		c.tables = make(map[doltdb.DataCacheKey]map[TableCacheKey]CacheableDoltTable)
 	}
 	if len(c.tables) > maxCachedKeys {
 		for k := range c.tables {
@@ -144,7 +156,7 @@ func (c *SessionCache) CacheTable(key doltdb.DataCacheKey, tableName TableCacheK
 
 	tablesForKey, ok := c.tables[key]
 	if !ok {
-		tablesForKey = make(map[TableCacheKey]sql.Table)
+		tablesForKey = make(map[TableCacheKey]CacheableDoltTable)
 		c.tables[key] = tablesForKey
 	}
 
@@ -171,8 +183,8 @@ func (k TableCacheKey) ToLower() TableCacheKey {
 	}
 }
 
-// GetCachedTable returns the cached sql.Table for the table named, and whether the cache was present
-func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCacheKey) (sql.Table, bool) {
+// GetCachedTable returns the cached CacheableDoltTable for the table named, and whether the cache was present
+func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCacheKey) (CacheableDoltTable, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 

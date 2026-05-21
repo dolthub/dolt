@@ -98,13 +98,6 @@ assert_feature_version() {
     fi
 }
 
-skip_nbf_dolt() {
-  if [ ! "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]
-  then
-    skip "skipping test for nomsBinFormat __DOLT__"
-  fi
-}
-
 setup_common() {
     setup_no_dolt_init
     dolt init

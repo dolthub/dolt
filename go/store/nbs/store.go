@@ -819,7 +819,10 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 	}
 	p := newFSTablePersister(dir, q, mmapArchiveIndexes)
 
-	journal, err := newChunkJournal(ctx, nbfVers, dir, m, p.(*fsTablePersister), warningsCb)
+	// The NomsBlockStore is not constructed yet, so bootstrapping errors should fail store
+	// creation rather than crash the process. Callers configure crash behavior afterwards
+	// via SetFatalBehavior.
+	journal, err := newChunkJournal(ctx, nbfVers, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, warningsCb)
 	if err != nil {
 		return nil, err
 	}

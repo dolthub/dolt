@@ -234,6 +234,12 @@ func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, fil
 // renames it to its final name, and adds it to the pending set. The returned
 // handle must be closed after the file has been Open'd or is no longer needed.
 // The pruneMu read lock is held for the entire operation.
+//
+// If writeFn fails, or the temp file cannot be closed or renamed, the inflight
+// temp file is removed before returning the error. This matters for callers
+// like ConjoinAll, where an I/O error reading a source under FatalBehaviorError
+// would otherwise leave the partially written conjoined table/archive file
+// behind until the next PruneTableFiles.
 func (ftp *fsTablePersister) writeAndProtect(finalName string, writeFn func(temp *os.File) error) (*pendingHandle, error) {
 	addr, ok := fileNameToAddr(finalName)
 	if !ok {
@@ -247,15 +253,19 @@ func (ftp *fsTablePersister) writeAndProtect(finalName string, writeFn func(temp
 	if err != nil {
 		return nil, err
 	}
+	tempName := temp.Name()
 
 	if err = writeFn(temp); err != nil {
 		_ = temp.Close()
+		_ = file.Remove(tempName)
 		return nil, err
 	}
 	if err = temp.Close(); err != nil {
+		_ = file.Remove(tempName)
 		return nil, err
 	}
-	if err = file.Rename(temp.Name(), filepath.Join(ftp.dir, finalName)); err != nil {
+	if err = file.Rename(tempName, filepath.Join(ftp.dir, finalName)); err != nil {
+		_ = file.Remove(tempName)
 		return nil, err
 	}
 	return ftp.addPending(addr), nil

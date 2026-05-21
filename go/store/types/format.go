@@ -16,38 +16,21 @@ package types
 
 import (
 	"errors"
-	"sync"
 
 	"github.com/dolthub/dolt/go/store/constants"
 )
-
-func init() {
-	nbf, err := GetFormatForVersionString(constants.FormatDefaultString)
-	if err != nil {
-		panic("unrecognized value for DOLT_DEFAULT_BIN_FORMAT " + constants.FormatDefaultString)
-	}
-	nbfLock.Lock()
-	defer nbfLock.Unlock()
-	Format_Default = nbf
-}
 
 type NomsBinFormat struct {
 	tag *formatTag
 }
 
 type formatTag struct {
+	// Can't be zero size of allocations are not unique.
 	furp byte
 }
 
 var formatTag_DOLT = &formatTag{}
 var Format_DOLT = &NomsBinFormat{formatTag_DOLT}
-
-var nbfLock = &sync.Mutex{}
-var Format_Default *NomsBinFormat
-
-func IsFormat_DOLT(nbf *NomsBinFormat) bool {
-	return nbf.tag == formatTag_DOLT
-}
 
 func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
 	if s == constants.FormatDoltString {
@@ -63,8 +46,4 @@ func (nbf *NomsBinFormat) VersionString() string {
 	} else {
 		panic("unrecognized NomsBinFormat tag value")
 	}
-}
-
-func (nbf *NomsBinFormat) UsesFlatbuffers() bool {
-	return nbf.tag == formatTag_DOLT
 }

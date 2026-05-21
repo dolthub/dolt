@@ -39,7 +39,7 @@ Applies the changes from an existing commit and creates a new commit from the cu
 
 Cherry-picking merge commits or commits with table drops/renames is not currently supported. 
 
-If any data conflicts, schema conflicts, or constraint violations are detected during cherry-picking, you can use Dolt's conflict resolution features to resolve them. For more information on resolving conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts.
+If any data conflicts, schema conflicts, or constraint violations are detected during cherry-picking, you can use Dolt's conflict resolution features to resolve them. For more information on resolving conflicts, see: https://dolthub.com/docs/concepts/dolt/git/conflicts.
 `,
 	Synopsis: []string{
 		`[--allow-empty] {{.LessThan}}commit{{.GreaterThan}}`,
@@ -50,7 +50,7 @@ var ErrCherryPickConflictsOrViolations = errors.NewKind("error: Unable to apply 
 	"or constraint violations. Please resolve the conflicts and/or constraint violations, then use `dolt add` " +
 	"to add the tables to the staged set, and `dolt cherry-pick --continue` to complete the cherry-pick. \n" +
 	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.\n" +
-	"For more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts")
+	"For more information on handling conflicts, see: https://dolthub.com/docs/concepts/dolt/git/conflicts")
 
 var ErrCherryPickVerificationFailed = errors.NewKind("error: Commit verification failed. Your changes are staged " +
 	"in the working set. Fix the failing tests, use `dolt add` to stage your changes, then " +
