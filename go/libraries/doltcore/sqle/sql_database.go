@@ -57,3 +57,21 @@ type SqlDatabase interface {
 	// mutating database state.
 	Close()
 }
+
+// DatabaseProvider is the SQL-engine composite of
+// dsess.DoltDatabaseProvider with the surfaces only the SQL engine
+// needs: sql.MutableDatabaseProvider (CreateDatabase / DropDatabase /
+// AllDatabases / HasDatabase / Database) and EngineOverrides.
+//
+// Lives here in sqle, not in dsess, so dsess stays free of SQL-engine
+// dependency. The concrete *DoltDatabaseProvider satisfies both this
+// composite and the narrower dsess.DoltDatabaseProvider.
+type DatabaseProvider interface {
+	dsess.DoltDatabaseProvider
+	sql.MutableDatabaseProvider
+
+	// EngineOverrides returns the overrides that were given during the
+	// creation of the provider.
+	EngineOverrides() sql.EngineOverrides
+}
+

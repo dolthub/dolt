@@ -958,6 +958,7 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 
 	sess := dsess.DSessFromSess(sqlCtx.Session)
 	provider := sess.Provider()
+	sqlProvider := sess.GenericProvider()
 
 	for _, sdb := range provider.DoltDatabases() {
 		name := sdb.Name()
@@ -966,7 +967,7 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 		}
 
 		// Load DB and its AI tracker
-		db, err := provider.Database(sqlCtx, name)
+		db, err := sqlProvider.Database(sqlCtx, name)
 		if err != nil {
 			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: provider db: %w", name, err)
 		}

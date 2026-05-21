@@ -335,7 +335,10 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 		}
 	}
 
-	db, err := sc.pro.Database(ctx, dbName)
+	db, _, err := sc.pro.SessionDatabase(ctx, dbName)
+	if err != nil {
+		return err
+	}
 	sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(sqle.SqlDatabase), branch, branch+"/"+dbName)
 	if err != nil {
 		return err

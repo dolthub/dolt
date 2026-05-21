@@ -276,7 +276,7 @@ func parseBranchArgs(apr *argparser.ArgParseResults) (newBranch string, createBr
 // if any issues are encountered while looking up the named database.
 func isReadOnlyDatabase(ctx *sql.Context, dbName string) (bool, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	db, err := doltSession.Provider().Database(ctx, dbName)
+	db, err := doltSession.GenericProvider().Database(ctx, dbName)
 	if err != nil {
 		return false, err
 	}

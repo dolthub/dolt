@@ -233,7 +233,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	defer remoteDb.Close()
 
 	lookupDbName := apr.Arg(2)
-	hasLookupDb := dsess.Provider().HasDatabase(ctx, lookupDbName)
+	hasLookupDb := dsess.GenericProvider().HasDatabase(ctx, lookupDbName)
 	// We can't only check the databases from memory since this command can be run from subdirectories.
 	fileSys := dsess.GetFileSystem()
 	lookupDbInFileSys, _ := fileSys.Exists(lookupDbName)
@@ -243,7 +243,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	}
 
 	if hasLookupDb {
-		err = dsess.Provider().DropDatabase(ctx, lookupDbName)
+		err = dsess.GenericProvider().DropDatabase(ctx, lookupDbName)
 		if err != nil {
 			return err
 		}
@@ -256,7 +256,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		}
 	}
 
-	err = dsess.Provider().CreateDatabase(ctx, lookupDbName)
+	err = dsess.GenericProvider().CreateDatabase(ctx, lookupDbName)
 	if err != nil {
 		return err
 	}

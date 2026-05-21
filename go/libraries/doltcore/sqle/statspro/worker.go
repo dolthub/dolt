@@ -232,7 +232,7 @@ func (sc *StatsController) newStatsForRoot(ctx *sql.Context, gcKv *memStats, byp
 	}
 	var toVisit []toCollect
 	if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, openSessionCmds, func() error {
-		dbs := dSess.Provider().AllDatabases(ctx)
+		dbs := dSess.GenericProvider().AllDatabases(ctx)
 		for _, db := range dbs {
 			sessDb, ok := db.(sqle.SqlDatabase)
 			if !ok {

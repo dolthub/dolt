@@ -71,8 +71,11 @@ type RemoteReadReplicaDatabase interface {
 	PullFromRemote(ctx *sql.Context) error
 }
 
+// DoltDatabaseProvider is the data-layer provider surface dsess.Session
+// uses. SQL-engine callers should use the wider sqle.DatabaseProvider
+// composite, which adds sql.MutableDatabaseProvider, EngineOverrides,
+// and wider return types for the three database-returning methods.
 type DoltDatabaseProvider interface {
-	sql.MutableDatabaseProvider
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
 	DbFactoryUrl() string
@@ -117,8 +120,6 @@ type DoltDatabaseProvider interface {
 	// PurgeDroppedDatabases permanently deletes any dropped databases that are being held in temporary storage
 	// in case they need to be restored. This operation is not reversible, so use with caution!
 	PurgeDroppedDatabases(ctx *sql.Context) error
-	// EngineOverrides returns the overrides that were given during the creation of the provider.
-	EngineOverrides() sql.EngineOverrides
 	// TxLocks returns the per-engine keymutex used to serialize
 	// transaction commits by working-set reference.
 	TxLocks() keymutex.Keymutex

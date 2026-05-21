@@ -54,7 +54,7 @@ type DoltHarness struct {
 }
 
 func (h *DoltHarness) Close() {
-	dbs := h.sess.Provider().AllDatabases(sql.NewEmptyContext())
+	dbs := h.sess.GenericProvider().AllDatabases(sql.NewEmptyContext())
 	for _, db := range dbs {
 		// Close the sql-layer database resources (global state, background threads, etc).
 		// Do NOT close the underlying DoltDB here; this harness reuses a shared *env.DoltEnv

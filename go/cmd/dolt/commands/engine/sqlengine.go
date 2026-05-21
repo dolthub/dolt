@@ -394,7 +394,7 @@ func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) 
 func (se *SqlEngine) InitStats(ctx context.Context) error {
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	pro := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(dsess.DoltDatabaseProvider)
+	pro := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(sqle.DatabaseProvider)
 	sqlCtx, err := se.NewLocalContext(ctx)
 	if err != nil {
 		return err

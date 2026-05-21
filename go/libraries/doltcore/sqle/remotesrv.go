@@ -44,14 +44,14 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 		return nil, err
 	}
 	sess := dsess.DSessFromSess(sqlCtx.Session)
-	db, err := sess.Provider().Database(sqlCtx, path)
+	db, err := sess.GenericProvider().Database(sqlCtx, path)
 	if err != nil {
 		if s.createDBs && sql.ErrDatabaseNotFound.Is(err) {
-			err = sess.Provider().CreateDatabase(sqlCtx, path)
+			err = sess.GenericProvider().CreateDatabase(sqlCtx, path)
 			if err != nil {
 				return nil, err
 			}
-			db, err = sess.Provider().Database(sqlCtx, path)
+			db, err = sess.GenericProvider().Database(sqlCtx, path)
 			if err != nil {
 				return nil, err
 			}
