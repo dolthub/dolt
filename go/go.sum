@@ -212,6 +212,8 @@ github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2 h1:u3PMzfF8RkKd3lB9pZ2bfn0qEG+1G
 github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2/go.mod h1:mIEZOHnFx4ZMQeawhw9rhsj+0zwQj7adVsnBX7t+eKY=
 github.com/dolthub/fslock v0.0.0-20251215194149-ef20baba2318 h1:n+vdH5G5Db+1qnDCpRjSQMxlTewwvTzKuuq0nJm0AqI=
 github.com/dolthub/fslock v0.0.0-20251215194149-ef20baba2318/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
+github.com/dolthub/fslock v0.0.4 h1:p0FcUPu81bO53349qPT1im7XyGu3CwZDsB0PEVdFcaE=
+github.com/dolthub/fslock v0.0.4/go.mod h1:895XJNoMTlL5N1TjOJbd9Pnpjtv1DW/Ddw9qShcAYsM=
 github.com/dolthub/go-icu-regex v0.0.0-20260412212219-49724d547866 h1:U6gSf5I0e6h6GP1/5Sa7D2lWW1CWfcVPtY5wkyHq6jY=
 github.com/dolthub/go-icu-regex v0.0.0-20260412212219-49724d547866/go.mod h1:F3cnm+vMRK1HaU6+rNqQrOCyR03HHhR1GWG2gnPOqaE=
 github.com/dolthub/go-mysql-server v0.20.1-0.20260521212721-c7d04c5655e5 h1:y+Iopj89mY+4/qOd+P6hEbXGqxHOUHD2BnbrDS4z1g0=
