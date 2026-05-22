@@ -53,7 +53,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
@@ -453,7 +452,7 @@ func (c *Controller) ClusterDatabase() sql.Database {
 	if c == nil {
 		return nil
 	}
-	return clusterdb.NewClusterDatabase(c)
+	return sqle.NewClusterDatabase(c)
 }
 
 func (c *Controller) RemoteSrvListenAddr() string {
@@ -650,19 +649,19 @@ func (c *Controller) registerCommitHook(hook *commithook) {
 	c.commithooks = append(c.commithooks, hook)
 }
 
-func (c *Controller) GetClusterStatus() []clusterdb.ReplicaStatus {
+func (c *Controller) GetClusterStatus() []sqle.ReplicaStatus {
 	if c == nil {
-		return []clusterdb.ReplicaStatus{}
+		return []sqle.ReplicaStatus{}
 	}
 	c.mu.Lock()
 	epoch, role := c.epoch, c.role
 	commithooks := make([]*commithook, len(c.commithooks))
 	copy(commithooks, c.commithooks)
 	c.mu.Unlock()
-	ret := make([]clusterdb.ReplicaStatus, len(commithooks))
+	ret := make([]sqle.ReplicaStatus, len(commithooks))
 	for i, c := range commithooks {
 		lag, lastUpdate, currentErrorStr := c.status()
-		ret[i] = clusterdb.ReplicaStatus{
+		ret[i] = sqle.ReplicaStatus{
 			Database:       c.dbname,
 			Remote:         c.remotename,
 			Role:           string(role),
@@ -962,7 +961,7 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 
 	for _, sdb := range provider.DoltDatabases() {
 		name := sdb.Name()
-		if name == clusterdb.DoltClusterDbName {
+		if name == sqle.DoltClusterDbName {
 			continue
 		}
 
