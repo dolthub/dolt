@@ -269,11 +269,9 @@ func (wtd *WorkspaceTableDeleter) Close(c *sql.Context) error {
 
 func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, targetStaging bool) (dsess.WriteSession, dsess.TableWriter, error) {
 	ds := dsess.DSessFromSess(ctx.Session)
-
-	setter := ds.SetWorkingRoot
+	var setter dsess.SessionRootSetter
 	if targetStaging {
 		setter = ds.SetStagingRoot
-
 		// Ensure table exists in staging root before getting writer.
 		// This is necessary when staging rows from a new table that exists
 		// in working but not yet in staging (e.g., 'dolt add -p' on a new table).
@@ -281,6 +279,8 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 		if err != nil {
 			return nil, nil, err
 		}
+	} else {
+		setter = ds.SetWorkingRoot
 	}
 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", wtm.ws)
@@ -288,13 +288,11 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 		return nil, nil, err
 	}
 
-	writeSession := writer.NewWriteSession(wtm.ws, gst, editor.Options{TargetStaging: targetStaging})
-
-	tableWriter, err := writeSession.GetTableWriter(ctx, wtm.tableName, ctx.GetCurrentDatabase(), setter, targetStaging)
+	writeSession := writer.NewWriteSession(ctx.GetCurrentDatabase(), wtm.ws, gst, setter, editor.Options{TargetStaging: targetStaging})
+	tableWriter, err := writeSession.GetTableWriter(ctx, wtm.tableName)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return writeSession, tableWriter, nil
 }
 
