@@ -74,4 +74,3 @@ type DatabaseProvider interface {
 	// creation of the provider.
 	EngineOverrides() sql.EngineOverrides
 }
-
