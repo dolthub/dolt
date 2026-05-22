@@ -27,8 +27,8 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/sirupsen/logrus"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/utils/version"
 )
 
@@ -64,13 +64,13 @@ type metricsListener struct {
 	mountPoint string
 
 	// used in updating cluster metrics
-	clusterStatus  clusterdb.ClusterStatusProvider
+	clusterStatus  sqle.ClusterStatusProvider
 	mu             *sync.Mutex
 	done           bool
 	clusterSeenDbs map[string]struct{}
 }
 
-func newMetricsListener(labels prometheus.Labels, versionStr, storagePath string, clusterStatus clusterdb.ClusterStatusProvider, metricsExposed bool) (*metricsListener, error) {
+func newMetricsListener(labels prometheus.Labels, versionStr, storagePath string, clusterStatus sqle.ClusterStatusProvider, metricsExposed bool) (*metricsListener, error) {
 	mountPoint := ""
 
 	if storagePath != "" {
