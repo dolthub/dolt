@@ -15,7 +15,7 @@
 package actions
 
 import (
-	"bytes"
+	"errors"
 	"strings"
 
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -124,18 +124,22 @@ type ErrCheckoutWouldOverwrite struct {
 }
 
 func (cwo ErrCheckoutWouldOverwrite) Error() string {
-	var buffer bytes.Buffer
+	var buffer strings.Builder
 	if len(cwo.LocalChangeTables) > 0 {
 		buffer.WriteString("Your local changes to the following tables would be overwritten by checkout:\n")
 		for _, tbl := range cwo.LocalChangeTables {
-			buffer.WriteString("\t" + tbl + "\n")
+			buffer.WriteString("\t")
+			buffer.WriteString(tbl)
+			buffer.WriteString("\n")
 		}
 		buffer.WriteString("Please commit your changes or stash them before you switch branches.\n")
 	}
 	if len(cwo.UntrackedTables) > 0 {
 		buffer.WriteString("The following untracked tables would be overwritten by checkout:\n")
 		for _, tbl := range cwo.UntrackedTables {
-			buffer.WriteString("\t" + tbl + "\n")
+			buffer.WriteString("\t")
+			buffer.WriteString(tbl)
+			buffer.WriteString("\n")
 		}
 		buffer.WriteString("Please move or remove them before you switch branches.\n")
 	}
@@ -144,8 +148,8 @@ func (cwo ErrCheckoutWouldOverwrite) Error() string {
 }
 
 func IsCheckoutWouldOverwrite(err error) bool {
-	_, ok := err.(ErrCheckoutWouldOverwrite)
-	return ok
+	var cwo ErrCheckoutWouldOverwrite
+	return errors.As(err, &cwo)
 }
 
 var ErrCheckoutWouldOverwriteIgnoredTables = goerrors.NewKind(
@@ -170,7 +174,7 @@ func NothingStagedTblDiffs(err error) []diff.TableDelta {
 	ns, ok := err.(NothingStaged)
 
 	if !ok {
-		panic("Must validate with IsCheckoutWouldOverwrite before calling CheckoutWouldOverwriteTables")
+		panic("Must validate with IsNothingStaged before calling NothingStagedTblDiffs")
 	}
 
 	return ns.NotStagedTbls

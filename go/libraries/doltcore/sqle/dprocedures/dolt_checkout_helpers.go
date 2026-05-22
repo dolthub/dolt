@@ -73,13 +73,27 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return fmt.Errorf("unable to resolve roots for %s", dbName)
 	}
 
+	// Compute the dolt_ignore-matched table set once for the whole checkout, then pass it to the
+	// overwrite check and the carry instead of recomputing it at each site. dolt_ignore is
+	// branch-scoped, so the source branch's patterns classify the tables. The carry leaves these
+	// tables on the source branch.
+	ignoredNames, err := doltdb.UnionTableNames(ctx, initialRoots.Working, initialRoots.Staged, branchHead)
+	if err != nil {
+		return err
+	}
+	ignoredList, err := doltdb.IdentifyIgnoredTables(ctx, initialRoots, ignoredNames)
+	if err != nil {
+		return err
+	}
+	ignored := doltdb.NewTableNameSet(ignoredList)
+
 	if !force {
 		newBranchRoots, err := db.ResolveBranchRoots(ctx, branchRef)
 		if err != nil {
 			return err
 		}
 		if !isNewBranch {
-			wouldOverwrite, err := actions.CheckoutWouldOverwriteWorkingSetChanges(ctx, initialRoots, newBranchRoots)
+			wouldOverwrite, err := actions.CheckoutWouldOverwriteWorkingSetChanges(ctx, initialRoots, newBranchRoots, ignored)
 			if err != nil {
 				return err
 			}
@@ -107,10 +121,10 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 	}
 
 	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
-	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
-	// CheckoutWouldOverwriteWorkingSetChanges.
+	// In that case the destination branch must not have its own uncommitted changes, as checked by
+	// CheckoutWouldOverwriteWorkingSetChanges, which only runs when not forced and not creating a new branch.
 	if hasChanges {
-		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force)
+		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force, ignored)
 		if err != nil {
 			return err
 		}
@@ -151,12 +165,13 @@ func transferWorkingChanges(
 	branchHead doltdb.RootValue,
 	branchRef ref.BranchRef,
 	force bool,
+	ignored *doltdb.TableNameSet,
 ) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	// Compute the new roots before switching the working set.
 	// This way, we don't leave the branch in a bad state in the event of an error.
-	newRoots, err := actions.RootsForBranch(ctx, initialRoots, branchHead, force)
+	newRoots, err := actions.RootsForBranch(ctx, initialRoots, branchHead, force, ignored)
 	if err != nil {
 		return err
 	}
