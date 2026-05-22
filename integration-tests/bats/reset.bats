@@ -451,7 +451,7 @@ SQL
 
     run dolt sql -q "SELECT pk, val FROM untracked_tbl" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1,42" ]] || false
+    [ "${lines[1]}" = "1,42" ]
 
     run dolt status
     [ "$status" -eq 0 ]

@@ -4028,10 +4028,10 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{10, 1, "c_val"}},
 			},
 			{
+				Query: "select index_name, non_unique, seq_in_index, column_name from information_schema.statistics where table_schema = database() and table_name = 'child' and index_name = 'idx_val';",
 				// TODO(elianddb): the information_schema assertions in these carry tests are gated
 				// to mysql because Doltgres does not populate information_schema.statistics yet, so
 				// index lookups return no rows. Remove the Dialect gates once Doltgres supports it.
-				Query:   "select index_name, non_unique, seq_in_index, column_name from information_schema.statistics where table_schema = database() and table_name = 'child' and index_name = 'idx_val';",
 				Dialect: "mysql",
 				// The unique index survived the round trip because main's working set was
 				// never touched.
@@ -4874,7 +4874,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			{
 				Query:   "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'c' and index_name = 'idx_code';",
 				Dialect: "mysql",
-				// non_unique=0 confirms the UNIQUE flag survived the retag.
+				// The UNIQUE flag survived the retag.
 				Expected: []sql.Row{{"idx_code", 0, 1, "code", "YES", "BTREE", ""}},
 			},
 			{
@@ -4902,7 +4902,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			{
 				Query:   "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'e' and index_name = 'idx_composite' order by seq_in_index;",
 				Dialect: "mysql",
-				// Two rows verify both column positions of the composite index were remapped correctly.
+				// Both column positions of the composite index were remapped.
 				Expected: []sql.Row{{"idx_composite", 1, 1, "label", "YES", "BTREE", ""}, {"idx_composite", 1, 2, "tag", "YES", "BTREE", ""}},
 			},
 			{
@@ -4988,7 +4988,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "insert into ai (val) values ('row3');",
-				// InsertID=3 confirms the auto-increment counter was not reset to 1 after the reset.
+				// The auto-increment counter was not reset by the hard reset.
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 3}}},
 			},
 			{
@@ -5039,8 +5039,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query: "select code from overlap;",
-				// The target branch version wins over the untracked copy.
+				Query:    "select code from overlap;",
 				Expected: []sql.Row{{"feat_data"}},
 			},
 		},

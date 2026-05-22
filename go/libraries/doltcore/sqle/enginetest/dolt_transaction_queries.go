@@ -2502,8 +2502,7 @@ var BranchIsolationTests = []queries.TransactionTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query: "/* client b */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'staged_tbl'",
-				// The staged variant stays on main for the same reason.
+				Query:    "/* client b */ select count(*) from information_schema.tables where table_schema = database() and table_name = 'staged_tbl'",
 				Expected: []sql.Row{{0}},
 			},
 			{

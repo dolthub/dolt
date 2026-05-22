@@ -1526,11 +1526,19 @@ SQL
 
     run dolt checkout feat
     [ "$status" -ne 0 ]
+    # conflict_tbl was never staged, so it is reported as untracked, not a local change.
+    [[ "$output" =~ "untracked tables would be overwritten by checkout" ]] || false
     [[ "$output" =~ "conflict_tbl" ]] || false
+    [[ "$output" =~ "Aborting" ]] || false
 
     run dolt branch --show-current
     [ "$status" -eq 0 ]
     [[ "$output" =~ "main" ]] || false
+
+    # The abort leaves the local table untouched: still the one-column version.
+    run dolt schema show conflict_tbl
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "val" ]] || false
 }
 
 @test "checkout: ignored tables stay on the source branch" {
@@ -1555,4 +1563,27 @@ SQL
     run dolt sql -q "SELECT pk FROM generated_x" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
+}
+
+@test "checkout: aborts when an untracked table matches conflicting dolt_ignore patterns" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    # dataset matches conflicting dolt_ignore patterns, so it cannot be classified and checkout aborts.
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('data*', true), ('*set', false)"
+    dolt commit -Am "conflicting ignore rules"
+    dolt branch other
+
+    dolt sql -q "CREATE TABLE dataset (pk INT PRIMARY KEY)"
+    dolt sql -q "INSERT INTO dataset VALUES (7)"
+
+    run dolt checkout other
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "conflicting patterns in dolt_ignore" ]] || false
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+
+    run dolt sql -q "SELECT pk FROM dataset" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "7" ]] || false
 }
