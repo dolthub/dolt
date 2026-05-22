@@ -90,7 +90,7 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 	newCollations := make([]sql.CollationID, len(types))
 	copy(newCollations, c.Collations)
 	for ; i < len(newCollations); i++ {
-		if types[i].Enc == val.StringEnc {
+		if isCollatedStringEnc(types[i].Enc) {
 			panic("string type encoding is missing its collation")
 		}
 		if isCollatedStringEnc(types[i].Enc) {

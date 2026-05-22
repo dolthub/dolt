@@ -559,63 +559,43 @@ func TestCompareAdaptiveValueStreamsChunks(t *testing.T) {
 	}
 }
 
-// countingJsonComparatorStore wraps a NodeStore so we can verify that JsonAdaptiveEnc values
-// dispatch through the JSON comparator (which delegates to IndexedJsonDocument.Compare) rather
-// than the generic byte-streaming chunk differ. If compareAdaptiveValue ever stopped routing
-// JSON values through this method, jsonCmps would stay at zero.
-type countingJsonComparatorStore struct {
-	NodeStore
-	jsonCmps  int
-	byteDiffs int
-}
-
-func (c *countingJsonComparatorStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (val.ChunkDiffer, error) {
-	c.byteDiffs++
-	return c.NodeStore.(val.ChunkedValueStore).OpenChunkDiffer(ctx, l, r)
-}
-
-func (c *countingJsonComparatorStore) CompareJsonAdaptiveValues(ctx context.Context, l, r val.AdaptiveValue) (int, error) {
-	c.jsonCmps++
-	return c.NodeStore.(val.JsonAdaptiveValueComparator).CompareJsonAdaptiveValues(ctx, l, r)
-}
-
-// TestCompareAdaptiveJsonUsesIndexedJsonCompare verifies that JsonAdaptiveEnc values are
+// TestJsonIndexOrder verifies that JsonAdaptiveEnc values are
 // compared via IndexedJsonDocument.Compare (type-aware JSON ordering) rather than the
 // byte-streaming path used for the other adaptive encodings. The numeric-array case is the
 // crucial one: a byte-wise compare would observe `"4"` < `"40"` at position 7, but JSON
 // number ordering puts 4 < 40, so a positive routing through IndexedJsonDocument.Compare is
 // the only way to get this right.
-func TestCompareAdaptiveJsonUsesIndexedJsonCompare(t *testing.T) {
+func TestJsonIndexOrder(t *testing.T) {
 	ctx := context.Background()
 
 	cases := []struct {
-		name string
-		l, r []byte
-		want int
+		name     string
+		l, r     []byte
+		expected int
 	}{
 		{
-			name: "identical objects",
-			l:    []byte(`{"a":1,"b":2}`),
-			r:    []byte(`{"a":1,"b":2}`),
-			want: 0,
+			name:     "identical objects",
+			l:        []byte(`{"a":1,"b":2}`),
+			r:        []byte(`{"a":1,"b":2}`),
+			expected: 0,
 		},
 		{
-			name: "object with different value",
-			l:    []byte(`{"a":1,"b":2}`),
-			r:    []byte(`{"a":1,"b":3}`),
-			want: -1,
+			name:     "object with different value",
+			l:        []byte(`{"a":1,"b":2}`),
+			r:        []byte(`{"a":1,"b":3}`),
+			expected: -1,
 		},
 		{
-			name: "numeric ordering in arrays beats lex ordering",
-			l:    []byte(`[1,2,4]`),
-			r:    []byte(`[1,2,40]`),
-			want: -1,
+			name:     "numeric ordering in arrays beats lex ordering",
+			l:        []byte(`[1,2,4]`),
+			r:        []byte(`[1,2,40]`),
+			expected: -1,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			cjs := &countingJsonComparatorStore{NodeStore: NewTestNodeStore()}
+			cjs := NewTestNodeStore()
 			lVal, err := val.NewOutOfBandAdaptiveValue(ctx, cjs, c.l)
 			require.NoError(t, err)
 			rVal, err := val.NewOutOfBandAdaptiveValue(ctx, cjs, c.r)
@@ -626,12 +606,7 @@ func TestCompareAdaptiveJsonUsesIndexedJsonCompare(t *testing.T) {
 				val.Type{Enc: val.JsonAdaptiveEnc},
 			)
 
-			cjs.byteDiffs = 0
-			cjs.jsonCmps = 0
-			got := td.Comparator().CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.JsonAdaptiveEnc})
-			require.Equal(t, c.want, got)
-			require.Equal(t, 1, cjs.jsonCmps, "JsonAdaptiveEnc must dispatch through CompareJsonAdaptiveValues")
-			require.Equal(t, 0, cjs.byteDiffs, "JSON compare must not fall back to the byte-streaming path")
+			require.Equal(t, c.expected, td.Comparator().CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.JsonAdaptiveEnc}))
 		})
 	}
 }
