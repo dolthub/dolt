@@ -158,17 +158,7 @@ func WithRemappedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, err
 
 	err = sch.Indexes().Iter(func(idx Index) (stop bool, err error) {
 		tags := RemapTags(idx.IndexedColumnTags(), tagRemap)
-		props := IndexProperties{
-			IsUnique:           idx.IsUnique(),
-			IsSpatial:          idx.IsSpatial(),
-			IsFullText:         idx.IsFullText(),
-			IsUserDefined:      idx.IsUserDefined(),
-			Comment:            idx.Comment(),
-			FullTextProperties: idx.FullTextProperties(),
-			IsVector:           idx.IsVector(),
-			VectorProperties:   idx.VectorProperties(),
-		}
-		_, err = newSch.Indexes().AddIndexByColTags(idx.Name(), tags, idx.PrefixLengths(), props)
+		_, err = newSch.Indexes().AddIndexByColTags(idx.Name(), tags, idx.PrefixLengths(), idx.Properties())
 		return false, err
 	})
 	if err != nil {
@@ -179,6 +169,7 @@ func WithRemappedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, err
 }
 
 // WithUpdatedColumnTag returns a copy of |sch| with the tag of the column named |name| set to |tag|.
+// It returns an error if no column named |name| exists.
 func WithUpdatedColumnTag(sch Schema, name string, tag uint64) (Schema, error) {
 	col, ok := sch.GetAllCols().GetByName(name)
 	if !ok {

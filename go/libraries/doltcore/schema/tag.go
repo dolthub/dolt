@@ -77,8 +77,8 @@ func (tm TagMapping) Size() int {
 }
 
 // RemapTags returns a new slice with each entry of |tags| replaced by its value in |remap|,
-// or kept unchanged when absent. When |remap| is empty the same |tags| slice is returned,
-// not a copy, so callers must not assume they can mutate the result safely.
+// or kept unchanged when absent. When |remap| is empty the input |tags| slice is returned as is
+// rather than a fresh allocation, so the result must be treated as read-only.
 func RemapTags(tags []uint64, remap map[uint64]uint64) []uint64 {
 	if len(remap) == 0 {
 		return tags
@@ -95,8 +95,10 @@ func RemapTags(tags []uint64, remap map[uint64]uint64) []uint64 {
 }
 
 // RemapTagsByColumnName returns |tags| rewritten so each tag points at the same-named column
-// on |destSch| instead of |srcSch|. When either schema is nil or a tag cannot be resolved on
-// both sides, the original |tags| slice is returned unchanged, not a copy.
+// on |destSch| instead of |srcSch|. When either schema is nil or any tag cannot be resolved on
+// both sides, the input |tags| slice is returned as is (treat it as read-only). The all-or-nothing
+// fallback leaves the foreign key pointing at the source tags, which is preferable to a partial
+// remap that would mix source and destination tags into one key.
 func RemapTagsByColumnName(tags []uint64, srcSch, destSch Schema) []uint64 {
 	if srcSch == nil || destSch == nil {
 		return tags
