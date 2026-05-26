@@ -114,7 +114,39 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
 	t.Skip()
-	var scripts = LongVarcharPKScripts
+	var scripts = []queries.ScriptTest{
+		{
+			Name: "foreign key violation, parent row deleted, child keyless",
+			SetUpScript: []string{
+				"create table parent (pk int primary key, a int);",
+				"create index idx_a on parent(pk, a);",
+				"create table child (fk1 int, fk2 int, foreign key (fk1, fk2) references parent(pk, a));",
+				"insert into parent values (10, 1), (20, 2);",
+				"insert into child values (10, 1), (20, 2);",
+				"call dolt_commit('-Am', 'setup');",
+				"call dolt_branch('other');",
+				"delete from child where fk2 = 1;",
+				"delete from parent where pk = 10;",
+				"call dolt_commit('-am', 'delete parent and child rows');",
+				"call dolt_checkout('other');",
+				"insert into child values (10, 1);",
+				"call dolt_commit('-am', 'insert child row');",
+				"set dolt_force_transaction_commit = on;",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:            "call dolt_merge('main')",
+					SkipResultsCheck: true,
+				},
+				{
+					Query: "select violation_type, fk2 from dolt_constraint_violations_child",
+					Expected: []sql.Row{
+						{"foreign key", 1},
+					},
+				},
+			},
+		},
+	}
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
@@ -124,8 +156,8 @@ func TestSingleScript(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
-		engine.EngineAnalyzer().Debug = true
-		engine.EngineAnalyzer().Verbose = true
+		// engine.EngineAnalyzer().Debug = true
+		// engine.EngineAnalyzer().Verbose = true
 
 		enginetest.TestScriptWithEngine(t, engine, harness, script)
 	}
