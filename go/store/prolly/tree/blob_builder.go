@@ -199,9 +199,9 @@ func (lw *blobLevelWriter) Write(ctx context.Context, r io.Reader) (hash.Hash, u
 	i, off, totalCount := 0, 0, uint64(0)
 	for {
 		// Sketchy hack to elide a copy here...
-		//h := (*hash.Hash)(unsafe.Pointer(&lw.buf[off]))
-		//var n uint64
-		//var err error
+		// h := (*hash.Hash)(unsafe.Pointer(&lw.buf[off]))
+		// var n uint64
+		// var err error
 		h, n, err := lw.child.Write(ctx, r)
 		if err != nil && err != io.EOF {
 			return hash.Hash{}, 0, err
@@ -366,10 +366,7 @@ func (d *blobChunkDiffer) Next(ctx context.Context) ([]byte, []byte, error) {
 	}
 }
 
-// newBlobChunkDiffer constructs a differ over two adaptive values. Either side may be inline
-// or NULL (in which case it shows up as an in-memory buffer) or out-of-band (in which case
-// the differ walks its prolly tree). When both sides are out-of-band with the same root
-// hash, the differ short-circuits to an empty stream.
+// newBlobChunkDiffer constructs a differ over two adaptive values.
 func newBlobChunkDiffer(ctx context.Context, ns NodeStore, l, r val.AdaptiveValue) (*blobChunkDiffer, error) {
 	d := &blobChunkDiffer{ns: ns}
 	if err := loadBlobDiffSide(ctx, ns, &d.l, l); err != nil {

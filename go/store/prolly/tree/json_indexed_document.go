@@ -170,6 +170,7 @@ func compareJsonAdaptiveValues(ctx context.Context, ns NodeStore, l, r val.Adapt
 	if err != nil {
 		return 0, err
 	}
+
 	// Order NULLs first, matching the behavior at the tuple layer.
 	if lWrapper == nil || rWrapper == nil {
 		if lWrapper == nil && rWrapper == nil {
@@ -180,6 +181,7 @@ func compareJsonAdaptiveValues(ctx context.Context, ns NodeStore, l, r val.Adapt
 		}
 		return 1, nil
 	}
+
 	if li, ok := lWrapper.(IndexedJsonDocument); ok {
 		return li.Compare(ctx, rWrapper)
 	}
@@ -187,6 +189,9 @@ func compareJsonAdaptiveValues(ctx context.Context, ns NodeStore, l, r val.Adapt
 		cmp, err := ri.Compare(ctx, lWrapper)
 		return -cmp, err
 	}
+
+	// If neither side is IndexedJsonDocument, fall back to built-in JSON comparison, which has the same semantics
+	// but is less efficient.
 	lv, err := lWrapper.ToInterface(ctx)
 	if err != nil {
 		return 0, err

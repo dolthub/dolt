@@ -704,50 +704,45 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue, enc Encoding) int {
-	// JSON has type-aware ordering rules, not byte ordering, so delegate to the store's
-	// JSON comparator when available. The implementation in tree uses
-	// IndexedJsonDocument.Compare, which walks both documents chunk-by-chunk.
+func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue, enc Encoding) (int, error) {
 	if enc == JsonAdaptiveEnc {
-		if jc, ok := vs.(JsonAdaptiveValueComparator); ok {
-			cmp, err := jc.CompareJsonAdaptiveValues(ctx, l, r)
-			if err != nil {
-				panic(fmt.Sprintf("compareAdaptiveValue: failed to compare JSON values: %v", err))
-			}
-			return cmp
-		}
+		return compareJsonAdaptiveValues(ctx, vs, l, r)
 	}
+
 	// If both values are inline we can compare their payloads without touching the ValueStore.
 	lPayload, lInline := InlineValueBytes(l)
 	rPayload, rInline := InlineValueBytes(r)
 	if lInline && rInline {
-		return bytes.Compare(lPayload, rPayload)
+		return bytes.Compare(lPayload, rPayload), nil
 	}
-	// At least one value is out-of-band. Open a chunk differ that walks both underlying trees
-	// in parallel; it may skip whole subtrees whose hashes match so a regression on a tiny
-	// slice of a huge value still short-circuits in O(tree height) reads.
+
 	differ, err := getChunkDiffer(ctx, vs, l, r)
 	if err != nil {
-		panic(fmt.Sprintf("compareAdaptiveValue: failed to open chunk differ: %v", err))
+		return 0, err
 	}
-	cmp, err := compareChunkDiffer(ctx, differ)
-	if err != nil {
-		panic(fmt.Sprintf("compareAdaptiveValue: failed to read chunk diff: %v", err))
+
+	return compareChunkDiffer(ctx, differ)
+}
+
+func compareJsonAdaptiveValues(ctx context.Context, vs ValueStore, l AdaptiveValue, r AdaptiveValue) (int, error) {
+	if jc, ok := vs.(JsonAdaptiveValueComparator); ok {
+		cmp, err := jc.CompareJsonAdaptiveValues(ctx, l, r)
+		if err != nil {
+			return 0, err
+		}
+		return cmp, nil
+	} else {
+		return 0, fmt.Errorf("value store %T does not support JSON adaptive value comparison", vs)
 	}
-	return cmp
 }
 
 // CompareAdaptiveStringsWithCollation compares two AdaptiveValue-encoded string values using
-// the given collation, walking the underlying chunked storage in parallel so very large
-// values can short-circuit as soon as the ordering is decided. When both values are inline
-// this avoids the streaming machinery entirely; otherwise it iterates the pair-wise diff
-// rune-by-rune (correctly handling UTF-8 sequences split across chunk boundaries) and applies
-// the collation's per-rune weight. Pass an unspecified collation to fall back to byte
-// ordering.
+// the given collation. Pass an unspecified collation to fall back to byte ordering.
 func CompareAdaptiveStringsWithCollation(ctx context.Context, vs ValueStore, l, r AdaptiveValue, collation sql.CollationID) (int, error) {
 	if collation == sql.Collation_Unspecified {
-		return compareAdaptiveValue(ctx, vs, l, r, StringAdaptiveEnc), nil
+		return compareAdaptiveValue(ctx, vs, l, r, StringAdaptiveEnc)
 	}
+
 	lPayload, lInline := InlineValueBytes(l)
 	rPayload, rInline := InlineValueBytes(r)
 	if lInline && rInline {

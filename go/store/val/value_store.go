@@ -37,32 +37,27 @@ type ValueStore interface {
 	WriteBytes(ctx context.Context, val []byte) (hash.Hash, error)
 }
 
-// ChunkDiffer streams aligned pairs of byte regions from two AdaptiveValues that need to be
-// compared. Each call to Next returns the next (left, right) pair of bytes to compare; an
-// implementation is free to skip regions that are known to be identical (for example, by
-// matching subtree hashes), so callers must not assume Next is called once per chunk in either
-// underlying value — only that, when the pairs are concatenated in order, they equal the
-// two input values. Next returns (nil, nil, io.EOF) when both streams are exhausted at
-// corresponding positions.
+// ChunkDiffer is an interface to diff chunk-encoded values in a ValueStore.
 type ChunkDiffer interface {
+	// Next returns the bytes of the next chunks that differ between left and right. io.EOF signals
+	// the end of the diff.
 	Next(ctx context.Context) (left, right []byte, err error)
 }
 
-// ChunkedValueStore is an optional interface implemented by ValueStores that can compare two
-// out-of-band AdaptiveValues by walking their underlying chunked storage in parallel. This
-// permits comparisons that short-circuit before loading either value fully, and lets the
-// implementation skip identical subtrees by hash. It is the right choice for the byte-oriented
+// ChunkDiffValueStore is an optional interface implemented by ValueStores that can compare two
+// out-of-band AdaptiveValues by walking their underlying chunked storage in parallel.
 // adaptive encodings (BytesAdaptiveEnc, StringAdaptiveEnc, GeomAdaptiveEnc).
-type ChunkedValueStore interface {
+type ChunkDiffValueStore interface {
+	// OpenChunkDiffer returns a ChunkDiffer that can diff the two given AdaptiveValues by diffing their chunked values.
 	OpenChunkDiffer(ctx context.Context, l, r AdaptiveValue) (ChunkDiffer, error)
 }
 
 // JsonAdaptiveValueComparator is an optional interface implemented by ValueStores that can
 // compare two JsonAdaptiveEnc values with JSON-aware semantics (MySQL JSON ordering rules,
-// not byte ordering). When the values are stored in a JSON-indexed prolly tree, the
-// implementation should walk the two trees chunk-by-chunk and short-circuit on the first
-// observable difference.
+// not byte ordering).
 type JsonAdaptiveValueComparator interface {
+	// CompareJsonAdaptiveValues compares two JsonAdaptiveEnc values.
+	// Returns 0 if equal, -1 if l < r, 1 if l > r.
 	CompareJsonAdaptiveValues(ctx context.Context, l, r AdaptiveValue) (int, error)
 }
 

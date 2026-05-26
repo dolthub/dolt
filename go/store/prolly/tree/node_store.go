@@ -230,9 +230,7 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 	return result, err
 }
 
-// OpenChunkDiffer implements val.ChunkedValueStore. It walks the two adaptive values' chunked
-// storage in parallel so callers can compare them without materializing either value fully,
-// and so identical subtrees on the two sides are skipped by content address.
+// OpenChunkDiffer implements val.ChunkedValueStore
 func (ns *nodeStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (val.ChunkDiffer, error) {
 	return newBlobChunkDiffer(ctx, ns, l, r)
 }
@@ -250,5 +248,5 @@ func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error
 }
 
 var _ val.ValueStore = &nodeStore{}
-var _ val.ChunkedValueStore = &nodeStore{}
+var _ val.ChunkDiffValueStore = &nodeStore{}
 var _ val.JsonAdaptiveValueComparator = &nodeStore{}
