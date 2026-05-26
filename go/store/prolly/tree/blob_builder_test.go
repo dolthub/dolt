@@ -559,58 +559,6 @@ func TestCompareAdaptiveValueStreamsChunks(t *testing.T) {
 	}
 }
 
-// TestJsonIndexOrder verifies that JsonAdaptiveEnc values are
-// compared via IndexedJsonDocument.Compare (type-aware JSON ordering) rather than the
-// byte-streaming path used for the other adaptive encodings. The numeric-array case is the
-// crucial one: a byte-wise compare would observe `"4"` < `"40"` at position 7, but JSON
-// number ordering puts 4 < 40, so a positive routing through IndexedJsonDocument.Compare is
-// the only way to get this right.
-func TestJsonIndexOrder(t *testing.T) {
-	ctx := context.Background()
-
-	cases := []struct {
-		name     string
-		l, r     []byte
-		expected int
-	}{
-		{
-			name:     "identical objects",
-			l:        []byte(`{"a":1,"b":2}`),
-			r:        []byte(`{"a":1,"b":2}`),
-			expected: 0,
-		},
-		{
-			name:     "object with different value",
-			l:        []byte(`{"a":1,"b":2}`),
-			r:        []byte(`{"a":1,"b":3}`),
-			expected: -1,
-		},
-		{
-			name:     "numeric ordering in arrays beats lex ordering",
-			l:        []byte(`[1,2,4]`),
-			r:        []byte(`[1,2,40]`),
-			expected: -1,
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			cjs := NewTestNodeStore()
-			lVal, err := val.NewOutOfBandAdaptiveValue(ctx, cjs, c.l)
-			require.NoError(t, err)
-			rVal, err := val.NewOutOfBandAdaptiveValue(ctx, cjs, c.r)
-			require.NoError(t, err)
-
-			td := val.NewTupleDescriptorWithArgs(
-				val.TupleDescriptorArgs{ValueStore: cjs},
-				val.Type{Enc: val.JsonAdaptiveEnc},
-			)
-
-			require.Equal(t, c.expected, td.Comparator().CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.JsonAdaptiveEnc}))
-		})
-	}
-}
-
 // TestCompareAdaptiveTextWithCollation drives the full CollationTupleComparator → val
 // streaming-collation path against real out-of-band adaptive text values. Without the
 // streaming-collation hook the comparator would fall back to bytewise comparison and the

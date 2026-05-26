@@ -755,12 +755,7 @@ func CompareAdaptiveStringsWithCollation(ctx context.Context, vs ValueStore, l, 
 	return compareCollatedChunkDiffer(ctx, differ, collation)
 }
 
-// CompareCollatedStrings compares two UTF-8 byte slices using the given collation. It first
-// byte-compares the common prefix as a fast path (every code-point boundary in a well-formed
-// UTF-8 stream is also a byte boundary, so a matching byte prefix necessarily encodes the
-// same prefix of runes), then backs up to the first rune boundary on each side and continues
-// rune-by-rune, applying the collation's per-rune weight. Malformed strings sort after
-// well-formed ones and two malformed strings compare equal, matching MySQL's behavior.
+// CompareCollatedStrings compares two UTF-8 byte slices using the given collation.
 func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 	i := 0
 	for i < len(left) && i < len(right) {
@@ -824,20 +819,13 @@ func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 	}
 }
 
-// compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings. It pulls
-// (left, right) pairs from the differ lazily, buffering enough bytes on each side to decode
-// the next rune (a rune may straddle a chunk boundary, so the buffer can hold up to
-// utf8.UTFMax-1 leftover bytes between iterations). The differ is free to skip identical
-// subtrees on both sides simultaneously — the byte-stream invariants stay correct because
-// each skipped region has the same length on both sides. The loop returns as soon as the
-// rune-by-rune comparison resolves or one side runs out of input.
+// compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings, getting just the diff between two
+// values when comparing them.
 func compareCollatedChunkDiffer(ctx context.Context, d ChunkDiffer, collation sql.CollationID) (int, error) {
 	getRuneWeight := collation.Sorter()
 	var lBuf, rBuf []byte
 	lDone, rDone := false, false
-	// pullFrom pulls (left, right) pairs from the differ and appends them to the buffers
-	// until both sides hold at least one full rune (or have been exhausted). Either side may
-	// reach EOF independently — we don't pull from it again once that happens.
+
 	pullFrom := func() error {
 		for (!lDone && !utf8.FullRune(lBuf)) || (!rDone && !utf8.FullRune(rBuf)) {
 			lChunk, rChunk, err := d.Next(ctx)
@@ -898,11 +886,7 @@ func compareCollatedChunkDiffer(ctx context.Context, d ChunkDiffer, collation sq
 	}
 }
 
-// compareChunkDiffer drains a ChunkDiffer and returns the byte ordering of the two underlying
-// values. Each (left, right) pair from the differ represents the next byte regions to compare;
-// the differ may yield regions of different sizes on the two sides when one value is shorter,
-// in which case the longer side sorts greater. Identical subtrees may be skipped, so this
-// runs in time proportional to the divergent prefix rather than the full value.
+// compareChunkDiffer compares two values using the output of a ChunkDiffer built on them, using the diffs it generates.
 func compareChunkDiffer(ctx context.Context, d ChunkDiffer) (int, error) {
 	var lBuf, rBuf []byte
 	lDone, rDone := false, false
