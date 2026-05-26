@@ -79,7 +79,8 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 // ResolvePredicateExpression compiles a predicate string into a sql.Expression resolved.
 // Used to re-hydrate partial index predicates from their string representation during DML writer setup.
 func ResolvePredicateExpression(ctx *sql.Context, tableName string, predicateStr string) (sql.Expression, error) {
-	parsed, err := parseQuery(ctx, fmt.Sprintf("SELECT %s FROM %s", predicateStr, tableName))
+	// TODO: added * in SELECT stmt to avoid pruning columns during analyzer.
+	parsed, err := parseQuery(ctx, fmt.Sprintf("SELECT *, %s FROM %s", predicateStr, tableName))
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +93,7 @@ func ResolvePredicateExpression(ctx *sql.Context, tableName string, predicateStr
 		if err != nil {
 			return nil, err
 		}
-		// TODO comes out in ContextRootFinalizer, so unwrap it??
+		// comes out in ContextRootFinalizer, so unwrap it
 		parsed = parsed.Children()[0]
 	}
 
@@ -100,10 +101,7 @@ func ResolvePredicateExpression(ctx *sql.Context, tableName string, predicateStr
 	if !ok {
 		return nil, fmt.Errorf("expected *plan.Project parsing predicate, got %T", parsed)
 	}
-	if len(proj.Projections) != 1 {
-		return nil, fmt.Errorf("expected 1 projection, got %d", len(proj.Projections))
-	}
-	expr := proj.Projections[0]
+	expr := proj.Projections[len(proj.Projections)-1]
 	if alias, ok := expr.(*expression.Alias); ok {
 		expr = alias.Child
 	}

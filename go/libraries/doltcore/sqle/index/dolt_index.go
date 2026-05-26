@@ -575,6 +575,9 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 		if !idx.IsUnique() {
 			continue
 		}
+		if idx.predicate != "" {
+			continue
+		}
 		var nullAccepting bool
 		for _, c := range idx.columns {
 			if c.IsNullable() {

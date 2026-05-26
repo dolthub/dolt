@@ -317,17 +317,7 @@ func (m prollySecondaryIndexWriter) matchesPredicate(ctx context.Context, sqlRow
 		return false, fmt.Errorf("expected *sql.Context for partial index predicate evaluation")
 	}
 	result, err := m.predicate.Eval(sqlCtx, sqlRow)
-	if err != nil {
-		return false, err
-	}
-	if result == nil {
-		return false, fmt.Errorf("expected bool result for partial index predicate evaluation")
-	}
-	res, ok := result.(bool)
-	if !ok {
-		return false, fmt.Errorf("expected bool result for partial index predicate evaluation")
-	}
-	return !res, nil
+	return result.(bool), err
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
