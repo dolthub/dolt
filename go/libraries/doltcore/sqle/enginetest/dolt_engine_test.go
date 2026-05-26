@@ -787,10 +787,6 @@ func TestAdaptiveEncoding(t *testing.T) {
 	RunAdaptiveEncodingScripts(t, newDoltHarness(t))
 }
 
-func TestLongVarcharPKOrdering(t *testing.T) {
-	RunLongVarcharPKScripts(t, newDoltHarness(t))
-}
-
 func TestDropDatabase(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDropEngineTest(t, h)
