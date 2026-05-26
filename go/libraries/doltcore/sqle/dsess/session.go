@@ -1374,17 +1374,16 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 	}
 
-	branchState := sessionState.NewEmptyBranchState(db.Revision(), db.RevisionType())
-
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
 	//  database is deleted out from under a running server
-	branchState.dbData = dbState.DbData
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
+	branchState := sessionState.NewEmptyBranchState(db.Revision(), db.RevisionType())
+	branchState.readOnly = dbState.ReadOnly
+	branchState.dbData = dbState.DbData
 	branchState.dbData.Rsr = adapter
 	branchState.dbData.Rsw = adapter
-	branchState.readOnly = dbState.ReadOnly
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	// Or better yet, get rid of EditOptions from the database, it's a session setting
@@ -1417,7 +1416,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			if err != nil {
 				return err
 			}
-			branchState.writeSession = d.writeSessProv(branchState.WorkingSet(), tracker, editOpts)
+			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchState.workingSet, tracker, d.SetWorkingRoot, editOpts)
 		}
 	}
 
@@ -2081,4 +2080,4 @@ func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, err
 // WriteSessFunc is a constructor that session builders use to
 // create fresh table editors.
 // The indirection avoids a writer/dsess package import cycle.
-type WriteSessFunc func(ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession
+type WriteSessFunc func(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, setter SessionRootSetter, opts editor.Options) WriteSession

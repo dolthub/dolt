@@ -45,12 +45,10 @@ type prollyTableWriter struct {
 	primary   indexWriter
 	secondary map[string]indexWriter
 
-	dbName  string
-	tblName doltdb.TableName
-	sch     schema.Schema
-	sqlSch  sql.Schema
-
-	setter    dsess.SessionRootSetter
+	dbName    string
+	tblName   doltdb.TableName
+	sch       schema.Schema
+	sqlSch    sql.Schema
 	writeSess dsess.WriteSession
 
 	aiCol      schema.Column
@@ -423,13 +421,9 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	newRoot, err := w.writeSess.FlushTable(ctx, w.tblName, tbl)
+	_, err = w.writeSess.FlushTable(ctx, w.tblName, tbl)
 	if err != nil {
 		return err
 	}
-	err = w.Reset(ctx, tbl)
-	if err != nil {
-		return err
-	}
-	return w.setter(ctx, w.dbName, newRoot)
+	return w.Reset(ctx, tbl)
 }

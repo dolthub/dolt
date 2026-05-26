@@ -723,7 +723,6 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 
 func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed dsess.TableWriter, err error) {
 	ds := dsess.DSessFromSess(ctx.Session)
-
 	var writeSession dsess.WriteSession
 	if t.pinnedWriteSession != nil {
 		writeSession = t.pinnedWriteSession
@@ -735,9 +734,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed dsess.TableWrit
 		writeSession = state.WriteSession()
 	}
 
-	setter := ds.SetWorkingRoot
-
-	ed, err = writeSession.GetTableWriter(ctx, t.TableName(), t.db.RevisionQualifiedName(), setter, false)
+	ed, err = writeSession.GetTableWriter(ctx, t.TableName())
 	if err != nil {
 		return nil, err
 	}
@@ -752,9 +749,8 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed dsess.TableWrit
 			return nil, err
 		}
 		return multiEditor.(dsess.TableWriter), nil
-	} else {
-		return ed, nil
 	}
+	return ed, nil
 }
 
 // getFullTextEditor gathers all pseudo-index tables for a Full-Text index and returns an editor that will write
@@ -1750,14 +1746,15 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	// If we have an auto increment column, we need to set it here before we begin the rewrite process (it may have changed)
-	if schema.HasAutoIncrement(newSch) {
-		newSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if col.AutoIncrement {
-				t.autoIncCol = col
-				return true, nil
-			}
-			return false, nil
-		})
+	err = newSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			t.autoIncCol = col
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Grab the next auto_increment value before we call truncate, since truncate will delete the table
@@ -1816,9 +1813,8 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, fmt.Errorf("cannot rebuild index on a headless branch")
 	}
 
-	writeSession := writer.NewWriteSession(newWs, ait, dbState.WriteSession().GetOptions())
-
-	ed, err := writeSession.GetTableWriter(ctx, t.TableName(), t.db.RevisionQualifiedName(), sess.SetWorkingRoot, false)
+	writeSession := writer.NewWriteSession(t.db.RevisionQualifiedName(), newWs, ait, sess.SetWorkingRoot, dbState.WriteSession().GetOptions())
+	ed, err := writeSession.GetTableWriter(ctx, t.TableName())
 	if err != nil {
 		return nil, err
 	}
@@ -1836,16 +1832,22 @@ func fullTextRewriteEditor(
 	dbState dsess.SessionState,
 	workingRoot doltdb.RootValue,
 ) (sql.RowInserter, error) {
+	// We need our own write session for the rewrite operation. The connection's session must continue to return rows of
+	// the table as it existed before the rewrite operation began until it completes, at which point we update the
+	// session with the rewritten table.
+	if ws := dbState.WriteSession(); ws == nil {
+		return nil, fmt.Errorf("cannot rebuild index on read only database %s", t.Name())
+	}
 
 	newTable, err := t.db.newDoltTable(ctx, t.Name(), newSch, dt)
 	if err != nil {
 		return nil, err
 	}
-
 	updatedRoot, configTable, tableSets, err := newTable.(*AlterableDoltTable).tableSetsForRewrite(ctx, workingRoot)
 	if err != nil {
 		return nil, err
 	}
+	newWs := ws.WithWorkingRoot(updatedRoot)
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
@@ -1854,18 +1856,11 @@ func fullTextRewriteEditor(
 		return nil, err
 	}
 
-	newWs := ws.WithWorkingRoot(updatedRoot)
-
 	// We need our own write session for the rewrite operation. The connection's session must continue to return rows of
 	// the table as it existed before the rewrite operation began until it completes, at which point we update the
 	// session with the rewritten table.
-	if ws := dbState.WriteSession(); ws == nil {
-		return nil, fmt.Errorf("cannot rebuild index on read only database %s", t.Name())
-	}
-
-	writeSession := writer.NewWriteSession(newWs, ait, dbState.WriteSession().GetOptions())
-
-	parentEditor, err := writeSession.GetTableWriter(ctx, t.TableName(), t.db.RevisionQualifiedName(), sess.SetWorkingRoot, false)
+	writeSession := writer.NewWriteSession(t.db.RevisionQualifiedName(), newWs, ait, sess.SetWorkingRoot, dbState.WriteSession().GetOptions())
+	parentEditor, err := writeSession.GetTableWriter(ctx, t.TableName())
 	if err != nil {
 		return nil, err
 	}
