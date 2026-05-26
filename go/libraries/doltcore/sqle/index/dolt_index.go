@@ -211,7 +211,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	return indexes, nil
 }
 
-func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, includeCommitColumns bool) *doltIndex {
+func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, includeCommitColumns bool, vs val.ValueStore) *doltIndex {
 	cols := make([]schema.Column, 0, len(sch.GetAllCols().GetColumns())+2)
 	if includeCommitColumns {
 		cols = append(cols,
@@ -234,15 +234,72 @@ func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, incl
 		constrainedToLookupExpression: false,
 		// We pass a nil ValueStore into the key builder, because we don't have one. This would cause an issue
 		// if any of the columns use Adaptive encoding, but that shouldn't be possible in the primary key.
-		keyBld: val.NewTupleBuilder(sch.GetKeyDescriptor(nil), nil),
+		keyBld: val.NewTupleBuilder(sch.GetKeyDescriptor(nil), vs),
 	}
 }
 
-func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, includeCommits bool) (indexes []sql.Index) {
+func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, vs val.ValueStore, includeCommits bool) (indexes []sql.Index) {
 	return []sql.Index{
-		MakeDiffTableIndex(tbl, "to", toSchema, includeCommits),
-		MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits),
+		MakeDiffTableIndex(tbl, "to", toSchema, includeCommits, vs),
+		MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits, vs),
 	}
+}
+
+type SecondaryDiffIndexType int
+
+const (
+	SecondaryDiffIndexType_To SecondaryDiffIndexType = iota
+	SecondaryDiffIndexType_From
+)
+
+func (t SecondaryDiffIndexType) Prefix() string {
+	switch t {
+	case SecondaryDiffIndexType_To:
+		return "to"
+	case SecondaryDiffIndexType_From:
+		return "from"
+	default:
+		panic("unknown secondary diff index type")
+	}
+}
+
+// MakeDiffTableSecondaryIndex creates a *doltIndex for a secondary index on the diff table function.
+// The prefix should be "to" or "from" and determines the column name prefix (e.g., "to_c1").
+// Returns nil, nil for fulltext, spatial, or vector indexes which are not supported.
+func MakeDiffTableSecondaryIndex(ctx context.Context, tableName string, indexType SecondaryDiffIndexType, t *doltdb.Table, sch schema.Schema, idx schema.Index) (*doltIndex, error) {
+	if idx.IsFullText() || idx.IsSpatial() || idx.IsVector() {
+		return nil, nil
+	}
+
+	indexRows, err := t.GetIndexRowData(ctx, idx.Name())
+	if err != nil {
+		return nil, err
+	}
+	keyBld := keyBuilderForIndex(indexRows)
+
+	cols := make([]schema.Column, idx.Count())
+	for i, tag := range idx.IndexedColumnTags() {
+		col, _ := idx.GetColumn(tag)
+		col.Name = indexType.Prefix() + "_" + col.Name
+		cols[i] = col
+	}
+
+	return &doltIndex{
+		id:                            indexType.Prefix() + "_" + idx.Name(),
+		tblName:                       tableName,
+		columns:                       cols,
+		indexSch:                      idx.Schema(),
+		tableSch:                      sch,
+		unique:                        idx.IsUnique(),
+		isPk:                          false,
+		comment:                       idx.Comment(),
+		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
+		keyBld:                        keyBld,
+		order:                         sql.IndexOrderNone,
+		constrainedToLookupExpression: false,
+		prefixLengths:                 idx.PrefixLengths(),
+	}, nil
 }
 
 // MockIndex returns a sql.Index that is not backed by an actual datastore. It's useful for system tables and

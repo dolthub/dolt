@@ -81,7 +81,47 @@ func (dtf *DiffTableFunction) IndexedAccess(ctx *sql.Context, lookup sql.IndexLo
 
 // GetIndexes implements sql.IndexAddressable
 func (dtf *DiffTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.MakeDiffTableIndexes(dtf.Name(), dtf.tableDelta.ToSch, dtf.tableDelta.FromSch, false), nil
+	indexes := index.MakeDiffTableIndexes(dtf.Name(), dtf.tableDelta.ToSch, dtf.tableDelta.FromSch, dtf.tableDelta.ToNodeStore, false)
+
+	// We can use a secondary index on the underlying table iff:
+	// - It exists on both commits and has the same schema.
+	// - It's a covering index (virtual columns exempted)
+	if dtf.tableDelta.ToTable != nil && dtf.tableDelta.FromTable != nil &&
+		dtf.tableDelta.ToSch != nil && dtf.tableDelta.FromSch != nil {
+		for _, toIdx := range dtf.tableDelta.ToSch.Indexes().AllIndexes() {
+			fromIdx := dtf.tableDelta.FromSch.Indexes().GetByName(toIdx.Name())
+			if fromIdx == nil {
+				continue
+			}
+			if !toIdx.Equals(fromIdx) {
+				continue
+			}
+			if len(toIdx.AllTags()) != dtf.tableDelta.ToSch.GetAllCols().Size() {
+				// The index must be covering in order to detect all diffs.
+				continue
+			}
+			if len(fromIdx.AllTags()) != dtf.tableDelta.FromSch.GetAllCols().Size() {
+				// The index must be covering in order to detect all diffs.
+				continue
+			}
+			toSecIdx, err := index.MakeDiffTableSecondaryIndex(ctx, dtf.Name(), index.SecondaryDiffIndexType_To, dtf.tableDelta.ToTable, dtf.tableDelta.ToSch, toIdx)
+			if err != nil {
+				return nil, err
+			}
+			if toSecIdx != nil {
+				indexes = append(indexes, toSecIdx)
+			}
+			fromSecIdx, err := index.MakeDiffTableSecondaryIndex(ctx, dtf.Name(), index.SecondaryDiffIndexType_From, dtf.tableDelta.FromTable, dtf.tableDelta.FromSch, fromIdx)
+			if err != nil {
+				return nil, err
+			}
+			if fromSecIdx != nil {
+				indexes = append(indexes, fromSecIdx)
+			}
+		}
+	}
+
+	return indexes, nil
 }
 
 func (dtf *DiffTableFunction) PreciseMatch() bool {
@@ -593,11 +633,46 @@ func (dtf *DiffTableFunction) PartitionRows(ctx *sql.Context, part sql.Partition
 	if part == nil {
 		return dtf.RowIter(ctx, nil)
 	}
-	dp := part.(*dtables.DiffPartition)
-	return dp.GetRowIter(ctx)
+	switch p := part.(type) {
+	case *dtables.DiffPartition:
+		return p.GetRowIter(ctx)
+	case *dtables.SecondaryDiffPartition:
+		return p.GetRowIter(ctx)
+	default:
+		return nil, fmt.Errorf("unexpected partition type: %T", part)
+	}
 }
 
 func (dtf *DiffTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	indexID := lookup.Index.ID()
+
+	if indexID != "commits_to" && indexID != "commits_from" {
+		// This is an index based on a secondary index of the underlying table.
+		prefix, indexName, isSecondary := parseSecondaryIndexID(indexID)
+		if isSecondary {
+			prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
+			if err != nil {
+				return nil, err
+			}
+
+			toSchema, fromSchema := dtf.getSchemas()
+			partition := dtables.NewSecondaryDiffPartition(
+				dtf.tableDelta.ToTable,
+				dtf.tableDelta.FromTable,
+				dtf.toRefDetails.refStr,
+				dtf.fromRefDetails.refStr,
+				dtf.toRefDetails.commitTime,
+				dtf.fromRefDetails.commitTime,
+				toSchema,
+				fromSchema,
+				prefix,
+				indexName,
+				prollyRanges,
+			)
+			return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
+		}
+	}
+
 	prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
 	if err != nil {
 		return nil, err
@@ -611,6 +686,17 @@ func (dtf *DiffTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.Inde
 		toSchema, fromSchema,
 		prollyRanges)
 	return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
+}
+
+// parseSecondaryIndexID parses a secondary index ID into the associated index on the underlying table.
+func parseSecondaryIndexID(id string) (indexType index.SecondaryDiffIndexType, indexName string, ok bool) {
+	if strings.HasPrefix(id, "to_") {
+		return index.SecondaryDiffIndexType_To, id[3:], true
+	}
+	if strings.HasPrefix(id, "from_") {
+		return index.SecondaryDiffIndexType_From, id[5:], true
+	}
+	return 0, "", false
 }
 
 func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string) error {
