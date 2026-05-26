@@ -240,7 +240,10 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 			// If the last to block was small we may not advance from at all.
 			currentKey := td.from.CurrentKey()
 			if currentKey != nil {
-				cmp := compareWithNilAsMin(ctx, td.order, K(currentKey), K(td.previousKey))
+				cmp, cmpErr := compareWithNilAsMin(ctx, td.order, K(currentKey), K(td.previousKey))
+				if cmpErr != nil {
+					return Patch{}, NoDiff, false, cmpErr
+				}
 
 				for cmp != 0 {
 					if cmp > 0 {
@@ -266,7 +269,10 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 						patch, diffType, err = td.sendAddedRange()
 						return patch, diffType, true, err
 					}
-					cmp = td.order.Compare(ctx, K(td.from.CurrentKey()), K(td.previousKey))
+					cmp, cmpErr = td.order.Compare(ctx, K(td.from.CurrentKey()), K(td.previousKey))
+					if cmpErr != nil {
+						return Patch{}, NoDiff, false, cmpErr
+					}
 				}
 				// At this point, the from cursor lines up with the max key emitted by the previous range diff.
 				// Advancing the from cursor one more time guarantees that both cursors reference chunks with the same start range.
@@ -334,7 +340,10 @@ func (td *PatchGenerator[K, O]) findNextPatch(ctx context.Context) (patch Patch,
 		}
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
-		cmp := td.order.Compare(ctx, K(f), K(t))
+		cmp, cmpErr := td.order.Compare(ctx, K(f), K(t))
+		if cmpErr != nil {
+			return Patch{}, NoDiff, false, cmpErr
+		}
 
 		if cmp == 0 {
 			if !equalcursorValues(td.from, td.to) {
@@ -453,7 +462,14 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 				parent: td.from,
 				nrw:    td.from.nrw,
 			}
-			for compareWithNilAsMin(ctx, td.order, K(td.from.CurrentKey()), K(td.previousKey)) <= 0 {
+			for {
+				cmp, cmpErr := compareWithNilAsMin(ctx, td.order, K(td.from.CurrentKey()), K(td.previousKey))
+				if cmpErr != nil {
+					return Patch{}, NoDiff, false, cmpErr
+				}
+				if cmp > 0 {
+					break
+				}
 				err = td.from.advance(ctx)
 				if err != nil {
 					return Patch{}, NoDiff, false, err

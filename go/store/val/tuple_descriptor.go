@@ -193,12 +193,12 @@ func (td *TupleDesc) GetField(i int, tup Tuple) []byte {
 }
 
 // Compare compares |left| and |right|.
-func (td *TupleDesc) Compare(ctx context.Context, left, right Tuple) (cmp int) {
+func (td *TupleDesc) Compare(ctx context.Context, left, right Tuple) (cmp int, err error) {
 	return td.cmp.Compare(ctx, left, right, td)
 }
 
 // CompareField compares |value| with the ith field of |tup|.
-func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup Tuple) (cmp int) {
+func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup Tuple) (cmp int, err error) {
 	var v []byte
 	if i < len(td.fast) {
 		var start, stop ByteSize

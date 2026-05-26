@@ -160,9 +160,14 @@ func makeDiffCallBack(from, to Map, innerCb tree.DiffFn) tree.DiffFn {
 	return func(ctx context.Context, diff tree.Diff) error {
 		// Skip diffs produced by non-canonical tuples. A canonical-tuple is a
 		// tuple where any null suffixes have been trimmed.
-		if diff.Type == tree.ModifiedDiff &&
-			from.valDesc.Compare(ctx, val.Tuple(diff.From), val.Tuple(diff.To)) == 0 {
-			return nil
+		if diff.Type == tree.ModifiedDiff {
+			cmp, err := from.valDesc.Compare(ctx, val.Tuple(diff.From), val.Tuple(diff.To))
+			if err != nil {
+				return err
+			}
+			if cmp == 0 {
+				return nil
+			}
 		}
 		return innerCb(ctx, diff)
 	}
@@ -369,7 +374,7 @@ func (m Map) Pool() pool.BuffPool {
 	return m.tuples.NodeStore.Pool()
 }
 
-func (m Map) CompareItems(ctx context.Context, left, right tree.Item) int {
+func (m Map) CompareItems(ctx context.Context, left, right tree.Item) (int, error) {
 	return m.keyDesc.Compare(ctx, val.Tuple(left), val.Tuple(right))
 }
 

@@ -31,31 +31,37 @@ type CollationTupleComparator struct {
 var _ val.TupleComparator = CollationTupleComparator{}
 
 // Compare implements TupleComparator
-func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.Tuple, desc *val.TupleDesc) (cmp int) {
+func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.Tuple, desc *val.TupleDesc) (cmp int, err error) {
 	fast := desc.GetFixedAccess()
 	off := len(fast)
 	var start, stop val.ByteSize
 	for i := 0; i < off; i++ {
 		stop = fast[i]
-		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop], c.vs)
+		cmp, err = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop], c.vs)
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
-			return cmp
+			return cmp, nil
 		}
 		start = stop
 	}
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j), c.vs)
+		cmp, err = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j), c.vs)
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
-			return cmp
+			return cmp, nil
 		}
 	}
 	return
 }
 
 // CompareValues implements TupleComparator
-func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type) int {
+func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type) (int, error) {
 	return collationCompare(ctx, typ, c.Collations[index], left, right, c.vs)
 }
 
@@ -111,27 +117,23 @@ func (c CollationTupleComparator) WithValueStore(vs val.ValueStore) val.TupleCom
 	return CollationTupleComparator{Collations: c.Collations, vs: vs}
 }
 
-func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte, vs val.ValueStore) int {
+func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte, vs val.ValueStore) (int, error) {
 	// order NULLs first
 	if left == nil || right == nil {
 		if bytes.Equal(left, right) {
-			return 0
+			return 0, nil
 		} else if left == nil {
-			return -1
+			return -1, nil
 		} else {
-			return 1
+			return 1, nil
 		}
 	}
 
 	switch typ.Enc {
 	case val.StringEnc:
-		return val.CompareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
+		return val.CompareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1]), nil
 	case val.StringAdaptiveEnc:
-		cmp, err := val.CompareAdaptiveStringsWithCollation(ctx, vs, left, right, collation)
-		if err != nil {
-			panic(err)
-		}
-		return cmp
+		return val.CompareAdaptiveStringsWithCollation(ctx, vs, left, right, collation)
 	default:
 		return (&val.DefaultTupleComparator{}).WithValueStore(vs).CompareValues(ctx, 0, left, right, typ)
 	}

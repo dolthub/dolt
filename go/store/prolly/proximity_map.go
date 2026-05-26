@@ -531,7 +531,10 @@ func (b *ProximityMapBuilder) createInitialPathMaps(ctx context.Context, maxLeve
 // getNextPathSegmentCandidates takes a list of keys, representing a path into the ProximityMap from the root.
 // It returns an iter over all possible keys that could be the next path segment.
 func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, pathMap *MutableMap, prefixTupleDesc *val.TupleDesc, prefixTuple val.Tuple) (MapIter, error) {
-	prefixRange := PrefixRange(ctx, prefixTuple, prefixTupleDesc)
+	prefixRange, err := PrefixRange(ctx, prefixTuple, prefixTupleDesc)
+	if err != nil {
+		return nil, err
+	}
 	return pathMap.IterRange(ctx, prefixRange)
 }
 

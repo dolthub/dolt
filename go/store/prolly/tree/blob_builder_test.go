@@ -543,7 +543,8 @@ func TestCompareAdaptiveValueStreamsChunks(t *testing.T) {
 
 			writesAfterBuild := cns.reads
 			cns.reads = 0
-			got := td.Comparator().CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.BytesAdaptiveEnc})
+			got, err := td.Comparator().CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.BytesAdaptiveEnc})
+			require.NoError(t, err)
 			require.Equal(t, c.want, got)
 
 			// Bound the number of nodes read during compare. The mismatch is well within the
@@ -612,7 +613,8 @@ func TestCompareAdaptiveTextWithCollation(t *testing.T) {
 				Collations: []sql.CollationID{c.collation},
 			}.WithValueStore(ns).Validated([]val.Type{{Enc: val.StringAdaptiveEnc}})
 
-			got := cmp.CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.StringAdaptiveEnc})
+			got, err := cmp.CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.StringAdaptiveEnc})
+			require.NoError(t, err)
 			require.Equal(t, c.want, got)
 		})
 	}

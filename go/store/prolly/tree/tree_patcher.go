@@ -77,7 +77,11 @@ func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 		if nextKey == nil {
 			break
 		} else if prevMutation.EndKey != nil {
-			assertTrue(order.Compare(ctx, K(nextKey), K(prevMutation.EndKey)) >= 0, "expected patches to be sorted by key, but got %v before %v", prevMutation, newMutation)
+			cmp, cmpErr := order.Compare(ctx, K(nextKey), K(prevMutation.EndKey))
+			if cmpErr != nil {
+				return nil, cmpErr
+			}
+			assertTrue(cmp >= 0, "expected patches to be sorted by key, but got %v before %v", prevMutation, newMutation)
 		}
 	}
 
@@ -101,7 +105,11 @@ func applyLeafPatch[K ~[]byte, O Ordering[K], S message.Serializer](
 	if cur.Valid() {
 		// Compare mutations |newKey| and |newValue|
 		// to the existing pair from the cursor
-		if order.Compare(ctx, K(newKey), K(cur.CurrentKey())) == 0 {
+		cmp, cmpErr := order.Compare(ctx, K(newKey), K(cur.CurrentKey()))
+		if cmpErr != nil {
+			return cmpErr
+		}
+		if cmp == 0 {
 			oldValue = cur.currentValue()
 		}
 
@@ -154,10 +162,16 @@ func applyNodePatch[K ~[]byte, O Ordering[K], S message.Serializer](
 		err = chkr.advanceTo(ctx, cur)
 
 		// The range (fromKey, toKey] is open from below. If there's already something at |fromKey|, advance past it.
-		if cur.Valid() && order.Compare(ctx, K(fromKey), K(cur.CurrentKey())) == 0 {
-			err = chkr.AddPair(ctx, cur.CurrentKey(), cur.currentValue())
-			if err != nil {
-				return err
+		if cur.Valid() {
+			cmp, cmpErr := order.Compare(ctx, K(fromKey), K(cur.CurrentKey()))
+			if cmpErr != nil {
+				return cmpErr
+			}
+			if cmp == 0 {
+				err = chkr.AddPair(ctx, cur.CurrentKey(), cur.currentValue())
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -183,10 +197,16 @@ func applyNodePatch[K ~[]byte, O Ordering[K], S message.Serializer](
 	if err != nil {
 		return err
 	}
-	if chkr.cur.Valid() && order.Compare(ctx, K(toKey), K(chkr.cur.CurrentKey())) == 0 {
-		err = chkr.skip(ctx)
-		if err != nil {
-			return err
+	if chkr.cur.Valid() {
+		cmp, cmpErr := order.Compare(ctx, K(toKey), K(chkr.cur.CurrentKey()))
+		if cmpErr != nil {
+			return cmpErr
+		}
+		if cmp == 0 {
+			err = chkr.skip(ctx)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

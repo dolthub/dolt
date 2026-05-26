@@ -164,7 +164,10 @@ func (f ProximityFlusher) visitNode(
 	var nodeSubtrees []uint64
 
 	if node.IsLeaf() {
-		keys, values, nodeSubtrees = f.rebuildLeafNodeWithEdits(ctx, node, edits, keyDesc)
+		keys, values, nodeSubtrees, err = f.rebuildLeafNodeWithEdits(ctx, node, edits, keyDesc)
+		if err != nil {
+			return nil, 0, err
+		}
 	} else {
 		// sort the list of edits based on which child node contains them.
 		childEdits := make(map[int]childEditList)
@@ -288,7 +291,7 @@ func (f ProximityFlusher) rebuildLeafNodeWithEdits(
 	originalNode *tree.Node,
 	edits []VectorIndexKV,
 	keyDesc *val.TupleDesc,
-) (keys [][]byte, values [][]byte, nodeSubtrees []uint64) {
+) (keys [][]byte, values [][]byte, nodeSubtrees []uint64, err error) {
 	// combine edits with node keys. Use merge sort.
 
 	editIdx := 0
@@ -311,7 +314,10 @@ func (f ProximityFlusher) rebuildLeafNodeWithEdits(
 		}
 		editKey := val.Tuple(edits[editIdx].key)
 		nodeKey := val.Tuple(originalNode.GetKey(nodeIdx))
-		cmp := keyDesc.Compare(ctx, editKey, nodeKey)
+		cmp, cmpErr := keyDesc.Compare(ctx, editKey, nodeKey)
+		if cmpErr != nil {
+			return nil, nil, nil, cmpErr
+		}
 		if cmp < 0 {
 			//edit comes first
 			// Edit doesn't match an existing key: it must be an insert.
@@ -352,17 +358,22 @@ func (f ProximityFlusher) rebuildNode(ctx context.Context, ns tree.NodeStore, no
 	if err != nil {
 		return nil, 0, err
 	}
-	editSkipList := skip.NewSkipList(func(ctx context.Context, left, right []byte) int {
+	editSkipList := skip.NewSkipList(func(ctx context.Context, left, right []byte) (int, error) {
 		return keyDesc.Compare(ctx, left, right)
 	})
 	for _, edit := range edits {
-		editSkipList.Put(ctx, edit.key, edit.value)
+		if err := editSkipList.Put(ctx, edit.key, edit.value); err != nil {
+			return nil, 0, err
+		}
 	}
 
 	insertFromNode := func(nd *tree.Node, i int) error {
 		key := nd.GetKey(i)
 		value := nd.GetValue(i)
-		_, hasNewVal := editSkipList.Get(ctx, key)
+		_, hasNewVal, err := editSkipList.Get(ctx, key)
+		if err != nil {
+			return err
+		}
 		if !hasNewVal {
 			// TODO: Is it faster if we fetch the level from the current tree?
 			keyLevel := tree.DeterministicHashLevel(f.logChunkSize, key)

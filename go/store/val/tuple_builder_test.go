@@ -227,9 +227,12 @@ type testCompare struct {
 
 var _ TupleComparator = testCompare{}
 
-func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
+func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int, err error) {
 	for i, typ := range desc.Types {
-		cmp = compare(ctx, typ, left.GetField(i), right.GetField(i), tc.vs)
+		cmp, err = compare(ctx, typ, left.GetField(i), right.GetField(i), tc.vs)
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
 			break
 		}
@@ -237,7 +240,7 @@ func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *Tupl
 	return
 }
 
-func (tc testCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
+func (tc testCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (int, error) {
 	return compare(ctx, typ, left, right, tc.vs)
 }
 

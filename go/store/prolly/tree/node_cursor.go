@@ -37,10 +37,10 @@ type cursor struct {
 	idx    int
 }
 
-type SearchFn func(ctx context.Context, nd *Node) (idx int)
+type SearchFn func(ctx context.Context, nd *Node) (idx int, err error)
 
 type Ordering[K ~[]byte] interface {
-	Compare(ctx context.Context, left, right K) int
+	Compare(ctx context.Context, left, right K) (int, error)
 }
 
 func newCursorAtRoot(ctx context.Context, ns NodeStore, nd *Node) (cur *cursor) {
@@ -107,9 +107,9 @@ func newCursorAtOrdinal(ctx context.Context, ns NodeStore, nd *Node, ord uint64)
 	}
 
 	distance := int64(ord)
-	return newCursorFromSearchFn(ctx, ns, nd, func(ctx context.Context, nd *Node) (idx int) {
+	return newCursorFromSearchFn(ctx, ns, nd, func(ctx context.Context, nd *Node) (idx int, err error) {
 		if nd.IsLeaf() {
-			return int(distance)
+			return int(distance), nil
 		}
 		nd, _ = nd.LoadSubtrees()
 
@@ -165,7 +165,10 @@ func newCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore,
 func newCursorFromSearchFn(ctx context.Context, ns NodeStore, nd *Node, search SearchFn) (cur *cursor, err error) {
 	cur = &cursor{nd: nd, nrw: ns}
 
-	cur.idx = search(ctx, cur.nd)
+	cur.idx, err = search(ctx, cur.nd)
+	if err != nil {
+		return cur, err
+	}
 	for !cur.isLeaf() {
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
@@ -178,7 +181,10 @@ func newCursorFromSearchFn(ctx context.Context, ns NodeStore, nd *Node, search S
 		parent := cur
 		cur = &cursor{nd: nd, parent: parent, nrw: ns}
 
-		cur.idx = search(ctx, cur.nd)
+		cur.idx, err = search(ctx, cur.nd)
+		if err != nil {
+			return cur, err
+		}
 	}
 	return
 }
@@ -191,7 +197,10 @@ func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeSt
 		i, j := 0, cur.nd.Count()
 		for i < j {
 			h := int(uint(i+j) >> 1)
-			cmp := order.Compare(ctx, key, K(cur.nd.GetKey(h)))
+			cmp, err := order.Compare(ctx, key, K(cur.nd.GetKey(h)))
+			if err != nil {
+				return cur, err
+			}
 			if cmp > 0 {
 				i = h + 1
 			} else {
@@ -218,11 +227,11 @@ func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeSt
 
 // searchForKey returns a SearchFn for |key|.
 func searchForKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
-	return func(ctx context.Context, nd *Node) (idx int) {
+	return func(ctx context.Context, nd *Node) (idx int, err error) {
 		// A flattened leaf node contains 1 value and 0 keys. We check for this and return the index of the only value,
 		// in order to prevent a comparison against the nonexistent key.
 		if nd.keys.IsEmpty() {
-			return 0
+			return 0, nil
 		}
 		n := int(nd.Count())
 		// Define f(-1) == false and f(n) == true.
@@ -230,7 +239,11 @@ func searchForKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
 		i, j := 0, n
 		for i < j {
 			h := int(uint(i+j) >> 1) // avoid overflow when computing h
-			less := order.Compare(ctx, key, K(nd.GetKey(h))) <= 0
+			cmp, err := order.Compare(ctx, key, K(nd.GetKey(h)))
+			if err != nil {
+				return 0, err
+			}
+			less := cmp <= 0
 			// i ≤ h < j
 			if !less {
 				i = h + 1 // preserves f(i-1) == false
@@ -240,7 +253,7 @@ func searchForKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
 		}
 		// i == j, f(i-1) == false, and
 		// f(j) (= f(i)) == true  =>  answer is i.
-		return i
+		return i, nil
 	}
 }
 
@@ -334,8 +347,16 @@ func currentCursorItems(cur *cursor) (key, value Item) {
 func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, order O) (err error) {
 	inBounds := true
 	if cur.parent != nil {
-		inBounds = inBounds && order.Compare(ctx, key, K(cur.firstKey())) >= 0
-		inBounds = inBounds && order.Compare(ctx, key, K(cur.lastKey())) <= 0
+		cmpFirst, cmpErr := order.Compare(ctx, key, K(cur.firstKey()))
+		if cmpErr != nil {
+			return cmpErr
+		}
+		cmpLast, cmpErr := order.Compare(ctx, key, K(cur.lastKey()))
+		if cmpErr != nil {
+			return cmpErr
+		}
+		inBounds = inBounds && cmpFirst >= 0
+		inBounds = inBounds && cmpLast <= 0
 	}
 
 	if !inBounds {
@@ -353,7 +374,7 @@ func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, ord
 		}
 	}
 
-	cur.idx = searchForKey(key, order)(ctx, cur.nd)
+	cur.idx, err = searchForKey(key, order)(ctx, cur.nd)
 
 	return
 }

@@ -64,12 +64,18 @@ func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc *val.Tupl
 
 	dupes := make([]int, 0, count)
 	for {
-		SortTuplePairs(ctx, items, keyDesc)
+		if err := SortTuplePairs(ctx, items, keyDesc); err != nil {
+			return nil, err
+		}
 		for i := range items {
 			if i == 0 {
 				continue
 			}
-			if keyDesc.Compare(ctx, items[i][0], items[i-1][0]) == 0 {
+			cmp, err := keyDesc.Compare(ctx, items[i][0], items[i-1][0])
+			if err != nil {
+				return nil, err
+			}
+			if cmp == 0 {
 				dupes = append(dupes, i)
 			}
 		}
@@ -183,10 +189,20 @@ func CloneRandomTuples(items [][2]val.Tuple) (clone [][2]val.Tuple) {
 	return
 }
 
-func SortTuplePairs(ctx context.Context, items [][2]val.Tuple, keyDesc *val.TupleDesc) {
+func SortTuplePairs(ctx context.Context, items [][2]val.Tuple, keyDesc *val.TupleDesc) error {
+	var sortErr error
 	sort.Slice(items, func(i, j int) bool {
-		return keyDesc.Compare(ctx, items[i][0], items[j][0]) < 0
+		if sortErr != nil {
+			return false
+		}
+		cmp, err := keyDesc.Compare(ctx, items[i][0], items[j][0])
+		if err != nil {
+			sortErr = err
+			return false
+		}
+		return cmp < 0
 	})
+	return sortErr
 }
 
 func ShuffleTuplePairs(items [][2]val.Tuple) {
@@ -224,7 +240,10 @@ func deduplicateTuples(ctx context.Context, desc *val.TupleDesc, tups [][2]val.T
 	uniq[0] = tups[0]
 
 	for i := 1; i < len(tups); i++ {
-		cmp := desc.Compare(ctx, tups[i-1][0], tups[i][0])
+		cmp, err := desc.Compare(ctx, tups[i-1][0], tups[i][0])
+		if err != nil {
+			panic(err)
+		}
 		if cmp < 0 {
 			uniq = append(uniq, tups[i])
 		}
@@ -448,7 +467,10 @@ func GetAddressFromLevelAndKeyForTest(ctx context.Context, ns NodeStore, root *N
 	i := 0
 	for i < root.Count() {
 		childKey := root.GetKey(i)
-		cmp := keyDesc.Compare(ctx, val.Tuple(childKey), key)
+		cmp, err := keyDesc.Compare(ctx, val.Tuple(childKey), key)
+		if err != nil {
+			return hash.Hash{}, false, err
+		}
 		if cmp >= 0 {
 			childAddr := root.getAddress(i)
 			if root.Level() == level {

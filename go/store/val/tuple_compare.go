@@ -22,10 +22,10 @@ import (
 // TupleComparator compares Tuples.
 type TupleComparator interface {
 	// Compare compares pairs of Tuples.
-	Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) int
+	Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (int, error)
 
 	// CompareValues compares pairs of values. The index should match the index used to retrieve the type.
-	CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int
+	CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (int, error)
 
 	// Prefix returns a TupleComparator for the first n types.
 	Prefix(n int) TupleComparator
@@ -49,30 +49,36 @@ type DefaultTupleComparator struct {
 var _ TupleComparator = &DefaultTupleComparator{}
 
 // Compare implements TupleComparator
-func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
+func (d *DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int, err error) {
 	off := len(desc.fast)
 	var start, stop ByteSize
 	for i := 0; i < off; i++ {
 		stop = desc.fast[i]
-		cmp = compare(ctx, desc.Types[i], left[start:stop], right[start:stop], d.vs)
+		cmp, err = compare(ctx, desc.Types[i], left[start:stop], right[start:stop], d.vs)
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
-			return cmp
+			return cmp, nil
 		}
 		start = stop
 	}
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = compare(ctx, typ, left.GetField(j), right.GetField(j), d.vs)
+		cmp, err = compare(ctx, typ, left.GetField(j), right.GetField(j), d.vs)
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
-			return cmp
+			return cmp, nil
 		}
 	}
 	return
 }
 
 // CompareValues implements TupleComparator
-func (d *DefaultTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (cmp int) {
+func (d *DefaultTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (cmp int, err error) {
 	return compare(ctx, typ, left, right, d.vs)
 }
 
@@ -96,73 +102,73 @@ func (d *DefaultTupleComparator) WithValueStore(vs ValueStore) TupleComparator {
 	return &DefaultTupleComparator{vs: vs}
 }
 
-func compare(ctx context.Context, typ Type, left, right []byte, vs ValueStore) int {
+func compare(ctx context.Context, typ Type, left, right []byte, vs ValueStore) (int, error) {
 	// order NULLs first
 	if left == nil || right == nil {
 		if bytes.Equal(left, right) {
-			return 0
+			return 0, nil
 		} else if left == nil {
-			return -1
+			return -1, nil
 		} else {
-			return 1
+			return 1, nil
 		}
 	}
 
 	switch typ.Enc {
 	case Int8Enc:
-		return compareInt8(readInt8(left), readInt8(right))
+		return compareInt8(readInt8(left), readInt8(right)), nil
 	case Uint8Enc:
-		return compareUint8(readUint8(left), readUint8(right))
+		return compareUint8(readUint8(left), readUint8(right)), nil
 	case Int16Enc:
-		return compareInt16(readInt16(left), readInt16(right))
+		return compareInt16(readInt16(left), readInt16(right)), nil
 	case Uint16Enc:
-		return compareUint16(ReadUint16(left), ReadUint16(right))
+		return compareUint16(ReadUint16(left), ReadUint16(right)), nil
 	case Int32Enc:
-		return compareInt32(readInt32(left), readInt32(right))
+		return compareInt32(readInt32(left), readInt32(right)), nil
 	case Uint32Enc:
-		return compareUint32(ReadUint32(left), ReadUint32(right))
+		return compareUint32(ReadUint32(left), ReadUint32(right)), nil
 	case Int64Enc:
-		return compareInt64(readInt64(left), readInt64(right))
+		return compareInt64(readInt64(left), readInt64(right)), nil
 	case Uint64Enc:
-		return compareUint64(readUint64(left), readUint64(right))
+		return compareUint64(readUint64(left), readUint64(right)), nil
 	case Float32Enc:
-		return compareFloat32(readFloat32(left), readFloat32(right))
+		return compareFloat32(readFloat32(left), readFloat32(right)), nil
 	case Float64Enc:
-		return compareFloat64(readFloat64(left), readFloat64(right))
+		return compareFloat64(readFloat64(left), readFloat64(right)), nil
 	case Bit64Enc:
-		return compareBit64(readBit64(left), readBit64(right))
+		return compareBit64(readBit64(left), readBit64(right)), nil
 	case DecimalEnc:
-		return compareDecimal(readDecimal(left), readDecimal(right))
+		return compareDecimal(readDecimal(left), readDecimal(right)), nil
 	case YearEnc:
-		return compareYear(readYear(left), readYear(right))
+		return compareYear(readYear(left), readYear(right)), nil
 	case DateEnc:
-		return compareDate(readDate(left), readDate(right))
+		return compareDate(readDate(left), readDate(right)), nil
 	case TimeEnc:
-		return compareTime(readTime(left), readTime(right))
+		return compareTime(readTime(left), readTime(right)), nil
 	case DatetimeEnc:
-		return compareDatetime(readDatetime(left), readDatetime(right))
+		return compareDatetime(readDatetime(left), readDatetime(right)), nil
 	case EnumEnc:
-		return compareEnum(readEnum(left), readEnum(right))
+		return compareEnum(readEnum(left), readEnum(right)), nil
 	case SetEnc:
-		return compareSet(readSet(left), readSet(right))
+		return compareSet(readSet(left), readSet(right)), nil
 	case StringEnc:
-		return compareString(readString(left), readString(right))
+		return compareString(readString(left), readString(right)), nil
 	case ByteStringEnc:
-		return compareByteString(readByteString(left), readByteString(right))
+		return compareByteString(readByteString(left), readByteString(right)), nil
 	case Hash128Enc:
-		return compareHash128(readHash128(left), readHash128(right))
+		return compareHash128(readHash128(left), readHash128(right)), nil
 	case GeomAddrEnc:
-		return compareAddr(readAddr(left), readAddr(right))
+		return compareAddr(readAddr(left), readAddr(right)), nil
 	case BytesAddrEnc:
-		return compareAddr(readAddr(left), readAddr(right))
+		return compareAddr(readAddr(left), readAddr(right)), nil
 	case CommitAddrEnc:
-		return compareAddr(readAddr(left), readAddr(right))
+		return compareAddr(readAddr(left), readAddr(right)), nil
 	case JSONAddrEnc:
-		return compareAddr(readAddr(left), readAddr(right))
+		return compareAddr(readAddr(left), readAddr(right)), nil
 	case StringAddrEnc:
-		return compareAddr(readAddr(left), readAddr(right))
+		return compareAddr(readAddr(left), readAddr(right)), nil
 	case CellEnc:
-		return compareCell(readCell(left), readCell(right))
+		return compareCell(readCell(left), readCell(right)), nil
 	case BytesAdaptiveEnc, StringAdaptiveEnc, GeomAdaptiveEnc, JsonAdaptiveEnc:
 		return compareAdaptiveValue(ctx, vs, left, right, typ.Enc)
 	default:

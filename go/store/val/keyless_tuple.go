@@ -82,12 +82,12 @@ type keylessCompare struct {
 var _ TupleComparator = &keylessCompare{}
 
 // Compare implements TupleComparator
-func (k *keylessCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) int {
-	return bytes.Compare(left, right)
+func (k *keylessCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (int, error) {
+	return bytes.Compare(left, right), nil
 }
 
 // CompareValues implements TupleComparator
-func (k *keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
+func (k *keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (int, error) {
 	return compare(ctx, typ, left, right, k.vs)
 }
 

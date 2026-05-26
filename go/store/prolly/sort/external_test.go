@@ -92,7 +92,9 @@ func TestFlush(t *testing.T) {
 			}
 
 			keyCmp := func(l, r val.Tuple) bool {
-				return tt.td.Compare(ctx, l, r) <= 0
+				cmp, err := tt.td.Compare(ctx, l, r)
+				require.NoError(t, err)
+				return cmp <= 0
 			}
 
 			t.Run("sorting", func(t *testing.T) {
@@ -177,7 +179,9 @@ func TestMerge(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(name(tt.td, tt.counts), func(t *testing.T) {
 			keyCmp := func(l, r val.Tuple) bool {
-				return tt.td.Compare(ctx, l, r) <= 0
+				cmp, err := tt.td.Compare(ctx, l, r)
+				require.NoError(t, err)
+				return cmp <= 0
 			}
 
 			var keyMems []keyIterable
@@ -283,7 +287,9 @@ func TestCompact(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(name(tt.td, tt.fileCnt), func(t *testing.T) {
 			keyCmp := func(l, r val.Tuple) bool {
-				return tt.td.Compare(ctx, l, r) <= 0
+				cmp, err := tt.td.Compare(ctx, l, r)
+				require.NoError(t, err)
+				return cmp <= 0
 			}
 
 			var keyFiles []keyIterable
@@ -419,7 +425,9 @@ func TestFileE2E(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s %d-rows %d-batch %d-files", tt.name, tt.rows, tt.batchSize, tt.fileMax), func(t *testing.T) {
 			keyCmp := func(l, r val.Tuple) bool {
-				return tt.td.Compare(ctx, l, r) <= 0
+				cmp, err := tt.td.Compare(ctx, l, r)
+				require.NoError(t, err)
+				return cmp <= 0
 			}
 
 			ctx := sql.NewEmptyContext()
