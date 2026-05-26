@@ -2473,7 +2473,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 		specs:   specs,
 	}
 
-	upstream, err := updateManifestGCGen(ctx, nbs.manifest, nbs.fatalBehavior, nbs.upstream.lock, newContents, nbs.stats, nil)
+	upstream, err := nbs.manifest.UpdateGCGen(ctx, nbs.fatalBehavior, nbs.upstream.lock, newContents, nbs.stats, nil)
 	if err != nil {
 		return err
 	}

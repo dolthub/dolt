@@ -232,6 +232,13 @@ func (dm dynamoManifest) Update(ctx context.Context, behavior dherrors.FatalBeha
 	return newContents, nil
 }
 
+// UpdateGCGen is unsupported for dynamoManifest: the legacy DynamoDB manifest
+// format (AWSStorageVersion) has no gcGen field, so it cannot track the garbage
+// collection generation that GC relies on.
+func (dm dynamoManifest) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	return manifestContents{}, errors.New("dynamodb-backed stores do not support garbage collection")
+}
+
 func errIsConditionalCheckFailed(err error) bool {
 	var ccfe *ddbtypes.ConditionalCheckFailedException
 	return errors.As(err, &ccfe)

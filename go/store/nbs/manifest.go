@@ -56,6 +56,7 @@ type manifest interface {
 	ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error)
 
 	manifestUpdater
+	manifestGCGenUpdater
 }
 
 type manifestUpdater interface {
@@ -205,20 +206,6 @@ func toSpecSet(specs []tableSpec) (ss map[hash.Hash]struct{}) {
 		ss[ts.name] = struct{}{}
 	}
 	return ss
-}
-
-// updateManifestGCGen updates |m| with a new garbage collection generation.
-// The supplied manifest must implement manifestGCGenUpdater. Callers are
-// responsible for serializing manifest updates (the NomsBlockStore holds its
-// |mu| across the read-modify-write); concurrent updates from other processes
-// or store instances are resolved by the underlying manifest's compare-and-swap
-// on the lock hash.
-func updateManifestGCGen(ctx context.Context, m manifest, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
-	updater, ok := m.(manifestGCGenUpdater)
-	if !ok {
-		return manifestContents{}, errors.New("manifest does not support updating gc gen")
-	}
-	return updater.UpdateGCGen(ctx, behavior, lastLock, newContents, stats, writeHook)
 }
 
 // TableSpecInfo is an interface for retrieving data from a tableSpec outside of this package
