@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync/atomic"
 
+	vttypes "github.com/dolthub/vitess/go/sqltypes"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
@@ -1090,12 +1092,18 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		fields := make([]prolly.RangeField, len(rng))
 		skipRangeMatchCallback := true
 		for j, expr := range rng {
-			if !sqltypes.IsInteger(expr.Typ) {
-				// String, decimal, float, datetime ranges can return
-				// false positive prefix matches. More precise range.Matches
-				// comparison is required.
+			// String, decimal, float, datetime ranges can return
+			// false positive prefix matches. More precise range.Matches
+			// comparison is required.
+			if extTyp, ok := expr.Typ.(sql.ExtendedType); ok {
+				// TODO: is there a better way to tell if this is an INT?
+				if !vttypes.IsIntegral(extTyp.Type()) {
+					skipRangeMatchCallback = false
+				}
+			} else if !sqltypes.IsInteger(expr.Typ) {
 				skipRangeMatchCallback = false
 			}
+
 			if rangeCutIsBinding(expr.LowerBound) {
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(ctx, expr.LowerBound, rng[j].Typ)
