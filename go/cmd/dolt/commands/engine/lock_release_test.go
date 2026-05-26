@@ -90,8 +90,10 @@ func TestCreateDatabase_ReleasesLockOnEngineClose(t *testing.T) {
 	_, err = os.Stat(lockPath)
 	require.NoError(t, err, "expected lock file to exist at %s", lockPath)
 
-	lck := fslock.New(lockPath)
+	lck, err := fslock.New(lockPath)
+	require.NoError(t, err)
 	err = lck.LockWithTimeout(25 * time.Millisecond)
 	require.NoError(t, err, "expected lock to be free after engine close (path=%s)", lockPath)
 	require.NoError(t, lck.Unlock())
+	require.NoError(t, lck.Close())
 }

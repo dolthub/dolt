@@ -703,7 +703,12 @@ func (gbs *GitBlobstore) maybeRunGC() {
 	}
 
 	lockPath := filepath.Join(gbs.gitDir, ".dolt-gc.lock")
-	lck := fslock.New(lockPath)
+	lck, err := fslock.New(lockPath)
+	if err != nil {
+		return // can't open the lock directory, skip
+	}
+	// Close runs after the Unlock below (defers are LIFO), releasing the lock's directory handle.
+	defer lck.Close()
 	if err := lck.LockWithTimeout(0); err != nil {
 		return // another process holds the lock, skip
 	}

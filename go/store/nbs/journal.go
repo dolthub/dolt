@@ -611,26 +611,41 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []t
 // When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
 // (The behavior change is implemented separately; this is the plumbing flag.)
 func newJournalManifest(ctx context.Context, dir string, failOnTimeout bool) (m *journalManifest, err error) {
-	lock := fslock.New(filepath.Join(dir, lockFileName))
+	lock, err := fslock.New(filepath.Join(dir, lockFileName))
+	if err != nil {
+		return nil, err
+	}
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
 	err = lock.LockWithTimeout(lockFileTimeout)
 	if errors.Is(err, fslock.ErrTimeout) {
+		// We didn't acquire the lock; release its directory handle and either
+		// fail or fall back to read-only mode.
+		_ = lock.Close()
+		lock = nil
 		if failOnTimeout {
 			return nil, ErrDatabaseLocked
 		}
-		lock, err = nil, nil // read only
+		err = nil // read only
 	} else if err != nil {
+		_ = lock.Close()
 		return nil, err
 	}
+
+	// On any error return past this point we don't hand the lock to a
+	// journalManifest, so release it (and its directory handle) ourselves.
+	defer func() {
+		if err != nil && lock != nil {
+			_ = lock.Unlock()
+			_ = lock.Close()
+		}
+	}()
+
 	m = &journalManifest{dir: dir, lock: lock}
 
 	var f *os.File
 	f, err = openIfExists(filepath.Join(dir, manifestFileName))
 	if err != nil {
-		if lock != nil {
-			_ = lock.Unlock()
-		}
 		return nil, err
 	} else if f == nil {
 		return m, nil
@@ -639,25 +654,15 @@ func newJournalManifest(ctx context.Context, dir string, failOnTimeout bool) (m 
 		if cerr := f.Close(); err == nil {
 			err = cerr // keep first error
 		}
-		if err != nil {
-			if lock != nil {
-				_ = lock.Unlock()
-			}
-		}
 	}()
 
 	var ok bool
 	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
 	if err != nil {
-		if lock != nil {
-			_ = lock.Unlock()
-		}
 		return nil, err
 	} else if !ok {
-		if lock != nil {
-			_ = lock.Unlock()
-		}
-		return nil, ErrUnreadableManifest
+		err = ErrUnreadableManifest
+		return nil, err
 	}
 	return
 }
@@ -738,6 +743,9 @@ func updateGCGenManifestCheck(upstream, contents manifestContents) error {
 func (jm *journalManifest) Close() (err error) {
 	if jm.lock != nil {
 		err = jm.lock.Unlock()
+		if cerr := jm.lock.Close(); err == nil {
+			err = cerr // keep first error
+		}
 		jm.lock = nil
 	}
 	return

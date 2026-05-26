@@ -153,7 +153,12 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err := os.MkdirAll(hashDir, 0o755); err != nil {
 		return nil, nil, nil, err
 	}
-	initLock := fslock.New(filepath.Join(hashDir, "init.lock"))
+	initLock, err := fslock.New(filepath.Join(hashDir, "init.lock"))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// Close runs after the Unlock below (defers are LIFO), releasing the lock's directory handle.
+	defer initLock.Close()
 	if err := initLock.Lock(); err != nil {
 		return nil, nil, nil, err
 	}

@@ -41,9 +41,13 @@ func main() {
 	manifestFile := flag.Arg(1)
 	manifestContents := flag.Arg(2)
 
-	// lock released by closing l.
-	lck := fslock.New(lockFile)
-	err := lck.TryLock()
+	lck, err := fslock.New(lockFile)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	// Close releases the lock's directory handle; it runs after the Unlock below.
+	defer lck.Close()
+	err = lck.TryLock()
 	if err == fslock.ErrLocked {
 		return
 	}
