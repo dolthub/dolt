@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/d"
@@ -208,138 +207,18 @@ func toSpecSet(specs []tableSpec) (ss map[hash.Hash]struct{}) {
 	return ss
 }
 
-func newManifestLocks() *manifestLocks {
-	return &manifestLocks{map[string]struct{}{}, map[string]struct{}{}, sync.NewCond(&sync.Mutex{})}
-}
-
-type manifestLocks struct {
-	updating map[string]struct{}
-	fetching map[string]struct{}
-	cond     *sync.Cond
-}
-
-func (ml *manifestLocks) lockForFetch(db string) {
-	lockByName(db, ml.cond, ml.fetching)
-}
-
-func (ml *manifestLocks) unlockForFetch(db string) error {
-	return unlockByName(db, ml.cond, ml.fetching)
-}
-
-func (ml *manifestLocks) lockForUpdate(db string) {
-	lockByName(db, ml.cond, ml.updating)
-}
-
-func (ml *manifestLocks) unlockForUpdate(db string) error {
-	return unlockByName(db, ml.cond, ml.updating)
-}
-
-func lockByName(db string, c *sync.Cond, locks map[string]struct{}) {
-	c.L.Lock()
-	defer c.L.Unlock()
-
-	for {
-		if _, inProgress := locks[db]; !inProgress {
-			locks[db] = struct{}{}
-			break
-		}
-		c.Wait()
-	}
-}
-
-func unlockByName(db string, c *sync.Cond, locks map[string]struct{}) error {
-	c.L.Lock()
-	defer c.L.Unlock()
-
-	if _, ok := locks[db]; !ok {
-		return errors.New("unlock failed")
-	}
-
-	delete(locks, db)
-
-	c.Broadcast()
-
-	return nil
-}
-
-type manifestManager struct {
-	m     manifest
-	locks *manifestLocks
-}
-
-func (mm manifestManager) lockOutFetch() {
-	mm.locks.lockForFetch(mm.Name())
-}
-
-func (mm manifestManager) allowFetch() error {
-	return mm.locks.unlockForFetch(mm.Name())
-}
-
-func (mm manifestManager) LockForUpdate() {
-	mm.locks.lockForUpdate(mm.Name())
-}
-
-func (mm manifestManager) UnlockForUpdate() error {
-	return mm.locks.unlockForUpdate(mm.Name())
-}
-
-func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, err error) {
-	mm.lockOutFetch()
-	defer func() {
-		afErr := mm.allowFetch()
-
-		if err == nil {
-			err = afErr
-		}
-	}()
-
-	return mm.m.ParseIfExists(ctx, stats, nil)
-}
-
-// Update attempts to write a new manifest.
-// Callers MUST protect uses of Update with Lock/UnlockForUpdate.
-// Update does not call Lock/UnlockForUpdate() on its own because it is
-// intended to be used in a larger critical section that reads the current
-// manifest, computes new contents, and writes them back atomically.
-func (mm manifestManager) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
-	mm.lockOutFetch()
-	defer func() {
-		afErr := mm.allowFetch()
-
-		if err == nil {
-			err = afErr
-		}
-	}()
-
-	return mm.m.Update(ctx, behavior, lastLock, newContents, stats, writeHook)
-}
-
-// UpdateGCGen will update the manifest with a new garbage collection generation.
-// Callers MUST protect uses of UpdateGCGen with Lock/UnlockForUpdate.
-func (mm manifestManager) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
-	updater, ok := mm.m.(manifestGCGenUpdater)
+// updateManifestGCGen updates |m| with a new garbage collection generation.
+// The supplied manifest must implement manifestGCGenUpdater. Callers are
+// responsible for serializing manifest updates (the NomsBlockStore holds its
+// |mu| across the read-modify-write); concurrent updates from other processes
+// or store instances are resolved by the underlying manifest's compare-and-swap
+// on the lock hash.
+func updateManifestGCGen(ctx context.Context, m manifest, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	updater, ok := m.(manifestGCGenUpdater)
 	if !ok {
 		return manifestContents{}, errors.New("manifest does not support updating gc gen")
 	}
-
-	mm.lockOutFetch()
-	defer func() {
-		afErr := mm.allowFetch()
-
-		if err == nil {
-			err = afErr
-		}
-	}()
-
 	return updater.UpdateGCGen(ctx, behavior, lastLock, newContents, stats, writeHook)
-}
-
-func (mm manifestManager) Close() error {
-	return nil
-}
-
-func (mm manifestManager) Name() string {
-	return mm.m.Name()
 }
 
 // TableSpecInfo is an interface for retrieving data from a tableSpec outside of this package

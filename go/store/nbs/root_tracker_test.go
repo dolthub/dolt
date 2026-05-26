@@ -175,7 +175,7 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
-	mm := manifestManager{fm, newManifestLocks()}
+	mm := manifest(fm)
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
 		require.EqualValues(t, 0, q.Usage())
@@ -226,7 +226,7 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 func TestChunkStoreManifestInProcessOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
-	mm := manifestManager{fm, newManifestLocks()}
+	mm := manifest(fm)
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFakeTablePersister(q)
 
@@ -275,123 +275,76 @@ func TestChunkStoreManifestInProcessOptimisticLockFail(t *testing.T) {
 	assert.Equal(constants.FormatDoltString, store.Version())
 }
 
-func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
-	assert := assert.New(t)
+// TestChunkStoreConcurrentInProcessCommits exercises two NomsBlockStore
+// instances backed by the same manifest committing concurrently. There is no
+// longer an in-process manifest update lock serializing them; correctness rests
+// entirely on the manifest's compare-and-swap on the lock hash plus each store's
+// optimistic retry loop. Both stores' chunks must end up in the shared manifest.
+func TestChunkStoreConcurrentInProcessCommits(t *testing.T) {
 	fm := &fakeManifest{name: "foo"}
-	upm := &updatePreemptManifest{manifest: fm}
-	mm := manifestManager{upm, newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFakeTablePersister(q)
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), constants.FormatDoltString, mm, p, q, c, defaultMemTableSize)
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, store.Close())
-		require.EqualValues(t, 0, q.Usage())
-	}()
+	mkStore := func() *NomsBlockStore {
+		s, err := newNomsBlockStore(context.Background(), constants.FormatDoltString, fm, p, q, c, defaultMemTableSize)
+		require.NoError(t, err)
+		return s
+	}
+	storeA := mkStore()
+	defer storeA.Close()
+	storeB := mkStore()
+	defer storeB.Close()
 
-	// store.Commit() should lock out calls to mm.Fetch()
-	wg := sync.WaitGroup{}
-	fetched := manifestContents{}
-	upm.preUpdate = func() {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			var err error
-			_, fetched, err = mm.Fetch(context.Background(), nil)
-			require.NoError(t, err)
-		}()
+	chunkA := chunks.NewChunk([]byte("chunk a"))
+	chunkB := chunks.NewChunk([]byte("chunk b"))
+
+	// addChunk adds |ch| to |s| without moving the root, retrying on optimistic
+	// lock failure (re-reading the shared manifest via Rebase) until it lands.
+	addChunk := func(s *NomsBlockStore, ch chunks.Chunk) error {
+		ctx := context.Background()
+		if err := s.Put(ctx, ch, noopGetAddrs); err != nil {
+			return err
+		}
+		for {
+			if err := s.Rebase(ctx); err != nil {
+				return err
+			}
+			root, err := s.Root(ctx)
+			if err != nil {
+				return err
+			}
+			ok, err := s.Commit(ctx, root, root)
+			if err != nil {
+				return err
+			}
+			if ok {
+				return nil
+			}
+		}
 	}
 
-	rootChunk := chunks.NewChunk([]byte("new root"))
-	err = store.Put(context.Background(), rootChunk, noopGetAddrs)
-	require.NoError(t, err)
-	h, err := store.Root(context.Background())
-	require.NoError(t, err)
-	success, err := store.Commit(context.Background(), rootChunk.Hash(), h)
-	require.NoError(t, err)
-	assert.True(success)
-
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); errs[0] = addChunk(storeA, chunkA) }()
+	go func() { defer wg.Done(); errs[1] = addChunk(storeB, chunkB) }()
 	wg.Wait()
-	h, err = store.Root(context.Background())
+	require.NoError(t, errs[0])
+	require.NoError(t, errs[1])
+
+	require.NoError(t, storeA.Rebase(context.Background()))
+	hasA, err := storeA.Has(context.Background(), chunkA.Hash())
 	require.NoError(t, err)
-	assert.Equal(h, fetched.root)
-}
-
-func TestChunkStoreSerializeCommits(t *testing.T) {
-	assert := assert.New(t)
-	fm := &fakeManifest{name: "foo"}
-	upm := &updatePreemptManifest{manifest: fm}
-	l := newManifestLocks()
-	q := NewUnlimitedMemQuotaProvider()
-	p := newFakeTablePersister(q)
-
-	c := inlineConjoiner{defaultMaxTables}
-
-	store, err := newNomsBlockStore(context.Background(), constants.FormatDoltString, manifestManager{upm, l}, p, q, c, defaultMemTableSize)
+	hasB, err := storeA.Has(context.Background(), chunkB.Hash())
 	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, store.Close())
-		require.EqualValues(t, 0, q.Usage())
-	}()
-
-	storeChunk := chunks.NewChunk([]byte("store"))
-	interloperChunk := chunks.NewChunk([]byte("interloper"))
-	updateCount := 0
-
-	interloper, err := newNomsBlockStore(
-		context.Background(),
-		constants.FormatDoltString,
-		manifestManager{
-			updatePreemptManifest{fm, func() { updateCount++ }}, l,
-		},
-		p,
-		q,
-		c,
-		defaultMemTableSize)
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, interloper.Close())
-	}()
-
-	wg := sync.WaitGroup{}
-	upm.preUpdate = func() {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := interloper.Put(context.Background(), interloperChunk, noopGetAddrs)
-			require.NoError(t, err)
-			h, err := interloper.Root(context.Background())
-			require.NoError(t, err)
-			success, err := interloper.Commit(context.Background(), h, h)
-			require.NoError(t, err)
-			assert.True(success)
-		}()
-
-		updateCount++
-	}
-
-	err = store.Put(context.Background(), storeChunk, noopGetAddrs)
-	require.NoError(t, err)
-	h, err := store.Root(context.Background())
-	require.NoError(t, err)
-	success, err := store.Commit(context.Background(), h, h)
-	require.NoError(t, err)
-	assert.True(success)
-
-	wg.Wait()
-	// store lands its commit (1). The interloper, serialized behind store by the
-	// update lock, then makes a doomed Update against its stale lock (2), rebases,
-	// and retries successfully (3). Both stores end up with both chunks.
-	assert.Equal(3, updateCount)
-	assert.True(interloper.Has(context.Background(), storeChunk.Hash()))
-	assert.True(interloper.Has(context.Background(), interloperChunk.Hash()))
+	assert.True(t, hasA)
+	assert.True(t, hasB)
 }
 
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, q MemoryQuotaProvider, store *NomsBlockStore) {
 	fm = &fakeManifest{}
-	mm := manifestManager{fm, newManifestLocks()}
+	mm := manifest(fm)
 	q = NewUnlimitedMemQuotaProvider()
 	p = newFakeTablePersister(q)
 	store, err := newNomsBlockStore(context.Background(), constants.FormatDoltString, mm, p, q, inlineConjoiner{defaultMaxTables}, 0)
