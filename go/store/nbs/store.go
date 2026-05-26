@@ -69,24 +69,25 @@ const (
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
 	defaultMaxTables           = 256
 
-	defaultManifestCacheSize = 1 << 23 // 8MB
-
 	// defaultGitBlobstoreMaxPartSize is the default maximum size (in bytes) for a single part blob written to a
 	// git-backed blobstore. Large values may be rejected by some Git remotes.
 	defaultGitBlobstoreMaxPartSize uint64 = 50 * 1024 * 1024
 )
 
 var (
-	cacheOnce           = sync.Once{}
+	manifestLocksOnce   = sync.Once{}
 	makeManifestManager func(manifest) manifestManager
 )
 
 var tracer = otel.Tracer("github.com/dolthub/dolt/go/store/nbs")
 
-func makeGlobalCaches() {
-	manifestCache := newManifestCache(defaultManifestCacheSize)
+// makeGlobalManifestLocks initializes the process-global manifestLocks shared
+// by every manifestManager. The locks serialize manifest Fetch and Update
+// operations against each other, both within a single store and across stores
+// that target the same path.
+func makeGlobalManifestLocks() {
 	manifestLocks := newManifestLocks()
-	makeManifestManager = func(m manifest) manifestManager { return manifestManager{m, manifestCache, manifestLocks} }
+	makeManifestManager = func(m manifest) manifestManager { return manifestManager{m, manifestLocks} }
 }
 
 type NBSCompressedChunkStore interface {
@@ -443,18 +444,11 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 
 	var updatedContents manifestContents
 	for {
-		ok, contents, _, ferr := nbs.manifestMgr.Fetch(ctx, nbs.stats)
+		ok, contents, ferr := nbs.manifestMgr.Fetch(ctx, nbs.stats)
 		if ferr != nil {
 			return manifestContents{}, false, ferr
 		} else if !ok {
 			contents = manifestContents{nbfVers: nbs.upstream.nbfVers}
-		}
-
-		// The global manifest cache can return stale empty contents
-		// (from a concurrent writer's failed read) with exists=true
-		// but empty nbfVers. Ensure nbfVers is always populated.
-		if contents.nbfVers == "" {
-			contents.nbfVers = nbs.upstream.nbfVers
 		}
 
 		if gcGen != nil && *gcGen != contents.gcGen {
@@ -555,7 +549,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		newTables, err = nbs.tables.rebase(ctx, rebaseContents.specs, sources, nbs.stats)
 		if err != nil {
 			if isTableFileNotFound(err) && i < maxRetries {
-				ok, latest, _, ferr := nbs.manifestMgr.Fetch(ctx, nbs.stats)
+				ok, latest, ferr := nbs.manifestMgr.Fetch(ctx, nbs.stats)
 				if ferr != nil {
 					return manifestContents{}, false, ferr
 				}
@@ -677,7 +671,7 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 }
 
 func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 S3APIV2, ddb DynamoDBAPIV2, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
+	manifestLocksOnce.Do(makeGlobalManifestLocks)
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
 		s3,
@@ -693,7 +687,7 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
 func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
+	manifestLocksOnce.Do(makeGlobalManifestLocks)
 
 	bs := blobstore.NewGCSBlobstore(gcs, bucketName, path)
 	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
@@ -701,7 +695,7 @@ func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string,
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
 func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string, provider common.ConfigurationProvider, client objectstorage.ObjectStorageClient, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
+	manifestLocksOnce.Do(makeGlobalManifestLocks)
 
 	bs, err := blobstore.NewOCIBlobstore(ctx, provider, client, bucketName, path)
 	if err != nil {
@@ -713,7 +707,7 @@ func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string
 
 // NewGitStore returns an nbs implementation backed by a GitBlobstore.
 func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
+	manifestLocksOnce.Do(makeGlobalManifestLocks)
 
 	// A Git remote may reject large blobs. To keep git-backed remotes broadly usable by default, enable
 	// chunked-object writes with a conservative max part size unless the caller explicitly overrides it.
@@ -734,7 +728,7 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 // NewNoConjoinGitStore returns an nbs implementation backed by a GitBlobstore, but disables conjoin.
 // This can be useful for deployments where conjoin's table rewrite cost is undesirable.
 func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
+	manifestLocksOnce.Do(makeGlobalManifestLocks)
 
 	if opts.MaxPartSize == 0 {
 		opts.MaxPartSize = defaultGitBlobstoreMaxPartSize
@@ -752,7 +746,7 @@ func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, 
 
 // NewBSStore returns an nbs implementation backed by a Blobstore
 func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
+	manifestLocksOnce.Do(makeGlobalManifestLocks)
 
 	mm := makeManifestManager(blobstoreManifest{bs})
 
@@ -762,7 +756,7 @@ func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, m
 
 // NewNoConjoinBSStore returns a nbs implementation backed by a Blobstore
 func NewNoConjoinBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
+	manifestLocksOnce.Do(makeGlobalManifestLocks)
 
 	mm := makeManifestManager(blobstoreManifest{bs})
 
@@ -775,7 +769,7 @@ func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 }
 
 func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider, mmapArchiveIndexes bool) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
+	manifestLocksOnce.Do(makeGlobalManifestLocks)
 	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
@@ -808,7 +802,7 @@ type JournalingStoreOptions struct {
 }
 
 func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), opts JournalingStoreOptions) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
+	manifestLocksOnce.Do(makeGlobalManifestLocks)
 	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
@@ -1446,7 +1440,7 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 func (nbs *NomsBlockStore) rebase(ctx context.Context) error {
 	const maxRetries = 5
 	for i := 0; ; i++ {
-		exists, contents, _, err := nbs.manifestMgr.Fetch(ctx, nbs.stats)
+		exists, contents, err := nbs.manifestMgr.Fetch(ctx, nbs.stats)
 		if err != nil {
 			return err
 		}
@@ -1562,11 +1556,6 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		return errOptimisticLockFailedTables
-	}
-
-	if cached, doomed := nbs.manifestMgr.updateWillFail(nbs.upstream.lock); doomed {
-		// Pre-emptive optimistic lock failure. Someone else in-process moved to the root, the set of tables, or both out from under us.
-		return handleOptimisticLockFailure(cached)
 	}
 
 	for {

@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-	"time"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/d"
@@ -209,14 +208,6 @@ func toSpecSet(specs []tableSpec) (ss map[hash.Hash]struct{}) {
 	return ss
 }
 
-func (mc manifestContents) size() (size uint64) {
-	size += uint64(len(mc.nbfVers)) + hash.ByteLen + hash.ByteLen
-	for _, sp := range mc.specs {
-		size += uint64(len(sp.name)) + uint32Size // for sp.chunkCount
-	}
-	return
-}
-
 func newManifestLocks() *manifestLocks {
 	return &manifestLocks{map[string]struct{}{}, map[string]struct{}{}, sync.NewCond(&sync.Mutex{})}
 }
@@ -273,7 +264,6 @@ func unlockByName(db string, c *sync.Cond, locks map[string]struct{}) error {
 
 type manifestManager struct {
 	m     manifest
-	cache *manifestCache
 	locks *manifestLocks
 }
 
@@ -293,18 +283,7 @@ func (mm manifestManager) UnlockForUpdate() error {
 	return mm.locks.unlockForUpdate(mm.Name())
 }
 
-func (mm manifestManager) updateWillFail(lastLock hash.Hash) (cached manifestContents, doomed bool) {
-	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
-		if lastLock != upstream.lock {
-			doomed, cached = true, upstream
-		}
-	}
-	return
-}
-
-func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, t time.Time, err error) {
-	entryTime := time.Now()
-
+func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, err error) {
 	mm.lockOutFetch()
 	defer func() {
 		afErr := mm.allowFetch()
@@ -314,47 +293,15 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 		}
 	}()
 
-	f := func() (bool, manifestContents, time.Time, error) {
-		cached, t, hit := mm.cache.Get(mm.Name())
-
-		if hit && t.After(entryTime) {
-			// Cache contains a manifest which is newer than entry time.
-			return true, cached, t, nil
-		}
-
-		t = time.Now()
-
-		exists, contents, err := mm.m.ParseIfExists(ctx, stats, nil)
-
-		if err != nil {
-			return false, manifestContents{}, t, err
-		}
-
-		err = mm.cache.Put(mm.Name(), contents, t)
-
-		if err != nil {
-			return false, manifestContents{}, t, err
-		}
-
-		return exists, contents, t, nil
-	}
-
-	exists, contents, t, err = f()
-	return
+	return mm.m.ParseIfExists(ctx, stats, nil)
 }
 
 // Update attempts to write a new manifest.
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
 // Update does not call Lock/UnlockForUpdate() on its own because it is
-// intended to be used in a larger critical section along with updateWillFail.
+// intended to be used in a larger critical section that reads the current
+// manifest, computes new contents, and writes them back atomically.
 func (mm manifestManager) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
-	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
-		if lastLock != upstream.lock {
-			return upstream, nil
-		}
-	}
-	t := time.Now()
-
 	mm.lockOutFetch()
 	defer func() {
 		afErr := mm.allowFetch()
@@ -364,24 +311,7 @@ func (mm manifestManager) Update(ctx context.Context, behavior dherrors.FatalBeh
 		}
 	}()
 
-	f := func() (manifestContents, error) {
-		contents, err := mm.m.Update(ctx, behavior, lastLock, newContents, stats, writeHook)
-
-		if err != nil {
-			return contents, err
-		}
-
-		err = mm.cache.Put(mm.Name(), contents, t)
-
-		if err != nil {
-			return manifestContents{}, err
-		}
-
-		return contents, nil
-	}
-
-	contents, err = f()
-	return
+	return mm.m.Update(ctx, behavior, lastLock, newContents, stats, writeHook)
 }
 
 // UpdateGCGen will update the manifest with a new garbage collection generation.
@@ -392,13 +322,6 @@ func (mm manifestManager) UpdateGCGen(ctx context.Context, behavior dherrors.Fat
 		return manifestContents{}, errors.New("manifest does not support updating gc gen")
 	}
 
-	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
-		if lastLock != upstream.lock {
-			return manifestContents{}, errors.New("manifest was modified during garbage collection")
-		}
-	}
-	t := time.Now()
-
 	mm.lockOutFetch()
 	defer func() {
 		afErr := mm.allowFetch()
@@ -408,28 +331,10 @@ func (mm manifestManager) UpdateGCGen(ctx context.Context, behavior dherrors.Fat
 		}
 	}()
 
-	f := func() (manifestContents, error) {
-		contents, err := updater.UpdateGCGen(ctx, behavior, lastLock, newContents, stats, writeHook)
-
-		if err != nil {
-			return contents, err
-		}
-
-		err = mm.cache.Put(mm.Name(), contents, t)
-
-		if err != nil {
-			return manifestContents{}, err
-		}
-
-		return contents, nil
-	}
-
-	contents, err = f()
-	return
+	return updater.UpdateGCGen(ctx, behavior, lastLock, newContents, stats, writeHook)
 }
 
 func (mm manifestManager) Close() error {
-	mm.cache.Delete(mm.Name())
 	return nil
 }
 

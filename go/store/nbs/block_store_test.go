@@ -507,7 +507,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 	}
 
 	makeManifestManager := func(m manifest) manifestManager {
-		return manifestManager{m, newManifestCache(0), newManifestLocks()}
+		return manifestManager{m, newManifestLocks()}
 	}
 
 	newChunk := chunks.NewChunk([]byte("gnu"))

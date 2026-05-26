@@ -175,7 +175,7 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
-	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
+	mm := manifestManager{fm, newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
 		require.EqualValues(t, 0, q.Usage())
@@ -223,10 +223,10 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	assert.True(success)
 }
 
-func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
+func TestChunkStoreManifestInProcessOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
-	mm := manifestManager{fm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
+	mm := manifestManager{fm, newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFakeTablePersister(q)
 
@@ -251,13 +251,16 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(interloper.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 
-	// Try to land a new chunk in store, which should fail AND not persist the contents of store.mt
+	// Try to land a new chunk in store. The commit fails the optimistic lock
+	// check (the interloper moved the root out from under us). store's memtable
+	// is persisted to a novel table file while attempting the doomed update,
+	// but the table is carried forward across the rebase so a subsequent commit
+	// with the correct |last| succeeds.
 	chunk = chunks.NewChunk([]byte("goodbye"))
 	err = store.Put(context.Background(), chunk, noopGetAddrs)
 	require.NoError(t, err)
 	assert.NotNil(store.memtable)
 	assert.False(store.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
-	assert.NotNil(store.memtable)
 
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
@@ -276,7 +279,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{name: "foo"}
 	upm := &updatePreemptManifest{manifest: fm}
-	mm := manifestManager{upm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
+	mm := manifestManager{upm, newManifestLocks()}
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFakeTablePersister(q)
 	c := inlineConjoiner{defaultMaxTables}
@@ -296,7 +299,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			var err error
-			_, fetched, _, err = mm.Fetch(context.Background(), nil)
+			_, fetched, err = mm.Fetch(context.Background(), nil)
 			require.NoError(t, err)
 		}()
 	}
@@ -320,14 +323,13 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{name: "foo"}
 	upm := &updatePreemptManifest{manifest: fm}
-	mc := newManifestCache(defaultManifestCacheSize)
 	l := newManifestLocks()
 	q := NewUnlimitedMemQuotaProvider()
 	p := newFakeTablePersister(q)
 
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), constants.FormatDoltString, manifestManager{upm, mc, l}, p, q, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDoltString, manifestManager{upm, l}, p, q, c, defaultMemTableSize)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, store.Close())
@@ -342,7 +344,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		context.Background(),
 		constants.FormatDoltString,
 		manifestManager{
-			updatePreemptManifest{fm, func() { updateCount++ }}, mc, l,
+			updatePreemptManifest{fm, func() { updateCount++ }}, l,
 		},
 		p,
 		q,
@@ -379,14 +381,17 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	assert.True(success)
 
 	wg.Wait()
-	assert.Equal(2, updateCount)
+	// store lands its commit (1). The interloper, serialized behind store by the
+	// update lock, then makes a doomed Update against its stale lock (2), rebases,
+	// and retries successfully (3). Both stores end up with both chunks.
+	assert.Equal(3, updateCount)
 	assert.True(interloper.Has(context.Background(), storeChunk.Hash()))
 	assert.True(interloper.Has(context.Background(), interloperChunk.Hash()))
 }
 
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, q MemoryQuotaProvider, store *NomsBlockStore) {
 	fm = &fakeManifest{}
-	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
+	mm := manifestManager{fm, newManifestLocks()}
 	q = NewUnlimitedMemQuotaProvider()
 	p = newFakeTablePersister(q)
 	store, err := newNomsBlockStore(context.Background(), constants.FormatDoltString, mm, p, q, inlineConjoiner{defaultMaxTables}, 0)
