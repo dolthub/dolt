@@ -153,8 +153,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/nbs/file_table_persister_test.go", NomsPath: "go/nbs/file_table_persister_test.go", HadCopyrightNotice: true},
 	{Path: "store/nbs/frag/main.go", NomsPath: "go/nbs/frag/main.go", HadCopyrightNotice: true},
 	{Path: "store/nbs/manifest.go", NomsPath: "go/nbs/manifest.go", HadCopyrightNotice: true},
-	{Path: "store/nbs/manifest_cache.go", NomsPath: "go/nbs/manifest_cache.go", HadCopyrightNotice: true},
-	{Path: "store/nbs/manifest_cache_test.go", NomsPath: "go/nbs/manifest_cache_test.go", HadCopyrightNotice: true},
 	{Path: "store/nbs/mem_table.go", NomsPath: "go/nbs/mem_table.go", HadCopyrightNotice: true},
 	{Path: "store/nbs/mem_table_test.go", NomsPath: "go/nbs/mem_table_test.go", HadCopyrightNotice: true},
 	{Path: "store/nbs/file_table_reader.go", NomsPath: "go/nbs/mmap_table_reader.go", HadCopyrightNotice: true},
