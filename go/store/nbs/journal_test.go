@@ -33,7 +33,6 @@ import (
 )
 
 func makeTestChunkJournal(t *testing.T) *ChunkJournal {
-	cacheOnce.Do(makeGlobalCaches)
 	ctx := context.Background()
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
@@ -62,7 +61,6 @@ func openTestChunkJournal(t *testing.T, dir string) *ChunkJournal {
 }
 
 func TestChunkJournalBlockStoreSuite(t *testing.T) {
-	cacheOnce.Do(makeGlobalCaches)
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
 		q := NewUnlimitedMemQuotaProvider()
 		nbf := types.Format_DOLT.VersionString()
@@ -119,7 +117,6 @@ func TestChunkJournalReadOnly(t *testing.T) {
 // commitRootHash, or between Persist flushing chunk records and Update committing
 // the root.
 func TestChunkJournalBootstrapMissingRootRecord(t *testing.T) {
-	cacheOnce.Do(makeGlobalCaches)
 	ctx := context.Background()
 	nbf := types.Format_DOLT.VersionString()
 
