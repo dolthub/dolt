@@ -442,4 +442,3 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 
 	return stompedTables, headWorkingDiffs, nil
 }
-
