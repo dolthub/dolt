@@ -630,6 +630,26 @@ func (d *DoltSession) DirtyDatabases() []string {
 	return dbNames
 }
 
+// DirtyBranchRevisions returns the revision-qualified database names for
+// every (database, branch) in this session whose branchState has
+// uncommitted changes. Unlike DirtyDatabases, this distinguishes branches
+// within the same database. Callers pass each returned name to
+// CommitWorkingSet / DoltCommit / Rollback to act on the specific branch
+// state.
+func (d *DoltSession) DirtyBranchRevisions() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []string
+	for _, dbState := range d.dbStates {
+		for _, branchState := range dbState.heads {
+			if branchState.dirty {
+				out = append(out, branchState.RevisionDbName())
+			}
+		}
+	}
+	return out
+}
+
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
