@@ -396,6 +396,8 @@ type fakeManifest struct {
 
 func (fm *fakeManifest) Name() string { return fm.name }
 
+func (fm *fakeManifest) Close() error { return nil }
+
 // ParseIfExists returns any fake manifest data the caller has injected using
 // Update() or set(). It treats an empty |fm.lock| as a non-existent manifest.
 func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {

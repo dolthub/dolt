@@ -79,6 +79,12 @@ func (dm dynamoManifest) Name() string {
 	return dm.table + dm.db
 }
 
+// Close implements manifest. The DynamoDB client is owned by the caller, so
+// there is nothing for the manifest to release.
+func (dm dynamoManifest) Close() error {
+	return nil
+}
+
 func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()

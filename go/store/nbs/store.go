@@ -771,10 +771,13 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 		return nil, err
 	}
 
-	mm := manifest(journal)
+	// |journal| serves as both the tablePersister and (wrapped) the manifest.
+	// The wrapper keeps the two roles' Close paths distinct: the persister path
+	// closes the journal writer, while the manifest path releases the backing
+	// manifest's file lock.
+	mm := manifest(journalManifestWrapper{journal: journal})
 	c := journalConjoiner{child: inlineConjoiner{defaultMaxTables}}
 
-	// |journal| serves as the manifest and tablePersister
 	return newNomsBlockStore(ctx, nbfVers, mm, journal, q, c, defaultMemTableSize)
 }
 
@@ -1604,6 +1607,13 @@ func (nbs *NomsBlockStore) Close() error {
 	err := nbs.persister.Close()
 	if err != nil {
 		err = dherrors.Fatalf(nbs.fatalBehavior, "%w: fatal error closing table persister", err)
+	}
+	// Close the manifest after the persister. For a journaling store the
+	// persister (the journal) flushes the latest root to the backing manifest
+	// during its Close, and the manifest Close then releases the backing
+	// manifest's file lock.
+	if merr := nbs.manifest.Close(); merr != nil {
+		err = errors.Join(err, dherrors.Fatalf(nbs.fatalBehavior, "%w: fatal error closing manifest", merr))
 	}
 	err = errors.Join(err, nbs.tables.close())
 	return err
