@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/cockroachdb/apd/v3"
 
@@ -607,7 +608,7 @@ func (td *TupleDesc) GetStringAdaptiveValue(ctx context.Context, i int, vs Value
 	}
 	if adaptiveValue.isInlined() {
 		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		return string(val), true, err
+		return unsafe.String(unsafe.SliceData(val), len(val)), true, err
 	} else {
 		val, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
 		return val, true, err
@@ -758,7 +759,7 @@ func (td *TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value
 		return readString(value)
 	case StringAdaptiveEnc, BytesAdaptiveEnc:
 		if b, isInline := InlineValueBytes(value); isInline {
-			return string(b)
+			return unsafe.String(unsafe.SliceData(b), len(b))
 		}
 		// for out of band values, we don't want to load the value just to format it, so we return a hex string of the bytes
 		// TODO: this is used in user-facing error messages like duplicate key errors, but in this Format method it's not
@@ -789,7 +790,7 @@ func (td *TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value
 	case ExtendedAddrEnc:
 		return hex.EncodeToString(value)
 	default:
-		return string(value)
+		return unsafe.String(unsafe.SliceData(value), len(value))
 	}
 }
 
