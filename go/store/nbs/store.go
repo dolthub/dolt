@@ -2544,8 +2544,8 @@ func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keepe
 // files in oldgen are conjoined together.
 // Returns the hash of the newly created conjoined table file.
 func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []hash.Hash) (hash.Hash, error) {
-	nbs.mu.RLock()
-	defer nbs.mu.RUnlock()
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
 
 	// If no storageIds provided, collect all table files from the current table set
 	if len(storageIds) == 0 {
