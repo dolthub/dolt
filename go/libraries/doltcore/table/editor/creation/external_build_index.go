@@ -40,7 +40,7 @@ const (
 // BuildProllyIndexExternal builds unique and non-unique indexes with a
 // single prolly tree materialization by presorting the index keys in an
 // intermediate file format.
-func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, tableName string, idx schema.Index, primary prolly.Map, uniqCb DupEntryCb) (durable.Index, error) {
+func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, tableName string, idx schema.Index, primary prolly.Map, uniqCb DupEntryCb, predicate sql.Expression) (durable.Index, error) {
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
 		return nil, err
@@ -73,6 +73,20 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 			break
 		} else if err != nil {
 			return nil, err
+		}
+
+		if predicate != nil {
+			sqlRow, err := index.BuildRow(ctx, k, v, sch, ns)
+			if err != nil {
+				return nil, err
+			}
+			result, err := predicate.Eval(ctx, sqlRow)
+			if err != nil {
+				return nil, err
+			}
+			if result == nil || result == false {
+				continue
+			}
 		}
 
 		idxKey, err := secondaryBld.SecondaryKeyFromRow(ctx, k, v)

@@ -298,7 +298,7 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 		IsVector:      false,
 		IsUserDefined: true,
 		Comment:       idx.Comment,
-	}, t.opts)
+	}, t.opts, nil)
 	if err != nil {
 		return err
 	}

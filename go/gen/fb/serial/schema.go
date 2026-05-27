@@ -781,7 +781,15 @@ func (rcv *Index) TryVectorInfo(obj *VectorInfo) (*VectorInfo, error) {
 	return nil, nil
 }
 
-const IndexNumFields = 14
+func (rcv *Index) Predicate() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(32))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const IndexNumFields = 15
 
 func IndexStart(builder *flatbuffers.Builder) {
 	builder.StartObject(IndexNumFields)
@@ -839,6 +847,9 @@ func IndexAddVectorKey(builder *flatbuffers.Builder, vectorKey bool) {
 }
 func IndexAddVectorInfo(builder *flatbuffers.Builder, vectorInfo flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(13, flatbuffers.UOffsetT(vectorInfo), 0)
+}
+func IndexAddPredicate(builder *flatbuffers.Builder, predicate flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(14, flatbuffers.UOffsetT(predicate), 0)
 }
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
