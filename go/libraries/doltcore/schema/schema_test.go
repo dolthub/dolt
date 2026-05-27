@@ -437,7 +437,7 @@ func TestWithRemappedColumnTagsPreservesMetadata(t *testing.T) {
 	remapped, err := WithRemappedColumnTags(sch, map[uint64]uint64{100: 200, 101: 201})
 	require.NoError(t, err)
 
-	// The remap actually happened: the new tags resolve and the old ones are gone.
+	// New tags resolve and the old ones are gone.
 	got, ok := remapped.GetAllCols().GetByName("val")
 	require.True(t, ok)
 	require.Equal(t, uint64(201), got.Tag, "column tag must be remapped")

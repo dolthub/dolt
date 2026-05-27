@@ -73,10 +73,6 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return fmt.Errorf("unable to resolve roots for %s", dbName)
 	}
 
-	// Compute the dolt_ignore-matched table set once for the whole checkout, then pass it to the
-	// overwrite check and the carry instead of recomputing it at each site. dolt_ignore is
-	// branch-scoped, so the source branch's patterns classify the tables. The carry leaves these
-	// tables on the source branch.
 	ignoredNames, err := doltdb.UnionTableNames(ctx, initialRoots.Working, initialRoots.Staged, branchHead)
 	if err != nil {
 		return err
@@ -87,26 +83,21 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 	}
 	ignored := doltdb.NewTableNameSet(ignoredList)
 
-	if !force {
+	var srcChanges *doltdb.RootsStatus
+	if workingSetExists {
+		srcChanges, err = doltdb.NewRootsStatus(ctx, initialRoots, ignored)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !force && !isNewBranch {
 		newBranchRoots, err := db.ResolveBranchRoots(ctx, branchRef)
 		if err != nil {
 			return err
 		}
-		if !isNewBranch {
-			wouldOverwrite, err := actions.CheckoutWouldOverwriteWorkingSetChanges(ctx, initialRoots, newBranchRoots, ignored)
-			if err != nil {
-				return err
-			}
-			if wouldOverwrite {
-				return actions.ErrWorkingSetsOnBothBranches
-			}
-		}
-	}
-
-	hasChanges := false
-	if workingSetExists {
-		hasChanges, _, _, err = actions.RootHasUncommittedChanges(initialRoots)
-		if err != nil {
+		// The destination branch must not have its own uncommitted changes.
+		if err := actions.CheckoutWouldOverwriteWorkingSets(ctx, srcChanges, newBranchRoots, ignored); err != nil {
 			return err
 		}
 	}
@@ -120,10 +111,7 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return err
 	}
 
-	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
-	// In that case the destination branch must not have its own uncommitted changes, as checked by
-	// CheckoutWouldOverwriteWorkingSetChanges, which only runs when not forced and not creating a new branch.
-	if hasChanges {
+	if srcChanges != nil {
 		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force, ignored)
 		if err != nil {
 			return err
@@ -138,10 +126,9 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		if err != nil {
 			return err
 		}
-
 	}
 
-	if workingSetExists && hasChanges {
+	if workingSetExists && srcChanges != nil {
 		name, email, _, _, err := dsess.ResolveNameEmail(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
 		if err != nil {
 			return err

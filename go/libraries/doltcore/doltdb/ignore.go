@@ -311,9 +311,5 @@ func (ip *IgnorePatterns) IsTableNameIgnored(tableName TableName) (IgnoreResult,
 	}
 	// The table name matched both positive and negative patterns.
 	// More specific patterns override less specific patterns.
-	//
-	// TODO(elianddb): break ties when no pattern is more specific. dolt_ignore rows have no order,
-	//	so give them one and let the last rule added win, the way git lets a later ignore rule
-	//	override an earlier one.
 	return resolveConflictingPatterns(trueMatches, falseMatches, tableName)
 }

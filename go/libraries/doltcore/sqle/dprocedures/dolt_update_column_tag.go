@@ -48,8 +48,7 @@ func doltUpdateColumnTag(ctx *sql.Context, args ...string) (sql.RowIter, error) 
 	tbl, tName, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return nil, err
-	}
-	if !ok {
+	} else if !ok {
 		return nil, fmt.Errorf("table %s does not exist", tableName)
 	}
 

@@ -460,8 +460,6 @@ SQL
 
 @test "reset: dolt reset --hard retags an untracked table that collides with the target" {
     # See https://github.com/dolthub/dolt/issues/11007
-    # bar.code and users.name both auto-generate tag 9815 since each branch assigns tags
-    # without seeing the other, so the carry must retag users.name to keep both tables.
     dolt checkout -b feat
     dolt sql -q "CREATE TABLE bar (code varchar(64) PRIMARY KEY);"
     dolt add .

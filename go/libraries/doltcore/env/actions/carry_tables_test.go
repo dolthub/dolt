@@ -53,22 +53,14 @@ func singleColPKSchema(t *testing.T, colName string, tag uint64) schema.Schema {
 	return dtestutils.CreateSchema(col)
 }
 
-// TestCarryUncommittedTables verifies that CarryUncommittedTables carries untracked tables into the
+// TestCarryTablesAbsentFromBaseline verifies that CarryTablesAbsentFromBaseline carries untracked tables into the
 // target root, resolves tag collisions, and propagates foreign keys.
-func TestCarryUncommittedTables(t *testing.T) {
+func TestCarryTablesAbsentFromBaseline(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11007
 	ctx, emptyRoot := newEmptyRoot(t)
 
-	// bar.code and users.name share collidingTag so the carry must retag users.name; posts.title
-	// gets a distinct tag and must be left untouched.
 	const collidingTag uint64 = 9815
 	const postsTitleTag uint64 = 13593
-
-	withUniqueIndex := func(sch schema.Schema, indexName string, tag uint64) schema.Schema {
-		_, err := sch.Indexes().AddIndexByColTags(indexName, []uint64{tag}, nil, schema.IndexProperties{IsUserDefined: true, IsUnique: true})
-		require.NoError(t, err)
-		return sch
-	}
 
 	target, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "bar"}, singleColPKSchema(t, "code", collidingTag))
 	require.NoError(t, err)
@@ -76,7 +68,11 @@ func TestCarryUncommittedTables(t *testing.T) {
 	// Source has bar (so the foreign key can reference it), plus untracked users and posts.
 	working, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "bar"}, singleColPKSchema(t, "code", collidingTag))
 	require.NoError(t, err)
-	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "users"}, withUniqueIndex(singleColPKSchema(t, "name", collidingTag), "idx_name", collidingTag))
+	// bar.code and users.name share collidingTag so the carry must retag users.name.
+	usersSch := singleColPKSchema(t, "name", collidingTag)
+	_, err = usersSch.Indexes().AddIndexByColTags("idx_name", []uint64{collidingTag}, nil, schema.IndexProperties{IsUserDefined: true, IsUnique: true})
+	require.NoError(t, err)
+	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "users"}, usersSch)
 	require.NoError(t, err)
 	working, err = doltdb.CreateEmptyTable(ctx, working, doltdb.TableName{Name: "posts"}, singleColPKSchema(t, "title", postsTitleTag))
 	require.NoError(t, err)
@@ -89,8 +85,7 @@ func TestCarryUncommittedTables(t *testing.T) {
 		ReferencedTableColumns: []uint64{collidingTag},
 	})
 
-	// |baseline| is target so only the child table is carried. Generally we exclude tables that exist on dest.
-	result, err := CarryUncommittedTables(ctx, working, target, target, nil)
+	result, err := CarryTablesAbsentFromBaseline(ctx, working, target, target, nil)
 	require.NoError(t, err)
 
 	t.Run("preserves tag on non-collision", func(t *testing.T) {
@@ -122,8 +117,6 @@ func TestCarryUncommittedTables(t *testing.T) {
 	})
 
 	t.Run("FK child column retagged, parent column unchanged", func(t *testing.T) {
-		// users.name and bar.code share collidingTag so users.name is retagged. bar.code is committed
-		// on the target and keeps its tag, so only the child side of the FK changes.
 		usersTbl, ok, err := result.GetTable(ctx, doltdb.TableName{Name: "users"})
 		require.NoError(t, err)
 		require.True(t, ok)
@@ -143,14 +136,15 @@ func TestCarryUncommittedTables(t *testing.T) {
 	})
 }
 
-// TestCarryUncommittedTablesMergedForeignKeyFollowsRetag verifies that when a carried child's column
+// TestCarryTablesAbsentFromBaselineMergedForeignKeyFollowsRetag verifies that when a carried child's column
 // is retagged to resolve a collision, a foreign key already merged onto the target is rewritten to
 // the new tag instead of being left pointing at the stale source tag.
-func TestCarryUncommittedTablesMergedForeignKeyFollowsRetag(t *testing.T) {
+func TestCarryTablesAbsentFromBaselineMergedForeignKeyFollowsRetag(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11007
 	ctx, emptyRoot := newEmptyRoot(t)
 
-	const collide uint64 = 70001 // shared by target anchor.x and source child.cid, forcing a retag
+	// Shared by target anchor.x and source child.cid, forcing a retag
+	const collide uint64 = 70001
 	const parentTag uint64 = 70002
 
 	target, err := doltdb.CreateEmptyTable(ctx, emptyRoot, doltdb.TableName{Name: "parent"}, singleColPKSchema(t, "id", parentTag))
@@ -173,8 +167,7 @@ func TestCarryUncommittedTablesMergedForeignKeyFollowsRetag(t *testing.T) {
 	working = putFK(t, ctx, working, fk)
 	target = putFK(t, ctx, target, fk)
 
-	// |baseline| is target so parent is treated as tracked and only child is carried.
-	result, err := CarryUncommittedTables(ctx, working, target, target, nil)
+	result, err := CarryTablesAbsentFromBaseline(ctx, working, target, target, nil)
 	require.NoError(t, err)
 
 	childTbl, ok, err := result.GetTable(ctx, doltdb.TableName{Name: "child"})
@@ -194,10 +187,10 @@ func TestCarryUncommittedTablesMergedForeignKeyFollowsRetag(t *testing.T) {
 		"carried foreign key must follow the child column retag, not keep the stale source tag")
 }
 
-// TestCarryUncommittedTablesParentTagMismatch verifies that a foreign key carried from source onto
+// TestCarryTablesAbsentFromBaselineParentTagMismatch verifies that a foreign key carried from source onto
 // target gets its referenced column tags rewritten to match the target parent schema when the
 // same parent column has a different tag on source and target.
-func TestCarryUncommittedTablesParentTagMismatch(t *testing.T) {
+func TestCarryTablesAbsentFromBaselineParentTagMismatch(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11007
 	ctx, emptyRoot := newEmptyRoot(t)
 
@@ -221,8 +214,7 @@ func TestCarryUncommittedTablesParentTagMismatch(t *testing.T) {
 		ReferencedTableColumns: []uint64{parentTagOnSource},
 	})
 
-	// |baseline| is target so only the child table is carried. Generally we exclude tables that exist on dest.
-	result, err := CarryUncommittedTables(ctx, working, target, target, nil)
+	result, err := CarryTablesAbsentFromBaseline(ctx, working, target, target, nil)
 	require.NoError(t, err)
 
 	resultFks, err := result.GetForeignKeyCollection(ctx)
@@ -235,11 +227,11 @@ func TestCarryUncommittedTablesParentTagMismatch(t *testing.T) {
 		"child column tag must be unchanged because there was no collision")
 }
 
-// TestCarryUncommittedTablesParentColumnRenamedKeepsSourceTag documents the accepted divergence when
+// TestCarryTablesAbsentFromBaselineParentColumnRenamedKeepsSourceTag documents the accepted divergence when
 // the referenced parent column has a different name on source and target (renamed on the target
 // branch). RemapTagsByColumnName cannot match the source column name against the target parent, so it
 // leaves the carried foreign key on the source tag.
-func TestCarryUncommittedTablesParentColumnRenamedKeepsSourceTag(t *testing.T) {
+func TestCarryTablesAbsentFromBaselineParentColumnRenamedKeepsSourceTag(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11007
 	ctx, emptyRoot := newEmptyRoot(t)
 
@@ -263,8 +255,7 @@ func TestCarryUncommittedTablesParentColumnRenamedKeepsSourceTag(t *testing.T) {
 		ReferencedTableColumns: []uint64{parentTagOnSource},
 	})
 
-	// |baseline| is target so only the child table is carried.
-	result, err := CarryUncommittedTables(ctx, working, target, target, nil)
+	result, err := CarryTablesAbsentFromBaseline(ctx, working, target, target, nil)
 	require.NoError(t, err)
 
 	resultFks, err := result.GetForeignKeyCollection(ctx)

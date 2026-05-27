@@ -1515,10 +1515,10 @@ SQL
     [[ "$output" =~ "fk_child" ]] || false
 }
 
-@test "checkout: aborts when untracked table conflicts with committed table on target branch" {
+@test "checkout: blocks untracked table that collides with target's committed table regardless of content" {
     # See https://github.com/dolthub/dolt/issues/11007
     dolt checkout -b feat
-    dolt sql -q "CREATE TABLE conflict_tbl (id INT PRIMARY KEY, val INT)"
+    dolt sql -q "CREATE TABLE conflict_tbl (id INT PRIMARY KEY, val INT); INSERT INTO conflict_tbl VALUES (1, 5);"
     dolt commit -Am "add conflict_tbl on feat"
     dolt checkout main
 
@@ -1535,10 +1535,18 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "main" ]] || false
 
-    # The abort leaves the local table untouched: still the one-column version.
     run dolt schema show conflict_tbl
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "val" ]] || false
+
+    # Drop the different-content copy and recreate with byte-identical content to feat's:
+    # the block must still fire because the source-side cleanup would discard it anyway.
+    dolt sql -q "DROP TABLE conflict_tbl; CREATE TABLE conflict_tbl (id INT PRIMARY KEY, val INT); INSERT INTO conflict_tbl VALUES (1, 5);"
+
+    run dolt checkout feat
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "untracked tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "conflict_tbl" ]] || false
 }
 
 @test "checkout: ignored tables stay on the source branch" {
@@ -1567,7 +1575,9 @@ SQL
 
 @test "checkout: aborts when an untracked table matches conflicting dolt_ignore patterns" {
     # See https://github.com/dolthub/dolt/issues/11007
-    # dataset matches conflicting dolt_ignore patterns, so it cannot be classified and checkout aborts.
+    # TODO(elianddb): break ties when no pattern is more specific. dolt_ignore rows have no
+    #   order, so give them one and let the last rule added win.
+    #   See https://git-scm.com/docs/gitignore#_description
     dolt sql -q "INSERT INTO dolt_ignore VALUES ('data*', true), ('*set', false)"
     dolt commit -Am "conflicting ignore rules"
     dolt branch other
@@ -1586,4 +1596,271 @@ SQL
     run dolt sql -q "SELECT pk FROM dataset" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "7" ]] || false
+}
+
+@test "checkout: allows convergent edits where staged content matches target" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql <<SQL
+create table t (pk int primary key, v int);
+insert into t values (1, 1);
+SQL
+    dolt add .
+    dolt commit -am "initial"
+    dolt branch other
+
+    dolt sql -q "update t set v=3 where pk=1"
+    dolt commit -am "v3 on main"
+
+    dolt checkout other
+    dolt sql -q "update t set v=3 where pk=1"
+    dolt add .
+
+    run dolt checkout main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'main'" ]] || false
+
+    run dolt sql -q "select v from t where pk=1"
+    [[ "$output" =~ "3" ]] || false
+}
+
+@test "checkout: blocks when only the staged version of a table differs from target" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table t (pk int primary key, v int); insert into t values (1, 1);"
+    dolt add .
+    dolt commit -m initial
+    dolt branch other
+
+    dolt sql -q "update t set v=99 where pk=1"
+    dolt commit -am "v99 on main"
+
+    dolt checkout other
+    dolt sql -q "update t set v=2 where pk=1"
+    dolt add .
+    dolt sql -q "update t set v=1 where pk=1"
+
+    run dolt checkout main
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "t" ]] || false
+}
+
+@test "checkout: blocks unstaged convergent edit even when content matches target" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table t (pk int primary key, v int); insert into t values (1, 1);"
+    dolt add .
+    dolt commit -m initial
+    dolt branch other
+
+    dolt sql -q "update t set v=3 where pk=1"
+    dolt commit -am "v3 on main"
+
+    dolt checkout other
+    dolt sql -q "update t set v=3 where pk=1"
+
+    run dolt checkout main
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "t" ]] || false
+}
+
+@test "checkout: -f discards local changes and lands on target HEAD even with shared head" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table t (pk int primary key, v int); insert into t values (1, 1);"
+    dolt add .
+    dolt commit -m initial
+    dolt branch other
+
+    dolt checkout other
+    dolt sql -q "update t set v=22 where pk=1"
+    dolt checkout main
+    dolt sql -q "update t set v=11 where pk=1"
+
+    run dolt checkout -f other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'other'" ]] || false
+
+    run dolt sql -q "select v from t where pk=1"
+    [[ "$output" =~ "1" ]] || false
+    [[ ! "$output" =~ "11" ]] || false
+    [[ ! "$output" =~ "22" ]] || false
+}
+
+@test "checkout: -f preserves untracked tables while discarding tracked changes" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table tracked (pk int primary key, v int); insert into tracked values (1, 1);"
+    dolt add .
+    dolt commit -m initial
+    dolt branch other
+
+    dolt sql -q "update tracked set v=99 where pk=1"
+    dolt sql -q "create table untracked_tbl (pk int primary key); insert into untracked_tbl values (42);"
+
+    run dolt checkout -f other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'other'" ]] || false
+
+    run dolt sql -q "select v from tracked where pk=1"
+    [[ "$output" =~ " 1 " ]] || false
+    [[ ! "$output" =~ "99" ]] || false
+
+    run dolt sql -q "select pk from untracked_tbl"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "untracked_tbl" ]] || false
+}
+
+@test "checkout: -f discards staged modifications" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table t (pk int primary key, v int); insert into t values (1, 1);"
+    dolt add .
+    dolt commit -m initial
+    dolt branch other
+
+    dolt sql -q "update t set v=99 where pk=1"
+    dolt add t
+
+    run dolt checkout -f other
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select v from t where pk=1"
+    [[ "$output" =~ " 1 " ]] || false
+    [[ ! "$output" =~ "99" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit" ]] || false
+}
+
+@test "checkout: -f discards staged new tables" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table base (pk int primary key); insert into base values (1);"
+    dolt add .
+    dolt commit -m initial
+    dolt branch other
+
+    dolt sql -q "create table staged_new (pk int primary key); insert into staged_new values (42);"
+    dolt add staged_new
+
+    run dolt checkout -f other
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "show tables"
+    [[ "$output" =~ "base" ]] || false
+    [[ ! "$output" =~ "staged_new" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit" ]] || false
+}
+
+@test "checkout: -f restores a working-deleted tracked table from target head" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table t (pk int primary key, v int); insert into t values (1, 1);"
+    dolt add .
+    dolt commit -m initial
+    dolt branch other
+
+    dolt sql -q "drop table t"
+
+    run dolt checkout -f other
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select v from t where pk=1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 1 " ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit" ]] || false
+}
+
+@test "checkout: -f restores a staged-deleted tracked table from target head" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table t (pk int primary key, v int); insert into t values (1, 1);"
+    dolt add .
+    dolt commit -m initial
+    dolt branch other
+
+    dolt sql -q "drop table t"
+    dolt add t
+
+    run dolt checkout -f other
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select v from t where pk=1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 1 " ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit" ]] || false
+}
+
+@test "checkout: carries untracked FK with stale tag when target renamed the parent column and is fixable by recreating FK" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table parent (a int primary key);"
+    dolt add .
+    dolt commit -m "parent on main"
+    dolt branch feat
+
+    dolt checkout feat
+    dolt sql -q "drop table parent; create table parent (b int primary key); insert into parent values (1);"
+    dolt add .
+    dolt commit -m "parent on feat with column b"
+
+    dolt checkout main
+    dolt sql -q "create table child (pk int primary key, fk_col int, foreign key (fk_col) references parent(a));"
+
+    run dolt checkout feat
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "show create table child"
+    [[ "$output" =~ "REFERENCES \`parent\` (\`a\`)" ]] || false
+
+    dolt add .
+    run dolt commit -m "commit child"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "foreign key" ]] || false
+    [[ "$output" =~ "invalid state" ]] || false
+
+    dolt sql -q "alter table child drop foreign key child_ibfk_1; alter table child add constraint child_fk foreign key (fk_col) references parent(b);"
+
+    dolt add .
+    run dolt commit -m "commit child with fixed FK"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "show create table child"
+    [[ "$output" =~ "REFERENCES \`parent\` (\`b\`)" ]] || false
+}
+
+@test "checkout: an untracked table with a foreign key survives repeated checkouts across two branches" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql -q "create table parent (id int primary key); insert into parent values (1);"
+    dolt add .
+    dolt commit -m "parent on main"
+    dolt branch feature
+
+    dolt sql -q "create table child (cid int primary key, pid int, foreign key (pid) references parent(id));"
+    dolt sql -q "insert into child values (10, 1);"
+
+    for hop in feature main feature main feature; do
+        run dolt checkout $hop
+        [ "$status" -eq 0 ]
+
+        run dolt status
+        [[ "$output" =~ "new table" ]] || false
+        [[ "$output" =~ "child" ]] || false
+
+        # The carried child row still joins to its parent through the foreign key.
+        run dolt sql -q "select c.cid, c.pid, p.id from child c join parent p on c.pid = p.id" -r csv
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "10,1,1" ]] || false
+
+        run dolt sql -q "show create table child"
+        [[ "$output" =~ "FOREIGN KEY" ]] || false
+        [[ "$output" =~ "REFERENCES \`parent\` (\`id\`)" ]] || false
+
+        # Inserting a child row with a non-existent parent fails.
+        run dolt sql -q "insert into child values (99, 999)"
+        [ "$status" -ne 0 ]
+        [[ "$output" =~ "Foreign key violation" ]] || false
+    done
 }

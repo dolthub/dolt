@@ -1368,6 +1368,29 @@ func (root *rootValue) DebugString(ctx context.Context, transitive bool) string 
 	return buf.String()
 }
 
+// DiffTableHashes returns the table-level changes between |from| and |to|, both produced by
+// [MapTableHashes] on two roots. Modified and added tables map to their |to| hash. Deleted
+// tables map to the zero hash rather than being omitted, so two diffs computed against the
+// same baseline compare equal under [maps.Equal] when the same tables were dropped.
+func DiffTableHashes(from, to map[TableName]hash.Hash) map[TableName]hash.Hash {
+	diffs := make(map[TableName]hash.Hash)
+	for name, fromHash := range from {
+		if toHash, ok := to[name]; ok {
+			if toHash != fromHash {
+				diffs[name] = toHash
+			}
+		} else {
+			diffs[name] = hash.Hash{}
+		}
+	}
+	for name, toHash := range to {
+		if _, ok := from[name]; !ok {
+			diffs[name] = toHash
+		}
+	}
+	return diffs
+}
+
 // MapTableHashes returns a map of each table name and hash.
 func MapTableHashes(ctx context.Context, root RootValue) (map[TableName]hash.Hash, error) {
 	names, err := UnionTableNames(ctx, root)

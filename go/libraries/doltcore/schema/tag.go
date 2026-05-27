@@ -94,11 +94,9 @@ func RemapTags(tags []uint64, remap map[uint64]uint64) []uint64 {
 	return out
 }
 
-// RemapTagsByColumnName returns |tags| rewritten so each tag points at the same-named column
-// on |destSch| instead of |srcSch|. When either schema is nil or any tag cannot be resolved on
-// both sides, the input |tags| slice is returned as is (treat it as read-only). The all-or-nothing
-// fallback leaves the foreign key pointing at the source tags, which is preferable to a partial
-// remap that would mix source and destination tags into one key.
+// RemapTagsByColumnName returns |tags| with each tag pointing at the same-named column on
+// |destSch| instead of |srcSch|. Returns |tags| unchanged (treat as read-only) when either
+// schema is nil or any tag cannot be resolved on both sides, avoiding a partial remap.
 func RemapTagsByColumnName(tags []uint64, srcSch, destSch Schema) []uint64 {
 	if srcSch == nil || destSch == nil {
 		return tags

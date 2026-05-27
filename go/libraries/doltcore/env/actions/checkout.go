@@ -121,66 +121,79 @@ func FindTableInRoots(ctx *sql.Context, roots doltdb.Roots, name string) (doltdb
 	return doltdb.TableName{}, nil, false, nil
 }
 
-// CheckoutWouldOverwriteUncommittedTables returns ErrCheckoutWouldOverwrite when any table
-// in |roots.Working| but absent from |roots.Head| differs from the committed version on
-// |targetRoot|. Tables also present in |roots.Staged| are reported as local changes, while
-// tables only in |roots.Working| are reported as untracked.
-func CheckoutWouldOverwriteUncommittedTables(ctx context.Context, roots doltdb.Roots, targetRoot doltdb.RootValue) error {
-	workingNames, err := roots.Working.GetAllTableNames(ctx, false)
+// CheckoutWouldOverwriteWorkingSets returns an error if checking out from a branch with
+// uncommitted state |src| onto |destRoots| would silently lose work. This happens when an
+// added source table collides with a committed table of the same name on destination, or
+// when both branches carry differing uncommitted changes. Pass nil |src| if the source has
+// none. Read-only system tables and tables in |ignored| are skipped.
+func CheckoutWouldOverwriteWorkingSets(ctx context.Context, src *doltdb.RootsStatus, destRoots doltdb.Roots, ignored *doltdb.TableNameSet) error {
+	if src == nil {
+		return nil
+	}
+	localChange, err := findCollisions(ctx, src.Added(), destRoots.Head)
 	if err != nil {
 		return err
 	}
-	headNames, err := roots.Head.GetAllTableNames(ctx, false)
+	untracked, err := findCollisions(ctx, src.Untracked(), destRoots.Head)
 	if err != nil {
 		return err
 	}
-	stagedNames, err := roots.Staged.GetAllTableNames(ctx, false)
-	if err != nil {
-		return err
-	}
-	headNamesSet := doltdb.NewTableNameSet(headNames)
-	stagedNamesSet := doltdb.NewTableNameSet(stagedNames)
-
-	var localChange, untracked []string
-	for _, name := range workingNames {
-		if headNamesSet.Contains(name) || doltdb.IsReadOnlySystemTable(name) {
+	// An unstaged working modification to a tracked table whose committed version on the
+	// target branch differs from source's head would be silently overwritten by the checkout.
+	for name := range src.Unstaged {
+		srcHeadHash, inHead := src.Head[name]
+		if !inHead {
 			continue
 		}
-		targetHash, _, err := targetRoot.GetTableHash(ctx, name)
+		destHeadHash, _, err := destRoots.Head.GetTableHash(ctx, name)
 		if err != nil {
 			return err
 		}
-		if targetHash.IsEmpty() {
-			continue
-		}
-		workingHash, _, err := roots.Working.GetTableHash(ctx, name)
-		if err != nil {
-			return err
-		}
-		if workingHash == targetHash {
-			continue
-		}
-		if stagedNamesSet.Contains(name) {
+		if destHeadHash != srcHeadHash {
 			localChange = append(localChange, name.String())
-		} else {
-			untracked = append(untracked, name.String())
 		}
 	}
-
 	if len(localChange) > 0 || len(untracked) > 0 {
 		slices.Sort(localChange)
 		slices.Sort(untracked)
 		return ErrCheckoutWouldOverwrite{LocalChangeTables: localChange, UntrackedTables: untracked}
 	}
+	dest, err := doltdb.NewRootsStatus(ctx, destRoots, ignored)
+	if err != nil || dest == nil {
+		return err
+	}
+	if !maps.Equal(src.Staged, dest.Staged) || !maps.Equal(src.Unstaged, dest.Unstaged) {
+		return ErrWorkingSetsOnBothBranches
+	}
 	return nil
+}
+
+// findCollisions returns the names in |candidates| that already exist as committed tables
+// on |destHead|. Such names cannot be safely carried: the carry keeps the destination's
+// version and the source-side cleanup then discards the source's copy.
+func findCollisions(ctx context.Context, candidates []doltdb.TableName, destHead doltdb.RootValue) ([]string, error) {
+	var out []string
+	for _, name := range candidates {
+		targetHash, _, err := destHead.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if targetHash.IsEmpty() {
+			continue
+		}
+		out = append(out, name.String())
+	}
+	return out, nil
 }
 
 // RootsForBranch returns the roots for checking out a branch whose head is |branchRoot|.
 // |roots.Head| must be the pre-checkout head. Uncommitted tables, those present in working
 // or staged but absent from the old head, are moved into the new root via
-// [CarryUncommittedTables], except the tables in |ignored|, which stay on the source branch.
+// [CarryTablesAbsentFromBaseline], except the tables in |ignored|, which stay on the source branch.
+// The caller is responsible for running [CheckoutWouldOverwriteWorkingSets] before reaching
+// here. When |force| skipped that check, the carry below keeps the destination's version on
+// any name collision.
 func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.RootValue, force bool, ignored *doltdb.TableNameSet) (doltdb.Roots, error) {
-	conflicts := doltdb.NewTableNameSet(nil)
 	if roots.Head == nil {
 		roots.Working = branchRoot
 		roots.Staged = branchRoot
@@ -188,13 +201,16 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		return roots, nil
 	}
 
-	if !force {
-		if err := CheckoutWouldOverwriteUncommittedTables(ctx, roots, branchRoot); err != nil {
+	// Force discards tracked local changes but preserves untracked tables.
+	if force {
+		working, err := CarryTablesAbsentFromBaseline(ctx, roots.Working, roots.Staged, branchRoot, ignored)
+		if err != nil {
 			return doltdb.Roots{}, err
 		}
+		return doltdb.Roots{Working: working, Staged: branchRoot, Head: branchRoot}, nil
 	}
-	// When |force| skipped the conflict check, the carry below keeps the destination's version on
-	// any name collision.
+
+	conflicts := doltdb.NewTableNameSet(nil)
 
 	// Snapshot the pre-checkout roots before the three-way merge below reassigns roots.Working
 	// and roots.Staged so the carry step still sees the original values.
@@ -234,7 +250,7 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		return doltdb.Roots{}, err
 	}
 
-	// Put the merged collections first so CarryUncommittedTables layers untracked keys on top.
+	// Put the merged collections first so CarryTablesAbsentFromBaseline layers untracked keys on top.
 	roots.Working, err = roots.Working.PutForeignKeyCollection(ctx, workingForeignKeys)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -245,14 +261,13 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 		return doltdb.Roots{}, err
 	}
 
-	// Ignored tables stay on the source branch because dolt_ignore is branch-scoped. |ignored| is
-	// the precomputed set the caller excludes from both carries.
-	roots.Working, err = CarryUncommittedTables(ctx, preCheckoutRoots.Working, preCheckoutRoots.Head, roots.Working, ignored)
+	// Ignored tables stay on the source branch because dolt_ignore is branch-scoped.
+	roots.Working, err = CarryTablesAbsentFromBaseline(ctx, preCheckoutRoots.Working, preCheckoutRoots.Head, roots.Working, ignored)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	roots.Staged, err = CarryUncommittedTables(ctx, preCheckoutRoots.Staged, preCheckoutRoots.Head, roots.Staged, ignored)
+	roots.Staged, err = CarryTablesAbsentFromBaseline(ctx, preCheckoutRoots.Staged, preCheckoutRoots.Head, roots.Staged, ignored)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -383,7 +398,10 @@ func threeWayMergeTableHashes(ctx context.Context, oldRoot, newRoot, changedRoot
 			return nil, err
 		}
 
-		if oldHash == changedHash {
+		if oldHash == changedHash || changedHash == newHash {
+			// Either the source did not modify this table, or it modified the table to the
+			// content the target already has. Either way the target's version is the result
+			// and no work is lost.
 			resultMap[tblName] = newHash
 		} else if oldHash == newHash {
 			resultMap[tblName] = changedHash
@@ -411,7 +429,7 @@ func threeWayMergeTableHashes(ctx context.Context, oldRoot, newRoot, changedRoot
 				return nil, err
 			}
 
-			// Skip uncommitted tables here so CarryUncommittedTables can pick them up after
+			// Skip uncommitted tables here so CarryTablesAbsentFromBaseline can pick them up after
 			// the merged tracked state lands on the destination. Carry needs that final state
 			// to detect column tag collisions and to rewrite foreign key references.
 			if oldHash == emptyHash {
@@ -646,92 +664,6 @@ func writeTableHashes(ctx context.Context, head doltdb.RootValue, tblHashes map[
 	return head, nil
 }
 
-// CheckoutWouldOverwriteWorkingSetChanges reports whether a checkout would overwrite
-// uncommitted changes on the destination. System and dolt_ignore-matched tables are excluded.
-// Identical uncommitted changes on both sides are not reported as an overwrite.
-func CheckoutWouldOverwriteWorkingSetChanges(ctx context.Context, sourceRoots, destRoots doltdb.Roots, ignored *doltdb.TableNameSet) (bool, error) {
-	// Fast path, like comparing tree hashes in git: if either side has no uncommitted changes,
-	// nothing can be overwritten, so skip the per-table hashing. This whole-root check may count
-	// ignored or system tables as dirty, which only costs a fall-through to the precise comparison
-	// below.
-	srcDirty, _, _, err := RootHasUncommittedChanges(sourceRoots)
-	if err != nil {
-		return false, err
-	}
-	if !srcDirty {
-		return false, nil
-	}
-	destDirty, _, _, err := RootHasUncommittedChanges(destRoots)
-	if err != nil {
-		return false, err
-	}
-	if !destDirty {
-		return false, nil
-	}
-
-	// Both sides have uncommitted changes. Compare only the tracked tables to decide whether the
-	// carry would actually overwrite the destination's uncommitted work.
-	//
-	// TODO(elianddb): this scans every tracked table on both branches, but only tables that
-	//	differ from their branch's last commit can be overwritten. The table list is stored as a
-	//	sorted tree that can compare two versions while skipping the parts that did not change,
-	//	like git comparing trees, so we could look at just the changed tables instead of all of
-	//	them. Doing so needs a small accessor to reach that tree, which the storage layer keeps
-	//	private today.
-	srcW, srcS, srcH, err := trackedRootHashes(ctx, sourceRoots, ignored)
-	if err != nil {
-		return false, err
-	}
-	if maps.Equal(srcW, srcH) && maps.Equal(srcS, srcH) {
-		return false, nil
-	}
-	destW, destS, destH, err := trackedRootHashes(ctx, destRoots, ignored)
-	if err != nil {
-		return false, err
-	}
-	if maps.Equal(destW, destH) && maps.Equal(destS, destH) {
-		return false, nil
-	}
-	return !maps.Equal(srcW, destW) || !maps.Equal(srcS, destS), nil
-}
-
-// trackedRootHashes returns name to hash maps for working, staged, and head of |roots|, keeping
-// only tracked tables. Read-only system tables and the tables in |ignored| are excluded, while
-// writable system tables such as dolt_ignore are kept.
-func trackedRootHashes(ctx context.Context, roots doltdb.Roots, ignored *doltdb.TableNameSet) (working, staged, head map[doltdb.TableName]hash.Hash, err error) {
-	hashes := func(root doltdb.RootValue) (map[doltdb.TableName]hash.Hash, error) {
-		names, err := root.GetAllTableNames(ctx, false)
-		if err != nil {
-			return nil, err
-		}
-		out := make(map[doltdb.TableName]hash.Hash, len(names))
-		for _, n := range names {
-			if doltdb.IsReadOnlySystemTable(n) || ignored.Contains(n) {
-				continue
-			}
-			h, _, err := root.GetTableHash(ctx, n)
-			if err != nil {
-				return nil, err
-			}
-			out[n] = h
-		}
-		return out, nil
-	}
-	working, err = hashes(roots.Working)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	staged, err = hashes(roots.Staged)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	head, err = hashes(roots.Head)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return working, staged, head, nil
-}
-
 // ClearFeatureVersion creates a new version of the provided roots where all three roots have the same
 // feature version. By hashing these new roots, we can easily determine whether the roots differ only by
 // their feature version.
@@ -756,32 +688,4 @@ func ClearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots,
 		Working: modifiedWorking,
 		Staged:  modifiedStaged,
 	}, nil
-}
-
-// RootHasUncommittedChanges returns whether the roots given have uncommitted changes, and the hashes of
-// the working and staged roots are identical. This function will ignore any difference in feature
-// versions between the root values.
-func RootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash hash.Hash, stagedHash hash.Hash, err error) {
-	roots, err = ClearFeatureVersion(context.Background(), roots)
-	if err != nil {
-		return false, hash.Hash{}, hash.Hash{}, err
-	}
-
-	headHash, err := roots.Head.HashOf()
-	if err != nil {
-		return false, hash.Hash{}, hash.Hash{}, err
-	}
-
-	workingHash, err = roots.Working.HashOf()
-	if err != nil {
-		return false, hash.Hash{}, hash.Hash{}, err
-	}
-
-	stagedHash, err = roots.Staged.HashOf()
-	if err != nil {
-		return false, hash.Hash{}, hash.Hash{}, err
-	}
-
-	hasChanges = workingHash != stagedHash || stagedHash != headHash
-	return hasChanges, workingHash, stagedHash, nil
 }

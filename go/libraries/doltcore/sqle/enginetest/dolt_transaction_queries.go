@@ -2543,8 +2543,7 @@ var BranchIsolationTests = []queries.TransactionTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/11007
-		// See https://docs.dolthub.com/sql-reference/version-control/branches for
-		// transaction-start snapshot semantics.
+		// See https://docs.dolthub.com/sql-reference/version-control/branches for transaction-start snapshot semantics.
 		Name: "dolt_checkout without --move respects transaction-start snapshot semantics",
 		SetUpScript: []string{
 			"create table tracked_tbl (x int primary key)",
@@ -2554,8 +2553,6 @@ var BranchIsolationTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// Client B starts first so its snapshot is pinned before A makes any
-				// changes, which is the precondition the rest of the test exercises.
 				Query:    "/* client b */ start transaction",
 				Expected: []sql.Row{},
 			},
@@ -2586,6 +2583,10 @@ var BranchIsolationTests = []queries.TransactionTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				Query:    "/* client b */ select count(*) from information_schema.tables where table_schema = 'mydb/main' and table_name = 'untracked_tbl'",
+				Expected: []sql.Row{{0}},
+			},
+			{
 				Query:    "/* client b */ commit",
 				Expected: []sql.Row{},
 			},
@@ -2609,7 +2610,7 @@ var BranchIsolationTests = []queries.TransactionTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/11007
-		Name: "dolt_checkout('--move') still carries uncommitted state for the calling client only",
+		Name: "dolt_checkout('--move') moves uncommitted state from source to target and cleans the source's working set for all clients",
 		SetUpScript: []string{
 			"create table tracked_tbl (x int primary key)",
 			"call dolt_commit('-Am', 'add tracked_tbl')",
@@ -2643,6 +2644,47 @@ var BranchIsolationTests = []queries.TransactionTest{
 				// --move cleaned main's working set on behalf of client B, so the carried
 				// table is no longer visible to client A on main.
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_checkout('--move') inside an open transaction switches the session but the eventual commit fails because the transaction spans two branches",
+		SetUpScript: []string{
+			"create table tracked_tbl (x int primary key)",
+			"call dolt_commit('-Am', 'add tracked_tbl')",
+			"call dolt_branch('feat')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ create table u (x int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into u values (7)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ call dolt_checkout('--move', 'feat')",
+				Expected: []sql.Row{{0, "Switched to branch 'feat'"}},
+			},
+			{
+				Query:    "/* client a */ select active_branch()",
+				Expected: []sql.Row{{"feat"}},
+			},
+			{
+				Query: "/* client a */ select x from u",
+				// The carried table is visible in the same session before commit.
+				Expected: []sql.Row{{7}},
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
 			},
 		},
 	},
