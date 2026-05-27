@@ -55,6 +55,11 @@ type manifest interface {
 	// implementation is guaranteeing exclusive access to the manifest.
 	ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error)
 
+	// Close releases any resources held by the manifest, such as a file
+	// lock. It is called by NomsBlockStore.Close. Implementations that hold
+	// no such resources may make this a no-op.
+	Close() error
+
 	manifestUpdater
 	manifestGCGenUpdater
 }

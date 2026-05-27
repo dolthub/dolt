@@ -44,7 +44,10 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	nbf := types.Format_DOLT.VersionString()
 	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, nil)
 	require.NoError(t, err)
-	t.Cleanup(func() { j.Close() })
+	// j.Close closes the journal writer; m.Close releases the backing manifest
+	// lock. A NomsBlockStore drives these via the persister and (wrapped)
+	// manifest Close paths, respectively.
+	t.Cleanup(func() { j.Close(); m.Close() })
 	return j
 }
 
@@ -56,7 +59,7 @@ func openTestChunkJournal(t *testing.T, dir string) *ChunkJournal {
 	nbf := types.Format_DOLT.VersionString()
 	j, err := newChunkJournal(t.Context(), nbf, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, nil)
 	require.NoError(t, err)
-	t.Cleanup(func() { j.Close() })
+	t.Cleanup(func() { j.Close(); m.Close() })
 	return j
 }
 
