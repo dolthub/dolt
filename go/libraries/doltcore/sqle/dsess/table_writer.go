@@ -94,4 +94,5 @@ type IndexState struct {
 	IsFullText    bool
 	IsUnique      bool
 	IsSpatial     bool
+	Predicate     sql.Expression
 }

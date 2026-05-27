@@ -159,7 +159,7 @@ func buildIndex(
 		return mergedMap, nil
 	}
 
-	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m)
+	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, nil)
 	if err != nil {
 		return nil, err
 	}

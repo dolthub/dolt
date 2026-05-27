@@ -427,6 +427,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
+		predicate:                     idx.Predicate(),
 		vrw:                           vrw,
 		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
@@ -459,6 +460,7 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
+		predicate:                     idx.Predicate(),
 		vrw:                           nil,
 		ns:                            nil,
 		keyBld:                        nil,
@@ -533,10 +535,11 @@ type doltIndex struct {
 	tableSch    schema.Schema
 	vectorProps schema.VectorProperties
 
-	id      string
-	dbName  string
-	tblName string
-	comment string
+	id        string
+	dbName    string
+	tblName   string
+	comment   string
+	predicate string
 
 	fullTextProps schema.FullTextProperties
 	prefixLengths []uint16
@@ -570,6 +573,9 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 	for _, i := range indexes {
 		idx := i.(*doltIndex)
 		if !idx.IsUnique() {
+			continue
+		}
+		if idx.predicate != "" {
 			continue
 		}
 		var nullAccepting bool
@@ -881,6 +887,11 @@ func (di *doltIndex) IsPrimaryKey() bool {
 // Comment implements sql.Index
 func (di *doltIndex) Comment() string {
 	return di.comment
+}
+
+// Predicate implements sql.PartialIndex
+func (di *doltIndex) Predicate() string {
+	return di.predicate
 }
 
 // PrefixLengths implements sql.Index
