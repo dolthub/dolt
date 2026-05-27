@@ -67,7 +67,7 @@ func (k tableIndexesKey) String() string {
 
 type StatsController struct {
 	logger         *logrus.Logger
-	pro            *sqle.DoltDatabaseProvider
+	pro            dsess.DoltDatabaseProvider
 	bgThreads      *sql.BackgroundThreads
 	statsBackingDb filesys.Filesys
 

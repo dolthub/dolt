@@ -87,6 +87,29 @@ type DoltDatabaseProvider struct {
 	InitDatabaseHooks []InitDatabaseHook
 }
 
+// ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
+// provider.
+type ProviderFactory interface {
+	NewProvider(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error)
+}
+
+// DoltProviderUnwrapper is an optional interface for sql.DatabaseProvider implementations
+// that wrap a *DoltDatabaseProvider. NewSqlEngine uses it to access the underlying
+// provider for Dolt-specific configuration (hooks, dialer, etc.) that is not part of
+// the sql.DatabaseProvider interface.
+type DoltProviderUnwrapper interface {
+	UnderlyingDoltProvider() *DoltDatabaseProvider
+}
+
+// DoltProviderFactory is the default ProviderFactory used by Dolt.
+type DoltProviderFactory struct{}
+
+var _ ProviderFactory = DoltProviderFactory{}
+
+func (DoltProviderFactory) NewProvider(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, databases, locations, overrides)
+}
+
 type remoteDialerWithGitCacheRoot struct {
 	dbfactory.GRPCDialProvider
 	root string
@@ -220,11 +243,9 @@ func (p *DoltDatabaseProvider) WithDbFactoryUrl(url string) *DoltDatabaseProvide
 	return &cp
 }
 
-// WithRemoteDialer returns a copy of this provider with the dialer provided
-func (p *DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvider) *DoltDatabaseProvider {
-	cp := *p
-	cp.remoteDialer = provider
-	return &cp
+// SetRemoteDialer sets the remote dialer on this provider in place and returns it.
+func (p *DoltDatabaseProvider) SetRemoteDialer(provider dbfactory.GRPCDialProvider) {
+	p.remoteDialer = provider
 }
 
 // SetDBLoadParams sets optional DB load params for newly created / registered databases. The provided map is cloned.

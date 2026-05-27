@@ -85,6 +85,15 @@ type Database struct {
 	revName       string
 	editOpts      editor.Options
 	revType       dsess.RevisionType
+
+	// SchemaWrap, when non-nil, is called by GetSchema and AllSchemas to transform the
+	// returned sql.DatabaseSchema before passing it to the caller. The first argument is
+	// the original requested schema name (preserving case); the second is the Database
+	// value with schemaName set to the stored (canonical) name.
+	// TODO: This is currently used by Doltgres to wrap databases, but we should be able
+	//       to completely remove this in a future refactoring if Doltgres overrides
+	//       GetTableInsensitive().
+	SchemaWrap func(requestedName string, db Database) sql.DatabaseSchema
 }
 
 var _ dsess.SqlDatabase = Database{}
@@ -2331,11 +2340,7 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	for _, schema := range schemas {
 		if strings.EqualFold(schema.Name, schemaName) {
 			db.schemaName = schema.Name
-			handledSchema, err := HandleSchema(ctx, schemaName, db)
-			if err != nil {
-				return nil, false, err
-			}
-			return handledSchema, true, nil
+			return db.applySchemaWrap(schemaName, db), true, nil
 		}
 	}
 
@@ -2343,16 +2348,19 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	// We create it explicitly for new databases.
 	if strings.EqualFold(schemaName, "public") {
 		db.schemaName = "public"
-		return db, true, nil
+		return db.applySchemaWrap(schemaName, db), true, nil
 	}
 
 	return nil, false, nil
 }
 
-// HandleSchema is used by Doltgres to intercept a database for the purposes of system tables. In Dolt, this just
-// returns the given database.
-var HandleSchema = func(ctx *sql.Context, schemaName string, db Database) (sql.DatabaseSchema, error) {
-	return db, nil
+// applySchemaWrap calls SchemaWrap if set, otherwise returns sdb as-is. requestedName is
+// the original schema name from the caller (before EqualFold normalization).
+func (db Database) applySchemaWrap(requestedName string, sdb Database) sql.DatabaseSchema {
+	if db.SchemaWrap != nil {
+		return db.SchemaWrap(requestedName, sdb)
+	}
+	return sdb
 }
 
 // AllSchemas implements sql.SchemaDatabase
@@ -2375,11 +2383,7 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 	for i, schema := range schemas {
 		sdb := db
 		sdb.schemaName = schema.Name
-		handledDb, err := HandleSchema(ctx, schema.Name, sdb)
-		if err != nil {
-			return nil, err
-		}
-		dbSchemas[i] = handledDb
+		dbSchemas[i] = db.applySchemaWrap(schema.Name, sdb)
 	}
 
 	// For doltgres, the information_schema database should be a schema.
