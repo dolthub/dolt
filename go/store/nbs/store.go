@@ -1279,8 +1279,8 @@ func toGetRecords(hashes hash.HashSet) []getRecord {
 	return reqs
 }
 
-func (nbs *NomsBlockStore) Count() (uint32, error) {
-	if err := nbs.ensureLoad(context.Background()); err != nil {
+func (nbs *NomsBlockStore) Count(ctx context.Context) (uint32, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
 		return 0, err
 	}
 	count, tables := func() (count uint32, tables chunkReader) {

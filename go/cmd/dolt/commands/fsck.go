@@ -496,11 +496,11 @@ type roundTripper struct {
 }
 
 func newRoundTripper(ctx context.Context, gs *nbs.GenerationalNBS, progress chan FsckProgressMessage, errs *Errs, fileErrCounts map[string]int) (*roundTripper, error) {
-	chunkCount, err := gs.OldGen().Count()
+	chunkCount, err := gs.OldGen().Count(ctx)
 	if err != nil {
 		return nil, err
 	}
-	chunkCount2, err := gs.NewGen().Count()
+	chunkCount2, err := gs.NewGen().Count(ctx)
 	if err != nil {
 		return nil, err
 	}

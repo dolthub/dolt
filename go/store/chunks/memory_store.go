@@ -429,7 +429,7 @@ func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetA
 	}, nil
 }
 
-func (ms *MemoryStoreView) Count() (uint32, error) {
+func (ms *MemoryStoreView) Count(_ context.Context) (uint32, error) {
 	return uint32(len(ms.pending)), nil
 }
 

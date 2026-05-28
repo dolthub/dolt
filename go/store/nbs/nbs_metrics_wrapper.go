@@ -78,8 +78,8 @@ func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, getAddrs 
 	return nbsMW.nbs.MarkAndSweepChunks(ctx, getAddrs, filter, dest, gcConfig, incrementalUpdateManifest)
 }
 
-func (nbsMW *NBSMetricWrapper) Count() (uint32, error) {
-	return nbsMW.nbs.Count()
+func (nbsMW *NBSMetricWrapper) Count(ctx context.Context) (uint32, error) {
+	return nbsMW.nbs.Count(ctx)
 }
 
 func (nbsMW *NBSMetricWrapper) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {

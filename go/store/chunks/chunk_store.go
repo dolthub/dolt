@@ -273,7 +273,7 @@ type ChunkStoreGarbageCollector interface {
 	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrs, filter HasManyFunc, dest ChunkStore, config GCConfig, incrementalUpdateManifest bool) (MarkAndSweeper, error)
 
 	// Count returns the number of chunks in the store.
-	Count() (uint32, error)
+	Count(ctx context.Context) (uint32, error)
 
 	// IterateAllChunks iterates over all chunks in the store, calling the provided callback for each chunk. This is
 	// a wrapper over the internal chunkSource.iterateAllChunks() method.

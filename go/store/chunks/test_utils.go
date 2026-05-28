@@ -99,7 +99,7 @@ func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetAddr
 	return collector.MarkAndSweepChunks(ctx, getAddrs, filter, collector, gcConfig, false)
 }
 
-func (s *TestStoreView) Count() (uint32, error) {
+func (s *TestStoreView) Count(_ context.Context) (uint32, error) {
 	panic("currently unused")
 }
 
