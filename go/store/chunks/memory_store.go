@@ -332,7 +332,7 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	return success, nil
 }
 
-func (ms *MemoryStoreView) BeginGC(keeper func(hash.Hash) bool, _ GCMode) error {
+func (ms *MemoryStoreView) BeginGC(_ context.Context, keeper func(hash.Hash) bool, _ GCMode) error {
 	return ms.transitionToGC(keeper)
 }
 

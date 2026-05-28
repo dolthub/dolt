@@ -510,8 +510,8 @@ func (gcs *GenerationalNBS) OldGenGCFilter() chunks.HasManyFunc {
 	}
 }
 
-func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCMode) error {
-	err := gcs.newGen.BeginGC(keeper, mode)
+func (gcs *GenerationalNBS) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, mode chunks.GCMode) error {
+	err := gcs.newGen.BeginGC(ctx, keeper, mode)
 	if err != nil {
 		return err
 	}
@@ -521,7 +521,7 @@ func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCM
 	// going away. In Full mode, we want to take read dependencies
 	// from the OldGen as well.
 	if mode == chunks.GCMode_Full {
-		err = gcs.oldGen.BeginGC(keeper, mode)
+		err = gcs.oldGen.BeginGC(ctx, keeper, mode)
 		if err != nil {
 			gcs.newGen.EndGC(mode)
 			return err

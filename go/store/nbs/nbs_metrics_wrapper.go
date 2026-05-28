@@ -66,8 +66,8 @@ func (nbsMW *NBSMetricWrapper) SupportedOperations() chunks.TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
 }
 
-func (nbsMW *NBSMetricWrapper) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCMode) error {
-	return nbsMW.nbs.BeginGC(keeper, mode)
+func (nbsMW *NBSMetricWrapper) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, mode chunks.GCMode) error {
+	return nbsMW.nbs.BeginGC(ctx, keeper, mode)
 }
 
 func (nbsMW *NBSMetricWrapper) EndGC(mode chunks.GCMode) {

@@ -2169,8 +2169,8 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 	return nbs.persister.PruneTableFiles(ctx)
 }
 
-func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode) error {
-	if err := nbs.ensureLoad(context.Background()); err != nil {
+func (nbs *NomsBlockStore) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, _ chunks.GCMode) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
 		return err
 	}
 	nbs.mu.Lock()

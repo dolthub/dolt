@@ -258,7 +258,7 @@ type ChunkStoreGarbageCollector interface {
 	//
 	// This function should not block indefinitely and should return an
 	// error if a GC is already in progress.
-	BeginGC(addChunk func(hash.Hash) bool, mode GCMode) error
+	BeginGC(ctx context.Context, addChunk func(hash.Hash) bool, mode GCMode) error
 
 	// EndGC indicates that the GC is over. The previously provided
 	// addChunk function must not be called after this function.
