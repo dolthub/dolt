@@ -1126,4 +1126,52 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// Regression for #11112.
+		Name: "dolt_workspace_* delete restricted by foreign key",
+		SetUpScript: []string{
+			"create table lists (id int primary key, name varchar(100));",
+			"create table list_entries (id int primary key, list_id int not null, content varchar(255), foreign key (list_id) references lists(id));",
+			"call dolt_commit('-Am', 'schema');",
+			"insert into lists values (1, 'list_1');",
+			"insert into list_entries values (1, 1, 'entry_1'), (2, 1, 'entry_2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "delete from dolt_workspace_lists where to_id = 1",
+				ExpectedErr: sql.ErrForeignKeyParentViolation,
+			},
+			{
+				Query:    "select id from lists order by id",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select id, list_id from list_entries order by id",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* delete cascades through foreign key",
+		SetUpScript: []string{
+			"create table lists (id int primary key, name varchar(100));",
+			"create table list_entries (id int primary key, list_id int not null, content varchar(255), foreign key (list_id) references lists(id) on delete cascade);",
+			"call dolt_commit('-Am', 'schema');",
+			"insert into lists values (1, 'list_1');",
+			"insert into list_entries values (1, 1, 'entry_1'), (2, 1, 'entry_2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "delete from dolt_workspace_lists where to_id = 1",
+			},
+			{
+				Query:    "select id from lists order by id",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select id from list_entries order by id",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }

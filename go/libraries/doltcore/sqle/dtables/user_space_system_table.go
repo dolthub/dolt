@@ -271,7 +271,7 @@ func createWriteableSystemTable(ctx *sql.Context, tblName doltdb.TableName, tblS
 
 	var tableWriter dsess.TableWriter
 	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err = ws.GetTableWriter(ctx, tblName, dbName, dSess.SetWorkingRoot, false)
+		tableWriter, err = ws.GetTableWriter(ctx, tblName)
 		if err != nil {
 			return nil, nil, err
 		}

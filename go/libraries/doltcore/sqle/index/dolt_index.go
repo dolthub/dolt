@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+	vttypes "github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -428,6 +429,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
+		predicate:                     idx.Predicate(),
 		vrw:                           vrw,
 		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
@@ -460,6 +462,7 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
+		predicate:                     idx.Predicate(),
 		vrw:                           nil,
 		ns:                            nil,
 		keyBld:                        nil,
@@ -534,10 +537,11 @@ type doltIndex struct {
 	tableSch    schema.Schema
 	vectorProps schema.VectorProperties
 
-	id      string
-	dbName  string
-	tblName string
-	comment string
+	id        string
+	dbName    string
+	tblName   string
+	comment   string
+	predicate string
 
 	fullTextProps schema.FullTextProperties
 	prefixLengths []uint16
@@ -571,6 +575,9 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 	for _, i := range indexes {
 		idx := i.(*doltIndex)
 		if !idx.IsUnique() {
+			continue
+		}
+		if idx.predicate != "" {
 			continue
 		}
 		var nullAccepting bool
@@ -888,6 +895,11 @@ func (di *doltIndex) Comment() string {
 	return di.comment
 }
 
+// Predicate implements sql.PartialIndex
+func (di *doltIndex) Predicate() string {
+	return di.predicate
+}
+
 // PrefixLengths implements sql.Index
 func (di *doltIndex) PrefixLengths() []uint16 {
 	return di.prefixLengths
@@ -1084,12 +1096,18 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		fields := make([]prolly.RangeField, len(rng))
 		skipRangeMatchCallback := true
 		for j, expr := range rng {
-			if !sqltypes.IsInteger(expr.Typ) {
-				// String, decimal, float, datetime ranges can return
-				// false positive prefix matches. More precise range.Matches
-				// comparison is required.
+			// String, decimal, float, datetime ranges can return
+			// false positive prefix matches. More precise range.Matches
+			// comparison is required.
+			if extTyp, ok := expr.Typ.(sql.ExtendedType); ok {
+				// TODO: is there a better way to tell if this is an INT?
+				if !vttypes.IsIntegral(extTyp.Type()) {
+					skipRangeMatchCallback = false
+				}
+			} else if !sqltypes.IsInteger(expr.Typ) {
 				skipRangeMatchCallback = false
 			}
+
 			if rangeCutIsBinding(expr.LowerBound) {
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(ctx, expr.LowerBound, rng[j].Typ)

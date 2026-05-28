@@ -144,6 +144,13 @@ func (fm fileManifest) Name() string {
 	return fm.dir
 }
 
+// Close implements manifest. fileManifest takes the file lock only for the
+// duration of each update, so there is no persistently held resource to
+// release here.
+func (fm fileManifest) Close() error {
+	return nil
+}
+
 // ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
 // them, it takes the lock, parses the manifest and returns its contents,
 // setting |exists| to true. If not, it sets |exists| to false and returns. In

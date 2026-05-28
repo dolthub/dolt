@@ -52,12 +52,17 @@ func ParseCreateTableStatement(ctx *sql.Context, root doltdb.RootValue, engine *
 		for _, c := range idx.Columns {
 			prefixes = append(prefixes, uint16(c.Length))
 		}
+		var predicateStr string
+		if idx.Predicate != nil {
+			predicateStr = idx.Predicate.String()
+		}
 		props := schema.IndexProperties{
 			IsUnique:   idx.IsUnique(),
 			IsSpatial:  idx.IsSpatial(),
 			IsFullText: idx.IsFullText(),
 			IsVector:   idx.IsVector(),
 			Comment:    idx.Comment,
+			Predicate:  predicateStr,
 		}
 		name := getIndexName(idx)
 		_, err = sch.Indexes().AddIndexByColNames(name, idx.ColumnNames(), prefixes, props)

@@ -33,7 +33,6 @@ import (
 )
 
 func makeTestChunkJournal(t *testing.T) *ChunkJournal {
-	cacheOnce.Do(makeGlobalCaches)
 	ctx := context.Background()
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
@@ -45,7 +44,10 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	nbf := types.Format_DOLT.VersionString()
 	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, nil)
 	require.NoError(t, err)
-	t.Cleanup(func() { j.Close() })
+	// j.Close closes the journal writer; m.Close releases the backing manifest
+	// lock. A NomsBlockStore drives these via the persister and (wrapped)
+	// manifest Close paths, respectively.
+	t.Cleanup(func() { j.Close(); m.Close() })
 	return j
 }
 
@@ -57,12 +59,11 @@ func openTestChunkJournal(t *testing.T, dir string) *ChunkJournal {
 	nbf := types.Format_DOLT.VersionString()
 	j, err := newChunkJournal(t.Context(), nbf, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, nil)
 	require.NoError(t, err)
-	t.Cleanup(func() { j.Close() })
+	t.Cleanup(func() { j.Close(); m.Close() })
 	return j
 }
 
 func TestChunkJournalBlockStoreSuite(t *testing.T) {
-	cacheOnce.Do(makeGlobalCaches)
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
 		q := NewUnlimitedMemQuotaProvider()
 		nbf := types.Format_DOLT.VersionString()
@@ -119,7 +120,6 @@ func TestChunkJournalReadOnly(t *testing.T) {
 // commitRootHash, or between Persist flushing chunk records and Update committing
 // the root.
 func TestChunkJournalBootstrapMissingRootRecord(t *testing.T) {
-	cacheOnce.Do(makeGlobalCaches)
 	ctx := context.Background()
 	nbf := types.Format_DOLT.VersionString()
 

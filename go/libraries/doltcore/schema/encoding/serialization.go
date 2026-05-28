@@ -418,6 +418,10 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		idx := indexes[i]
 		no := b.CreateString(idx.Name())
 		co := b.CreateString(idx.Comment())
+		var predOffset fb.UOffsetT
+		if idx.Predicate() != "" {
+			predOffset = b.CreateString(idx.Predicate())
+		}
 
 		// serialize indexed columns
 		tags := idx.IndexedColumnTags()
@@ -473,6 +477,9 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 			serial.IndexAddVectorKey(b, true)
 			serial.IndexAddVectorInfo(b, vectorInfo)
 		}
+		if idx.Predicate() != "" {
+			serial.IndexAddPredicate(b, predOffset)
+		}
 		offs[i] = serial.IndexEnd(b)
 	}
 
@@ -511,6 +518,7 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 			IsVector:           idx.VectorKey(),
 			IsUserDefined:      !idx.SystemDefined(),
 			Comment:            string(idx.Comment()),
+			Predicate:          string(idx.Predicate()),
 			FullTextProperties: fti,
 			VectorProperties:   vi,
 		}
