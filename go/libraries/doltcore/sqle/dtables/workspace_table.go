@@ -21,6 +21,8 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
@@ -31,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -88,6 +91,9 @@ var _ sql.RowUpdater = (*WorkspaceTableUpdater)(nil)
 
 type WorkspaceTableDeleter struct {
 	WorkspaceTableModifier
+	fkEditor      *plan.ForeignKeyEditor
+	fkUpdaters    []sql.ForeignKeyEditor
+	userTblEditor sql.ForeignKeyEditor
 }
 
 var _ sql.RowDeleter = (*WorkspaceTableDeleter)(nil)
@@ -202,15 +208,42 @@ func (wtu *WorkspaceTableUpdater) Close(c *sql.Context) error {
 	return nil
 }
 
+// StatementBegin resolves the underlying table through the session catalog so
+// the revert flows through the same writer ordinary DML uses, then wraps it in
+// a ForeignKeyEditor so FK actions fire on the revert.
 func (wtd *WorkspaceTableDeleter) StatementBegin(ctx *sql.Context) {
-	// Deletes are only allowed on WORKING, do not target staging.
-	sessionWriter, tableWriter, err := wtd.getWorkspaceTableWriter(ctx, false)
+	ds := dsess.DSessFromSess(ctx.Session)
+	catalog := analyzer.NewCatalog(ds.GenericProvider(), overrides.EngineOverridesFromContext(ctx))
+	catalog.AuthHandler = sql.NoopAuthorizationHandler{}
+
+	tbl, _, err := catalog.TableSchema(ctx, ctx.GetCurrentDatabase(), wtd.tableName.Schema, wtd.tableName.Name)
 	if err != nil {
 		wtd.err = &err
 		return
 	}
-	wtd.tableWriter = &tableWriter
-	wtd.sessionWriter = &sessionWriter
+	fkTbl, ok := tbl.(sql.ForeignKeyTable)
+	if !ok {
+		e := fmt.Errorf("workspace target table %s does not support foreign keys", wtd.tableName)
+		wtd.err = &e
+		return
+	}
+
+	fkEditor, updaters, err := analyzer.BuildForeignKeyEditor(ctx, catalog, fkTbl)
+	if err != nil {
+		wtd.err = &err
+		return
+	}
+
+	wtd.fkEditor = fkEditor
+	wtd.fkUpdaters = updaters
+	if fkEditor == nil {
+		wtd.userTblEditor = fkTbl.GetForeignKeyEditor(ctx)
+		wtd.userTblEditor.StatementBegin(ctx)
+		return
+	}
+	for _, u := range updaters {
+		u.StatementBegin(ctx)
+	}
 }
 
 func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
@@ -232,7 +265,6 @@ func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
 	toRow := row[3 : 3+schemaLen]
 	fromRow := row[3+schemaLen:]
 
-	// If to Row has any non-nil values, then we need to do an update. Otherwise, insert.
 	wasDelete := true
 	for _, val := range toRow {
 		if val != nil {
@@ -248,24 +280,76 @@ func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
 		}
 	}
 
-	tableWriter := (*wtd.tableWriter)
-	if tableWriter == nil {
-		return fmt.Errorf("Runtime error: table writer is nil")
+	if wtd.fkEditor != nil {
+		switch {
+		case wasInsert:
+			return wtd.fkEditor.Delete(c, toRow, 0)
+		case wasDelete:
+			for _, ref := range wtd.fkEditor.References {
+				if err := ref.CheckReference(c, fromRow); err != nil {
+					return err
+				}
+			}
+			return wtd.fkEditor.Editor.Insert(c, fromRow)
+		default:
+			return wtd.fkEditor.Update(c, toRow, fromRow, 0)
+		}
 	}
 
+	if wtd.userTblEditor == nil {
+		return fmt.Errorf("Runtime error: table writer is nil")
+	}
 	if wasInsert {
-		return tableWriter.Delete(c, toRow) // delete newly added row.
+		return wtd.userTblEditor.Delete(c, toRow)
 	} else if wasDelete {
-		return tableWriter.Insert(c, fromRow) // restore deleted row.
+		return wtd.userTblEditor.Insert(c, fromRow)
 	} else {
-		return tableWriter.Update(c, toRow, fromRow) // restore updated row.
+		return wtd.userTblEditor.Update(c, toRow, fromRow)
 	}
 }
 
 func (wtd *WorkspaceTableDeleter) Close(c *sql.Context) error {
-	// Resources released in StatementComplete
+	var firstErr error
+	for _, u := range wtd.fkUpdaters {
+		if err := u.Close(c); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if wtd.userTblEditor != nil {
+		if err := wtd.userTblEditor.Close(c); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (wtd *WorkspaceTableDeleter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	for _, u := range wtd.fkUpdaters {
+		if err := u.DiscardChanges(ctx, errorEncountered); err != nil {
+			return err
+		}
+	}
+	if wtd.userTblEditor != nil {
+		return wtd.userTblEditor.DiscardChanges(ctx, errorEncountered)
+	}
 	return nil
 }
+
+func (wtd *WorkspaceTableDeleter) StatementComplete(ctx *sql.Context) error {
+	if wtd.err != nil {
+		return *wtd.err
+	}
+	for _, u := range wtd.fkUpdaters {
+		if err := u.StatementComplete(ctx); err != nil {
+			return err
+		}
+	}
+	if wtd.userTblEditor != nil {
+		return wtd.userTblEditor.StatementComplete(ctx)
+	}
+	return nil
+}
+
 
 func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, targetStaging bool) (dsess.WriteSession, dsess.TableWriter, error) {
 	ds := dsess.DSessFromSess(ctx.Session)
@@ -417,7 +501,7 @@ func (wt *WorkspaceTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 	}
 
 	return &WorkspaceTableDeleter{
-		modifier,
+		WorkspaceTableModifier: modifier,
 	}
 }
 
