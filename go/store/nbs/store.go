@@ -182,8 +182,8 @@ func (nbs *NomsBlockStore) ensureLoad(ctx context.Context) error {
 }
 
 // IterateRoots iterates over the in-memory roots tracked by the ChunkJournal, if there is one.
-func (nbs *NomsBlockStore) IterateRoots(f func(root string, timestamp *time.Time) error) error {
-	if err := nbs.ensureLoad(context.TODO()); err != nil {
+func (nbs *NomsBlockStore) IterateRoots(ctx context.Context, f func(root string, timestamp *time.Time) error) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
 		return err
 	}
 	cj := nbs.chunkJournal()

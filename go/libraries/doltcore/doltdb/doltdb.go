@@ -2107,7 +2107,7 @@ func (ddb *DoltDB) restoreDefaultConjoinBehavior() {
 // NomsBlockStore instance which exposes its roots through
 // IterateRoots.  Otherwise returns |nil| without visiting any roots,
 // including the current one.
-func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error) error {
+func (ddb *DoltDB) IterateRoots(ctx context.Context, cb func(root string, timestamp *time.Time) error) error {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
 	if generationalNBS, ok := cs.(*nbs.GenerationalNBS); ok {
@@ -2115,7 +2115,7 @@ func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error
 	}
 
 	if nbsStore, ok := cs.(*nbs.NomsBlockStore); ok {
-		return nbsStore.IterateRoots(cb)
+		return nbsStore.IterateRoots(ctx, cb)
 	} else {
 		return nil
 	}
