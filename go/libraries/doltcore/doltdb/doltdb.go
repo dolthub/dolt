@@ -2172,7 +2172,10 @@ func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
 		if err != nil {
 			return StoreSizes{}, err
 		}
-		journalSz, ok := newGenNBS.ChunkJournalSize()
+		journalSz, ok, err := newGenNBS.ChunkJournalSize(ctx)
+		if err != nil {
+			return StoreSizes{}, err
+		}
 		if ok {
 			return StoreSizes{
 				JournalBytes: uint64(journalSz),

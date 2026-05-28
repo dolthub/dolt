@@ -201,16 +201,16 @@ func (nbs *NomsBlockStore) chunkJournal() *ChunkJournal {
 	return nil
 }
 
-func (nbs *NomsBlockStore) ChunkJournalSize() (int64, bool) {
-	if err := nbs.ensureLoad(context.Background()); err != nil {
-		return 0, false
+func (nbs *NomsBlockStore) ChunkJournalSize(ctx context.Context) (int64, bool, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return 0, false, err
 	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if cj := nbs.chunkJournal(); cj != nil {
-		return cj.Size(), true
+		return cj.Size(), true, nil
 	}
-	return 0, false
+	return 0, false, nil
 }
 
 func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
