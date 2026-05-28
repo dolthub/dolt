@@ -1934,19 +1934,19 @@ func (nbs *NomsBlockStore) SupportedOperations(ctx context.Context) (chunks.Tabl
 	}, nil
 }
 
-func (nbs *NomsBlockStore) Path() (string, bool) {
-	if err := nbs.ensureLoad(context.Background()); err != nil {
-		return "", false
+func (nbs *NomsBlockStore) Path(ctx context.Context) (string, bool, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return "", false, err
 	}
 	if tfp, ok := nbs.persister.(tableFilePersister); ok {
 		switch p := tfp.(type) {
 		case *fsTablePersister, *ChunkJournal:
-			return p.Path(), true
+			return p.Path(), true, nil
 		default:
-			return "", false
+			return "", false, nil
 		}
 	}
-	return "", false
+	return "", false, nil
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore

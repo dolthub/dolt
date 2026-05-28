@@ -397,7 +397,10 @@ func (gcs *GenerationalNBS) Sources(ctx context.Context) (chunks.TableFileSource
 	ret.Root = newgensources.Root
 	ret.TableFiles = append([]chunks.TableFile{}, newgensources.TableFiles...)
 	ret.AppendixTableFiles = append([]chunks.TableFile{}, newgensources.AppendixTableFiles...)
-	prefix := gcs.RelativeOldGenPath()
+	prefix, err := gcs.RelativeOldGenPath(ctx)
+	if err != nil {
+		return chunks.TableFileSources{}, err
+	}
 	for _, tf := range oldgensources.TableFiles {
 		ret.TableFiles = append(ret.TableFiles, prefixedTableFile{tf, prefix})
 	}
@@ -456,7 +459,10 @@ func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(ctx context.Context, hash
 		return nil, err
 	}
 	if len(hashes) > 0 {
-		prefix := gcs.RelativeOldGenPath()
+		prefix, err := gcs.RelativeOldGenPath(ctx)
+		if err != nil {
+			return nil, err
+		}
 		toadd, err := gcs.oldGen.GetChunkLocationsWithPaths(ctx, hashes)
 		if err != nil {
 			return nil, err
@@ -485,19 +491,25 @@ func (gcs *GenerationalNBS) GetChunkLocations(ctx context.Context, hashes hash.H
 	return res, nil
 }
 
-func (gcs *GenerationalNBS) RelativeOldGenPath() string {
-	newgenpath, ngpok := gcs.newGen.Path()
-	oldgenpath, ogpok := gcs.oldGen.Path()
+func (gcs *GenerationalNBS) RelativeOldGenPath(ctx context.Context) (string, error) {
+	newgenpath, ngpok, err := gcs.newGen.Path(ctx)
+	if err != nil {
+		return "", err
+	}
+	oldgenpath, ogpok, err := gcs.oldGen.Path(ctx)
+	if err != nil {
+		return "", err
+	}
 	if ngpok && ogpok {
 		if p, err := filepath.Rel(newgenpath, oldgenpath); err == nil {
-			return p
+			return p, nil
 		}
 	}
-	return "oldgen"
+	return "oldgen", nil
 }
 
-func (gcs *GenerationalNBS) Path() (string, bool) {
-	return gcs.newGen.Path()
+func (gcs *GenerationalNBS) Path(ctx context.Context) (string, bool, error) {
+	return gcs.newGen.Path(ctx)
 }
 
 func (gcs *GenerationalNBS) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
