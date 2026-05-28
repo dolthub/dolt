@@ -350,7 +350,6 @@ func (wtd *WorkspaceTableDeleter) StatementComplete(ctx *sql.Context) error {
 	return nil
 }
 
-
 func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, targetStaging bool) (dsess.WriteSession, dsess.TableWriter, error) {
 	ds := dsess.DSessFromSess(ctx.Session)
 	var setter dsess.SessionRootSetter
