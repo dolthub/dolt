@@ -188,14 +188,20 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 
 	// Anything that looks like it has a dolt database belongs here.
 	if dEnv.HasDoltDataDir() {
-		LoadDoltDB(ctx, dEnv)
-		dbErr := dEnv.DBLoadError
-		if dbErr != nil {
-			if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
-				logrus.Errorf("failed to load database %s with error: %s", dbName, dbErr.Error())
-				logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
-			} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
-				logrus.Warnf("failed to load database with error: %s", dbErr.Error())
+		// If a sql-server is running over this directory tree, the journal
+		// is held by that process and our local load is a doomed lock
+		// timeout. Skip it; callers that genuinely need the DB will lazy-
+		// load via DoltDB().
+		if !nearbyServerCredsExist(dataDirFS) {
+			LoadDoltDB(ctx, dEnv)
+			dbErr := dEnv.DBLoadError
+			if dbErr != nil {
+				if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
+					logrus.Errorf("failed to load database %s with error: %s", dbName, dbErr.Error())
+					logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
+				} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
+					logrus.Warnf("failed to load database with error: %s", dbErr.Error())
+				}
 			}
 		}
 		envSet[dbName] = dEnv
@@ -364,6 +370,33 @@ func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
 	})
 
 	return currentDb
+}
+
+// nearbyServerCredsExist returns true if a sql-server.info file is present in
+// the .dolt directory of |fs| or any parent directory. Its presence means a
+// sql-server is running over this tree and holds the journal locks; eagerly
+// loading any local DB will just time out against those locks.
+func nearbyServerCredsExist(fs filesys.Filesys) bool {
+	const credsFile = "sql-server.info"
+	cur := fs
+	root, err := cur.Abs(".")
+	if err != nil {
+		return false
+	}
+	for root != "" && root[len(root)-1] != filepath.Separator {
+		if exists, _ := cur.Exists(filepath.Join(dbfactory.DoltDir, credsFile)); exists {
+			return true
+		}
+		cur, err = cur.WithWorkingDir("..")
+		if err != nil {
+			return false
+		}
+		root, err = cur.Abs(".")
+		if err != nil {
+			return false
+		}
+	}
+	return false
 }
 
 func getRepoRootDir(path, pathSeparator string) string {
