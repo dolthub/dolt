@@ -101,7 +101,7 @@ file_size() {
 
   local grown_size=$(file_size "$journal")
 
-  run dolt status
+  run dolt log
   [ "$status" -eq 1 ]
   [[ "$output" =~ "invalid journal record length: 5242881 exceeds max allowed size of 5242880" ]] || false
 
