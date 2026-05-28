@@ -522,11 +522,11 @@ func newRoundTripper(ctx context.Context, gs *nbs.GenerationalNBS, progress chan
 }
 
 func (rt *roundTripper) scanAll(ctx context.Context) error {
-	rt.gs.TolerantIterateAllChunks(ctx, rt.roundTripAndCategorizeChunk, func(sourceFile string, err error) {
+	err := rt.gs.TolerantIterateAllChunks(ctx, rt.roundTripAndCategorizeChunk, func(sourceFile string, err error) {
 		rt.errs.AppendE(err)
 		rt.fileErrCounts[sourceFile]++
 	})
-	return ctx.Err()
+	return errors.Join(err, ctx.Err())
 }
 
 // roundTripAndCategorizeChunk verifies the chunk's hash matches its content, categorizes it by type. This method is
