@@ -28,7 +28,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -37,7 +36,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
-	"github.com/fatih/color"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
@@ -821,8 +819,6 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 			}
 			return
 		}
-		// XXX: Just printing here for now so that we can audit when the databases are actually loaded.
-		fmt.Fprintf(color.Error, "actually loading database at %s\n%s\n", dir, string(debug.Stack()))
 		m, err := newJournalManifest(ctx, dir, lock)
 		if err != nil {
 			nbs.loadErr = err

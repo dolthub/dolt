@@ -191,8 +191,6 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		LoadDoltDB(ctx, dEnv)
 		dbErr := dEnv.DBLoadError
 		if dbErr != nil {
-			// XXX: We are not guaranteed to see these errors here, because the database might
-			// be lazily loaded.
 			if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
 				logrus.Errorf("failed to load database %s with error: %s", dbName, dbErr.Error())
 			} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
