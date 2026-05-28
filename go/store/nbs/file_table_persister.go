@@ -35,12 +35,27 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
+
+var loadingTableFilesDisabled bool
+
+func init() {
+	if os.Getenv(dconfig.EnvAssertNoTableFilesRead) != "" {
+		loadingTableFilesDisabled = true
+	}
+}
+
+func PanicIfLoadingTableFilesDisabled() {
+	if loadingTableFilesDisabled {
+		panic("tried to load a table file or journal file but loading table files is disabled")
+	}
+}
 
 const tempTablePrefix = "nbs_table_"
 
@@ -145,6 +160,7 @@ func (ftplc *fsTablePersisterRefCounter) addRef() {
 }
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+	PanicIfLoadingTableFilesDisabled()
 	ftp.pruneMu.RLock()
 	defer ftp.pruneMu.RUnlock()
 	rc := fsTablePersisterRefCounter{ftp, name}

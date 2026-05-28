@@ -57,4 +57,9 @@ const (
 	// Used for tests. If set, Dolt will error if it would rebuild a table's row data.
 	EnvAssertNoTableRewrite         = "DOLT_TEST_ASSERT_NO_TABLE_REWRITE"
 	EnvAssertNoInMemoryArchiveIndex = "DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX"
+
+	// Used for tests. Make Dolt fail if it loads table file data
+	// from disk, such as bootstraping the journal file or loading
+	// a table file with tableFilePersister.Open.
+	EnvAssertNoTableFilesRead = "DOLT_TEST_ASSERT_NO_TABLE_FILES_READ"
 )
