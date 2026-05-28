@@ -80,6 +80,7 @@ var _ manifest = journalManifestWrapper{}
 // NomsBlockStore is not yet constructed at this point, so callers pass FatalBehaviorError to
 // fail store creation rather than crash the process.
 func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister, behavior dherrors.FatalBehavior, warningsCb func(error)) (*ChunkJournal, error) {
+	PanicIfLoadingTableFilesDisabled()
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
