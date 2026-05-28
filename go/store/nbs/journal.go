@@ -607,22 +607,26 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []t
 	return c.child.chooseConjoinees(pruned)
 }
 
-// newJournalManifest makes a new file manifest.
-// When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
-// (The behavior change is implemented separately; this is the plumbing flag.)
-func newJournalManifest(ctx context.Context, dir string, failOnTimeout bool) (m *journalManifest, err error) {
+func newJournalLock(dir string, failOnTimeout bool) (*fslock.Lock, chunks.ExclusiveAccessMode, error) {
 	lock := fslock.New(filepath.Join(dir, lockFileName))
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
-	err = lock.LockWithTimeout(lockFileTimeout)
+	err := lock.LockWithTimeout(lockFileTimeout)
 	if errors.Is(err, fslock.ErrTimeout) {
 		if failOnTimeout {
-			return nil, ErrDatabaseLocked
+			return nil, chunks.ExclusiveAccessMode_ReadOnly, ErrDatabaseLocked
 		}
-		lock, err = nil, nil // read only
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, nil
 	} else if err != nil {
-		return nil, err
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, err
 	}
+	return lock, chunks.ExclusiveAccessMode_Exclusive, nil
+}
+
+// newJournalManifest makes a new file manifest.
+// When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
+// (The behavior change is implemented separately; this is the plumbing flag.)
+func newJournalManifest(ctx context.Context, dir string, lock *fslock.Lock) (m *journalManifest, err error) {
 	m = &journalManifest{dir: dir, lock: lock}
 
 	var f *os.File
