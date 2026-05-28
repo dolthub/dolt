@@ -160,14 +160,15 @@ func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 		stop, err := getKeyPrefix(tuples[z][0], prefixDesc)
 		require.NoError(t, err)
 
-		openR, err := openRange(ctx, start, stop, prefixDesc)
-		require.NoError(t, err)
-		openStartR, err := openStartRange(ctx, start, stop, prefixDesc)
-		require.NoError(t, err)
-		openStopR, err := openStopRange(ctx, start, stop, prefixDesc)
-		require.NoError(t, err)
-		closedR, err := closedRange(ctx, start, stop, prefixDesc)
-		require.NoError(t, err)
+		mustRange := func(rng Range, err error) Range {
+			require.NoError(t, err)
+			return rng
+		}
+
+		openR := mustRange(openRange(ctx, start, stop, prefixDesc))
+		openStartR := mustRange(openStartRange(ctx, start, stop, prefixDesc))
+		openStopR := mustRange(openStopRange(ctx, start, stop, prefixDesc))
+		closedR := mustRange(closedRange(ctx, start, stop, prefixDesc))
 
 		tests := []prefixRangeTest{
 			// two-sided ranges
@@ -226,7 +227,7 @@ func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 			}
 			assert.Equal(t, io.EOF, err)
 
-			expCount := getExpectedRangeSize(test.testRange, tuples)
+			expCount := getExpectedRangeSize(t, test.testRange, tuples)
 			assert.Equal(t, expCount, actCount)
 		}
 	}
@@ -245,18 +246,16 @@ func getKeyPrefix(key val.Tuple, desc *val.TupleDesc) (partial val.Tuple, err er
 }
 
 // computes expected range on full tuples set
-func getExpectedRangeSize(rng Range, tuples [][2]val.Tuple) (sz int) {
+func getExpectedRangeSize(t *testing.T, rng Range, tuples [][2]val.Tuple) (sz int) {
 	ctx := context.Background()
 	for i := range tuples {
 		k := tuples[i][0]
 		above, err := rng.aboveStart(ctx, k)
-		if err != nil {
-			panic(err)
-		}
+		require.NoError(t, err)
+
 		below, err := rng.belowStop(ctx, k)
-		if err != nil {
-			panic(err)
-		}
+		require.NoError(t, err)
+
 		if above && below {
 			sz++
 		}
