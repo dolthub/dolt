@@ -734,59 +734,22 @@ If you're interested in running this command against a remote host, hit us up on
 		targetEnv = rootEnv
 	}
 
-	var lookForServer bool
-	readOnly, err := targetEnv.IsAccessModeReadOnly(ctx)
+	// A running sql-server leaves a sql-server.info file in its .dolt dir.
+	localCreds, err := sqlserver.FindAndLoadLocalCreds(targetEnv.FS)
 	if err != nil {
-		// Missing dolt data dir is expected if we are in a top level server directory. Other errors are not.
-		if !errors.Is(err, doltdb.ErrMissingDoltDataDir) {
-			return nil, err
-		}
+		return nil, err
 	}
-
-	if readOnly {
-		// If the loaded target environment has a doltDB and we do not
-		// have access to it, we look for a server.
-		lookForServer = true
-	} else if targetEnv.DoltDB(ctx) == nil {
-		// If the loaded environment itself does not have a doltDB, we
-		// may want to look for a server. We do so if all of the
-		// repositories in our MultiEnv are ReadOnly. This includes the
-		// case where there are no repositories in our MultiEnv
-		var allReposAreReadOnly bool = true
-		err = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-			readOnly, err := dEnv.IsAccessModeReadOnly(ctx)
-			if err != nil {
-				return true, fmt.Errorf("Failed to load database %s due to error: %w", name, err)
-			}
-
-			allReposAreReadOnly = allReposAreReadOnly && readOnly
-
-			return !allReposAreReadOnly, nil
-		})
-
-		if err != nil {
-			return nil, err
+	if localCreds != nil {
+		if verbose {
+			cli.Println("verbose: starting remote mode")
 		}
 
-		lookForServer = allReposAreReadOnly
-	}
-	if lookForServer {
-		localCreds, err := sqlserver.FindAndLoadLocalCreds(targetEnv.FS)
-		if err != nil {
-			return nil, err
+		if !creds.Specified {
+			creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: localCreds.Secret, Specified: false}
 		}
-		if localCreds != nil {
-			if verbose {
-				cli.Println("verbose: starting remote mode")
-			}
-
-			if !creds.Specified {
-				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: localCreds.Secret, Specified: false}
-			}
-			doltConfigName := targetEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
-			doltConfigEmail := targetEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
-		}
+		doltConfigName := targetEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
+		doltConfigEmail := targetEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
 	}
 
 	if verbose {
