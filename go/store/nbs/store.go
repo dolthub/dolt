@@ -791,6 +791,12 @@ type JournalingStoreOptions struct {
 	// FailOnLockTimeout returns an error if the exclusive journal manifest lock cannot be acquired
 	// within Dolt's internal lock timeout, instead of falling back to opening in read-only mode.
 	FailOnLockTimeout bool
+
+	// If true, instead of waiting a short time to try to acquire the lock, proceed immediately
+	// as soon as the lock acquire has failed. This is useful to Dolt if some databases have
+	// already been loaded in ExclusiveAccessMode_ReadOnly and there is no real reason to wait
+	// around trying to get Exclusive mode if you fail on the first non-blocking flock call.
+	SkipLockFileTimeout bool
 }
 
 func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), opts JournalingStoreOptions) (*NomsBlockStore, error) {
@@ -798,7 +804,11 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 		return nil, err
 	}
 
-	lock, staticAccessMode, err := newJournalLock(dir, opts.FailOnLockTimeout)
+	timeout := lockFileTimeout
+	if opts.SkipLockFileTimeout {
+		timeout = 0
+	}
+	lock, staticAccessMode, err := newJournalLock(dir, timeout, opts.FailOnLockTimeout)
 	if err != nil {
 		return nil, err
 	}

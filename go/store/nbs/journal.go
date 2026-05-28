@@ -608,11 +608,19 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []t
 	return c.child.chooseConjoinees(pruned)
 }
 
-func newJournalLock(dir string, failOnTimeout bool) (*fslock.Lock, chunks.ExclusiveAccessMode, error) {
+func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*fslock.Lock, chunks.ExclusiveAccessMode, error) {
 	lock := fslock.New(filepath.Join(dir, lockFileName))
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
-	err := lock.LockWithTimeout(lockFileTimeout)
+	var err error
+	if timeout == 0 {
+		err = lock.TryLock()
+		if errors.Is(err, fslock.ErrLocked) {
+			err = fslock.ErrTimeout
+		}
+	} else {
+		err = lock.LockWithTimeout(timeout)
+	}
 	if errors.Is(err, fslock.ErrTimeout) {
 		if failOnTimeout {
 			return nil, chunks.ExclusiveAccessMode_ReadOnly, ErrDatabaseLocked
