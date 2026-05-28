@@ -446,8 +446,8 @@ func (gcs *GenerationalNBS) PruneTableFiles(ctx context.Context) error {
 }
 
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
-func (gcs *GenerationalNBS) SupportedOperations() chunks.TableFileStoreOps {
-	return gcs.newGen.SupportedOperations()
+func (gcs *GenerationalNBS) SupportedOperations(ctx context.Context) (chunks.TableFileStoreOps, error) {
+	return gcs.newGen.SupportedOperations(ctx)
 }
 
 func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {

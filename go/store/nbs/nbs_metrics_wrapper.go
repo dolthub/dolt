@@ -62,8 +62,8 @@ func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, file
 }
 
 // Forwards SupportedOperations to wrapped block store.
-func (nbsMW *NBSMetricWrapper) SupportedOperations() chunks.TableFileStoreOps {
-	return nbsMW.nbs.SupportedOperations()
+func (nbsMW *NBSMetricWrapper) SupportedOperations(ctx context.Context) (chunks.TableFileStoreOps, error) {
+	return nbsMW.nbs.SupportedOperations(ctx)
 }
 
 func (nbsMW *NBSMetricWrapper) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, mode chunks.GCMode) error {

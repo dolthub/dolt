@@ -2035,7 +2035,15 @@ func pullHash(
 	destCS := datas.ChunkStoreFromDatabase(destDB)
 	waf := types.WalkAddrsForNBF(srcDB.Format(), skipHashes)
 
-	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
+	srcCanUsePuller, err := datas.CanUsePuller(ctx, srcDB)
+	if err != nil {
+		return err
+	}
+	destCanUsePuller, err := datas.CanUsePuller(ctx, destDB)
+	if err != nil {
+		return err
+	}
+	if srcCanUsePuller && destCanUsePuller {
 		puller, err := pull.NewPuller(ctx, tempDir, defaultTargetFileSize, srcCS, destCS, waf, targetHashes, statsCh)
 		if err == pull.ErrDBUpToDate {
 			return nil

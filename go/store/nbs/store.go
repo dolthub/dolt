@@ -1759,7 +1759,7 @@ func (nbs *NomsBlockStore) Stats() interface{} {
 }
 
 func (nbs *NomsBlockStore) StatsSummary() string {
-	if err := nbs.ensureLoad(context.Background()); err != nil {
+	if err := nbs.ensureLoad(context.TODO()); err != nil {
 		return "failed to load"
 	}
 	nbs.mu.Lock()
@@ -1919,9 +1919,9 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[hash.Hash]chunkSource, erro
 
 }
 
-func (nbs *NomsBlockStore) SupportedOperations() chunks.TableFileStoreOps {
-	if err := nbs.ensureLoad(context.Background()); err != nil {
-		panic(err)
+func (nbs *NomsBlockStore) SupportedOperations(ctx context.Context) (chunks.TableFileStoreOps, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return chunks.TableFileStoreOps{}, err
 	}
 	var ok bool
 	_, ok = nbs.persister.(tableFilePersister)
@@ -1931,7 +1931,7 @@ func (nbs *NomsBlockStore) SupportedOperations() chunks.TableFileStoreOps {
 		CanWrite: ok,
 		CanPrune: ok,
 		CanGC:    ok,
-	}
+	}, nil
 }
 
 func (nbs *NomsBlockStore) Path() (string, bool) {
@@ -2284,7 +2284,10 @@ func (nbs *NomsBlockStore) hasLocalGCNovelty() bool {
 }
 
 func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
-	ops := nbs.SupportedOperations()
+	ops, err := nbs.SupportedOperations(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
 	}
@@ -2325,7 +2328,7 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src Compressed
 		}
 		return nil
 	}
-	err := precheck()
+	err = precheck()
 	if err != nil {
 		return nil, err
 	}
