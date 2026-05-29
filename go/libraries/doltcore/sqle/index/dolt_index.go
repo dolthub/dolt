@@ -240,10 +240,14 @@ func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, incl
 }
 
 func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, includeCommits bool) (indexes []sql.Index) {
-	return []sql.Index{
-		MakeDiffTableIndex(tbl, "to", toSchema, includeCommits),
-		MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits),
+	indexes = make([]sql.Index, 0)
+	if toSchema != nil {
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "to", toSchema, includeCommits))
 	}
+	if fromSchema != nil {
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits))
+	}
+	return indexes
 }
 
 // MockIndex returns a sql.Index that is not backed by an actual datastore. It's useful for system tables and

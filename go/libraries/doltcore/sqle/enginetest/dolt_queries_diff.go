@@ -6857,6 +6857,25 @@ left join dolt_commit_diff_xy cd
 			},
 		},
 	},
+	{
+		name: "indexes work when table doesn't exist on one branch",
+		setup: []string{
+			"call dolt_checkout('-b', 'mod')",
+			"create table newTable(id int)",
+			"call dolt_add('newTable')",
+			"call dolt_commit('-am', 'added new table')",
+		},
+		queries: []systabQuery{
+			{
+				query: "select count(*) from dolt_diff('main', 'mod', 'newTable') where to_commit='def'",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				query: "select count(*) from dolt_diff('mod', 'main', 'newTable') where to_commit='def'",
+				exp:   []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 var QueryDiffTableScriptTests = []queries.ScriptTest{

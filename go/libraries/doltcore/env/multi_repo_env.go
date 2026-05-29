@@ -193,7 +193,6 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		if dbErr != nil {
 			if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
 				logrus.Errorf("failed to load database %s with error: %s", dbName, dbErr.Error())
-				logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
 			} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
 				logrus.Warnf("failed to load database with error: %s", dbErr.Error())
 			}
