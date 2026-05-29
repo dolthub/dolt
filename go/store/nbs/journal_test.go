@@ -37,7 +37,7 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	t.Cleanup(func() { file.RemoveAll(dir) })
-	l, _, err := newJournalLock(dir, false)
+	l, _, err := newJournalLock(dir, lockFileTimeout, false)
 	require.NoError(t, err)
 	m, err := newJournalManifest(ctx, dir, l)
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 }
 
 func openTestChunkJournal(t *testing.T, dir string) *ChunkJournal {
-	l, _, err := newJournalLock(dir, false)
+	l, _, err := newJournalLock(dir, lockFileTimeout, false)
 	require.NoError(t, err)
 	m, err := newJournalManifest(t.Context(), dir, l)
 	require.NoError(t, err)
@@ -111,7 +111,7 @@ func TestChunkJournalReadOnly(t *testing.T) {
 		rw := makeTestChunkJournal(t)
 		assert.Equal(t, chunks.ExclusiveAccessMode(chunks.ExclusiveAccessMode_Exclusive), rw.AccessMode())
 
-		_, _, err := newJournalLock(rw.backing.dir, true)
+		_, _, err := newJournalLock(rw.backing.dir, lockFileTimeout, true)
 		require.ErrorIs(t, err, ErrDatabaseLocked)
 	})
 }
