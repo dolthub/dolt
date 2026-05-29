@@ -23,34 +23,11 @@ import (
 
 // blobChunkDiffer is an implementation of val.ChunkDiffer for chunked blob values.
 //
-// A blob is stored as a fixed-fanout, append-only prolly tree: leaf nodes hold a single byte
-// chunk (their GetValue(0)) and internal nodes hold the addresses of their children. The differ
-// walks two such trees in parallel and yields the byte regions that the consumer needs in order
-// to compare the two blobs, skipping any content it can prove is identical on both sides.
-//
-// The differ works in two phases:
-//
-//  1. Aligned-prefix phase. Starting at the roots, the two cursors advance in lockstep. While
-//     both cursors sit on internal nodes at the same level, their children are compared by
-//     address: identical children (same address ⇒ same bytes ⇒ same length) are skipped on both
-//     sides at once, and differing children are descended into so that the search for shared
-//     content continues at the next level down. This is what lets a small edit deep inside a
-//     large, multi-level tree be located without reading the unchanged subtrees. The invariant
-//     maintained throughout this phase is that the bytes skipped so far are byte-for-byte
-//     identical (and equal length) on both sides, so the two cursors remain byte-aligned.
-//
-//  2. Drain phase. As soon as the cursors can no longer be aligned — a leaf is reached on either
-//     side, the levels differ, or a side is an inline buffer — the blobs genuinely diverge from
-//     this point on. The differ then streams every remaining leaf from both sides, one leaf per
-//     side per Next call, without any further skipping. No skipping is safe here because once
-//     differing (and possibly different-length) content has been emitted the cursors are no
-//     longer byte-aligned, so an address match no longer implies the bytes occupy the same
-//     position in the two streams.
-//
-// The consumer (see compareChunkDiffer / compareCollatedChunkDiffer) concatenates each side's
-// emitted bytes independently and compares the concatenations, stopping at the first differing
-// byte. The (left, right) pair returned by Next therefore does not need to be byte-aligned with
-// itself; only the skipped content must be identical and identically positioned on both sides.
+// This implementation may return identical chunks as diffs after the first differing chunk is found. It
+// treats the entire remainder of the byte streams after the first diverging chunks to be part of the diff, since
+// depending on the chunking algorithm used the byte offsets of those identical chunks may be different.
+// We typically only care about the first diff chunk returned by these (the primary use case is ordering comparisons),
+// but be advised.
 type blobChunkDiffer struct {
 	ns NodeStore
 	l  blobDiffSide
@@ -106,7 +83,6 @@ func (s *blobDiffSide) internalTop() (*blobDiffFrame, bool) {
 		return nil, false
 	}
 	top := &s.stack[len(s.stack)-1]
-	// trim guarantees top.idx < top.node.Count() while the stack is non-empty.
 	if top.node.IsLeaf() {
 		return nil, false
 	}
@@ -158,6 +134,7 @@ func (s *blobDiffSide) nextLeaf(ctx context.Context, ns NodeStore) ([]byte, erro
 }
 
 // Next implements val.ChunkDiffer.
+// This method may return identical byte slices after the first one. See comment on blobChunkDiffer for details.
 func (d *blobChunkDiffer) Next(ctx context.Context) ([]byte, []byte, error) {
 	for {
 		d.l.trim()
@@ -168,16 +145,16 @@ func (d *blobChunkDiffer) Next(ctx context.Context) ([]byte, []byte, error) {
 		}
 
 		if !d.diverged {
-			lTop, lok := d.l.internalTop()
-			rTop, rok := d.r.internalTop()
-			if lok && rok && lTop.node.Level() == rTop.node.Level() {
+			lTop, lInternal := d.l.internalTop()
+			rTop, rInternal := d.r.internalTop()
+			if lInternal && rInternal && lTop.node.Level() == rTop.node.Level() {
 				if lTop.node.getAddress(lTop.idx) == rTop.node.getAddress(rTop.idx) {
-					// Identical subtrees: skip both. Comparing addresses does not read
-					// from the store, so skipping shared content is cheap.
+					// Identical subtrees: skip both.
 					lTop.idx++
 					rTop.idx++
 					continue
 				}
+
 				// Differing subtrees at the same level: descend into both and keep
 				// looking for shared content one level down.
 				if err := d.l.descend(ctx, d.ns); err != nil {
