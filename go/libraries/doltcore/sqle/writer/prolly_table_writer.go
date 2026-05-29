@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -40,21 +41,23 @@ type AutoIncrementGetter interface {
 }
 
 type prollyTableWriter struct {
-	sch                    schema.Schema
-	errEncountered         error
-	primary                indexWriter
-	flusher                dsess.WriteSessionFlusher
-	aiTracker              globalstate.AutoIncrementTracker
-	nextAutoIncrementValue map[string]uint64
-	tbl                    *doltdb.Table
-	secondary              map[string]indexWriter
-	setter                 dsess.SessionRootSetter
-	tableName              doltdb.TableName
-	dbName                 string
-	aiCol                  schema.Column
-	sqlSch                 sql.Schema
-	setAutoIncrement       bool
-	targetStaging          bool
+	tbl       *doltdb.Table
+	primary   indexWriter
+	secondary map[string]indexWriter
+
+	dbName    string
+	tblName   doltdb.TableName
+	sch       schema.Schema
+	sqlSch    sql.Schema
+	writeSess dsess.WriteSession
+
+	aiCol      schema.Column
+	aiTracker  globalstate.AutoIncrementTracker
+	aiAlterVal uint64
+	aiAltered  bool // True when an ALTER TABLE affects the auto increment value
+	aiSet      bool // True when an INSERT/UPDATE affects the auto increment value
+
+	errEncountered error
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}
@@ -97,6 +100,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 			pkMap:         def.PkMapping,
 			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
 			key:           make(sql.Row, keyDesc.Count()),
+			predicate:     def.Predicate,
 		}
 	}
 
@@ -134,6 +138,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 			primary:       primary,
 			unique:        def.IsUnique,
 			spatial:       def.IsSpatial,
+			predicate:     def.Predicate,
 			prefixLengths: def.PrefixLengths,
 			keyBld:        val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
 			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
@@ -169,37 +174,10 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 		return err
 	}
 
-	w.setAutoIncrement = true
-
 	// TODO: need schema name in ai tracker
-	w.aiTracker.Next(ctx, w.tableName.Name, sqlRow)
-	return nil
-}
+	w.aiSet = true
+	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow)
 
-// Delete implements TableWriter.
-func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
-	for _, wr := range w.secondary {
-		if err := wr.Delete(ctx, sqlRow); err != nil {
-			return err
-		}
-	}
-	if err := w.primary.Delete(ctx, sqlRow); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
-	err := w.primary.VisitGCRoots(ctx, roots)
-	if err != nil {
-		return err
-	}
-	for _, writer := range w.secondary {
-		err = writer.VisitGCRoots(ctx, roots)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -217,38 +195,19 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 		return err
 	}
 
-	w.setAutoIncrement = true
+	w.aiSet = true
 	return nil
 }
 
-// GetNextAutoIncrementValue implements TableWriter.
-func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return w.aiTracker.Next(ctx, w.tableName.Name, insertVal)
-}
-
-// SetAutoIncrementValue implements AutoIncrementSetter.
-func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
-	if err != nil {
-		return err
+// Delete implements TableWriter.
+func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	for _, wr := range w.secondary {
+		if err := wr.Delete(ctx, sqlRow); err != nil {
+			return err
+		}
 	}
-
-	w.nextAutoIncrementValue = make(map[string]uint64)
-	w.nextAutoIncrementValue[w.tableName.Name] = seq
-
-	// The work above is persisted in flush
-	return w.flush(ctx)
-}
-
-func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
-	return w.aiTracker.AcquireTableLock(ctx, w.tableName.Name)
-}
-
-// Close implements Closer
-func (w *prollyTableWriter) Close(ctx *sql.Context) error {
-	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
-	if w.errEncountered == nil {
-		return w.flush(ctx)
+	if err := w.primary.Delete(ctx, sqlRow); err != nil {
+		return err
 	}
 	return nil
 }
@@ -288,21 +247,7 @@ func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
 	return err
 }
 
-// GetIndexes implements sql.IndexAddressableTable.
-func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	indexes := ctx.GetIndexRegistry().IndexesByTable(w.dbName, w.tableName.Name)
-	ret := make([]sql.Index, len(indexes))
-	for i := range indexes {
-		ret[i] = indexes[i]
-	}
-	return ret, nil
-}
-
-func (w *prollyTableWriter) PreciseMatch() bool {
-	return true
-}
-
-// IndexedAccess implements sql.IndexAddressableTable.
+// IndexedAccess implements sql.IndexAddressable.
 func (w *prollyTableWriter) IndexedAccess(_ *sql.Context, i sql.IndexLookup) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &prollyFkIndexer{
@@ -311,17 +256,78 @@ func (w *prollyTableWriter) IndexedAccess(_ *sql.Context, i sql.IndexLookup) sql
 	}
 }
 
+// GetIndexes implements sql.IndexAddressable.
+func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	indexes := ctx.GetIndexRegistry().IndexesByTable(w.dbName, w.tblName.Name)
+	ret := make([]sql.Index, len(indexes))
+	for i := range indexes {
+		ret[i] = indexes[i]
+	}
+	return ret, nil
+}
+
+// PreciseMatch implements sql.IndexAddressable.
+func (w *prollyTableWriter) PreciseMatch() bool {
+	return true
+}
+
+// GetNextAutoIncrementValue implements TableWriter.
+func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
+	return w.aiTracker.Next(ctx, w.tblName.Name, insertVal)
+}
+
+// SetAutoIncrementValue implements AutoIncrementSetter.
+func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
+	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
+	if err != nil {
+		return err
+	}
+
+	w.aiAlterVal = seq
+	w.aiAltered = true
+
+	// The work above is persisted in flushAllTables
+	return w.flush(ctx)
+}
+
+// AcquireAutoIncrementLock implements AutoIncrementSetter.
+func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
+	return w.aiTracker.AcquireTableLock(ctx, w.tblName.Name)
+}
+
+// Close implements Closer
+func (w *prollyTableWriter) Close(ctx *sql.Context) error {
+	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
+	if w.errEncountered != nil {
+		return w.errEncountered
+	}
+	return w.flush(ctx)
+}
+
+func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	err := w.primary.VisitGCRoots(ctx, roots)
+	if err != nil {
+		return err
+	}
+	for _, writer := range w.secondary {
+		err = writer.VisitGCRoots(ctx, roots)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
-func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
-	schState, err := writerSchema(ctx, tbl, w.tableName.Name, w.dbName)
+func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
+	schState, err := writerSchema(ctx, tbl, w.tblName.Name, w.dbName)
 	if err != nil {
 		return err
 	}
 
 	var newPrimary indexWriter
-
 	var newSecondaries map[string]indexWriter
-	if schema.IsKeyless(sch) {
+	if schema.IsKeyless(schState.DoltSchema) {
 		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, schState)
 		if err != nil {
 			return err
@@ -342,64 +348,82 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 	}
 
 	w.tbl = tbl
-	w.sch = sch
+	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
-	w.flusher = sess
 
 	return nil
 }
 
-func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err error) {
+// table materializes all changes to the primary key, secondary keys, and auto increments to a new doltdb.Table
+func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err error) {
 	// flush primary row storage
-	pm, err := w.primary.Map(ctx)
+	priMap, err := w.primary.Map(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	t, err = w.tbl.UpdateRows(ctx, durable.IndexFromMapInterface(pm))
+	tbl, err = w.tbl.UpdateRows(ctx, durable.IndexFromMapInterface(priMap))
 	if err != nil {
 		return nil, err
 	}
 
 	// flush secondary index storage
-	s, err := t.GetIndexSet(ctx)
+	idxSet, err := tbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, wrSecondary := range w.secondary {
-		sm, err := wrSecondary.Map(ctx)
+	for _, secIdxWriter := range w.secondary {
+		var secMap prolly.MapInterface
+		secMap, err = secIdxWriter.Map(ctx)
 		if err != nil {
 			return nil, err
 		}
-		idx := durable.IndexFromMapInterface(sm)
 
-		s, err = s.PutIndex(ctx, wrSecondary.Name(), idx)
+		idx := durable.IndexFromMapInterface(secMap)
+		idxSet, err = idxSet.PutIndex(ctx, secIdxWriter.Name(), idx)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	t, err = t.SetIndexSet(ctx, s)
+	tbl, err = tbl.SetIndexSet(ctx, idxSet)
 	if err != nil {
 		return nil, err
 	}
 
-	return t, nil
+	if w.aiCol.AutoIncrement {
+		if w.aiAltered {
+			tbl, err = w.aiTracker.Set(ctx, w.tblName.Name, tbl, w.writeSess.GetWorkingSet().Ref(), w.aiAlterVal)
+			if err != nil {
+				return nil, err
+			}
+		} else if w.aiSet {
+			var aiVal uint64
+			aiVal, err = w.aiTracker.Current(w.tblName.Name)
+			if err != nil {
+				return nil, err
+			}
+			tbl, err = tbl.SetAutoIncrementValue(ctx, aiVal)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return tbl, nil
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	ws, err := w.flusher.FlushWithAutoIncrementOverrides(ctx, w.setAutoIncrement, w.nextAutoIncrementValue)
+	tbl, err := w.table(ctx)
 	if err != nil {
 		return err
 	}
-
-	if w.targetStaging {
-		return w.setter(ctx, w.dbName, ws.StagedRoot())
-	} else {
-		return w.setter(ctx, w.dbName, ws.WorkingRoot())
+	_, err = w.writeSess.FlushTable(ctx, w.tblName, tbl)
+	if err != nil {
+		return err
 	}
+	return w.Reset(ctx, tbl)
 }

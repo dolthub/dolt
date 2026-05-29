@@ -51,7 +51,7 @@ func (b *doltTpccBenchmarkerImpl) checkInstallation(ctx context.Context) error {
 }
 
 func (b *doltTpccBenchmarkerImpl) initDoltRepo(ctx context.Context) (string, error) {
-	return InitDoltRepo(ctx, b.dir, b.serverConfig.GetServerExec(), b.config.GetNomsBinFormat(), tpccDbName)
+	return InitDoltRepo(ctx, b.dir, b.serverConfig.GetServerExec(), tpccDbName)
 }
 
 func (b *doltTpccBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {

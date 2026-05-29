@@ -506,14 +506,10 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 		}
 	}
 
-	makeManifestManager := func(m manifest) manifestManager {
-		return manifestManager{m, newManifestCache(0), newManifestLocks()}
-	}
-
 	newChunk := chunks.NewChunk([]byte("gnu"))
 
 	t.Run("NoConjoin", func(t *testing.T) {
-		mm := makeManifestManager(&fakeManifest{})
+		mm := manifest(&fakeManifest{})
 		q := NewUnlimitedMemQuotaProvider()
 		defer func() {
 			require.EqualValues(t, 0, q.Usage())
@@ -554,7 +550,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 			},
 		}
 
-		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, q, c, testMemTableSize)
+		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, fm, p, q, c, testMemTableSize)
 		require.NoError(t, err)
 		defer smallTableStore.Close()
 
@@ -591,7 +587,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 			},
 		}
 
-		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, q, c, testMemTableSize)
+		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, fm, p, q, c, testMemTableSize)
 		require.NoError(t, err)
 		defer smallTableStore.Close()
 

@@ -30,8 +30,14 @@ func MoveNewGenToOldGen(
 	progress chan string,
 ) error {
 	if gs, ok := cs.(*GenerationalNBS); ok {
-		srcPath, _ := gs.newGen.Path()
-		dstPath, _ := gs.oldGen.Path()
+		srcPath, _, err := gs.newGen.Path(ctx)
+		if err != nil {
+			return err
+		}
+		dstPath, _, err := gs.oldGen.Path(ctx)
+		if err != nil {
+			return err
+		}
 
 		allFiles := make([]hash.Hash, 0, len(gs.newGen.tables.upstream))
 		sourceSet := gs.newGen.tables.upstream

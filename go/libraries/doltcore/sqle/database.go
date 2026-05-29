@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
@@ -32,7 +33,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -575,7 +575,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 			}
 			return dt, true, nil
 		}
-		dt, err := dtables.NewConflictsTable(ctx, tname, srcTable, root, dtables.RootSetter(db))
+		dt, err := dtables.NewConflictsTable(ctx, tname, db, srcTable, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}
@@ -1517,7 +1517,11 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 
 		cachedTable, ok := dbState.SessionCache().GetCachedTable(key, dsess.TableCacheKey{Name: tableName, Schema: db.schemaName})
 		if ok {
-			return cachedTable, true, nil
+			rebound, err := cachedTable.RebindDatabase(ctx, db)
+			if err != nil {
+				return nil, false, err
+			}
+			return rebound, true, nil
 		}
 	}
 
@@ -1664,14 +1668,14 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	return tableName, tbl, true, nil
 }
 
-func (db Database) newDoltTable(ctx *sql.Context, tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
+func (db Database) newDoltTable(ctx *sql.Context, tableName string, sch schema.Schema, tbl *doltdb.Table) (dsess.CacheableDoltTable, error) {
 	readonlyTable, err := NewDoltTable(ctx, tableName, sch, tbl, db, db.editOpts)
 	if err != nil {
 		return nil, err
 	}
 
 	tname := doltdb.TableName{Name: tableName, Schema: db.schemaName}
-	var table sql.Table
+	var table dsess.CacheableDoltTable
 	if doltdb.IsReadOnlySystemTable(tname) {
 		table = readonlyTable
 	} else if doltdb.IsDoltCITable(tableName) && !doltdb.IsFullTextTable(tableName) {
@@ -3113,7 +3117,7 @@ func convertRowToRebasePlanStep(ctx context.Context, row sql.Row) (rebase.Rebase
 	}
 
 	return rebase.RebasePlanStep{
-		RebaseOrder: row[0].(decimal.Decimal),
+		RebaseOrder: row[0].(*apd.Decimal),
 		Action:      rebaseAction,
 		CommitHash:  commitHash,
 		CommitMsg:   commitMsg,

@@ -39,12 +39,12 @@ var _ sql.ReferenceChecker = (*prollyFkIndexer)(nil)
 
 // Name implements the interface sql.Table.
 func (n *prollyFkIndexer) Name() string {
-	return n.writer.tableName.Name
+	return n.writer.tblName.Name
 }
 
 // String implements the interface sql.Table.
 func (n *prollyFkIndexer) String() string {
-	return n.writer.tableName.Name
+	return n.writer.tblName.Name
 }
 
 // Schema implements the interface sql.Table.

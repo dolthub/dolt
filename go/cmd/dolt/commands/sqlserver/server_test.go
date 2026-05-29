@@ -615,7 +615,7 @@ func TestGenerateYamlConfig(t *testing.T) {
 	expected := `# Dolt SQL server configuration
 #
 # Uncomment and edit lines as necessary to modify your configuration.
-# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+# Full documentation: https://dolthub.com/docs/sql-reference/server/configuration
 #
 
 # log_level: info

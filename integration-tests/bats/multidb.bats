@@ -39,13 +39,3 @@ teardown() {
     	 set @@global.new_default_branch='feat'"
     dolt sql -q "use repo1"
 }
-
-@test "multidb: incompatible BIN FORMATs" {
-    mkdir dbs1/repo4
-    cd dbs1/repo4
-    DOLT_DEFAULT_BIN_FORMAT=__DOLT__ dolt init
-    cd ..
-
-    dolt --help
-    dolt sql -q "show tables"
-}

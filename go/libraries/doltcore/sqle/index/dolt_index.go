@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+	vttypes "github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -211,30 +212,40 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	return indexes, nil
 }
 
-func DoltToFromCommitIndexes(tbl string, sch schema.Schema) (indexes []sql.Index) {
-	for _, toFrom := range []string{"to", "from"} {
-		cols := make([]schema.Column, 0, len(sch.GetAllCols().GetColumns())+2)
+func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, includeCommitColumns bool) *doltIndex {
+	cols := make([]schema.Column, 0, len(sch.GetAllCols().GetColumns())+2)
+	if includeCommitColumns {
 		cols = append(cols,
 			schema.NewColumn(ToCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
 			schema.NewColumn(FromCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
 		)
-		for _, col := range sch.GetPKCols().GetColumns() {
-			col.Name = toFrom + "_" + col.Name
-			cols = append(cols, col)
-		}
+	}
+	for _, col := range sch.GetPKCols().GetColumns() {
+		col.Name = prefix + "_" + col.Name
+		cols = append(cols, col)
+	}
 
-		indexes = append(indexes, &doltIndex{
-			id:                            "commits_" + toFrom,
-			tblName:                       doltdb.DoltCommitDiffTablePrefix + tbl,
-			columns:                       cols,
-			unique:                        true,
-			comment:                       "",
-			order:                         sql.IndexOrderNone,
-			constrainedToLookupExpression: false,
-			// We pass a nil ValueStore into the key builder, because we don't have one. This would cause an issue
-			// if any of the columns use Adaptive encoding, but that shouldn't be possible in the primary key.
-			keyBld: val.NewTupleBuilder(sch.GetKeyDescriptor(nil), nil),
-		})
+	return &doltIndex{
+		id:                            "commits_" + prefix,
+		tblName:                       tableName,
+		columns:                       cols,
+		unique:                        true,
+		comment:                       "",
+		order:                         sql.IndexOrderNone,
+		constrainedToLookupExpression: false,
+		// We pass a nil ValueStore into the key builder, because we don't have one. This would cause an issue
+		// if any of the columns use Adaptive encoding, but that shouldn't be possible in the primary key.
+		keyBld: val.NewTupleBuilder(sch.GetKeyDescriptor(nil), nil),
+	}
+}
+
+func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, includeCommits bool) (indexes []sql.Index) {
+	indexes = make([]sql.Index, 0)
+	if toSchema != nil {
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "to", toSchema, includeCommits))
+	}
+	if fromSchema != nil {
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits))
 	}
 	return indexes
 }
@@ -421,6 +432,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
+		predicate:                     idx.Predicate(),
 		vrw:                           vrw,
 		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
@@ -453,6 +465,7 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
+		predicate:                     idx.Predicate(),
 		vrw:                           nil,
 		ns:                            nil,
 		keyBld:                        nil,
@@ -527,10 +540,11 @@ type doltIndex struct {
 	tableSch    schema.Schema
 	vectorProps schema.VectorProperties
 
-	id      string
-	dbName  string
-	tblName string
-	comment string
+	id        string
+	dbName    string
+	tblName   string
+	comment   string
+	predicate string
 
 	fullTextProps schema.FullTextProperties
 	prefixLengths []uint16
@@ -564,6 +578,9 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 	for _, i := range indexes {
 		idx := i.(*doltIndex)
 		if !idx.IsUnique() {
+			continue
+		}
+		if idx.predicate != "" {
 			continue
 		}
 		var nullAccepting bool
@@ -877,6 +894,11 @@ func (di *doltIndex) Comment() string {
 	return di.comment
 }
 
+// Predicate implements sql.PartialIndex
+func (di *doltIndex) Predicate() string {
+	return di.predicate
+}
+
 // PrefixLengths implements sql.Index
 func (di *doltIndex) PrefixLengths() []uint16 {
 	return di.prefixLengths
@@ -1073,12 +1095,18 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		fields := make([]prolly.RangeField, len(rng))
 		skipRangeMatchCallback := true
 		for j, expr := range rng {
-			if !sqltypes.IsInteger(expr.Typ) {
-				// String, decimal, float, datetime ranges can return
-				// false positive prefix matches. More precise range.Matches
-				// comparison is required.
+			// String, decimal, float, datetime ranges can return
+			// false positive prefix matches. More precise range.Matches
+			// comparison is required.
+			if extTyp, ok := expr.Typ.(sql.ExtendedType); ok {
+				// TODO: is there a better way to tell if this is an INT?
+				if !vttypes.IsIntegral(extTyp.Type()) {
+					skipRangeMatchCallback = false
+				}
+			} else if !sqltypes.IsInteger(expr.Typ) {
 				skipRangeMatchCallback = false
 			}
+
 			if rangeCutIsBinding(expr.LowerBound) {
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(ctx, expr.LowerBound, rng[j].Typ)

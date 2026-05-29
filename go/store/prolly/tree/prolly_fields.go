@@ -25,11 +25,11 @@ import (
 	"math"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/mohae/uvarint"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -441,7 +441,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 	case val.Bit64Enc:
 		tb.PutBit(i, uint64(convUint(v)))
 	case val.DecimalEnc:
-		tb.PutDecimal(i, v.(decimal.Decimal))
+		tb.PutDecimal(i, v.(*apd.Decimal))
 	case val.YearEnc:
 		tb.PutYear(i, v.(int16))
 	case val.DateEnc:

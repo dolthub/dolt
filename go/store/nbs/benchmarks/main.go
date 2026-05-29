@@ -109,7 +109,7 @@ func main() {
 				d.PanicIfError(err)
 			}()
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, bufSize, nbs.NewUnlimitedMemQuotaProvider(), false)
+				return nbs.NewLocalStore(context.Background(), types.Format_DOLT.VersionString(), dir, bufSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 			}
 			reset = func() {
 				err := file.RemoveAll(dir)
@@ -140,7 +140,7 @@ func main() {
 			cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
 			d.PanicIfError(err)
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *toAWS, s3Bucket, s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), bufSize, nbs.NewUnlimitedMemQuotaProvider())
+				return nbs.NewAWSStore(context.Background(), types.Format_DOLT.VersionString(), dynamoTable, *toAWS, s3Bucket, s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), bufSize, nbs.NewUnlimitedMemQuotaProvider())
 			}
 			reset = func() {
 				ddb := dynamodb.NewFromConfig(cfg)
@@ -164,13 +164,13 @@ func main() {
 	} else {
 		if *useNBS != "" {
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *useNBS, bufSize, nbs.NewUnlimitedMemQuotaProvider(), false)
+				return nbs.NewLocalStore(context.Background(), types.Format_DOLT.VersionString(), *useNBS, bufSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 			}
 		} else if *useAWS != "" {
 			cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
 			d.PanicIfError(err)
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *useAWS, s3Bucket, s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), bufSize, nbs.NewUnlimitedMemQuotaProvider())
+				return nbs.NewAWSStore(context.Background(), types.Format_DOLT.VersionString(), dynamoTable, *useAWS, s3Bucket, s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), bufSize, nbs.NewUnlimitedMemQuotaProvider())
 			}
 		}
 		writeDB = func() {}

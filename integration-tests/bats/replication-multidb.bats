@@ -50,10 +50,7 @@ teardown() {
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
-
-    if ! [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT__" ]; then
-      dolt config --list | awk '{ print $1 }' | grep sqlserver.global | xargs -r dolt config --global --unset
-    fi
+    dolt config --list | awk '{ print $1 }' | grep sqlserver.global | xargs -r dolt config --global --unset
 }
 
 @test "replication-multidb: load global vars" {

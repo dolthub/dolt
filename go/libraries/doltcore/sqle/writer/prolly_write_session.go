@@ -22,7 +22,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -32,12 +31,13 @@ import (
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetWorkingRoot before any
 // table editors are returned.
-func NewWriteSession(ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) dsess.WriteSession {
+func NewWriteSession(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, setter dsess.SessionRootSetter, opts editor.Options) dsess.WriteSession {
 	return &prollyWriteSession{
-		workingSet:    ws,
+		dbName:        dbName,
 		tables:        make(map[doltdb.TableName]*prollyTableWriter),
 		aiTracker:     aiTracker,
-		mut:           &sync.RWMutex{},
+		workingSet:    ws,
+		setter:        setter,
 		targetStaging: opts.TargetStaging,
 	}
 }
@@ -45,10 +45,11 @@ func NewWriteSession(ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementT
 // prollyWriteSession handles all edit operations on a table that may also update other tables.
 // Serves as coordination for SessionedTableEditors.
 type prollyWriteSession struct {
-	workingSet    *doltdb.WorkingSet
+	dbName        string
 	tables        map[doltdb.TableName]*prollyTableWriter
 	aiTracker     globalstate.AutoIncrementTracker
-	mut           *sync.RWMutex
+	workingSet    *doltdb.WorkingSet
+	setter        dsess.SessionRootSetter
 	targetStaging bool
 }
 
@@ -59,8 +60,6 @@ func (s *prollyWriteSession) GetWorkingSet() *doltdb.WorkingSet {
 }
 
 func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
 	for _, writer := range s.tables {
 		err := writer.VisitGCRoots(ctx, roots)
 		if err != nil {
@@ -70,12 +69,9 @@ func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.H
 	return nil
 }
 
-// GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter, targetStaging bool) (dsess.TableWriter, error) {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-
-	if tw, ok := s.tables[tableName]; ok {
+// GetTableWriter implements WriteSession
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.TableName) (dsess.TableWriter, error) {
+	if tw, ok := s.tables[tblName]; ok {
 		return tw, nil
 	}
 
@@ -83,11 +79,14 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 	// fullTextRewriteEditor for one example, where the |ctx| maintains
 	// the old version of the data while fulltext indexes are rebuilt
 	// using this hidden empty workingSet.
-	root := s.workingSet.WorkingRoot()
-	if targetStaging {
+	var root doltdb.RootValue
+	if s.targetStaging {
 		root = s.workingSet.StagedRoot()
+	} else {
+		root = s.workingSet.WorkingRoot()
 	}
-	t, ok, err := root.GetTable(ctx, tableName)
+
+	tbl, ok, err := root.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -95,145 +94,156 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 		return nil, doltdb.ErrTableNotFound
 	}
 
-	schState, err := writerSchema(ctx, t, tableName.Name, db)
+	tblWriter := &prollyTableWriter{
+		tblName:   tblName,
+		dbName:    s.dbName,
+		aiTracker: s.aiTracker,
+		writeSess: s,
+	}
+	err = tblWriter.Reset(ctx, tbl)
 	if err != nil {
 		return nil, err
 	}
 
-	var pw indexWriter
-	var sws map[string]indexWriter
-	if schema.IsKeyless(schState.DoltSchema) {
-		pw, err = getPrimaryKeylessProllyWriter(ctx, t, schState)
-		if err != nil {
-			return nil, err
-		}
-		sws, err = getSecondaryKeylessProllyWriters(ctx, t, schState, pw.(prollyKeylessWriter))
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		pw, err = getPrimaryProllyWriter(ctx, t, schState)
-		if err != nil {
-			return nil, err
-		}
-		sws, err = getSecondaryProllyIndexWriters(ctx, t, schState)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	twr := &prollyTableWriter{
-		tableName:     tableName,
-		dbName:        db,
-		primary:       pw,
-		secondary:     sws,
-		tbl:           t,
-		sch:           schState.DoltSchema,
-		sqlSch:        schState.PkSchema.Schema,
-		aiCol:         schState.AutoIncCol,
-		aiTracker:     s.aiTracker,
-		flusher:       s,
-		setter:        setter,
-		targetStaging: targetStaging,
-	}
-	s.tables[tableName] = twr
-
-	return twr, nil
+	s.tables[tblName] = tblWriter
+	return tblWriter, nil
 }
 
-// Flush implemented WriteSession.
-func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-	return s.flush(ctx, false, nil)
-}
-
-func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, autoIncSet bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-	return s.flush(ctx, autoIncSet, autoIncrements)
-}
-
-// SetWorkingSet implements WriteSession.
+// SetWorkingSet implements WriteSession
 func (s *prollyWriteSession) SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-	return s.setWorkingSet(ctx, ws)
-}
-
-// GetOptions implemented WriteSession.
-func (s *prollyWriteSession) GetOptions() editor.Options {
-	return editor.Options{}
-}
-
-// SetOptions implemented WriteSession.
-func (s *prollyWriteSession) SetOptions(opts editor.Options) {
-	return
-}
-
-// flush is the inner implementation for Flush that does not acquire any locks
-func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (*doltdb.WorkingSet, error) {
-	tables := make(map[doltdb.TableName]*doltdb.Table, len(s.tables))
-	mu := &sync.Mutex{}
-
-	eg, egCtx := errgroup.WithContext(ctx)
-	sqlEgCtx := ctx.WithContext(egCtx)
-
-	for name, wr := range s.tables {
-		eg.Go(func() error {
-			t, err := wr.table(sqlEgCtx)
+	root := ws.WorkingRoot()
+	rootHash, err := root.HashOf()
+	if err != nil {
+		return err
+	}
+	workingRootHash, err := s.workingSet.WorkingRoot().HashOf()
+	if err != nil {
+		return err
+	}
+	if rootHash != workingRootHash {
+		var tbl *doltdb.Table
+		var ok bool
+		for tblName, tblWriter := range s.tables {
+			tbl, ok, err = root.GetTable(ctx, tblName)
 			if err != nil {
 				return err
 			}
-
-			// Update this table's auto increment value if it has one. This value comes from the global state unless an
-			// override was specified (e.g. if the next value was set explicitly)
-			if schema.HasAutoIncrement(wr.sch) {
-				// TODO: need schema name for auto increment
-				autoIncVal, err := s.aiTracker.Current(name.Name)
-				if err != nil {
-					return err
-				}
-				override, hasManuallySetAi := manualAutoIncrementsSettings[name.Name]
-				if hasManuallySetAi {
-					autoIncVal = override
-				}
-
-				// Update the table with the new auto-inc value if necessary. If it was set manually via an ALTER TABLE
-				// statement, we defer to the tracker to update the value itself, since this impacts the global state.
-				if hasManuallySetAi {
-					t, err = s.aiTracker.Set(sqlEgCtx, name.Name, t, s.workingSet.Ref(), autoIncVal)
-					if err != nil {
-						return err
-					}
-				} else if autoIncSet {
-					t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
-					if err != nil {
-						return err
-					}
-				}
+			// table was removed in newer root
+			if !ok {
+				delete(s.tables, tblName)
+				continue
 			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			tables[name] = t
-			return nil
-		})
+			err = tblWriter.Reset(ctx, tbl)
+			if err != nil {
+				return err
+			}
+		}
 	}
-	if err := eg.Wait(); err != nil {
+	s.workingSet = ws
+	return nil
+}
+
+// GetOptions implements WriteSession
+func (s *prollyWriteSession) GetOptions() editor.Options {
+	return editor.Options{
+		TargetStaging: s.targetStaging,
+	}
+}
+
+// SetOptions implements WriteSession
+func (s *prollyWriteSession) SetOptions(opts editor.Options) {
+	s.targetStaging = opts.TargetStaging
+	return
+}
+
+// Flush implements WriteSessionFlusher
+func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	_, err := s.flushAllTables(ctx)
+	if err != nil {
 		return nil, err
 	}
+	return s.workingSet, nil
+}
 
-	var err error
-	flushed := s.workingSet.WorkingRoot()
+// FlushTable puts the already materialized table into the working set
+func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (flushed doltdb.RootValue, err error) {
 	if s.targetStaging {
 		flushed = s.workingSet.StagedRoot()
-	}
-	for name, tbl := range tables {
-		flushed, err = flushed.PutTable(ctx, name, tbl)
+		flushed, err = flushed.PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return nil, err
 		}
+		s.workingSet = s.workingSet.WithStagedRoot(flushed)
+	} else {
+		flushed = s.workingSet.WorkingRoot()
+		flushed, err = flushed.PutTable(ctx, tblName, tbl)
+		if err != nil {
+			return nil, err
+		}
+		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
+	}
+	err = s.setter(ctx, s.dbName, flushed)
+	if err != nil {
+		return nil, err
+	}
+	return flushed, nil
+}
+
+// flushAllTables is the inner implementation for Flush that does not acquire any locks
+func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue, error) {
+	type flushedTable struct {
+		tblName doltdb.TableName
+		tbl     *doltdb.Table
+		err     error
+	}
+
+	// Flush each table and send results to the flushedTables channel
+	flushedTables := make(chan flushedTable, 10)
+	wg := sync.WaitGroup{}
+	wg.Add(len(s.tables))
+	for tblName, tblWriter := range s.tables {
+		go func() {
+			defer wg.Done()
+			tbl, err := tblWriter.table(ctx)
+			flushedTables <- flushedTable{
+				tblName: tblName,
+				tbl:     tbl,
+				err:     err,
+			}
+		}()
+	}
+
+	var flushed doltdb.RootValue
+	if s.targetStaging {
+		flushed = s.workingSet.StagedRoot()
+	} else {
+		flushed = s.workingSet.WorkingRoot()
+	}
+
+	// Drain from the flushedTables channel and update RootValue with updated table
+	eg := errgroup.Group{}
+	eg.Go(func() error {
+		var err error
+		for flushedTbl := range flushedTables {
+			if flushedTbl.err != nil {
+				return flushedTbl.err
+			}
+			flushed, err = flushed.PutTable(ctx, flushedTbl.tblName, flushedTbl.tbl)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	// Wait for all tables to materialize before closing the flushedTables channel
+	// Additionally, we must start the drain goroutine before blocking
+	wg.Wait()
+	close(flushedTables)
+
+	// Wait for all flushed tables to be put onto the working set
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
 
 	if s.targetStaging {
@@ -242,31 +252,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
 
-	return s.workingSet, nil
-}
-
-// setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks
-func (s *prollyWriteSession) setWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
-	root := ws.WorkingRoot()
-	for tableName, tableWriter := range s.tables {
-		t, ok, err := root.GetTable(ctx, tableName)
-		if err != nil {
-			return err
-		}
-		if !ok { // table was removed in newer root
-			delete(s.tables, tableName)
-			continue
-		}
-		tSch, err := t.GetSchema(ctx)
-		if err != nil {
-			return err
-		}
-
-		err = tableWriter.Reset(ctx, s, t, tSch)
-		if err != nil {
-			return err
-		}
-	}
-	s.workingSet = ws
-	return nil
+	// TODO: seems like we should call s.setter to update the working set in the branch state,
+	//  but doing so causes Binlog replication tests to fail?
+	return flushed, nil
 }
