@@ -193,9 +193,15 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		if dbErr != nil {
 			if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
 				logrus.Errorf("failed to load database %s with error: %s", dbName, dbErr.Error())
-				logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
 			} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
 				logrus.Warnf("failed to load database with error: %s", dbErr.Error())
+			}
+		}
+		if skipLockTimeout, err := dEnv.IsAccessModeReadOnly(ctx); err == nil && skipLockTimeout {
+			if dbLoadParams == nil {
+				dbLoadParams = map[string]any{dbfactory.SkipJournalLockTimeoutParam: true}
+			} else {
+				dbLoadParams[dbfactory.SkipJournalLockTimeoutParam] = true
 			}
 		}
 		envSet[dbName] = dEnv
@@ -267,9 +273,16 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 }
 
 func (mrEnv *MultiRepoEnv) ReloadDBs(ctx context.Context) {
+	anyIsReadOnly := false
 	for _, namedEnv := range mrEnv.envs {
 		dEnv := namedEnv.env
-
+		if anyIsReadOnly {
+			if dEnv.DBLoadParams == nil {
+				dEnv.DBLoadParams = map[string]any{dbfactory.SkipJournalLockTimeoutParam: true}
+			} else {
+				dEnv.DBLoadParams[dbfactory.SkipJournalLockTimeoutParam] = true
+			}
+		}
 		if dEnv.doltDB == nil {
 			LoadDoltDB(ctx, dEnv)
 		}
@@ -286,6 +299,10 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(ctx context.Context) {
 			cfgErr := dEnv.CfgLoadErr
 			if cfgErr != nil {
 				logrus.Warnf("failed to load database configuration at %s with error: %s", dEnv.urlStr, cfgErr.Error())
+			}
+		} else if !anyIsReadOnly {
+			if isReadOnly, err := dEnv.IsAccessModeReadOnly(ctx); err == nil && isReadOnly {
+				anyIsReadOnly = true
 			}
 		}
 	}

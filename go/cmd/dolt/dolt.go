@@ -753,10 +753,21 @@ If you're interested in running this command against a remote host, hit us up on
 		// repositories in our MultiEnv are ReadOnly. This includes the
 		// case where there are no repositories in our MultiEnv
 		var allReposAreReadOnly bool = true
+		var anyIsReadOnly bool = false
 		err = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+			if anyIsReadOnly {
+				if dEnv.DBLoadParams == nil {
+					dEnv.DBLoadParams = map[string]any{dbfactory.SkipJournalLockTimeoutParam: true}
+				} else {
+					dEnv.DBLoadParams[dbfactory.SkipJournalLockTimeoutParam] = true
+				}
+			}
 			readOnly, err := dEnv.IsAccessModeReadOnly(ctx)
 			if err != nil {
 				return true, fmt.Errorf("Failed to load database %s due to error: %w", name, err)
+			}
+			if readOnly {
+				anyIsReadOnly = true
 			}
 
 			allReposAreReadOnly = allReposAreReadOnly && readOnly

@@ -49,6 +49,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/valctx"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -139,6 +140,16 @@ type NomsBlockStore struct {
 	fatalBehavior dherrors.FatalBehavior
 
 	closed bool
+
+	staticAccessMode chunks.ExclusiveAccessMode
+	staticVersion    string
+	loadOnce         sync.Once
+
+	// If loadThunk is passed |false|, it is being called as part
+	// of Close(). It should clean up any retained resources,
+	// instead of loading the database.
+	loadThunk func(ctx context.Context, loadIt bool)
+	loadErr   error
 }
 
 func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
@@ -161,8 +172,20 @@ type Range struct {
 	DictLength uint32
 }
 
+func (nbs *NomsBlockStore) ensureLoad(ctx context.Context) error {
+	if nbs.loadThunk != nil {
+		nbs.loadOnce.Do(func() {
+			nbs.loadThunk(ctx, true)
+		})
+	}
+	return nbs.loadErr
+}
+
 // IterateRoots iterates over the in-memory roots tracked by the ChunkJournal, if there is one.
-func (nbs *NomsBlockStore) IterateRoots(f func(root string, timestamp *time.Time) error) error {
+func (nbs *NomsBlockStore) IterateRoots(ctx context.Context, f func(root string, timestamp *time.Time) error) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	cj := nbs.chunkJournal()
 	if cj == nil {
 		return nil
@@ -178,16 +201,22 @@ func (nbs *NomsBlockStore) chunkJournal() *ChunkJournal {
 	return nil
 }
 
-func (nbs *NomsBlockStore) ChunkJournalSize() (int64, bool) {
+func (nbs *NomsBlockStore) ChunkJournalSize(ctx context.Context) (int64, bool, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return 0, false, err
+	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if cj := nbs.chunkJournal(); cj != nil {
-		return cj.Size(), true
+		return cj.Size(), true, nil
 	}
-	return 0, false
+	return 0, false, nil
 }
 
 func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return nil, err
+	}
 	valctx.ValidateContext(ctx)
 	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
 	if err != nil {
@@ -271,6 +300,9 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 }
 
 func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return nil, err
+	}
 	valctx.ValidateContext(ctx)
 	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
 	if err != nil {
@@ -394,6 +426,9 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 }
 
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return nil, err
+	}
 	valctx.ValidateContext(ctx)
 	sources, err := nbs.openChunkSourcesForManifestUpdateAndRebase(ctx, updates, nil)
 	if err != nil {
@@ -545,6 +580,9 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 }
 
 func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (ManifestInfo, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return nil, err
+	}
 	valctx.ValidateContext(ctx)
 	sources, err := nbs.openChunkSourcesForManifestUpdateAndRebase(ctx, updates, nil)
 	if err != nil {
@@ -606,6 +644,9 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 // assumes that stores grow monotonically unless the |gcGen| of a manifest changes. Since this interface
 // cannot set |gcGen|, callers must ensure that calls to this function grow the store monotonically.
 func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root hash.Hash, tableFiles map[hash.Hash]uint32, appendixTableFiles map[hash.Hash]uint32) (err error) {
+	if err := store.ensureLoad(ctx); err != nil {
+		return err
+	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	contents := manifestContents{
@@ -750,6 +791,12 @@ type JournalingStoreOptions struct {
 	// FailOnLockTimeout returns an error if the exclusive journal manifest lock cannot be acquired
 	// within Dolt's internal lock timeout, instead of falling back to opening in read-only mode.
 	FailOnLockTimeout bool
+
+	// If true, instead of waiting a short time to try to acquire the lock, proceed immediately
+	// as soon as the lock acquire has failed. This is useful to Dolt if some databases have
+	// already been loaded in ExclusiveAccessMode_ReadOnly and there is no real reason to wait
+	// around trying to get Exclusive mode if you fail on the first non-blocking flock call.
+	SkipLockFileTimeout bool
 }
 
 func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), opts JournalingStoreOptions) (*NomsBlockStore, error) {
@@ -757,28 +804,77 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 		return nil, err
 	}
 
-	m, err := newJournalManifest(ctx, dir, opts.FailOnLockTimeout)
-	if err != nil {
-		return nil, err
+	timeout := lockFileTimeout
+	if opts.SkipLockFileTimeout {
+		timeout = 0
 	}
-	p := newFSTablePersister(dir, q, mmapArchiveIndexes)
-
-	// The NomsBlockStore is not constructed yet, so bootstrapping errors should fail store
-	// creation rather than crash the process. Callers configure crash behavior afterwards
-	// via SetFatalBehavior.
-	journal, err := newChunkJournal(ctx, nbfVers, dir, m, p.(*fsTablePersister), dherrors.FatalBehaviorError, warningsCb)
+	lock, staticAccessMode, err := newJournalLock(dir, timeout, opts.FailOnLockTimeout)
 	if err != nil {
 		return nil, err
 	}
 
-	// |journal| serves as both the tablePersister and (wrapped) the manifest.
-	// The wrapper keeps the two roles' Close paths distinct: the persister path
-	// closes the journal writer, while the manifest path releases the backing
-	// manifest's file lock.
-	mm := manifest(journalManifestWrapper{journal: journal})
-	c := journalConjoiner{child: inlineConjoiner{defaultMaxTables}}
+	nbs, err := newEmptyNomsBlockStore(defaultMemTableSize)
+	if err != nil {
+		if lock != nil {
+			lock.Unlock()
+			lock.Close()
+		}
+		return nil, err
+	}
+	nbs.staticAccessMode = staticAccessMode
+	nbs.staticVersion = constants.FormatDoltString
+	nbs.loadThunk = func(ctx context.Context, loadIt bool) {
+		if loadIt == false {
+			if lock != nil {
+				lock.Unlock()
+				lock.Close()
+			}
+			return
+		}
+		m, err := newJournalManifest(ctx, dir, lock)
+		if err != nil {
+			nbs.loadErr = err
+			if lock != nil {
+				lock.Unlock()
+				lock.Close()
+			}
+			return
+		}
+		p := newFSTablePersister(dir, q, mmapArchiveIndexes).(*fsTablePersister)
 
-	return newNomsBlockStore(ctx, nbfVers, mm, journal, q, c, defaultMemTableSize)
+		// The NomsBlockStore is not constructed yet, so bootstrapping errors should fail store
+		// creation rather than crash the process. Callers configure crash behavior afterwards
+		// via SetFatalBehavior.
+		journal, err := newChunkJournal(ctx, nbfVers, dir, m, p, dherrors.FatalBehaviorError, warningsCb)
+		if err != nil {
+			// *journalManifest exclusively owns the lock, if any, at this point.
+			m.Close()
+			nbs.loadErr = err
+			return
+		}
+
+		// |journal| serves as both the tablePersister and (wrapped) the manifest.
+		// The wrapper keeps the two roles' Close paths distinct: the persister path
+		// closes the journal writer, while the manifest path releases the backing
+		// manifest's file lock.
+		mm := manifest(journalManifestWrapper{journal: journal})
+		c := journalConjoiner{child: inlineConjoiner{defaultMaxTables}}
+
+		nbs.manifest = mm
+		nbs.persister = journal
+		nbs.conjoiner = c
+		nbs.tables = newTableSet(journal, q)
+		nbs.upstream = manifestContents{nbfVers: nbfVers}
+
+		if err = nbs.rebase(ctx); err != nil {
+			journal.Close()
+			mm.Close()
+			nbs.loadErr = err
+			return
+		}
+	}
+
+	return nbs, nil
 }
 
 func checkDir(dir string) error {
@@ -792,22 +888,15 @@ func checkDir(dir string) error {
 	return nil
 }
 
-func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64) (*NomsBlockStore, error) {
+func newEmptyNomsBlockStore(memTableSize uint64) (*NomsBlockStore, error) {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
-
 	hasCache, err := lru.New2Q[hash.Hash, struct{}](hasCacheSize)
 	if err != nil {
 		return nil, err
 	}
-
 	nbs := &NomsBlockStore{
-		manifest:   m,
-		persister:  p,
-		conjoiner:  c,
-		tables:     newTableSet(p, q),
-		upstream:   manifestContents{nbfVers: nbfVerStr},
 		memtableSz: memTableSize,
 		hasCache:   hasCache,
 		stats:      NewStats(),
@@ -815,6 +904,20 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tabl
 	}
 	nbs.gcCond = sync.NewCond(&nbs.mu)
 	nbs.conjoinOpCond = sync.NewCond(&nbs.mu)
+	return nbs, nil
+}
+
+func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64) (*NomsBlockStore, error) {
+	nbs, err := newEmptyNomsBlockStore(memTableSize)
+	if err != nil {
+		return nil, err
+	}
+
+	nbs.manifest = m
+	nbs.persister = p
+	nbs.conjoiner = c
+	nbs.tables = newTableSet(p, q)
+	nbs.upstream = manifestContents{nbfVers: nbfVerStr}
 
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
@@ -871,6 +974,9 @@ func (nbs *NomsBlockStore) waitForGC(ctx context.Context, cycle uint64) error {
 }
 
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	valctx.ValidateContext(ctx)
 	return nbs.putChunk(ctx, c, getAddrs, nbs.refCheck)
 }
@@ -994,6 +1100,9 @@ func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) err
 }
 
 func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return chunks.Chunk{}, err
+	}
 	valctx.ValidateContext(ctx)
 	ctx, span := tracer.Start(ctx, "nbs.Get")
 	defer span.End()
@@ -1058,6 +1167,9 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 }
 
 func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	valctx.ValidateContext(ctx)
 	ctx, span := tracer.Start(ctx, "nbs.GetMany", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
@@ -1069,6 +1181,9 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 }
 
 func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, ToChunker)) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	valctx.ValidateContext(ctx)
 	return nbs.getManyCompressed(ctx, hashes, found, gcDependencyMode_TakeDependency)
 }
@@ -1178,7 +1293,10 @@ func toGetRecords(hashes hash.HashSet) []getRecord {
 	return reqs
 }
 
-func (nbs *NomsBlockStore) Count() (uint32, error) {
+func (nbs *NomsBlockStore) Count(ctx context.Context) (uint32, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return 0, err
+	}
 	count, tables := func() (count uint32, tables chunkReader) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
@@ -1193,6 +1311,9 @@ func (nbs *NomsBlockStore) Count() (uint32, error) {
 }
 
 func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return false, err
+	}
 	valctx.ValidateContext(ctx)
 	t1 := time.Now()
 	defer func() {
@@ -1251,6 +1372,9 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 }
 
 func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return nil, err
+	}
 	valctx.ValidateContext(ctx)
 	return nbs.hasManyDep(ctx, hashes, gcDependencyMode_TakeDependency)
 }
@@ -1384,6 +1508,9 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 }
 
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	valctx.ValidateContext(ctx)
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -1419,6 +1546,9 @@ func (nbs *NomsBlockStore) rebase(ctx context.Context) error {
 }
 
 func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return hash.Hash{}, err
+	}
 	valctx.ValidateContext(ctx)
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
@@ -1426,6 +1556,9 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 }
 
 func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (success bool, err error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return false, err
+	}
 	valctx.ValidateContext(ctx)
 	return nbs.commit(ctx, current, last, nbs.refCheck)
 }
@@ -1588,16 +1721,32 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 }
 
 func (nbs *NomsBlockStore) Version() string {
+	if nbs.staticVersion != "" {
+		return nbs.staticVersion
+	}
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
 	return nbs.upstream.nbfVers
 }
 
 func (nbs *NomsBlockStore) AccessMode() chunks.ExclusiveAccessMode {
+	if nbs.loadThunk != nil {
+		return nbs.staticAccessMode
+	}
 	return nbs.persister.AccessMode()
 }
 
 func (nbs *NomsBlockStore) Close() error {
+	if nbs.loadThunk != nil {
+		loaded := true
+		nbs.loadOnce.Do(func() {
+			nbs.loadThunk(context.Background(), false)
+			loaded = false
+		})
+		if !loaded || nbs.loadErr != nil {
+			return nil
+		}
+	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	nbs.closed = true
@@ -1624,6 +1773,9 @@ func (nbs *NomsBlockStore) Stats() interface{} {
 }
 
 func (nbs *NomsBlockStore) StatsSummary() string {
+	if err := nbs.ensureLoad(context.TODO()); err != nil {
+		return "failed to load"
+	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	cnt := nbs.tables.count()
@@ -1668,6 +1820,9 @@ func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 // Sources retrieves the current root hash, a list of all table files (which may include appendix tablefiles),
 // and a second list of only the appendix table files
 func (nbs *NomsBlockStore) Sources(ctx context.Context) (chunks.TableFileSources, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return chunks.TableFileSources{}, err
+	}
 	valctx.ValidateContext(ctx)
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -1749,6 +1904,9 @@ func newTableFile(cs chunkSource, info tableSpec, behavior dherrors.FatalBehavio
 }
 
 func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return 0, err
+	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
@@ -1775,7 +1933,10 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[hash.Hash]chunkSource, erro
 
 }
 
-func (nbs *NomsBlockStore) SupportedOperations() chunks.TableFileStoreOps {
+func (nbs *NomsBlockStore) SupportedOperations(ctx context.Context) (chunks.TableFileStoreOps, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return chunks.TableFileStoreOps{}, err
+	}
 	var ok bool
 	_, ok = nbs.persister.(tableFilePersister)
 
@@ -1784,23 +1945,29 @@ func (nbs *NomsBlockStore) SupportedOperations() chunks.TableFileStoreOps {
 		CanWrite: ok,
 		CanPrune: ok,
 		CanGC:    ok,
-	}
+	}, nil
 }
 
-func (nbs *NomsBlockStore) Path() (string, bool) {
+func (nbs *NomsBlockStore) Path(ctx context.Context) (string, bool, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return "", false, err
+	}
 	if tfp, ok := nbs.persister.(tableFilePersister); ok {
 		switch p := tfp.(type) {
 		case *fsTablePersister, *ChunkJournal:
-			return p.Path(), true
+			return p.Path(), true, nil
 		default:
-			return "", false
+			return "", false, nil
 		}
 	}
-	return "", false
+	return "", false, nil
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, splitOffset uint64, numChunks int, _ []byte, getRd func() (io.ReadCloser, uint64, error)) (io.Closer, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return nil, err
+	}
 	valctx.ValidateContext(ctx)
 	tfp, ok := nbs.persister.(tableFilePersister)
 	if !ok {
@@ -1827,6 +1994,9 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 
 // AddTableFilesToManifest adds table files to the manifest
 func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	valctx.ValidateContext(ctx)
 	return nbs.addTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs, nbs.refCheck, nil)
 }
@@ -2002,6 +2172,9 @@ func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx contex
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	valctx.ValidateContext(ctx)
 	return nbs.pruneTableFiles(ctx)
 }
@@ -2010,7 +2183,10 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 	return nbs.persister.PruneTableFiles(ctx)
 }
 
-func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode) error {
+func (nbs *NomsBlockStore) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, _ chunks.GCMode) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	return nbs.lockedBeginGC(keeper)
@@ -2099,6 +2275,9 @@ func (nbs *NomsBlockStore) beginRead() (endRead func()) {
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return nil, err
+	}
 	valctx.ValidateContext(ctx)
 	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, gcConfig, incrementalUpdateManifest)
 }
@@ -2119,7 +2298,10 @@ func (nbs *NomsBlockStore) hasLocalGCNovelty() bool {
 }
 
 func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
-	ops := nbs.SupportedOperations()
+	ops, err := nbs.SupportedOperations(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
 	}
@@ -2160,7 +2342,7 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src Compressed
 		}
 		return nil
 	}
-	err := precheck()
+	err = precheck()
 	if err != nil {
 		return nil, err
 	}
@@ -2413,6 +2595,9 @@ func (gcf gcFinalizer) Close() error {
 }
 
 func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	for _, v := range nbs.tables.novel {
 		err := v.iterateAllChunks(ctx, cb, nbs.stats)
 		if err != nil {
@@ -2434,21 +2619,25 @@ func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk c
 	return nil
 }
 
-func (nbs *NomsBlockStore) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) {
+func (nbs *NomsBlockStore) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) error {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
 	for _, v := range nbs.tables.novel {
 		fileName := v.hash().String() + v.suffix()
 		v.tolerantIterateAllChunks(ctx, cb, func(err error) { errCb(fileName, err) }, nbs.stats)
 		if ctx.Err() != nil {
-			return
+			return nil
 		}
 	}
 	for _, v := range nbs.tables.upstream {
 		fileName := v.hash().String() + v.suffix()
 		v.tolerantIterateAllChunks(ctx, cb, func(err error) { errCb(fileName, err) }, nbs.stats)
 		if ctx.Err() != nil {
-			return
+			return nil
 		}
 	}
+	return nil
 }
 
 func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mode chunks.GCMode, srcs chunkSourceSet) (err error) {
@@ -2554,6 +2743,9 @@ func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keepe
 // files in oldgen are conjoined together.
 // Returns the hash of the newly created conjoined table file.
 func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []hash.Hash) (hash.Hash, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return hash.Hash{}, err
+	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 

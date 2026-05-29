@@ -80,6 +80,7 @@ var _ manifest = journalManifestWrapper{}
 // NomsBlockStore is not yet constructed at this point, so callers pass FatalBehaviorError to
 // fail store creation rather than crash the process.
 func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister, behavior dherrors.FatalBehavior, warningsCb func(error)) (*ChunkJournal, error) {
+	PanicIfLoadingTableFilesDisabled()
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
@@ -607,40 +608,41 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []t
 	return c.child.chooseConjoinees(pruned)
 }
 
-// newJournalManifest makes a new file manifest.
-// When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
-// (The behavior change is implemented separately; this is the plumbing flag.)
-func newJournalManifest(ctx context.Context, dir string, failOnTimeout bool) (m *journalManifest, err error) {
+func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*fslock.Lock, chunks.ExclusiveAccessMode, error) {
 	lock, err := fslock.New(filepath.Join(dir, lockFileName))
 	if err != nil {
-		return nil, err
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, err
 	}
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
-	err = lock.LockWithTimeout(lockFileTimeout)
+	if timeout == 0 {
+		err = lock.TryLock()
+		if errors.Is(err, fslock.ErrLocked) {
+			err = fslock.ErrTimeout
+		}
+	} else {
+		err = lock.LockWithTimeout(timeout)
+	}
 	if errors.Is(err, fslock.ErrTimeout) {
 		// We didn't acquire the lock; release its directory handle and either
 		// fail or fall back to read-only mode.
 		_ = lock.Close()
 		lock = nil
 		if failOnTimeout {
-			return nil, ErrDatabaseLocked
+			return nil, chunks.ExclusiveAccessMode_ReadOnly, ErrDatabaseLocked
 		}
-		err = nil // read only
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, nil
 	} else if err != nil {
 		_ = lock.Close()
-		return nil, err
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, err
 	}
+	return lock, chunks.ExclusiveAccessMode_Exclusive, nil
+}
 
-	// On any error return past this point we don't hand the lock to a
-	// journalManifest, so release it (and its directory handle) ourselves.
-	defer func() {
-		if err != nil && lock != nil {
-			_ = lock.Unlock()
-			_ = lock.Close()
-		}
-	}()
-
+// newJournalManifest makes a new file manifest.
+// When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
+// (The behavior change is implemented separately; this is the plumbing flag.)
+func newJournalManifest(ctx context.Context, dir string, lock *fslock.Lock) (m *journalManifest, err error) {
 	m = &journalManifest{dir: dir, lock: lock}
 
 	var f *os.File
