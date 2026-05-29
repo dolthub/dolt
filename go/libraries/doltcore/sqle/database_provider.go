@@ -1622,7 +1622,7 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 }
 
 // Function implements the FunctionProvider interface
-func (p *DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, bool) {
+func (p *DoltDatabaseProvider) Function(_ *sql.Context, schema, name string) (sql.Function, bool) {
 	fn, ok := p.functions[strings.ToLower(name)]
 	if !ok {
 		return nil, false

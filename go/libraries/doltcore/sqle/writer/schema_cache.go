@@ -98,6 +98,7 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 			PrefixLengths: def.PrefixLengths(),
 		}
 		if predStr := def.Predicate(); predStr != "" {
+			// TODO: need to set the schema in search_path? it cannot find tables and types.
 			predExpr, err := expranalysis.ResolvePredicateExpression(ctx, tableName, predStr)
 			if err != nil {
 				return nil, fmt.Errorf("failed to compile partial index predicate for %s: %w", def.Name(), err)
