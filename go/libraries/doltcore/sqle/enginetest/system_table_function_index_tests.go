@@ -140,6 +140,38 @@ var SystemTableFunctionIndexTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "test DOLT_DIFF() with expression index",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int, index expression_index (c1+c2, c2, c1));",
+			"set @Commit0 = HashOf('HEAD');",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'create table');",
+			"set @Commit1 = HashOf('HEAD');",
+			"insert into t (pk, c1, c2) values(1, 2, 3), (4, 5, 6);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'insert rows');",
+			"set @Commit2 = HashOf('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't') WHERE to_c1 + to_c2 = 3;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"to_covering"},
+			},
+			{
+				// TODO: When using a secondary index that covers a virtual column, DOLT_DIFF produces values for that column.
+				// When not using a secondary index, those values are always nil. We should decide which behavior is correct.
+				Query: "SELECT to_pk, to_c1, to_c2, to_c3, from_pk, from_c1, from_c2, from_c3, diff_type from dolt_diff(@Commit1, @Commit2, 't') WHERE to_c1 = 5;",
+				Expected: []sql.Row{
+					{4, 5, 6, 15, nil, nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"to_covering_with_virtual"},
+			},
+		},
+	},
+	{
 		Name: "test DOLT_PATCH() indexes",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",

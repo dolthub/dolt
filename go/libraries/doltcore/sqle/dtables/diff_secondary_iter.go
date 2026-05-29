@@ -186,8 +186,13 @@ func (itr *prollySecondaryDiffIter) populateRows(ctx context.Context, pk val.Tup
 		diffType = tree.ModifiedDiff
 	}
 
-	for i := range indexedRow {
-		indexedRow[itr.secondaryToPrimaryMap[i]], err = tree.GetField(ctx, itr.toSecondary.KeyDesc(), i, secondaryMapKey, itr.toSecondary.NodeStore())
+	for i, primaryPosition := range itr.secondaryToPrimaryMap {
+		// If the column isn't present in the secondary index, it must be a generated column.
+		// Currently, virtual generated columns are nil in the diff, so we can skip those.
+		// TODO: For generated columns (virtual + stored), we should desire consistent behavior between indexed and non-indexed cases.
+		// Currently, non-indexed / primary-indexed uses of DOLT_DIFF show values for stored generated columns and show NULL for virtual generated columns.
+		// Whereas secondary indexed uses show values for generated columns in the secondary index and NULL for others.
+		indexedRow[primaryPosition], err = tree.GetField(ctx, itr.toSecondary.KeyDesc(), i, secondaryMapKey, itr.toSecondary.NodeStore())
 		if err != nil {
 			return nil, err
 		}
