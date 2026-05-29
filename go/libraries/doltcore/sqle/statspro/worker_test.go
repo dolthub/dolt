@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
@@ -815,6 +815,16 @@ func executeQuery(ctx *sql.Context, eng *gms.Engine, query string) error {
 	return iter.Close(ctx) // tx commit
 }
 
+// runQueries executes |queries| in order, returning the first error.
+func runQueries(ctx *sql.Context, eng *gms.Engine, queries ...string) error {
+	for _, q := range queries {
+		if err := executeQuery(ctx, eng, q); err != nil {
+			return fmt.Errorf("query %q failed: %w", q, err)
+		}
+	}
+	return nil
+}
+
 func executeQueryResults(ctx *sql.Context, eng *gms.Engine, query string) ([]sql.Row, error) {
 	_, iter, _, err := eng.Query(ctx, query)
 	if err != nil {
@@ -908,74 +918,74 @@ func TestStatsGcConcurrency(t *testing.T) {
 	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
 	require.NoError(t, sc.Restart(ctx))
 
-	addDb := func(ctx *sql.Context, dbName string) {
-		require.NoError(t, executeQuery(ctx, sqlEng, "create database "+dbName))
+	addDb := func(ctx *sql.Context, dbName string) error {
+		return runQueries(ctx, sqlEng, "create database "+dbName)
 	}
 
-	addData := func(ctx *sql.Context, dbName string, i int) {
-		//log.Println("add ", dbName)
-		require.NoError(t, executeQuery(ctx, sqlEng, "use "+dbName))
-		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
+	addData := func(ctx *sql.Context, dbName string, i int) error {
+		return runQueries(ctx, sqlEng,
+			"use "+dbName,
+			"create table xy (x int primary key, y int)",
+			"insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")",
+		)
 	}
 
-	dropDb := func(dropCtx *sql.Context, dbName string) {
-		//log.Println("drop ", dbName)
-		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "drop database "+dbName))
+	dropDb := func(dropCtx *sql.Context, dbName string) error {
+		return runQueries(dropCtx, sqlEng,
+			"use mydb",
+			"drop database "+dbName,
+		)
 	}
-
-	// it is important to use new sessions for this test, to avoid working root conflicts
-	addCtx, _ := sc.ctxGen(context.Background())
-	writeCtx, _ := sc.ctxGen(context.Background())
-	dropCtx, _ := sc.ctxGen(context.Background())
 
 	iters := 20
 	dbs := make(chan string, iters)
 
-	{
-		wg := sync.WaitGroup{}
-		wg.Add(2)
+	eg, egCtx := errgroup.WithContext(t.Context())
+	// it is important to use new sessions for this test, to avoid working root conflicts
+	addCtx, _ := sc.ctxGen(egCtx)
+	writeCtx, _ := sc.ctxGen(egCtx)
+	dropCtx, _ := sc.ctxGen(egCtx)
 
-		addCnt := 0
-		go func() {
-			for i := range iters {
-				addCnt++
-				dbName := "db" + strconv.Itoa(i)
-				addDb(addCtx, dbName)
-				addData(writeCtx, dbName, i)
-				dbs <- dbName
+	eg.Go(func() error {
+		defer close(dbs)
+		for i := range iters {
+			dbName := "db" + strconv.Itoa(i)
+			if err := addDb(addCtx, dbName); err != nil {
+				return err
 			}
-			close(dbs)
-			wg.Done()
-		}()
+			if err := addData(writeCtx, dbName, i); err != nil {
+				return err
+			}
+			dbs <- dbName
+		}
+		return nil
+	})
 
-		dropCnt := 0
-		go func() {
-			i := 0
-			for db := range dbs {
-				if i%2 == 0 {
-					time.Sleep(10 * time.Millisecond)
-					dropCnt++
-					dropDb(dropCtx, db)
+	eg.Go(func() error {
+		i := 0
+		for db := range dbs {
+			if i%2 == 0 {
+				time.Sleep(10 * time.Millisecond)
+				if err := dropDb(dropCtx, db); err != nil {
+					return err
 				}
-				i++
 			}
-			wg.Done()
-		}()
+			i++
+		}
+		return nil
+	})
 
-		wg.Wait()
+	require.NoError(t, eg.Wait())
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 
-		<-sc.Stop()
+	<-sc.Stop()
 
-		// 101 dbs, 100 with stats (not main)
-		require.Equal(t, iters/2, len(sc.Stats.stats))
-		//require.NoError(t, sc.ValidateState(ctx))
-		require.Equal(t, iters/2, sc.kv.Len())
-	}
+	// 101 dbs, 100 with stats (not main)
+	require.Equal(t, iters/2, len(sc.Stats.stats))
+	//require.NoError(t, sc.ValidateState(ctx))
+	require.Equal(t, iters/2, sc.kv.Len())
 }
 
 func TestStatsBranchConcurrency(t *testing.T) {
@@ -985,76 +995,82 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	setTimers(t, ctx, 1*time.Millisecond, time.Hour)
 	require.NoError(t, sc.Restart(ctx))
 
-	addBranch := func(ctx *sql.Context, i int) {
+	addBranch := func(ctx *sql.Context, i int) error {
 		branchName := "branch" + strconv.Itoa(i)
-		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('main')"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', '"+branchName+"')"))
+		return runQueries(ctx, sqlEng,
+			"use mydb",
+			"call dolt_checkout('main')",
+			"call dolt_checkout('-b', '"+branchName+"')",
+		)
 	}
 
-	addData := func(ctx *sql.Context, i int) {
+	addData := func(ctx *sql.Context, i int) error {
 		branchName := "branch" + strconv.Itoa(i)
-		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('"+branchName+"')"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		return runQueries(ctx, sqlEng,
+			"use mydb",
+			"call dolt_checkout('"+branchName+"')",
+			"create table xy (x int primary key, y int)",
+			"insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")",
+			"call dolt_stats_wait()",
+		)
 	}
 
-	dropBranch := func(dropCtx *sql.Context, branchName string) {
-		//log.Println("delete branch: ", branchName)
-		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-		del := "call dolt_branch('-d', '" + branchName + "')"
-		require.NoError(t, executeQuery(ctx, sqlEng, del))
+	dropBranch := func(dropCtx *sql.Context, branchName string) error {
+		return runQueries(dropCtx, sqlEng,
+			"use mydb",
+			"call dolt_branch('-d', '"+branchName+"')",
+		)
 	}
-
-	// it is important to use new sessions for this test, to avoid working root conflicts
-	addCtx, _ := sc.ctxGen(context.Background())
-	dropCtx, _ := sc.ctxGen(context.Background())
 
 	iters := 20
-	{
-		branches := make(chan string, iters)
+	branches := make(chan string, iters)
 
-		wg := sync.WaitGroup{}
-		wg.Add(2)
+	eg, egCtx := errgroup.WithContext(t.Context())
+	// it is important to use new sessions for this test, to avoid working root conflicts
+	addCtx, _ := sc.ctxGen(egCtx)
+	dropCtx, _ := sc.ctxGen(egCtx)
 
-		go func() {
-			for i := range iters {
-				addBranch(addCtx, i)
-				addData(addCtx, i)
-				branches <- "branch" + strconv.Itoa(i)
+	eg.Go(func() error {
+		defer close(branches)
+		for i := range iters {
+			if err := addBranch(addCtx, i); err != nil {
+				return err
 			}
-			close(branches)
-			wg.Done()
-		}()
+			if err := addData(addCtx, i); err != nil {
+				return err
+			}
+			branches <- "branch" + strconv.Itoa(i)
+		}
+		return nil
+	})
 
-		go func() {
-			i := 0
-			for br := range branches {
-				if i%2 == 0 {
-					dropBranch(dropCtx, br)
-					time.Sleep(50 * time.Microsecond)
+	eg.Go(func() error {
+		i := 0
+		for br := range branches {
+			if i%2 == 0 {
+				if err := dropBranch(dropCtx, br); err != nil {
+					return err
 				}
-				i++
+				time.Sleep(50 * time.Microsecond)
 			}
-			wg.Done()
-		}()
+			i++
+		}
+		return nil
+	})
 
-		wg.Wait()
+	require.NoError(t, eg.Wait())
 
-		err := executeQuery(ctx, sqlEng, "call dolt_stats_wait()")
-		require.NoError(t, err)
+	err := executeQuery(ctx, sqlEng, "call dolt_stats_wait()")
+	require.NoError(t, err)
 
-		err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
-		require.NoError(t, err)
-		<-sc.Stop()
+	err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
+	require.NoError(t, err)
+	<-sc.Stop()
 
-		// at the end we should still have |iters/2| databases
-		require.Equal(t, iters/2, len(sc.Stats.stats))
-		//require.NoError(t, sc.ValidateState(ctx))
-		require.Equal(t, iters/2, sc.kv.Len())
-	}
+	// at the end we should still have |iters/2| databases
+	require.Equal(t, iters/2, len(sc.Stats.stats))
+	//require.NoError(t, sc.ValidateState(ctx))
+	require.Equal(t, iters/2, sc.kv.Len())
 }
 
 func TestStatsCacheGrowth(t *testing.T) {
@@ -1065,49 +1081,56 @@ func TestStatsCacheGrowth(t *testing.T) {
 	setTimers(t, ctx, 1*time.Millisecond, time.Hour)
 	require.NoError(t, sc.Restart(ctx))
 
-	addBranch := func(ctx *sql.Context, i int) {
+	addBranch := func(ctx *sql.Context, i int) error {
 		branchName := "branch" + strconv.Itoa(i)
-		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('main')"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', '"+branchName+"')"))
+		return runQueries(ctx, sqlEng,
+			"use mydb",
+			"call dolt_checkout('main')",
+			"call dolt_checkout('-b', '"+branchName+"')",
+		)
 	}
 
-	addData := func(ctx *sql.Context, i int) {
+	addData := func(ctx *sql.Context, i int) error {
 		branchName := "branch" + strconv.Itoa(i)
-		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('"+branchName+"')"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
-
+		return runQueries(ctx, sqlEng,
+			"use mydb",
+			"call dolt_checkout('"+branchName+"')",
+			"create table xy (x int primary key, y int)",
+			"insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")",
+		)
 	}
 
 	iters := 20
-	{
-		branches := make(chan string, iters)
+	branches := make(chan string, iters)
 
-		go func() {
-			addCtx, _ := sc.ctxGen(context.Background())
-			for i := range iters {
-				addBranch(addCtx, i)
-				addData(addCtx, i)
-				branches <- "branch" + strconv.Itoa(i)
+	eg, egCtx := errgroup.WithContext(t.Context())
+	addCtx, _ := sc.ctxGen(egCtx)
+	eg.Go(func() error {
+		defer close(branches)
+		for i := range iters {
+			if err := addBranch(addCtx, i); err != nil {
+				return err
 			}
-			close(branches)
-		}()
-
-		i := 0
-		for _ = range branches {
-			i++
+			if err := addData(addCtx, i); err != nil {
+				return err
+			}
+			branches <- "branch" + strconv.Itoa(i)
 		}
+		return nil
+	})
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
-
-		<-sc.Stop()
-
-		// at the end we should still have |iters/2| databases
-		require.Equal(t, iters, len(sc.Stats.stats))
-		//require.NoError(t, sc.ValidateState(ctx))
-		require.Equal(t, iters, sc.kv.Len())
+	for range branches {
 	}
+
+	require.NoError(t, eg.Wait())
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
+
+	<-sc.Stop()
+
+	// at the end we should still have |iters/2| databases
+	require.Equal(t, iters, len(sc.Stats.stats))
+	//require.NoError(t, sc.ValidateState(ctx))
+	require.Equal(t, iters, sc.kv.Len())
 }
