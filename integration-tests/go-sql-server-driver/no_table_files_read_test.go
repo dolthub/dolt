@@ -36,25 +36,41 @@ import (
 // from disk. We use it to prove that, when a server is running, the CLI never
 // touches the local database files.
 //
+// Every scenario uses a data dir root which contains multiple databases
+// (db_one and db_two) as subdirectories, and exercises CLI invocations both
+// from the data dir root and from within a particular database subdirectory.
+// At the multi-db root there is no "current database", so the commands which
+// require one (`dolt log`, `dolt remote -v`) are only exercised from the
+// subdirectory; from the root we use `dolt sql -q` with database-qualified
+// names.
+//
 // The test matrix has three top-level scenarios:
 //
-//  1. A dolt sql-server is running. The CLI is invoked with
-//     DOLT_TEST_ASSERT_NO_TABLE_FILES_READ=1 and must succeed, because it
+//  1. A dolt sql-server is running in the data dir root. The CLI is invoked
+//     with DOLT_TEST_ASSERT_NO_TABLE_FILES_READ=1 and must succeed, because it
 //     dispatches to the server without reading any table files.
-//  2. No server is running, but a stale sql-server.info file is present. The
-//     CLI is invoked (executing locally) and must still succeed.
+//  2. No server is running, but a stale sql-server.info file is present at the
+//     data dir root. The CLI is invoked (executing locally) and must succeed.
 //  3. No server is running, but a concurrent `dolt sql` process holds the
-//     database lock. The CLI is invoked (executing locally); reads succeed and
-//     writes fail because they cannot acquire the write lock.
+//     write lock on db_one. The CLI is invoked (executing locally); reads
+//     succeed, writes to db_one fail because they cannot acquire the write
+//     lock, and writes to the unlocked db_two succeed.
 //
 // In scenarios 2 and 3 the CLI must read the local database, so we do not set
 // DOLT_TEST_ASSERT_NO_TABLE_FILES_READ for those invocations.
 
-// makePopulatedRepo creates a fresh repo store and an initialized repo named
-// |name| with a committed table, some rows, and a remote configured.
-func makePopulatedRepo(t *testing.T, u driver.DoltUser, name string) driver.Repo {
+// makePopulatedRepoStore creates a fresh repo store (the data dir root) with
+// two initialized databases below it, each with a committed table, some rows,
+// and a remote configured.
+func makePopulatedRepoStore(t *testing.T, u driver.DoltUser) (driver.RepoStore, driver.Repo, driver.Repo) {
 	rs, err := u.MakeRepoStore()
 	require.NoError(t, err)
+	dbOne := makePopulatedDB(t, rs, "db_one")
+	dbTwo := makePopulatedDB(t, rs, "db_two")
+	return rs, dbOne, dbTwo
+}
+
+func makePopulatedDB(t *testing.T, rs driver.RepoStore, name string) driver.Repo {
 	repo, err := rs.MakeRepo(name)
 	require.NoError(t, err)
 	err = repo.DoltExec("sql", "-q", "create table vals (id int primary key auto_increment, v int);"+
@@ -63,6 +79,15 @@ func makePopulatedRepo(t *testing.T, u driver.DoltUser, name string) driver.Repo
 	require.NoError(t, err)
 	require.NoError(t, repo.CreateRemote("origin", "file://"+filepath.Join(repo.Dir, "remote")))
 	return repo
+}
+
+// writeStaleInfoFile writes a stale sql-server.info file into the .dolt
+// directory of the data dir root. Credentials lookup walks up from the cwd, so
+// invocations from both the root and a database subdirectory will discover it.
+func writeStaleInfoFile(t *testing.T, rs driver.RepoStore) {
+	dotDolt := filepath.Join(rs.Dir, ".dolt")
+	require.NoError(t, os.MkdirAll(dotDolt, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dotDolt, "sql-server.info"), []byte("1:3306:this_is_not_a_real_secret"), 0600))
 }
 
 // withNoTableFilesRead sets DOLT_TEST_ASSERT_NO_TABLE_FILES_READ=1 on |cmd| so
@@ -93,91 +118,141 @@ func TestNoTableFilesRead(t *testing.T) {
 		u.Cleanup()
 	})
 
-	// Sanity check: with the assertion hook enabled and no server running, a
-	// CLI command which reads the database must fail. This proves the hook
-	// itself works and the success cases below are meaningful.
+	// Sanity check: with the assertion hook enabled and no server running, CLI
+	// commands which read the database must fail. This proves the hook itself
+	// works and the success cases below are meaningful. We check both from the
+	// data dir root (database-qualified read) and from a database subdirectory.
 	t.Run("AssertHookFailsWhenLoadingTableFiles", func(t *testing.T) {
-		repo := makePopulatedRepo(t, u, "assert_hook")
-		out := assertCmdFails(t, withNoTableFilesRead(repo.DoltCmd("log")))
-		require.Regexp(t, "loading table files is disabled", out)
+		rs, dbOne, _ := makePopulatedRepoStore(t, u)
+		t.Run("from data dir root", func(t *testing.T) {
+			out := assertCmdFails(t, withNoTableFilesRead(rs.DoltCmd("sql", "-q", "select count(*) from db_one.vals")))
+			require.Regexp(t, "loading table files is disabled", out)
+		})
+		t.Run("from database subdirectory", func(t *testing.T) {
+			out := assertCmdFails(t, withNoTableFilesRead(dbOne.DoltCmd("log")))
+			require.Regexp(t, "loading table files is disabled", out)
+		})
 	})
 
-	// Scenario 1: a dolt sql-server is running. All CLI invocations set the
-	// assertion hook and must succeed by dispatching to the server.
+	// Scenario 1: a dolt sql-server is running in the data dir root. All CLI
+	// invocations set the assertion hook and must succeed by dispatching to the
+	// server.
 	t.Run("WithRunningServer", func(t *testing.T) {
-		repo := makePopulatedRepo(t, u, "with_running_server")
+		rs, dbOne, _ := makePopulatedRepoStore(t, u)
 
 		var ports DynamicResources
 		ports.global = &GlobalPorts
 		ports.t = t
-		RunServerUntilEndOfTest(t, repo, &driver.Server{
+		RunServerUntilEndOfTest(t, rs, &driver.Server{
 			Args:        []string{"--port", `{{get_port "server"}}`},
 			DynamicPort: "server",
 		}, &ports)
 
-		t.Run("sql read", func(t *testing.T) {
-			out := assertCmdSucceeds(t, withNoTableFilesRead(repo.DoltCmd("sql", "-q", "select count(*) from vals")))
-			require.Regexp(t, "3", out)
+		t.Run("from data dir root", func(t *testing.T) {
+			t.Run("show databases", func(t *testing.T) {
+				out := assertCmdSucceeds(t, withNoTableFilesRead(rs.DoltCmd("sql", "-q", "show databases")))
+				require.Regexp(t, "db_one", out)
+				require.Regexp(t, "db_two", out)
+			})
+			t.Run("sql read", func(t *testing.T) {
+				out := assertCmdSucceeds(t, withNoTableFilesRead(rs.DoltCmd("sql", "-q", "select count(*) from db_one.vals")))
+				require.Regexp(t, "3", out)
+			})
+			t.Run("sql write of db_two", func(t *testing.T) {
+				assertCmdSucceeds(t, withNoTableFilesRead(rs.DoltCmd("sql", "-q", "insert into db_two.vals (v) values (10)")))
+			})
 		})
-		t.Run("sql write", func(t *testing.T) {
-			assertCmdSucceeds(t, withNoTableFilesRead(repo.DoltCmd("sql", "-q", "insert into vals (v) values (10)")))
-		})
-		t.Run("remote -v", func(t *testing.T) {
-			out := assertCmdSucceeds(t, withNoTableFilesRead(repo.DoltCmd("remote", "-v")))
-			require.Regexp(t, "origin", out)
-		})
-		t.Run("log", func(t *testing.T) {
-			out := assertCmdSucceeds(t, withNoTableFilesRead(repo.DoltCmd("log")))
-			require.Regexp(t, "initial data", out)
+		t.Run("from database subdirectory", func(t *testing.T) {
+			t.Run("sql read", func(t *testing.T) {
+				out := assertCmdSucceeds(t, withNoTableFilesRead(dbOne.DoltCmd("sql", "-q", "select count(*) from vals")))
+				require.Regexp(t, "3", out)
+			})
+			t.Run("sql write", func(t *testing.T) {
+				assertCmdSucceeds(t, withNoTableFilesRead(dbOne.DoltCmd("sql", "-q", "insert into vals (v) values (11)")))
+			})
+			t.Run("remote -v", func(t *testing.T) {
+				out := assertCmdSucceeds(t, withNoTableFilesRead(dbOne.DoltCmd("remote", "-v")))
+				require.Regexp(t, "origin", out)
+			})
+			t.Run("log", func(t *testing.T) {
+				out := assertCmdSucceeds(t, withNoTableFilesRead(dbOne.DoltCmd("log")))
+				require.Regexp(t, "initial data", out)
+			})
 		})
 	})
 
 	// Scenario 2: no server running, but a stale sql-server.info file is
-	// present. The CLI executes locally and must still work.
+	// present at the data dir root. The CLI executes locally and must work.
 	t.Run("WithStaleInfoFile", func(t *testing.T) {
-		repo := makePopulatedRepo(t, u, "with_stale_info_file")
-		path := filepath.Join(repo.Dir, ".dolt/sql-server.info")
-		require.NoError(t, os.WriteFile(path, []byte("1:3306:this_is_not_a_real_secret"), 0600))
+		rs, dbOne, _ := makePopulatedRepoStore(t, u)
+		writeStaleInfoFile(t, rs)
 
-		t.Run("sql read", func(t *testing.T) {
-			out := assertCmdSucceeds(t, repo.DoltCmd("sql", "-q", "select count(*) from vals"))
-			require.Regexp(t, "3", out)
+		t.Run("from data dir root", func(t *testing.T) {
+			t.Run("sql read", func(t *testing.T) {
+				out := assertCmdSucceeds(t, rs.DoltCmd("sql", "-q", "select count(*) from db_one.vals"))
+				require.Regexp(t, "3", out)
+			})
+			t.Run("sql write of db_two", func(t *testing.T) {
+				assertCmdSucceeds(t, rs.DoltCmd("sql", "-q", "insert into db_two.vals (v) values (20)"))
+			})
 		})
-		t.Run("sql write", func(t *testing.T) {
-			assertCmdSucceeds(t, repo.DoltCmd("sql", "-q", "insert into vals (v) values (20)"))
-		})
-		t.Run("remote -v", func(t *testing.T) {
-			out := assertCmdSucceeds(t, repo.DoltCmd("remote", "-v"))
-			require.Regexp(t, "origin", out)
-		})
-		t.Run("log", func(t *testing.T) {
-			out := assertCmdSucceeds(t, repo.DoltCmd("log"))
-			require.Regexp(t, "initial data", out)
+		t.Run("from database subdirectory", func(t *testing.T) {
+			t.Run("sql read", func(t *testing.T) {
+				out := assertCmdSucceeds(t, dbOne.DoltCmd("sql", "-q", "select count(*) from vals"))
+				require.Regexp(t, "3", out)
+			})
+			t.Run("sql write", func(t *testing.T) {
+				assertCmdSucceeds(t, dbOne.DoltCmd("sql", "-q", "insert into vals (v) values (21)"))
+			})
+			t.Run("remote -v", func(t *testing.T) {
+				out := assertCmdSucceeds(t, dbOne.DoltCmd("remote", "-v"))
+				require.Regexp(t, "origin", out)
+			})
+			t.Run("log", func(t *testing.T) {
+				out := assertCmdSucceeds(t, dbOne.DoltCmd("log"))
+				require.Regexp(t, "initial data", out)
+			})
 		})
 	})
 
 	// Scenario 3: no server running, but a concurrent `dolt sql` process holds
-	// the database lock. The CLI executes locally: reads succeed and writes
-	// fail because they cannot acquire the exclusive write lock.
+	// the write lock on db_one. The CLI executes locally: reads succeed, writes
+	// to db_one fail because they cannot acquire the exclusive write lock, and
+	// writes to the unlocked db_two succeed.
 	t.Run("WithConcurrentDoltSql", func(t *testing.T) {
-		repo := makePopulatedRepo(t, u, "with_concurrent_dolt_sql")
-		RunDoltSQLUntilEndOfTest(t, repo)
+		rs, dbOne, _ := makePopulatedRepoStore(t, u)
+		RunDoltSQLUntilEndOfTest(t, dbOne)
 
-		t.Run("sql read", func(t *testing.T) {
-			out := assertCmdSucceeds(t, repo.DoltCmd("sql", "-q", "select count(*) from vals"))
-			require.Regexp(t, "3", out)
+		t.Run("from data dir root", func(t *testing.T) {
+			t.Run("sql read of locked db_one", func(t *testing.T) {
+				out := assertCmdSucceeds(t, rs.DoltCmd("sql", "-q", "select count(*) from db_one.vals"))
+				require.Regexp(t, "3", out)
+			})
+			t.Run("sql write of locked db_one fails", func(t *testing.T) {
+				out := assertCmdFails(t, rs.DoltCmd("sql", "-q", "insert into db_one.vals (v) values (30)"))
+				require.Regexp(t, "(?i)read only", out)
+			})
+			t.Run("sql write of unlocked db_two succeeds", func(t *testing.T) {
+				assertCmdSucceeds(t, rs.DoltCmd("sql", "-q", "insert into db_two.vals (v) values (31)"))
+			})
 		})
-		t.Run("sql write fails", func(t *testing.T) {
-			out := assertCmdFails(t, repo.DoltCmd("sql", "-q", "insert into vals (v) values (30)"))
-			require.Regexp(t, "(?i)read only", out)
-		})
-		t.Run("remote -v", func(t *testing.T) {
-			out := assertCmdSucceeds(t, repo.DoltCmd("remote", "-v"))
-			require.Regexp(t, "origin", out)
-		})
-		t.Run("log", func(t *testing.T) {
-			out := assertCmdSucceeds(t, repo.DoltCmd("log"))
-			require.Regexp(t, "initial data", out)
+		t.Run("from database subdirectory", func(t *testing.T) {
+			t.Run("sql read", func(t *testing.T) {
+				out := assertCmdSucceeds(t, dbOne.DoltCmd("sql", "-q", "select count(*) from vals"))
+				require.Regexp(t, "3", out)
+			})
+			t.Run("sql write fails", func(t *testing.T) {
+				out := assertCmdFails(t, dbOne.DoltCmd("sql", "-q", "insert into vals (v) values (32)"))
+				require.Regexp(t, "(?i)read only", out)
+			})
+			t.Run("remote -v", func(t *testing.T) {
+				out := assertCmdSucceeds(t, dbOne.DoltCmd("remote", "-v"))
+				require.Regexp(t, "origin", out)
+			})
+			t.Run("log", func(t *testing.T) {
+				out := assertCmdSucceeds(t, dbOne.DoltCmd("log"))
+				require.Regexp(t, "initial data", out)
+			})
 		})
 	})
 }
