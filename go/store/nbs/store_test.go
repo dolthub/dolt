@@ -344,7 +344,7 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	require.NoError(t, st.BeginGC(nil, chunks.GCMode_Full))
+	require.NoError(t, st.BeginGC(t.Context(), nil, chunks.GCMode_Full))
 	noopFilter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 		return hashes, nil
 	}

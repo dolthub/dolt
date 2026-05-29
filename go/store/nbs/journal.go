@@ -72,14 +72,15 @@ type ChunkJournal struct {
 
 var _ tablePersister = &ChunkJournal{}
 var _ tableFilePersister = &ChunkJournal{}
-var _ manifest = &ChunkJournal{}
 var _ manifestGCGenUpdater = &ChunkJournal{}
 var _ io.Closer = &ChunkJournal{}
+var _ manifest = journalManifestWrapper{}
 
 // |behavior| controls how fatal errors encountered during bootstrapping are handled; the
 // NomsBlockStore is not yet constructed at this point, so callers pass FatalBehaviorError to
 // fail store creation rather than crash the process.
 func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister, behavior dherrors.FatalBehavior, warningsCb func(error)) (*ChunkJournal, error) {
+	PanicIfLoadingTableFilesDisabled()
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
@@ -515,7 +516,12 @@ func (j *ChunkJournal) maybeInit(ctx context.Context, behavior dherrors.FatalBeh
 	return
 }
 
-// Close implements io.Closer
+// Close implements io.Closer. It closes the journal writer and flushes the
+// latest root to the backing manifest. It does not release the backing
+// manifest's file lock; that is done by journalManifestWrapper.Close, which a
+// NomsBlockStore invokes through the manifest interface. When a ChunkJournal is
+// constructed and closed directly (e.g. in tests), callers must also close
+// |j.backing| to release the lock.
 func (j *ChunkJournal) Close() (err error) {
 	if j.wr != nil {
 		err = j.wr.Close()
@@ -528,12 +534,45 @@ func (j *ChunkJournal) Close() (err error) {
 			}
 		}
 	}
-	// close the journal manifest to release the file lock
-	if cerr := j.backing.Close(); err == nil {
-		err = cerr // keep first error
-	}
-
 	return err
+}
+
+// journalManifestWrapper adapts a *ChunkJournal to the manifest interface so a
+// NomsBlockStore can hold the journal as its manifest separately from holding
+// it as its tablePersister. The journal writer is closed and the latest root is
+// flushed to the backing manifest through the tablePersister path
+// (ChunkJournal.Close); this wrapper's Close releases the backing manifest,
+// which holds the exclusive database file lock.
+type journalManifestWrapper struct {
+	journal *ChunkJournal
+}
+
+// Name implements manifest.
+func (w journalManifestWrapper) Name() string {
+	return w.journal.Name()
+}
+
+// ParseIfExists implements manifest.
+func (w journalManifestWrapper) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
+	return w.journal.ParseIfExists(ctx, stats, readHook)
+}
+
+// Update implements manifest.
+func (w journalManifestWrapper) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	return w.journal.Update(ctx, behavior, lastLock, next, stats, writeHook)
+}
+
+// UpdateGCGen implements manifest.
+func (w journalManifestWrapper) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	return w.journal.UpdateGCGen(ctx, behavior, lastLock, next, stats, writeHook)
+}
+
+// Close implements manifest. It releases the backing manifest, which holds the
+// exclusive database file lock for a journaling store. Closing the journal
+// writer and flushing the latest root happen in ChunkJournal.Close, via the
+// tablePersister path.
+func (w journalManifestWrapper) Close() error {
+	return w.journal.backing.Close()
 }
 
 func (j *ChunkJournal) AccessMode() chunks.ExclusiveAccessMode {
@@ -569,22 +608,26 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []t
 	return c.child.chooseConjoinees(pruned)
 }
 
-// newJournalManifest makes a new file manifest.
-// When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
-// (The behavior change is implemented separately; this is the plumbing flag.)
-func newJournalManifest(ctx context.Context, dir string, failOnTimeout bool) (m *journalManifest, err error) {
+func newJournalLock(dir string, failOnTimeout bool) (*fslock.Lock, chunks.ExclusiveAccessMode, error) {
 	lock := fslock.New(filepath.Join(dir, lockFileName))
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
-	err = lock.LockWithTimeout(lockFileTimeout)
+	err := lock.LockWithTimeout(lockFileTimeout)
 	if errors.Is(err, fslock.ErrTimeout) {
 		if failOnTimeout {
-			return nil, ErrDatabaseLocked
+			return nil, chunks.ExclusiveAccessMode_ReadOnly, ErrDatabaseLocked
 		}
-		lock, err = nil, nil // read only
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, nil
 	} else if err != nil {
-		return nil, err
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, err
 	}
+	return lock, chunks.ExclusiveAccessMode_Exclusive, nil
+}
+
+// newJournalManifest makes a new file manifest.
+// When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
+// (The behavior change is implemented separately; this is the plumbing flag.)
+func newJournalManifest(ctx context.Context, dir string, lock *fslock.Lock) (m *journalManifest, err error) {
 	m = &journalManifest{dir: dir, lock: lock}
 
 	var f *os.File

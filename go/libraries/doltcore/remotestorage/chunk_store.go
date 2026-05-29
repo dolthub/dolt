@@ -1082,13 +1082,13 @@ const (
 	chunkAggDistance = 8 * 1024
 )
 
-func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
+func (dcs *DoltChunkStore) SupportedOperations(_ context.Context) (chunks.TableFileStoreOps, error) {
 	return chunks.TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: true,
 		CanPrune: false,
 		CanGC:    false,
-	}
+	}, nil
 }
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.

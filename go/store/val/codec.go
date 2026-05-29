@@ -888,44 +888,15 @@ func compareCollatedChunkDiffer(ctx context.Context, d ChunkDiffer, collation sq
 
 // compareChunkDiffer compares two values using the output of a ChunkDiffer built on them, using the diffs it generates.
 func compareChunkDiffer(ctx context.Context, d ChunkDiffer) (int, error) {
-	var lBuf, rBuf []byte
-	lDone, rDone := false, false
-	for {
-		for (len(lBuf) == 0 && !lDone) || (len(rBuf) == 0 && !rDone) {
-			lChunk, rChunk, err := d.Next(ctx)
-			if err == io.EOF {
-				lDone = true
-				rDone = true
-				break
-			}
-			if err != nil {
-				return 0, err
-			}
-			if len(lChunk) > 0 {
-				lBuf = append(lBuf, lChunk...)
-			}
-			if len(rChunk) > 0 {
-				rBuf = append(rBuf, rChunk...)
-			}
-		}
-		switch {
-		case len(lBuf) == 0 && len(rBuf) == 0:
-			return 0, nil
-		case len(lBuf) == 0:
-			return -1, nil
-		case len(rBuf) == 0:
-			return 1, nil
-		}
-		n := len(lBuf)
-		if len(rBuf) < n {
-			n = len(rBuf)
-		}
-		if c := bytes.Compare(lBuf[:n], rBuf[:n]); c != 0 {
-			return c, nil
-		}
-		lBuf = lBuf[n:]
-		rBuf = rBuf[n:]
+	lChunk, rChunk, err := d.Next(ctx)
+	if err == io.EOF {
+		return 0, nil
 	}
+	if err != nil {
+		return 0, err
+	}
+
+	return bytes.Compare(lChunk, rChunk), nil
 }
 
 func writeRaw(buf, val []byte) {

@@ -129,6 +129,9 @@ table Index {
   // these fields should be set for vector indexes and otherwise omitted, for backwards compatibility
   vector_key:bool;
   vector_info:VectorInfo;
+
+  // WHERE clause expression string for partial indexes (empty for full indexes)
+  predicate:string;
 }
 
 table FulltextInfo {
