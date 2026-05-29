@@ -45,7 +45,7 @@ const (
 
 	// We will try up to this many times to see good behavior. If we have
 	// lots of scheduling contention, we can still be slow enough that we
-	// thing we are waiting on the lock files but we are actually just
+	// think we are waiting on the lock files but we are actually just
 	// running slowly.
 	maxTrials = 3
 )
