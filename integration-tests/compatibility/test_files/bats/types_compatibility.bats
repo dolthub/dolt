@@ -2,6 +2,18 @@
 # Tests that the current Dolt build can read, write, and alter tables containing
 # every supported MySQL type that were originally created by an older Dolt version.
 # Special emphasis on TEXT and BLOB variants, which may be stored out-of-band.
+#
+# IMPORTANT — test-coverage gap closed 2026-05-29:
+#   The v2.0.7 adaptive-encoding regression (raw-hash StringAddrEnc / BytesAddrEnc
+#   misread as StringAdaptiveEnc / BytesAdaptiveEnc, panic in hash.New with
+#   "invalid hash length: 19") slipped through this suite because the panic was
+#   caught by errguard's recover() and converted to a soft SQL error while
+#   dolt exited 0. The TEXT/BLOB read tests below all asserted only
+#   `[ "$status" -eq 0 ]` and so silently passed against the broken binary.
+#   They now also call assert_no_panic_shape "$output" to fail on the panic
+#   marker strings ("invalid hash length", "panic recovered", "runtime error").
+#   See also adaptive_legacy_text_compatibility.bats for a dedicated test that
+#   exercises the legacy-raw-hash read path end-to-end.
 bats_load_library common.bash
 bats_load_library compat-common.bash
 
@@ -61,30 +73,35 @@ teardown() {
 @test "types_compatibility: tinytext column readable from old dolt" {
     run dolt sql -q "SELECT pk, c_tinytext FROM all_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "1,tinytext val" ]] || false
 }
 
 @test "types_compatibility: text column readable from old dolt" {
     run dolt sql -q "SELECT pk, c_text FROM all_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "1,text val" ]] || false
 }
 
 @test "types_compatibility: mediumtext column readable from old dolt" {
     run dolt sql -q "SELECT pk, c_mediumtext FROM all_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "1,mediumtext val" ]] || false
 }
 
 @test "types_compatibility: longtext column readable from old dolt" {
     run dolt sql -q "SELECT pk, c_longtext FROM all_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "1,longtext val" ]] || false
 }
 
 @test "types_compatibility: large text values readable from old dolt" {
     run dolt sql -q "SELECT pk, LENGTH(c_text), LENGTH(c_mediumtext), LENGTH(c_longtext) FROM all_types WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "3,500,500,500" ]] || false
 }
 
@@ -97,30 +114,35 @@ teardown() {
 @test "types_compatibility: tinyblob column readable from old dolt" {
     run dolt sql -q "SELECT pk, c_tinyblob FROM all_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "1,tinyblob val" ]] || false
 }
 
 @test "types_compatibility: blob column readable from old dolt" {
     run dolt sql -q "SELECT pk, c_blob FROM all_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "1,blob val" ]] || false
 }
 
 @test "types_compatibility: mediumblob column readable from old dolt" {
     run dolt sql -q "SELECT pk, c_mediumblob FROM all_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "1,mediumblob val" ]] || false
 }
 
 @test "types_compatibility: longblob column readable from old dolt" {
     run dolt sql -q "SELECT pk, c_longblob FROM all_types WHERE pk=1;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "1,longblob val" ]] || false
 }
 
 @test "types_compatibility: large blob values readable from old dolt" {
     run dolt sql -q "SELECT pk, LENGTH(c_blob), LENGTH(c_mediumblob), LENGTH(c_longblob) FROM all_types WHERE pk=3;" -r csv
     [ "$status" -eq 0 ]
+    assert_no_panic_shape "$output"
     [[ "${lines[1]}" =~ "3,500,500,500" ]] || false
 }
 

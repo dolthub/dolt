@@ -2061,6 +2061,11 @@ func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, ol
 		if err != nil {
 			return nil, err
 		}
+		// Surviving TEXT/BLOB columns must keep their original storage encoding —
+		// ToDoltSchema rebuilds every column via FromSqlType with enc=0, which would
+		// otherwise be flipped to adaptive on the next serialization (see
+		// typeinfo.PreserveAdaptiveEncoding for the full rationale).
+		newSch = preserveSurvivingColumnEncodings(oldSch, newSch)
 		return newSch, err
 	}
 
@@ -2075,10 +2080,65 @@ func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, ol
 		return nil, fmt.Errorf("expected column %s to exist in the old schema but did not find it", oldColumn.Name)
 	}
 
+	// Preserve original storage encoding on every column that survives the change in
+	// the same TypeInfo family. The rewrite path re-inserts every row through
+	// RewriteInserter, so in principle a TEXT/BLOB column being modified could safely
+	// migrate from StringAddr → StringAdaptive — but that re-encoding flow has not been
+	// audited end-to-end, and unrelated surviving TEXT/BLOB columns would always lose
+	// their encoding if we did not pin it back here.
+	newSch = preserveSurvivingColumnEncodings(oldSch, newSch)
+
 	newColCollection := replaceColumnTagInCollection(newSch.GetAllCols(), oldDoltCol.Name, oldDoltCol.Tag)
 	newPkColCollection := replaceColumnTagInCollection(newSch.GetPKCols(), oldDoltCol.Name, oldDoltCol.Tag)
 	return schema.NewSchema(newColCollection, newSch.GetPkOrdinals(), newSch.GetCollation(),
 		schema.NewIndexCollection(newColCollection, newPkColCollection), newSch.Checks())
+}
+
+// preserveSurvivingColumnEncodings walks |newSch| and, for each column that exists in
+// |oldSch| under the same name and NomsKind, restores the original column's storage
+// encoding onto the new column's TypeInfo. Columns whose family does not have a variable
+// storage encoding (anything other than TEXT/BLOB) pass through unchanged — see
+// typeinfo.PreserveAdaptiveEncoding for the precise behaviour and rationale.
+func preserveSurvivingColumnEncodings(oldSch, newSch schema.Schema) schema.Schema {
+	if oldSch == nil || newSch == nil {
+		return newSch
+	}
+	cols := newSch.GetAllCols().GetColumns()
+	changed := false
+	for i := range cols {
+		oldCol, ok := oldSch.GetAllCols().GetByNameCaseInsensitive(cols[i].Name)
+		if !ok {
+			continue
+		}
+		if oldCol.Kind != cols[i].Kind {
+			continue
+		}
+		preserved := typeinfo.PreserveAdaptiveEncoding(oldCol.TypeInfo, cols[i].TypeInfo)
+		if preserved == cols[i].TypeInfo {
+			continue
+		}
+		cols[i].TypeInfo = preserved
+		changed = true
+	}
+	if !changed {
+		return newSch
+	}
+	newColCollection := schema.NewColCollection(cols...)
+	pkCols := newSch.GetPKCols().GetColumns()
+	for i := range pkCols {
+		if updated, ok := newColCollection.GetByName(pkCols[i].Name); ok {
+			pkCols[i] = updated
+		}
+	}
+	newPkColCollection := schema.NewColCollection(pkCols...)
+	rebuilt, err := schema.NewSchema(newColCollection, newSch.GetPkOrdinals(), newSch.GetCollation(),
+		schema.NewIndexCollection(newColCollection, newPkColCollection), newSch.Checks())
+	if err != nil {
+		// Preserve original behaviour on the (extremely unlikely) error path: fall back
+		// to the not-encoding-preserved schema rather than failing the ALTER outright.
+		return newSch
+	}
+	return rebuilt
 }
 
 // replaceColumnTagInCollection returns a new ColCollection, based on |cc|, with the column named |name| updated
@@ -2192,6 +2252,25 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	col, err := sqlutil.ToDoltCol(existingCol.Tag, column)
 	if err != nil {
 		return err
+	}
+
+	// Preserve legacy storage encoding on type widenings (e.g. TEXT → LONGTEXT) where
+	// the column survives in the same TypeInfo family. Without this, FromSqlType returns
+	// a fresh TypeInfo with enc=0, which falls back to the global UseAdaptiveEncoding
+	// default on serialization, silently re-tagging a 1.x AddrEnc column as AdaptiveEnc
+	// while its persisted row data is unchanged (raw 20-byte hashes), causing adaptive
+	// dispatch to panic on read with "invalid hash length: 19" (TEXT/BLOB) or to
+	// silently drift the schema record off the on-disk value layout (JSON/GEOMETRY,
+	// where the reader-side compat masks the panic).
+	//
+	// The explicit Kind guard here mirrors the same check in
+	// preserveSurvivingColumnEncodings (the rewrite-path helper) — kind mismatch means
+	// the column is fundamentally changing storage shape and the new TypeInfo's default
+	// encoding is correct. typeinfo.PreserveAdaptiveEncoding's internal type-switch
+	// would also catch the family mismatch, but the call-site guard makes the
+	// preservation contract visible without having to read the helper.
+	if existingCol.Kind == col.Kind {
+		col.TypeInfo = typeinfo.PreserveAdaptiveEncoding(existingCol.TypeInfo, col.TypeInfo)
 	}
 
 	// TODO: move this logic into ShouldRewrite

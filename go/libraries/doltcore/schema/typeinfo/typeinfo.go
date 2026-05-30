@@ -224,6 +224,90 @@ func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
 	return typ, nil
 }
 
+// PreserveAdaptiveEncoding returns newTI with its storage encoding overridden to that
+// of oldTI whenever both TypeInfos belong to the same adaptive-encoding family. The
+// adaptive-encoding families are:
+//
+//   - *blobStringType (TEXT)        — StringAddrEnc        ↔ StringAdaptiveEnc
+//   - *varBinaryType  (BLOB)        — BytesAddrEnc         ↔ BytesAdaptiveEnc
+//   - *jsonType       (JSON)        — JSONAddrEnc          ↔ JsonAdaptiveEnc
+//   - *pointType,                   ┐
+//     *linestringType,              │
+//     *polygonType,                 │
+//     *multipointType,              │   GeomAddrEnc        ↔ GeomAdaptiveEnc
+//     *multilinestringType,         │   (each type pinned within its own family —
+//     *multipolygonType,            │   we never cross between, e.g., point and
+//     *geomcollType,                │   linestring, even though their encodings
+//     *geometryType   (GEOMETRY)    ┘   would technically be assignment-compatible)
+//
+// For everything else — fixed-encoding families (INT, DECIMAL, …) and cross-family
+// mismatches (e.g. TEXT → BLOB, VARCHAR → TEXT, POINT → LINESTRING) — newTI is
+// returned unchanged.
+//
+// This must be called on the ALTER schema-write path (e.g. ModifyColumn / column
+// rewrite) whenever a column survives the alteration in the same TypeInfo family. A
+// schema written before adaptive encoding was the default carries enc=<…>AddrEnc, and
+// the freshly-constructed TypeInfo coming back from FromSqlType has enc=0 — which then
+// falls back to the global UseAdaptiveEncoding default on serialization, silently
+// re-tagging the persisted column as <…>AdaptiveEnc while the on-disk row data is
+// still in the legacy raw-hash format. For TEXT/BLOB this causes adaptive dispatch to
+// panic on read with "invalid hash length: 19" (handled defensively in the reader by
+// IsLegacyAddress); for JSON / GEOMETRY the reader-side compat absorbs the panic but
+// the persisted schema record drifts away from the on-disk value layout, which a
+// well-behaved fix must avoid.
+func PreserveAdaptiveEncoding(oldTI, newTI TypeInfo) TypeInfo {
+	if oldTI == nil || newTI == nil {
+		return newTI
+	}
+	switch nt := newTI.(type) {
+	case *blobStringType:
+		if ot, ok := oldTI.(*blobStringType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *varBinaryType:
+		if ot, ok := oldTI.(*varBinaryType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *jsonType:
+		if ot, ok := oldTI.(*jsonType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *pointType:
+		if ot, ok := oldTI.(*pointType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *linestringType:
+		if ot, ok := oldTI.(*linestringType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *polygonType:
+		if ot, ok := oldTI.(*polygonType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *multipointType:
+		if ot, ok := oldTI.(*multipointType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *multilinestringType:
+		if ot, ok := oldTI.(*multilinestringType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *multipolygonType:
+		if ot, ok := oldTI.(*multipolygonType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *geomcollType:
+		if ot, ok := oldTI.(*geomcollType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *geometryType:
+		if ot, ok := oldTI.(*geometryType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	}
+	return newTI
+}
+
 // FromKind returns the default TypeInfo for a given types.Value.
 // Deprecated. Use FromSqlType instead.
 func FromKind(kind types.NomsKind) TypeInfo {
