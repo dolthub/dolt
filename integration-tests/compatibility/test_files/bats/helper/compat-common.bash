@@ -74,20 +74,7 @@ strip_ansi() {
 }
 
 # assert_no_panic_shape(<output>) fails the test if the captured |output| contains
-# panic markers that bats's `[ "$status" -eq 0 ]` check can MISS. Background: the
-# v2.0.7 adaptive-encoding regression panicked inside hash.New with
-# "invalid hash length: 19" when the current reader was handed a TEXT/BLOB cell
-# written by a 1.x server in raw-hash StringAddrEnc / BytesAddrEnc form. The
-# panic was caught by errguard's recover() and surfaced as a soft SQL error
-# while dolt exited 0 -- so every existing TEXT/BLOB read test below passed
-# even though the user-visible output was wrong. This helper closes the gap by
-# asserting the panic shape never appears in stdout/stderr. Always pair with
-# the existing `[ "$status" -eq 0 ]` check, not in place of it.
-#
-# Usage:
-#   run dolt sql -q "SELECT c_text FROM all_types WHERE pk=1;" -r csv
-#   [ "$status" -eq 0 ]
-#   assert_no_panic_shape "$output"
+# panic markers that bats's `[ "$status" -eq 0 ]` check missed.
 assert_no_panic_shape() {
   local out="$1"
   if [[ "$out" =~ "invalid hash length" ]]; then

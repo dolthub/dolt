@@ -2,18 +2,7 @@
 # Tests that the current Dolt build can read, write, and alter tables containing
 # every supported MySQL type that were originally created by an older Dolt version.
 # Special emphasis on TEXT and BLOB variants, which may be stored out-of-band.
-#
-# IMPORTANT — test-coverage gap closed 2026-05-29:
-#   The v2.0.7 adaptive-encoding regression (raw-hash StringAddrEnc / BytesAddrEnc
-#   misread as StringAdaptiveEnc / BytesAdaptiveEnc, panic in hash.New with
-#   "invalid hash length: 19") slipped through this suite because the panic was
-#   caught by errguard's recover() and converted to a soft SQL error while
-#   dolt exited 0. The TEXT/BLOB read tests below all asserted only
-#   `[ "$status" -eq 0 ]` and so silently passed against the broken binary.
-#   They now also call assert_no_panic_shape "$output" to fail on the panic
-#   marker strings ("invalid hash length", "panic recovered", "runtime error").
-#   See also adaptive_legacy_text_compatibility.bats for a dedicated test that
-#   exercises the legacy-raw-hash read path end-to-end.
+
 bats_load_library common.bash
 bats_load_library compat-common.bash
 
