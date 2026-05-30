@@ -225,36 +225,9 @@ func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
 }
 
 // PreserveAdaptiveEncoding returns newTI with its storage encoding overridden to that
-// of oldTI whenever both TypeInfos belong to the same adaptive-encoding family. The
-// adaptive-encoding families are:
-//
-//   - *blobStringType (TEXT)        — StringAddrEnc        ↔ StringAdaptiveEnc
-//   - *varBinaryType  (BLOB)        — BytesAddrEnc         ↔ BytesAdaptiveEnc
-//   - *jsonType       (JSON)        — JSONAddrEnc          ↔ JsonAdaptiveEnc
-//   - *pointType,                   ┐
-//     *linestringType,              │
-//     *polygonType,                 │
-//     *multipointType,              │   GeomAddrEnc        ↔ GeomAdaptiveEnc
-//     *multilinestringType,         │   (each type pinned within its own family —
-//     *multipolygonType,            │   we never cross between, e.g., point and
-//     *geomcollType,                │   linestring, even though their encodings
-//     *geometryType   (GEOMETRY)    ┘   would technically be assignment-compatible)
-//
-// For everything else — fixed-encoding families (INT, DECIMAL, …) and cross-family
-// mismatches (e.g. TEXT → BLOB, VARCHAR → TEXT, POINT → LINESTRING) — newTI is
-// returned unchanged.
-//
-// This must be called on the ALTER schema-write path (e.g. ModifyColumn / column
-// rewrite) whenever a column survives the alteration in the same TypeInfo family. A
-// schema written before adaptive encoding was the default carries enc=<…>AddrEnc, and
-// the freshly-constructed TypeInfo coming back from FromSqlType has enc=0 — which then
-// falls back to the global UseAdaptiveEncoding default on serialization, silently
-// re-tagging the persisted column as <…>AdaptiveEnc while the on-disk row data is
-// still in the legacy raw-hash format. For TEXT/BLOB this causes adaptive dispatch to
-// panic on read with "invalid hash length: 19" (handled defensively in the reader by
-// IsLegacyAddress); for JSON / GEOMETRY the reader-side compat absorbs the panic but
-// the persisted schema record drifts away from the on-disk value layout, which a
-// well-behaved fix must avoid.
+// of oldTI whenever both TypeInfos belong to the same adaptive-encoding family. This
+// keeps columns that we don't rewrite during ALTER TABLE statements on the same encoding.
+// We could alternately rewrite the table in the presence of such ALTER TABLE statments.
 func PreserveAdaptiveEncoding(oldTI, newTI TypeInfo) TypeInfo {
 	if oldTI == nil || newTI == nil {
 		return newTI
