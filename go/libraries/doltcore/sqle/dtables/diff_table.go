@@ -103,6 +103,7 @@ func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb
 		return nil, err
 	}
 
+	// TODO: This assumes the schema has not changed, but it's possible that columns have been added or deleted.
 	diffTableSchema, err := GetDiffTableSchemaAndJoiner(sch, sch)
 	if err != nil {
 		return nil, err

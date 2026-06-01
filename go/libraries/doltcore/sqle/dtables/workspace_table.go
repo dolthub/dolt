@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -554,11 +553,6 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		}
 	}
 
-	if wkDel == nil && stgDel == nil {
-		emptyTable := emptyWorkspaceTable{tableName}
-		return &emptyTable, nil
-	}
-
 	var fromSch schema.Schema
 	if stgDel != nil && stgDel.FromTable != nil {
 		fromSch, err = stgDel.FromTable.GetSchema(ctx)
@@ -585,7 +579,16 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		}
 	}
 	if fromSch == nil && toSch == nil {
-		return nil, errors.New("Runtime error: from and to schemas are both nil")
+		table, _, err := getTableInsensitiveOrError(ctx, head, tableName)
+		if err != nil {
+			return nil, err
+		}
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		toSch = sch
+		fromSch = sch
 	}
 	if fromSch == nil {
 		fromSch = toSch
@@ -1064,34 +1067,4 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 	}()
 
 	return iter, nil
-}
-
-type emptyWorkspaceTable struct {
-	tableName doltdb.TableName
-}
-
-var _ sql.Table = (*emptyWorkspaceTable)(nil)
-
-func (e emptyWorkspaceTable) Name() string {
-	return doltdb.DoltWorkspaceTablePrefix + e.tableName.Name
-}
-
-func (e emptyWorkspaceTable) String() string {
-	return e.Name()
-}
-
-func (e emptyWorkspaceTable) Schema(ctx *sql.Context) sql.Schema {
-	sch := GetDoltWorkspaceBaseSqlSchema()
-	// Only return the "id" and "staged" columns.
-	return sch[0:2]
-}
-
-func (e emptyWorkspaceTable) Collation() sql.CollationID { return sql.Collation_Default }
-
-func (e emptyWorkspaceTable) Partitions(c *sql.Context) (sql.PartitionIter, error) {
-	return index.SinglePartitionIterFromNomsMap(nil), nil
-}
-
-func (e emptyWorkspaceTable) PartitionRows(c *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	return sql.RowsToRowIter(), nil
 }
