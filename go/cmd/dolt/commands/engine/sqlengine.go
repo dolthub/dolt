@@ -408,10 +408,7 @@ func (se *SqlEngine) InitStats(ctx context.Context) error {
 		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 		sc.SetMemOnly(memOnly.(int8) == 1)
 
-		if adder, ok := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(interface {
-			AddInitDatabaseHook(sqle.InitDatabaseHook)
-			AddDropDatabaseHook(sqle.DropDatabaseHook)
-		}); ok {
+		if adder, ok := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(sqle.DatabaseHookRegistrar); ok {
 			adder.AddInitDatabaseHook(statspro.NewInitDatabaseHook(sc))
 			adder.AddDropDatabaseHook(statspro.NewDropDatabaseHook(sc))
 		}

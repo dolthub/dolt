@@ -129,6 +129,7 @@ var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ DatabaseHookRegistrar = (*DoltDatabaseProvider)(nil)
 
 func (p *DoltDatabaseProvider) DefaultBranch() string {
 	return p.defaultBranch
@@ -804,6 +805,15 @@ func validateDBName(dbName string) error {
 
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
 type DropDatabaseHook func(ctx *sql.Context, name string)
+
+// DatabaseHookRegistrar is implemented by database providers that support registering
+// hooks for database init and drop lifecycle events.
+type DatabaseHookRegistrar interface {
+	// AddInitDatabaseHook adds an InitDatabaseHook that runs whenever a database is created.
+	AddInitDatabaseHook(InitDatabaseHook)
+	// AddDropDatabaseHook adds a DropDatabaseHook that runs whenever a database is dropped.
+	AddDropDatabaseHook(DropDatabaseHook)
+}
 
 // NewConfigureReplicationDatabaseHook sets up the hooks to push to a remote to replicate a newly created database.
 //
