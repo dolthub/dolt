@@ -83,3 +83,67 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial data" ]] || false
 }
+
+@test "copy-tags: preserves indexes, check constraints, comment, and multi-column primary key" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql <<SQL
+CREATE TABLE accounts (
+    id INT NOT NULL,
+    region VARCHAR(8) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    PRIMARY KEY (region, id),
+    UNIQUE KEY email_unique (email),
+    KEY id_idx (id),
+    CONSTRAINT email_format CHECK (email LIKE '%@%')
+);
+SQL
+    dolt sql -q "ALTER TABLE accounts COMMENT='application accounts'" 2>/dev/null || true
+    dolt commit -Am "accounts on main"
+
+    dolt checkout branch1
+    dolt sql <<SQL
+CREATE TABLE accounts (
+    id INT NOT NULL,
+    region VARCHAR(8) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    PRIMARY KEY (region, id),
+    UNIQUE KEY email_unique (email),
+    KEY id_idx (id),
+    CONSTRAINT email_format CHECK (email LIKE '%@%')
+);
+SQL
+    dolt sql -q "ALTER TABLE accounts COMMENT='application accounts'" 2>/dev/null || true
+    # Diverge the id tag on branch1 so copy-tags has real work to do.
+    dolt schema update-tag accounts id 11111
+    dolt commit -Am "accounts on branch1"
+
+    dolt schema copy-tags main
+
+    run dolt schema tags accounts
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "11111" ]] || false
+
+    run dolt sql -q "show create table accounts"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "PRIMARY KEY (\`region\`,\`id\`)" ]] || false
+    [[ "$output" =~ "UNIQUE KEY \`email_unique\`" ]] || false
+    [[ "$output" =~ "KEY \`id_idx\`" ]] || false
+    [[ "$output" =~ "CONSTRAINT \`email_format\` CHECK" ]] || false
+    [[ "$output" =~ "COMMENT='application accounts'" ]] || false
+
+    run dolt sql -q "INSERT INTO accounts VALUES (1, 'us', 'no-at-sign')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Check constraint" ]] || false
+
+    dolt sql -q "INSERT INTO accounts VALUES (1, 'us', 'alice@example.com')"
+    run dolt sql -q "INSERT INTO accounts VALUES (2, 'eu', 'alice@example.com')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate" ]] || false
+
+    dolt sql -q "INSERT INTO accounts VALUES (1, 'eu', 'bob@example.com')"
+
+    run dolt sql -r csv -q "SELECT region, id FROM accounts ORDER BY region, id"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "eu,1" ]] || false
+    [[ "$output" =~ "us,1" ]] || false
+}

@@ -76,6 +76,23 @@ func (tm TagMapping) Size() int {
 	return len(tm)
 }
 
+// RemapTags returns a new slice with each entry of |tags| replaced by its value in
+// |remap|, or kept unchanged when absent. The result is always a fresh allocation that
+// the caller may mutate.
+func RemapTags(tags []uint64, remap map[uint64]uint64) []uint64 {
+	out := make([]uint64, len(tags))
+	copy(out, tags)
+	if len(remap) == 0 {
+		return out
+	}
+	for i, t := range tags {
+		if newTag, ok := remap[t]; ok {
+			out[i] = newTag
+		}
+	}
+	return out
+}
+
 // AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema.
 // It uses a deterministic random number generator that is seeded with the NomsKinds of any existing columns in the
 // schema and the NomsKind of the column being added to the schema. Deterministic tag generation means that branches
