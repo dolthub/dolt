@@ -224,6 +224,63 @@ func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
 	return typ, nil
 }
 
+// PreserveAdaptiveEncoding returns newTI with its storage encoding overridden to that
+// of oldTI whenever both TypeInfos belong to the same adaptive-encoding family. This
+// keeps columns that we don't rewrite during ALTER TABLE statements on the same encoding.
+// We could alternately rewrite the table in the presence of such ALTER TABLE statments.
+func PreserveAdaptiveEncoding(oldTI, newTI TypeInfo) TypeInfo {
+	if oldTI == nil || newTI == nil {
+		return newTI
+	}
+	switch nt := newTI.(type) {
+	case *blobStringType:
+		if ot, ok := oldTI.(*blobStringType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *varBinaryType:
+		if ot, ok := oldTI.(*varBinaryType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *jsonType:
+		if ot, ok := oldTI.(*jsonType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *pointType:
+		if ot, ok := oldTI.(*pointType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *linestringType:
+		if ot, ok := oldTI.(*linestringType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *polygonType:
+		if ot, ok := oldTI.(*polygonType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *multipointType:
+		if ot, ok := oldTI.(*multipointType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *multilinestringType:
+		if ot, ok := oldTI.(*multilinestringType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *multipolygonType:
+		if ot, ok := oldTI.(*multipolygonType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *geomcollType:
+		if ot, ok := oldTI.(*geomcollType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	case *geometryType:
+		if ot, ok := oldTI.(*geometryType); ok {
+			return nt.WithEncoding(ot.Encoding())
+		}
+	}
+	return newTI
+}
+
 // FromKind returns the default TypeInfo for a given types.Value.
 // Deprecated. Use FromSqlType instead.
 func FromKind(kind types.NomsKind) TypeInfo {
