@@ -85,15 +85,6 @@ type Database struct {
 	revName       string
 	editOpts      editor.Options
 	revType       dsess.RevisionType
-
-	// SchemaWrap, when non-nil, is called by GetSchema and AllSchemas to transform the
-	// returned sql.DatabaseSchema before passing it to the caller. The first argument is
-	// the original requested schema name (preserving case); the second is the Database
-	// value with schemaName set to the stored (canonical) name.
-	// TODO: This is currently used by Doltgres to wrap databases, but we should be able
-	//       to completely remove this in a future refactoring if Doltgres overrides
-	//       GetTableInsensitive().
-	SchemaWrap func(requestedName string, db Database) sql.DatabaseSchema
 }
 
 var _ dsess.SqlDatabase = Database{}
@@ -1534,13 +1525,6 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 		}
 	}
 
-	t, tblExists, err := db.checkForPgCatalogTable(ctx, tableName)
-	if err != nil {
-		return nil, false, err
-	} else if tblExists {
-		return t, tblExists, nil
-	}
-
 	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, doltdb.TableName{Schema: db.schemaName, Name: tableName})
 	if err != nil {
 		return nil, false, err
@@ -1579,27 +1563,6 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	}
 
 	return table, true, nil
-}
-
-// checkForPgCatalogTable checks if the table is of pg_catalog schema
-// when the schema is not defined and the table name start with 'pg_'.
-func (db Database) checkForPgCatalogTable(ctx *sql.Context, tableName string) (sql.Table, bool, error) {
-	if resolve.UseSearchPath && db.schemaName == "" && strings.HasPrefix(strings.ToLower(tableName), "pg_") {
-		sdb, foundSch, err := db.GetSchema(ctx, "pg_catalog")
-		if err != nil {
-			return nil, false, err
-		}
-		if foundSch {
-			tbl, foundTbl, err := sdb.GetTableInsensitive(ctx, tableName)
-			if err != nil {
-				return nil, false, err
-			}
-			if foundTbl {
-				return tbl, foundTbl, nil
-			}
-		}
-	}
-	return nil, false, nil
 }
 
 // resolveUserTable returns the table with the given name from the root given. The table name is resolved in a
@@ -1873,13 +1836,6 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 
 // dropTable drops the table with the baseName given, without any business logic checks
 func (db Database) dropTable(ctx *sql.Context, tableName string) error {
-	_, tblExists, err := db.checkForPgCatalogTable(ctx, tableName)
-	if err != nil {
-		return err
-	} else if tblExists {
-		return sql.ErrDropTableNotSupported.New("pg_catalog")
-	}
-
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
 		ds.DropTemporaryTable(ctx, db.Name(), tableName)
@@ -2340,7 +2296,7 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	for _, schema := range schemas {
 		if strings.EqualFold(schema.Name, schemaName) {
 			db.schemaName = schema.Name
-			return db.applySchemaWrap(schemaName, db), true, nil
+			return db, true, nil
 		}
 	}
 
@@ -2348,19 +2304,10 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	// We create it explicitly for new databases.
 	if strings.EqualFold(schemaName, "public") {
 		db.schemaName = "public"
-		return db.applySchemaWrap(schemaName, db), true, nil
+		return db, true, nil
 	}
 
 	return nil, false, nil
-}
-
-// applySchemaWrap calls SchemaWrap if set, otherwise returns sdb as-is. requestedName is
-// the original schema name from the caller (before EqualFold normalization).
-func (db Database) applySchemaWrap(requestedName string, sdb Database) sql.DatabaseSchema {
-	if db.SchemaWrap != nil {
-		return db.SchemaWrap(requestedName, sdb)
-	}
-	return sdb
 }
 
 // AllSchemas implements sql.SchemaDatabase
@@ -2383,7 +2330,7 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 	for i, schema := range schemas {
 		sdb := db
 		sdb.schemaName = schema.Name
-		dbSchemas[i] = db.applySchemaWrap(schema.Name, sdb)
+		dbSchemas[i] = sdb
 	}
 
 	// For doltgres, the information_schema database should be a schema.
