@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -33,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -580,14 +580,16 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		}
 	}
 	if fromSch == nil && toSch == nil {
+		// TODO: We should use getTableInsensitiveOrError to error out here like we do for nonexistent dolt_diff tables.
+		//  https://github.com/dolthub/dolt/issues/11139
 		table, _, tableExists, err := doltdb.GetTableInsensitive(ctx, head, tableName)
 		if err != nil {
 			return nil, err
 		}
-		// TODO: We should error out here like we do for nonexistent dolt_diff tables.
 		if !tableExists {
 			return &emptyWorkspaceTable{tableName: tableName}, nil
 		}
+
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return nil, err
