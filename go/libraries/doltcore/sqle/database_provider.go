@@ -87,6 +87,29 @@ type DoltDatabaseProvider struct {
 	InitDatabaseHooks []InitDatabaseHook
 }
 
+// ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
+// provider.
+type ProviderFactory interface {
+	NewProvider(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error)
+}
+
+// DoltProviderUnwrapper is an optional interface for sql.DatabaseProvider implementations
+// that wrap a *DoltDatabaseProvider. NewSqlEngine uses it to access the underlying
+// provider for Dolt-specific configuration (hooks, dialer, etc.) that is not part of
+// the sql.DatabaseProvider interface.
+type DoltProviderUnwrapper interface {
+	UnderlyingDoltProvider() *DoltDatabaseProvider
+}
+
+// DoltProviderFactory is the default ProviderFactory used by Dolt.
+type DoltProviderFactory struct{}
+
+var _ ProviderFactory = DoltProviderFactory{}
+
+func (DoltProviderFactory) NewProvider(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, databases, locations, overrides)
+}
+
 type remoteDialerWithGitCacheRoot struct {
 	dbfactory.GRPCDialProvider
 	root string
@@ -106,6 +129,7 @@ var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ DatabaseHookRegistrar = (*DoltDatabaseProvider)(nil)
 
 func (p *DoltDatabaseProvider) DefaultBranch() string {
 	return p.defaultBranch
@@ -220,11 +244,9 @@ func (p *DoltDatabaseProvider) WithDbFactoryUrl(url string) *DoltDatabaseProvide
 	return &cp
 }
 
-// WithRemoteDialer returns a copy of this provider with the dialer provided
-func (p *DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvider) *DoltDatabaseProvider {
-	cp := *p
-	cp.remoteDialer = provider
-	return &cp
+// SetRemoteDialer sets the remote dialer on this provider in place and returns it.
+func (p *DoltDatabaseProvider) SetRemoteDialer(provider dbfactory.GRPCDialProvider) {
+	p.remoteDialer = provider
 }
 
 // SetDBLoadParams sets optional DB load params for newly created / registered databases. The provided map is cloned.
@@ -783,6 +805,15 @@ func validateDBName(dbName string) error {
 
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
 type DropDatabaseHook func(ctx *sql.Context, name string)
+
+// DatabaseHookRegistrar is implemented by database providers that support registering
+// hooks for database init and drop lifecycle events.
+type DatabaseHookRegistrar interface {
+	// AddInitDatabaseHook adds an InitDatabaseHook that runs whenever a database is created.
+	AddInitDatabaseHook(InitDatabaseHook)
+	// AddDropDatabaseHook adds a DropDatabaseHook that runs whenever a database is dropped.
+	AddDropDatabaseHook(DropDatabaseHook)
+}
 
 // NewConfigureReplicationDatabaseHook sets up the hooks to push to a remote to replicate a newly created database.
 //

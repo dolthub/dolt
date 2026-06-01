@@ -1525,13 +1525,6 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 		}
 	}
 
-	t, tblExists, err := db.checkForPgCatalogTable(ctx, tableName)
-	if err != nil {
-		return nil, false, err
-	} else if tblExists {
-		return t, tblExists, nil
-	}
-
 	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, doltdb.TableName{Schema: db.schemaName, Name: tableName})
 	if err != nil {
 		return nil, false, err
@@ -1570,27 +1563,6 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	}
 
 	return table, true, nil
-}
-
-// checkForPgCatalogTable checks if the table is of pg_catalog schema
-// when the schema is not defined and the table name start with 'pg_'.
-func (db Database) checkForPgCatalogTable(ctx *sql.Context, tableName string) (sql.Table, bool, error) {
-	if resolve.UseSearchPath && db.schemaName == "" && strings.HasPrefix(strings.ToLower(tableName), "pg_") {
-		sdb, foundSch, err := db.GetSchema(ctx, "pg_catalog")
-		if err != nil {
-			return nil, false, err
-		}
-		if foundSch {
-			tbl, foundTbl, err := sdb.GetTableInsensitive(ctx, tableName)
-			if err != nil {
-				return nil, false, err
-			}
-			if foundTbl {
-				return tbl, foundTbl, nil
-			}
-		}
-	}
-	return nil, false, nil
 }
 
 // resolveUserTable returns the table with the given name from the root given. The table name is resolved in a
@@ -1864,13 +1836,6 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 
 // dropTable drops the table with the baseName given, without any business logic checks
 func (db Database) dropTable(ctx *sql.Context, tableName string) error {
-	_, tblExists, err := db.checkForPgCatalogTable(ctx, tableName)
-	if err != nil {
-		return err
-	} else if tblExists {
-		return sql.ErrDropTableNotSupported.New("pg_catalog")
-	}
-
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
 		ds.DropTemporaryTable(ctx, db.Name(), tableName)
@@ -2331,11 +2296,7 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	for _, schema := range schemas {
 		if strings.EqualFold(schema.Name, schemaName) {
 			db.schemaName = schema.Name
-			handledSchema, err := HandleSchema(ctx, schemaName, db)
-			if err != nil {
-				return nil, false, err
-			}
-			return handledSchema, true, nil
+			return db, true, nil
 		}
 	}
 
@@ -2347,12 +2308,6 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	}
 
 	return nil, false, nil
-}
-
-// HandleSchema is used by Doltgres to intercept a database for the purposes of system tables. In Dolt, this just
-// returns the given database.
-var HandleSchema = func(ctx *sql.Context, schemaName string, db Database) (sql.DatabaseSchema, error) {
-	return db, nil
 }
 
 // AllSchemas implements sql.SchemaDatabase
@@ -2375,11 +2330,7 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 	for i, schema := range schemas {
 		sdb := db
 		sdb.schemaName = schema.Name
-		handledDb, err := HandleSchema(ctx, schema.Name, sdb)
-		if err != nil {
-			return nil, err
-		}
-		dbSchemas[i] = handledDb
+		dbSchemas[i] = sdb
 	}
 
 	// For doltgres, the information_schema database should be a schema.
