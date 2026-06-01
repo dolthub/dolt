@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -579,9 +580,13 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		}
 	}
 	if fromSch == nil && toSch == nil {
-		table, _, err := getTableInsensitiveOrError(ctx, head, tableName)
+		table, _, tableExists, err := doltdb.GetTableInsensitive(ctx, head, tableName)
 		if err != nil {
 			return nil, err
+		}
+		// TODO: We should error out here like we do for nonexistent dolt_diff tables.
+		if !tableExists {
+			return &emptyWorkspaceTable{tableName: tableName}, nil
 		}
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
@@ -1067,4 +1072,34 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 	}()
 
 	return iter, nil
+}
+
+type emptyWorkspaceTable struct {
+	tableName doltdb.TableName
+}
+
+var _ sql.Table = (*emptyWorkspaceTable)(nil)
+
+func (e emptyWorkspaceTable) Name() string {
+	return doltdb.DoltWorkspaceTablePrefix + e.tableName.Name
+}
+
+func (e emptyWorkspaceTable) String() string {
+	return e.Name()
+}
+
+func (e emptyWorkspaceTable) Schema(ctx *sql.Context) sql.Schema {
+	sch := GetDoltWorkspaceBaseSqlSchema()
+	// Only return the "id" and "staged" columns.
+	return sch[0:2]
+}
+
+func (e emptyWorkspaceTable) Collation() sql.CollationID { return sql.Collation_Default }
+
+func (e emptyWorkspaceTable) Partitions(c *sql.Context) (sql.PartitionIter, error) {
+	return index.SinglePartitionIterFromNomsMap(nil), nil
+}
+
+func (e emptyWorkspaceTable) PartitionRows(c *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return sql.RowsToRowIter(), nil
 }
