@@ -26,6 +26,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -536,12 +537,21 @@ func findCommonCommit(a, b []*Commit) (*Commit, bool) {
 	}
 
 	as, bs := toAddrMap(a), toAddrMap(b)
+	var common []*Commit
 	for s, c := range as {
 		if _, present := bs[s]; present {
-			return c, true
+			common = append(common, c)
 		}
 	}
-	return nil, false
+	if len(common) == 0 {
+		return nil, false
+	}
+	// Sort by address to ensure deterministic selection when multiple
+	// common ancestors exist at the same height (e.g., criss-cross merges).
+	sort.Slice(common, func(i, j int) bool {
+		return common[i].Addr().Less(common[j].Addr())
+	})
+	return common[0], true
 }
 
 func firstError(l, r error) error {
