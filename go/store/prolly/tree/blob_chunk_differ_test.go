@@ -42,7 +42,12 @@ func buildBlobTree(t *testing.T, ctx context.Context, ns NodeStore, chunkSize in
 // differFromRoots builds a blobChunkDiffer directly over two root nodes, bypassing the
 // AdaptiveValue plumbing so the tree-walking logic can be exercised in isolation.
 func differFromRoots(ns NodeStore, l, r *Node) *blobChunkDiffer {
-	d := &blobChunkDiffer{ns: ns}
+	d := &blobChunkDiffer{
+		ns:       ns,
+		l:        &blobDiffSide{},
+		r:        &blobDiffSide{},
+		diverged: false,
+	}
 	if l != nil && !l.empty() {
 		d.l.stack = []blobDiffFrame{{node: l}}
 	}

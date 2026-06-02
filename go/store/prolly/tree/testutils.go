@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var testRand = rand.New(rand.NewSource(1))
@@ -360,7 +361,7 @@ func (v *nodeStoreValidator) WriteBytes(ctx context.Context, val []byte) (hash.H
 	return h, err
 }
 
-func (v *nodeStoreValidator) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (ChunkDiffer, error) {
+func (v *nodeStoreValidator) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (chunkDiffer, error) {
 	return newBlobChunkDiffer(ctx, v, l, r)
 }
 
@@ -435,6 +436,14 @@ func (v *nodeStoreValidator) PurgeCaches() {
 
 func (v *nodeStoreValidator) Format() *types.NomsBinFormat {
 	return v.ns.Format()
+}
+
+func (v *nodeStoreValidator) CompareAdaptive(ctx context.Context, l val.AdaptiveValue, r val.AdaptiveValue, encoding val.Encoding) (int, error) {
+	return v.ns.CompareAdaptive(ctx, l, r, encoding)
+}
+
+func (v *nodeStoreValidator) CompareAdaptiveCollatedStrings(ctx context.Context, l, r val.AdaptiveValue, collation sql.CollationID) (int, error) {
+	return v.ns.CompareAdaptiveCollatedStrings(ctx, l, r, collation)
 }
 
 func MakeTreeForTest(tuples [][2]val.Tuple) (*Node, error) {

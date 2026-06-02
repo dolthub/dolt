@@ -417,11 +417,11 @@ func (c *countingNodeStore) Read(ctx context.Context, h hash.Hash) (*Node, error
 	return c.NodeStore.Read(ctx, h)
 }
 
-func (c *countingNodeStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (ChunkDiffer, error) {
+func (c *countingNodeStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (chunkDiffer, error) {
 	return newBlobChunkDiffer(ctx, c, l, r)
 }
 
-// TestBlobChunkDiffer exercises the new ChunkDiffer API end-to-end. The "identical roots"
+// TestBlobChunkDiffer exercises the new chunkDiffer API end-to-end. The "identical roots"
 // case is the headline benefit: when both adaptive values share an out-of-band address, the
 // differ should short-circuit to EOF without reading the blob's interior at all. The
 // "localized diff" case verifies that hash-based subtree skipping limits reads to roughly the

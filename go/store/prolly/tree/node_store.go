@@ -234,11 +234,6 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 	return result, err
 }
 
-// OpenChunkDiffer implements val.ChunkedValueStore
-func (ns *nodeStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (ChunkDiffer, error) {
-	return newBlobChunkDiffer(ctx, ns, l, r)
-}
-
 // CompareJsonAdaptiveValues implements val.JsonAdaptiveValueComparator. The work is done by
 // IndexedJsonDocument.Compare, which compares two JSON documents chunk-by-chunk and applies
 // MySQL's JSON ordering rules.
@@ -264,7 +259,7 @@ func (ns *nodeStore) CompareAdaptive(ctx context.Context, l val.AdaptiveValue, r
 		return bytes.Compare(lPayload, rPayload), nil
 	}
 
-	differ, err := ns.getChunkDiffer(ctx, l, r)
+	differ, err := newBlobChunkDiffer(ctx, ns, l, r)
 	if err != nil {
 		return 0, err
 	}
@@ -272,11 +267,7 @@ func (ns *nodeStore) CompareAdaptive(ctx context.Context, l val.AdaptiveValue, r
 	return compareChunkDiffer(ctx, differ)
 }
 
-func (ns *nodeStore) getChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (ChunkDiffer, error) {
-	return ns.OpenChunkDiffer(ctx, l, r)
-}
-
-func compareChunkDiffer(ctx context.Context, d ChunkDiffer) (int, error) {
+func compareChunkDiffer(ctx context.Context, d chunkDiffer) (int, error) {
 	lChunk, rChunk, err := d.Next(ctx)
 	if err == io.EOF {
 		return 0, nil
@@ -301,16 +292,17 @@ func (ns *nodeStore) CompareAdaptiveCollatedStrings(ctx context.Context, l, r va
 		return val.CompareCollatedStrings(collation, lPayload, rPayload), nil
 	}
 
-	differ, err := ns.getChunkDiffer(ctx, l, r)
+	differ, err := newBlobChunkDiffer(ctx, ns, l, r)
 	if err != nil {
 		return 0, err
 	}
+
 	return compareCollatedChunkDiffer(ctx, differ, collation)
 }
 
 // compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings, getting just the diff between two
 // values when comparing them.
-func compareCollatedChunkDiffer(ctx context.Context, d ChunkDiffer, collation sql.CollationID) (int, error) {
+func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sql.CollationID) (int, error) {
 	getRuneWeight := collation.Sorter()
 	var lBuf, rBuf []byte
 	lDone, rDone := false, false
@@ -375,11 +367,9 @@ func compareCollatedChunkDiffer(ctx context.Context, d ChunkDiffer, collation sq
 	}
 }
 
-// ChunkDiffer is an interface to diff chunk-encoded values in a ValueStore.
-type ChunkDiffer interface {
+// chunkDiffer is an interface to diff chunk-encoded values in a ValueStore.
+type chunkDiffer interface {
 	// Next returns the bytes of the next chunks that differ between left and right. io.EOF signals
 	// the end of the diff.
 	Next(ctx context.Context) (left, right []byte, err error)
 }
-
-var _ val.ValueStore = &nodeStore{}
