@@ -289,6 +289,14 @@ func (t *TestValueStore) WriteBytes(_ context.Context, val []byte) (h hash.Hash,
 	return h, nil
 }
 
+func (t TestValueStore) CompareAdaptive(ctx context.Context, l AdaptiveValue, r AdaptiveValue, encoding Encoding) (int, error) {
+	panic("unsupported")
+}
+
+func (t TestValueStore) CompareAdaptiveCollatedStrings(ctx context.Context, l, r AdaptiveValue, collation sql.CollationID) (int, error) {
+	panic("unsupported")
+}
+
 var _ ValueStore = &TestValueStore{}
 
 func TestTupleBuilderJsonAdaptiveEncoding(t *testing.T) {
