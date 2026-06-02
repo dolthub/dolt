@@ -85,15 +85,6 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl      string
 	DropDatabaseHooks []DropDatabaseHook
 	InitDatabaseHooks []InitDatabaseHook
-
-	// remoteDbs caches *doltdb.DoltDB wrappers for git-backed remotes, keyed
-	// by lower-cased remote URL. Saves the wrapper-construction work on every
-	// GetRemoteDB call; the underlying singleton (ChunkStore + datas.Database)
-	// is owned by dbfactory.gitRemoteCache and torn down via
-	// dbfactory.TeardownGitRemotes. Callers MUST NOT call Teardown on the
-	// returned value (Close is fine — the gitSharedChunkStore shim swallows
-	// it for git remotes).
-	// Mutex is a pointer so WithFunctions / WithTableFunctions copies share it.
 	remoteDbs   map[string]*doltdb.DoltDB
 	remoteDbsMu *sync.Mutex
 }
@@ -344,12 +335,6 @@ func (p *DoltDatabaseProvider) Close() {
 
 }
 
-// Teardown releases end-of-lifecycle resources owned by the provider —
-// notably the process-global git-remote cache, whose Teardown drives
-// GitBlobstore.Teardown (maybeRunGC + per-session ref cleanup). Intended to
-// be called exactly once, by the owner of the provider's lifecycle
-// (typically engine shutdown at process exit). Close does not call
-// Teardown; callers must invoke both, in order: Teardown, then Close.
 func (p *DoltDatabaseProvider) Teardown(ctx context.Context) {
 	dbfactory.TeardownGitRemotes(ctx)
 	p.remoteDbsMu.Lock()
@@ -600,15 +585,6 @@ func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlData
 	return revDbs, nil
 }
 
-// GetRemoteDB returns a *doltdb.DoltDB for the given remote.
-//
-// For git-backed remotes (URL prefix "git+"), the returned DoltDB is shared
-// across callers via the provider's remoteDbs cache. Callers MUST NOT call
-// Teardown on the returned value; Close is safe (suppressed by the
-// gitSharedChunkStore shim).
-//
-// For non-git remotes, the call is uncached and the caller owns the returned
-// DoltDB's lifecycle.
 func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote) (*doltdb.DoltDB, error) {
 	// For git remotes, thread through the initiating database's repo root so git caches can be located under
 	// `<repoRoot>/.dolt/...` instead of a user-global cache dir.
