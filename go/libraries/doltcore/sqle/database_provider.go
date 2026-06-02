@@ -337,7 +337,7 @@ func (p *DoltDatabaseProvider) Close() {
 					continue
 				}
 				seen[ddb] = struct{}{}
-				_ = ddb.Close(context.Background())
+				_ = ddb.Close()
 			}
 		}
 	}
@@ -649,7 +649,7 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 			// Lost a race; both wrap the same underlying datas.Database, so
 			// dropping ours is safe.
 			p.remoteDbsMu.Unlock()
-			_ = ddb.Close(ctx)
+			_ = ddb.Close()
 			return existing, nil
 		}
 		p.remoteDbs[key] = ddb
@@ -1119,7 +1119,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	if closeDoltDBs {
 		for _, ddb := range db.DoltDatabases() {
 			if ddb != nil {
-				_ = ddb.Close(ctx)
+				_ = ddb.Close()
 			}
 		}
 	}

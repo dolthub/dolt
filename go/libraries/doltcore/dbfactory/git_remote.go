@@ -107,11 +107,6 @@ var (
 	gitRemoteCache   = map[string]gitRemoteCacheEntry{}
 )
 
-// TeardownGitRemotes runs Teardown on every cached git-remote chunk store
-// (driving GitBlobstore.Teardown → maybeRunGC + per-session ref cleanup),
-// then forces a full Close on the underlying NomsBlockStore to release its
-// in-memory state. Intended to be called exactly once at process / engine
-// shutdown. Errors are intentionally swallowed.
 func TeardownGitRemotes(ctx context.Context) {
 	gitRemoteCacheMu.Lock()
 	entries := gitRemoteCache
@@ -127,36 +122,16 @@ func TeardownGitRemotes(ctx context.Context) {
 	}
 }
 
-// gitSharedChunkStore wraps the singleton *NomsBlockStore handed out by
-// gitRemoteCache so that callers can safely defer Close() on their *DoltDB.
-// The underlying NomsBlockStore is shared across every *DoltDB the factory
-// hands out for a given (cache repo, ref); letting any one caller's Close()
-// propagate down to nbs.Close() would close the shared manifest + table
-// readers (the table-index refcount goes negative on the next caller's
-// Close, which panics). Suppressing Close at this layer keeps that
-// machinery alive for the lifetime of the process / provider.
-//
-// The destructive teardown (git GC, per-session ref cleanup) lives in
-// Teardown, which is promoted through the embedded *NomsBlockStore and is
-// driven exactly once by DoltDatabaseProvider.Close().
 type gitSharedChunkStore struct {
 	*nbs.NomsBlockStore
 }
 
 func (gitSharedChunkStore) Close() error { return nil }
 
-// ForceClose bypasses the Close shim and calls the embedded *NomsBlockStore's
-// real Close — releasing in-memory chunk-source index state and the blob-backed
-// manifest/persister handles. Only safe to call when no other goroutine is
-// using this chunk store; intended for dbfactory.TeardownGitRemotes after the
-// process-global gitRemoteCache entry has been drained.
 func (cs gitSharedChunkStore) ForceClose() error {
 	return cs.NomsBlockStore.Close()
 }
 
-// gitBlobstoreSyncForReadTTLOverride, when non-zero, is passed as
-// GitBlobstoreOptions.SyncForReadTTL when constructing a new GitBlobstore.
-// Test seam only.
 var gitBlobstoreSyncForReadTTLOverride time.Duration
 
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {

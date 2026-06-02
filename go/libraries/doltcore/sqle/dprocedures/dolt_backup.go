@@ -230,7 +230,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	// comment in syncRemote. Note that remoteDb is only the source being read from — the restored
 	// database (lookupDbName) is a separate database created via [dsess.DoltSessionProvider.CreateDatabase]
 	// and follows the normal caching path.
-	defer remoteDb.Close(ctx)
+	defer remoteDb.Close()
 
 	lookupDbName := apr.Arg(2)
 	hasLookupDb := dsess.Provider().HasDatabase(ctx, lookupDbName)
@@ -306,7 +306,7 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	// the process retains open file descriptors on the backup directory until exit. On network filesystems
 	// such as NFS, open file descriptors prevent the backup directory from being deleted even after
 	// dolt_backup remove.
-	defer destDb.Close(ctx)
+	defer destDb.Close()
 
 	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), actions.SyncRootsDBRelationshipUnknown, statsCh)
