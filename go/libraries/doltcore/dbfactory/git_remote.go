@@ -107,10 +107,11 @@ var (
 	gitRemoteCache   = map[string]gitRemoteCacheEntry{}
 )
 
-// TeardownGitRemotes runs Teardown on every cached git-remote chunk store,
-// driving GitBlobstore.Teardown (maybeRunGC + per-session ref cleanup) for
-// each. Intended to be called exactly once at process / engine shutdown.
-// Errors are intentionally swallowed.
+// TeardownGitRemotes runs Teardown on every cached git-remote chunk store
+// (driving GitBlobstore.Teardown → maybeRunGC + per-session ref cleanup),
+// then forces a full Close on the underlying NomsBlockStore to release its
+// in-memory state. Intended to be called exactly once at process / engine
+// shutdown. Errors are intentionally swallowed.
 func TeardownGitRemotes(ctx context.Context) {
 	gitRemoteCacheMu.Lock()
 	entries := gitRemoteCache
@@ -118,7 +119,11 @@ func TeardownGitRemotes(ctx context.Context) {
 	gitRemoteCacheMu.Unlock()
 
 	for _, entry := range entries {
-		_ = datas.ChunkStoreFromDatabase(entry.db).Teardown(ctx)
+		cs := datas.ChunkStoreFromDatabase(entry.db)
+		_ = cs.Teardown(ctx)
+		if g, ok := cs.(gitSharedChunkStore); ok {
+			_ = g.ForceClose()
+		}
 	}
 }
 
@@ -139,6 +144,15 @@ type gitSharedChunkStore struct {
 }
 
 func (gitSharedChunkStore) Close() error { return nil }
+
+// ForceClose bypasses the Close shim and calls the embedded *NomsBlockStore's
+// real Close — releasing in-memory chunk-source index state and the blob-backed
+// manifest/persister handles. Only safe to call when no other goroutine is
+// using this chunk store; intended for dbfactory.TeardownGitRemotes after the
+// process-global gitRemoteCache entry has been drained.
+func (cs gitSharedChunkStore) ForceClose() error {
+	return cs.NomsBlockStore.Close()
+}
 
 // gitBlobstoreSyncForReadTTLOverride, when non-zero, is passed as
 // GitBlobstoreOptions.SyncForReadTTL when constructing a new GitBlobstore.

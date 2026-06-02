@@ -32,7 +32,6 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dolthub/fslock"
-	"github.com/fatih/color"
 	"github.com/google/uuid"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
@@ -652,48 +651,33 @@ func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
 // Teardown best-effort deletes this instance's UUID-owned refs and
 // periodically runs git gc to repack the cache repository.
 func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
-	fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown start gitDir=%s localRef=%s remoteTrackingRef=%s\n", gbs.gitDir, gbs.localRef, gbs.remoteTrackingRef)
-
 	// Best-effort periodic GC to repack the cache repo. Runs outside the
 	// write lock so a slow gc cannot serialize other writers. maybeRunGC
 	// has its own file-based lock for cross-process coordination.
-	fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown calling maybeRunGC\n")
 	gbs.maybeRunGC()
-	fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown maybeRunGC done\n")
 
 	gbs.writeMu.Lock()
 	defer gbs.writeMu.Unlock()
 
 	deleteIfExists := func(ref string) error {
 		if ref == "" {
-			fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown deleteIfExists skip (empty ref)\n")
 			return nil
 		}
 		_, ok, err := gbs.api.TryResolveRefCommit(ctx, ref)
 		if err != nil {
-			fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown deleteIfExists resolve err ref=%s err=%v\n", ref, err)
 			return err
 		}
 		if !ok {
-			fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown deleteIfExists ref absent ref=%s\n", ref)
 			return nil
 		}
-		fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown deleting ref=%s\n", ref)
 		_, err = gbs.runner.Run(ctx, git.RunOptions{}, "update-ref", "-d", ref)
-		if err != nil {
-			fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown delete err ref=%s err=%v\n", ref, err)
-		} else {
-			fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown deleted ref=%s\n", ref)
-		}
 		return err
 	}
 
-	err := errors.Join(
+	return errors.Join(
 		deleteIfExists(gbs.localRef),
 		deleteIfExists(gbs.remoteTrackingRef),
 	)
-	fmt.Fprintf(color.Output, "DUSTIN: GitBlobstore.Teardown done err=%v\n", err)
-	return err
 }
 
 func (gbs *GitBlobstore) Close() error {
