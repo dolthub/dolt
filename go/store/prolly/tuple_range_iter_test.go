@@ -48,35 +48,31 @@ func testIterRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 		}
 		start, stop := tuples[a][0], tuples[z][0]
 
-		openR, err := openRange(ctx, start, stop, desc)
-		require.NoError(t, err)
-		openStartR, err := openStartRange(ctx, start, stop, desc)
-		require.NoError(t, err)
-		openStopR, err := openStopRange(ctx, start, stop, desc)
-		require.NoError(t, err)
-		closedR, err := closedRange(ctx, start, stop, desc)
-		require.NoError(t, err)
+		mustRange := func(rng Range, err error) Range {
+			require.NoError(t, err)
+			return rng
+		}
 
 		tests := []rangeIterTest{
 			// two-sided ranges
 			{
 				name:      "OpenRange",
-				testRange: openR,
+				testRange: mustRange(openRange(ctx, start, stop, desc)),
 				expCount:  nonNegative((z - a) - 1),
 			},
 			{
 				name:      "OpenStartRange",
-				testRange: openStartR,
+				testRange: mustRange(openStartRange(ctx, start, stop, desc)),
 				expCount:  z - a,
 			},
 			{
 				name:      "OpenStopRange",
-				testRange: openStopR,
+				testRange: mustRange(openStopRange(ctx, start, stop, desc)),
 				expCount:  z - a,
 			},
 			{
 				name:      "closedRange",
-				testRange: closedR,
+				testRange: mustRange(closedRange(ctx, start, stop, desc)),
 				expCount:  (z - a) + 1,
 			},
 
@@ -165,28 +161,23 @@ func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 			return rng
 		}
 
-		openR := mustRange(openRange(ctx, start, stop, prefixDesc))
-		openStartR := mustRange(openStartRange(ctx, start, stop, prefixDesc))
-		openStopR := mustRange(openStopRange(ctx, start, stop, prefixDesc))
-		closedR := mustRange(closedRange(ctx, start, stop, prefixDesc))
-
 		tests := []prefixRangeTest{
 			// two-sided ranges
 			{
 				name:      "OpenRange",
-				testRange: openR,
+				testRange: mustRange(openRange(ctx, start, stop, prefixDesc)),
 			},
 			{
 				name:      "OpenStartRange",
-				testRange: openStartR,
+				testRange: mustRange(openStartRange(ctx, start, stop, prefixDesc)),
 			},
 			{
 				name:      "OpenStopRange",
-				testRange: openStopR,
+				testRange: mustRange(openStopRange(ctx, start, stop, prefixDesc)),
 			},
 			{
 				name:      "closedRange",
-				testRange: closedR,
+				testRange: mustRange(closedRange(ctx, start, stop, prefixDesc)),
 			},
 
 			// one-sided ranges

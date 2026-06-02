@@ -60,12 +60,12 @@ func getNextAndSplitIfAtEnd[K ~[]byte, O Ordering[K]](ctx context.Context, patch
 // In the case that a key-value pair was modified on both |left| and |right| with different resulting
 // values, the CollisionFn is called to perform a cell-wise merge, or to throw a conflict.
 func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
-		ctx context.Context,
-		ns NodeStore,
-		left, right, base *Node,
-		collide CollisionFn,
-		order O,
-		serializer S,
+	ctx context.Context,
+	ns NodeStore,
+	left, right, base *Node,
+	collide CollisionFn,
+	order O,
+	serializer S,
 ) (final *Node, stats MergeStats, err error) {
 	ld, err := PatchGeneratorFromRoots[K](ctx, ns, ns, base, left, order)
 	if err != nil {
@@ -152,10 +152,10 @@ func resolveCollision(left Patch, lDiffType DiffType, right Patch, rDiffType Dif
 
 // SendPatches iterates over |l| and |r| in parallel, sending an ordered non-overlapping series of patches into |buf|.
 func SendPatches[K ~[]byte, O Ordering[K]](
-		ctx context.Context,
-		l, r PatchGenerator[K, O],
-		buf PatchBuffer,
-		cb CollisionFn,
+	ctx context.Context,
+	l, r PatchGenerator[K, O],
+	buf PatchBuffer,
+	cb CollisionFn,
 ) (err error) {
 	var (
 		left, right          Patch
