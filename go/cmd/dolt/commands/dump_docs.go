@@ -32,6 +32,7 @@ const (
 	cliMdDocHeader = "" +
 		"---\n" +
 		"title: CLI\n" +
+		"description: Full reference for the dolt command-line interface — every command, every flag, with examples.\n" +
 		"---\n\n" +
 		"# Command Line Interface Reference\n\n"
 )
