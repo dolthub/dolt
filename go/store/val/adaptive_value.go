@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/mohae/uvarint"
@@ -180,41 +179,6 @@ func (v AdaptiveValue) getUnderlyingBytes(ctx context.Context, vs ValueStore) ([
 	_, lengthBytes := uvarint.Uvarint(v)
 	addr := v[lengthBytes:]
 	return vs.ReadBytes(ctx, hash.New(addr))
-}
-
-// singlePairDiffer is a ChunkDiffer that yields a single (left, right) pair and then EOF. It
-// is used for in-memory fallback paths — both inline, or when the ValueStore doesn't implement
-// ChunkDiffValueStore so we must materialize both sides.
-type singlePairDiffer struct {
-	l, r []byte
-	done bool
-}
-
-func (d *singlePairDiffer) Next(_ context.Context) ([]byte, []byte, error) {
-	if d.done {
-		return nil, nil, io.EOF
-	}
-	d.done = true
-	return d.l, d.r, nil
-}
-
-// getChunkDiffer returns a ChunkDiffer that yields aligned (left, right) byte regions for
-// comparison. When the ValueStore supports ChunkDiffValueStore the differ walks both underlying
-// trees in parallel and can short-circuit on subtree-hash matches; otherwise it falls back to
-// loading each side fully and yielding a single pair.
-func getChunkDiffer(ctx context.Context, vs ValueStore, l, r AdaptiveValue) (ChunkDiffer, error) {
-	if cvs, ok := vs.(ChunkDiffValueStore); ok {
-		return cvs.OpenChunkDiffer(ctx, l, r)
-	}
-	lBytes, err := l.getUnderlyingBytes(ctx, vs)
-	if err != nil {
-		return nil, err
-	}
-	rBytes, err := r.getUnderlyingBytes(ctx, vs)
-	if err != nil {
-		return nil, err
-	}
-	return &singlePairDiffer{l: lBytes, r: rBytes}, nil
 }
 
 func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {

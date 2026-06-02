@@ -360,7 +360,7 @@ func (v *nodeStoreValidator) WriteBytes(ctx context.Context, val []byte) (hash.H
 	return h, err
 }
 
-func (v *nodeStoreValidator) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (val.ChunkDiffer, error) {
+func (v *nodeStoreValidator) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (ChunkDiffer, error) {
 	return newBlobChunkDiffer(ctx, v, l, r)
 }
 

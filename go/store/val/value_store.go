@@ -33,8 +33,14 @@ const BytePeekLength = 128
 // The only implementation is tree.NodeStore, but ValueStore can be used without depending on the tree package.
 // This is useful for type handlers.
 type ValueStore interface {
+	// ReadBytes reads the bytes associated with the given content hash
 	ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error)
+	// WriteBytes writes the given bytes and returns the content hash
 	WriteBytes(ctx context.Context, val []byte) (hash.Hash, error)
+	// CompareAdaptive compares two adaptive values.
+	CompareAdaptive(ctx context.Context, l AdaptiveValue, r AdaptiveValue, encoding Encoding) (int, error)
+	// CompareAdaptiveCollatedStrings compares two adaptive string values with the given collation.
+	CompareAdaptiveCollatedStrings(ctx context.Context, l, r AdaptiveValue, collation sql.CollationID) (int, error)
 }
 
 // ChunkDiffer is an interface to diff chunk-encoded values in a ValueStore.
@@ -42,23 +48,6 @@ type ChunkDiffer interface {
 	// Next returns the bytes of the next chunks that differ between left and right. io.EOF signals
 	// the end of the diff.
 	Next(ctx context.Context) (left, right []byte, err error)
-}
-
-// ChunkDiffValueStore is an optional interface implemented by ValueStores that can compare two
-// out-of-band AdaptiveValues by walking their underlying chunked storage in parallel.
-// adaptive encodings (BytesAdaptiveEnc, StringAdaptiveEnc, GeomAdaptiveEnc).
-type ChunkDiffValueStore interface {
-	// OpenChunkDiffer returns a ChunkDiffer that can diff the two given AdaptiveValues by diffing their chunked values.
-	OpenChunkDiffer(ctx context.Context, l, r AdaptiveValue) (ChunkDiffer, error)
-}
-
-// JsonAdaptiveValueComparator is an optional interface implemented by ValueStores that can
-// compare two JsonAdaptiveEnc values with JSON-aware semantics (MySQL JSON ordering rules,
-// not byte ordering).
-type JsonAdaptiveValueComparator interface {
-	// CompareJsonAdaptiveValues compares two JsonAdaptiveEnc values.
-	// Returns 0 if equal, -1 if l < r, 1 if l > r.
-	CompareJsonAdaptiveValues(ctx context.Context, l, r AdaptiveValue) (int, error)
 }
 
 // ImmutableValue represents a content-addressed value stored in a ValueStore.

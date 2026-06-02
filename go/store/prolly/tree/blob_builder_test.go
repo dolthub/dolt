@@ -417,7 +417,7 @@ func (c *countingNodeStore) Read(ctx context.Context, h hash.Hash) (*Node, error
 	return c.NodeStore.Read(ctx, h)
 }
 
-func (c *countingNodeStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (val.ChunkDiffer, error) {
+func (c *countingNodeStore) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (ChunkDiffer, error) {
 	return newBlobChunkDiffer(ctx, c, l, r)
 }
 

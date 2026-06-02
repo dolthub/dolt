@@ -37,7 +37,7 @@ type blobChunkDiffer struct {
 	diverged bool
 }
 
-var _ val.ChunkDiffer = (*blobChunkDiffer)(nil)
+var _ ChunkDiffer = (*blobChunkDiffer)(nil)
 
 // blobDiffSide tracks one side of a chunk diff. A side is either an in-memory buffer (for inline
 // or null adaptive values) or a stack of frames descending into a prolly tree (for out-of-band

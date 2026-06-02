@@ -18,8 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"fmt"
-	"io"
 	"math"
 	"math/bits"
 	"time"
@@ -704,57 +702,6 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-func compareAdaptiveValue(ctx context.Context, vs ValueStore, l, r AdaptiveValue, enc Encoding) (int, error) {
-	if enc == JsonAdaptiveEnc {
-		return compareJsonAdaptiveValues(ctx, vs, l, r)
-	}
-
-	// If both values are inline we can compare their payloads without touching the ValueStore.
-	lPayload, lInline := InlineValueBytes(l)
-	rPayload, rInline := InlineValueBytes(r)
-	if lInline && rInline {
-		return bytes.Compare(lPayload, rPayload), nil
-	}
-
-	differ, err := getChunkDiffer(ctx, vs, l, r)
-	if err != nil {
-		return 0, err
-	}
-
-	return compareChunkDiffer(ctx, differ)
-}
-
-func compareJsonAdaptiveValues(ctx context.Context, vs ValueStore, l AdaptiveValue, r AdaptiveValue) (int, error) {
-	if jc, ok := vs.(JsonAdaptiveValueComparator); ok {
-		cmp, err := jc.CompareJsonAdaptiveValues(ctx, l, r)
-		if err != nil {
-			return 0, err
-		}
-		return cmp, nil
-	} else {
-		return 0, fmt.Errorf("value store %T does not support JSON adaptive value comparison", vs)
-	}
-}
-
-// CompareAdaptiveStringsWithCollation compares two AdaptiveValue-encoded string values using
-// the given collation. Pass an unspecified collation to fall back to byte ordering.
-func CompareAdaptiveStringsWithCollation(ctx context.Context, vs ValueStore, l, r AdaptiveValue, collation sql.CollationID) (int, error) {
-	if collation == sql.Collation_Unspecified {
-		return compareAdaptiveValue(ctx, vs, l, r, StringAdaptiveEnc)
-	}
-
-	lPayload, lInline := InlineValueBytes(l)
-	rPayload, rInline := InlineValueBytes(r)
-	if lInline && rInline {
-		return CompareCollatedStrings(collation, lPayload, rPayload), nil
-	}
-	differ, err := getChunkDiffer(ctx, vs, l, r)
-	if err != nil {
-		return 0, err
-	}
-	return compareCollatedChunkDiffer(ctx, differ, collation)
-}
-
 // CompareCollatedStrings compares two UTF-8 byte slices using the given collation.
 func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 	i := 0
@@ -817,86 +764,6 @@ func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 	} else {
 		return 0
 	}
-}
-
-// compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings, getting just the diff between two
-// values when comparing them.
-func compareCollatedChunkDiffer(ctx context.Context, d ChunkDiffer, collation sql.CollationID) (int, error) {
-	getRuneWeight := collation.Sorter()
-	var lBuf, rBuf []byte
-	lDone, rDone := false, false
-
-	pullFrom := func() error {
-		for (!lDone && !utf8.FullRune(lBuf)) || (!rDone && !utf8.FullRune(rBuf)) {
-			lChunk, rChunk, err := d.Next(ctx)
-			if err == io.EOF {
-				lDone = true
-				rDone = true
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			if len(lChunk) > 0 {
-				lBuf = append(lBuf, lChunk...)
-			}
-			if len(rChunk) > 0 {
-				rBuf = append(rBuf, rChunk...)
-			}
-		}
-		return nil
-	}
-	for {
-		if err := pullFrom(); err != nil {
-			return 0, err
-		}
-		switch {
-		case len(lBuf) == 0 && len(rBuf) == 0:
-			return 0, nil
-		case len(lBuf) == 0:
-			return -1, nil
-		case len(rBuf) == 0:
-			return 1, nil
-		}
-		lr, lread := utf8.DecodeRune(lBuf)
-		rr, rread := utf8.DecodeRune(rBuf)
-		lErr := lr == utf8.RuneError && lread == 1
-		rErr := rr == utf8.RuneError && rread == 1
-		if lErr || rErr {
-			if lErr && !rErr {
-				return 1, nil
-			}
-			if !lErr && rErr {
-				return -1, nil
-			}
-			return 0, nil
-		}
-		if lr != rr {
-			lw := getRuneWeight(lr)
-			rw := getRuneWeight(rr)
-			if lw < rw {
-				return -1, nil
-			}
-			if lw > rw {
-				return 1, nil
-			}
-		}
-		lBuf = lBuf[lread:]
-		rBuf = rBuf[rread:]
-	}
-}
-
-// compareChunkDiffer compares two values using the output of a ChunkDiffer built on them, using the diffs it generates.
-func compareChunkDiffer(ctx context.Context, d ChunkDiffer) (int, error) {
-	lChunk, rChunk, err := d.Next(ctx)
-	if err == io.EOF {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-
-	return bytes.Compare(lChunk, rChunk), nil
 }
 
 func writeRaw(buf, val []byte) {

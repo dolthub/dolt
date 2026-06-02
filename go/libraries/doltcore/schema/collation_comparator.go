@@ -133,7 +133,7 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 	case val.StringEnc:
 		return val.CompareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1]), nil
 	case val.StringAdaptiveEnc:
-		return val.CompareAdaptiveStringsWithCollation(ctx, vs, left, right, collation)
+		return vs.CompareAdaptiveCollatedStrings(ctx, left, right, collation)
 	default:
 		return (&val.DefaultTupleComparator{}).WithValueStore(vs).CompareValues(ctx, 0, left, right, typ)
 	}
