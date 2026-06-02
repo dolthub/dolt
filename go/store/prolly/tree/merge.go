@@ -60,12 +60,12 @@ func getNextAndSplitIfAtEnd[K ~[]byte, O Ordering[K]](ctx context.Context, patch
 // In the case that a key-value pair was modified on both |left| and |right| with different resulting
 // values, the CollisionFn is called to perform a cell-wise merge, or to throw a conflict.
 func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
-	ctx context.Context,
-	ns NodeStore,
-	left, right, base *Node,
-	collide CollisionFn,
-	order O,
-	serializer S,
+		ctx context.Context,
+		ns NodeStore,
+		left, right, base *Node,
+		collide CollisionFn,
+		order O,
+		serializer S,
 ) (final *Node, stats MergeStats, err error) {
 	ld, err := PatchGeneratorFromRoots[K](ctx, ns, ns, base, left, order)
 	if err != nil {
@@ -152,10 +152,10 @@ func resolveCollision(left Patch, lDiffType DiffType, right Patch, rDiffType Dif
 
 // SendPatches iterates over |l| and |r| in parallel, sending an ordered non-overlapping series of patches into |buf|.
 func SendPatches[K ~[]byte, O Ordering[K]](
-	ctx context.Context,
-	l, r PatchGenerator[K, O],
-	buf PatchBuffer,
-	cb CollisionFn,
+		ctx context.Context,
+		l, r PatchGenerator[K, O],
+		buf PatchBuffer,
+		cb CollisionFn,
 ) (err error) {
 	var (
 		left, right          Patch
@@ -179,22 +179,18 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		leftLevel, _ := l.getLevel()
 		rightLevel, _ := r.getLevel()
 		if leftLevel > 0 && rightLevel > 0 {
-			cmpLR, cmpErr := compareWithNilAsMin(ctx, order, K(left.EndKey), K(right.KeyBelowStart))
-			if cmpErr != nil {
-				return cmpErr
-			}
-			cmpRL, cmpErr := compareWithNilAsMin(ctx, order, K(right.EndKey), K(left.KeyBelowStart))
-			if cmpErr != nil {
-				return cmpErr
-			}
-			if cmpLR <= 0 {
+			if cmp, err := compareWithNilAsMin(ctx, order, K(left.EndKey), K(right.KeyBelowStart)); err != nil {
+				return err
+			} else if cmp <= 0 {
 				// Left change is entirely before right change.
 				// This change is already on the left map, so we ignore it.
 				left, lDiffType, lok, err = l.Next(ctx)
 				if err != nil {
 					return err
 				}
-			} else if cmpRL <= 0 {
+			} else if cmp, err := compareWithNilAsMin(ctx, order, K(right.EndKey), K(left.KeyBelowStart)); err != nil {
+				return err
+			} else if cmp <= 0 {
 				// Right change is entirely before left change.
 				err = buf.SendPatch(ctx, right)
 				if err != nil {
@@ -213,9 +209,9 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				// If the left side added or removed a chunk, we can safely ignore it. If the right side added a chunk,
 				// then we already encountered it. But if the right side removed a chunk, we need to emit a patch here
 				// that reflects that.
-				cmp, cmpErr := compareWithNilAsMin(ctx, order, K(left.KeyBelowStart), K(right.KeyBelowStart))
-				if cmpErr != nil {
-					return cmpErr
+				cmp, err := compareWithNilAsMin(ctx, order, K(left.KeyBelowStart), K(right.KeyBelowStart))
+				if err != nil {
+					return err
 				}
 				if cmp > 0 {
 					err = buf.SendPatch(ctx, right)
@@ -236,9 +232,9 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			} else {
 				// In all other cases there's a conflict and we have to split whichever one comes first.
 				// If both have the same start key, split both.
-				cmp, cmpErr := compareWithNilAsMin(ctx, order, K(left.KeyBelowStart), K(right.KeyBelowStart))
-				if cmpErr != nil {
-					return cmpErr
+				cmp, err := compareWithNilAsMin(ctx, order, K(left.KeyBelowStart), K(right.KeyBelowStart))
+				if err != nil {
+					return err
 				}
 				if cmp <= 0 {
 					left, lDiffType, lok, err = l.split(ctx)
@@ -258,22 +254,18 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 
 		// If one branch returns a range patch and the other returns a point patch, we need to see if they overlap and possibly split the range diff.
 		if rightLevel > 0 {
-			cmpLR, cmpErr := compareWithNilAsMin(ctx, order, K(left.EndKey), K(right.KeyBelowStart))
-			if cmpErr != nil {
-				return cmpErr
-			}
-			cmpLE, cmpErr := order.Compare(ctx, K(left.EndKey), K(right.EndKey))
-			if cmpErr != nil {
-				return cmpErr
-			}
-			if cmpLR <= 0 {
+			if cmp, err := compareWithNilAsMin(ctx, order, K(left.EndKey), K(right.KeyBelowStart)); err != nil {
+				return err
+			} else if cmp <= 0 {
 				// point update comes first
 				// This change is already on the left map, so we ignore it.
 				left, lDiffType, lok, err = l.Next(ctx)
 				if err != nil {
 					return err
 				}
-			} else if cmpLE > 0 {
+			} else if cmp, err := order.Compare(ctx, K(left.EndKey), K(right.EndKey)); err != nil {
+				return err
+			} else if cmp > 0 {
 				// range update comes first
 				err = buf.SendPatch(ctx, right)
 				if err != nil {
@@ -294,15 +286,9 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		}
 
 		if leftLevel > 0 {
-			cmpRL, cmpErr := compareWithNilAsMin(ctx, order, K(right.EndKey), K(left.KeyBelowStart))
-			if cmpErr != nil {
-				return cmpErr
-			}
-			cmpRE, cmpErr := order.Compare(ctx, K(right.EndKey), K(left.EndKey))
-			if cmpErr != nil {
-				return cmpErr
-			}
-			if cmpRL <= 0 {
+			if cmp, err := compareWithNilAsMin(ctx, order, K(right.EndKey), K(left.KeyBelowStart)); err != nil {
+				return err
+			} else if cmp <= 0 {
 				// point update comes first
 				err = buf.SendPatch(ctx, right)
 				if err != nil {
@@ -312,7 +298,9 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-			} else if cmpRE > 0 {
+			} else if cmp, err := order.Compare(ctx, K(right.EndKey), K(left.EndKey)); err != nil {
+				return err
+			} else if cmp > 0 {
 				// range update comes first
 				// This change is already on the left map, so we ignore it.
 				left, lDiffType, lok, err = l.Next(ctx)
