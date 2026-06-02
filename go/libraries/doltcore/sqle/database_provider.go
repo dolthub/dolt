@@ -85,8 +85,8 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl      string
 	DropDatabaseHooks []DropDatabaseHook
 	InitDatabaseHooks []InitDatabaseHook
-	remoteDbs         map[string]*doltdb.DoltDB
-	remoteDbsMu       *sync.Mutex
+	gitRemotes        map[string]*doltdb.DoltDB
+	gitRemotesMu      *sync.Mutex
 }
 
 // ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
@@ -219,8 +219,8 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 		overrides:              overrides,
 		txLocks:                keymutex.NewMapped(),
-		remoteDbs:              map[string]*doltdb.DoltDB{},
-		remoteDbsMu:            &sync.Mutex{},
+		gitRemotes:             map[string]*doltdb.DoltDB{},
+		gitRemotesMu:           &sync.Mutex{},
 	}, nil
 }
 
@@ -337,9 +337,9 @@ func (p *DoltDatabaseProvider) Close() {
 
 func (p *DoltDatabaseProvider) Teardown(ctx context.Context) {
 	dbfactory.TeardownGitRemotes(ctx)
-	p.remoteDbsMu.Lock()
-	p.remoteDbs = map[string]*doltdb.DoltDB{}
-	p.remoteDbsMu.Unlock()
+	p.gitRemotesMu.Lock()
+	p.gitRemotes = map[string]*doltdb.DoltDB{}
+	p.gitRemotesMu.Unlock()
 }
 
 // Installs an InitDatabaseHook which configures new databases--those
@@ -606,9 +606,9 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 	isGit := strings.HasPrefix(key, "git+")
 
 	if isGit {
-		p.remoteDbsMu.Lock()
-		cached, ok := p.remoteDbs[key]
-		p.remoteDbsMu.Unlock()
+		p.gitRemotesMu.Lock()
+		cached, ok := p.gitRemotes[key]
+		p.gitRemotesMu.Unlock()
 		if ok {
 			return cached, nil
 		}
@@ -620,16 +620,18 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 	}
 
 	if isGit {
-		p.remoteDbsMu.Lock()
-		if existing, ok := p.remoteDbs[key]; ok {
-			// Lost a race; both wrap the same underlying datas.Database, so
-			// dropping ours is safe.
-			p.remoteDbsMu.Unlock()
-			_ = ddb.Close()
-			return existing, nil
-		}
-		p.remoteDbs[key] = ddb
-		p.remoteDbsMu.Unlock()
+		ddb = func() *doltdb.DoltDB {
+			p.gitRemotesMu.Lock()
+			defer p.gitRemotesMu.Unlock()
+			if existing, ok := p.gitRemotes[key]; ok {
+				// Lost a race; both wrap the same underlying datas.Database, so
+				// dropping ours is safe.
+				_ = ddb.Close()
+				return existing
+			}
+			p.gitRemotes[key] = ddb
+			return ddb
+		}()
 	}
 	return ddb, nil
 }
