@@ -470,17 +470,11 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	fromAutoInc, err := td.FromTable.GetAutoIncrementValue(ctx)
+	aiChanged, err := td.hasAutoIncrementChanged(ctx)
 	if err != nil {
 		return false, err
 	}
-
-	toAutoInc, err := td.ToTable.GetAutoIncrementValue(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	if fromAutoInc != toAutoInc {
+	if aiChanged {
 		return true, nil
 	}
 
@@ -495,6 +489,18 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 	}
 
 	return !fromSchemaHash.Equal(toSchemaHash), nil
+}
+
+func (td TableDelta) hasAutoIncrementChanged(ctx context.Context) (bool, error) {
+	fromAutoInc, err := td.FromTable.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return false, err
+	}
+	toAutoInc, err := td.ToTable.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return false, err
+	}
+	return fromAutoInc != toAutoInc, nil
 }
 
 func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, error) {
@@ -523,6 +529,14 @@ func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, er
 			return false, err
 		}
 		if !fromRowDataHash.Equal(toRowDataHash) {
+			return true, nil
+		}
+
+		aiChanged, err := td.hasAutoIncrementChanged(ctx)
+		if err != nil {
+			return false, err
+		}
+		if aiChanged {
 			return true, nil
 		}
 
