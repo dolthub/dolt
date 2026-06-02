@@ -85,8 +85,8 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl      string
 	DropDatabaseHooks []DropDatabaseHook
 	InitDatabaseHooks []InitDatabaseHook
-	remoteDbs   map[string]*doltdb.DoltDB
-	remoteDbsMu *sync.Mutex
+	remoteDbs         map[string]*doltdb.DoltDB
+	remoteDbsMu       *sync.Mutex
 }
 
 // ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
