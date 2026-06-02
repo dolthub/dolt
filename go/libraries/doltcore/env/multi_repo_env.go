@@ -325,7 +325,7 @@ func (mrEnv *MultiRepoEnv) Close(ctx context.Context) error {
 	var errs []error
 	for _, namedEnv := range mrEnv.envs {
 		if ddb := namedEnv.env.DoltDB(ctx); ddb != nil {
-			if err := ddb.Close(); err != nil {
+			if err := ddb.Close(ctx); err != nil {
 				errs = append(errs, err)
 			}
 		}

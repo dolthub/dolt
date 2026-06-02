@@ -252,7 +252,7 @@ func validateBranchMergedIntoUpstream[C doltdb.Context](ctx context.Context, dbd
 	if err != nil {
 		return err
 	}
-	defer remoteDb.Close()
+	defer remoteDb.Close(ctx)
 
 	cs, err := doltdb.NewCommitSpec(branch.GetPath())
 	if err != nil {

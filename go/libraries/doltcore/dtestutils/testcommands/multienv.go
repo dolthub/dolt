@@ -93,7 +93,7 @@ func (mr *MultiRepoTestSetup) homeProv() (string, error) {
 
 func (mr *MultiRepoTestSetup) Close() {
 	for _, db := range mr.DoltDBs {
-		err := db.Close()
+		err := db.Close(context.Background())
 		if err != nil {
 			mr.Errhand(err)
 		}

@@ -324,7 +324,7 @@ func (p *DoltDatabaseProvider) Close() {
 					continue
 				}
 				seen[ddb] = struct{}{}
-				_ = ddb.Close()
+				_ = ddb.Close(context.Background())
 			}
 		}
 	}
@@ -1055,7 +1055,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	if closeDoltDBs {
 		for _, ddb := range db.DoltDatabases() {
 			if ddb != nil {
-				_ = ddb.Close()
+				_ = ddb.Close(ctx)
 			}
 		}
 	}

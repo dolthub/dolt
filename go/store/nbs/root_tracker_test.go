@@ -644,6 +644,10 @@ func (ftp fakeTablePersister) Close() error {
 	return nil
 }
 
+func (ftp fakeTablePersister) Teardown(ctx context.Context) error {
+	return nil
+}
+
 func (ftp fakeTablePersister) AccessMode() chunks.ExclusiveAccessMode {
 	return chunks.ExclusiveAccessMode_Shared
 }

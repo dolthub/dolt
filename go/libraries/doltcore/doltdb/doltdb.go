@@ -349,8 +349,14 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 	return err
 }
 
-func (ddb *DoltDB) Close() error {
-	return ddb.db.Close()
+func (ddb *DoltDB) Close(ctx context.Context) error {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+	cErr := ddb.db.Close()
+	tErr := cs.Teardown(ctx)
+	if cErr != nil {
+		return cErr
+	}
+	return tErr
 }
 
 // GetHashForRefStr resolves a ref string (such as a branch name or tag) and resolves it to a hash.Hash.

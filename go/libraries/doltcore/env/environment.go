@@ -128,7 +128,7 @@ func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 // loading the database is gated behind.
 func (dEnv *DoltEnv) Close() error {
 	if dEnv != nil && dEnv.doltDB != nil {
-		err := dEnv.doltDB.Close()
+		err := dEnv.doltDB.Close(context.Background())
 		dEnv.doltDB = nil
 		return err
 	}

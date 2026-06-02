@@ -1764,6 +1764,10 @@ func (nbs *NomsBlockStore) Close() error {
 	return err
 }
 
+func (nbs *NomsBlockStore) Teardown(ctx context.Context) error {
+	return nbs.persister.Teardown(ctx)
+}
+
 func (nbs *NomsBlockStore) Stats() interface{} {
 	return nbs.stats.Clone()
 }

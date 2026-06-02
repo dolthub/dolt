@@ -199,3 +199,7 @@ func (g GhostBlockStore) StatsSummary() string {
 func (g GhostBlockStore) Close() error {
 	panic("GhostBlockStore does not support Close")
 }
+
+func (g GhostBlockStore) Teardown(ctx context.Context) error {
+	return nil
+}

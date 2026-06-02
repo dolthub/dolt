@@ -63,6 +63,10 @@ func (ob *OSSBlobstore) Path() string {
 	return path.Join(ob.bucketName, ob.prefix)
 }
 
+func (ob *OSSBlobstore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 func (ob *OSSBlobstore) Exists(_ context.Context, key string) (bool, error) {
 	return ob.bucket.IsObjectExist(ob.absKey(key))
 }

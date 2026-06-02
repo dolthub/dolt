@@ -112,13 +112,6 @@ var (
 // Test seam only.
 var gitBlobstoreSyncForReadTTLOverride time.Duration
 
-// No-op Close so callers can defer Close() on a shared instance.
-type gitNoopCloseChunkStore struct {
-	*nbs.NomsBlockStore
-}
-
-func (gitNoopCloseChunkStore) Close() error { return nil }
-
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
 	if err != nil {
@@ -187,9 +180,8 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	cs := gitNoopCloseChunkStore{NomsBlockStore: nbsCS}
-	vrw := types.NewValueStore(cs)
-	ns := tree.NewNodeStore(cs)
+	vrw := types.NewValueStore(nbsCS)
+	ns := tree.NewNodeStore(nbsCS)
 	db := datas.NewTypesDatabase(vrw, ns)
 
 	gitRemoteCacheMu.Lock()

@@ -95,7 +95,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 	if err != nil {
 		return cmdFailure, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
 	}
-	defer remoteDB.Close()
+	defer remoteDB.Close(ctx)
 
 	err = remoteDB.Rebase(ctx)
 	if err != nil {

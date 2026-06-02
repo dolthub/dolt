@@ -85,7 +85,7 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	defer srcDB.Close()
+	defer srcDB.Close(ctx)
 
 	err = srcDB.Rebase(ctx)
 	if err != nil {

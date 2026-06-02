@@ -220,7 +220,7 @@ type prollyStats struct {
 
 func (p *prollyStats) Close() {
 	if p.ddb != nil {
-		_ = p.ddb.Close()
+		_ = p.ddb.Close(context.Background())
 	}
 }
 
