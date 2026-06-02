@@ -28,10 +28,16 @@ import (
 )
 
 const (
-	fileParamName  = "file"
+	fileParamName = "file"
+	// Frontmatter emitted at the top of cli.md. The dolt docs site consumes
+	// title + description from frontmatter (title becomes the <title> and on-
+	// page H1; description powers OG/Twitter cards and the per-entry summary
+	// in llms.txt). Keep description as a single line of plain YAML — the
+	// docs site's frontmatter checker accepts unquoted strings here.
 	cliMdDocHeader = "" +
 		"---\n" +
 		"title: CLI\n" +
+		"description: Full reference for the dolt command-line interface — every command, every flag, with examples. Generated from `dolt dump-docs`.\n" +
 		"---\n\n" +
 		"# Command Line Interface Reference\n\n"
 )
