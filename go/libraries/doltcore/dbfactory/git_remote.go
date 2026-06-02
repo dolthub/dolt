@@ -107,6 +107,39 @@ var (
 	gitRemoteCache   = map[string]gitRemoteCacheEntry{}
 )
 
+// TeardownGitRemotes runs Teardown on every cached git-remote chunk store,
+// driving GitBlobstore.Teardown (maybeRunGC + per-session ref cleanup) for
+// each. Intended to be called exactly once at process / engine shutdown.
+// Errors are intentionally swallowed.
+func TeardownGitRemotes(ctx context.Context) {
+	gitRemoteCacheMu.Lock()
+	entries := gitRemoteCache
+	gitRemoteCache = map[string]gitRemoteCacheEntry{}
+	gitRemoteCacheMu.Unlock()
+
+	for _, entry := range entries {
+		_ = datas.ChunkStoreFromDatabase(entry.db).Teardown(ctx)
+	}
+}
+
+// gitSharedChunkStore wraps the singleton *NomsBlockStore handed out by
+// gitRemoteCache so that callers can safely defer Close() on their *DoltDB.
+// The underlying NomsBlockStore is shared across every *DoltDB the factory
+// hands out for a given (cache repo, ref); letting any one caller's Close()
+// propagate down to nbs.Close() would close the shared manifest + table
+// readers (the table-index refcount goes negative on the next caller's
+// Close, which panics). Suppressing Close at this layer keeps that
+// machinery alive for the lifetime of the process / provider.
+//
+// The destructive teardown (git GC, per-session ref cleanup) lives in
+// Teardown, which is promoted through the embedded *NomsBlockStore and is
+// driven exactly once by DoltDatabaseProvider.Close().
+type gitSharedChunkStore struct {
+	*nbs.NomsBlockStore
+}
+
+func (gitSharedChunkStore) Close() error { return nil }
+
 // gitBlobstoreSyncForReadTTLOverride, when non-zero, is passed as
 // GitBlobstoreOptions.SyncForReadTTL when constructing a new GitBlobstore.
 // Test seam only.
@@ -180,8 +213,9 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	vrw := types.NewValueStore(nbsCS)
-	ns := tree.NewNodeStore(nbsCS)
+	cs := gitSharedChunkStore{NomsBlockStore: nbsCS}
+	vrw := types.NewValueStore(cs)
+	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 
 	gitRemoteCacheMu.Lock()

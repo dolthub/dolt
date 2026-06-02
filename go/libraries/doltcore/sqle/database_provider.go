@@ -85,6 +85,17 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl      string
 	DropDatabaseHooks []DropDatabaseHook
 	InitDatabaseHooks []InitDatabaseHook
+
+	// remoteDbs caches *doltdb.DoltDB wrappers for git-backed remotes, keyed
+	// by lower-cased remote URL. Saves the wrapper-construction work on every
+	// GetRemoteDB call; the underlying singleton (ChunkStore + datas.Database)
+	// is owned by dbfactory.gitRemoteCache and torn down via
+	// dbfactory.TeardownGitRemotes. Callers MUST NOT call Teardown on the
+	// returned value (Close is fine — the gitSharedChunkStore shim swallows
+	// it for git remotes).
+	// Mutex is a pointer so WithFunctions / WithTableFunctions copies share it.
+	remoteDbs   map[string]*doltdb.DoltDB
+	remoteDbsMu *sync.Mutex
 }
 
 // ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
@@ -217,6 +228,8 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 		overrides:              overrides,
 		txLocks:                keymutex.NewMapped(),
+		remoteDbs:              map[string]*doltdb.DoltDB{},
+		remoteDbsMu:            &sync.Mutex{},
 	}, nil
 }
 
@@ -329,6 +342,19 @@ func (p *DoltDatabaseProvider) Close() {
 		}
 	}
 
+}
+
+// Teardown releases end-of-lifecycle resources owned by the provider —
+// notably the process-global git-remote cache, whose Teardown drives
+// GitBlobstore.Teardown (maybeRunGC + per-session ref cleanup). Intended to
+// be called exactly once, by the owner of the provider's lifecycle
+// (typically engine shutdown at process exit). Close does not call
+// Teardown; callers must invoke both, in order: Teardown, then Close.
+func (p *DoltDatabaseProvider) Teardown(ctx context.Context) {
+	dbfactory.TeardownGitRemotes(ctx)
+	p.remoteDbsMu.Lock()
+	p.remoteDbs = map[string]*doltdb.DoltDB{}
+	p.remoteDbsMu.Unlock()
 }
 
 // Installs an InitDatabaseHook which configures new databases--those
@@ -574,6 +600,15 @@ func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlData
 	return revDbs, nil
 }
 
+// GetRemoteDB returns a *doltdb.DoltDB for the given remote.
+//
+// For git-backed remotes (URL prefix "git+"), the returned DoltDB is shared
+// across callers via the provider's remoteDbs cache. Callers MUST NOT call
+// Teardown on the returned value; Close is safe (suppressed by the
+// gitSharedChunkStore shim).
+//
+// For non-git remotes, the call is uncached and the caller owns the returned
+// DoltDB's lifecycle.
 func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote) (*doltdb.DoltDB, error) {
 	// For git remotes, thread through the initiating database's repo root so git caches can be located under
 	// `<repoRoot>/.dolt/...` instead of a user-global cache dir.
@@ -591,7 +626,36 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 		}
 	}
 
-	return r.GetRemoteDBWithoutCaching(ctx, format, dialer)
+	key := strings.ToLower(r.Url)
+	isGit := strings.HasPrefix(key, "git+")
+
+	if isGit {
+		p.remoteDbsMu.Lock()
+		cached, ok := p.remoteDbs[key]
+		p.remoteDbsMu.Unlock()
+		if ok {
+			return cached, nil
+		}
+	}
+
+	ddb, err := r.GetRemoteDBWithoutCaching(ctx, format, dialer)
+	if err != nil {
+		return nil, err
+	}
+
+	if isGit {
+		p.remoteDbsMu.Lock()
+		if existing, ok := p.remoteDbs[key]; ok {
+			// Lost a race; both wrap the same underlying datas.Database, so
+			// dropping ours is safe.
+			p.remoteDbsMu.Unlock()
+			_ = ddb.Close(ctx)
+			return existing, nil
+		}
+		p.remoteDbs[key] = ddb
+		p.remoteDbsMu.Unlock()
+	}
+	return ddb, nil
 }
 
 func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {

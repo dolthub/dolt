@@ -350,13 +350,19 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 }
 
 func (ddb *DoltDB) Close(ctx context.Context) error {
-	cs := datas.ChunkStoreFromDatabase(ddb.db)
-	cErr := ddb.db.Close()
-	tErr := cs.Teardown(ctx)
-	if cErr != nil {
-		return cErr
-	}
-	return tErr
+	return ddb.db.Close()
+}
+
+// Teardown releases resources that should be cleaned up on definitive shutdown
+// of this DoltDB — e.g. running periodic git GC and dropping per-session cache
+// refs for git-backed remotes. Distinct from Close: Close may be called many
+// times across deferred-cleanup paths on shared/cached DoltDB instances,
+// whereas Teardown is intended to be called exactly once by the owner of the
+// DoltDB's lifecycle (typically a higher-level cache at server shutdown).
+// Callers of cached DoltDBs (e.g. via DoltDatabaseProvider.GetRemoteDB) MUST
+// NOT call Teardown.
+func (ddb *DoltDB) Teardown(ctx context.Context) error {
+	return datas.ChunkStoreFromDatabase(ddb.db).Teardown(ctx)
 }
 
 // GetHashForRefStr resolves a ref string (such as a branch name or tag) and resolves it to a hash.Hash.
