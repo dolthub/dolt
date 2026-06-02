@@ -648,3 +648,35 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch other" ]] || false
 }
+
+@test "status: ALTER TABLE AUTO_INCREMENT value change shows table as modified" {
+    # See https://github.com/dolthub/dolt/issues/11145
+    dolt sql <<SQL
+CREATE TABLE ainc (id int NOT NULL AUTO_INCREMENT, PRIMARY KEY (id));
+INSERT INTO ainc VALUES ();
+SQL
+    dolt add -A && dolt commit -m "create ainc"
+
+    dolt sql -q "ALTER TABLE ainc AUTO_INCREMENT = 100"
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AUTO_INCREMENT=100" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "modified:         ainc" ]] || false
+    ! [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt add ainc
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "modified:         ainc" ]] || false
+
+    dolt commit -m "bump auto_increment"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
