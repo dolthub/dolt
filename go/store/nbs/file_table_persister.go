@@ -428,6 +428,10 @@ func (ftp *fsTablePersister) Close() error {
 	return nil
 }
 
+func (ftp *fsTablePersister) Teardown(ctx context.Context) error {
+	return nil
+}
+
 func (ftp *fsTablePersister) AccessMode() chunks.ExclusiveAccessMode {
 	return chunks.ExclusiveAccessMode_Shared
 }

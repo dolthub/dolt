@@ -79,6 +79,10 @@ func (bs *LocalBlobstore) Path() string {
 	return bs.RootDir
 }
 
+func (bs *LocalBlobstore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 // Get retrieves an io.reader for the portion of a blob specified by br along with
 // its version
 func (bs *LocalBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {

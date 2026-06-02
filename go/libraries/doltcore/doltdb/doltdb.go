@@ -353,6 +353,10 @@ func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
 }
 
+func (ddb *DoltDB) Teardown(ctx context.Context) error {
+	return datas.ChunkStoreFromDatabase(ddb.db).Teardown(ctx)
+}
+
 // GetHashForRefStr resolves a ref string (such as a branch name or tag) and resolves it to a hash.Hash.
 func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {

@@ -504,6 +504,7 @@ func (se *SqlEngine) Close() error {
 		err = se.engine.Close()
 	}
 	if se.provider != nil {
+		se.provider.Teardown(context.Background())
 		se.provider.Close()
 	}
 	return err

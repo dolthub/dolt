@@ -648,11 +648,9 @@ func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
 	return err
 }
 
-// Close best-effort deletes this instance's UUID-owned refs and
+// Teardown best-effort deletes this instance's UUID-owned refs and
 // periodically runs git gc to repack the cache repository.
-func (gbs *GitBlobstore) Close() error {
-	ctx := context.Background()
-
+func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 	// Best-effort periodic GC to repack the cache repo. Runs outside the
 	// write lock so a slow gc cannot serialize other writers. maybeRunGC
 	// has its own file-based lock for cross-process coordination.
@@ -680,6 +678,10 @@ func (gbs *GitBlobstore) Close() error {
 		deleteIfExists(gbs.localRef),
 		deleteIfExists(gbs.remoteTrackingRef),
 	)
+}
+
+func (gbs *GitBlobstore) Close() error {
+	return nil
 }
 
 const gcInterval = 24 * time.Hour

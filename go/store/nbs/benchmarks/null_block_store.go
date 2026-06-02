@@ -67,6 +67,10 @@ func (nb nullBlockStore) Close() error {
 	return nil
 }
 
+func (nb nullBlockStore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 func (nb nullBlockStore) Rebase(ctx context.Context) error {
 	return nil
 }

@@ -85,6 +85,8 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl      string
 	DropDatabaseHooks []DropDatabaseHook
 	InitDatabaseHooks []InitDatabaseHook
+	gitRemotes        map[string]*doltdb.DoltDB
+	gitRemotesMu      *sync.Mutex
 }
 
 // ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
@@ -217,6 +219,8 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 		overrides:              overrides,
 		txLocks:                keymutex.NewMapped(),
+		gitRemotes:             map[string]*doltdb.DoltDB{},
+		gitRemotesMu:           &sync.Mutex{},
 	}, nil
 }
 
@@ -329,6 +333,13 @@ func (p *DoltDatabaseProvider) Close() {
 		}
 	}
 
+}
+
+func (p *DoltDatabaseProvider) Teardown(ctx context.Context) {
+	dbfactory.TeardownGitRemotes(ctx)
+	p.gitRemotesMu.Lock()
+	p.gitRemotes = map[string]*doltdb.DoltDB{}
+	p.gitRemotesMu.Unlock()
 }
 
 // Installs an InitDatabaseHook which configures new databases--those
@@ -591,7 +602,38 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 		}
 	}
 
-	return r.GetRemoteDBWithoutCaching(ctx, format, dialer)
+	key := strings.ToLower(r.Url)
+	isGit := strings.HasPrefix(key, "git+")
+
+	if isGit {
+		p.gitRemotesMu.Lock()
+		cached, ok := p.gitRemotes[key]
+		p.gitRemotesMu.Unlock()
+		if ok {
+			return cached, nil
+		}
+	}
+
+	ddb, err := r.GetRemoteDBWithoutCaching(ctx, format, dialer)
+	if err != nil {
+		return nil, err
+	}
+
+	if isGit {
+		ddb = func() *doltdb.DoltDB {
+			p.gitRemotesMu.Lock()
+			defer p.gitRemotesMu.Unlock()
+			if existing, ok := p.gitRemotes[key]; ok {
+				// Lost a race; both wrap the same underlying datas.Database, so
+				// dropping ours is safe.
+				_ = ddb.Close()
+				return existing
+			}
+			p.gitRemotes[key] = ddb
+			return ddb
+		}()
+	}
+	return ddb, nil
 }
 
 func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {

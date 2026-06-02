@@ -453,6 +453,10 @@ func (ms *MemoryStoreView) Close() error {
 	return nil
 }
 
+func (ms *MemoryStoreView) Teardown(ctx context.Context) error {
+	return nil
+}
+
 type memoryStoreFactory struct {
 	stores map[string]*MemoryStorage
 	mu     *sync.Mutex
