@@ -256,7 +256,7 @@ func SchemaMerge(
 
 	// Add all merged CHECKs to merged schema
 	for _, chk := range mergedChks {
-		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
+		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced(), chk.IsNotValid())
 	}
 
 	return sch, sc, mergeInfo, diffInfo, nil

@@ -559,6 +559,7 @@ func serializeChecks(b *fb.Builder, checks []schema.Check) fb.UOffsetT {
 		serial.CheckConstraintAddEnforced(b, checks[i].Enforced())
 		serial.CheckConstraintAddExpression(b, eo)
 		serial.CheckConstraintAddName(b, no)
+		serial.CheckConstraintAddIsNotValid(b, checks[i].IsNotValid())
 		offs[i] = serial.CheckConstraintEnd(b)
 	}
 
@@ -578,7 +579,7 @@ func deserializeChecks(sch schema.Schema, s *serial.TableSchema) error {
 			return err
 		}
 		n, e := string(c.Name()), string(c.Expression())
-		if _, err := coll.AddCheck(n, e, c.Enforced()); err != nil {
+		if _, err := coll.AddCheck(n, e, c.Enforced(), c.IsNotValid()); err != nil {
 			return err
 		}
 	}

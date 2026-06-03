@@ -52,6 +52,9 @@ table ForeignKey {
   // For tables in the non-default schema, these fields are set 
   child_table_database_schema:[string];
   parent_table_database_schema:[string];
+
+  // For whether existing rows are checked
+  is_not_valid:bool;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

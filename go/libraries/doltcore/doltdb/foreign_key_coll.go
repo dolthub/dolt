@@ -60,6 +60,7 @@ type ForeignKey struct {
 	OnUpdate               ForeignKeyReferentialAction `noms:"on_update" json:"on_update"`
 	OnDelete               ForeignKeyReferentialAction `noms:"on_delete" json:"on_delete"`
 	UnresolvedFKDetails    UnresolvedFKDetails         `noms:"unres_fk,omitempty" json:"unres_fk,omitempty"`
+	IsNotValid             bool                        `noms:"is_not_valid,omitempty" json:"is_not_valid,omitempty"`
 }
 
 // UnresolvedFKDetails contains any details necessary for an unresolved foreign key to resolve to a valid foreign key.

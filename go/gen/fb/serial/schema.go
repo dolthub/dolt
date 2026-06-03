@@ -1125,7 +1125,19 @@ func (rcv *CheckConstraint) MutateEnforced(n bool) bool {
 	return rcv._tab.MutateBoolSlot(8, n)
 }
 
-const CheckConstraintNumFields = 3
+func (rcv *CheckConstraint) IsNotValid() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *CheckConstraint) MutateIsNotValid(n bool) bool {
+	return rcv._tab.MutateBoolSlot(10, n)
+}
+
+const CheckConstraintNumFields = 4
 
 func CheckConstraintStart(builder *flatbuffers.Builder) {
 	builder.StartObject(CheckConstraintNumFields)
@@ -1138,6 +1150,9 @@ func CheckConstraintAddExpression(builder *flatbuffers.Builder, expression flatb
 }
 func CheckConstraintAddEnforced(builder *flatbuffers.Builder, enforced bool) {
 	builder.PrependBoolSlot(2, enforced, false)
+}
+func CheckConstraintAddIsNotValid(builder *flatbuffers.Builder, isNotValid bool) {
+	builder.PrependBoolSlot(3, isNotValid, false)
 }
 func CheckConstraintEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

@@ -341,7 +341,19 @@ func (rcv *ForeignKey) ParentTableDatabaseSchemaLength() int {
 	return 0
 }
 
-const ForeignKeyNumFields = 13
+func (rcv *ForeignKey) IsNotValid() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(30))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *ForeignKey) MutateIsNotValid(n bool) bool {
+	return rcv._tab.MutateBoolSlot(30, n)
+}
+
+const ForeignKeyNumFields = 14
 
 func ForeignKeyStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ForeignKeyNumFields)
@@ -402,6 +414,9 @@ func ForeignKeyAddParentTableDatabaseSchema(builder *flatbuffers.Builder, parent
 }
 func ForeignKeyStartParentTableDatabaseSchemaVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
+}
+func ForeignKeyAddIsNotValid(builder *flatbuffers.Builder, isNotValid bool) {
+	builder.PrependBoolSlot(13, isNotValid, false)
 }
 func ForeignKeyEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

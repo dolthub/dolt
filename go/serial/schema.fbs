@@ -153,6 +153,7 @@ table CheckConstraint {
     name:string;
     expression:string;
     enforced:bool;
+    is_not_valid:bool;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go
