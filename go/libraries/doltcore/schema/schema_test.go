@@ -540,15 +540,17 @@ func TestWithRemappedColumnTags(t *testing.T) {
 		require.Equal(t, uint16(4096), remapped.GetTargetRowSize())
 	})
 
-	t.Run("EmptyRemapReturnsInputSchema", func(t *testing.T) {
+	t.Run("EmptyRemapReturnsEquivalentSchema", func(t *testing.T) {
 		sch, _ := newRemapInputs(t)
 
 		remapped, err := WithRemappedColumnTags(sch, nil)
 		require.NoError(t, err)
-		require.Same(t, sch, remapped, "nil remap must short-circuit and return the input schema")
+		require.NotSame(t, sch, remapped, "nil remap must allocate a fresh schema")
+		require.Equal(t, sch.GetAllCols().GetColumns(), remapped.GetAllCols().GetColumns())
 
 		remapped, err = WithRemappedColumnTags(sch, map[uint64]uint64{})
 		require.NoError(t, err)
-		require.Same(t, sch, remapped, "empty remap must short-circuit and return the input schema")
+		require.NotSame(t, sch, remapped, "empty remap must allocate a fresh schema")
+		require.Equal(t, sch.GetAllCols().GetColumns(), remapped.GetAllCols().GetColumns())
 	})
 }

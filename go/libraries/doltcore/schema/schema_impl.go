@@ -133,13 +133,9 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 }
 
 // WithRemappedColumnTags returns a copy of |sch| with column and index tags rewritten via
-// |tagRemap|. Schema metadata and check constraints are preserved. Returns |sch| unchanged
-// when |tagRemap| is empty.
+// |tagRemap|. Schema metadata and check constraints are preserved. An empty or nil |tagRemap|
+// still returns a fresh schema equivalent to |sch|.
 func WithRemappedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, error) {
-	if len(tagRemap) == 0 {
-		return sch, nil
-	}
-
 	allCols := sch.GetAllCols()
 	cols := allCols.GetColumns()
 	for oldTag, newTag := range tagRemap {
