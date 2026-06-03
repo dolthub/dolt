@@ -172,7 +172,6 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	// Close runs after the Unlock below (defers are LIFO), releasing the lock's directory handle.
 	defer initLock.Close()
 	if err := initLock.Lock(); err != nil {
 		return nil, nil, nil, err

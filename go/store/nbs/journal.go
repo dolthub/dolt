@@ -628,8 +628,8 @@ func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*fsl
 		err = lock.LockWithTimeout(timeout)
 	}
 	if errors.Is(err, fslock.ErrTimeout) {
-		// We didn't acquire the lock; release its directory handle and either
-		// fail or fall back to read-only mode.
+		// We didn't acquire the lock; close the *Lock instance and
+		// either fail or fall back to read-only mode.
 		_ = lock.Close()
 		lock = nil
 		if failOnTimeout {

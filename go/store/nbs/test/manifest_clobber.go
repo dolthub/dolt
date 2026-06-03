@@ -45,8 +45,8 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	// Close releases the lock's directory handle; it runs after the Unlock below.
 	defer lck.Close()
+
 	err = lck.TryLock()
 	if err == fslock.ErrLocked {
 		return
@@ -54,7 +54,6 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-
 	defer lck.Unlock()
 
 	m, err := os.Create(manifestFile)

@@ -101,8 +101,7 @@ func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
 	if err != nil {
 		return nil, err
 	}
-	// The fslock holds a directory handle for as long as it exists. If we don't
-	// return the manifest (which owns the lock), release it here.
+	// If we don't return the manifest, which owns the lock, release it here.
 	defer func() {
 		if err != nil {
 			_ = lock.Close()
@@ -110,8 +109,7 @@ func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
 	}()
 	m = fileManifest{dir: dir, lock: lock}
 
-	var f *os.File
-	f, err = openIfExists(filepath.Join(dir, manifestFileName))
+	f, err := openIfExists(filepath.Join(dir, manifestFileName))
 	if err != nil {
 		return nil, err
 	} else if f == nil {
@@ -124,8 +122,7 @@ func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
 		}
 	}()
 
-	var ok bool
-	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
+	ok, _, err := m.ParseIfExists(ctx, &Stats{}, nil)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -139,12 +136,7 @@ type fileManifest struct {
 	dir  string
 }
 
-// Close releases the directory handle held by the manifest's file lock. It is
-// invoked by NomsBlockStore.Close when the store is torn down.
 func (fm fileManifest) Close() error {
-	if fm.lock == nil {
-		return nil
-	}
 	return fm.lock.Close()
 }
 

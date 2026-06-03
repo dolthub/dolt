@@ -709,7 +709,6 @@ func (gbs *GitBlobstore) maybeRunGC() {
 	if err != nil {
 		return // can't open the lock directory, skip
 	}
-	// Close runs after the Unlock below (defers are LIFO), releasing the lock's directory handle.
 	defer lck.Close()
 	if err := lck.LockWithTimeout(0); err != nil {
 		return // another process holds the lock, skip
