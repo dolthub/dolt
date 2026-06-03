@@ -170,10 +170,12 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, totalSize int64, 
 }
 
 func fLock(lockFilePath string) (*fslock.Lock, error) {
-	lck := fslock.New(lockFilePath)
-	err := lck.Lock()
-
+	lck, err := fslock.New(lockFilePath)
 	if err != nil {
+		return nil, err
+	}
+	if err := lck.Lock(); err != nil {
+		_ = lck.Close()
 		return nil, err
 	}
 
@@ -191,7 +193,11 @@ func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key 
 		return "", errors.New("Could not acquire lock of " + lockFilePath)
 	}
 
-	defer lck.Unlock()
+	// Unlock releases the lock; Close releases the lock's directory handle.
+	defer func() {
+		_ = lck.Unlock()
+		_ = lck.Close()
+	}()
 
 	rc, _, ver, err := bs.Get(ctx, key, BlobRange{})
 
