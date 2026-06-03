@@ -537,7 +537,7 @@ func testInsertOrderIndependence(t *testing.T, keyDesc *val.TupleDesc) {
 func testIncrementalInserts(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("incremental inserts", func(t *testing.T) {
 		ctx := context.Background()
-		ns := tree.NewTestNodeStore()
+		ns, keyDesc := keyDescWithNodeStore(keyDesc)
 		pb := pool.NewBuffPool()
 		logChunkSize := uint8(1)
 		distanceType := vector.DistanceL2Squared{}
@@ -601,10 +601,23 @@ func testIncrementalInserts(t *testing.T, keyDesc *val.TupleDesc) {
 	})
 }
 
+// keyDescWithNodeStore returns a new NodeStore and a TupleDesc based on the input that uses it.
+//
+// TODO: this is necessary for VECTOR encoding because the map mutator needs to be able to call Compare() on the
+// list of keys under edit, which requires the NodeStore for `BytesAdaptiveEnc`. For this use case, this comparison
+// is expensive and unnecessary. We should change the map mutator used by vector indexes to use a custom comparator.
+func keyDescWithNodeStore(keyDesc *val.TupleDesc) (tree.NodeStore, *val.TupleDesc) {
+	ns := tree.NewTestNodeStore()
+	keyDesc = val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{
+		ValueStore: ns,
+	}, keyDesc.Types...)
+	return ns, keyDesc
+}
+
 func testIncrementalUpdates(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("incremental updates", func(t *testing.T) {
 		ctx := context.Background()
-		ns := tree.NewTestNodeStore()
+		ns, keyDesc := keyDescWithNodeStore(keyDesc)
 		pb := pool.NewBuffPool()
 		logChunkSize := uint8(1)
 		distanceType := vector.DistanceL2Squared{}
@@ -700,7 +713,7 @@ func testIncrementalUpdates(t *testing.T, keyDesc *val.TupleDesc) {
 func testIncrementalDeletes(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("incremental deletes", func(t *testing.T) {
 		ctx := context.Background()
-		ns := tree.NewTestNodeStore()
+		ns, keyDesc := keyDescWithNodeStore(keyDesc)
 		pb := pool.NewBuffPool()
 		logChunkSize := uint8(1)
 		distanceType := vector.DistanceL2Squared{}

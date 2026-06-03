@@ -195,10 +195,10 @@ func openJsonDoc(ctx context.Context, ns NodeStore, v val.AdaptiveValue) (sql.JS
 }
 
 func tryWithFallback(
-		ctx context.Context,
-		i IndexedJsonDocument,
-		tryFunc func() error,
-		fallbackFunc func(document types.JSONDocument) error) error {
+	ctx context.Context,
+	i IndexedJsonDocument,
+	tryFunc func() error,
+	fallbackFunc func(document types.JSONDocument) error) error {
 	err := tryFunc()
 	if err == unknownLocationKeyError || err == unsupportedPathError || err == jsonParseError {
 		if err != unsupportedPathError {
