@@ -92,6 +92,7 @@ var _ dsess.RevisionDatabase = Database{}
 var _ globalstate.GlobalStateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
 var _ sql.Database = Database{}
+var _ sql.IndexNameGenerator = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TableCreator = Database{}
 var _ sql.IndexedTableCreator = Database{}
@@ -1691,6 +1692,11 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 
 func (db Database) SchemaName() string {
 	return db.schemaName
+}
+
+// GenerateIndexName implements the sql.IndexNameGenerator interface.
+func (db Database) GenerateIndexName(ctx *sql.Context, _ string, idxDef sql.IndexDef, tbl sql.Table) (string, error) {
+	return sql.GenerateMySqlIndexName(ctx, idxDef, tbl)
 }
 
 // GetAllTableNames returns all user-space tables, including system tables in user space
