@@ -48,6 +48,13 @@ const (
 	ForeignKeyReferentialAction_SetDefault
 )
 
+type ForeignKeyMatchType byte
+
+const (
+	ForeignKeyMatchType_Simple ForeignKeyMatchType = iota
+	ForeignKeyMatchType_Full
+)
+
 // ForeignKey is the complete, internal representation of a Foreign Key.
 type ForeignKey struct {
 	Name                   string                      `noms:"name" json:"name"`
@@ -61,6 +68,7 @@ type ForeignKey struct {
 	OnDelete               ForeignKeyReferentialAction `noms:"on_delete" json:"on_delete"`
 	UnresolvedFKDetails    UnresolvedFKDetails         `noms:"unres_fk,omitempty" json:"unres_fk,omitempty"`
 	IsNotValid             bool                        `noms:"is_not_valid,omitempty" json:"is_not_valid,omitempty"`
+	MatchType              ForeignKeyMatchType         `noms:"match_type,omitempty" json:"match_type,omitempty"`
 }
 
 // UnresolvedFKDetails contains any details necessary for an unresolved foreign key to resolve to a valid foreign key.

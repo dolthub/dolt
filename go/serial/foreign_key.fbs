@@ -23,6 +23,12 @@ enum ForeignKeyReferentialAction : uint8 {
   SetNull = 4,
 }
 
+enum ForeignKeyMatchType : uint8 {
+  Simple = 0,
+  Full   = 1,
+  Partial = 2,
+}
+
 table ForeignKeyCollection {
   foreign_keys:[ForeignKey];
 }
@@ -55,6 +61,9 @@ table ForeignKey {
 
   // For whether existing rows are checked
   is_not_valid:bool;
+
+  // NULL handling semantics for composite FK columns
+  match_type:ForeignKeyMatchType;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

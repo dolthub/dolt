@@ -1264,6 +1264,7 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 				OnDelete:       sqlutil.ToReferentialAction(fk.OnDelete),
 				IsResolved:     fk.IsResolved(),
 				IsNotValid:     fk.IsNotValid,
+				MatchType:      sql.ForeignKeyMatchType(fk.MatchType),
 			}
 			continue
 		}
@@ -2798,6 +2799,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 		return err
 	}
 	doltFk.IsNotValid = sqlFk.IsNotValid
+	doltFk.MatchType = doltdb.ForeignKeyMatchType(sqlFk.MatchType)
 
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -2900,6 +2902,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 		}
 	}
 	doltFk.IsNotValid = sqlFk.IsNotValid
+	doltFk.MatchType = doltdb.ForeignKeyMatchType(sqlFk.MatchType)
 
 	err = fkc.AddKeys(doltFk)
 	if err != nil {
