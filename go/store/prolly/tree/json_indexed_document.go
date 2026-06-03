@@ -143,11 +143,12 @@ func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []b
 // fallback. When neither side is indexed (both inline) we still get correct MySQL JSON
 // ordering via types.CompareJSON.
 func compareJsonAdaptiveValues(ctx context.Context, ns NodeStore, l, r val.AdaptiveValue) (int, error) {
-	lWrapper, err := OpenJsonAdaptiveValue(ctx, l, ns)
+	lWrapper, err := openJsonDoc(ctx, ns, l)
 	if err != nil {
 		return 0, err
 	}
-	rWrapper, err := OpenJsonAdaptiveValue(ctx, r, ns)
+
+	rWrapper, err := openJsonDoc(ctx, ns, r)
 	if err != nil {
 		return 0, err
 	}
@@ -184,11 +185,20 @@ func compareJsonAdaptiveValues(ctx context.Context, ns NodeStore, l, r val.Adapt
 	return types.CompareJSON(ctx, lv, rv)
 }
 
+func openJsonDoc(ctx context.Context, ns NodeStore, v val.AdaptiveValue) (sql.JSONWrapper, error) {
+	val, _, err := val.GetJsonAdaptiveValue(ctx, ns, v)
+	if err != nil {
+		return nil, err
+	}
+
+	return OpenJsonAdaptiveValue(ctx, val, ns)
+}
+
 func tryWithFallback(
-	ctx context.Context,
-	i IndexedJsonDocument,
-	tryFunc func() error,
-	fallbackFunc func(document types.JSONDocument) error) error {
+		ctx context.Context,
+		i IndexedJsonDocument,
+		tryFunc func() error,
+		fallbackFunc func(document types.JSONDocument) error) error {
 	err := tryFunc()
 	if err == unknownLocationKeyError || err == unsupportedPathError || err == jsonParseError {
 		if err != unsupportedPathError {
