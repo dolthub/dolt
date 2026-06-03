@@ -918,6 +918,10 @@ func (dcs *DoltChunkStore) Close() error {
 	return dcs.finalizer()
 }
 
+func (dcs *DoltChunkStore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 // Uploads all chunks in |hashToChunk| to the remote store and returns
 // the manifest entries that correspond to the new table files. Used
 // by |Commit|. Typically |hashToChunk| will have come from our |wb|

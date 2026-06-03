@@ -136,6 +136,10 @@ type ChunkStore interface {
 	// Close() concurrently with any other ChunkStore method; behavior is
 	// undefined and probably crashy.
 	io.Closer
+
+	// Teardown releases resources that should be cleaned up before Close.
+	// Implementations that have no such resources may return nil.
+	Teardown(ctx context.Context) error
 }
 
 type DebugLogger interface {

@@ -537,6 +537,10 @@ func (j *ChunkJournal) Close() (err error) {
 	return err
 }
 
+func (j *ChunkJournal) Teardown(ctx context.Context) error {
+	return nil
+}
+
 // journalManifestWrapper adapts a *ChunkJournal to the manifest interface so a
 // NomsBlockStore can hold the journal as its manifest separately from holding
 // it as its tablePersister. The journal writer is closed and the latest root is

@@ -349,6 +349,15 @@ func (gcs *GenerationalNBS) Close() error {
 	return nErr
 }
 
+func (gcs *GenerationalNBS) Teardown(ctx context.Context) error {
+	oErr := gcs.oldGen.Teardown(ctx)
+	nErr := gcs.newGen.Teardown(ctx)
+	if oErr != nil {
+		return oErr
+	}
+	return nErr
+}
+
 func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSet) error {
 	notInOldGen, err := gcs.oldGen.HasMany(ctx, hashes)
 

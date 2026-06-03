@@ -530,6 +530,49 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_status reports AUTO_INCREMENT value changes",
+		// See https://github.com/dolthub/dolt/issues/11145
+		SetUpScript: []string{
+			"CREATE TABLE ainc (id int NOT NULL AUTO_INCREMENT, PRIMARY KEY (id));",
+			"INSERT INTO ainc VALUES ();",
+			"CALL DOLT_COMMIT('-Am', 'create ainc');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "ALTER TABLE ainc AUTO_INCREMENT = 100;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT table_name, staged, status FROM dolt_status;",
+				Expected: []sql.Row{{"ainc", byte(0), "modified"}},
+			},
+			{
+				Query:    "CALL DOLT_ADD('ainc');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT table_name, staged, status FROM dolt_status;",
+				Expected: []sql.Row{{"ainc", byte(1), "modified"}},
+			},
+			{
+				Query:    "CALL DOLT_COMMIT('-m', 'bump auto_increment');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_status;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "ALTER TABLE ainc AUTO_INCREMENT = 100;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_status;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
 		Name: "dolt_commit with only ignored table changes closes the transaction",
 		SetUpScript: []string{
 			"INSERT INTO dolt_ignore VALUES ('ignored_*', true)",

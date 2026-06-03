@@ -107,17 +107,32 @@ var (
 	gitRemoteCache   = map[string]gitRemoteCacheEntry{}
 )
 
-// gitBlobstoreSyncForReadTTLOverride, when non-zero, is passed as
-// GitBlobstoreOptions.SyncForReadTTL when constructing a new GitBlobstore.
-// Test seam only.
-var gitBlobstoreSyncForReadTTLOverride time.Duration
+func TeardownGitRemotes(ctx context.Context) {
+	gitRemoteCacheMu.Lock()
+	entries := gitRemoteCache
+	gitRemoteCache = map[string]gitRemoteCacheEntry{}
+	gitRemoteCacheMu.Unlock()
 
-// No-op Close so callers can defer Close() on a shared instance.
-type gitNoopCloseChunkStore struct {
+	for _, entry := range entries {
+		cs := datas.ChunkStoreFromDatabase(entry.db)
+		_ = cs.Teardown(ctx)
+		if g, ok := cs.(gitSharedChunkStore); ok {
+			_ = g.ForceClose()
+		}
+	}
+}
+
+type gitSharedChunkStore struct {
 	*nbs.NomsBlockStore
 }
 
-func (gitNoopCloseChunkStore) Close() error { return nil }
+func (gitSharedChunkStore) Close() error { return nil }
+
+func (cs gitSharedChunkStore) ForceClose() error {
+	return cs.NomsBlockStore.Close()
+}
+
+var gitBlobstoreSyncForReadTTLOverride time.Duration
 
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
@@ -192,7 +207,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	cs := gitNoopCloseChunkStore{NomsBlockStore: nbsCS}
+	cs := gitSharedChunkStore{NomsBlockStore: nbsCS}
 	vrw := types.NewValueStore(cs)
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)

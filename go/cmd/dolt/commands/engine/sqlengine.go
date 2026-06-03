@@ -97,6 +97,9 @@ type SqlEngineConfig struct {
 	// Intended for embedded-driver use-cases that need to influence dbfactory / storage open behavior.
 	DBLoadParams map[string]interface{}
 
+	// ProviderFactory controls how the DatabaseProvider is created. If nil, sqle.DoltProviderFactory is used.
+	ProviderFactory sqle.ProviderFactory
+
 	FatalBehavior dherrors.FatalBehavior
 }
 
@@ -181,12 +184,31 @@ func NewSqlEngine(
 		locations = append(locations, nil)
 	}
 
+	factory := config.ProviderFactory
+	if factory == nil {
+		factory = sqle.DoltProviderFactory{}
+	}
+
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
+	engineProvider, err := factory.NewProvider(b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
 	if err != nil {
 		return nil, err
 	}
-	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
+
+	// Extract the underlying *DoltDatabaseProvider for Dolt-specific configuration. For the
+	// default DoltProviderFactory the result IS a *DoltDatabaseProvider; custom factories
+	// (e.g. Doltgres) return a wrapper and implement DoltProviderUnwrapper to expose it.
+	var pro *sqle.DoltDatabaseProvider
+	switch p := engineProvider.(type) {
+	case *sqle.DoltDatabaseProvider:
+		pro = p
+	case sqle.DoltProviderUnwrapper:
+		pro = p.UnderlyingDoltProvider()
+	default:
+		return nil, fmt.Errorf("provider %T must be or wrap a *sqle.DoltDatabaseProvider", engineProvider)
+	}
+
+	pro.SetRemoteDialer(mrEnv.RemoteDialProvider())
 	if config != nil && len(config.DBLoadParams) > 0 {
 		pro.SetDBLoadParams(config.DBLoadParams)
 	}
@@ -200,7 +222,7 @@ func NewSqlEngine(
 
 	sqlEngine := &SqlEngine{}
 	// Create the engine
-	engine := gms.New(analyzer.NewBuilder(pro).AddOverrides(config.EngineOverrides).Build(), &gms.Config{
+	engine := gms.New(analyzer.NewBuilder(engineProvider).AddOverrides(config.EngineOverrides).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
@@ -372,7 +394,7 @@ func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) 
 func (se *SqlEngine) InitStats(ctx context.Context) error {
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	pro := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
+	pro := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(dsess.DoltDatabaseProvider)
 	sqlCtx, err := se.NewLocalContext(ctx)
 	if err != nil {
 		return err
@@ -386,8 +408,10 @@ func (se *SqlEngine) InitStats(ctx context.Context) error {
 		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 		sc.SetMemOnly(memOnly.(int8) == 1)
 
-		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
-		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
+		if adder, ok := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(sqle.DatabaseHookRegistrar); ok {
+			adder.AddInitDatabaseHook(statspro.NewInitDatabaseHook(sc))
+			adder.AddDropDatabaseHook(statspro.NewDropDatabaseHook(sc))
+		}
 
 		var sqlDbs []sql.Database
 		for _, db := range dbs {
@@ -480,6 +504,7 @@ func (se *SqlEngine) Close() error {
 		err = se.engine.Close()
 	}
 	if se.provider != nil {
+		se.provider.Teardown(context.Background())
 		se.provider.Close()
 	}
 	return err

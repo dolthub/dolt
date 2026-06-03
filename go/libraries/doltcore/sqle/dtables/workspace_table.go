@@ -554,11 +554,6 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		}
 	}
 
-	if wkDel == nil && stgDel == nil {
-		emptyTable := emptyWorkspaceTable{tableName}
-		return &emptyTable, nil
-	}
-
 	var fromSch schema.Schema
 	if stgDel != nil && stgDel.FromTable != nil {
 		fromSch, err = stgDel.FromTable.GetSchema(ctx)
@@ -585,7 +580,22 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		}
 	}
 	if fromSch == nil && toSch == nil {
-		return nil, errors.New("Runtime error: from and to schemas are both nil")
+		// TODO: We should use getTableInsensitiveOrError to error out here like we do for nonexistent dolt_diff tables.
+		//  https://github.com/dolthub/dolt/issues/11139
+		table, _, tableExists, err := doltdb.GetTableInsensitive(ctx, head, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !tableExists {
+			return &emptyWorkspaceTable{tableName: tableName}, nil
+		}
+
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		toSch = sch
+		fromSch = sch
 	}
 	if fromSch == nil {
 		fromSch = toSch

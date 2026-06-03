@@ -149,7 +149,7 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 }
 
 // Init should only be called once
-func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, dbs []sql.Database) error {
+func (sc *StatsController) Init(ctx context.Context, pro dsess.DoltDatabaseProvider, ctxGen ctxFactory, dbs []sql.Database) error {
 	sc.pro = pro
 
 	ctxGenWrap := func(ctx context.Context) (*sql.Context, error) {

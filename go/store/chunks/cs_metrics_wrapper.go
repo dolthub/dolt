@@ -157,6 +157,10 @@ func (csMW *CSMetricWrapper) Close() error {
 	return csMW.cs.Close()
 }
 
+func (csMW *CSMetricWrapper) Teardown(ctx context.Context) error {
+	return csMW.cs.Teardown(ctx)
+}
+
 func (csMW *CSMetricWrapper) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
 	return csMW.cs.PersistGhostHashes(ctx, refs)
 }

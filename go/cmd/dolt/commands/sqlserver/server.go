@@ -86,6 +86,9 @@ type Config struct {
 	Controller              *svcs.Controller
 	ProtocolListenerFactory server.ProtocolListenerFunc
 	MCP                     *MCPConfig
+
+	// ProviderFactory controls how the DatabaseProvider is instantiated
+	ProviderFactory sqle.ProviderFactory
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -277,6 +280,7 @@ func ConfigureServices(
 				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
 				SkipRootUserInitialization: cfg.SkipRootUserInit,
 				EngineOverrides:            cfg.ServerConfig.Overrides(),
+				ProviderFactory:            cfg.ProviderFactory,
 			}
 			return nil
 		},
