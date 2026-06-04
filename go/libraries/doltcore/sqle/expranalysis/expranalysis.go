@@ -76,9 +76,10 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 	return nil, fmt.Errorf("unable to find check expression")
 }
 
-// ResolvePredicateExpression compiles a predicate string into a sql.Expression resolved.
-// Used to re-hydrate partial index predicates from their string representation during DML writer setup.
-func ResolvePredicateExpression(ctx *sql.Context, tableName string, predicateStr string) (sql.Expression, error) {
+// ResolveExpression compiles a predicate or check constraint string into a sql.Expression resolved.
+// Used to re-hydrate partial index predicates and check expressions from their string representation.
+// It uses SELECT statement on the expression FROM given table.
+func ResolveExpression(ctx *sql.Context, tableName string, predicateStr string) (sql.Expression, error) {
 	// TODO: added * in SELECT stmt to avoid pruning columns during analyzer.
 	parsed, err := parseQuery(ctx, fmt.Sprintf("SELECT *, %s FROM %s", predicateStr, tableName))
 	if err != nil {

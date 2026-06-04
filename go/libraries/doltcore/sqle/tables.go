@@ -1217,6 +1217,7 @@ func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
 			Name:            check.Name(),
 			CheckExpression: check.Expression(),
 			Enforced:        check.Enforced(),
+			IsNotValid:      check.IsNotValid(),
 		}
 	}
 	return checks
@@ -1262,6 +1263,8 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 				OnUpdate:       sqlutil.ToReferentialAction(fk.OnUpdate),
 				OnDelete:       sqlutil.ToReferentialAction(fk.OnDelete),
 				IsResolved:     fk.IsResolved(),
+				IsNotValid:     fk.IsNotValid,
+				MatchType:      sql.ForeignKeyMatchType(fk.MatchType),
 			}
 			continue
 		}
@@ -2795,6 +2798,8 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if err != nil {
 		return err
 	}
+	doltFk.IsNotValid = sqlFk.IsNotValid
+	doltFk.MatchType = doltdb.ForeignKeyMatchType(sqlFk.MatchType)
 
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -2896,6 +2901,8 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 			return err
 		}
 	}
+	doltFk.IsNotValid = sqlFk.IsNotValid
+	doltFk.MatchType = doltdb.ForeignKeyMatchType(sqlFk.MatchType)
 
 	err = fkc.AddKeys(doltFk)
 	if err != nil {
@@ -3097,7 +3104,7 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		}
 	}
 
-	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
+	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced, check.IsNotValid)
 	if err != nil {
 		return err
 	}

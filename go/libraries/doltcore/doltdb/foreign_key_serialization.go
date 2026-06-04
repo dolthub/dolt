@@ -109,6 +109,8 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 				TableColumns:           childUnresolved,
 				ReferencedTableColumns: parentUnresolved,
 			},
+			IsNotValid: fk.IsNotValid(),
+			MatchType:  ForeignKeyMatchType(fk.MatchType()),
 		})
 		if err != nil {
 			return nil, err
@@ -163,6 +165,8 @@ func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessa
 		serial.ForeignKeyAddUnresolvedParentColumns(b, unresolvedParent)
 		serial.ForeignKeyAddOnUpdate(b, serial.ForeignKeyReferentialAction(fk.OnUpdate))
 		serial.ForeignKeyAddOnDelete(b, serial.ForeignKeyReferentialAction(fk.OnDelete))
+		serial.ForeignKeyAddIsNotValid(b, fk.IsNotValid)
+		serial.ForeignKeyAddMatchType(b, serial.ForeignKeyMatchType(fk.MatchType))
 		offsets[i] = serial.ForeignKeyEnd(b)
 	}
 

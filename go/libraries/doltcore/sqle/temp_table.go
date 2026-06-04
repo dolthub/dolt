@@ -408,7 +408,7 @@ func (t *TempTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) er
 		check.Name = strconv.Itoa(rand.Int())
 	}
 
-	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
+	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced, check.IsNotValid)
 	if err != nil {
 		return err
 	}
