@@ -153,7 +153,7 @@ func (side *blobDiffSide) nextLeaf(ctx context.Context, ns NodeStore) ([]byte, e
 	return nil, nil
 }
 
-// Next implements val.ChunkDiffer.
+// Next implements chunkDiffer.
 // This method may return identical byte slices after the first one. See comment on blobChunkDiffer for details.
 func (d *blobChunkDiffer) Next(ctx context.Context) ([]byte, []byte, error) {
 	for {

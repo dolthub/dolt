@@ -308,6 +308,10 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 	var lBuf, rBuf []byte
 	lDone, rDone := false, false
 
+	// TODO: the call to Next() starts at the first differing chunk, then returns every leaf chunk in order from both
+	//  sides thereafter. This is correct, but potentially inefficient in the case where there are sparse byte differences
+	//  that are collation-equivalent spread through two large documents we are sorting. We could more efficiently
+	//  perform the comparison in this case by having Next() and NextDiff() methods for the two traversal cases.
 	pullFrom := func() error {
 		for (!lDone && !utf8.FullRune(lBuf)) || (!rDone && !utf8.FullRune(rBuf)) {
 			lChunk, rChunk, err := d.Next(ctx)
@@ -342,6 +346,9 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 		}
 		lr, lread := utf8.DecodeRune(lBuf)
 		rr, rread := utf8.DecodeRune(rBuf)
+
+		// RuneError should be impossible to return for the above reads unless the UTF8 bytes are malformed or the
+		// buffer is empty. We handle this error here by enforcing an arbitrary order.
 		lErr := lr == utf8.RuneError && lread == 1
 		rErr := rr == utf8.RuneError && rread == 1
 		if lErr || rErr {
@@ -353,6 +360,7 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 			}
 			return 0, nil
 		}
+
 		if lr != rr {
 			lw := getRuneWeight(lr)
 			rw := getRuneWeight(rr)

@@ -43,13 +43,6 @@ type ValueStore interface {
 	CompareAdaptiveCollatedStrings(ctx context.Context, l, r AdaptiveValue, collation sql.CollationID) (int, error)
 }
 
-// ChunkDiffer is an interface to diff chunk-encoded values in a ValueStore.
-type ChunkDiffer interface {
-	// Next returns the bytes of the next chunks that differ between left and right. io.EOF signals
-	// the end of the diff.
-	Next(ctx context.Context) (left, right []byte, err error)
-}
-
 // ImmutableValue represents a content-addressed value stored in a ValueStore.
 // The contents are loaded lazily and stored in |Buf|
 type ImmutableValue struct {
