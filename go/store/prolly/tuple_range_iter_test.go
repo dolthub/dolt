@@ -48,26 +48,31 @@ func testIterRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 		}
 		start, stop := tuples[a][0], tuples[z][0]
 
+		mustRange := func(rng Range, err error) Range {
+			require.NoError(t, err)
+			return rng
+		}
+
 		tests := []rangeIterTest{
 			// two-sided ranges
 			{
 				name:      "OpenRange",
-				testRange: openRange(ctx, start, stop, desc),
+				testRange: mustRange(openRange(ctx, start, stop, desc)),
 				expCount:  nonNegative((z - a) - 1),
 			},
 			{
 				name:      "OpenStartRange",
-				testRange: openStartRange(ctx, start, stop, desc),
+				testRange: mustRange(openStartRange(ctx, start, stop, desc)),
 				expCount:  z - a,
 			},
 			{
 				name:      "OpenStopRange",
-				testRange: openStopRange(ctx, start, stop, desc),
+				testRange: mustRange(openStopRange(ctx, start, stop, desc)),
 				expCount:  z - a,
 			},
 			{
 				name:      "closedRange",
-				testRange: closedRange(ctx, start, stop, desc),
+				testRange: mustRange(closedRange(ctx, start, stop, desc)),
 				expCount:  (z - a) + 1,
 			},
 
@@ -109,7 +114,9 @@ func testIterRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 				key, _, err = iter.Next(ctx)
 
 				if key != nil {
-					assert.True(t, desc.Compare(ctx, prev, key) < 0)
+					cmp, cmpErr := desc.Compare(ctx, prev, key)
+					require.NoError(t, cmpErr)
+					assert.True(t, cmp < 0)
 				}
 			}
 			assert.Equal(t, io.EOF, err)
@@ -149,23 +156,28 @@ func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 		stop, err := getKeyPrefix(tuples[z][0], prefixDesc)
 		require.NoError(t, err)
 
+		mustRange := func(rng Range, err error) Range {
+			require.NoError(t, err)
+			return rng
+		}
+
 		tests := []prefixRangeTest{
 			// two-sided ranges
 			{
 				name:      "OpenRange",
-				testRange: openRange(ctx, start, stop, prefixDesc),
+				testRange: mustRange(openRange(ctx, start, stop, prefixDesc)),
 			},
 			{
 				name:      "OpenStartRange",
-				testRange: openStartRange(ctx, start, stop, prefixDesc),
+				testRange: mustRange(openStartRange(ctx, start, stop, prefixDesc)),
 			},
 			{
 				name:      "OpenStopRange",
-				testRange: openStopRange(ctx, start, stop, prefixDesc),
+				testRange: mustRange(openStopRange(ctx, start, stop, prefixDesc)),
 			},
 			{
 				name:      "closedRange",
-				testRange: closedRange(ctx, start, stop, prefixDesc),
+				testRange: mustRange(closedRange(ctx, start, stop, prefixDesc)),
 			},
 
 			// one-sided ranges
@@ -199,12 +211,14 @@ func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 				key, _, err = iter.Next(ctx)
 
 				if key != nil {
-					assert.True(t, prefixDesc.Compare(ctx, prev, key) < 0)
+					cmp, cmpErr := prefixDesc.Compare(ctx, prev, key)
+					require.NoError(t, cmpErr)
+					assert.True(t, cmp < 0)
 				}
 			}
 			assert.Equal(t, io.EOF, err)
 
-			expCount := getExpectedRangeSize(test.testRange, tuples)
+			expCount := getExpectedRangeSize(t, test.testRange, tuples)
 			assert.Equal(t, expCount, actCount)
 		}
 	}
@@ -223,11 +237,17 @@ func getKeyPrefix(key val.Tuple, desc *val.TupleDesc) (partial val.Tuple, err er
 }
 
 // computes expected range on full tuples set
-func getExpectedRangeSize(rng Range, tuples [][2]val.Tuple) (sz int) {
+func getExpectedRangeSize(t *testing.T, rng Range, tuples [][2]val.Tuple) (sz int) {
 	ctx := context.Background()
 	for i := range tuples {
 		k := tuples[i][0]
-		if rng.aboveStart(ctx, k) && rng.belowStop(ctx, k) {
+		above, err := rng.aboveStart(ctx, k)
+		require.NoError(t, err)
+
+		below, err := rng.belowStop(ctx, k)
+		require.NoError(t, err)
+
+		if above && below {
 			sz++
 		}
 	}
@@ -271,6 +291,11 @@ func TestMapIterRange(t *testing.T) {
 		val.Type{Enc: val.Int32Enc},
 	)
 
+	mustRange := func(rng Range, err error) Range {
+		require.NoError(t, err)
+		return rng
+	}
+
 	tests := []struct {
 		name     string
 		logical  []int
@@ -280,25 +305,25 @@ func TestMapIterRange(t *testing.T) {
 		// partial-key range scan
 		{
 			name:     "range [1:4]",
-			rng:      closedRange(ctx, intTuple(1), intTuple(4), partialDesc),
+			rng:      mustRange(closedRange(ctx, intTuple(1), intTuple(4), partialDesc)),
 			physical: [2]int{0, 24},
 			logical:  []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22},
 		},
 		{
 			name:     "range (1:4]",
-			rng:      openStartRange(ctx, intTuple(1), intTuple(4), partialDesc),
+			rng:      mustRange(openStartRange(ctx, intTuple(1), intTuple(4), partialDesc)),
 			physical: [2]int{6, 24},
 			logical:  []int{6, 8, 10, 12, 14, 16, 18, 20, 22},
 		},
 		{
 			name:     "range [1:4)",
-			rng:      openStopRange(ctx, intTuple(1), intTuple(4), partialDesc),
+			rng:      mustRange(openStopRange(ctx, intTuple(1), intTuple(4), partialDesc)),
 			physical: [2]int{0, 18},
 			logical:  []int{0, 2, 4, 6, 8, 10, 12, 14, 16},
 		},
 		{
 			name:     "range (1:4)",
-			rng:      openRange(ctx, intTuple(1), intTuple(4), partialDesc),
+			rng:      mustRange(openRange(ctx, intTuple(1), intTuple(4), partialDesc)),
 			physical: [2]int{6, 18},
 			logical:  []int{6, 8, 10, 12, 14, 16},
 		},
@@ -306,55 +331,55 @@ func TestMapIterRange(t *testing.T) {
 		// full-key range scan
 		{
 			name:     "range (1,1:4,3)",
-			rng:      openRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc),
+			rng:      mustRange(openRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc)),
 			physical: [2]int{0, 24},
 			logical:  []int{2, 8, 14, 20},
 		},
 		{
 			name:     "range (1,1:4,3]",
-			rng:      openStartRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc),
+			rng:      mustRange(openStartRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc)),
 			physical: [2]int{0, 24},
 			logical:  []int{2, 4, 8, 10, 14, 16, 20, 22},
 		},
 		{
 			name:     "range [1,1:4,3)",
-			rng:      openStopRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc),
+			rng:      mustRange(openStopRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc)),
 			physical: [2]int{0, 24},
 			logical:  []int{0, 2, 6, 8, 12, 14, 18, 20},
 		},
 		{
 			name:     "range [1,1:4,3]",
-			rng:      closedRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc),
+			rng:      mustRange(closedRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc)),
 			physical: [2]int{0, 24},
 			logical:  []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22},
 		},
 		{
 			name:     "range [1,2:4,2]",
-			rng:      closedRange(ctx, intTuple(1, 2), intTuple(4, 2), fullDesc),
+			rng:      mustRange(closedRange(ctx, intTuple(1, 2), intTuple(4, 2), fullDesc)),
 			physical: [2]int{0, 24},
 			logical:  []int{2, 8, 14, 20},
 		},
 		{
 			name:     "range (1,2:4,2]",
-			rng:      openStartRange(ctx, intTuple(1, 2), intTuple(4, 2), fullDesc),
+			rng:      mustRange(openStartRange(ctx, intTuple(1, 2), intTuple(4, 2), fullDesc)),
 			physical: [2]int{0, 24},
 			logical:  []int{},
 		},
 		{
 			name:     "range [2,2:3,2]",
-			rng:      closedRange(ctx, intTuple(2, 2), intTuple(3, 2), fullDesc),
+			rng:      mustRange(closedRange(ctx, intTuple(2, 2), intTuple(3, 2), fullDesc)),
 			physical: [2]int{6, 18},
 			logical:  []int{8, 14},
 		},
 		{
 			name:     "range [2,2:2,3]",
-			rng:      closedRange(ctx, intTuple(2, 2), intTuple(2, 3), fullDesc),
+			rng:      mustRange(closedRange(ctx, intTuple(2, 2), intTuple(2, 3), fullDesc)),
 			physical: [2]int{8, 12},
 			logical:  []int{8, 10},
 		},
 		{
 			name:     "range [2,2:2,2]",
-			rng:      closedRange(ctx, intTuple(2, 2), intTuple(2, 2), fullDesc),
+			rng:      mustRange(closedRange(ctx, intTuple(2, 2), intTuple(2, 2), fullDesc)),
 			physical: [2]int{8, 10},
 			logical:  []int{8},
 		},

@@ -30,7 +30,7 @@ import (
 func newMergeKvIter(
 	leftState, rightState mergeState,
 	joiner *prollyToSqlJoiner,
-	lrComparer, llComparer func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int,
+	lrComparer, llComparer func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) (int, error),
 	joinFilters []sql.Expression,
 	isLeftJoin bool,
 	excludeNulls bool,
@@ -68,8 +68,8 @@ type mergeJoinKvIter struct {
 	leftNorm  coveringNormalizer
 	rightNorm coveringNormalizer
 
-	lrCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
-	llCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
+	lrCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) (int, error)
+	llCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) (int, error)
 
 	lookaheadBuf [][]byte
 	// TODO: we want to build KV-side static expression implementations
@@ -125,7 +125,10 @@ compare:
 	// if equal continue to match buffer stage
 	// if unequal increment one side
 	for {
-		cmp := l.lrCmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal)
+		cmp, cmpErr := l.lrCmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal)
+		if cmpErr != nil {
+			return nil, cmpErr
+		}
 		// merge_join assumes left and right iterators are sorted in ascending order, so need to flip comparison for
 		// iterators that are sorted in descending order.
 		if l.isReversed {
@@ -227,7 +230,10 @@ match:
 			if err != nil {
 				return nil, err
 			}
-			cmp := l.llCmp(tmpKey, tmpVal, l.leftKey, l.leftVal)
+			cmp, cmpErr := l.llCmp(tmpKey, tmpVal, l.leftKey, l.leftVal)
+			if cmpErr != nil {
+				return nil, cmpErr
+			}
 
 			if cmp != 0 {
 				// if the left key is new, invalidate lookahead buffer and
@@ -362,7 +368,11 @@ func (l *mergeJoinKvIter) fillMatchBuf(ctx *sql.Context) error {
 			}
 			return err
 		}
-		if l.lrCmp(l.leftKey, l.leftVal, l.nextRightKey, l.nextRightVal) == 0 {
+		cmp, cmpErr := l.lrCmp(l.leftKey, l.leftVal, l.nextRightKey, l.nextRightVal)
+		if cmpErr != nil {
+			return cmpErr
+		}
+		if cmp == 0 {
 			l.lookaheadBuf = append(l.lookaheadBuf, l.nextRightKey, l.nextRightVal)
 		} else {
 			return nil
@@ -407,7 +417,7 @@ func mergeComparer(
 	filter sql.Expression,
 	lState, rState mergeState,
 	projections []uint64,
-) (lrCmp, llCmp func(leftKey, leftVal, rightKey, rightVal val.Tuple) int, ok bool) {
+) (lrCmp, llCmp func(leftKey, leftVal, rightKey, rightVal val.Tuple) (int, error), ok bool) {
 	// first filter expression needs to be evaluated
 	// can accept a subset of types -- (cmp GF GF)
 	// need to map expression id to key or value position
@@ -461,18 +471,18 @@ func mergeComparer(
 	if lKeyOk {
 		lKeyDesc := lState.idxMap.KeyDesc()
 		lTyp = lKeyDesc.Types[lKeyIdx]
-		llCmp = func(leftKey, _, rightKey, _ val.Tuple) int {
+		llCmp = func(leftKey, _, rightKey, _ val.Tuple) (int, error) {
 			return lKeyDesc.Comparator().CompareValues(ctx, 0, leftKey.GetField(lKeyIdx), rightKey.GetField(lKeyIdx), lTyp)
 		}
 		if rKeyOk {
 			rTyp = rState.idxMap.KeyDesc().Types[rKeyIdx]
 
-			lrCmp = func(leftKey, _, rightKey, _ val.Tuple) int {
+			lrCmp = func(leftKey, _, rightKey, _ val.Tuple) (int, error) {
 				return lKeyDesc.Comparator().CompareValues(ctx, 0, leftKey.GetField(lKeyIdx), rightKey.GetField(rKeyIdx), lTyp)
 			}
 		} else if rValOk {
 			rTyp = rState.idxMap.ValDesc().Types[rValIdx]
-			lrCmp = func(leftKey, _, _, rightVal val.Tuple) int {
+			lrCmp = func(leftKey, _, _, rightVal val.Tuple) (int, error) {
 				return lKeyDesc.Comparator().CompareValues(ctx, 0, leftKey.GetField(lKeyIdx), rightVal.GetField(rValIdx), lTyp)
 			}
 		} else {
@@ -481,17 +491,17 @@ func mergeComparer(
 	} else if lValOk {
 		lValDesc := lState.idxMap.ValDesc()
 		lTyp = lValDesc.Types[lValIdx]
-		llCmp = func(_, leftVal, _, rightVal val.Tuple) int {
+		llCmp = func(_, leftVal, _, rightVal val.Tuple) (int, error) {
 			return lValDesc.Comparator().CompareValues(ctx, 0, leftVal.GetField(lValIdx), rightVal.GetField(lValIdx), lTyp)
 		}
 		if rKeyOk {
 			rTyp = rState.idxMap.KeyDesc().Types[rKeyIdx]
-			lrCmp = func(_, leftVal, rightKey, _ val.Tuple) int {
+			lrCmp = func(_, leftVal, rightKey, _ val.Tuple) (int, error) {
 				return lValDesc.Comparator().CompareValues(ctx, 0, leftVal.GetField(lValIdx), rightKey.GetField(rKeyIdx), lTyp)
 			}
 		} else if rValOk {
 			rTyp = rState.idxMap.ValDesc().Types[rValIdx]
-			lrCmp = func(_, leftVal, _, rightVal val.Tuple) int {
+			lrCmp = func(_, leftVal, _, rightVal val.Tuple) (int, error) {
 				return lValDesc.Comparator().CompareValues(ctx, 0, leftVal.GetField(lValIdx), rightVal.GetField(rValIdx), lTyp)
 			}
 		} else {

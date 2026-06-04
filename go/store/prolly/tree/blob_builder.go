@@ -199,9 +199,9 @@ func (lw *blobLevelWriter) Write(ctx context.Context, r io.Reader) (hash.Hash, u
 	i, off, totalCount := 0, 0, uint64(0)
 	for {
 		// Sketchy hack to elide a copy here...
-		//h := (*hash.Hash)(unsafe.Pointer(&lw.buf[off]))
-		//var n uint64
-		//var err error
+		// h := (*hash.Hash)(unsafe.Pointer(&lw.buf[off]))
+		// var n uint64
+		// var err error
 		h, n, err := lw.child.Write(ctx, r)
 		if err != nil && err != io.EOF {
 			return hash.Hash{}, 0, err

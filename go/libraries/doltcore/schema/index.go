@@ -256,6 +256,7 @@ func (ix *indexImpl) Schema() Schema {
 		// contentHashedFields is the collection of column tags for columns in a unique index that do
 		// not have a prefix length specified and should be stored as a content hash. This information
 		// is needed to later identify that an index is using content-hashed encoding.
+		// TODO: this is imprecise, we need the encoding information from the column type
 		prefixLength := uint16(0)
 		if len(ix.PrefixLengths()) > i {
 			prefixLength = ix.PrefixLengths()[i]

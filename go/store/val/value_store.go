@@ -33,8 +33,14 @@ const BytePeekLength = 128
 // The only implementation is tree.NodeStore, but ValueStore can be used without depending on the tree package.
 // This is useful for type handlers.
 type ValueStore interface {
+	// ReadBytes reads the bytes associated with the given content hash
 	ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error)
+	// WriteBytes writes the given bytes and returns the content hash
 	WriteBytes(ctx context.Context, val []byte) (hash.Hash, error)
+	// CompareAdaptive compares two adaptive values.
+	CompareAdaptive(ctx context.Context, l AdaptiveValue, r AdaptiveValue, encoding Encoding) (int, error)
+	// CompareAdaptiveCollatedStrings compares two adaptive string values with the given collation.
+	CompareAdaptiveCollatedStrings(ctx context.Context, l, r AdaptiveValue, collation sql.CollationID) (int, error)
 }
 
 // ImmutableValue represents a content-addressed value stored in a ValueStore.

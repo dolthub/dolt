@@ -253,8 +253,12 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.NotNil(t, dif)
 		require.Equal(t, ModifiedDiff, diffType)
 		assert.NotNil(t, dif.KeyBelowStart)
-		assert.Equal(t, dfr.order.Compare(ctx, val.Tuple(dif.KeyBelowStart), fromTups[511][0]), -1)
-		assert.Equal(t, dfr.order.Compare(ctx, val.Tuple(dif.EndKey), fromTups[511][0]), 1)
+		cmpBelow, err := dfr.order.Compare(ctx, val.Tuple(dif.KeyBelowStart), fromTups[511][0])
+		require.NoError(t, err)
+		assert.Equal(t, cmpBelow, -1)
+		cmpEnd, err := dfr.order.Compare(ctx, val.Tuple(dif.EndKey), fromTups[511][0])
+		require.NoError(t, err)
+		assert.Equal(t, cmpEnd, 1)
 
 		KeyBelowStart := dif.EndKey
 		dif, diffType, isMore, err = dfr.Next(ctx)

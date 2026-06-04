@@ -125,15 +125,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 	case val.JsonAdaptiveEnc:
 		v, ok, err = td.GetJsonAdaptiveValue(ctx, i, ns, tup)
 		if ok {
-			switch val := v.(type) {
-			case *val.JsonAdaptiveStorage:
-				v, err = NewJSONDoc(val.Addr(), ns).ToIndexedJSONDocument(ctx)
-			case []byte:
-				val = unescapeHTMLCodepoints(val)
-				return types.NewLazyJSONDocument(val), nil
-			default:
-				err = fmt.Errorf("unexpected type for JsonAdaptiveEnc: %T", val)
-			}
+			return OpenJsonAdaptiveValue(ctx, v, ns)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
@@ -188,6 +180,19 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		return nil, err
 	}
 	return v, err
+}
+
+// OpenJsonAdaptiveValue returns a sql.JSONWrapper for the given value from a JsonAdaptiveEnc column
+func OpenJsonAdaptiveValue(ctx context.Context, v interface{}, ns NodeStore) (sql.JSONWrapper, error) {
+	switch val := v.(type) {
+	case *val.JsonAdaptiveStorage:
+		return NewJSONDoc(val.Addr(), ns).ToIndexedJSONDocument(ctx)
+	case []byte:
+		val = unescapeHTMLCodepoints(val)
+		return types.NewLazyJSONDocument(val), nil
+	default:
+		return nil, fmt.Errorf("unexpected type for JsonAdaptiveEnc: %T", val)
+	}
 }
 
 // GetFieldValue reads the value from the ith field of the Tuple as a sql.Value

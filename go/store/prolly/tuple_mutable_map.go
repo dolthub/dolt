@@ -243,7 +243,10 @@ func (mut *GenericMutableMap[M, T]) IterRange(ctx context.Context, rng Range) (M
 	if err != nil {
 		return nil, err
 	}
-	memIter := memIterFromRange(ctx, mut.tuples.Edits, rng)
+	memIter, err := memIterFromRange(ctx, mut.tuples.Edits, rng)
+	if err != nil {
+		return nil, err
+	}
 
 	iter := &mutableMapIter[val.Tuple, val.Tuple, *val.TupleDesc]{
 		memory: memIter,

@@ -486,7 +486,8 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 		_, contentHashedField := contentHashedFields[tag]
 		typeHandler, hasTypeHandler := sqlType.(val.TupleTypeHandler)
 
-		if hasTypeHandler {
+		customEncoding := hasTypeHandler && val.IsExtendedEncoding(col.TypeInfo.Encoding())
+		if customEncoding {
 			encoding := col.TypeInfo.Encoding()
 			t = val.Type{
 				Enc:      encoding,
@@ -502,18 +503,19 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 			}
 		} else {
 			// For key columns, even types that are typically stored out of band get an inline encoding, unless they're
-			// a hashed field in a unique index
-			if !contentHashedField && queryType == query.Type_BLOB {
+			// a hashed field in a unique index. Fields with a typeHandler (Doltgres types) aren't subject to this constraint.
+			useKeyPrefix := !contentHashedField && !hasTypeHandler
+			if useKeyPrefix && queryType == query.Type_BLOB {
 				t = val.Type{
 					Enc:      val.Encoding(encodingFromQueryType(query.Type_VARBINARY)),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
-			} else if !contentHashedField && queryType == query.Type_TEXT {
+			} else if useKeyPrefix && queryType == query.Type_TEXT {
 				t = val.Type{
 					Enc:      val.Encoding(encodingFromQueryType(query.Type_VARCHAR)),
 					Nullable: columnMissingNotNullConstraint(col),
 				}
-			} else if !contentHashedField && queryType == query.Type_GEOMETRY {
+			} else if useKeyPrefix && queryType == query.Type_GEOMETRY {
 				t = val.Type{
 					Enc:      val.Encoding(serial.EncodingCell),
 					Nullable: columnMissingNotNullConstraint(col),
@@ -535,7 +537,11 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 			collations = append(collations, sql.Collation_Unspecified)
 		}
 
-		handlers = append(handlers, handler)
+		if customEncoding {
+			handlers = append(handlers, handler)
+		} else {
+			handlers = append(handlers, nil)
+		}
 
 		return
 	})
@@ -545,9 +551,9 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 			panic(fmt.Errorf("cannot create tuple descriptor from %d collations and %d types", len(collations), len(tt)))
 		}
 		cmp := CollationTupleComparator{Collations: collations}
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers, ValueStore: vs}, tt...)
 	} else {
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs}, tt...)
 	}
 }
 
@@ -604,9 +610,9 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 			panic(fmt.Errorf("cannot create tuple descriptor from %d collations and %d types", len(collations), len(tt)))
 		}
 		cmp := CollationTupleComparator{Collations: collations}
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers, ValueStore: vs}, tt...)
 	} else {
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs}, tt...)
 	}
 }
 

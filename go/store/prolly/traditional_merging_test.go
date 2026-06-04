@@ -84,7 +84,10 @@ func sendPatches[K ~[]byte, O tree.Ordering[K]](ctx context.Context, l, r tree.D
 	}
 
 	for lok && rok {
-		cmp := order.Compare(ctx, K(left.Key), K(right.Key))
+		cmp, cmpErr := order.Compare(ctx, K(left.Key), K(right.Key))
+		if cmpErr != nil {
+			return cmpErr
+		}
 
 		switch {
 		case cmp < 0:

@@ -305,7 +305,10 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 		}
 	}
 
-	rng := prolly.PrefixRange(ctx, prefixKey, writer.prefixBld.Desc)
+	rng, err := prolly.PrefixRange(ctx, prefixKey, writer.prefixBld.Desc)
+	if err != nil {
+		return err
+	}
 	itr, err := writer.mut.IterRange(ctx, rng)
 	if err != nil {
 		return err

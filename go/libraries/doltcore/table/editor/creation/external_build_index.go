@@ -62,8 +62,17 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 		return BuildProximityIndex(ctx, ns, idx, keyDesc, prefixDesc, iter, secondaryBld, uniqCb)
 	}
 
+	var sortErr error
 	sorter := sort.NewTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
-		return keyDesc.Compare(ctx, t1, t2) < 0
+		if sortErr != nil {
+			return false
+		}
+		cmp, err := keyDesc.Compare(ctx, t1, t2)
+		if err != nil {
+			sortErr = err
+			return false
+		}
+		return cmp < 0
 	}, tempfiles.MovableTempFileProvider)
 	defer sorter.Close()
 
@@ -101,11 +110,17 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 		if err := sorter.Insert(ctx, idxKey); err != nil {
 			return nil, err
 		}
+		if sortErr != nil {
+			return nil, sortErr
+		}
 	}
 
 	sortedKeys, err := sorter.Flush(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if sortErr != nil {
+		return nil, sortErr
 	}
 	defer sortedKeys.Close()
 
@@ -194,13 +209,19 @@ func (t *tupleIterWithCb) Next(ctx context.Context) (val.Tuple, val.Tuple) {
 			}
 			return nil, nil
 		}
-		if t.lastKey != nil && t.prefixDesc.Compare(ctx, t.lastKey, curKey) == 0 && t.uniqCb != nil {
-			// register a constraint violation if |key| collides with |lastKey|
-			if err := t.uniqCb(ctx, t.lastKey, curKey); err != nil {
-				t.err = err
+		if t.lastKey != nil && t.uniqCb != nil {
+			cmp, cmpErr := t.prefixDesc.Compare(ctx, t.lastKey, curKey)
+			if cmpErr != nil {
+				t.err = cmpErr
 				return nil, nil
 			}
-
+			if cmp == 0 {
+				// register a constraint violation if |key| collides with |lastKey|
+				if err := t.uniqCb(ctx, t.lastKey, curKey); err != nil {
+					t.err = err
+					return nil, nil
+				}
+			}
 		}
 		t.lastKey = curKey
 		return curKey, val.EmptyTuple

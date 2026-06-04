@@ -23,6 +23,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -64,12 +66,18 @@ func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc *val.Tupl
 
 	dupes := make([]int, 0, count)
 	for {
-		SortTuplePairs(ctx, items, keyDesc)
+		if err := SortTuplePairs(ctx, items, keyDesc); err != nil {
+			return nil, err
+		}
 		for i := range items {
 			if i == 0 {
 				continue
 			}
-			if keyDesc.Compare(ctx, items[i][0], items[i-1][0]) == 0 {
+			cmp, err := keyDesc.Compare(ctx, items[i][0], items[i-1][0])
+			if err != nil {
+				return nil, err
+			}
+			if cmp == 0 {
 				dupes = append(dupes, i)
 			}
 		}
@@ -183,10 +191,20 @@ func CloneRandomTuples(items [][2]val.Tuple) (clone [][2]val.Tuple) {
 	return
 }
 
-func SortTuplePairs(ctx context.Context, items [][2]val.Tuple, keyDesc *val.TupleDesc) {
+func SortTuplePairs(ctx context.Context, items [][2]val.Tuple, keyDesc *val.TupleDesc) error {
+	var sortErr error
 	sort.Slice(items, func(i, j int) bool {
-		return keyDesc.Compare(ctx, items[i][0], items[j][0]) < 0
+		if sortErr != nil {
+			return false
+		}
+		cmp, err := keyDesc.Compare(ctx, items[i][0], items[j][0])
+		if err != nil {
+			sortErr = err
+			return false
+		}
+		return cmp < 0
 	})
+	return sortErr
 }
 
 func ShuffleTuplePairs(items [][2]val.Tuple) {
@@ -224,7 +242,10 @@ func deduplicateTuples(ctx context.Context, desc *val.TupleDesc, tups [][2]val.T
 	uniq[0] = tups[0]
 
 	for i := 1; i < len(tups); i++ {
-		cmp := desc.Compare(ctx, tups[i-1][0], tups[i][0])
+		cmp, err := desc.Compare(ctx, tups[i-1][0], tups[i][0])
+		if err != nil {
+			panic(err)
+		}
 		if cmp < 0 {
 			uniq = append(uniq, tups[i])
 		}
@@ -341,6 +362,14 @@ func (v *nodeStoreValidator) WriteBytes(ctx context.Context, val []byte) (hash.H
 	return h, err
 }
 
+func (v *nodeStoreValidator) OpenChunkDiffer(ctx context.Context, l, r val.AdaptiveValue) (chunkDiffer, error) {
+	return newBlobChunkDiffer(ctx, v, l, r)
+}
+
+func (v *nodeStoreValidator) CompareJsonAdaptiveValues(ctx context.Context, l, r val.AdaptiveValue) (int, error) {
+	return compareJsonAdaptiveValues(ctx, v, l, r)
+}
+
 func (v *nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 	nd, err := v.ns.Read(ctx, ref)
 	if err != nil {
@@ -410,6 +439,14 @@ func (v *nodeStoreValidator) Format() *types.NomsBinFormat {
 	return v.ns.Format()
 }
 
+func (v *nodeStoreValidator) CompareAdaptive(ctx context.Context, l val.AdaptiveValue, r val.AdaptiveValue, encoding val.Encoding) (int, error) {
+	return v.ns.CompareAdaptive(ctx, l, r, encoding)
+}
+
+func (v *nodeStoreValidator) CompareAdaptiveCollatedStrings(ctx context.Context, l, r val.AdaptiveValue, collation sql.CollationID) (int, error) {
+	return v.ns.CompareAdaptiveCollatedStrings(ctx, l, r, collation)
+}
+
 func MakeTreeForTest(tuples [][2]val.Tuple) (*Node, error) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
@@ -440,7 +477,10 @@ func GetAddressFromLevelAndKeyForTest(ctx context.Context, ns NodeStore, root *N
 	i := 0
 	for i < root.Count() {
 		childKey := root.GetKey(i)
-		cmp := keyDesc.Compare(ctx, val.Tuple(childKey), key)
+		cmp, err := keyDesc.Compare(ctx, val.Tuple(childKey), key)
+		if err != nil {
+			return hash.Hash{}, false, err
+		}
 		if cmp >= 0 {
 			childAddr := root.getAddress(i)
 			if root.Level() == level {
