@@ -543,14 +543,14 @@ type jsonLocationOrdering struct {
 
 var _ Ordering[jsonLocationKey] = &jsonLocationOrdering{}
 
-func (o *jsonLocationOrdering) Compare(ctx context.Context, left, right jsonLocationKey) int {
+func (o *jsonLocationOrdering) Compare(ctx context.Context, left, right jsonLocationKey) (int, error) {
 	// A JSON document that fits entirely in a single chunk has no keys,
 	if len(left) == 0 && len(right) == 0 {
-		return 0
+		return 0, nil
 	} else if len(left) == 0 {
-		return -1
+		return -1, nil
 	} else if len(right) == 0 {
-		return 1
+		return 1, nil
 	}
 	leftPath := jsonPathFromKey(left)
 	rightPath := jsonPathFromKey(right)
@@ -558,5 +558,5 @@ func (o *jsonLocationOrdering) Compare(ctx context.Context, left, right jsonLoca
 	if err != nil {
 		o.err = err
 	}
-	return cmp
+	return cmp, nil
 }

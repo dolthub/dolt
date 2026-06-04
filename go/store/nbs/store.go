@@ -817,6 +817,7 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 	if err != nil {
 		if lock != nil {
 			lock.Unlock()
+			lock.Close()
 		}
 		return nil, err
 	}
@@ -826,6 +827,7 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 		if loadIt == false {
 			if lock != nil {
 				lock.Unlock()
+				lock.Close()
 			}
 			return
 		}
@@ -834,6 +836,7 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 			nbs.loadErr = err
 			if lock != nil {
 				lock.Unlock()
+				lock.Close()
 			}
 			return
 		}
@@ -844,6 +847,7 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 		// via SetFatalBehavior.
 		journal, err := newChunkJournal(ctx, nbfVers, dir, m, p, dherrors.FatalBehaviorError, warningsCb)
 		if err != nil {
+			// *journalManifest exclusively owns the lock, if any, at this point.
 			m.Close()
 			nbs.loadErr = err
 			return

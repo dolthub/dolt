@@ -221,13 +221,18 @@ func testBuildLargeTuple(t *testing.T) {
 	tb.PutByteString(11, []byte(s2))
 }
 
-type testCompare struct{}
+type testCompare struct {
+	vs ValueStore
+}
 
 var _ TupleComparator = testCompare{}
 
-func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
+func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int, err error) {
 	for i, typ := range desc.Types {
-		cmp = compare(typ, left.GetField(i), right.GetField(i))
+		cmp, err = compare(ctx, typ, left.GetField(i), right.GetField(i), tc.vs)
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
 			break
 		}
@@ -235,8 +240,8 @@ func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *Tupl
 	return
 }
 
-func (tc testCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
-	return compare(typ, left, right)
+func (tc testCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (int, error) {
+	return compare(ctx, typ, left, right, tc.vs)
 }
 
 func (tc testCompare) Prefix(n int) TupleComparator {
@@ -249,6 +254,10 @@ func (tc testCompare) Suffix(n int) TupleComparator {
 
 func (tc testCompare) Validated(types []Type) TupleComparator {
 	return tc
+}
+
+func (tc testCompare) WithValueStore(vs ValueStore) TupleComparator {
+	return testCompare{vs: vs}
 }
 
 type TestValueStore struct {
@@ -278,6 +287,14 @@ func (t *TestValueStore) WriteBytes(_ context.Context, val []byte) (h hash.Hash,
 	t.values = append(t.values, val)
 	h[0] = byte(len(t.values))
 	return h, nil
+}
+
+func (t TestValueStore) CompareAdaptive(ctx context.Context, l AdaptiveValue, r AdaptiveValue, encoding Encoding) (int, error) {
+	panic("unsupported")
+}
+
+func (t TestValueStore) CompareAdaptiveCollatedStrings(ctx context.Context, l, r AdaptiveValue, collation sql.CollationID) (int, error) {
+	panic("unsupported")
 }
 
 var _ ValueStore = &TestValueStore{}

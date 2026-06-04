@@ -252,7 +252,8 @@ func TestCompare(t *testing.T) {
 
 	for _, test := range tests {
 		ctx := sql.NewEmptyContext()
-		act := compare(test.typ, test.l, test.r)
+		act, err := compare(ctx, test.typ, test.l, test.r, nil)
+		assert.NoError(t, err)
 		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
 			(&TupleDesc{}).formatValue(ctx, test.typ.Enc, 0, test.l),
 			fmtComparator(test.cmp),

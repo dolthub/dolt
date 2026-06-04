@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -805,7 +806,7 @@ func (di *doltIndex) HasContentHashedField() bool {
 			prefixLength = di.prefixLengths[i]
 		}
 
-		if sqltypes.IsTextBlob(col.TypeInfo.ToSqlType()) && prefixLength == 0 {
+		if isHashEncoded(col.TypeInfo) && prefixLength == 0 {
 			contentHashedField = true
 			return true, nil
 		}
@@ -814,6 +815,10 @@ func (di *doltIndex) HasContentHashedField() bool {
 	})
 
 	return contentHashedField
+}
+
+func isHashEncoded(ti typeinfo.TypeInfo) bool {
+	return val.IsAddrEncoding(ti.Encoding()) || val.IsAdaptiveEncoding(ti.Encoding())
 }
 
 func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
@@ -1177,7 +1182,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		for i, field := range fields {
 			// lookups on non-unique indexes can't be point lookups
 			typ := di.keyBld.Desc.Types[i]
-			cmp := order.CompareValues(ctx, i, field.Hi.Value, field.Lo.Value, typ)
+			cmp, err := order.CompareValues(ctx, i, field.Hi.Value, field.Lo.Value, typ)
+			if err != nil {
+				return nil, err
+			}
 			fields[i].BoundsAreEqual = cmp == 0
 
 			if !di.unique {

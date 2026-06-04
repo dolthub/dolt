@@ -65,7 +65,10 @@ func DiffChunksAtLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, level i
 
 		f := fromNode.GetKey(i)
 		t := toNode.GetKey(j)
-		cmp := from.Order.Compare(ctx, K(f), K(t))
+		cmp, err := from.Order.Compare(ctx, K(f), K(t))
+		if err != nil {
+			return nil, err
+		}
 		if cmp == 0 {
 			// replace from->to
 			diffs = append(diffs, chunkDiff{from: []hash.Hash{fromAddr}, to: []hash.Hash{toAddr}})
@@ -85,7 +88,10 @@ func DiffChunksAtLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, level i
 				}
 				f = fromNode.GetKey(i)
 				t = toNode.GetKey(j)
-				cmp = from.Order.Compare(ctx, K(f), K(t))
+				cmp, err = from.Order.Compare(ctx, K(f), K(t))
+				if err != nil {
+					return nil, err
+				}
 			}
 			// either addrs equal, or keys synced
 			var newChunkDiff chunkDiff

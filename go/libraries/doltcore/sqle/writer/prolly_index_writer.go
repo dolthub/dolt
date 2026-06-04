@@ -404,7 +404,10 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	// build a val.Tuple containing only fields for the unique column prefix
 	key := m.keyBld.BuildPrefix(ns.Pool(), m.idxCols)
 	desc := m.keyBld.Desc.PrefixDesc(m.idxCols)
-	rng := prolly.PrefixRange(ctx, key, desc)
+	rng, err := prolly.PrefixRange(ctx, key, desc)
+	if err != nil {
+		return err
+	}
 	iter, err := m.mut.IterRange(ctx, rng)
 	if err != nil {
 		return err
