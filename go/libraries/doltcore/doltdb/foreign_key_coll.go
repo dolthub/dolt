@@ -48,11 +48,13 @@ const (
 	ForeignKeyReferentialAction_SetDefault
 )
 
+// ForeignKeyMatchType represents NULL handling semantics for composite FK columns (Doltgres-only feature).
 type ForeignKeyMatchType byte
 
 const (
 	ForeignKeyMatchType_Simple ForeignKeyMatchType = iota
 	ForeignKeyMatchType_Full
+	ForeignKeyMatchType_Partial // this is not supported in Postgres
 )
 
 // ForeignKey is the complete, internal representation of a Foreign Key.
