@@ -23,8 +23,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -59,7 +59,7 @@ func (rltf *ReflogTableFunction) NewInstance(ctx *sql.Context, database sql.Data
 }
 
 func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	sqlDb, ok := rltf.database.(dsess.SqlDatabase)
+	sqlDb, ok := rltf.database.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", rltf.database)
 	}

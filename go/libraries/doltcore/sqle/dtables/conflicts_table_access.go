@@ -19,7 +19,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/store/prolly"
 )
 
@@ -32,7 +32,7 @@ import (
 //
 // The merge-permission carve-out exists so that PR reviewers with only
 // merge access can resolve a merge that produced conflicts.
-func checkConflictsTableWriteAccess(ctx *sql.Context, db dsess.SqlDatabase, artM prolly.ArtifactMap) error {
+func checkConflictsTableWriteAccess(ctx *sql.Context, db dsess.VersionedDatabase, artM prolly.ArtifactMap) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err == nil {
 		return nil
 	}

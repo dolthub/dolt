@@ -35,10 +35,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -221,7 +221,7 @@ func (sc *StatsController) newGcTicker() *time.Ticker {
 	return time.NewTicker(sc.gcInterval)
 }
 
-func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys, rotateOk bool) error {
+func (sc *StatsController) AddFs(ctx *sql.Context, db sqle.SqlDatabase, fs filesys.Filesys, rotateOk bool) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -335,8 +335,11 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 		}
 	}
 
-	db, err := sc.pro.Database(ctx, dbName)
-	sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), branch, branch+"/"+dbName)
+	db, _, err := sc.pro.SessionDatabase(ctx, dbName)
+	if err != nil {
+		return err
+	}
+	sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(sqle.SqlDatabase), branch, branch+"/"+dbName)
 	if err != nil {
 		return err
 	}

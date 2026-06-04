@@ -19,7 +19,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 func NewInitDatabaseHook(sc *StatsController) sqle.InitDatabaseHook {
@@ -28,7 +27,7 @@ func NewInitDatabaseHook(sc *StatsController) sqle.InitDatabaseHook {
 		_ *sqle.DoltDatabaseProvider,
 		name string,
 		denv *env.DoltEnv,
-		db dsess.SqlDatabase,
+		db sqle.SqlDatabase,
 	) error {
 		if sc.getUserHomeDir == nil {
 			sc.mu.Lock()

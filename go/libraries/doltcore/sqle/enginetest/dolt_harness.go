@@ -35,10 +35,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -47,7 +47,7 @@ import (
 )
 
 type DoltHarness struct {
-	provider              dsess.DoltDatabaseProvider
+	provider              sqle.DatabaseProvider
 	engine                *gms.Engine
 	t                     *testing.T
 	multiRepoEnv          *env.MultiRepoEnv
@@ -509,7 +509,7 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (enginete
 	}
 
 	allDatabases := ddp.AllDatabases(d.NewContext())
-	dbs := make([]dsess.SqlDatabase, len(allDatabases))
+	dbs := make([]sqle.SqlDatabase, len(allDatabases))
 	locations := make([]filesys.Filesys, len(allDatabases))
 
 	for i, db := range allDatabases {
@@ -546,7 +546,7 @@ func (d *DoltHarness) closeProvider() {
 	if d.provider != nil {
 		dbs := d.provider.AllDatabases(sql.NewEmptyContext())
 		for _, db := range dbs {
-			require.NoError(d.t, db.(dsess.SqlDatabase).DbData().Ddb.Close())
+			require.NoError(d.t, db.(sqle.SqlDatabase).DbData().Ddb.Close())
 		}
 	}
 }

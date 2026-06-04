@@ -31,9 +31,9 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -54,12 +54,12 @@ type DoltHarness struct {
 }
 
 func (h *DoltHarness) Close() {
-	dbs := h.sess.Provider().AllDatabases(sql.NewEmptyContext())
+	dbs := h.sess.GenericProvider().AllDatabases(sql.NewEmptyContext())
 	for _, db := range dbs {
 		// Close the sql-layer database resources (global state, background threads, etc).
 		// Do NOT close the underlying DoltDB here; this harness reuses a shared *env.DoltEnv
 		// across multiple init/teardown cycles (see doltharness_test.go).
-		db.(dsess.SqlDatabase).Close()
+		db.(dsql.SqlDatabase).Close()
 	}
 }
 

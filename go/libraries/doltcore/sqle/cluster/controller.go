@@ -47,13 +47,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
@@ -246,7 +245,7 @@ func (c *Controller) ManageSystemVariables(variables sqlvars) {
 	c.refreshSystemVars()
 }
 
-func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, dbs ...dsess.SqlDatabase) error {
+func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, dbs ...sqle.SqlDatabase) error {
 	if c == nil {
 		return nil
 	}
@@ -453,7 +452,7 @@ func (c *Controller) ClusterDatabase() sql.Database {
 	if c == nil {
 		return nil
 	}
-	return clusterdb.NewClusterDatabase(c)
+	return sqle.NewClusterDatabase(c)
 }
 
 func (c *Controller) RemoteSrvListenAddr() string {
@@ -650,19 +649,19 @@ func (c *Controller) registerCommitHook(hook *commithook) {
 	c.commithooks = append(c.commithooks, hook)
 }
 
-func (c *Controller) GetClusterStatus() []clusterdb.ReplicaStatus {
+func (c *Controller) GetClusterStatus() []sqle.ReplicaStatus {
 	if c == nil {
-		return []clusterdb.ReplicaStatus{}
+		return []sqle.ReplicaStatus{}
 	}
 	c.mu.Lock()
 	epoch, role := c.epoch, c.role
 	commithooks := make([]*commithook, len(c.commithooks))
 	copy(commithooks, c.commithooks)
 	c.mu.Unlock()
-	ret := make([]clusterdb.ReplicaStatus, len(commithooks))
+	ret := make([]sqle.ReplicaStatus, len(commithooks))
 	for i, c := range commithooks {
 		lag, lastUpdate, currentErrorStr := c.status()
-		ret[i] = clusterdb.ReplicaStatus{
+		ret[i] = sqle.ReplicaStatus{
 			Database:       c.dbname,
 			Remote:         c.remotename,
 			Role:           string(role),
@@ -958,15 +957,16 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 
 	sess := dsess.DSessFromSess(sqlCtx.Session)
 	provider := sess.Provider()
+	sqlProvider := sess.GenericProvider()
 
 	for _, sdb := range provider.DoltDatabases() {
 		name := sdb.Name()
-		if name == clusterdb.DoltClusterDbName {
+		if name == sqle.DoltClusterDbName {
 			continue
 		}
 
 		// Load DB and its AI tracker
-		db, err := provider.Database(sqlCtx, name)
+		db, err := sqlProvider.Database(sqlCtx, name)
 		if err != nil {
 			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: provider db: %w", name, err)
 		}

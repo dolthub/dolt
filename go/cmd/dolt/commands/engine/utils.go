@@ -21,17 +21,16 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsess.SqlDatabase, []filesys.Filesys, error) {
-	var dbs []dsess.SqlDatabase
+func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]sqle.SqlDatabase, []filesys.Filesys, error) {
+	var dbs []sqle.SqlDatabase
 	var locations []filesys.Filesys
-	var db dsess.SqlDatabase
+	var db sqle.SqlDatabase
 
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		db, err = newDatabase(ctx, name, dEnv)

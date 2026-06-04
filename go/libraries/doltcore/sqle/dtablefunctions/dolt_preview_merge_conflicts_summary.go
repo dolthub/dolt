@@ -24,9 +24,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
 
@@ -203,7 +203,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) RowIter(ctx *sql.Context, r
 		return nil, fmt.Errorf("right branch name cannot be empty")
 	}
 
-	sqledb, ok := pm.database.(dsess.SqlDatabase)
+	sqledb, ok := pm.database.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", pm.database)
 	}
@@ -289,7 +289,7 @@ type rootInfo struct {
 
 // resolveBranchesToRoots resolves branch names to their corresponding root values
 // and finds the common merge base.
-func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, rightBranch string) (rootInfo, error) {
+func resolveBranchesToRoots(ctx *sql.Context, db dsess.VersionedDatabase, leftBranch, rightBranch string) (rootInfo, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	headRef, err := sess.CWBHeadRef(ctx, db.Name())
@@ -342,7 +342,7 @@ type tableConflict struct {
 // getTablesWithConflicts analyzes the merge between two branches and returns
 // a list of tables that would have conflicts. It performs a dry-run merge
 // to identify both schema and data conflicts without modifying the database.
-func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, mergeBranch string) ([]tableConflict, error) {
+func getTablesWithConflicts(ctx *sql.Context, db dsess.VersionedDatabase, baseBranch, mergeBranch string) ([]tableConflict, error) {
 	ri, err := resolveBranchesToRoots(ctx, db, baseBranch, mergeBranch)
 	if err != nil {
 		return nil, err

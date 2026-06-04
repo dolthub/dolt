@@ -22,19 +22,19 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
 type BackupsTable struct {
-	db        dsess.SqlDatabase
+	db        dsess.VersionedDatabase
 	tableName string
 }
 
 var _ sql.Table = (*BackupsTable)(nil)
 
-func NewBackupsTable(db dsess.SqlDatabase, tableName string) *BackupsTable {
+func NewBackupsTable(db dsess.VersionedDatabase, tableName string) *BackupsTable {
 	return &BackupsTable{db: db, tableName: tableName}
 }
 

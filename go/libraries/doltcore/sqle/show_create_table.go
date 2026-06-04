@@ -21,14 +21,14 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 )
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
 
-func PrepareCreateTableStmt(ctx context.Context, sqlDb dsess.SqlDatabase) (*sql.Context, *sqle.Engine, *dsess.DoltSession) {
+func PrepareCreateTableStmt(ctx context.Context, sqlDb SqlDatabase) (*sql.Context, *sqle.Engine, *dsess.DoltSession) {
 	pro, err := NewDoltDatabaseProviderWithDatabase(env.DefaultInitBranch, nil, sqlDb, nil, sql.EngineOverrides{})
 	if err != nil {
 		return nil, nil, nil

@@ -24,17 +24,16 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // NewBinlogInitDatabaseHook returns an InitDatabaseHook function that records the database creation in the binlog events.
-func NewBinlogInitDatabaseHook(_ context.Context, listeners []doltdb.DatabaseUpdateListener) func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv, db dsess.SqlDatabase) error {
+func NewBinlogInitDatabaseHook(_ context.Context, listeners []doltdb.DatabaseUpdateListener) func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv, db sqle.SqlDatabase) error {
 	return func(
 		ctx *sql.Context,
 		pro *sqle.DoltDatabaseProvider,
 		name string,
 		denv *env.DoltEnv,
-		db dsess.SqlDatabase,
+		db sqle.SqlDatabase,
 	) error {
 		for _, listener := range listeners {
 			err := listener.DatabaseCreated(ctx, name)

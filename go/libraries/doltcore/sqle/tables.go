@@ -38,11 +38,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typecompatibility"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/fk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -85,7 +85,7 @@ var _ dtables.VersionableTable = (*DoltTable)(nil)
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
-	db           dsess.SqlDatabase
+	db           SqlDatabase
 	lockedToRoot doltdb.RootValue
 
 	// overriddenSchema is set when the @@dolt_override_schema system var is in use
@@ -219,7 +219,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 
 }
 
-func NewDoltTable(ctx *sql.Context, name string, sch schema.Schema, tbl *doltdb.Table, db dsess.SqlDatabase, opts editor.Options) (*DoltTable, error) {
+func NewDoltTable(ctx *sql.Context, name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
@@ -3283,7 +3283,7 @@ var _ dsess.CacheableDoltTable = (*AlterableDoltTable)(nil)
 
 // RebindDatabase implements dsess.CacheableDoltTable.
 // Shallow-copies the table and refreshes the db-derived fields.
-func (t *DoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (dsess.CacheableDoltTable, error) {
+func (t *DoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.VersionedDatabase) (dsess.CacheableDoltTable, error) {
 	db := newDb.(Database)
 	sqlSch, err := sqlutil.FromDoltSchema(ctx, db.Name(), t.tableName, t.sch)
 	if err != nil {
@@ -3297,7 +3297,7 @@ func (t *DoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (d
 }
 
 // RebindDatabase implements dsess.CacheableDoltTable.
-func (t *WritableDoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (dsess.CacheableDoltTable, error) {
+func (t *WritableDoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.VersionedDatabase) (dsess.CacheableDoltTable, error) {
 	db := newDb.(Database)
 	inner, err := t.DoltTable.RebindDatabase(ctx, newDb)
 	if err != nil {
@@ -3310,7 +3310,7 @@ func (t *WritableDoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlData
 }
 
 // RebindDatabase implements dsess.CacheableDoltTable.
-func (t *AlterableDoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.SqlDatabase) (dsess.CacheableDoltTable, error) {
+func (t *AlterableDoltTable) RebindDatabase(ctx *sql.Context, newDb dsess.VersionedDatabase) (dsess.CacheableDoltTable, error) {
 	inner, err := t.WritableDoltTable.RebindDatabase(ctx, newDb)
 	if err != nil {
 		return nil, err

@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
@@ -31,11 +31,11 @@ var _ sql.Table = (*BranchActivityTable)(nil)
 
 // BranchActivityTable is a read-only system table that tracks branch activity
 type BranchActivityTable struct {
-	db        dsess.SqlDatabase
+	db        dsess.VersionedDatabase
 	tableName string
 }
 
-func NewBranchActivityTable(_ *sql.Context, db dsess.SqlDatabase) sql.Table {
+func NewBranchActivityTable(_ *sql.Context, db dsess.VersionedDatabase) sql.Table {
 	return &BranchActivityTable{db: db, tableName: doltdb.BranchActivityTableName}
 }
 

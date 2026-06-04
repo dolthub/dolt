@@ -38,13 +38,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
@@ -175,12 +175,12 @@ func NewSqlEngine(
 	// DoltDB instances. |all| is going to include some extension,
 	// informational databases like |dolt_cluster| sometimes,
 	// depending on config.
-	all := make([]dsess.SqlDatabase, len(dbs))
+	all := make([]sqle.SqlDatabase, len(dbs))
 	copy(all, dbs)
 
 	clusterDB := config.ClusterController.ClusterDatabase()
 	if clusterDB != nil {
-		all = append(all, clusterDB.(dsess.SqlDatabase))
+		all = append(all, clusterDB.(sqle.SqlDatabase))
 		locations = append(locations, nil)
 	}
 
@@ -371,7 +371,7 @@ func NewSqlEngine(
 
 // NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
 // TODO: migrate to provider
-func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *SqlEngine {
+func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]sqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
 		engine: engine,
 	}
@@ -394,7 +394,7 @@ func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) 
 func (se *SqlEngine) InitStats(ctx context.Context) error {
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	pro := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(dsess.DoltDatabaseProvider)
+	pro := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(sqle.DatabaseProvider)
 	sqlCtx, err := se.NewLocalContext(ctx)
 	if err != nil {
 		return err
@@ -433,11 +433,11 @@ func (se *SqlEngine) InitStats(ctx context.Context) error {
 }
 
 // Databases returns a slice of all databases in the engine
-func (se *SqlEngine) Databases(ctx *sql.Context) []dsess.SqlDatabase {
+func (se *SqlEngine) Databases(ctx *sql.Context) []sqle.SqlDatabase {
 	databases := se.provider.AllDatabases(ctx)
-	dbs := make([]dsess.SqlDatabase, len(databases))
+	dbs := make([]sqle.SqlDatabase, len(databases))
 	for i := range databases {
-		dbs[i] = databases[i].(dsess.SqlDatabase)
+		dbs[i] = databases[i].(sqle.SqlDatabase)
 	}
 
 	return nil
@@ -577,7 +577,7 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 
 	// When a new database is registered (via clone, restore, or undrop), wake the
 	// event executor so it can discover any events in the new database.
-	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, func(ctx *sql.Context, _ *sqle.DoltDatabaseProvider, _ string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
+	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, func(ctx *sql.Context, _ *sqle.DoltDatabaseProvider, _ string, _ *env.DoltEnv, _ sqle.SqlDatabase) error {
 		engine.EventScheduler.NotifyDatabaseAdded()
 		return nil
 	})

@@ -30,9 +30,9 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
@@ -125,7 +125,7 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 		return nil, err
 	}
 
-	sqledb, ok := p.database.(dsess.SqlDatabase)
+	sqledb, ok := p.database.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unable to get dolt database")
 	}

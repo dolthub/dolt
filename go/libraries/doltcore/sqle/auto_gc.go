@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 )
@@ -319,7 +318,7 @@ type autoGCCommitHook struct {
 
 // During engine initialization, called on the original set of
 // databases to configure them for auto-GC.
-func (c *AutoGCController) ApplyCommitHooks(ctx context.Context, mrEnv *env.MultiRepoEnv, dbs ...dsess.SqlDatabase) error {
+func (c *AutoGCController) ApplyCommitHooks(ctx context.Context, mrEnv *env.MultiRepoEnv, dbs ...SqlDatabase) error {
 	for _, db := range dbs {
 		denv := mrEnv.GetEnv(db.Name())
 		if denv == nil {
@@ -344,7 +343,7 @@ func (c *AutoGCController) DropDatabaseHook() DropDatabaseHook {
 }
 
 func (c *AutoGCController) InitDatabaseHook() InitDatabaseHook {
-	return func(ctx *sql.Context, _ *DoltDatabaseProvider, name string, env *env.DoltEnv, _ dsess.SqlDatabase) error {
+	return func(ctx *sql.Context, _ *DoltDatabaseProvider, name string, env *env.DoltEnv, _ SqlDatabase) error {
 		ddb := env.DoltDB(ctx)
 		ddb.PrependCommitHooks(ctx, c.newCommitHook(name, ddb))
 		return nil

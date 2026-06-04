@@ -30,8 +30,8 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -232,9 +232,9 @@ func (sc *StatsController) newStatsForRoot(ctx *sql.Context, gcKv *memStats, byp
 	}
 	var toVisit []toCollect
 	if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, openSessionCmds, func() error {
-		dbs := dSess.Provider().AllDatabases(ctx)
+		dbs := dSess.GenericProvider().AllDatabases(ctx)
 		for _, db := range dbs {
-			sessDb, ok := db.(dsess.SqlDatabase)
+			sessDb, ok := db.(sqle.SqlDatabase)
 			if !ok {
 				continue
 			}
@@ -302,7 +302,7 @@ func (sc *StatsController) newStatsForRoot(ctx *sql.Context, gcKv *memStats, byp
 			newStats.DbCnt++
 
 			for _, tableName := range tableNames {
-				err = sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv, bypassRateLimit, openSessionCmds)
+				err = sc.updateTable(ctx, newStats, tableName, sqlDb.(sqle.SqlDatabase), gcKv, bypassRateLimit, openSessionCmds)
 				if err != nil {
 					return nil, err
 				}
@@ -458,7 +458,7 @@ func (sc *StatsController) execWithOptionalRateLimit(ctx *sql.Context, bypassRat
 	return sc.rateLimiter.execute(ctx, f)
 }
 
-func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats, bypassRateLimit, openSessionCmds bool) error {
+func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, tableName string, sqlDb sqle.SqlDatabase, gcKv *memStats, bypassRateLimit, openSessionCmds bool) error {
 	var err error
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table

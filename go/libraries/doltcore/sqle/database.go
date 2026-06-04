@@ -39,16 +39,16 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/dolthub/dolt/go/libraries/doltcore/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/adapters"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -87,7 +87,7 @@ type Database struct {
 	revType       dsess.RevisionType
 }
 
-var _ dsess.SqlDatabase = Database{}
+var _ SqlDatabase = Database{}
 var _ dsess.RevisionDatabase = Database{}
 var _ globalstate.GlobalStateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
@@ -131,7 +131,7 @@ type ReadOnlyDatabase struct {
 }
 
 var _ sql.ReadOnlyDatabase = ReadOnlyDatabase{}
-var _ dsess.SqlDatabase = ReadOnlyDatabase{}
+var _ SqlDatabase = ReadOnlyDatabase{}
 
 func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
@@ -141,7 +141,7 @@ func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState
 	return initialDBState(ctx, r, r.revision)
 }
 
-func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (SqlDatabase, error) {
 	revDb, err := r.Database.WithBranchRevision(requestedName, branchSpec)
 	if err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func (db Database) GetTableResolver() doltdb.TableResolver {
 	return TableResolver{db}
 }
 
-func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (SqlDatabase, error) {
 	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
 	db.revision = branchSpec.Branch
 	db.revName = db.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch
@@ -240,7 +240,7 @@ func (d forwardCtxDbData) CWBHeadRef(ctx *sql.Context) (ref.DoltRef, error) {
 
 // initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should
 // implement their own method for an initial db state and not rely on this method.
-func initialDBState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dsess.InitialDbState, error) {
+func initialDBState(ctx *sql.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	if len(db.Revision()) > 0 {
 		return initialStateForRevisionDb(ctx, db)
 	}
@@ -2771,13 +2771,13 @@ func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag sche
 // getCatalog creates and returns the analyzer.Catalog instance for this database.
 func (db Database) getCatalog(ctx *sql.Context) *analyzer.Catalog {
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	return sqle.NewDefault(doltSession.Provider()).Analyzer.Catalog
+	return sqle.NewDefault(doltSession.GenericProvider()).Analyzer.Catalog
 }
 
 // getEventScheduler retrieves the EventScheduler for this database
 func (db Database) getEventScheduler(ctx *sql.Context) sql.EventScheduler {
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	return sqle.NewDefault(doltSession.Provider()).EventScheduler
+	return sqle.NewDefault(doltSession.GenericProvider()).EventScheduler
 }
 
 // SaveEvent implements sql.EventDatabase.

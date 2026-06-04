@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 )
 
 const JoinCostFuncName = "dolt_join_cost"
@@ -77,7 +77,7 @@ func (c *JoinCost) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.Provider()
-	eng := gms.NewDefault(pro)
+	eng := gms.NewDefault(pro.(sql.DatabaseProvider))
 
 	binder := planbuilder.New(ctx, eng.Analyzer.Catalog, eng.EventScheduler)
 	parsed, _, _, qFlags, err := binder.Parse(q, nil, false)

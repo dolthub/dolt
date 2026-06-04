@@ -27,10 +27,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -276,7 +276,7 @@ func parseBranchArgs(apr *argparser.ArgParseResults) (newBranch string, createBr
 // if any issues are encountered while looking up the named database.
 func isReadOnlyDatabase(ctx *sql.Context, dbName string) (bool, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	db, err := doltSession.Provider().Database(ctx, dbName)
+	db, err := doltSession.GenericProvider().Database(ctx, dbName)
 	if err != nil {
 		return false, err
 	}

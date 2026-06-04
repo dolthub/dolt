@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/indexmeta"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -564,12 +565,8 @@ type doltIndex struct {
 	fulltext bool
 }
 
-type LookupMeta struct {
-	Idx      sql.Index
-	Fds      *sql.FuncDepSet
-	Cols     sql.FastIntSet
-	Ordinals []int
-}
+// LookupMeta is an alias for indexmeta.LookupMeta kept here for callers within sqle.
+type LookupMeta = indexmeta.LookupMeta
 
 // GetStrictLookups searches |indexes| and returns a slice of LookupMeta that indicates which indexes can be used
 // for strict lookups. Indexes may be used for strict lookups if they are a unique index and the columns they

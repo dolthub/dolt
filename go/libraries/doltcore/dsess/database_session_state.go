@@ -21,7 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 )
@@ -30,7 +30,11 @@ import (
 // establish the in memory state of the session for every new transaction.
 type InitialDbState struct {
 	DbData env.DbData[*sql.Context]
-	Db     sql.Database
+	// Db is the database this state belongs to. Only the identity
+	// surface (Name, revision coordinates) is consumed by dsess; the
+	// field is typed VersionedDatabase so non-SQL implementers can
+	// participate.
+	Db VersionedDatabase
 	// HeadRoot is the root value for databases without a HeadCommit. Nil for databases with a HeadCommit.
 	HeadRoot doltdb.RootValue
 	// If err is set, this InitialDbState is partially invalid, but may be

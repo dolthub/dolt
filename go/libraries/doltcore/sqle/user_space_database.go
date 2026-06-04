@@ -20,8 +20,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 )
@@ -33,7 +34,7 @@ type UserSpaceDatabase struct {
 	editOpts editor.Options
 }
 
-var _ dsess.SqlDatabase = (*UserSpaceDatabase)(nil)
+var _ SqlDatabase = (*UserSpaceDatabase)(nil)
 
 func NewUserSpaceDatabase(root doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
 	return &UserSpaceDatabase{RootValue: root, editOpts: editOpts}
@@ -99,7 +100,7 @@ func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbSt
 	}, nil
 }
 
-func (db *UserSpaceDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+func (db *UserSpaceDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (SqlDatabase, error) {
 	// Nothing to do here, we don't support changing branch revisions
 	return db, nil
 }
@@ -122,6 +123,10 @@ func (db *UserSpaceDatabase) DbData() env.DbData[*sql.Context] {
 
 func (db *UserSpaceDatabase) EditOptions() editor.Options {
 	return db.editOpts
+}
+
+func (db *UserSpaceDatabase) GetGlobalState() globalstate.GlobalState {
+	return globalstate.NoOp{}
 }
 
 func (db *UserSpaceDatabase) Revision() string {

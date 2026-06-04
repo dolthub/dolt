@@ -21,7 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/indexmeta"
 )
 
 // CacheableDoltTable is implemented by tables in SessionCache.tables.
@@ -33,7 +33,7 @@ import (
 // correct Database instance.
 type CacheableDoltTable interface {
 	sql.Table
-	RebindDatabase(ctx *sql.Context, newDb SqlDatabase) (CacheableDoltTable, error)
+	RebindDatabase(ctx *sql.Context, newDb VersionedDatabase) (CacheableDoltTable, error)
 }
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
@@ -52,7 +52,7 @@ type SessionCache struct {
 	// writers are keyed by table schema hash
 	writers map[doltdb.DataCacheKey]*WriterState
 	// strictLookups are keyed by table schema hash
-	strictLookups map[doltdb.DataCacheKey][]index.LookupMeta
+	strictLookups map[doltdb.DataCacheKey][]indexmeta.LookupMeta
 	// checks is keyed by table schema hash
 	checks map[doltdb.DataCacheKey][]sql.CheckDefinition
 
@@ -64,7 +64,7 @@ type SessionCache struct {
 // handles to data or state, but always defer to the session. Keys in the secondary map are revision specifier strings
 type DatabaseCache struct {
 	// revisionDbs caches databases by name. The name is always lower case and revision qualified
-	revisionDbs map[revisionDbCacheKey]SqlDatabase
+	revisionDbs map[revisionDbCacheKey]VersionedDatabase
 	// initialDbStates caches the initial state of databases by name for a given noms root, which is the primary key.
 	// The secondary key is the lower-case revision-qualified database name.
 	initialDbStates map[doltdb.DataCacheKey]map[string]InitialDbState
@@ -202,7 +202,7 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 }
 
 // GetCachedStrictLookup returns a cached set of |sql.IndexLookup|s for the table named, and whether the cache was present
-func (c *SessionCache) GetCachedStrictLookup(key doltdb.DataCacheKey) ([]index.LookupMeta, bool) {
+func (c *SessionCache) GetCachedStrictLookup(key doltdb.DataCacheKey) ([]indexmeta.LookupMeta, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	schemaState, ok := c.strictLookups[key]
@@ -210,12 +210,12 @@ func (c *SessionCache) GetCachedStrictLookup(key doltdb.DataCacheKey) ([]index.L
 }
 
 // CacheStrictLookup caches a set of |sql.IndexLookup|s for the table named
-func (c *SessionCache) CacheStrictLookup(key doltdb.DataCacheKey, state []index.LookupMeta) {
+func (c *SessionCache) CacheStrictLookup(key doltdb.DataCacheKey, state []indexmeta.LookupMeta) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.strictLookups == nil {
-		c.strictLookups = make(map[doltdb.DataCacheKey][]index.LookupMeta)
+		c.strictLookups = make(map[doltdb.DataCacheKey][]indexmeta.LookupMeta)
 	}
 	if len(c.strictLookups) > maxCachedKeys {
 		for k := range c.strictLookups {
@@ -399,7 +399,7 @@ func (c *SessionCache) GetCachedTriggers(key doltdb.DataCacheKey, schema string)
 }
 
 // GetCachedRevisionDb returns the cached revision database named, and whether the cache was present
-func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string, requestedName string) (SqlDatabase, bool) {
+func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string, requestedName string) (VersionedDatabase, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -415,12 +415,12 @@ func (c *DatabaseCache) GetCachedRevisionDb(revisionDbName string, requestedName
 }
 
 // CacheRevisionDb caches the revision database named
-func (c *DatabaseCache) CacheRevisionDb(database SqlDatabase) {
+func (c *DatabaseCache) CacheRevisionDb(database VersionedDatabase) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.revisionDbs == nil {
-		c.revisionDbs = make(map[revisionDbCacheKey]SqlDatabase)
+		c.revisionDbs = make(map[revisionDbCacheKey]VersionedDatabase)
 	}
 
 	if len(c.revisionDbs) > maxCachedKeys {
@@ -506,6 +506,6 @@ func (c *DatabaseCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.sessionVars = make(map[string]sessionVarCacheKey)
-	c.revisionDbs = make(map[revisionDbCacheKey]SqlDatabase)
+	c.revisionDbs = make(map[revisionDbCacheKey]VersionedDatabase)
 	c.initialDbStates = make(map[doltdb.DataCacheKey]map[string]InitialDbState)
 }

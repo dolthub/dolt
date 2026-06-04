@@ -28,12 +28,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -348,7 +348,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string, commitBecomesEmptyHandl
 		return fmt.Errorf("unable to get db datata for database %s", ctx.GetCurrentDatabase())
 	}
 
-	db, err := doltSession.Provider().Database(ctx, ctx.GetCurrentDatabase())
+	db, err := doltSession.GenericProvider().Database(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
 		return err
 	}
@@ -544,7 +544,7 @@ func validateNoConflicts(ctx *sql.Context) error {
 // loadRebasePlan loads the rebase plan from the current database for the current session and validates it.
 func loadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	db, err := doltSession.Provider().Database(ctx, ctx.GetCurrentDatabase())
+	db, err := doltSession.GenericProvider().Database(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
 		return nil, err
 	}

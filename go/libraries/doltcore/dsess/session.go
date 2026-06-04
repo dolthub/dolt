@@ -32,9 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -77,7 +76,7 @@ type DoltSession struct {
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
-var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
+var _ SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
@@ -98,7 +97,38 @@ func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSessi
 	}
 }
 
+// NewDetachedSession returns a DoltSession whose embedded sql.Session is a
+// fresh sql.BaseSession not bound to any specific client connection. Use this
+// when another external session manager (eg DumoboDB) owns the
+// DoltSession's lifecycle and individual SQL requests will run against a
+// *sql.Context that points at this session rather than a per-connection one.
+//
+// Identical to NewDoltSession but inverts the dependency on a caller-supplied
+// sql.BaseSession.
+func NewDetachedSession(
+	pro DoltDatabaseProvider,
+	conf config.ReadWriteConfig,
+	branchController *branch_control.Controller,
+	statsProvider sql.StatsProvider,
+	writeSessProv WriteSessFunc,
+	gcSafepointController *gcctx.GCSafepointController,
+	branchActivityTracker *doltdb.BranchActivityTracker,
+) (*DoltSession, error) {
+	return NewDoltSession(
+		sql.NewBaseSession(),
+		pro,
+		conf,
+		branchController,
+		statsProvider,
+		writeSessProv,
+		gcSafepointController,
+		branchActivityTracker,
+	)
+}
+
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
+// sqlSess may be any *sql.BaseSession; pass sql.NewBaseSession() (or use NewDetachedSession) when the
+// session is not bound to a single client connection.
 func NewDoltSession(
 	sqlSess *sql.BaseSession,
 	pro DoltDatabaseProvider,
@@ -142,12 +172,22 @@ func (d *DoltSession) Provider() DoltDatabaseProvider {
 // GenericProvider returns the sql.MutableDatabaseProvider for this session. This allows access to the provider without
 // incurring import cycles in some cases.
 func (d *DoltSession) GenericProvider() sql.MutableDatabaseProvider {
-	return d.provider
+	// dsess.DoltDatabaseProvider does not embed sql.MutableDatabaseProvider
+	// (that surface lives on sqle.DatabaseProvider). Concrete providers in
+	// production (sqle.DoltDatabaseProvider) satisfy both; callers of this
+	// method exist only on the SQL path.
+	return d.provider.(sql.MutableDatabaseProvider)
 }
 
 // StatsProvider returns the sql.StatsProvider for this session.
 func (d *DoltSession) StatsProvider() sql.StatsProvider {
 	return d.statsProv
+}
+
+// SessionDbProvider is implemented by DoltSession and allows expranalysis to
+// access the database provider without a direct import of this package.
+type SessionDbProvider interface {
+	GenericProvider() sql.MutableDatabaseProvider
 }
 
 // DSessFromSess retrieves a dolt session from a standard sql.Session
@@ -357,7 +397,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	// Take a snapshot of the current noms root for every database under management
 	doltDatabases := d.provider.DoltDatabases()
-	txDbs := make([]SqlDatabase, 0, len(doltDatabases))
+	txDbs := make([]VersionedDatabase, 0, len(doltDatabases))
 	for _, db := range doltDatabases {
 		// TODO: this nil check is only necessary to support UserSpaceDatabase and clusterDatabase, come up with a better set of
 		//  interfaces to capture these capabilities
@@ -588,6 +628,26 @@ func (d *DoltSession) DirtyDatabases() []string {
 		}
 	}
 	return dbNames
+}
+
+// DirtyBranchRevisions returns the revision-qualified database names for
+// every (database, branch) in this session whose branchState has
+// uncommitted changes. Unlike DirtyDatabases, this distinguishes branches
+// within the same database. Callers pass each returned name to
+// CommitWorkingSet / DoltCommit / Rollback to act on the specific branch
+// state.
+func (d *DoltSession) DirtyBranchRevisions() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []string
+	for _, dbState := range d.dbStates {
+		for _, branchState := range dbState.heads {
+			if branchState.dirty {
+				out = append(out, branchState.RevisionDbName())
+			}
+		}
+	}
+	return out
 }
 
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
@@ -1309,7 +1369,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
+func (d *DoltSession) addDB(ctx *sql.Context, db VersionedDatabase) error {
 	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
 	baseName, _ := doltdb.SplitRevisionDbName(revisionQualifiedName)
 
@@ -1385,9 +1445,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	branchState.dbData.Rsr = adapter
 	branchState.dbData.Rsw = adapter
 
-	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
-	// Or better yet, get rid of EditOptions from the database, it's a session setting
-	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
+	editOpts := db.EditOptions()
 
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
@@ -1404,13 +1462,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if dbState.WorkingSet != nil {
 			branchState.workingSet = dbState.WorkingSet
 
-			// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
-			//  that's hard to express with the current types
-			stateProvider, ok := db.(globalstate.GlobalStateProvider)
-			if !ok {
-				return fmt.Errorf("database does not contain global state store")
-			}
-			sessionState.globalState = stateProvider.GetGlobalState()
+			sessionState.globalState = db.GetGlobalState()
 
 			tracker, err := sessionState.globalState.AutoIncrementTracker(ctx)
 			if err != nil {
@@ -1739,13 +1791,12 @@ func (d *DoltSession) GCSafepointController() *gcctx.GCSafepointController {
 // does not have a working set yet, then a new, empty working set is created and set in |dbState|.
 // If |db| is NOT a branch revision database, or |dbState| already has a working set, then this
 // function will not do anything.
-func initializeBranchWorkingSet(ctx *sql.Context, db SqlDatabase, dbState *InitialDbState) error {
-	revisionDb, isRevisionDb := db.(RevisionDatabase)
-	if !isRevisionDb || revisionDb.RevisionType() != RevisionTypeBranch || dbState.WorkingSet != nil {
+func initializeBranchWorkingSet(ctx *sql.Context, db VersionedDatabase, dbState *InitialDbState) error {
+	if db.RevisionType() != RevisionTypeBranch || dbState.WorkingSet != nil {
 		return nil
 	}
 
-	branchRef := ref.NewBranchRef(revisionDb.Revision())
+	branchRef := ref.NewBranchRef(db.Revision())
 	wsRef, err := ref.WorkingSetRefForHead(branchRef)
 	if err != nil {
 		return err
@@ -1764,7 +1815,7 @@ func initializeBranchWorkingSet(ctx *sql.Context, db SqlDatabase, dbState *Initi
 	dbState.WorkingSet = doltdb.EmptyWorkingSet(wsRef).
 		WithWorkingRoot(headRoot).WithStagedRoot(headRoot)
 
-	ctx.GetLogger().Warnf("initializing empty working set for branch %s", revisionDb.Revision())
+	ctx.GetLogger().Warnf("initializing empty working set for branch %s", db.Revision())
 
 	return dbState.DbData.Ddb.UpdateWorkingSet(ctx, wsRef, dbState.WorkingSet,
 		hash.Hash{}, doltdb.TodoWorkingSetMeta(), nil)
@@ -2026,7 +2077,7 @@ func persistServerUuid(persistedGlobalVars []sql.SystemVariable, globalConfig co
 }
 
 // TransactionRoot returns the noms root for the given database in the current transaction
-func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
+func TransactionRoot(ctx *sql.Context, db VersionedDatabase) (hash.Hash, error) {
 	tx, ok := ctx.GetTransaction().(*DoltTransaction)
 	// We don't have a real transaction in some cases (esp. PREPARE), in which case we need to use the tip of the data
 	if !ok {
@@ -2042,7 +2093,7 @@ func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
 }
 
 // DefaultHead returns the head for the database given when one isn't specified
-func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, error) {
+func DefaultHead(ctx *sql.Context, baseName string, db VersionedDatabase) (string, error) {
 	head := ""
 
 	// First check the global variable for the default branch

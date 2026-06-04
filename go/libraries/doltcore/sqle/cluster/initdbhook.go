@@ -22,14 +22,14 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads) sqle.InitDatabaseHook {
-	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv, db dsess.SqlDatabase) error {
+	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv, db sqle.SqlDatabase) error {
 		dialprovider := controller.gRPCDialProvider(denv)
 		var remoteDBs []func(context.Context) (*doltdb.DoltDB, error)
 		var remoteUrls []string

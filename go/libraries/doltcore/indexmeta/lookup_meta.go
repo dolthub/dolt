@@ -1,4 +1,4 @@
-// Copyright 2023 Dolthub, Inc.
+// Copyright 2026 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,26 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dprocedures
+package indexmeta
 
-import (
-	"fmt"
+import "github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
-)
-
-func doltPurgeDroppedDatabases(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	if len(args) > 0 {
-		return nil, fmt.Errorf("dolt_purge_dropped_databases does not take any arguments")
-	}
-
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	err := doltSession.Provider().PurgeDroppedDatabases(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return rowToIter(int64(cmdSuccess)), nil
+// LookupMeta describes an index that can be used for a strict (unique-key) lookup.
+// Kept in its own package so dsess can reference the type without importing sqle/index,
+// which transitively pulls in the full go-mysql-server query planner.
+type LookupMeta struct {
+	Idx      sql.Index
+	Fds      *sql.FuncDepSet
+	Cols     sql.FastIntSet
+	Ordinals []int
 }

@@ -24,9 +24,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/fk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -51,7 +51,7 @@ var _ sql.IndexedTable = (*BranchesTable)(nil)
 
 // BranchesTable is the system table that accesses branches
 type BranchesTable struct {
-	db        dsess.SqlDatabase
+	db        dsess.VersionedDatabase
 	tableName string
 	remote    bool
 }
@@ -196,12 +196,12 @@ func (bt *BranchesTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEdi
 }
 
 // NewBranchesTable creates a BranchesTable
-func NewBranchesTable(_ *sql.Context, db dsess.SqlDatabase, tableName string) sql.Table {
+func NewBranchesTable(_ *sql.Context, db dsess.VersionedDatabase, tableName string) sql.Table {
 	return &BranchesTable{db: db, tableName: tableName}
 }
 
 // NewRemoteBranchesTable creates a BranchesTable with only remote refs
-func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.SqlDatabase, tableName string) sql.Table {
+func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.VersionedDatabase, tableName string) sql.Table {
 	return &BranchesTable{db: ddb, remote: true, tableName: tableName}
 }
 

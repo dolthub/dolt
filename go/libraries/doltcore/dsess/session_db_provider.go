@@ -71,8 +71,11 @@ type RemoteReadReplicaDatabase interface {
 	PullFromRemote(ctx *sql.Context) error
 }
 
+// DoltDatabaseProvider is the data-layer provider surface dsess.Session
+// uses. SQL-engine callers should use the wider sqle.DatabaseProvider
+// composite, which adds sql.MutableDatabaseProvider, EngineOverrides,
+// and wider return types for the three database-returning methods.
 type DoltDatabaseProvider interface {
-	sql.MutableDatabaseProvider
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
 	DbFactoryUrl() string
@@ -97,12 +100,12 @@ type DoltDatabaseProvider interface {
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, depth int, remoteParams map[string]string) error
 	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base
 	// database.
-	SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error)
+	SessionDatabase(ctx *sql.Context, dbName string) (VersionedDatabase, bool, error)
 	// BaseDatabase returns the base database for the specified database name. Meant for informational purposes when
 	// managing the session initialization only. Use SessionDatabase for normal database retrieval.
-	BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool)
+	BaseDatabase(ctx *sql.Context, dbName string) (VersionedDatabase, bool)
 	// DoltDatabases returns all databases known to this provider.
-	DoltDatabases() []SqlDatabase
+	DoltDatabases() []VersionedDatabase
 	// UndropDatabase attempts to restore the database |dbName| that was previously dropped.
 	// The restored database will appear identically when accessed through the SQL
 	// interface, but may be stored in a slightly different location on disk
@@ -117,8 +120,6 @@ type DoltDatabaseProvider interface {
 	// PurgeDroppedDatabases permanently deletes any dropped databases that are being held in temporary storage
 	// in case they need to be restored. This operation is not reversible, so use with caution!
 	PurgeDroppedDatabases(ctx *sql.Context) error
-	// EngineOverrides returns the overrides that were given during the creation of the provider.
-	EngineOverrides() sql.EngineOverrides
 	// TxLocks returns the per-engine keymutex used to serialize
 	// transaction commits by working-set reference.
 	TxLocks() keymutex.Keymutex
@@ -127,36 +128,4 @@ type DoltDatabaseProvider interface {
 type SessionDatabaseBranchSpec struct {
 	RepoState env.RepoStateReadWriter[*sql.Context]
 	Branch    string
-}
-
-type SqlDatabase interface {
-	sql.Database
-	sql.SchemaDatabase
-	sql.DatabaseSchema
-	sql.AliasedDatabase
-	SessionDatabase
-	RevisionDatabase
-
-	// WithBranchRevision returns a copy of this database with the revision set to the given branch revision, and the
-	// database name set to the given name.
-	WithBranchRevision(requestedName string, branchSpec SessionDatabaseBranchSpec) (SqlDatabase, error)
-
-	// TODO: get rid of this, it's managed by the session, not the DB
-	GetRoot(*sql.Context) (doltdb.RootValue, error)
-	// TODO: remove ddb from the below, it's separable and is 95% of the uses of this method
-	DbData() env.DbData[*sql.Context]
-	// DoltDatabases returns all underlying DoltDBs for this database.
-	DoltDatabases() []*doltdb.DoltDB
-	// Schema returns the schema of the database.
-	Schema() string
-
-	GetTableResolver() doltdb.TableResolver
-
-	// Clean up any global resources associated with the
-	// SqlDatabase itself.  For DoltDatabases, this notably does
-	// not close the DoltDB, for example, but should shut down
-	// background threads not managed through
-	// sql.BackgroundThreads but which could be accessing or
-	// mutating database state.
-	Close()
 }

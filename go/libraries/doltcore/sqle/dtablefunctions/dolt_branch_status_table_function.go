@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 )
 
 var _ sql.TableFunction = (*BranchStatusTableFunction)(nil)
@@ -117,7 +117,7 @@ func (b *BranchStatusTableFunction) WithChildren(ctx *sql.Context, children ...s
 
 // RowIter implements the sql.Node interface
 func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	sqlDb, ok := b.db.(dsess.SqlDatabase)
+	sqlDb, ok := b.db.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unable to get dolt database")
 	}

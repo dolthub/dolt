@@ -27,10 +27,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
@@ -243,7 +243,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	// TODO: When we add support for joining on table functions, we'll need to evaluate this against the
 	//       specified row. That row is what has the left_table context in a join query.
 	//       This will expand the test cases we need to cover significantly.
-	sqledb, ok := dtf.database.(dsess.SqlDatabase)
+	sqledb, ok := dtf.database.(dsess.VersionedDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unable to get dolt database")
 	}
@@ -289,7 +289,7 @@ type refDetails struct {
 
 // loadDetailsForRef loads the root, hash, and timestamp for the specified from
 // and to ref values
-func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.SqlDatabase) (*refDetails, *refDetails, error) {
+func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.VersionedDatabase) (*refDetails, *refDetails, error) {
 	fromCommitStr, toCommitStr, err := loadCommitStrings(ctx, fromRef, toRef, dotRef, db)
 	if err != nil {
 		return nil, nil, err
@@ -313,7 +313,7 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	return fromDetails, toDetails, nil
 }
 
-func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.SqlDatabase) (string, string, error) {
+func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.VersionedDatabase) (string, string, error) {
 	if dotRef != nil {
 		dotStr, err := interfaceToString(dotRef)
 		if err != nil {
@@ -367,7 +367,7 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 
 // loadCommitStrings gets the to and from commit strings, using the common
 // ancestor as the from commit string for three dot diff
-func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.SqlDatabase) (string, string, error) {
+func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.VersionedDatabase) (string, string, error) {
 	fromStr, toStr, err := resolveCommitStrings(ctx, fromRef, toRef, dotRef, db)
 	if err != nil {
 		return "", "", err
@@ -618,7 +618,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		return nil
 	}
 
-	sqledb, ok := dtf.database.(dsess.SqlDatabase)
+	sqledb, ok := dtf.database.(dsess.VersionedDatabase)
 	if !ok {
 		return fmt.Errorf("unexpected database type: %T", dtf.database)
 	}
@@ -734,7 +734,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 
 // cacheTableDelta caches and returns an appropriate table delta for the table name given, taking renames into
 // consideration. Returns a sql.ErrTableNotFound if the given table name cannot be found in either revision.
-func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string, db dsess.SqlDatabase) (diff.TableDelta, error) {
+func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string, db dsess.VersionedDatabase) (diff.TableDelta, error) {
 	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, db)
 	if err != nil {
 		return diff.TableDelta{}, err
