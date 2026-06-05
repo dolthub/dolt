@@ -78,10 +78,8 @@ CREATE TABLE accounts (
     UNIQUE KEY email_unique (email),
     KEY id_idx (id),
     CONSTRAINT email_format CHECK (email LIKE '%@%')
-);
+) COMMENT='application accounts';
 SQL
-    # TODO(elianddb): dolt sql drops CREATE TABLE COMMENT when PRIMARY KEY is a separate clause, and ALTER TABLE COMMENT errors with types.OkResult despite persisting.
-    dolt sql -q "ALTER TABLE accounts COMMENT='application accounts'" 2>/dev/null || true
 
     dolt sql -q "call dolt_update_column_tag('accounts', 'id', 999);"
     dolt sql -q "call dolt_update_column_tag('accounts', 'email', 888);"

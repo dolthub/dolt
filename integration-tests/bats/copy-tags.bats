@@ -95,10 +95,8 @@ CREATE TABLE accounts (
     UNIQUE KEY email_unique (email),
     KEY id_idx (id),
     CONSTRAINT email_format CHECK (email LIKE '%@%')
-);
+) COMMENT='application accounts';
 SQL
-    # TODO(elianddb): dolt sql drops CREATE TABLE COMMENT when PRIMARY KEY is a separate clause, and ALTER TABLE COMMENT errors with types.OkResult despite persisting.
-    dolt sql -q "ALTER TABLE accounts COMMENT='application accounts'" 2>/dev/null || true
     dolt commit -Am "accounts on main"
 
     dolt checkout branch1
@@ -111,10 +109,8 @@ CREATE TABLE accounts (
     UNIQUE KEY email_unique (email),
     KEY id_idx (id),
     CONSTRAINT email_format CHECK (email LIKE '%@%')
-);
+) COMMENT='application accounts';
 SQL
-    # TODO(elianddb): dolt sql drops CREATE TABLE COMMENT when PRIMARY KEY is a separate clause, and ALTER TABLE COMMENT errors with types.OkResult despite persisting.
-    dolt sql -q "ALTER TABLE accounts COMMENT='application accounts'" 2>/dev/null || true
     # Diverge the id tag on branch1 so copy-tags has real work to do.
     dolt schema update-tag accounts id 11111
     dolt commit -Am "accounts on branch1"
