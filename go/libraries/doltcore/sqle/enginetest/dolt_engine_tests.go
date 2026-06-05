@@ -641,6 +641,17 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 			}
 		}()
 	}
+	for _, script := range AutoIncrementTransactionTests {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
+	}
 }
 
 func RunBranchTransactionTest(t *testing.T, h DoltEnginetestHarness) {

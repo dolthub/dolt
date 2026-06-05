@@ -144,6 +144,12 @@ func NewSqlEngine(
 		})
 	}
 
+	// Some database initialization logic depends on system variables, load them before the databases
+	err := applySystemVariables(sql.SystemVariables, config.SystemVariables)
+	if err != nil {
+		return nil, err
+	}
+
 	dbs, locations, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return nil, err
@@ -159,11 +165,6 @@ func NewSqlEngine(
 	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
 
 	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, mrEnv, dbs...)
-	if err != nil {
-		return nil, err
-	}
-
-	err = applySystemVariables(sql.SystemVariables, config.SystemVariables)
 	if err != nil {
 		return nil, err
 	}
