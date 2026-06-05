@@ -184,9 +184,10 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		columns: []schema.Column{
 			schema.NewColumn(ToCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
 		},
-		indexSch:                      sch,
-		tableSch:                      sch,
-		unique:                        true,
+		indexSch: sch,
+		tableSch: sch,
+		// A single commit changes many rows, so the to_commit and from_commit indexes are not unique.
+		unique:                        false,
 		comment:                       "",
 		vrw:                           t.ValueReadWriter(),
 		ns:                            t.NodeStore(),
@@ -202,7 +203,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 			},
 			indexSch:                      sch,
 			tableSch:                      sch,
-			unique:                        true,
+			unique:                        false,
 			comment:                       "",
 			vrw:                           t.ValueReadWriter(),
 			ns:                            t.NodeStore(),
