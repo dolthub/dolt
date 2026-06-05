@@ -133,7 +133,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		var h hash.Hash
 		h, ok = td.GetBytesAddr(i, tup)
 		if ok {
-			v = val.NewByteArray(ctx, h, ns)
+			v = val.NewByteArray(h, ns)
 		}
 	case val.JSONAddrEnc:
 		var h hash.Hash
@@ -145,7 +145,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		var h hash.Hash
 		h, ok = td.GetStringAddr(i, tup)
 		if ok {
-			v = val.NewTextStorage(ctx, h, ns)
+			v = val.NewTextStorage(h, ns)
 		}
 	case val.BytesAdaptiveEnc:
 		v, ok, err = td.GetBytesAdaptiveValue(ctx, i, ns, tup)
@@ -334,7 +334,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		if !ok {
 			return v, nil
 		}
-		v.WrappedVal = val.NewByteArray(ctx, h, ns)
+		v.WrappedVal = val.NewByteArray(h, ns)
 		return v, nil
 
 	case val.JSONAddrEnc:
@@ -376,7 +376,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		// out-of-band
 		_, lengthBytes := uvarint.Uvarint(b)
 		h := hash.New(b[lengthBytes:])
-		v.WrappedVal = val.NewByteArray(ctx, h, ns)
+		v.WrappedVal = val.NewByteArray(h, ns)
 		return v, err
 
 	case val.GeomAdaptiveEnc:

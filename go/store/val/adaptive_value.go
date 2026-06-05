@@ -189,7 +189,7 @@ func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, bu
 	}
 	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
 	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewByteArray(ctx, address, vs).WithMaxByteLength(int64(length)), nil
+	return NewByteArray(address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
@@ -200,7 +200,7 @@ func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, 
 	}
 	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
 	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewTextStorage(ctx, address, vs).WithMaxByteLength(int64(length)), nil
+	return NewTextStorage(address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 func (v AdaptiveValue) convertToGeometryStorage(ctx context.Context, vs ValueStore) (*GeometryStorage, error) {

@@ -37,7 +37,7 @@ func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns NodeS
 	require.NoError(t, err)
 	root, err := SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
-	return NewIndexedJsonDocument(ctx, root, ns)
+	return NewIndexedJsonDocument(root, ns)
 }
 
 // createLargeDocumentForTesting creates a JSON document large enough to be split across multiple chunks.
@@ -508,7 +508,7 @@ func TestIndexedJsonDocument_CompareMatchesInMemory(t *testing.T) {
 		require.NoError(t, err)
 		return docPair{
 			inMem:   inMem,
-			indexed: NewIndexedJsonDocument(ctx, root, ns),
+			indexed: NewIndexedJsonDocument(root, ns),
 		}
 	}
 

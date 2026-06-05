@@ -48,7 +48,6 @@ var _ types.JSONBytes = IndexedJsonDocument{}
 var _ types.MutableJSON = IndexedJsonDocument{}
 var _ types.ComparableJSON = IndexedJsonDocument{}
 var _ fmt.Stringer = IndexedJsonDocument{}
-var _ driver.Valuer = IndexedJsonDocument{}
 
 func OnceContextValues[T1, T2 any](f func(ctx context.Context) (T1, T2)) func(context.Context) (T1, T2) {
 	var (
@@ -80,7 +79,7 @@ func OnceContextValues[T1, T2 any](f func(ctx context.Context) (T1, T2)) func(co
 	}
 }
 
-func NewIndexedJsonDocument(ctx context.Context, root *Node, ns NodeStore) IndexedJsonDocument {
+func NewIndexedJsonDocument(root *Node, ns NodeStore) IndexedJsonDocument {
 	m := StaticMap[jsonLocationKey, address, *jsonLocationOrdering]{
 		Root:      root,
 		NodeStore: ns,
@@ -353,7 +352,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 				return IndexedJsonDocument{}, false, err
 			}
 
-			return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
+			return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
 
 		}
 		if cursorPath.getScannerState() != arrayInitialElement && cursorPath.getScannerState() != objectInitialElement {
@@ -413,7 +412,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 		return IndexedJsonDocument{}, false, err
 	}
 
-	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
+	return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
 }
 
 // Remove implements types.MutableJSON
@@ -486,7 +485,7 @@ func (i IndexedJsonDocument) removeWithLocation(ctx context.Context, keyPath jso
 		return IndexedJsonDocument{}, false, err
 	}
 
-	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
+	return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
 }
 
 // Set implements types.MutableJSON
@@ -630,7 +629,7 @@ func (i IndexedJsonDocument) replaceIntoCursor(ctx context.Context, keyPath json
 		return IndexedJsonDocument{}, false, err
 	}
 
-	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
+	return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
 }
 
 // ArrayInsert is not yet implemented, so we call it on a types.JSONDocument instead.
@@ -651,10 +650,8 @@ func (i IndexedJsonDocument) ArrayAppend(ctx context.Context, path string, val s
 	return types.JSONDocument{Val: v}.ArrayAppend(ctx, path, val)
 }
 
-// Value implements driver.Valuer for interoperability with other go libraries
-func (i IndexedJsonDocument) Value() (driver.Value, error) {
-	// :-/.
-	return types.JsonToMySqlString(context.TODO(), i)
+func (i IndexedJsonDocument) ValueContext(ctx context.Context) (driver.Value, error) {
+	return types.JsonToMySqlString(ctx, i)
 }
 
 // String implements the fmt.Stringer interface.

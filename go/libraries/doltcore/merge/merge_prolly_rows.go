@@ -2344,7 +2344,7 @@ func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 		if err != nil {
 			return types.JSONDocument{}, true, err
 		}
-		merged = tree.NewIndexedJsonDocument(ctx, root, ns)
+		merged = tree.NewIndexedJsonDocument(root, ns)
 	}
 
 	for {
