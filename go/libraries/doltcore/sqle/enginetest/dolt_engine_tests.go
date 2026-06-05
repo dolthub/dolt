@@ -1855,11 +1855,11 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-								"  `id` int NOT NULL,\n" +
-								"  `c1` int,\n" +
-								"  PRIMARY KEY (`id`),\n" +
-								"  KEY `c1_idx` (`c1`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `id` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  PRIMARY KEY (`id`),\n" +
+							"  KEY `c1_idx` (`c1`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
@@ -1905,12 +1905,12 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-								"  `id` int NOT NULL,\n" +
-								"  `c1` int,\n" +
-								"  PRIMARY KEY (`id`),\n" +
-								"  KEY `c1_idx` (`c1`),\n" +
-								"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `id` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  PRIMARY KEY (`id`),\n" +
+							"  KEY `c1_idx` (`c1`),\n" +
+							"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 				{
@@ -1982,10 +1982,10 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-								"  `id` int NOT NULL,\n" +
-								"  `c1` int,\n" +
-								"  KEY `c1_idx` (`c1`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `id` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  KEY `c1_idx` (`c1`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 				{
