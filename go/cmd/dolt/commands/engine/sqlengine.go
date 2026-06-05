@@ -107,9 +107,9 @@ type SqlEngineConfigOption func(*SqlEngineConfig)
 
 // NewSqlEngine returns a SqlEngine
 func NewSqlEngine(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
-	config *SqlEngineConfig,
+		ctx context.Context,
+		mrEnv *env.MultiRepoEnv,
+		config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 	// Context validation is a testing mode that we run Dolt in
 	// during integration tests. It asserts that `context.Context`
@@ -144,6 +144,12 @@ func NewSqlEngine(
 		})
 	}
 
+	// Some database initialization logic depends on system variables, load them before the databases
+	err := applySystemVariables(sql.SystemVariables, config.SystemVariables)
+	if err != nil {
+		return nil, err
+	}
+
 	dbs, locations, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return nil, err
@@ -159,11 +165,6 @@ func NewSqlEngine(
 	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
 
 	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, mrEnv, dbs...)
-	if err != nil {
-		return nil, err
-	}
-
-	err = applySystemVariables(sql.SystemVariables, config.SystemVariables)
 	if err != nil {
 		return nil, err
 	}
@@ -597,13 +598,13 @@ func sqlContextFactory(ctx context.Context, opts ...sql.ContextOption) *sql.Cont
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
 func doltSessionFactory(
-	pro *sqle.DoltDatabaseProvider,
-	statsPro sql.StatsProvider,
-	config config.ReadWriteConfig,
-	bc *branch_control.Controller,
-	gcSafepointController *gcctx.GCSafepointController,
-	autocommit bool,
-	tracker *doltdb.BranchActivityTracker) sessionFactory {
+		pro *sqle.DoltDatabaseProvider,
+		statsPro sql.StatsProvider,
+		config config.ReadWriteConfig,
+		bc *branch_control.Controller,
+		gcSafepointController *gcctx.GCSafepointController,
+		autocommit bool,
+		tracker *doltdb.BranchActivityTracker) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession, gcSafepointController, tracker)
 		if err != nil {
