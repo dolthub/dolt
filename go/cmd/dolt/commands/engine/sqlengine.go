@@ -107,9 +107,9 @@ type SqlEngineConfigOption func(*SqlEngineConfig)
 
 // NewSqlEngine returns a SqlEngine
 func NewSqlEngine(
-		ctx context.Context,
-		mrEnv *env.MultiRepoEnv,
-		config *SqlEngineConfig,
+	ctx context.Context,
+	mrEnv *env.MultiRepoEnv,
+	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 	// Context validation is a testing mode that we run Dolt in
 	// during integration tests. It asserts that `context.Context`
@@ -598,13 +598,13 @@ func sqlContextFactory(ctx context.Context, opts ...sql.ContextOption) *sql.Cont
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
 func doltSessionFactory(
-		pro *sqle.DoltDatabaseProvider,
-		statsPro sql.StatsProvider,
-		config config.ReadWriteConfig,
-		bc *branch_control.Controller,
-		gcSafepointController *gcctx.GCSafepointController,
-		autocommit bool,
-		tracker *doltdb.BranchActivityTracker) sessionFactory {
+	pro *sqle.DoltDatabaseProvider,
+	statsPro sql.StatsProvider,
+	config config.ReadWriteConfig,
+	bc *branch_control.Controller,
+	gcSafepointController *gcctx.GCSafepointController,
+	autocommit bool,
+	tracker *doltdb.BranchActivityTracker) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession, gcSafepointController, tracker)
 		if err != nil {
