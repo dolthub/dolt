@@ -1439,7 +1439,7 @@ func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns tree.
 	require.NoError(t, err)
 	root, err := tree.SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
-	return tree.NewIndexedJsonDocument(ctx, root, ns)
+	return tree.NewIndexedJsonDocument(root, ns)
 }
 
 // createLargeDocumentForTesting creates a JSON document large enough to be split across multiple chunks.

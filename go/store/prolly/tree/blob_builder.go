@@ -282,7 +282,7 @@ func (b *JSONDoc) ToIndexedJSONDocument(ctx context.Context) (sql.JSONWrapper, e
 		// We're reading a non-indexed multi-chunk document written by an older version of Dolt.
 		return b.ToLazyJSONDocument(ctx)
 	}
-	return NewIndexedJsonDocument(ctx, root, b.ns), nil
+	return NewIndexedJsonDocument(root, b.ns), nil
 }
 
 func (b *JSONDoc) ToString(ctx context.Context) (string, error) {
