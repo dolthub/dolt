@@ -28,6 +28,31 @@ import (
 
 var DiffSystemTableScriptTests = []queries.ScriptTest{
 	{
+		// See https://github.com/dolthub/dolt/issues/11159
+		Name: "dolt_diff_ table to_commit and from_commit indexes are non-unique",
+		SetUpScript: []string{
+			"create table foo (id int primary key, v int);",
+			"insert into foo values (1,1),(2,1),(3,1),(4,1);",
+			"call dolt_commit('-Am', 'seed');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_foo;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				// The harness skips assertions containing "show indexes from", so this uses the singular synonym.
+				Query: "SHOW INDEX FROM dolt_diff_foo;",
+				Expected: []sql.Row{
+					{"dolt_diff_foo", 0, "to_pks", 1, "to_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 0, "from_pks", 1, "from_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "to_commit", 1, "to_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "from_commit", 1, "from_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+				},
+			},
+		},
+	},
+	{
 		Name: "base case: added rows",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 int);",
