@@ -60,6 +60,9 @@ type AutoIncrementTracker struct {
 	// async initialization and block on the process completing.
 	cancelInit chan struct{}
 	dbName     string
+	// lockMode is the effective @@innodb_autoinc_lock_mode at the time of AutoIncrementTracker initialization.
+	// This value can only be set by config and cannot be changed in a running server.
+	lockMode LockMode
 }
 
 // currentLockMode returns the effective @@innodb_autoinc_lock_mode stored in global server vars
@@ -197,7 +200,7 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 	// interleaved lock mode (the default) the engine holds no statement-level lock, so we take a
 	// short per-table lock here.
 	locked := false
-	if currentLockMode() == LockMode_Interleaved {
+	if a.lockMode == LockMode_Interleaved {
 		release := a.mm.Lock(tbl)
 		defer release()
 		locked = true
@@ -208,7 +211,7 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 		// Missing tracker state after initialization can happen when a running sql-server discovers a database
 		// restored after startup, so initialize it here.
 		if !locked {
-			if currentLockMode() == LockMode_Interleaved {
+			if a.lockMode == LockMode_Interleaved {
 				release := a.mm.Lock(tbl)
 				defer release()
 				locked = true
@@ -560,7 +563,8 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 		return nil, err
 	}
 
-	if currentLockMode() == LockMode_Interleaved {
+	if a.lockMode == LockMode_Interleaved {
+		// This shouldn't be possible, it's a serious programming error if it happens
 		panic("Attempted to acquire AutoInc lock for entire insert operation, but lock mode was set to Interleaved")
 	}
 	return a.mm.Lock(tableName), nil
@@ -640,6 +644,7 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 		})
 	}
 
+	a.lockMode = currentLockMode()
 	a.initErr = eg.Wait()
 }
 
