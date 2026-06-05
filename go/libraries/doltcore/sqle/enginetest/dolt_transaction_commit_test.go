@@ -16,6 +16,8 @@ package enginetest
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
@@ -534,6 +536,67 @@ func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 			{
 				Query:       "/* client b */ INSERT INTO child VALUES (3, 3);",
 				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+		},
+	})
+}
+
+// TestDoltTransactionFulltextNullBodyNonFF is a regression test for a hang triggered by two concurrent
+// connections both inserting rows that leave the FULLTEXT-indexed column NULL. When the second
+// commit cannot fast-forward (because the first already advanced the working-set head), Dolt
+// calls rebuildFullTextIndexes, which was unneccessarily rebuilding the fulltext index. This test
+// asserts that fulltext index is not repeatedly rebuilt.
+func TestDoltTransactionFulltextNullBodyNonFF(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+
+	// Seed the table with 500 rows that have populated html_body. The row count matters: without
+	// the fix, the rebuild scans all rows and drives memory.tableIter's recursive Next to O(N²)
+	// depth, which causes this test to time out rather than complete in milliseconds.
+	const seedRows = 500
+	var vals []string
+	for i := 0; i < seedRows; i++ {
+		vals = append(vals, fmt.Sprintf("('seed-%04d','inbox','hello world unique%d content here')", i, i))
+	}
+	bulkInsert := "INSERT INTO emails (id, mailbox_id, html_body) VALUES " + strings.Join(vals, ",")
+
+	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
+		Name: "concurrent null-body inserts into fulltext table do not trigger unnecessary rebuild",
+		SetUpScript: []string{
+			`CREATE TABLE emails (
+				id         VARCHAR(36) PRIMARY KEY,
+				mailbox_id VARCHAR(36),
+				html_body  LONGTEXT,
+				FULLTEXT KEY ft (html_body)
+			)`,
+			bulkInsert,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "/* client a */ SET @@autocommit=0;", Expected: []sql.Row{{types.NewOkResult(0)}}},
+			{Query: "/* client b */ SET @@autocommit=0;", Expected: []sql.Row{{types.NewOkResult(0)}}},
+			{Query: "/* client a */ START TRANSACTION;", Expected: []sql.Row{}},
+			{Query: "/* client b */ START TRANSACTION;", Expected: []sql.Row{}},
+			{
+				Query:    "/* client a */ INSERT INTO emails (id, mailbox_id) VALUES ('tx-a', 'box-a');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ INSERT INTO emails (id, mailbox_id) VALUES ('tx-b', 'box-b');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			// Client b commits first, advancing the working-set head.
+			{Query: "/* client b */ COMMIT;", Expected: []sql.Row{}},
+			// Client a commits second: startState != existingWs triggers the non-ff merge path.
+			{Query: "/* client a */ COMMIT;", Expected: []sql.Row{}},
+			{
+				// Both rows landed: 500 seeds + 2 new rows.
+				Query:    "/* client a */ SELECT COUNT(*) FROM emails;",
+				Expected: []sql.Row{{seedRows + 2}},
+			},
+			{
+				// FULLTEXT index is intact — all seeded rows are still searchable.
+				Query:    "/* client a */ SELECT COUNT(*) FROM emails WHERE MATCH(html_body) AGAINST ('hello');",
+				Expected: []sql.Row{{seedRows}},
 			},
 		},
 	})
