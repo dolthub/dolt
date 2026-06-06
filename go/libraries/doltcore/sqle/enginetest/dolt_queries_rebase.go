@@ -1840,7 +1840,7 @@ commit
 			{
 				Query: "SELECT message FROM dolt_log LIMIT 1;",
 				Expected: []sql.Row{
-					{"empty \ncommit \n2"},
+					{"empty\ncommit\n2"},
 				},
 			},
 			{
@@ -1852,7 +1852,7 @@ commit
 			{
 				Query: "SELECT * from dolt_rebase;",
 				Expected: []sql.Row{
-					{"1", "pick", doltCommit, "empty \ncommit \n2"},
+					{"1", "pick", doltCommit, "empty\ncommit\n2"},
 				},
 			},
 			{
@@ -1864,7 +1864,7 @@ commit
 			{
 				Query: "SELECT message FROM dolt_log LIMIT 1;",
 				Expected: []sql.Row{
-					{"empty \ncommit \n2"},
+					{"empty\ncommit\n2"},
 				},
 			},
 		},
