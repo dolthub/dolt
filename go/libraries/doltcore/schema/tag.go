@@ -76,6 +76,46 @@ func (tm TagMapping) Size() int {
 	return len(tm)
 }
 
+// RemapTags returns a new slice with each entry of |tags| replaced by its value in |remap|,
+// or kept unchanged when absent. When |remap| is empty the input |tags| slice is returned as is
+// rather than a fresh allocation, so the result must be treated as read-only.
+func RemapTags(tags []uint64, remap map[uint64]uint64) []uint64 {
+	if len(remap) == 0 {
+		return tags
+	}
+	out := make([]uint64, len(tags))
+	for i, t := range tags {
+		if newTag, ok := remap[t]; ok {
+			out[i] = newTag
+		} else {
+			out[i] = t
+		}
+	}
+	return out
+}
+
+// RemapTagsByColumnName returns |tags| with each tag pointing at the same-named column on
+// |destSch| instead of |srcSch|. Returns |tags| unchanged (treat as read-only) when either
+// schema is nil or any tag cannot be resolved on both sides, avoiding a partial remap.
+func RemapTagsByColumnName(tags []uint64, srcSch, destSch Schema) []uint64 {
+	if srcSch == nil || destSch == nil {
+		return tags
+	}
+	out := make([]uint64, len(tags))
+	for i, srcTag := range tags {
+		srcCol, ok := srcSch.GetAllCols().GetByTag(srcTag)
+		if !ok {
+			return tags
+		}
+		destCol, ok := destSch.GetAllCols().GetByName(srcCol.Name)
+		if !ok {
+			return tags
+		}
+		out[i] = destCol.Tag
+	}
+	return out
+}
+
 // AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema.
 // It uses a deterministic random number generator that is seeded with the NomsKinds of any existing columns in the
 // schema and the NomsKind of the column being added to the schema. Deterministic tag generation means that branches

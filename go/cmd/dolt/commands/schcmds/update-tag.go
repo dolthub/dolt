@@ -16,7 +16,6 @@ package schcmds
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -88,7 +87,7 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 	tbl, tName, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: tableName})
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get table").Build(), usage)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get table").AddCause(err).Build(), usage)
 	}
 	if !ok {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("table %s does not exist", tableName).Build(), usage)
@@ -96,10 +95,10 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get schema").Build(), usage)
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get schema").AddCause(err).Build(), usage)
 	}
 
-	newSch, err := updateColumnTag(sch, columnName, tag)
+	newSch, err := schema.WithUpdatedColumnTag(sch, columnName, tag)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to update column tag").AddCause(err).Build(), usage)
 	}
@@ -120,35 +119,4 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 	}
 
 	return commands.HandleVErrAndExitCode(nil, usage)
-}
-
-func updateColumnTag(sch schema.Schema, name string, tag uint64) (schema.Schema, error) {
-	var found bool
-	columns := sch.GetAllCols().GetColumns()
-	// Find column and update its tag
-	for i, col := range columns {
-		if col.Name == name {
-			col.Tag = tag
-			columns[i] = col
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return nil, fmt.Errorf("column %s does not exist", name)
-	}
-
-	newSch, err := schema.SchemaFromCols(schema.NewColCollection(columns...))
-	if err != nil {
-		return nil, err
-	}
-
-	err = newSch.SetPkOrdinals(sch.GetPkOrdinals())
-	if err != nil {
-		return nil, err
-	}
-	newSch.SetCollation(sch.GetCollation())
-
-	return newSch, nil
 }

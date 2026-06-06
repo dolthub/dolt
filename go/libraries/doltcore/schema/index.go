@@ -58,6 +58,8 @@ type Index interface {
 	FullTextProperties() FullTextProperties
 	// VectorProperties returns all properties belonging to a vector index.
 	VectorProperties() VectorProperties
+	// Properties returns the IndexProperties describing this index.
+	Properties() IndexProperties
 }
 
 var _ Index = (*indexImpl)(nil)
@@ -290,6 +292,20 @@ func (ix *indexImpl) FullTextProperties() FullTextProperties {
 // VectorProperties implements Index.
 func (ix *indexImpl) VectorProperties() VectorProperties {
 	return ix.vectorProperties
+}
+
+// Properties implements Index.
+func (ix *indexImpl) Properties() IndexProperties {
+	return IndexProperties{
+		IsUnique:           ix.isUnique,
+		IsSpatial:          ix.isSpatial,
+		IsFullText:         ix.isFullText,
+		IsUserDefined:      ix.isUserDefined,
+		Comment:            ix.comment,
+		FullTextProperties: ix.fullTextProps,
+		IsVector:           ix.isVector,
+		VectorProperties:   ix.vectorProperties,
+	}
 }
 
 // copy returns an exact copy of the calling index.

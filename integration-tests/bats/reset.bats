@@ -435,3 +435,63 @@ SQL
     [[ "$output" =~ "3,30" ]] || false
     [[ "$output" =~ "4,40" ]] || false
 }
+
+@test "reset: dolt reset --hard to a branch preserves untracked tables" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt checkout -b feat
+    dolt sql -q "CREATE TABLE committed_on_feat (id INT PRIMARY KEY)"
+    dolt commit -Am "add committed_on_feat"
+    dolt checkout main
+
+    dolt sql -q "CREATE TABLE untracked_tbl (pk INT PRIMARY KEY, val INT)"
+    dolt sql -q "INSERT INTO untracked_tbl VALUES (1, 42)"
+
+    run dolt reset --hard feat
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk, val FROM untracked_tbl" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1,42" ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "untracked_tbl" ]] || false
+}
+
+@test "reset: dolt reset --hard retags an untracked table that collides with the target" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt checkout -b feat
+    dolt sql -q "CREATE TABLE bar (code varchar(64) PRIMARY KEY);"
+    dolt add .
+    dolt commit -m "add bar"
+
+    run dolt schema tags -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "bar,code,9815" ]] || false
+
+    dolt checkout main
+    dolt sql -q "CREATE TABLE users (name varchar(64) PRIMARY KEY);"
+    dolt sql -q "INSERT INTO users VALUES ('alice');"
+
+    run dolt schema tags -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "users,name,9815" ]] || false
+
+    run dolt reset --hard feat
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT name FROM users" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "alice" ]] || false
+
+    run dolt schema tags -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "bar,code,9815" ]] || false
+    [[ "$output" =~ "users,name,12204" ]] || false
+
+    dolt sql -q "INSERT INTO users VALUES ('bob');"
+    run dolt sql -q "SELECT name FROM users ORDER BY name" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "alice" ]] || false
+    [[ "$output" =~ "bob" ]] || false
+}

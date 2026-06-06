@@ -4035,6 +4035,98 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_checkout leaves untracked tables with secondary indexes and foreign keys on the source branch",
+		SetUpScript: []string{
+			"call dolt_branch('empty');",
+			"create table parent (id int primary key, name varchar(64));",
+			"create table child (id int primary key, parent_id int, val varchar(64));",
+			"create unique index idx_val on child (val);",
+			"alter table child add constraint fk_parent foreign key (parent_id) references parent(id);",
+			"insert into parent values (1, 'alice');",
+			"insert into child values (10, 1, 'c_val');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('empty');",
+				Expected: []sql.Row{{0, "Switched to branch 'empty'"}},
+			},
+			{
+				Query: "select count(*) from information_schema.tables where table_schema = database() and table_name in ('parent', 'child');",
+				// TODO(elianddb): the information_schema assertions in these carry tests are gated
+				// 	to mysql because Doltgres does not populate information_schema.statistics yet.
+				Dialect:  "mysql",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				Query:    "select id, name from parent;",
+				Expected: []sql.Row{{1, "alice"}},
+			},
+			{
+				Query:    "select id, parent_id, val from child;",
+				Expected: []sql.Row{{10, 1, "c_val"}},
+			},
+			{
+				Query:    "select index_name, non_unique, seq_in_index, column_name from information_schema.statistics where table_schema = database() and table_name = 'child' and index_name = 'idx_val';",
+				Dialect:  "mysql",
+				Expected: []sql.Row{{"idx_val", 0, 1, "val"}},
+			},
+			{
+				Query:    "select id from child where val = 'c_val';",
+				Expected: []sql.Row{{10}},
+			},
+			{
+				Query:    "select constraint_name, table_name from information_schema.table_constraints where table_schema = database() and constraint_type = 'FOREIGN KEY' and table_name = 'child';",
+				Dialect:  "mysql",
+				Expected: []sql.Row{{"fk_parent", "child"}},
+			},
+			{
+				Query:       "insert into child values (99, 999, 'orphan');",
+				Dialect:     "mysql",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name:    "dolt_checkout keeps an untracked foreign key on the source even when the parent is missing on the target",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table parent (id int primary key);",
+			"call dolt_commit('-Am', 'add parent');",
+			"call dolt_branch('no_parent');",
+			"call dolt_checkout('no_parent');",
+			"drop table parent;",
+			"call dolt_commit('-Am', 'drop parent on no_parent');",
+			"call dolt_checkout('main');",
+			"create table child (id int primary key, pid int, constraint fk_orphan foreign key (pid) references parent(id));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('no_parent');",
+				Expected: []sql.Row{{0, "Switched to branch 'no_parent'"}},
+			},
+			{
+				Query: "select count(*) from information_schema.tables where table_schema = database() and table_name = 'child';",
+				// child stayed on main, so no foreign key exists on no_parent.
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				Query: "select constraint_name from information_schema.table_constraints where table_schema = database() and constraint_type = 'FOREIGN KEY' and table_name = 'child';",
+				// child still references parent on main, where parent exists.
+				Expected: []sql.Row{{"fk_orphan"}},
+			},
+		},
+	},
 }
 
 var DoltCheckoutReadOnlyScripts = []queries.ScriptTest{
@@ -4714,6 +4806,202 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from mytable;",
 				Expected: []sql.Row{{1, 10}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_reset('--hard') preserves untracked tables after resetting to a divergent branch",
+		SetUpScript: []string{
+			"call dolt_checkout('-b', 'feat');",
+			"create table bar (code varchar(64) primary key);",
+			"call dolt_commit('-Am', 'add bar');",
+			"call dolt_checkout('main');",
+			"create table users (name varchar(64) primary key, email varchar(64));",
+			"create index idx_email on users (email);",
+			"insert into users values ('alice', 'alice@example.com');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard', 'feat');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select name from users;",
+				Expected: []sql.Row{{"alice"}},
+			},
+			{
+				Query:    "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'users' and index_name = 'idx_email';",
+				Dialect:  "mysql",
+				Expected: []sql.Row{{"idx_email", 1, 1, "email", "YES", "BTREE", ""}},
+			},
+			{
+				Query:    "select name from users where email = 'alice@example.com';",
+				Expected: []sql.Row{{"alice"}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		// Collision verified in bats-mirror test in reset.bats as tag 9815.
+		Name: "dolt_reset('--hard') retags an untracked table whose primary key column collides with the target and preserves its secondary indexes",
+		SetUpScript: []string{
+			"call dolt_checkout('-b', 'feat');",
+			"create table bar (code varchar(64) primary key);",
+			"call dolt_commit('-Am', 'add bar on feat');",
+			"call dolt_checkout('main');",
+			"create table users (name varchar(64) primary key, email varchar(64), label varchar(64));",
+			"create index idx_email on users (email);",
+			"create index idx_composite on users (email, label);",
+			"insert into users values ('alice', 'alice@example.com', 'admin');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard', 'feat');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select name from users;",
+				Expected: []sql.Row{{"alice"}},
+			},
+			{
+				Query:    "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'users' and index_name = 'idx_email';",
+				Dialect:  "mysql",
+				Expected: []sql.Row{{"idx_email", 1, 1, "email", "YES", "BTREE", ""}},
+			},
+			{
+				Query:    "select name from users where email = 'alice@example.com';",
+				Expected: []sql.Row{{"alice"}},
+			},
+			{
+				Query:   "select index_name, non_unique, seq_in_index, column_name, nullable, index_type, index_comment from information_schema.statistics where table_schema = database() and table_name = 'users' and index_name = 'idx_composite' order by seq_in_index;",
+				Dialect: "mysql",
+				// Both column positions of the composite index follow the carried columns after the retag.
+				Expected: []sql.Row{{"idx_composite", 1, 1, "email", "YES", "BTREE", ""}, {"idx_composite", 1, 2, "label", "YES", "BTREE", ""}},
+			},
+			{
+				Query:    "select name from users where email = 'alice@example.com' and label = 'admin';",
+				Expected: []sql.Row{{"alice"}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_reset('--hard') preserves FK on untracked child when parent is committed on target",
+		SetUpScript: []string{
+			"call dolt_checkout('-b', 'feat');",
+			"create table parent (id int primary key, name varchar(64));",
+			"insert into parent values (1, 'alice'), (2, 'bob');",
+			"call dolt_commit('-Am', 'add parent on feat');",
+			"call dolt_checkout('main');",
+			// A local copy of parent is needed for the FK definition. The committed version wins after reset.
+			"create table parent (id int primary key, name varchar(64));",
+			"create table child (id int primary key, parent_id int, constraint fk_parent foreign key (parent_id) references parent(id));",
+			"insert into parent values (1, 'alice'), (2, 'bob');",
+			"insert into child values (10, 1), (20, 2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard', 'feat');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "select id, name from parent order by id;",
+				// The committed parent from feat replaces the untracked local copy.
+				Expected: []sql.Row{{1, "alice"}, {2, "bob"}},
+			},
+			{
+				Query:    "select id, parent_id from child order by id;",
+				Expected: []sql.Row{{10, 1}, {20, 2}},
+			},
+			{
+				Query:    "select constraint_name, table_name from information_schema.table_constraints where table_schema = database() and constraint_type = 'FOREIGN KEY' and table_name = 'child';",
+				Dialect:  "mysql",
+				Expected: []sql.Row{{"fk_parent", "child"}},
+			},
+			{
+				Query:       "insert into child values (99, 999);",
+				Dialect:     "mysql",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_reset('--hard') preserves untracked table schema properties",
+		// Auto-increment, table comment/collation, and generated columns are MySQL-dialect, which
+		// Doltgres handles differently, so this whole script is gated to the mysql harness.
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"call dolt_branch('empty');",
+			"create table ai (id int auto_increment primary key, val varchar(64));",
+			"insert into ai (val) values ('row1'), ('row2');",
+			"create table meta (id int primary key) comment 'my comment' collate utf8mb4_general_ci;",
+			"create table defaults_tbl (id int primary key, score int default 99, label varchar(64) default 'n/a');",
+			"insert into defaults_tbl (id) values (1);",
+			"create table gen (id int primary key, base int, doubled int generated always as (base * 2));",
+			"insert into gen (id, base) values (1, 7);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard', 'empty');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "insert into ai (val) values ('row3');",
+				// The auto-increment counter is not reset by the hard reset.
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 3}}},
+			},
+			{
+				Query:    "select id from ai where val = 'row3';",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "select table_comment from information_schema.tables where table_schema = database() and table_name = 'meta';",
+				Expected: []sql.Row{{"my comment"}},
+			},
+			{
+				Query:    "select table_collation from information_schema.tables where table_schema = database() and table_name = 'meta';",
+				Expected: []sql.Row{{"utf8mb4_general_ci"}},
+			},
+			{
+				Query:    "select score, label from defaults_tbl where id = 1;",
+				Expected: []sql.Row{{99, "n/a"}},
+			},
+			{
+				Query:    "insert into defaults_tbl (id) values (2);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "select score, label from defaults_tbl where id = 2;",
+				Expected: []sql.Row{{99, "n/a"}},
+			},
+			{
+				Query:    "select doubled from gen where id = 1;",
+				Expected: []sql.Row{{14}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11007
+		Name: "dolt_reset('--hard') replaces an untracked table when the target has the same name",
+		SetUpScript: []string{
+			"call dolt_checkout('-b', 'feat');",
+			"create table overlap (code varchar(64) primary key);",
+			"insert into overlap values ('feat_data');",
+			"call dolt_commit('-Am', 'add overlap');",
+			"call dolt_checkout('main');",
+			"create table overlap (code varchar(64) primary key);",
+			"insert into overlap values ('main_data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard', 'feat');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select code from overlap;",
+				Expected: []sql.Row{{"feat_data"}},
 			},
 		},
 	},

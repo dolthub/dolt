@@ -30,8 +30,9 @@ import (
 )
 
 // resetHardTables resolves a new HEAD commit from a refSpec and updates working set roots by
-// resetting the table contexts for tracked tables. New tables are ignored. Returns new HEAD
-// Commit and Roots.
+// resetting tracked tables to that HEAD. Uncommitted tables are carried forward onto the new HEAD
+// via CarryTablesAbsentFromBaseline so a hard reset does not destroy tables that were never committed.
+// Returns the new HEAD Commit and Roots.
 func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
@@ -63,71 +64,11 @@ func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr str
 		}
 	}
 
-	newWorking, err := MoveUntrackedTables(ctx, roots.Working, roots.Staged, roots.Head)
+	newWorking, err := CarryTablesAbsentFromBaseline(ctx, roots.Working, roots.Staged, roots.Head, nil)
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}
 	return newHead, doltdb.Roots{Head: roots.Head, Working: newWorking, Staged: roots.Head}, nil
-}
-
-// MoveUntrackedTables copies tables present in |sourceWorking| but absent from |sourceStaged|
-// onto |target|, returning the resulting root. Tables that name-collide with one already in
-// |target| are skipped so the target version wins. Tables whose column tags collide with one
-// in |target| are dropped silently.
-// TODO(elianddb): retag colliding columns instead of dropping the table.
-func MoveUntrackedTables(ctx context.Context, sourceWorking, sourceStaged, target doltdb.RootValue) (doltdb.RootValue, error) {
-	untracked, err := doltdb.GetAllSchemas(ctx, sourceWorking)
-	if err != nil {
-		return nil, err
-	}
-
-	staged, err := doltdb.GetAllSchemas(ctx, sourceStaged)
-	if err != nil {
-		return nil, err
-	}
-	for name := range staged {
-		delete(untracked, name)
-	}
-
-	targetSchemas, err := doltdb.GetAllSchemas(ctx, target)
-	if err != nil {
-		return nil, err
-	}
-	targetTags := make(map[uint64]struct{})
-	for _, sch := range targetSchemas {
-		for _, tag := range sch.GetAllCols().Tags {
-			targetTags[tag] = struct{}{}
-		}
-	}
-
-	for name, sch := range untracked {
-		for _, col := range sch.GetAllCols().GetColumns() {
-			if _, ok := targetTags[col.Tag]; ok {
-				delete(untracked, name)
-				break
-			}
-		}
-	}
-
-	for name := range untracked {
-		// Skip when target has a table of the same name so the target version wins.
-		if _, exists := targetSchemas[name]; exists {
-			continue
-		}
-		tbl, exists, err := sourceWorking.GetTable(ctx, name)
-		if err != nil {
-			return nil, err
-		}
-		if !exists {
-			return nil, fmt.Errorf("untracked table %s does not exist in working set", name)
-		}
-		target, err = target.PutTable(ctx, name, tbl)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write table back to database: %s", err)
-		}
-	}
-
-	return target, nil
 }
 
 func GetAllTableNames(ctx context.Context, root doltdb.RootValue) []doltdb.TableName {

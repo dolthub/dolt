@@ -68,35 +68,36 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return err
 	}
 
-	if !force {
-		currentRoots, hasRoots := dSess.GetRoots(ctx, dbName)
-		if !hasRoots {
-			return fmt.Errorf("unable to resolve roots for %s", dbName)
+	initialRoots, hasRoots := dSess.GetRoots(ctx, dbName)
+	if !hasRoots {
+		return fmt.Errorf("unable to resolve roots for %s", dbName)
+	}
+
+	ignoredNames, err := doltdb.UnionTableNames(ctx, initialRoots.Working, initialRoots.Staged, branchHead)
+	if err != nil {
+		return err
+	}
+	ignoredList, err := doltdb.IdentifyIgnoredTables(ctx, initialRoots, ignoredNames)
+	if err != nil {
+		return err
+	}
+	ignored := doltdb.NewTableNameSet(ignoredList)
+
+	var srcChanges *doltdb.RootsStatus
+	if workingSetExists {
+		srcChanges, err = doltdb.NewRootsStatus(ctx, initialRoots, ignored)
+		if err != nil {
+			return err
 		}
+	}
+
+	if !force && !isNewBranch {
 		newBranchRoots, err := db.ResolveBranchRoots(ctx, branchRef)
 		if err != nil {
 			return err
 		}
-		if !isNewBranch {
-			wouldStomp, err := actions.CheckoutWouldStompWorkingSetChanges(ctx, currentRoots, newBranchRoots)
-			if err != nil {
-				return err
-			}
-			if wouldStomp {
-				return actions.ErrWorkingSetsOnBothBranches
-			}
-		}
-	}
-
-	initialRoots, hasRoots := dSess.GetRoots(ctx, dbName)
-	if !hasRoots {
-		return fmt.Errorf("unable to get roots")
-	}
-
-	hasChanges := false
-	if workingSetExists {
-		hasChanges, _, _, err = actions.RootHasUncommittedChanges(initialRoots)
-		if err != nil {
+		// The destination branch must not have its own uncommitted changes.
+		if err := actions.CheckoutWouldOverwriteWorkingSets(ctx, srcChanges, newBranchRoots, ignored); err != nil {
 			return err
 		}
 	}
@@ -110,11 +111,8 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		return err
 	}
 
-	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
-	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
-	// checkoutWouldStompWorkingSetChanges
-	if hasChanges {
-		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force)
+	if srcChanges != nil {
+		err = transferWorkingChanges(ctx, dbName, initialRoots, branchHead, branchRef, force, ignored)
 		if err != nil {
 			return err
 		}
@@ -128,10 +126,9 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		if err != nil {
 			return err
 		}
-
 	}
 
-	if workingSetExists && hasChanges {
+	if workingSetExists && srcChanges != nil {
 		name, email, _, _, err := dsess.ResolveNameEmail(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
 		if err != nil {
 			return err
@@ -155,12 +152,13 @@ func transferWorkingChanges(
 	branchHead doltdb.RootValue,
 	branchRef ref.BranchRef,
 	force bool,
+	ignored *doltdb.TableNameSet,
 ) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	// Compute the new roots before switching the working set.
 	// This way, we don't leave the branch in a bad state in the event of an error.
-	newRoots, err := actions.RootsForBranch(ctx, initialRoots, branchHead, force)
+	newRoots, err := actions.RootsForBranch(ctx, initialRoots, branchHead, force, ignored)
 	if err != nil {
 		return err
 	}
