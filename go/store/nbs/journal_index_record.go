@@ -106,9 +106,19 @@ const (
 
 // processIndexRecords reads batches of chunk index lookups into the journal.
 // An index batch looks like |lookup|lookup|...|meta|. The first byte of a record
-// indicates whether it is a |lookup| or |meta|. Only callback errors are returned.
-// The caller is expected to track the latest lookupMeta end offset and truncate
-// the index to compensate for partially written batches.
+// indicates whether it is a |lookup| or |meta|.
+//
+// |off| tracks the end of the last fully-read batch; the caller truncates the
+// index to |off| to discard a partially written trailing batch. The returned
+// error distinguishes the two ways reading can stop short:
+//
+//   - A clean io.EOF at a record boundary, or an io.ErrUnexpectedEOF from a record
+//     that was only partially written before a crash, is the expected end of a
+//     crash-truncated index. These return a nil error; reading simply stops at the
+//     last complete batch.
+//   - Any other read error (a genuine I/O fault), a callback (validation) failure,
+//     or an unrecognized record tag returns a non-nil error so the caller can
+//     surface it and rebuild from the journal.
 func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []lookup, uint32) error) (off int64, err error) {
 	var batchCrc uint32
 	var batch []lookup
@@ -116,7 +126,7 @@ func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []looku
 	for off < sz {
 		recTag, err := rd.ReadByte()
 		if err != nil {
-			return off, nil
+			return off, ignoreBenignIndexEOF(err)
 		}
 		batchOff += 1
 
@@ -124,7 +134,7 @@ func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []looku
 		case indexRecChunk:
 			l, err := readIndexLookup(rd)
 			if err != nil {
-				return off, nil
+				return off, ignoreBenignIndexEOF(err)
 			}
 			batchOff += lookupSz
 			batch = append(batch, l)
@@ -133,7 +143,7 @@ func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []looku
 		case indexRecMeta:
 			m, err := readIndexMeta(rd)
 			if err != nil {
-				return off, nil
+				return off, ignoreBenignIndexEOF(err)
 			}
 			if err := cb(m, batch, batchCrc); err != nil {
 				return off, err
@@ -147,6 +157,17 @@ func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []looku
 		}
 	}
 	return off, nil
+}
+
+// ignoreBenignIndexEOF maps the expected end-of-index conditions to a nil error: a
+// clean io.EOF at a record boundary, or an io.ErrUnexpectedEOF from a record that
+// was only partially written before a crash. Both simply mean the readable index
+// ends here. Any other error is a genuine I/O fault and is returned unchanged.
+func ignoreBenignIndexEOF(err error) error {
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return nil
+	}
+	return err
 }
 
 var ErrMalformedIndex = errors.New("journal index is malformed")
