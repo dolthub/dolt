@@ -3293,6 +3293,30 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "three-way merge of table with vector index",
+		SetUpScript: []string{
+			"CREATE TABLE chunks (id INT PRIMARY KEY, e VECTOR(3) NOT NULL, VECTOR INDEX vidx (e))",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'base schema')",
+			"CALL DOLT_CHECKOUT('-b', 'branch')",
+			"INSERT INTO chunks VALUES (1, STRING_TO_VECTOR('[1,0,0]')), (2, STRING_TO_VECTOR('[0,1,0]'))",
+			"CALL DOLT_COMMIT('-am', 'rows on branch')",
+			"CALL DOLT_CHECKOUT('main')",
+			"INSERT INTO chunks VALUES (9, STRING_TO_VECTOR('[0.5,0.5,0]'))",
+			"CALL DOLT_COMMIT('-am', 'row on main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('branch')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT id FROM chunks ORDER BY id",
+				Expected: []sql.Row{{1}, {2}, {9}},
+			},
+		},
+	},
+	{
 		Name: "no-ff merge commit uses author session variables for author identity",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk INT PRIMARY KEY)",

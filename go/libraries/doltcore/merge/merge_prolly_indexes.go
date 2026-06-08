@@ -56,19 +56,23 @@ func mergeProllySecondaryIndexes(
 	}
 
 	tryGetIdx := func(sch schema.Schema, iS durable.IndexSet, indexName string) (prolly.Map, bool, error) {
-		ok := sch.Indexes().Contains(indexName)
-		if ok {
-			idx, err := iS.GetIndex(ctx, sch, nil, indexName)
-			if err != nil {
-				return prolly.Map{}, false, err
-			}
-			m, err := durable.ProllyMapFromIndex(idx)
-			if err != nil {
-				return prolly.Map{}, false, err
-			}
-			return m, true, nil
+		idxDef := sch.Indexes().GetByName(indexName)
+		if idxDef == nil {
+			return prolly.Map{}, false, nil
 		}
-		return prolly.Map{}, false, nil
+		// Vector indexes are stored as proximity maps, not prolly maps; they must be rebuilt.
+		if idxDef.IsVector() {
+			return prolly.Map{}, false, nil
+		}
+		idx, err := iS.GetIndex(ctx, sch, nil, indexName)
+		if err != nil {
+			return prolly.Map{}, false, err
+		}
+		m, err := durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return prolly.Map{}, false, err
+		}
+		return m, true, nil
 	}
 
 	// Schema merge can introduce new constraints/uniqueness checks.
