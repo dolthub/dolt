@@ -418,60 +418,35 @@ func validateCols(t *testing.T, cols []Column, colColl *ColCollection, msg strin
 	}
 }
 
-// newRemapInputs builds the schema and tag remap shared by the TestWithRemappedColumnTags subtests.
-func newRemapInputs(t *testing.T) (Schema, map[uint64]uint64) {
-	t.Helper()
-	id, err := NewColumnWithTypeInfo("id", 100, typeinfo.Int64Type, true, "", false, "", NotNullConstraint{})
-	require.NoError(t, err)
-	region, err := NewColumnWithTypeInfo("region", 101, typeinfo.StringDefaultType, true, "", false, "", NotNullConstraint{})
-	require.NoError(t, err)
-	val, err := NewColumnWithTypeInfo("val", 102, typeinfo.StringDefaultType, false, "", false, "")
-	require.NoError(t, err)
-	sch, err := NewSchema(NewColCollection(id, region, val), []int{1, 0}, Collation_utf8mb4_general_ci, nil, nil)
-	require.NoError(t, err)
-	sch.SetComment("test comment")
-	sch.SetTargetRowSize(4096)
-	_, err = sch.Checks().AddCheck("val_nonempty", "val <> ''", true, false)
-	require.NoError(t, err)
-	_, err = sch.Checks().AddCheck("region_nonempty", "region <> ''", true, false)
-	require.NoError(t, err)
-	_, err = sch.Indexes().AddIndexByColTags("val_idx", []uint64{102}, []uint16{16}, IndexProperties{IsUnique: true, IsUserDefined: true, Comment: "idx comment"})
-	require.NoError(t, err)
-	_, err = sch.Indexes().AddIndexByColTags("region_val_idx", []uint64{101, 102}, []uint16{0, 8}, IndexProperties{IsUserDefined: true})
-	require.NoError(t, err)
-	return sch, map[uint64]uint64{100: 200, 102: 202}
-}
-
 func TestWithRemappedColumnTags(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11007
 	t.Run("Rewrites", func(t *testing.T) {
 		sch, remap := newRemapInputs(t)
-		remapped, err := WithRemappedColumnTags(sch, remap)
-		require.NoError(t, err)
+		remapped := mustRemap(t, sch, remap)
+		cols := remapped.GetAllCols()
 
-		require.Equal(t, 3, remapped.GetAllCols().Size(), "no columns must be dropped during retag")
+		require.Equal(t, 3, cols.Size(), "no columns must be dropped during retag")
 
-		gotID, ok := remapped.GetAllCols().GetByName("id")
+		id, ok := cols.GetByName("id")
 		require.True(t, ok)
-		require.Equal(t, uint64(200), gotID.Tag, "id tag must be remapped")
-		_, ok = remapped.GetAllCols().GetByTag(100)
+		require.Equal(t, uint64(200), id.Tag, "id tag must be remapped")
+		_, ok = cols.GetByTag(100)
 		require.False(t, ok, "old id tag must be gone")
 
-		gotVal, ok := remapped.GetAllCols().GetByName("val")
+		val, ok := cols.GetByName("val")
 		require.True(t, ok)
-		require.Equal(t, uint64(202), gotVal.Tag, "val tag must be remapped")
-		_, ok = remapped.GetAllCols().GetByTag(102)
+		require.Equal(t, uint64(202), val.Tag, "val tag must be remapped")
+		_, ok = cols.GetByTag(102)
 		require.False(t, ok, "old val tag must be gone")
 
-		gotRegion, ok := remapped.GetAllCols().GetByName("region")
+		region, ok := cols.GetByName("region")
 		require.True(t, ok)
-		require.Equal(t, uint64(101), gotRegion.Tag, "unremapped region tag must be unchanged")
+		require.Equal(t, uint64(101), region.Tag, "unremapped region tag must be unchanged")
 	})
 
 	t.Run("PreservesPrimaryKeyOrdinals", func(t *testing.T) {
 		sch, remap := newRemapInputs(t)
-		remapped, err := WithRemappedColumnTags(sch, remap)
-		require.NoError(t, err)
+		remapped := mustRemap(t, sch, remap)
 		require.Equal(t, []int{1, 0}, remapped.GetPkOrdinals())
 
 		pkCols := remapped.GetPKCols().GetColumns()
@@ -484,32 +459,28 @@ func TestWithRemappedColumnTags(t *testing.T) {
 
 	t.Run("PreservesIndexes", func(t *testing.T) {
 		sch, remap := newRemapInputs(t)
-		wantValProps := sch.Indexes().GetByName("val_idx").Properties()
-		wantValPrefix := sch.Indexes().GetByName("val_idx").PrefixLengths()
-		wantRegionValProps := sch.Indexes().GetByName("region_val_idx").Properties()
-		wantRegionValPrefix := sch.Indexes().GetByName("region_val_idx").PrefixLengths()
+		wantVal := sch.Indexes().GetByName("val_idx")
+		wantRegionVal := sch.Indexes().GetByName("region_val_idx")
 
-		remapped, err := WithRemappedColumnTags(sch, remap)
-		require.NoError(t, err)
+		remapped := mustRemap(t, sch, remap)
 
 		valIdx := remapped.Indexes().GetByName("val_idx")
 		require.NotNil(t, valIdx)
 		require.Equal(t, "val_idx", valIdx.Name())
 		require.Equal(t, []uint64{202}, valIdx.IndexedColumnTags(), "single-column index tag must be remapped")
-		require.Equal(t, wantValProps, valIdx.Properties(), "index properties must survive the retag")
-		require.Equal(t, wantValPrefix, valIdx.PrefixLengths(), "prefix lengths must survive the retag")
+		require.Equal(t, wantVal.Properties(), valIdx.Properties(), "index properties must survive the retag")
+		require.Equal(t, wantVal.PrefixLengths(), valIdx.PrefixLengths(), "prefix lengths must survive the retag")
 
 		regionValIdx := remapped.Indexes().GetByName("region_val_idx")
 		require.NotNil(t, regionValIdx)
 		require.Equal(t, []uint64{101, 202}, regionValIdx.IndexedColumnTags(), "multi-column index must remap only the changed tag")
-		require.Equal(t, wantRegionValProps, regionValIdx.Properties())
-		require.Equal(t, wantRegionValPrefix, regionValIdx.PrefixLengths(), "multi-column index prefix lengths must survive the retag")
+		require.Equal(t, wantRegionVal.Properties(), regionValIdx.Properties())
+		require.Equal(t, wantRegionVal.PrefixLengths(), regionValIdx.PrefixLengths(), "multi-column index prefix lengths must survive the retag")
 	})
 
 	t.Run("PreservesCheckConstraints", func(t *testing.T) {
 		sch, remap := newRemapInputs(t)
-		remapped, err := WithRemappedColumnTags(sch, remap)
-		require.NoError(t, err)
+		remapped := mustRemap(t, sch, remap)
 
 		checks := remapped.Checks().AllChecks()
 		require.Len(t, checks, 2, "all check constraints must survive")
@@ -532,8 +503,7 @@ func TestWithRemappedColumnTags(t *testing.T) {
 
 	t.Run("PreservesTableMetadata", func(t *testing.T) {
 		sch, remap := newRemapInputs(t)
-		remapped, err := WithRemappedColumnTags(sch, remap)
-		require.NoError(t, err)
+		remapped := mustRemap(t, sch, remap)
 
 		require.Equal(t, Collation_utf8mb4_general_ci, remapped.GetCollation())
 		require.Equal(t, "test comment", remapped.GetComment())
@@ -541,16 +511,53 @@ func TestWithRemappedColumnTags(t *testing.T) {
 	})
 
 	t.Run("EmptyRemapReturnsEquivalentSchema", func(t *testing.T) {
-		sch, _ := newRemapInputs(t)
-
-		remapped, err := WithRemappedColumnTags(sch, nil)
-		require.NoError(t, err)
-		require.NotSame(t, sch, remapped, "nil remap must allocate a fresh schema")
-		require.Equal(t, sch.GetAllCols().GetColumns(), remapped.GetAllCols().GetColumns())
-
-		remapped, err = WithRemappedColumnTags(sch, map[uint64]uint64{})
-		require.NoError(t, err)
-		require.NotSame(t, sch, remapped, "empty remap must allocate a fresh schema")
-		require.Equal(t, sch.GetAllCols().GetColumns(), remapped.GetAllCols().GetColumns())
+		for _, remap := range []map[uint64]uint64{nil, {}} {
+			sch, _ := newRemapInputs(t)
+			remapped := mustRemap(t, sch, remap)
+			require.NotSame(t, sch, remapped, "empty remap must allocate a fresh schema")
+			require.Equal(t, sch.GetAllCols().GetColumns(), remapped.GetAllCols().GetColumns())
+		}
 	})
+}
+
+// newRemapInputs builds the schema and tag remap shared by the TestWithRemappedColumnTags subtests.
+func newRemapInputs(t *testing.T) (Schema, map[uint64]uint64) {
+	t.Helper()
+	cols := NewColCollection(
+		mustCol(t, "id", 100, typeinfo.Int64Type, true, NotNullConstraint{}),
+		mustCol(t, "region", 101, typeinfo.StringDefaultType, true, NotNullConstraint{}),
+		mustCol(t, "val", 102, typeinfo.StringDefaultType, false),
+	)
+	sch, err := NewSchema(cols, []int{1, 0}, Collation_utf8mb4_general_ci, nil, nil)
+	require.NoError(t, err)
+	sch.SetComment("test comment")
+	sch.SetTargetRowSize(4096)
+
+	_, err = sch.Checks().AddCheck("val_nonempty", "val <> ''", true, false)
+	require.NoError(t, err)
+	_, err = sch.Checks().AddCheck("region_nonempty", "region <> ''", true, false)
+	require.NoError(t, err)
+
+	_, err = sch.Indexes().AddIndexByColTags("val_idx", []uint64{102}, []uint16{16}, IndexProperties{IsUnique: true, IsUserDefined: true, Comment: "idx comment"})
+	require.NoError(t, err)
+	_, err = sch.Indexes().AddIndexByColTags("region_val_idx", []uint64{101, 102}, []uint16{0, 8}, IndexProperties{IsUserDefined: true})
+	require.NoError(t, err)
+
+	return sch, map[uint64]uint64{100: 200, 102: 202}
+}
+
+// mustCol builds a typed column, failing the test if construction returns an error.
+func mustCol(t *testing.T, name string, tag uint64, ti typeinfo.TypeInfo, partOfPK bool, constraints ...ColConstraint) Column {
+	t.Helper()
+	col, err := NewColumnWithTypeInfo(name, tag, ti, partOfPK, "", false, "", constraints...)
+	require.NoError(t, err)
+	return col
+}
+
+// mustRemap rewrites the column and index tags of |sch| using |remap|, failing the test if the operation returns an error.
+func mustRemap(t *testing.T, sch Schema, remap map[uint64]uint64) Schema {
+	t.Helper()
+	remapped, err := WithRemappedColumnTags(sch, remap)
+	require.NoError(t, err)
+	return remapped
 }
