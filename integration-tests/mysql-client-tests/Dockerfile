@@ -80,6 +80,7 @@ RUN pyinstaller --onefile --collect-all mysql.connector sqlalchemy-test.py
 RUN pyinstaller --onefile --collect-all mysql.connector mysql-connector-test.py
 RUN pyinstaller --onefile mariadb-connector-test.py
 RUN pyinstaller --onefile python-replication-test.py
+RUN pyinstaller --onefile custom-version-string-test.py
 
 FROM elixir:1.18.3-slim AS elixir_clients_build
 RUN apt-get update && apt-get install -y ca-certificates xz-utils curl && rm -rf /var/lib/apt/lists/*

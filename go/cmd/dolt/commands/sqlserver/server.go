@@ -1230,8 +1230,11 @@ func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.P
 		return server.Config{}, err
 	}
 
-	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-	// to the value of mysql that we support.
+	// The server config is created before system variables are initialized, so we have to use
+	// the config to inform its responses.
+	if verstionString, hasVersionString := serverConfig.SystemVars()["version"]; hasVersionString {
+		serverConf.Version = fmt.Sprint(verstionString)
+	}
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()
