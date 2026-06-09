@@ -194,6 +194,14 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName doltdb.
 			return nil, err
 		}
 	}
+
+	// Vector indexes cannot be incrementally updated; rebuild them from scratch
+	// using the resolved row data.
+	idxSet, err = merge.RebuildVectorIndexes(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tblName.Name, newMap, idxSet)
+	if err != nil {
+		return nil, err
+	}
+
 	newTbl, err = newTbl.SetIndexSet(ctx, idxSet)
 	if err != nil {
 		return nil, err
