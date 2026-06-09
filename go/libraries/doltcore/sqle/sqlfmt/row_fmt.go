@@ -365,10 +365,11 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 		if err != nil {
 			return "", err
 		}
-		if !ok {
-			return "", fmt.Errorf("expected string, got %T", value)
+		if ok {
+			return quoteAndEscapeString(value), nil
 		}
-		return quoteAndEscapeString(value), nil
+		// Fall back to the pre-computed string representation from SqlColToStr.
+		return quoteAndEscapeString(str), nil
 	case querypb.Type_JSON, querypb.Type_ENUM, querypb.Type_SET, querypb.Type_BLOB:
 		return quoteAndEscapeString(str), nil
 	case querypb.Type_VARCHAR, querypb.Type_CHAR:
