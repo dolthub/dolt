@@ -895,11 +895,6 @@ type bootstrapConfig struct {
 	homeDir string
 }
 
-// createBootstrapConfig parses the global arguments, inspects current working directory, loads the profile, and
-// even digs into server config to build the bootstrapConfig struct. If all goes well, |cfg| is set to a struct that
-// contains all the parsed arguments and other configurations. If there is an error, |cfg| will be nil.
-// |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
-// |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
 // preScanDirFlag does a lightweight scan of raw args for -C/--directory before
 // the full arg parse runs, so cwdFs can be set before any filesystem operations.
 // Returns "" if neither flag is present. --chdir is handled separately in runMain.
@@ -915,6 +910,11 @@ func preScanDirFlag(args []string) string {
 	return ""
 }
 
+// createBootstrapConfig parses the global arguments, inspects current working directory, loads the profile, and
+// even digs into server config to build the bootstrapConfig struct. If all goes well, |cfg| is set to a struct that
+// contains all the parsed arguments and other configurations. If there is an error, |cfg| will be nil.
+// |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
+// |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
 func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
 	var cwdFs filesys.Filesys
 
