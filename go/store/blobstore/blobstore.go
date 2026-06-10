@@ -46,6 +46,9 @@ type Blobstore interface {
 
 	// Concatenate creates a new blob named |key| by concatenating |sources|.
 	Concatenate(ctx context.Context, key string, sources []string) (version string, err error)
+
+	// Teardown releases resources held by the blobstore.
+	Teardown(ctx context.Context) error
 }
 
 // GetBytes is a utility method calls bs.Get and handles reading the data from the returned

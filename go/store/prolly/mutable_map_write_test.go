@@ -476,7 +476,7 @@ func testInternalNodeSplits(t *testing.T) {
 	for i := range tuples {
 		bld.PutInt32(0, int32(i))
 		bld.PutInt32(1, int32(0))
-		tuples[i][0], err = bld.Build(sharedPool)
+		tuples[i][0], err = bld.Build(context.Background(), sharedPool)
 		require.NoError(t, err)
 		tuples[i][1] = val.EmptyTuple
 	}
@@ -490,7 +490,7 @@ func testInternalNodeSplits(t *testing.T) {
 		for j := 1; j <= k; j++ {
 			bld.PutInt32(0, int32(j))
 			bld.PutInt32(1, int32(j))
-			key, err := bld.Build(sharedPool)
+			key, err := bld.Build(context.Background(), sharedPool)
 			require.NoError(t, err)
 			err = mut.Put(ctx, key, val.EmptyTuple)
 			require.NoError(t, err)
@@ -539,11 +539,11 @@ func makePut(k, v int64) (key, value val.Tuple) {
 	mutKeyBuilder.PutInt64(0, k)
 	mutValBuilder.PutInt64(0, v)
 	var err error
-	key, err = mutKeyBuilder.Build(sharedPool)
+	key, err = mutKeyBuilder.Build(context.Background(), sharedPool)
 	if err != nil {
 		panic(err)
 	}
-	value, err = mutValBuilder.Build(sharedPool)
+	value, err = mutValBuilder.Build(context.Background(), sharedPool)
 	if err != nil {
 		panic(err)
 	}
@@ -553,7 +553,7 @@ func makePut(k, v int64) (key, value val.Tuple) {
 func makeDelete(k int64) (key val.Tuple) {
 	mutKeyBuilder.PutInt64(0, k)
 	var err error
-	key, err = mutKeyBuilder.Build(sharedPool)
+	key, err = mutKeyBuilder.Build(context.Background(), sharedPool)
 	if err != nil {
 		panic(err)
 	}
@@ -575,7 +575,8 @@ func materializeMap(t *testing.T, mut *MutableMap) Map {
 		if nextMutation.Key == nil {
 			break
 		}
-		cmp := mut.keyDesc.Compare(ctx, val.Tuple(prevMutation.Key), val.Tuple(nextMutation.Key))
+		cmp, err := mut.keyDesc.Compare(ctx, val.Tuple(prevMutation.Key), val.Tuple(nextMutation.Key))
+		require.NoError(t, err)
 		assert.True(t, cmp < 0)
 		prevMutation = nextMutation
 	}

@@ -15,7 +15,7 @@ Dolt databases. We host public data for free. If you want to host
 your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). If you want us to run a Dolt server for you, we have [Hosted Dolt](https://hosted.doltdb.com).
 
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
-ask questions, or [check out our roadmap](https://docs.dolthub.com/other/roadmap)
+ask questions, or [check out our roadmap](https://dolthub.com/docs/other/roadmap)
 to see what we're building next.
 
 ## What's it for?
@@ -24,7 +24,7 @@ Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
 it so far](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/).
 
-Learn more about Dolt use cases, configuration and guides to use dolt on our [documentation page](https://docs.dolthub.com/introduction/what-is-dolt).
+Learn more about Dolt use cases, configuration and guides to use dolt on our [documentation page](https://dolthub.com/docs/introduction/what-is-dolt).
 
 # How to use this image
 

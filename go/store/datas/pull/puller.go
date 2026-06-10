@@ -101,7 +101,7 @@ func NewPuller(
 	}
 
 	// walkAddrs can be used for getAddrs on the AddTableFile call as well.
-	getAddrs := func(c chunks.Chunk) chunks.GetAddrsCb {
+	getAddrs := func(c chunks.Chunk) chunks.InsertAddrsCb {
 		return func(ctx context.Context, ins hash.HashSet, filter chunks.PendingRefExists) error {
 			return walkAddrs(c, func(h hash.Hash, _ bool) error {
 				if !filter(h) {

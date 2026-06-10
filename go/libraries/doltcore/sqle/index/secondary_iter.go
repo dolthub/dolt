@@ -138,7 +138,7 @@ func (c *nonCovStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (
 		from := c.pkMap.MapOrdinal(to)
 		c.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk, err := c.pkBld.Build(sharePool)
+	pk, err := c.pkBld.Build(ctx, sharePool)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,10 @@ func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly
 			return c.m.IterKeyRange(ctx, start, stop)
 		}
 	}
-	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	rng, err := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	if err != nil {
+		return nil, err
+	}
 
 	iter, err := c.m.IterRange(ctx, rng)
 	if err != nil {
@@ -266,7 +269,10 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 			return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld}, nil
 		}
 	}
-	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	rng, err := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	if err != nil {
+		return nil, err
+	}
 	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err
@@ -322,7 +328,10 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 			return &keylessLookupIter{pri: c.pri, secIter: secIter, pkMap: c.pkMap, pkBld: c.pkBld, prefixDesc: c.prefixDesc}, nil
 		}
 	}
-	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	rng, err := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	if err != nil {
+		return nil, err
+	}
 	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err
@@ -365,7 +374,7 @@ func (i *keylessLookupIter) Next(ctx context.Context) (k, v val.Tuple, err error
 		from := i.pkMap.MapOrdinal(to)
 		i.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	i.k, err = i.pkBld.Build(sharePool)
+	i.k, err = i.pkBld.Build(ctx, sharePool)
 	if err != nil {
 		return nil, nil, err
 	}

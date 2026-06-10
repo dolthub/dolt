@@ -96,11 +96,8 @@ jobs:
         if: ${{ github.event_name == 'repository_dispatch' }}
         with:
           ref: ${{ github.event.client_payload.ref }}
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go/go.mod
-        id: go
+      - name: Set up Go toolchain
+        uses: ./.github/actions/setup-go-toolchain
       - name: Setup Python 3.x
         uses: actions/setup-python@v5
         with:
@@ -110,10 +107,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ^16
-      - name: Create CI Bin
-        run: |
-          mkdir -p ./.ci_bin
-          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+      - name: Build dolt
+        uses: ./.github/actions/build-dolt
+        with:
+          remotesrv: 'true'
+          noms: 'true'
       - name: Install Bats Windows
         run: |
           git clone https://github.com/bats-core/bats-core.git
@@ -132,23 +130,8 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
-      - name: Install ICU4C (Windows)
-        uses: msys2/setup-msys2@v2
-        with:
-          path-type: inherit
-          msystem: UCRT64
-          pacboy: icu:p toolchain:p pkg-config:p
-      - name: Install Dolt
-        working-directory: ./go
-        shell: msys2 {0}
-        run: |
-          go.exe build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
-          go.exe build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
-          go.exe build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
       - name: Setup Dolt Config
-        run: |
-          dolt config --global --add user.name 'Dolthub Actions'
-          dolt config --global --add user.email 'actions@dolthub.com'
+        uses: ./.github/actions/setup-dolt-config
       - name: Test file
         run: bats --tap ${{ matrix.file }}
         working-directory: ./integration-tests/bats

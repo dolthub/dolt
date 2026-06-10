@@ -242,7 +242,7 @@ func getCreateTableStatement(ctx *sql.Context, table string, sch schema.Schema, 
 }
 
 func getSchemaConflictDescription(ctx *sql.Context, table doltdb.TableName, base, ours, theirs schema.Schema) (string, error) {
-	_, conflict, _, _, err := merge.SchemaMerge(ctx, noms.Format_Default, ours, theirs, base, table)
+	_, conflict, _, _, err := merge.SchemaMerge(ctx, noms.Format_DOLT, ours, theirs, base, table)
 	if err != nil {
 		return "", err
 	}

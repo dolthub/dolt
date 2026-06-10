@@ -140,7 +140,7 @@ teardown() {
 }
 
 @test "no-repo: dolt version prints out of date warning" {
-    echo "2.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+    echo "3.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
 
     run dolt version
     [ "$status" -eq 0 ]
@@ -164,7 +164,7 @@ teardown() {
 }
 
 @test "no-repo: disabling version check suppresses out of date warning" {
-    echo "2.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+    echo "3.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
     dolt config --global --add versioncheck.disabled true
 
     run dolt version
@@ -173,7 +173,7 @@ teardown() {
 }
 
 @test "no-repo: disable version check warning only appears once" {
-    echo "2.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+    echo "3.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
 
     run dolt version
     [ "$status" -eq 0 ]

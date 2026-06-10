@@ -172,11 +172,13 @@ func TestRangeSearch(t *testing.T) {
 			lo, hi := test.physical[0], test.physical[1]
 
 			startSearch := rangeStartSearchFn(rng)
-			idx := startSearch(ctx, testNode)
+			idx, err := startSearch(ctx, testNode)
+			require.NoError(t, err)
 			assert.Equal(t, lo, idx, "range should start at index %d", lo)
 
 			stopSearch := rangeStopSearchFn(rng)
-			idx = stopSearch(ctx, testNode)
+			idx, err = stopSearch(ctx, testNode)
+			require.NoError(t, err)
 			assert.Equal(t, hi, idx, "range should stop before index %d", hi)
 
 			// validate physical range (unfiltered iter)
@@ -238,7 +240,7 @@ func intNullTuple(ints ...*int32) val.Tuple {
 			tb.PutInt32(i, *val)
 		}
 	}
-	tup, err := tb.Build(sharedPool)
+	tup, err := tb.Build(context.Background(), sharedPool)
 	if err != nil {
 		panic(err)
 	}

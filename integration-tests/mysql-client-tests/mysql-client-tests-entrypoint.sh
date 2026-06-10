@@ -14,6 +14,12 @@ dolt config --global --add user.email mysql-test-runner@liquidata.co
 echo "Running mysql-client-tests:"
 run_bats /build/bin/bats/mysql-client-tests.bats
 
+# We need to test that setting the version variable is reflected in the info received
+# when a client connects. Many drivers ignore this info, including go's SQL driver.
+# So we need to use a client test to check this.
+echo "Running custom-version-string-test"
+run_bats /build/bin/bats/custom-version-string-test.bats
+
 # We run mariadb-binlog integration in this suite same as with mysqldump in mysql-client-tests.bats.
 # However, there's a bit more setup necessary to pipe the output from the dump in a mariadb client, so it's been
 # separated into a separate bats.

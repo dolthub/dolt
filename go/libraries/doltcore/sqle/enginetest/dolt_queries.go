@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/google/uuid"
 
@@ -525,6 +526,49 @@ var DoltScripts = []queries.ScriptTest{
 				// test_special is explicitly not ignored (false overrides wildcard)
 				Query:    "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'test_special';",
 				Expected: []sql.Row{{"test_special", false}},
+			},
+		},
+	},
+	{
+		Name: "dolt_status reports AUTO_INCREMENT value changes",
+		// See https://github.com/dolthub/dolt/issues/11145
+		SetUpScript: []string{
+			"CREATE TABLE ainc (id int NOT NULL AUTO_INCREMENT, PRIMARY KEY (id));",
+			"INSERT INTO ainc VALUES ();",
+			"CALL DOLT_COMMIT('-Am', 'create ainc');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "ALTER TABLE ainc AUTO_INCREMENT = 100;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT table_name, staged, status FROM dolt_status;",
+				Expected: []sql.Row{{"ainc", byte(0), "modified"}},
+			},
+			{
+				Query:    "CALL DOLT_ADD('ainc');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT table_name, staged, status FROM dolt_status;",
+				Expected: []sql.Row{{"ainc", byte(1), "modified"}},
+			},
+			{
+				Query:    "CALL DOLT_COMMIT('-m', 'bump auto_increment');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_status;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "ALTER TABLE ainc AUTO_INCREMENT = 100;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_status;",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
@@ -1277,6 +1321,12 @@ var DoltScripts = []queries.ScriptTest{
 					{"view", "view1", "CREATE VIEW VIEW1 AS SELECT v1 FROM viewtest"},
 					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
 				},
+			},
+			{
+				// dolt_schemas is not directly modifiable; a direct UPDATE
+				// must return a clean error, not panic.
+				Query:          "UPDATE dolt_schemas SET name = 'x' WHERE name = 'view1'",
+				ExpectedErrStr: "the dolt_schemas table cannot be modified directly",
 			},
 		},
 	},
@@ -2683,6 +2733,34 @@ WHERE z IN (
 			},
 		},
 	},
+	{
+		Name:    "dolt_history_dolt_schemas committer column when unset reflects --author",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"CREATE VIEW v1 AS SELECT 1",
+			"CALL DOLT_COMMIT('-Am', 'create view', '--author', 'Test Author <test@example.com>')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT committer FROM dolt_history_dolt_schemas WHERE name = 'v1'",
+				Expected: []sql.Row{{"Test Author <test@example.com>"}},
+			},
+		},
+	},
+	{
+		Name:    "dolt_history_dolt_procedures committer column when unset reflects --author",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"CREATE PROCEDURE p1() SELECT 1",
+			"CALL DOLT_COMMIT('-Am', 'create procedure', '--author', 'Test Author <test@example.com>')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT committer FROM dolt_history_dolt_procedures WHERE name = 'p1'",
+				Expected: []sql.Row{{"Test Author <test@example.com>"}},
+			},
+		},
+	},
 }
 
 // BrokenHistorySystemTableScriptTests contains tests that work for non-prepared, but don't work
@@ -2892,6 +2970,60 @@ var BranchesSystemTableTests = []queries.ScriptTest{
 					{"main", "root", "root@localhost"},
 				},
 				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+		},
+	},
+	{
+		Name: "dolt_branches latest_committer column when unset reflects --author",
+		SetUpScript: []string{
+			"CALL DOLT_CHECKOUT('-b', 'feature');",
+			"CREATE TABLE t (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'author commit', '--author', 'Test Author <author@example.com>');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT latest_committer, latest_committer_email, latest_author, latest_author_email FROM dolt_branches WHERE name = 'feature';",
+				Expected: []sql.Row{{"Test Author", "author@example.com", "Test Author", "author@example.com"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branches default commit populates committer and author from session identity",
+		SetUpScript: []string{
+			"CALL DOLT_CHECKOUT('-b', 'feature');",
+			"CREATE TABLE t (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'session commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT latest_committer, latest_committer_email, latest_author, latest_author_email FROM dolt_branches WHERE name = 'feature';",
+				Expected: []sql.Row{{"root", "root@localhost", "root", "root@localhost"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branches schema exposes split committer and author columns",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'init');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "DESCRIBE dolt_branches;",
+				Expected: []sql.Row{
+					{"name", "text", "NO", "PRI", nil, ""},
+					{"hash", "text", "NO", "", nil, ""},
+					{"latest_committer", "text", "YES", "", nil, ""},
+					{"latest_committer_email", "text", "YES", "", nil, ""},
+					{"latest_commit_date", "datetime(3)", "YES", "", nil, ""},
+					{"latest_commit_message", "text", "YES", "", nil, ""},
+					{"remote", "text", "YES", "", nil, ""},
+					{"branch", "text", "YES", "", nil, ""},
+					{"dirty", "tinyint(1)", "YES", "", nil, ""},
+					{"latest_author", "text", "YES", "", nil, ""},
+					{"latest_author_email", "text", "YES", "", nil, ""},
+					{"latest_author_date", "datetime(3)", "YES", "", nil, ""},
+				},
 			},
 		},
 	},
@@ -3749,6 +3881,52 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_checkout -b with --no-overwrite-ignore aborts when ignored table differs at start point",
+		SetUpScript: []string{
+			"create table ignored_tbl (pk int primary key, val int);",
+			"insert into ignored_tbl values (1, 100);",
+			"insert into dolt_ignore values ('ignored_tbl', true);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'add ignored table on main', '--force');",
+			"insert into ignored_tbl values (2, 200);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'modify ignored table', '--force');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_checkout('-b', 'newbranch', '--no-overwrite-ignore', 'HEAD~1');",
+				ExpectedErr: actions.ErrCheckoutWouldOverwriteIgnoredTables,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout -b with --overwrite-ignore succeeds when ignored table differs at start point",
+		SetUpScript: []string{
+			"create table ignored_tbl (pk int primary key, val int);",
+			"insert into ignored_tbl values (1, 100);",
+			"insert into dolt_ignore values ('ignored_tbl', true);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'add ignored table on main', '--force');",
+			"insert into ignored_tbl values (2, 200);",
+			"call dolt_add('-A', '--force');",
+			"call dolt_commit('-m', 'modify ignored table', '--force');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_checkout('-b', 'newbranch', '--overwrite-ignore', 'HEAD~1');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"newbranch"}},
+			},
+		},
+	},
+	{
 		Name: "dolt_checkout default behavior overwrites ignored tables",
 		SetUpScript: []string{
 			"create table ignored_tbl (pk int primary key, val int);",
@@ -3770,6 +3948,90 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query:    "select active_branch();",
 				Expected: []sql.Row{{"other"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout('.') preserves untracked tables",
+		SetUpScript: []string{
+			"create table tracked (pk int primary key);",
+			"call dolt_commit('-Am', 'add tracked');",
+			"insert into tracked values (1);",
+			"create table untracked (pk int primary key);",
+			"insert into untracked values (9);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('.');",
+				Expected: []sql.Row{{0, ""}},
+			},
+			{
+				Query:    "select * from tracked;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from untracked;",
+				Expected: []sql.Row{{9}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout('.') preserves ignored tables",
+		SetUpScript: []string{
+			"insert into dolt_ignore values ('private_*', true);",
+			"call dolt_commit('-Am', 'commit ignore rule');",
+			"create table mytable (pk int primary key, val int);",
+			"insert into mytable values (1, 10);",
+			"call dolt_commit('-Am', 'add mytable');",
+			"create table private_data (pk int primary key, secret varchar(100));",
+			"insert into private_data values (1, 'secret');",
+			"insert into mytable values (2, 20);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('.');",
+				Expected: []sql.Row{{0, ""}},
+			},
+			{
+				Query:    "select pk, secret from private_data;",
+				Expected: []sql.Row{{1, "secret"}},
+			},
+			{
+				Query:    "select * from mytable;",
+				Expected: []sql.Row{{1, 10}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout('HEAD', table) does not stage other ignored tables",
+		SetUpScript: []string{
+			"insert into dolt_ignore values ('private_*', true);",
+			"call dolt_commit('-Am', 'commit ignore rule');",
+			"create table mytable (pk int primary key, val int);",
+			"insert into mytable values (1, 10);",
+			"call dolt_commit('-Am', 'add mytable');",
+			"create table private_data (pk int primary key, secret varchar(100));",
+			"insert into private_data values (1, 'secret');",
+			"update mytable set val = 99 where pk = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('HEAD', 'mytable');",
+				Expected: []sql.Row{{0, ""}},
+			},
+			{
+				Query:    "select * from mytable;",
+				Expected: []sql.Row{{1, 10}},
+			},
+			{
+				Query: "select staged from dolt_status where table_name = 'private_data';",
+				// Empty result confirms private_data was not staged as a side effect of the
+				// checkout that named only mytable.
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select pk, secret from private_data;",
+				Expected: []sql.Row{{1, "secret"}},
 			},
 		},
 	},
@@ -4335,9 +4597,10 @@ var DoltResetTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// dolt_status should only show the unstaged table t being added
-				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", byte(0), "new table"}},
+				Query: "select * from dolt_status",
+				// The index is left untouched by --soft, so table t is still staged against the
+				// new HEAD which no longer contains it. See https://git-scm.com/docs/git-reset.
+				Expected: []sql.Row{{"t", byte(1), "new table"}},
 			},
 		},
 	},
@@ -4361,6 +4624,96 @@ var DoltResetTestScripts = []queries.ScriptTest{
 				// dolt_status should only show the unstaged table t being added
 				Query:    "select * from dolt_status",
 				Expected: []sql.Row{{"t", byte(0), "new table"}},
+			},
+		},
+	},
+	{
+		// See https://git-scm.com/docs/git-reset
+		Name: "dolt_reset(rev) moves HEAD, resets the index, and leaves the working tree alone",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, v int);",
+			"INSERT INTO t VALUES (1, 10);",
+			"call dolt_commit('-Am', 'c1');",
+			"INSERT INTO t VALUES (2, 20);",
+			"call dolt_commit('-am', 'c2');",
+			"INSERT INTO t VALUES (3, 30);",
+			"call dolt_add('.');",
+			"INSERT INTO t VALUES (4, 40);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('HEAD~');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "SELECT pk, v FROM t AS OF STAGED ORDER BY pk",
+				// Index resets to the new HEAD which only has pk=1.
+				Expected: []sql.Row{{1, 10}},
+			},
+			{
+				Query: "SELECT pk, v FROM t ORDER BY pk",
+				// Working tree is preserved across the reset, including the staged pk=3 and
+				// the unstaged pk=4 from before the reset.
+				Expected: []sql.Row{{1, 10}, {2, 20}, {3, 30}, {4, 40}},
+			},
+		},
+	},
+	{
+		// See https://git-scm.com/docs/git-reset
+		Name: "dolt_reset('--soft', rev) leaves staged tables untouched",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, v int);",
+			"INSERT INTO t VALUES (1, 10);",
+			"call dolt_commit('-Am', 'c1');",
+			"INSERT INTO t VALUES (2, 20);",
+			"call dolt_commit('-am', 'c2');",
+			"INSERT INTO t VALUES (3, 30);",
+			"call dolt_add('.');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--soft', 'HEAD~');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT pk FROM t AS OF STAGED ORDER BY pk",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
+				Query:    "SELECT pk FROM t ORDER BY pk",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
+				Query: "SELECT * FROM dolt_status",
+				// The byte indicates whether the table is staged (1) or unstaged (0).
+				Expected: []sql.Row{{"t", byte(1), "modified"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_reset('--hard') preserves ignored tables when ignore rule is committed",
+		SetUpScript: []string{
+			"insert into dolt_ignore values ('private_data', true);",
+			"call dolt_commit('-Am', 'add ignore rule');",
+			"create table mytable (pk int primary key, val int);",
+			"insert into mytable values (1, 10);",
+			"call dolt_commit('-Am', 'add mytable');",
+			"create table private_data (pk int primary key, secret varchar(100));",
+			"insert into private_data values (1, 'secret');",
+			"insert into mytable values (2, 20);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_reset('--hard');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select pk, secret from private_data;",
+				Expected: []sql.Row{{1, "secret"}},
+			},
+			{
+				Query:    "select * from mytable;",
+				Expected: []sql.Row{{1, 10}},
 			},
 		},
 	},
@@ -4533,8 +4886,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
 			},
 			{
-				Query:          "SELECT parents from dolt_log();",
-				ExpectedErrStr: `column "parents" could not be found in any table in scope`,
+				Query: "SELECT parents from dolt_log();",
+				// Without --parents the parents column is part of the schema and reads as NULL for every row.
+				Expected: []sql.Row{{nil}, {nil}, {nil}},
+			},
+			{
+				Query: "SELECT parents = @Commit1 from dolt_log('--parents') WHERE commit_hash = @Commit2;",
+				// With --parents the parents column carries the parent hashes joined by ", ".
+				Expected: []sql.Row{{true}},
 			},
 			{
 				Query:       "SELECT * from dolt_log('--decorate', 'invalid');",
@@ -4549,16 +4908,22 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:          "SELECT refs from dolt_log();",
-				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+				Query: "SELECT refs from dolt_log();",
+				// refs is always populated; only the head commit carries a ref name, others read as empty.
+				Expected: []sql.Row{{"HEAD -> main"}, {""}, {""}},
 			},
 			{
-				Query:          "SELECT refs from dolt_log('--decorate', 'auto');",
-				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+				Query: "SELECT refs from dolt_log('--decorate', 'no') WHERE commit_hash = @Commit2;",
+				// --decorate=no zeros the refs column even for the head commit.
+				Expected: []sql.Row{{""}},
 			},
 			{
-				Query:          "SELECT refs from dolt_log('--decorate', 'no');",
-				ExpectedErrStr: `column "refs" could not be found in any table in scope`,
+				Query: "SELECT refs from dolt_log('--decorate', 'auto') WHERE commit_hash = @Commit2;",
+				// auto has no defined meaning in SQL contexts; the server warns and downgrades to short.
+				Expected:                        []sql.Row{{"HEAD -> main"}},
+				ExpectedWarning:                 mysql.ERWarnDeprecatedSyntax,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "--decorate=auto has no defined meaning",
 			},
 		},
 	},
@@ -4791,8 +5156,8 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t"}},
 			},
 			{
-				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('new-branch') limit 1;",
-				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t again"}},
+				Query:    "SELECT commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('new-branch') limit 1;",
+				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t again"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit1, committer, email, message from dolt_log(@Commit1) limit 1;",
@@ -4832,39 +5197,39 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		*/
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('^main', 'new-branch');",
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('^main', 'new-branch');",
 				Expected: []sql.Row{
-					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
-				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('main..new-branch');",
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('main..new-branch');",
 				Expected: []sql.Row{
-					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
-				Query: "SELECT commit_hash = @Commit5, commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('main...new-branch');",
+				Query: "SELECT commit_hash = @Commit5, commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('main...new-branch');",
 				Expected: []sql.Row{
-					{true, false, false, "root", "root@localhost", "inserting into t 5"},
-					{false, true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, false, "root", "root@localhost", "root", "root@localhost", "inserting into t 5"},
+					{false, true, false, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, false, true, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
-				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '--not', 'main');",
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('new-branch', '--not', 'main');",
 				Expected: []sql.Row{
-					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
-				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '^main');",
+				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('new-branch', '^main');",
 				Expected: []sql.Row{
-					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
-					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
+					{true, false, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 4"},
+					{false, true, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
@@ -4884,12 +5249,12 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
-				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('^main', @Commit3);",
-				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
+				Query:    "SELECT commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log('^main', @Commit3);",
+				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 3"}},
 			},
 			{
-				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log(@Commit3, '--not', @Commit2);",
-				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
+				Query:    "SELECT commit_hash = @Commit3, committer, email, author, author_email, message from dolt_log(@Commit3, '--not', @Commit2);",
+				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "John Doe", "johndoe@example.com", "inserting into t 3"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^new-branch', @Commit5);",
@@ -5146,6 +5511,11 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"Merge branch 'branch2' into main", true, true}}, // shows two parents for merge commit
 			},
 			{
+				Query: "SELECT parents IS NULL from dolt_log('main', '--merges') LIMIT 1;",
+				// Without --parents the parents column reads as NULL for every row.
+				Expected: []sql.Row{{true}},
+			},
+			{
 				Query:    "SELECT commit_hash = @Commit3, parents = @Commit1 from dolt_log('branch2', '--parents') LIMIT 1;", // shows one parent for non-merge commit
 				Expected: []sql.Row{{true, true}},
 			},
@@ -5177,12 +5547,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key);",
 			"call dolt_add('.')",
 			"set @Commit1 = '';",
+			"set @FeatureCommit = '';",
+			"set @MainCommit = '';",
 			"call dolt_commit_hash_out(@Commit1, '-am', 'commit 1');",
 			"call dolt_commit('--allow-empty', '-m', 'commit 2');",
 			"call dolt_checkout('-b', 'feature');",
-			"call dolt_commit('--allow-empty', '-m', 'feature commit');",
+			"call dolt_commit_hash_out(@FeatureCommit, '--allow-empty', '-m', 'feature commit');",
 			"call dolt_checkout('main');",
-			"call dolt_commit('--allow-empty', '-m', 'main commit');",
+			"call dolt_commit_hash_out(@MainCommit, '--allow-empty', '-m', 'main commit');",
 			"call dolt_merge('feature', '-m', 'merge feature');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -5195,6 +5567,12 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 					{"date", "datetime(3)", "NO", "", nil, ""},
 					{"message", "text", "NO", "", nil, ""},
 					{"commit_order", "bigint unsigned", "NO", "", nil, ""},
+					{"parents", "text", "YES", "", nil, ""},
+					{"refs", "text", "NO", "", nil, ""},
+					{"signature", "text", "YES", "", nil, ""},
+					{"author", "text", "NO", "", nil, ""},
+					{"author_email", "text", "NO", "", nil, ""},
+					{"author_date", "datetime(3)", "NO", "", nil, ""},
 				},
 			},
 			{
@@ -5202,6 +5580,26 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{uint64(2)},
 				},
+			},
+			{
+				Query: "select refs from dolt_log where message = 'commit 1';",
+				// Non-head commits have no ref pointing at them, so refs reads as the empty string.
+				Expected: []sql.Row{{""}},
+			},
+			{
+				Query: "select refs from dolt_log where commit_order = (select max(commit_order) from dolt_log);",
+				// The newest commit by commit_order is the HEAD of main, so refs carries its short name.
+				Expected: []sql.Row{{"HEAD -> main"}},
+			},
+			{
+				Query: "select parents = concat(@MainCommit, ', ', @FeatureCommit) from dolt_log where message = 'merge feature';",
+				// The merge commit carries both parent hashes joined by ", " in commit order: main first, then feature.
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query: "select signature from dolt_log where message = 'commit 1';",
+				// Unsigned commits return an empty string in the signature column when projected.
+				Expected: []sql.Row{{""}},
 			},
 			{
 				Query: "select commit_order from dolt_log() where message = 'commit 1';",
@@ -5291,6 +5689,28 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT message from dolt_log() dl1 where exists (select 1 from dolt_log(dl1.commit_hash, '--not', @Commit1));",
 				Expected: []sql.Row{{"inserting into t"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_log shows author and committer columns separately",
+		SetUpScript: []string{
+			"CREATE TABLE log_author_tbl (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'author commit', '--author', 'Test Author <author@example.com>');",
+			// If the committer is set explicitly by the user the --author flag does not affect it.
+			"SET dolt_committer_name = 'Committer';",
+			"CALL DOLT_COMMIT('--allow-empty', '-m', 'committer name commit', '--author', 'Test Author <author@example.com>');",
+			"SET dolt_committer_email = 'committer@example.com';",
+			"CALL DOLT_COMMIT('--allow-empty', '-m', 'committer commit', '--author', 'Test Author <author@example.com>');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT committer, email, author, author_email FROM dolt_log ORDER BY date DESC LIMIT 3;",
+				Expected: []sql.Row{
+					{"Committer", "committer@example.com", "Test Author", "author@example.com"},
+					{"Committer", "root@localhost", "Test Author", "author@example.com"},
+					{"Test Author", "author@example.com", "Test Author", "author@example.com"},
+				},
 			},
 		},
 	},
@@ -5851,6 +6271,183 @@ func generateStringData(length int) string {
 	return b.String()
 }
 
+// JsonAdaptiveEncodingScriptTests exercises the JsonAdaptiveEnc storage path end-to-end.
+// New JSON columns use JsonAdaptiveEnc, storing small documents inline in the tuple and
+// larger documents out-of-band as raw-byte blobs.
+var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
+	{
+		Name: "json adaptive: small document stored inline",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			`insert into t values (1, '{"a":1}'), (2, '{"b":2}')`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select pk, j from t order by pk",
+				Expected: []sql.Row{{1, types.MustJSON(`{"a":1}`)}, {2, types.MustJSON(`{"b":2}`)}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: json_extract on small document",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			`insert into t values (1, '{"name":"alice","age":30}')`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `select json_extract(j, '$.name') from t where pk = 1`,
+				Expected: []sql.Row{{types.MustJSON(`"alice"`)}},
+			},
+			{
+				Query:    `select json_extract(j, '$.age') from t where pk = 1`,
+				Expected: []sql.Row{{types.MustJSON(`30`)}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: update and re-read",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			`insert into t values (1, '{"x":1}')`,
+			`update t set j = json_set(j, '$.x', 99) where pk = 1`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select j from t where pk = 1",
+				Expected: []sql.Row{{types.MustJSON(`{"x":99}`)}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: null json values",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			"insert into t values (1, null), (2, 'null')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select pk, j from t order by pk",
+				Expected: []sql.Row{{1, nil}, {2, types.MustJSON(`null`)}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: large document stored out-of-band",
+		SetUpScript: func() []string {
+			// Build a JSON object large enough (> 2048 bytes) to be stored out-of-band.
+			m := make(map[string]string)
+			for i := 0; i < 50; i++ {
+				m[fmt.Sprintf("key_%02d", i)] = strings.Repeat("v", 50)
+			}
+			bs, _ := json.Marshal(m)
+			return []string{
+				"create table t (pk int primary key, j json)",
+				fmt.Sprintf(`insert into t values (1, '%s')`, string(bs)),
+			}
+		}(),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `select json_extract(j, '$.key_00') from t where pk = 1`,
+				Expected: []sql.Row{{types.MustJSON(fmt.Sprintf(`"%s"`, strings.Repeat("v", 50)))}},
+			},
+			{
+				Query:    "select json_length(j) from t where pk = 1",
+				Expected: []sql.Row{{50}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: delete row with json column",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			`insert into t values (1, '{"a":1}'), (2, '{"b":2}')`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "delete from t where pk = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "select pk, j from t",
+				Expected: []sql.Row{{2, types.MustJSON(`{"b":2}`)}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: json array round-trip",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			`insert into t values (1, '[1,2,3]'), (2, '["a","b","c"]')`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select pk, j from t order by pk",
+				Expected: []sql.Row{{1, types.MustJSON(`[1, 2, 3]`)}, {2, types.MustJSON(`["a", "b", "c"]`)}},
+			},
+			{
+				Query:    `select json_extract(j, '$[1]') from t where pk = 1`,
+				Expected: []sql.Row{{types.MustJSON(`2`)}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: dolt commit and read-back",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			`insert into t values (1, '{"committed":true}')`,
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'add json row')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select j from t where pk = 1",
+				Expected: []sql.Row{{types.MustJSON(`{"committed":true}`)}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: filter by json_extract",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			`insert into t values (1, '{"status":"active"}'), (2, '{"status":"inactive"}'), (3, '{"status":"active"}')`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `select pk from t where json_extract(j, '$.status') = 'active' order by pk`,
+				Expected: []sql.Row{{1}, {3}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: json_set creates new field",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			`insert into t values (1, '{"a":1}')`,
+			`update t set j = json_set(j, '$.b', 2) where pk = 1`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select j from t where pk = 1",
+				Expected: []sql.Row{{types.MustJSON(`{"a":1,"b":2}`)}},
+			},
+		},
+	},
+	{
+		Name: "json adaptive: nested json object",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json)",
+			`insert into t values (1, '{"outer":{"inner":{"deep":42}}}')`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `select json_extract(j, '$.outer.inner.deep') from t where pk = 1`,
+				Expected: []sql.Row{{types.MustJSON(`42`)}},
+			},
+		},
+	},
+}
+
 var DoltTagTestScripts = []queries.ScriptTest{
 	{
 		Name: "dolt-tag: SQL create tags",
@@ -5867,7 +6464,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT tag_name, IF(CHAR_LENGTH(tag_hash) < 0, NULL, 'not null'), tagger, email, IF(date IS NULL, NULL, 'not null'), message from dolt_tags",
-				Expected: []sql.Row{{"v1", "not null", "billy bob", "bigbillieb@fake.horse", "not null", ""}},
+				Expected: []sql.Row{{"v1", "not null", "root", "root@localhost", "not null", ""}},
 			},
 			{
 				Query:    "CALL DOLT_TAG('v2', '-m', 'create tag v2')",
@@ -7499,6 +8096,20 @@ var DoltCommitTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT COUNT(parent_hash) FROM dolt_commit_ancestors WHERE commit_hash= @hash;",
 				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commits committer columns when unset reflect --author",
+		SetUpScript: []string{
+			"CREATE TABLE commits_author_tbl (pk INT PRIMARY KEY);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'author commit', '--author', 'Test Author <author@example.com>');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT committer, email, author, author_email FROM dolt_commits WHERE message = 'author commit';",
+				Expected: []sql.Row{{"Test Author", "author@example.com", "Test Author", "author@example.com"}},
 			},
 		},
 	},

@@ -161,11 +161,6 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			cli.PrintErrln("`dolt show --no-pretty` or `dolt show (BRANCHNAME)` only supported in local mode.")
 			return 1
 		}
-
-		if !opts.pretty && !dEnv.DoltDB(queryist.Context).Format().UsesFlatbuffers() {
-			cli.PrintErrln("`dolt show --no-pretty` or `dolt show (BRANCHNAME)` is not supported when using old LD_1 storage format.")
-			return 1
-		}
 	}
 
 	for _, specRef := range resolvedRefs {
@@ -190,10 +185,6 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			}
 			if dEnv == nil {
 				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` requires a local environment. Not intended for common use.")
-				return 1
-			}
-			if !dEnv.DoltDB(queryist.Context).Format().UsesFlatbuffers() {
-				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` is not supported when using old LD_1 storage format.")
 				return 1
 			}
 
@@ -289,12 +280,11 @@ func (cmd ShowCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 
 func parseShowArgs(apr *argparser.ArgParseResults) (*showOpts, error) {
 
-	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
-	switch decorateOption {
-	case "short", "full", "auto", "no":
-	default:
-		return nil, fmt.Errorf("fatal: invalid --decorate option: %s", decorateOption)
+	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, cli.DecorateAuto)
+	if err := cli.ValidateDecorateOption(decorateOption); err != nil {
+		return nil, fmt.Errorf("fatal: %v", err)
 	}
+	decorateOption = resolveDecorateAuto(decorateOption)
 
 	return &showOpts{
 		showParents: apr.Contains(cli.ParentsFlag),

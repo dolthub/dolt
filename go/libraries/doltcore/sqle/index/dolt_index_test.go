@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -174,11 +174,11 @@ var typesTests = []struct {
 }
 
 var (
-	typesTableRow1 = sql.Row{int32(-3), uint64(1), mustTime("2020-05-14 12:00:00"), mustDecimal("-3.30000"), uint16(2), -3.3, uint64(1), types.Timespan(-183000000), "a", int16(1980)}
-	typesTableRow2 = sql.Row{int32(-1), uint64(2), mustTime("2020-05-14 12:00:01"), mustDecimal("-1.10000"), uint16(3), -1.1, uint64(3), types.Timespan(-61000000), "b", int16(1990)}
-	typesTableRow3 = sql.Row{int32(0), uint64(3), mustTime("2020-05-14 12:00:02"), mustDecimal("0.00000"), uint16(4), 0.0, uint64(4), types.Timespan(0), "c", int16(2000)}
-	typesTableRow4 = sql.Row{int32(1), uint64(4), mustTime("2020-05-14 12:00:03"), mustDecimal("1.10000"), uint16(5), 1.1, uint64(5), types.Timespan(61000000), "d", int16(2010)}
-	typesTableRow5 = sql.Row{int32(3), uint64(5), mustTime("2020-05-14 12:00:04"), mustDecimal("3.30000"), uint16(6), 3.3, uint64(6), types.Timespan(183000000), "e", int16(2020)}
+	typesTableRow1 = sql.Row{int32(-3), uint64(1), mustTime("2020-05-14 12:00:00"), decimalFromString("-3.30000"), uint16(2), -3.3, uint64(1), types.Timespan(-183000000), "a", int16(1980)}
+	typesTableRow2 = sql.Row{int32(-1), uint64(2), mustTime("2020-05-14 12:00:01"), decimalFromString("-1.10000"), uint16(3), -1.1, uint64(3), types.Timespan(-61000000), "b", int16(1990)}
+	typesTableRow3 = sql.Row{int32(0), uint64(3), mustTime("2020-05-14 12:00:02"), decimalFromString("0.00000"), uint16(4), 0.0, uint64(4), types.Timespan(0), "c", int16(2000)}
+	typesTableRow4 = sql.Row{int32(1), uint64(4), mustTime("2020-05-14 12:00:03"), decimalFromString("1.10000"), uint16(5), 1.1, uint64(5), types.Timespan(61000000), "d", int16(2010)}
+	typesTableRow5 = sql.Row{int32(3), uint64(5), mustTime("2020-05-14 12:00:04"), decimalFromString("3.30000"), uint16(6), 3.3, uint64(6), types.Timespan(183000000), "e", int16(2020)}
 )
 
 func TestDoltIndexEqual(t *testing.T) {
@@ -1422,8 +1422,8 @@ func mustTime(timeString string) time.Time {
 	return t
 }
 
-func mustDecimal(s string) decimal.Decimal {
-	d, err := decimal.NewFromString(s)
+func decimalFromString(s string) *apd.Decimal {
+	d, _, err := apd.NewFromString(s)
 	if err != nil {
 		panic(err)
 	}
@@ -1462,7 +1462,7 @@ func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
 
 func TestSplitNullsFromRange(t *testing.T) {
 	t.Run("EmptyRange", func(t *testing.T) {
-		r, err := index.SplitNullsFromRange(sql.MySQLRange{})
+		r, err := index.SplitNullsFromRange(context.Background(), sql.MySQLRange{})
 		assert.NoError(t, err)
 		assert.NotNil(t, r)
 		assert.Len(t, r, 1)
@@ -1471,7 +1471,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("ThreeColumnNoNullsRange", func(t *testing.T) {
 		r := sql.MySQLRange{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NotNullRangeColumnExpr(types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(context.Background(), r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 1)
@@ -1481,7 +1481,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("LastColumnOnlyNull", func(t *testing.T) {
 		r := sql.MySQLRange{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NullRangeColumnExpr(types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(context.Background(), r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 1)
@@ -1491,7 +1491,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("LastColumnAll", func(t *testing.T) {
 		r := sql.MySQLRange{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.AllRangeColumnExpr(types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(context.Background(), r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 2)
@@ -1505,7 +1505,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("FirstColumnAll", func(t *testing.T) {
 		r := sql.MySQLRange{sql.AllRangeColumnExpr(types.Int8), sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(context.Background(), r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 2)
@@ -1519,7 +1519,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 	t.Run("AllColumnAll", func(t *testing.T) {
 		r := sql.MySQLRange{sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8)}
-		rs, err := index.SplitNullsFromRange(r)
+		rs, err := index.SplitNullsFromRange(context.Background(), r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
 		assert.Len(t, rs, 8)

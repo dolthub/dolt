@@ -101,7 +101,7 @@ func zapToLogrusLevel(l zapcore.Level) logrus.Level {
 }
 
 // mcpInit validates and reserves the MCP port
-func mcpInit(cfg *Config, state *svcs.ServiceState) func(context.Context) error {
+func mcpInit(cfg *Config) func(context.Context) error {
 	return func(context.Context) error {
 		addr := net.JoinHostPort("0.0.0.0", strconv.Itoa(*cfg.MCP.Port))
 		l, err := net.Listen("tcp", addr)
@@ -109,18 +109,13 @@ func mcpInit(cfg *Config, state *svcs.ServiceState) func(context.Context) error 
 			return err
 		}
 		_ = l.Close()
-		state.Swap(svcs.ServiceState_Init)
 		return nil
 	}
 }
 
 // mcpRun starts the MCP HTTP server and wires lifecycle to errgroup
-func mcpRun(cfg *Config, lgr *logrus.Logger, state *svcs.ServiceState, cancelPtr *context.CancelFunc, groupPtr **errgroup.Group) func(context.Context) {
+func mcpRun(cfg *Config, lgr *logrus.Logger, cancelPtr *context.CancelFunc, groupPtr **errgroup.Group) func(context.Context) {
 	return func(ctx context.Context) {
-		if !state.CompareAndSwap(svcs.ServiceState_Init, svcs.ServiceState_Run) {
-			return
-		}
-
 		// Logger for MCP (prefix and level inherited from logrus)
 		logger := newZapFromLogrusWithPrefix(lgr, "[dolt-mcp] ")
 
@@ -180,17 +175,17 @@ func mcpRun(cfg *Config, lgr *logrus.Logger, state *svcs.ServiceState, cancelPtr
 }
 
 // mcpStop gracefully stops the MCP server by cancelling context and waiting for the errgroup
-func mcpStop(cancel context.CancelFunc, group *errgroup.Group, state *svcs.ServiceState) func() error {
-	return func() error {
-		if cancel != nil {
-			cancel()
+func mcpStop(cancelPtr *context.CancelFunc, groupPtr **errgroup.Group) func(svcs.RunState) error {
+	return func(rs svcs.RunState) error {
+		if rs == svcs.RunNotInvoked {
+			return nil
 		}
-		if group != nil {
-			if err := group.Wait(); err != nil {
-				return err
-			}
+		if *cancelPtr != nil {
+			(*cancelPtr)()
 		}
-		state.Swap(svcs.ServiceState_Stopped)
+		if *groupPtr != nil {
+			return (*groupPtr).Wait()
+		}
 		return nil
 	}
 }
@@ -200,14 +195,13 @@ func registerMCPService(controller *svcs.Controller, cfg *Config, lgr *logrus.Lo
 	if cfg.MCP == nil || cfg.MCP.Port == nil || *cfg.MCP.Port <= 0 {
 		return
 	}
-	var state svcs.ServiceState
 	var cancel context.CancelFunc
 	var group *errgroup.Group
 
 	svc := &svcs.AnonService{
-		InitF: mcpInit(cfg, &state),
-		RunF:  mcpRun(cfg, lgr, &state, &cancel, &group),
-		StopF: mcpStop(cancel, group, &state),
+		InitF: mcpInit(cfg),
+		RunF:  mcpRun(cfg, lgr, &cancel, &group),
+		StopF: mcpStop(&cancel, &group),
 	}
 	_ = controller.Register(svc)
 }

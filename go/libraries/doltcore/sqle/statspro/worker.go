@@ -404,7 +404,9 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 						keyBuilder.PutRaw(i, keyBytes.GetField(i))
 					}
 
-					updater.add(ctx, keyBuilder.BuildPrefixNoRecycle(prollyMap.Pool(), updater.prefixLen))
+					if err := updater.add(ctx, keyBuilder.BuildPrefixNoRecycle(prollyMap.Pool(), updater.prefixLen)); err != nil {
+						return err
+					}
 					keyBuilder.Recycle()
 				}
 

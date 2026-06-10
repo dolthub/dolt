@@ -270,10 +270,10 @@ func mutate(t *testing.T, ctx context.Context, baseRoot *tree.Node, keyDesc, val
 		var newValue val.Tuple
 		if m.value != nil {
 			valBld.PutUint32(0, *m.value)
-			newValue, err = valBld.Build(sharedPool)
+			newValue, err = valBld.Build(context.Background(), sharedPool)
 			require.NoError(t, err)
 		}
-		newKey, err := keyBld.Build(sharedPool)
+		newKey, err := keyBld.Build(context.Background(), sharedPool)
 		require.NoError(t, err)
 
 		err = mutMap.Put(ctx, newKey, newValue)
@@ -299,10 +299,10 @@ func mutateStrings(t *testing.T, ctx context.Context, baseRoot *tree.Node, keyDe
 		if m.value != nil {
 			err = valBld.PutString(0, *m.value)
 			require.NoError(t, err)
-			newValue, err = valBld.Build(sharedPool)
+			newValue, err = valBld.Build(context.Background(), sharedPool)
 			require.NoError(t, err)
 		}
-		newKey, err := keyBld.Build(sharedPool)
+		newKey, err := keyBld.Build(context.Background(), sharedPool)
 		require.NoError(t, err)
 
 		err = mutMap.Put(ctx, newKey, newValue)
@@ -1360,7 +1360,7 @@ func TestPatchBasedMerging(t *testing.T) {
 		collide := func(left, right tree.Diff) (tree.Diff, bool) {
 			tupleBuilder := val.NewTupleBuilder(desc, ns)
 			tupleBuilder.PutUint32(0, valueOnCollision)
-			newVal, err := tupleBuilder.Build(sharedPool)
+			newVal, err := tupleBuilder.Build(context.Background(), sharedPool)
 			require.NoError(t, err)
 			// Resolve conflicts by returning a special value that we check for
 			return tree.Diff{
@@ -1429,11 +1429,11 @@ func TestPatchBasedMerging(t *testing.T) {
 		for i := range tuples {
 			err = bld.PutString(0, "long_string_key_goes_here_"+strconv.Itoa(i))
 			require.NoError(t, err)
-			tuples[i][0], err = bld.Build(sharedPool)
+			tuples[i][0], err = bld.Build(context.Background(), sharedPool)
 			require.NoError(t, err)
 			err = bld.PutString(0, "long_string_value_goes_here_"+strconv.Itoa(i))
 			require.NoError(t, err)
-			tuples[i][1], err = bld.Build(sharedPool)
+			tuples[i][1], err = bld.Build(context.Background(), sharedPool)
 			require.NoError(t, err)
 		}
 		baseRoot, err := tree.MakeTreeForTest(tuples)

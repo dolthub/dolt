@@ -57,7 +57,7 @@ func TestVisitResolvedTag(t *testing.T) {
 	ctx := context.Background()
 
 	// Initialize repo
-	err := dEnv.InitRepo(ctx, types.Format_Default, "test user", "test@test.com", "main")
+	err := dEnv.InitRepo(ctx, types.Format_DOLT, "test user", "test@test.com", "main")
 	require.NoError(t, err)
 
 	// Create a tag
@@ -89,7 +89,7 @@ func TestIterResolvedTagsPaginated(t *testing.T) {
 	ctx := context.Background()
 
 	// Initialize repo
-	err := dEnv.InitRepo(ctx, types.Format_Default, "test user", "test@test.com", "main")
+	err := dEnv.InitRepo(ctx, types.Format_DOLT, "test user", "test@test.com", "main")
 	require.NoError(t, err)
 
 	expectedTagNames := make([]string, DefaultPageSize*2)

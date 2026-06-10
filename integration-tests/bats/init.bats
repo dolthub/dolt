@@ -203,14 +203,6 @@ teardown() {
 @test "init: create a database when current working directory does not have a database yet" {
     set_dolt_user "baz", "baz@bash.com"
 
-    # Default format is NEW (__DOLT__) when DOLT_DEFAULT_BIN_FORMAT is undefined
-    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "" ]
-    then
-        orig_bin_format="__DOLT__"
-    else
-        orig_bin_format=$DOLT_DEFAULT_BIN_FORMAT
-    fi
-
     mkdir new_format && cd new_format
     run dolt init
     [ $status -eq 0 ]

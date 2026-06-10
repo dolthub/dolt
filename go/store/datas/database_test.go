@@ -24,6 +24,7 @@ package datas
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -228,7 +229,13 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 }
 
 func newOpts(vrw types.ValueReadWriter, parent hash.Hash) CommitOptions {
-	return CommitOptions{Parents: []hash.Hash{parent}}
+	return CommitOptions{
+		Parents: []hash.Hash{parent},
+		Meta: &CommitMeta{
+			Author:    CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+			Committer: CommitIdent{Date: CommitDateAt(time.UnixMilli(0))},
+		},
+	}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
@@ -472,8 +479,8 @@ func (suite *DatabaseSuite) TestMetaOption() {
 	ds, err := suite.db.GetDataset(ctx, "ds1")
 	suite.NoError(err)
 
-	ds, err = suite.db.Commit(ctx, ds, types.String("a"), CommitOptions{Meta: &CommitMeta{Name: "arv"}})
+	ds, err = suite.db.Commit(ctx, ds, types.String("a"), CommitOptions{Meta: &CommitMeta{Author: CommitIdent{Name: "arv"}}})
 	suite.NoError(err)
 	meta, err := GetCommitMeta(ctx, mustHead(ds))
-	suite.Equal("arv", meta.Name)
+	suite.Equal("arv", meta.Author.Name)
 }

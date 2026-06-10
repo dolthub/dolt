@@ -545,7 +545,7 @@ func (db *database) WriteCommit(ctx context.Context, ds Dataset, commit *Commit)
 
 // Calls db.Commit with empty CommitOptions{}.
 func CommitValue(ctx context.Context, db Database, ds Dataset, v types.Value) (Dataset, error) {
-	return db.Commit(ctx, ds, v, CommitOptions{})
+	return db.Commit(ctx, ds, v, CommitOptions{Meta: &CommitMeta{}})
 }
 func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurrentAddr hash.Hash, newCommitValue types.Value) error {
 	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
@@ -939,8 +939,8 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string, workingse
 }
 
 // GC traverses the database starting at the Root and removes all unreferenced data from persistent storage.
-func (db *database) GC(ctx context.Context, mode types.GCMode, cmp chunks.GCArchiveLevel, oldGenRefs, newGenRefs hash.HashSet, safepointController types.GCSafepointController) error {
-	return db.ValueStore.GC(ctx, mode, cmp, oldGenRefs, newGenRefs, safepointController)
+func (db *database) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenRefs, newGenRefs hash.HashSet, safepointController types.GCSafepointController) error {
+	return db.ValueStore.GC(ctx, gcConfig, oldGenRefs, newGenRefs, safepointController)
 }
 
 func (db *database) tryCommitChunks(ctx context.Context, newRootHash hash.Hash, currentRootHash hash.Hash) error {

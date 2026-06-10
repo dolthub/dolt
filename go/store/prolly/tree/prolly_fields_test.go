@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -106,7 +106,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		{
 			name:  "decimal",
 			typ:   val.Type{Enc: val.DecimalEnc},
-			value: mustParseDecimal("0.263419374632932747932030573792"),
+			value: decimalFromString("0.263419374632932747932030573792"),
 		},
 		{
 			name:  "string",
@@ -213,7 +213,7 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	err := PutField(ctx, ns, builder, 0, test.value)
 	require.NoError(t, err)
 
-	tup, err := builder.Build(testPool)
+	tup, err := builder.Build(context.Background(), testPool)
 	require.NoError(t, err)
 
 	v, err := GetField(ctx, desc, 0, tup, ns)
@@ -266,8 +266,8 @@ func mustParseJson(t *testing.T, s string) types.JSONDocument {
 	return types.JSONDocument{Val: v}
 }
 
-func mustParseDecimal(s string) decimal.Decimal {
-	d, err := decimal.NewFromString(s)
+func decimalFromString(s string) *apd.Decimal {
+	d, _, err := apd.NewFromString(s)
 	if err != nil {
 		panic(err)
 	}
@@ -314,7 +314,7 @@ func TestGeometryEncoding(t *testing.T) {
 			builder := val.NewTupleBuilder(oldDesc, ns)
 			b := serializeGeometry(test.value)
 			builder.PutGeometry(0, b)
-			tup, err := builder.Build(testPool)
+			tup, err := builder.Build(context.Background(), testPool)
 			require.NoError(t, err)
 
 			var v interface{}

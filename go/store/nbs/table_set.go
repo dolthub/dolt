@@ -377,6 +377,42 @@ func (ts *tableSet) flatten(ctx context.Context) (*tableSet, error) {
 	return flattened, nil
 }
 
+func (ts *tableSet) insertIntoChunkSourceSet(ctx context.Context, css chunkSourceSet, specToRead tableSpec, existing chunkSourceSet, stats *Stats) error {
+	fileHash := specToRead.name
+	if css[fileHash] != nil {
+		return nil
+	}
+	if s, ok := ts.novel[fileHash]; ok {
+		cloned, err := s.clone()
+		if err != nil {
+			return err
+		}
+		css[fileHash] = cloned
+		return nil
+	} else if s, ok := ts.upstream[fileHash]; ok {
+		cloned, err := s.clone()
+		if err != nil {
+			return err
+		}
+		css[fileHash] = cloned
+		return nil
+	} else if s, ok := existing[fileHash]; ok {
+		cloned, err := s.clone()
+		if err != nil {
+			return err
+		}
+		css[fileHash] = cloned
+		return nil
+	}
+
+	cs, err := ts.p.Open(ctx, fileHash, specToRead.chunkCount, stats)
+	if err != nil {
+		return err
+	}
+	css[fileHash] = cs
+	return nil
+}
+
 // openForAdd will attempt to open every file named in |files| with the
 // table persister, returning a new chunkSourceSet for all of the files
 // if they are all able to be opened. An error will be returned if any

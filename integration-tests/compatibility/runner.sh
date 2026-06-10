@@ -66,16 +66,22 @@ function list_backward_compatible_versions() {
 function test_backward_compatibility() {
   ver=$1
   bin=`download_release "$ver"`
+  DOLT_NEW_BIN=`which dolt`   # capture current dolt before PATH is modified
 
   # create a Dolt repository using version "$ver"
   PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
   echo "Run the bats tests with current Dolt version hitting repositories from older Dolt version $ver"
-  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats --print-output-on-failure ./test_files/bats
+  DOLT_OLD_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW_BIN" DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/$ver" DOLT_VERSION="$ver" bats --print-output-on-failure ./test_files/bats
 }
 
 function test_bidirectional_compatibility() {
   ver=$1
+
+  if [ -z $ver ]; then
+    return
+  fi
+  
   bin=`download_release "$ver"`
 
   DOLT_NEW=`which dolt`
@@ -83,12 +89,35 @@ function test_bidirectional_compatibility() {
   # unlike other tests, these tests don't rely on a shared setup script, they do all their own initialization
   mkdir "repos/$ver-forward"
   echo "Run the bidirectional tests with current Dolt version and older Dolt version $ver"
-  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW" REPO_DIR="$(pwd)/repos/$ver-forward" bats --print-output-on-failure ./test_files/bats/bidirectional
+  DOLT_OLD_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW" REPO_DIR="$(pwd)/repos/$ver-forward" bats --print-output-on-failure ./test_files/bats/bidirectional
 
   # same thing, but in the oppposite direction
   mkdir "repos/$ver-backward"
   echo "Run the bidirectional tests with older Dolt version $ver and current Dolt version"
-  DOLT_LEGACY_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/$ver-backward" bats --print-output-on-failure ./test_files/bats/bidirectional
+  DOLT_OLD_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/$ver-backward" bats --print-output-on-failure ./test_files/bats/bidirectional
+}
+
+function test_bidirectional_remote_compatibility() {
+  ver=$1
+
+  if [ -z $ver ]; then
+    return
+  fi
+
+  bin=`download_release "$ver"`
+
+  DOLT_NEW=`which dolt`
+
+  # Like test_bidirectional_compatibility, the tests under ./bats/bidirectional_remote do their
+  # own initialization; REPO_DIR just needs to exist as a clean scratch space that gets copied
+  # into bats_repo by each test's setup().
+  mkdir "repos/$ver-remote-forward"
+  echo "Run the bidirectional remote tests with current Dolt version and older Dolt version $ver"
+  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW" REPO_DIR="$(pwd)/repos/$ver-remote-forward" bats --print-output-on-failure ./test_files/bats/bidirectional_remote
+
+  mkdir "repos/$ver-remote-backward"
+  echo "Run the bidirectional remote tests with older Dolt version $ver and current Dolt version"
+  DOLT_LEGACY_BIN="$DOLT_NEW" DOLT_NEW_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/$ver-remote-backward" bats --print-output-on-failure ./test_files/bats/bidirectional_remote
 }
 
 function list_2_0_breaking_versions() {
@@ -103,19 +132,30 @@ function test_2_0_breaking_compatibility() {
   setup_repo_2_0_breaking "2_0_breaking-$ver"
 
   echo "Run 2.0 breaking tests: verify old Dolt version $ver fails on adaptive-encoded data"
-  DOLT_LEGACY_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/2_0_breaking-$ver" bats --print-output-on-failure ./test_files/bats/2_0_breaking
+  DOLT_OLD_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/2_0_breaking-$ver" bats --print-output-on-failure ./test_files/bats/2_0_breaking
 }
 
 function list_forward_compatible_versions() {
   grep -v '^ *#' < test_files/forward_compatible_versions.txt
 }
 
+function list_2_0_forward_compatible_versions() {
+  grep -v '^ *#' < test_files/2_0_forward_compatible_versions.txt
+}
+
+
 function test_forward_compatibility() {
   ver=$1
+
+  if [ -z $ver ]; then
+    return
+  fi
+  
   bin=`download_release "$ver"`
+  DOLT_NEW_BIN=`which dolt`   # capture current dolt before PATH is prepended with old binary
 
   echo "Run the bats tests using older Dolt version $ver hitting repositories from the current Dolt version"
-  
+
   # Push this repo to a file remote in preparation to clone it. This
   # prunes out certain aspects of the storage (certain refs) that may
   # not be compatible with older versions.
@@ -139,7 +179,7 @@ function test_forward_compatibility() {
   then
       rm -rf "repos/$ver"
   fi
-  
+
   cd repos
   # Make sure these clone and setup commands are run with the version of dolt under test
   relpath="`pwd`"/../"$bin":"$PATH"
@@ -159,12 +199,20 @@ function test_forward_compatibility() {
 
   # Run the bats tests
   PATH="`pwd`"/"$bin":"$PATH" dolt version
-  echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
-  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
+  PATH="`pwd`"/"$bin":"$PATH" DOLT_OLD_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW_BIN" REPO_DIR="`pwd`"/repos/$ver bats --print-output-on-failure ./test_files/bats
 }
 
 _main() {
   PLATFORM_TUPLE=`get_platform_tuple`
+
+  # BATS_LIB_PATH lets nested test files load helpers via bats_load_library without
+  # depth-relative paths. The compat suite's helpers come first; the main bats suite
+  # provides query-server-common and windows-compat.
+  export BATS_LIB_PATH="$(pwd)/test_files/bats/helper:$(pwd)/../bats/helper"
+
+  # Tells the bats skip helpers which path is the freshly-built dolt so a version-literal
+  # match against a released binary does not skip the dev build.
+  export DOLT_DEV_BUILD_PATH="$(command -v dolt)"
 
   # make directories and cleanup when killed
   mkdir repos binaries
@@ -178,36 +226,33 @@ _main() {
   # setup repo for current dolt version
   setup_repo HEAD
 
-  # TODO: forwards compatibility breaks when adaptive encoding is turned on in all cases. After we
-  # have a release with the new schema serialization field, we should get a new, more limited list
-  # of the versions which are actually forward compatible
-  
   # test forward compatibility
-  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
-      if [ -s "test_files/forward_compatible_versions.txt" ]; then
-          list_forward_compatible_versions | while IFS= read -r ver; do
-              test_forward_compatibility "$ver"
-          done
-      fi
-  else
-      # For now we only test that we break with an appropriate error message
-      if [ -s "test_files/2_0_breaking_versions.txt" ]; then
-          list_2_0_breaking_versions | while IFS= read -r ver; do
-              test_2_0_breaking_compatibility "$ver"
-          done
-      fi
+  # For now we only test that we break with an appropriate error message,
+  # we should change this when we have more 2.x releases.
+  if [ -s "test_files/2_0_breaking_versions.txt" ]; then
+    list_2_0_breaking_versions | while IFS= read -r ver; do
+      test_2_0_breaking_compatibility "$ver"
+    done
   fi
 
 
   # test bidirectional compatibility
-  if [[ "$DOLT_USE_ADAPTIVE_ENCODING" != "true" ]]; then
-      if [ -s "test_files/forward_compatible_versions.txt" ]; then
-          list_forward_compatible_versions | while IFS= read -r ver; do
-              test_bidirectional_compatibility "$ver"
-          done
-      fi
-  fi
+  echo "Testing post-2.0 bi-directional compatible versions"
+  if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+    list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+      test_bidirectional_compatibility "$ver"
+    done
+  fi      
 
+  # test bidirectional remote compatibility: two versions add the same column independently,
+  # insert disjoint data, and sync via a file remote. Same forward-compatibility limit applies.
+  echo "Testing post-2.0 remote compatible versions"
+  if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+    list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+      test_bidirectional_remote_compatibility "$ver"
+    done
+  fi
+ 
   # sanity check: run tests against current version
   echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
   DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="$(pwd)/repos/HEAD" bats --print-output-on-failure ./test_files/bats

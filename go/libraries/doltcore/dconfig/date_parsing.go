@@ -15,8 +15,9 @@
 package dconfig
 
 import (
-	"errors"
 	"time"
+
+	errors2 "gopkg.in/src-d/go-errors.v1"
 )
 
 // SupportedLayouts is the set of time string formats for configuration date strings.
@@ -35,6 +36,10 @@ var SupportedLayouts = []string{
 	"2006-01-02T15:04:05Z07:00",
 }
 
+var (
+	ErrUnsupportedDateFormat = errors2.NewKind("error: '%s' is not in a supported format.")
+)
+
 // ParseDate attempt to parse a date string into a time.Time object.
 func ParseDate(dateStr string) (time.Time, error) {
 	for _, layout := range SupportedLayouts {
@@ -45,5 +50,5 @@ func ParseDate(dateStr string) (time.Time, error) {
 		}
 	}
 
-	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
+	return time.Time{}, ErrUnsupportedDateFormat.New(dateStr)
 }

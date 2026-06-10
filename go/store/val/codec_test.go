@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -252,7 +252,8 @@ func TestCompare(t *testing.T) {
 
 	for _, test := range tests {
 		ctx := sql.NewEmptyContext()
-		act := compare(test.typ, test.l, test.r)
+		act, err := compare(ctx, test.typ, test.l, test.r, nil)
+		assert.NoError(t, err)
 		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
 			(&TupleDesc{}).formatValue(ctx, test.typ.Enc, 0, test.l),
 			fmtComparator(test.cmp),
@@ -294,7 +295,7 @@ func encBit(u uint64) []byte {
 	return buf
 }
 
-func encDecimal(d decimal.Decimal) []byte {
+func encDecimal(d *apd.Decimal) []byte {
 	buf := make([]byte, sizeOfDecimal(d))
 	writeDecimal(buf, d)
 	return buf
@@ -571,7 +572,7 @@ func roundTripDatetimes(t *testing.T) {
 }
 
 func roundTripDecimal(t *testing.T) {
-	decimals := []decimal.Decimal{
+	decimals := []*apd.Decimal{
 		decimalFromString("0"),
 		decimalFromString("1"),
 		decimalFromString("-1"),
@@ -596,9 +597,10 @@ func roundTripDecimal(t *testing.T) {
 		buf := make([]byte, sizeOfDecimal(dec))
 		writeDecimal(buf, dec)
 		actual := readDecimal(buf)
-		assert.True(t, dec.Equal(actual), "%s != %s",
-			dec.String(), actual.String())
-		assert.Equal(t, dec, actual)
+		decStr := dec.Text('f')
+		actualStr := actual.Text('f')
+		assert.True(t, dec.Cmp(actual) == 0, "%s != %s", decStr, actualStr)
+		assert.Equal(t, decStr, actualStr)
 		zero(buf)
 	}
 }
@@ -607,8 +609,8 @@ func testDate(y, m, d int) (date time.Time) {
 	return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
 }
 
-func decimalFromString(s string) decimal.Decimal {
-	d, err := decimal.NewFromString(s)
+func decimalFromString(s string) *apd.Decimal {
+	d, _, err := apd.NewFromString(s)
 	if err != nil {
 		panic(err)
 	}

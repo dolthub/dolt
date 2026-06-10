@@ -249,7 +249,7 @@ func testResolver(t *testing.T, ns NodeStore, valDesc *val.TupleDesc, valBuilder
 				valBuilder.PutInt64(i, base)
 			}
 		}
-		tup, err := valBuilder.Build(ns.Pool())
+		tup, err := valBuilder.Build(context.Background(), ns.Pool())
 		return tup, true, err
 	}
 }
@@ -302,13 +302,13 @@ func newTestMap(t *testing.T, ctx context.Context, rows [][]int, ns NodeStore, v
 
 	for _, row := range rows {
 		keyBuilder.PutInt64(0, int64(row[0]))
-		key, err := keyBuilder.Build(ns.Pool())
+		key, err := keyBuilder.Build(context.Background(), ns.Pool())
 		require.NoError(t, err)
 		for j := 1; j < len(row); j++ {
 			valBuilder.PutInt64(j-1, int64(row[j]))
 			require.NoError(t, err)
 		}
-		val, err := valBuilder.Build(ns.Pool())
+		val, err := valBuilder.Build(context.Background(), ns.Pool())
 		require.NoError(t, err)
 		err = chkr.AddPair(ctx, Item(key), Item(val))
 		require.NoError(t, err)

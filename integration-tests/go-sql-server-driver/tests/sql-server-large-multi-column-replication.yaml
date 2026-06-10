@@ -1,0 +1,107 @@
+parallel: true
+tests:
+
+- name: row with multiple large columns replicates correctly
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: |
+        CREATE TABLE multi_large (
+          id        BIGINT PRIMARY KEY,
+          txt       LONGTEXT,
+          blob_data LONGBLOB,
+          doc       JSON,
+          note      TEXT
+        )
+    - exec: |
+        INSERT INTO multi_large VALUES (
+          1,
+          REPEAT('textcol-row1-', 1154),
+          REPEAT('blobcol-row1-', 1924),
+          JSON_OBJECT('row', 1, 'data', REPEAT('jsoncol-row1-', 847)),
+          REPEAT('note-col-row1-', 357)
+        )
+    - exec: |
+        INSERT INTO multi_large VALUES (
+          2,
+          REPEAT('textcol-row2-', 1154),
+          REPEAT('blobcol-row2-', 1924),
+          JSON_OBJECT('row', 2, 'data', REPEAT('jsoncol-row2-', 847)),
+          REPEAT('note-col-row2-', 357)
+        )
+    - exec: |
+        INSERT INTO multi_large VALUES (
+          3,
+          REPEAT('textcol-row3-', 1154),
+          REPEAT('blobcol-row3-', 1924),
+          JSON_OBJECT('row', 3, 'data', REPEAT('jsoncol-row3-', 847)),
+          REPEAT('note-col-row3-', 357)
+        )
+    - query: "SELECT COUNT(*) FROM multi_large WHERE LENGTH(txt) > 10000 AND LENGTH(blob_data) > 20000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+  - on: server2
+    retry_attempts: 100
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM multi_large"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+    - query: "SELECT COUNT(*) FROM multi_large WHERE LENGTH(txt) > 10000 AND LENGTH(blob_data) > 20000 AND LENGTH(doc) > 11000 AND LENGTH(note) > 4000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+    - query: "SELECT doc->>'$.row' FROM multi_large WHERE id = 2"
+      result:
+        columns: ["doc->>'$.row'"]
+        rows: [["2"]]

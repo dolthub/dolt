@@ -76,7 +76,7 @@ func TestWaitForGCNotTrappedAcrossCycles(t *testing.T) {
 		return true
 	}
 
-	require.NoError(t, st.BeginGC(cycle1Keeper, chunks.GCMode_Full))
+	require.NoError(t, st.BeginGC(t.Context(), cycle1Keeper, chunks.GCMode_Full))
 
 	// Launch a goroutine that Puts the same chunk again. addChunk holds
 	// nbs.mu for the entire call. The chunk already exists in the

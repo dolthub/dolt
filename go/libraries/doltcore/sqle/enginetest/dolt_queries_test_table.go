@@ -204,7 +204,7 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 				Query: "SELECT * FROM dolt_test_run('column tests')",
 				Expected: []sql.Row{
 					{"expect integer for columns", "column tests", "select * from dolt_branches;", "FAIL", "cannot run assertion on non integer value: 0.5"},
-					{"should fail columns", "column tests", "select * from dolt_branches;", "FAIL", "Assertion failed: expected_columns equal to 7, got 9"},
+					{"should fail columns", "column tests", "select * from dolt_branches;", "FAIL", "Assertion failed: expected_columns equal to 7, got 12"},
 					{"should pass columns", "column tests", "select * from dolt_branches;", "PASS", ""},
 				},
 			},
@@ -305,7 +305,7 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 				Query: "SELECT * FROM dolt_test_run('decimal tests')",
 				Expected: []sql.Row{
 					{"can compare to integer", "decimal tests", "select * from decimals;", "PASS", ""},
-					{"should fail", "decimal tests", "select * from decimals;", "FAIL", "Assertion failed: expected_single_value greater than 10.5, got 10.4"},
+					{"should fail", "decimal tests", "select * from decimals;", "FAIL", "Assertion failed: expected_single_value greater than 10.5, got 10.40"},
 					{"should pass", "decimal tests", "select * from decimals;", "PASS", ""},
 				},
 			},

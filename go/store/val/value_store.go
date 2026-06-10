@@ -17,6 +17,7 @@ package val
 import (
 	"context"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"unsafe"
 
@@ -32,8 +33,14 @@ const BytePeekLength = 128
 // The only implementation is tree.NodeStore, but ValueStore can be used without depending on the tree package.
 // This is useful for type handlers.
 type ValueStore interface {
+	// ReadBytes reads the bytes associated with the given content hash
 	ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error)
+	// WriteBytes writes the given bytes and returns the content hash
 	WriteBytes(ctx context.Context, val []byte) (hash.Hash, error)
+	// CompareAdaptive compares two adaptive values.
+	CompareAdaptive(ctx context.Context, l AdaptiveValue, r AdaptiveValue, encoding Encoding) (int, error)
+	// CompareAdaptiveCollatedStrings compares two adaptive string values with the given collation.
+	CompareAdaptiveCollatedStrings(ctx context.Context, l, r AdaptiveValue, collation sql.CollationID) (int, error)
 }
 
 // ImmutableValue represents a content-addressed value stored in a ValueStore.
@@ -63,16 +70,21 @@ func (t *ImmutableValue) GetBytes(ctx context.Context) ([]byte, error) {
 	return t.Buf, nil
 }
 
+// TextStorage is a sql.AnyWrapper to wrap large string values stored out of band.
 type TextStorage struct {
 	ImmutableValue
-	// ctx is a context that can be used in driver.Value
-	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
-	ctx           context.Context
 	maxByteLength int64
 }
 
 var _ sql.StringWrapper = &TextStorage{}
-var _ driver.Valuer = &TextStorage{}
+
+// NewTextStorage creates a new TextStorage with the given content address and ValueStore.
+func NewTextStorage(addr hash.Hash, vs ValueStore) *TextStorage {
+	return &TextStorage{
+		ImmutableValue: NewImmutableValue(addr, vs),
+		maxByteLength:  types.LongText.MaxByteLength(),
+	}
+}
 
 // IsExactLength implements sql.BytesWrapper
 func (t *TextStorage) IsExactLength() bool {
@@ -93,10 +105,12 @@ func (t *TextStorage) Unwrap(ctx context.Context) (string, error) {
 	return *(*string)(unsafe.Pointer(&buf)), nil
 }
 
+// UnwrapAny implements sql.AnyWrapper by unwrapping to a string.
 func (t *TextStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
 	return t.Unwrap(ctx)
 }
 
+// WithMaxByteLength returns a copy of TextStorage with the given max byte length.
 func (t *TextStorage) WithMaxByteLength(maxByteLength int64) *TextStorage {
 	return &TextStorage{
 		ImmutableValue: NewImmutableValue(t.Addr, t.vs),
@@ -104,6 +118,7 @@ func (t *TextStorage) WithMaxByteLength(maxByteLength int64) *TextStorage {
 	}
 }
 
+// Compare implements sql.AnyWrapper. Two TextStorage values with the same out-of-band address are equal.
 func (t *TextStorage) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
 	otherTextStorage, ok := other.(TextStorage)
 	if !ok {
@@ -120,33 +135,30 @@ func (t *TextStorage) Hash() interface{} {
 	return t.Addr
 }
 
-func NewTextStorage(ctx context.Context, addr hash.Hash, vs ValueStore) *TextStorage {
-	return &TextStorage{
-		ImmutableValue: NewImmutableValue(addr, vs),
-		maxByteLength:  types.LongText.MaxByteLength(),
-		ctx:            ctx,
-	}
-}
-
 // Value implements driver.Valuer for interoperability with other go libraries
-func (t *TextStorage) Value() (driver.Value, error) {
-	buf, err := t.GetBytes(t.ctx)
+func (t *TextStorage) ValueContext(ctx context.Context) (driver.Value, error) {
+	buf, err := t.GetBytes(ctx)
 	if err != nil {
 		return "", err
 	}
 	return *(*string)(unsafe.Pointer(&buf)), nil
 }
 
+// ByteArray is a sql.AnyWrapper to wrap large byte array values stored out of band.
 type ByteArray struct {
 	ImmutableValue
-	// ctx is a context that can be used in driver.Value
-	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
-	ctx           context.Context
 	maxByteLength int64
 }
 
 var _ sql.BytesWrapper = &ByteArray{}
-var _ driver.Valuer = &ByteArray{}
+
+// NewByteArray creates a new ByteArray with the given content address and ValueStore.
+func NewByteArray(addr hash.Hash, vs ValueStore) *ByteArray {
+	return &ByteArray{
+		ImmutableValue: NewImmutableValue(addr, vs),
+		maxByteLength:  types.LongBlob.MaxByteLength(),
+	}
+}
 
 // IsExactLength implements sql.BytesWrapper
 func (b *ByteArray) IsExactLength() bool {
@@ -158,6 +170,7 @@ func (b *ByteArray) MaxByteLength() int64 {
 	return b.maxByteLength
 }
 
+// Compare implements sql.AnyWrapper. Two ByteArray values with the same out-of-band address are equal.
 func (b *ByteArray) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
 	otherByteArray, ok := other.(ByteArray)
 	if !ok {
@@ -169,14 +182,7 @@ func (b *ByteArray) Compare(ctx context.Context, other interface{}) (cmp int, co
 	return 0, false, nil
 }
 
-func NewByteArray(ctx context.Context, addr hash.Hash, vs ValueStore) *ByteArray {
-	return &ByteArray{
-		ImmutableValue: NewImmutableValue(addr, vs),
-		maxByteLength:  types.LongBlob.MaxByteLength(),
-		ctx:            ctx,
-	}
-}
-
+// ToBytes implements sql.BytesWrapper by loading the bytes from storage.
 func (b *ByteArray) ToBytes(ctx context.Context) ([]byte, error) {
 	return b.GetBytes(ctx)
 }
@@ -191,6 +197,7 @@ func (b *ByteArray) Unwrap(ctx context.Context) ([]byte, error) {
 	return b.GetBytes(ctx)
 }
 
+// ToString implements sql.AnyWrapper by loading the bytes from storage and converting to a string.
 func (b *ByteArray) ToString(ctx context.Context) (string, error) {
 	buf, err := b.ToBytes(ctx)
 	if err != nil {
@@ -209,6 +216,7 @@ func (b *ByteArray) Hash() interface{} {
 	return b.Addr
 }
 
+// WithMaxByteLength returns a copy of ByteArray with the given max byte length.
 func (b *ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
 	return &ByteArray{
 		ImmutableValue: b.ImmutableValue,
@@ -216,19 +224,12 @@ func (b *ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
 	}
 }
 
-// Value implements driver.Valuer for interoperability with other go libraries
-func (b *ByteArray) Value() (driver.Value, error) {
-	return b.GetBytes(b.ctx)
+func (b *ByteArray) ValueContext(ctx context.Context) (driver.Value, error) {
+	return b.GetBytes(ctx)
 }
 
-// GeometryStorage wraps serialized geometry bytes and defers deserialization until the value is needed.
-// The geometry bytes may be stored inline or out-of-band via a content address.
-// It implements sql.AnyWrapper; GMS geometry types call sql.UnwrapAny to obtain
-// the underlying types.GeometryValue when evaluation actually requires it.
+// GeometryStorage is a sql.AnyWrapper for geometry values.
 type GeometryStorage struct {
-	// inlineBytes holds the serialized geometry bytes when the value is stored inline.
-	// When nil, the value is out-of-band and must be loaded via ImmutableValue.
-	inlineBytes []byte
 	// outOfBand holds a lazily-loaded out-of-band value. Only used when inlineBytes is nil.
 	outOfBand     ImmutableValue
 	maxByteLength int64
@@ -236,27 +237,21 @@ type GeometryStorage struct {
 
 var _ sql.AnyWrapper = &GeometryStorage{}
 
-// NewGeometryStorageInline creates a GeometryStorage from inline serialized bytes.
-func NewGeometryStorageInline(buf []byte) *GeometryStorage {
-	return &GeometryStorage{
-		inlineBytes:   buf,
-		maxByteLength: int64(len(buf)),
-	}
-}
-
 // NewGeometryStorageOutOfBand creates a GeometryStorage that lazily loads bytes from a content-addressed store.
-func NewGeometryStorageOutOfBand(ctx context.Context, addr hash.Hash, vs ValueStore, maxByteLength int64) *GeometryStorage {
+func NewGeometryStorageOutOfBand(addr hash.Hash, vs ValueStore, maxByteLength int64) *GeometryStorage {
 	return &GeometryStorage{
 		outOfBand:     NewImmutableValue(addr, vs),
 		maxByteLength: maxByteLength,
 	}
 }
 
+// Unwrap implements sql.Wrapper by loading the bytes from storage and returning them.
+func (g *GeometryStorage) Unwrap(ctx context.Context) (result []byte, err error) {
+	return g.GetSerializedBytes(ctx)
+}
+
 // GetSerializedBytes returns the raw serialized geometry bytes, loading from storage if necessary.
 func (g *GeometryStorage) GetSerializedBytes(ctx context.Context) ([]byte, error) {
-	if g.inlineBytes != nil {
-		return g.inlineBytes, nil
-	}
 	return g.outOfBand.GetBytes(ctx)
 }
 
@@ -271,7 +266,7 @@ func (g *GeometryStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
 
 // IsExactLength implements sql.AnyWrapper.
 func (g *GeometryStorage) IsExactLength() bool {
-	return g.inlineBytes != nil
+	return true
 }
 
 // MaxByteLength implements sql.AnyWrapper.
@@ -285,7 +280,7 @@ func (g *GeometryStorage) Compare(ctx context.Context, other interface{}) (cmp i
 	if !ok {
 		return 0, false, nil
 	}
-	if g.inlineBytes == nil && otherGeom.inlineBytes == nil && g.outOfBand.Addr == otherGeom.outOfBand.Addr {
+	if g.outOfBand.Addr == otherGeom.outOfBand.Addr {
 		return 0, true, nil
 	}
 	return 0, false, nil
@@ -299,6 +294,94 @@ func (g *GeometryStorage) Hash() interface{} {
 // Addr returns the content address for out-of-band storage. Only valid when IsExactLength returns false.
 func (g *GeometryStorage) Addr() hash.Hash {
 	return g.outOfBand.Addr
+}
+
+// JsonAdaptiveStorage wraps raw JSON bytes and defers deserialization until the value is needed.
+// The bytes may be stored inline or out-of-band via a content address.
+// It implements sql.JSONWrapper and types.JSONBytes.
+type JsonAdaptiveStorage struct {
+	outOfBand     ImmutableValue
+	maxByteLength int64
+}
+
+var _ sql.JSONWrapper = &JsonAdaptiveStorage{}
+var _ sql.AnyWrapper = &JsonAdaptiveStorage{}
+var _ types.JSONBytes = &JsonAdaptiveStorage{}
+
+// NewJsonStorageOutOfBand creates a JsonAdaptiveStorage that lazily loads bytes from a content-addressed store.
+func NewJsonStorageOutOfBand(addr hash.Hash, vs ValueStore, maxByteLength int64) *JsonAdaptiveStorage {
+	return &JsonAdaptiveStorage{
+		outOfBand:     NewImmutableValue(addr, vs),
+		maxByteLength: maxByteLength,
+	}
+}
+
+// GetBytes implements types.JSONBytes by returning the raw JSON bytes.
+func (j *JsonAdaptiveStorage) GetBytes(ctx context.Context) ([]byte, error) {
+	return j.outOfBand.GetBytes(ctx)
+}
+
+// Clone implements sql.JSONWrapper.
+func (j *JsonAdaptiveStorage) Clone(_ context.Context) sql.JSONWrapper {
+	return &JsonAdaptiveStorage{
+		outOfBand:     j.outOfBand,
+		maxByteLength: j.maxByteLength,
+	}
+}
+
+// ToInterface implements sql.JSONWrapper by deserializing the raw JSON bytes.
+func (j *JsonAdaptiveStorage) ToInterface(ctx context.Context) (interface{}, error) {
+	buf, err := j.GetBytes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var val interface{}
+	if err = json.Unmarshal(buf, &val); err != nil {
+		return nil, err
+	}
+	return val, nil
+}
+
+// IsExactLength returns true when the bytes are stored inline (exact length known without loading).
+func (j *JsonAdaptiveStorage) IsExactLength() bool {
+	return true
+}
+
+// MaxByteLength returns the maximum byte length of the JSON data.
+func (j *JsonAdaptiveStorage) MaxByteLength() int64 {
+	return j.maxByteLength
+}
+
+// Addr returns the content address for out-of-band storage. Only valid when IsExactLength returns false.
+func (j *JsonAdaptiveStorage) Addr() hash.Hash {
+	return j.outOfBand.Addr
+}
+
+// UnwrapAny implements sql.AnyWrapper by loading bytes and deserializing to an interface{}.
+func (j *JsonAdaptiveStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
+	return j.ToInterface(ctx)
+}
+
+// Compare implements sql.AnyWrapper. Two JsonAdaptiveStorage values with the same out-of-band address are equal.
+func (j *JsonAdaptiveStorage) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
+	otherJson, ok := other.(*JsonAdaptiveStorage)
+	if !ok {
+		return 0, false, nil
+	}
+	if j.outOfBand.Addr == otherJson.outOfBand.Addr {
+		return 0, true, nil
+	}
+	return 0, false, nil
+}
+
+// Hash implements sql.AnyWrapper by returning the content address for out-of-band storage, or nil for inline storage.
+func (j *JsonAdaptiveStorage) Hash() interface{} {
+	return j.outOfBand.Addr
+}
+
+// Unwrap implements sql.JSONWrapper by loading the bytes and returning them.
+func (j *JsonAdaptiveStorage) Unwrap(ctx context.Context) (result []byte, err error) {
+	return j.GetBytes(ctx)
 }
 
 // deserializeGeometryBytes converts raw serialized bytes into a types.GeometryValue.

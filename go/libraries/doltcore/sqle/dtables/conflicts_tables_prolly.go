@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -38,6 +39,7 @@ import (
 func newProllyConflictsTable(
 	ctx *sql.Context,
 	tbl *doltdb.Table,
+	db dsess.SqlDatabase,
 	sourceUpdatableTbl sql.UpdatableTable,
 	tblName doltdb.TableName,
 	root doltdb.RootValue,
@@ -70,6 +72,7 @@ func newProllyConflictsTable(
 		theirSch:        theirSch,
 		root:            root,
 		tbl:             tbl,
+		db:              db,
 		rs:              rs,
 		artM:            m,
 		sqlTable:        sourceUpdatableTbl,
@@ -87,6 +90,7 @@ type ProllyConflictsTable struct {
 	rs              RootSetter
 	root            doltdb.RootValue
 	tbl             *doltdb.Table
+	db              dsess.SqlDatabase
 	sqlTable        sql.UpdatableTable
 	versionMappings *versionMappings
 	tblName         doltdb.TableName
@@ -122,10 +126,16 @@ func (ct ProllyConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partitio
 }
 
 func (ct ProllyConflictsTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	if err := checkConflictsTableWriteAccess(ctx, ct.db, ct.artM); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	return newProllyConflictOurTableUpdater(ctx, ct)
 }
 
 func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
+	if err := checkConflictsTableWriteAccess(ctx, ct.db, ct.artM); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	return newProllyConflictDeleter(ctx, ct)
 }
 
@@ -552,7 +562,17 @@ type prollyConflictOurTableUpdater struct {
 }
 
 func newProllyConflictOurTableUpdater(ctx *sql.Context, ct ProllyConflictsTable) *prollyConflictOurTableUpdater {
-	ourUpdater := ct.sqlTable.Updater(ctx)
+	// Set a bypass marker on the context for the duration of the source-table
+	// writer construction. The conflicts-table Updater already admitted the
+	// caller via checkConflictsTableWriteAccess; without this marker the inner
+	// source-table Updater factory would reject a merge-permission caller.
+	dbName, branch := doltdb.SplitRevisionDbName(ct.db.RevisionQualifiedName())
+	markedCtx := ctx.WithContext(dsess.WithConflictsBypass(ctx.Context, dsess.ConflictsBypassMarker{
+		DbName:  dbName,
+		Branch:  branch,
+		TblName: ct.tblName,
+	}))
+	ourUpdater := ct.sqlTable.Updater(markedCtx)
 	return &prollyConflictOurTableUpdater{
 		srcUpdater:      ourUpdater,
 		versionMappings: ct.versionMappings,
@@ -657,7 +677,7 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error)
 	cd.kB.PutUint8(numSourceKeyFields+1, uint8(prolly.ArtifactTypeConflict))
 	cd.kB.PutByteString(numSourceKeyFields+2, make([]byte, hash.ByteLen))
 
-	key, err := cd.kB.Build(cd.pool)
+	key, err := cd.kB.Build(ctx, cd.pool)
 	if err != nil {
 		return err
 	}
@@ -712,7 +732,7 @@ func (cd *prollyConflictDeleter) putKeylessHash(ctx *sql.Context, r sql.Row) err
 		}
 	}
 
-	v, err := cd.vB.Build(cd.pool)
+	v, err := cd.vB.Build(ctx, cd.pool)
 	if err != nil {
 		return err
 	}

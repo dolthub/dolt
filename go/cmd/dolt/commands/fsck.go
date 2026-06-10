@@ -130,9 +130,14 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	params := make(map[string]interface{})
 	params[dbfactory.ChunkJournalParam] = struct{}{}
 	dbFact := dbfactory.FileFactory{}
-	ddb, _, _, err := dbFact.CreateDbNoCache(ctx, types.Format_Default, u, params, func(vErr error) {
+	ddb, _, _, err := dbFact.CreateDbNoCache(ctx, types.Format_DOLT, u, params, func(vErr error) {
 		report.ScanErrs.AppendE(vErr)
 	})
+	if err == nil {
+		// Creating NomsBlockStore can lazily load the actual database resources. We force them here by performing
+		// an actual read against the database.
+		_, err = datas.ChunkStoreFromDatabase(ddb).Root(ctx)
+	}
 	if err != nil {
 		if errors.Is(err, nbs.ErrJournalDataLoss) {
 			cli.PrintErrln("WARNING: Chunk journal is corrupted and some data may be lost.")
@@ -491,11 +496,11 @@ type roundTripper struct {
 }
 
 func newRoundTripper(ctx context.Context, gs *nbs.GenerationalNBS, progress chan FsckProgressMessage, errs *Errs, fileErrCounts map[string]int) (*roundTripper, error) {
-	chunkCount, err := gs.OldGen().Count()
+	chunkCount, err := gs.OldGen().Count(ctx)
 	if err != nil {
 		return nil, err
 	}
-	chunkCount2, err := gs.NewGen().Count()
+	chunkCount2, err := gs.NewGen().Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -517,11 +522,11 @@ func newRoundTripper(ctx context.Context, gs *nbs.GenerationalNBS, progress chan
 }
 
 func (rt *roundTripper) scanAll(ctx context.Context) error {
-	rt.gs.TolerantIterateAllChunks(ctx, rt.roundTripAndCategorizeChunk, func(sourceFile string, err error) {
+	err := rt.gs.TolerantIterateAllChunks(ctx, rt.roundTripAndCategorizeChunk, func(sourceFile string, err error) {
 		rt.errs.AppendE(err)
 		rt.fileErrCounts[sourceFile]++
 	})
-	return ctx.Err()
+	return errors.Join(err, ctx.Err())
 }
 
 // roundTripAndCategorizeChunk verifies the chunk's hash matches its content, categorizes it by type. This method is

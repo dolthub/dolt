@@ -125,12 +125,12 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 		config.UserNameKey:  name,
 		config.UserEmailKey: email,
 	})
-	err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email, defaultBranch)
+	err = dEnv.InitRepo(context.Background(), types.Format_DOLT, name, email, defaultBranch)
 	if err != nil {
 		mr.Errhand("Failed to initialize environment:" + err.Error())
 	}
 
-	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
+	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_DOLT, doltdb.LocalDirDoltDB, filesys.LocalFS)
 	if err != nil {
 		mr.Errhand("Failed to initialize environment:" + err.Error())
 	}
@@ -189,7 +189,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	cloneDir := filepath.Join(mr.Root, dbName)
 
 	r := mr.GetRemote(fromRemote)
-	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default, mr.envs[dbName])
+	srcDB, err := r.GetRemoteDB(ctx, types.Format_DOLT, mr.envs[dbName])
 	if err != nil {
 		mr.Errhand(err)
 	}
@@ -259,19 +259,18 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	t := datas.CommitterDate()
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		panic("couldn't get roots: " + err.Error())
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, doltdb.SimpleTableResolver{}, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, actions.CommitStagedProps{
+	ident := datas.CommitIdent{Name: name, Email: email}
+	commitStagedProps := actions.CommitStagedProps{
 		Message:    "auto commit",
-		Date:       t,
 		AllowEmpty: true,
-		Force:      false,
-		Name:       name,
-		Email:      email,
-	})
+		Author:     ident,
+		Committer:  ident,
+	}
+	pendingCommit, err := actions.GetCommitStaged(ctx, doltdb.SimpleTableResolver{}, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, commitStagedProps)
 	if err != nil {
 		panic("pending commit error: " + err.Error())
 	}

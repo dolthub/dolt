@@ -102,7 +102,7 @@ func (csMW *CSMetricWrapper) HasMany(ctx context.Context, hashes hash.HashSet) (
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (csMW *CSMetricWrapper) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCurry) error {
+func (csMW *CSMetricWrapper) Put(ctx context.Context, c Chunk, getAddrs InsertAddrsCurry) error {
 	atomic.AddInt32(&csMW.TotalChunkPuts, 1)
 	return csMW.cs.Put(ctx, c, getAddrs)
 }
@@ -155,6 +155,10 @@ func (csMW *CSMetricWrapper) StatsSummary() string {
 // undefined and probably crashy.
 func (csMW *CSMetricWrapper) Close() error {
 	return csMW.cs.Close()
+}
+
+func (csMW *CSMetricWrapper) Teardown(ctx context.Context) error {
+	return csMW.cs.Teardown(ctx)
 }
 
 func (csMW *CSMetricWrapper) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {

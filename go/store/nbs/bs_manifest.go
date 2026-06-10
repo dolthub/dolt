@@ -36,6 +36,12 @@ func (bsm blobstoreManifest) Name() string {
 	return bsm.bs.Path()
 }
 
+// Close implements manifest. The blobstore is owned by the caller, so there is
+// nothing for the manifest to release.
+func (bsm blobstoreManifest) Close() error {
+	return nil
+}
+
 func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (string, manifestContents, error) {
 	reader, _, ver, err := bs.Get(ctx, manifestFile, blobstore.AllRange)
 	if err != nil {

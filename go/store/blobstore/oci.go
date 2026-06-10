@@ -77,6 +77,10 @@ func (bs *OCIBlobstore) Path() string {
 	return path.Join(bs.bucketName, bs.prefix)
 }
 
+func (bs *OCIBlobstore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 // Exists returns true if a blob exists for the given key, and false if it does not.
 // For InMemoryBlobstore instances error should never be returned (though other
 // implementations of this interface can)

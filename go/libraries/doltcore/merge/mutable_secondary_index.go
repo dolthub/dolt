@@ -28,9 +28,13 @@ import (
 )
 
 // GetMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index in |indexes|.
+// Vector indexes are skipped because they cannot be represented as a prolly.Map.
 func GetMutableSecondaryIdxs(ctx *sql.Context, ourSch, sch schema.Schema, tableName string, indexes durable.IndexSet) ([]MutableSecondaryIdx, error) {
-	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
-	for i, index := range sch.Indexes().AllIndexes() {
+	mods := make([]MutableSecondaryIdx, 0, sch.Indexes().Count())
+	for _, index := range sch.Indexes().AllIndexes() {
+		if index.IsVector() {
+			continue
+		}
 		idx, err := indexes.GetIndex(ctx, sch, nil, index.Name())
 		if err != nil {
 			return nil, err
@@ -39,10 +43,11 @@ func GetMutableSecondaryIdxs(ctx *sql.Context, ourSch, sch schema.Schema, tableN
 		if err != nil {
 			return nil, err
 		}
-		mods[i], err = NewMutableSecondaryIdx(ctx, m, ourSch, sch, tableName, index)
+		mod, err := NewMutableSecondaryIdx(ctx, m, ourSch, sch, tableName, index)
 		if err != nil {
 			return nil, err
 		}
+		mods = append(mods, mod)
 	}
 	return mods, nil
 }
@@ -54,6 +59,11 @@ func GetMutableSecondaryIdxs(ctx *sql.Context, ourSch, sch schema.Schema, tableN
 func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ns tree.NodeStore, ourSch, sch schema.Schema, tableName string, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, 0, sch.Indexes().Count())
 	for _, index := range sch.Indexes().AllIndexes() {
+		// Vector indexes cannot be incrementally updated as prolly.Maps; they are rebuilt
+		// from scratch in mergeProllySecondaryIndexes after the merge completes.
+		if index.IsVector() {
+			continue
+		}
 
 		// If an index isn't found on the left side, we know it must be a new index added on the right side,
 		// so just skip it, and we'll rebuild the full index at the end of merging when we notice it's missing.

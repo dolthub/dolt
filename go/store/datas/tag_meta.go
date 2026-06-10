@@ -32,7 +32,7 @@ const (
 	tagMetaVersion = "1.0"
 )
 
-var TagNowFunc = CommitterDate
+var TagNowFunc = CommitNow
 var TagLoc = CommitLoc
 
 // TagMeta contains all the metadata that is associated with a tag within a data repo.

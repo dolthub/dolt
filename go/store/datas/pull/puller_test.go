@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/google/uuid"
@@ -44,7 +45,7 @@ func TestNbsPuller(t *testing.T) {
 		err := os.MkdirAll(dir, os.ModePerm)
 		require.NoError(t, err)
 
-		nbf := types.Format_Default.VersionString()
+		nbf := types.Format_DOLT.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 		st, err := nbs.NewLocalStore(ctx, nbf, dir, clienttest.DefaultMemTableSize, q, false)
 		require.NoError(t, err)
@@ -61,7 +62,7 @@ func TestChunkJournalPuller(t *testing.T) {
 		err := os.MkdirAll(dir, os.ModePerm)
 		require.NoError(t, err)
 
-		nbf := types.Format_Default.VersionString()
+		nbf := types.Format_DOLT.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 
 		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false, nil)
@@ -94,7 +95,7 @@ func TestPuller(t *testing.T) {
 		err = os.MkdirAll(dir, os.ModePerm)
 		require.NoError(t, err)
 
-		nbf := types.Format_Default.VersionString()
+		nbf := types.Format_DOLT.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 
 		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false, nil)
@@ -124,7 +125,7 @@ type testTuple struct {
 func buildKeyTuple(ns tree.NodeStore, k int64) val.Tuple {
 	tb := val.NewTupleBuilder(testKeyDesc, ns)
 	tb.PutInt64(0, k)
-	tup, _ := tb.Build(ns.Pool())
+	tup, _ := tb.Build(context.Background(), ns.Pool())
 	return tup
 }
 
@@ -132,7 +133,7 @@ func buildValTuple(ns tree.NodeStore, v0, v1 string) val.Tuple {
 	tb := val.NewTupleBuilder(testValDesc, ns)
 	tb.PutString(0, v0)
 	tb.PutString(1, v1)
-	tup, _ := tb.Build(ns.Pool())
+	tup, _ := tb.Build(context.Background(), ns.Pool())
 	return tup
 }
 
@@ -353,7 +354,8 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 		}
 
 		rootVal := buildRootValue(am)
-		commitOpts := datas.CommitOptions{Parents: parent}
+		epoch := datas.CommitDateAt(time.UnixMilli(0))
+		commitOpts := datas.CommitOptions{Parents: parent, Meta: &datas.CommitMeta{Author: datas.CommitIdent{Date: epoch}, Committer: datas.CommitIdent{Date: epoch}}}
 		ds, err = db.Commit(ctx, ds, rootVal, commitOpts)
 		require.NoError(t, err)
 
@@ -368,7 +370,8 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 	am = addToAddressMap(t, ctx, ns, am, "big_table", bigTable)
 
 	rootVal := buildRootValue(am)
-	commitOpts := datas.CommitOptions{Parents: parent}
+	epoch := datas.CommitDateAt(time.UnixMilli(0))
+	commitOpts := datas.CommitOptions{Parents: parent, Meta: &datas.CommitMeta{Author: datas.CommitIdent{Date: epoch}, Committer: datas.CommitIdent{Date: epoch}}}
 	ds, err = db.Commit(ctx, ds, rootVal, commitOpts)
 	require.NoError(t, err)
 

@@ -379,6 +379,57 @@ SQL
     [[ "$output" =~ "mutually exclusive" ]] || false
 }
 
+@test "sql-checkout: DOLT_CHECKOUT -b with --no-overwrite-ignore aborts when ignored table differs at start point" {
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "add ignored table on main" --force
+
+    dolt sql -q "INSERT INTO ignored_tbl VALUES (2, 200)"
+    dolt add -A --force
+    dolt commit -m "modify ignored table" --force
+
+    # Direct SQL call (no --move): creating branch from HEAD~1 where ignored_tbl differs
+    run dolt sql -q "CALL DOLT_CHECKOUT('-b', 'newbranch', '--no-overwrite-ignore', 'HEAD~1')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ignored tables would be overwritten by checkout" ]] || false
+    [[ "$output" =~ "ignored_tbl" ]] || false
+}
+
+@test "sql-checkout: DOLT_CHECKOUT -b with --overwrite-ignore succeeds when ignored table differs at start point" {
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "add ignored table on main" --force
+
+    dolt sql -q "INSERT INTO ignored_tbl VALUES (2, 200)"
+    dolt add -A --force
+    dolt commit -m "modify ignored table" --force
+
+    run dolt sql -q "CALL DOLT_CHECKOUT('-b', 'newbranch', '--overwrite-ignore', 'HEAD~1')"
+    [ "$status" -eq 0 ]
+}
+
+@test "sql-checkout: DOLT_CHECKOUT -b with --no-overwrite-ignore from HEAD succeeds (hashes identical)" {
+    dolt sql <<SQL
+CREATE TABLE ignored_tbl (pk int PRIMARY KEY, val int);
+INSERT INTO ignored_tbl VALUES (1, 100);
+INSERT INTO dolt_ignore VALUES ('ignored_tbl', true);
+SQL
+    dolt add -A --force
+    dolt commit -m "add ignored table on main" --force
+
+    # Creating from HEAD: hashes always match, no overwrite possible
+    run dolt sql -q "CALL DOLT_CHECKOUT('-b', 'newbranch', '--no-overwrite-ignore')"
+    [ "$status" -eq 0 ]
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | awk '{print $2}'
 }

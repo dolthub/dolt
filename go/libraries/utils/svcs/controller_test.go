@@ -43,12 +43,12 @@ func TestController(t *testing.T) {
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error { return nil },
 				RunF:  func(context.Context) {},
-				StopF: func() error { return errors.New("second") },
+				StopF: func(RunState) error { return errors.New("second") },
 			}))
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error { return nil },
 				RunF:  func(context.Context) {},
-				StopF: func() error { return err },
+				StopF: func(RunState) error { return err },
 			}))
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -88,7 +88,7 @@ func TestController(t *testing.T) {
 				require.Error(t, c.Register(&AnonService{
 					InitF: func(context.Context) error { return nil },
 					RunF:  func(context.Context) {},
-					StopF: func() error { return nil },
+					StopF: func(RunState) error { return nil },
 				}))
 				c.Stop()
 			}()
@@ -107,7 +107,7 @@ func TestController(t *testing.T) {
 					return nil
 				},
 				RunF:  func(context.Context) {},
-				StopF: func() error { return nil },
+				StopF: func(RunState) error { return nil },
 			}))
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error {
@@ -115,7 +115,7 @@ func TestController(t *testing.T) {
 					return nil
 				},
 				RunF:  func(context.Context) {},
-				StopF: func() error { return nil },
+				StopF: func(RunState) error { return nil },
 			}))
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error {
@@ -123,7 +123,7 @@ func TestController(t *testing.T) {
 					return nil
 				},
 				RunF:  func(context.Context) {},
-				StopF: func() error { return nil },
+				StopF: func(RunState) error { return nil },
 			}))
 			ctx := context.Background()
 			var wg sync.WaitGroup
@@ -148,7 +148,7 @@ func TestController(t *testing.T) {
 					return nil
 				},
 				RunF:  func(context.Context) {},
-				StopF: func() error { return nil },
+				StopF: func(RunState) error { return nil },
 			}))
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error {
@@ -156,14 +156,14 @@ func TestController(t *testing.T) {
 					return nil
 				},
 				RunF:  func(context.Context) {},
-				StopF: func() error { return nil },
+				StopF: func(RunState) error { return nil },
 			}))
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error {
 					return err
 				},
 				RunF:  func(context.Context) {},
-				StopF: func() error { return nil },
+				StopF: func(RunState) error { return nil },
 			}))
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error {
@@ -171,7 +171,7 @@ func TestController(t *testing.T) {
 					return nil
 				},
 				RunF:  func(context.Context) {},
-				StopF: func() error { return nil },
+				StopF: func(RunState) error { return nil },
 			}))
 			ctx := context.Background()
 			var wg sync.WaitGroup
@@ -195,7 +195,7 @@ func TestController(t *testing.T) {
 					return nil
 				},
 				RunF: func(context.Context) {},
-				StopF: func() error {
+				StopF: func(RunState) error {
 					stopped = append(stopped, 0)
 					return nil
 				},
@@ -205,7 +205,7 @@ func TestController(t *testing.T) {
 					return nil
 				},
 				RunF: func(context.Context) {},
-				StopF: func() error {
+				StopF: func(RunState) error {
 					stopped = append(stopped, 1)
 					return nil
 				},
@@ -215,7 +215,7 @@ func TestController(t *testing.T) {
 					return err
 				},
 				RunF: func(context.Context) {},
-				StopF: func() error {
+				StopF: func(RunState) error {
 					stopped = append(stopped, 2)
 					return nil
 				},
@@ -225,7 +225,7 @@ func TestController(t *testing.T) {
 					return nil
 				},
 				RunF: func(context.Context) {},
-				StopF: func() error {
+				StopF: func(RunState) error {
 					stopped = append(stopped, 3)
 					return nil
 				},
@@ -250,12 +250,12 @@ func TestController(t *testing.T) {
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error { return nil },
 				RunF:  func(context.Context) { wg.Done() },
-				StopF: func() error { return nil },
+				StopF: func(RunState) error { return nil },
 			}))
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error { return nil },
 				RunF:  func(context.Context) { wg.Done() },
-				StopF: func() error { return nil },
+				StopF: func(RunState) error { return nil },
 			}))
 			ctx := context.Background()
 			var cwg sync.WaitGroup
@@ -278,7 +278,7 @@ func TestController(t *testing.T) {
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error { return nil },
 				RunF:  func(context.Context) {},
-				StopF: func() error {
+				StopF: func(RunState) error {
 					wg.Done()
 					return errors.New("second error")
 				},
@@ -286,7 +286,7 @@ func TestController(t *testing.T) {
 			require.NoError(t, c.Register(&AnonService{
 				InitF: func(context.Context) error { return nil },
 				RunF:  func(context.Context) {},
-				StopF: func() error {
+				StopF: func(RunState) error {
 					wg.Done()
 					return err
 				},
@@ -303,6 +303,50 @@ func TestController(t *testing.T) {
 			require.ErrorIs(t, c.WaitForStop(), err)
 			wg.Wait()
 			cwg.Wait()
+		})
+	})
+	t.Run("RunState", func(t *testing.T) {
+		t.Run("RunInvokedOnNormalStop", func(t *testing.T) {
+			c := NewController()
+			var receivedState RunState = -1
+			require.NoError(t, c.Register(&AnonService{
+				RunF:  func(context.Context) {},
+				StopF: func(rs RunState) error { receivedState = rs; return nil },
+			}))
+			ctx := context.Background()
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				require.NoError(t, c.WaitForStart())
+				c.Stop()
+			}()
+			require.NoError(t, c.Start(ctx))
+			require.NoError(t, c.WaitForStop())
+			require.Equal(t, RunInvoked, receivedState)
+			wg.Wait()
+		})
+		t.Run("RunNotInvokedOnInitFailure", func(t *testing.T) {
+			c := NewController()
+			var receivedState RunState = -1
+			initErr := errors.New("init failed")
+			require.NoError(t, c.Register(&AnonService{
+				StopF: func(rs RunState) error { receivedState = rs; return nil },
+			}))
+			require.NoError(t, c.Register(&AnonService{
+				InitF: func(context.Context) error { return initErr },
+			}))
+			ctx := context.Background()
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				c.WaitForStart()
+				c.Stop()
+			}()
+			require.ErrorIs(t, c.Start(ctx), initErr)
+			require.Equal(t, RunNotInvoked, receivedState)
+			wg.Wait()
 		})
 	})
 	t.Run("RunStopsControllerExample", func(t *testing.T) {
@@ -325,8 +369,10 @@ func TestController(t *testing.T) {
 				go c.Stop()
 				runWg.Done()
 			},
-			StopF: func() error {
-				runWg.Wait()
+			StopF: func(rs RunState) error {
+				if rs == RunInvoked {
+					runWg.Wait()
+				}
 				return runErr
 			},
 		}

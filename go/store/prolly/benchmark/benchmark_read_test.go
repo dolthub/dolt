@@ -217,7 +217,7 @@ func makeGoMap(scale uint64) map[uint64]val.Tuple {
 		vb.PutInt64(3, src.Int63())
 		vb.PutInt64(4, src.Int63())
 		var err error
-		kv[i], err = vb.Build(shared)
+		kv[i], err = vb.Build(context.Background(), shared)
 		if err != nil {
 			panic(err)
 		}
@@ -243,7 +243,7 @@ func makeSyncMap(scale uint64) *sync.Map {
 		vb.PutInt64(2, src.Int63())
 		vb.PutInt64(3, src.Int63())
 		vb.PutInt64(4, src.Int63())
-		tup, err := vb.Build(shared)
+		tup, err := vb.Build(context.Background(), shared)
 		if err != nil {
 			panic(err)
 		}

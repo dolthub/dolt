@@ -6,9 +6,9 @@
 # containing TEXT and BLOB columns, then verify that an older dolt client (pre-2.0) fails
 # with "table has unknown fields" when trying to read them.
 
-dolt config --global --add metrics.disabled true > /dev/null 2>&1
-
 setup() {
+    bats_load_library common.bash
+    bats_load_library compat-common.bash
     cp -Rpf $REPO_DIR bats_repo
     cd bats_repo
 }
@@ -18,17 +18,8 @@ teardown() {
     rm -rf bats_repo
 }
 
-# When DOLT_LEGACY_BIN is set, old_dolt runs that binary; otherwise runs dolt.
-old_dolt() {
-  if [ -n "$DOLT_LEGACY_BIN" ]; then
-    "$DOLT_LEGACY_BIN" "$@"
-  else
-    dolt "$@"
-  fi
-}
-
 @test "2_0_breaking: old client fails reading TEXT column with adaptive encoding" {
-    [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
 
     run old_dolt sql -q "SELECT * FROM text_types;"
     [ "$status" -ne 0 ]
@@ -36,7 +27,7 @@ old_dolt() {
 }
 
 @test "2_0_breaking: old client fails reading BLOB column with adaptive encoding" {
-    [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
 
     run old_dolt sql -q "SELECT * FROM blob_types;"
     [ "$status" -ne 0 ]
@@ -44,7 +35,7 @@ old_dolt() {
 }
 
 @test "2_0_breaking: old client fails reading mixed TEXT and BLOB table with adaptive encoding" {
-    [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
 
     run old_dolt sql -q "SELECT * FROM mixed_types;"
     [ "$status" -ne 0 ]
@@ -52,7 +43,7 @@ old_dolt() {
 }
 
 @test "2_0_breaking: old client can still read table with no TEXT or BLOB columns" {
-    [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
 
     run old_dolt sql -q "SELECT * FROM no_text_blob ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
@@ -62,7 +53,7 @@ old_dolt() {
 }
 
 @test "2_0_breaking: old client fails on dolt diff for adaptive-encoded table" {
-    [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
 
     run old_dolt diff HEAD~1 HEAD -- text_types
     [ "$status" -ne 0 ]
@@ -70,7 +61,7 @@ old_dolt() {
 }
 
 @test "2_0_breaking: old client fails on schema show for adaptive-encoded table" {
-    [ -n "$DOLT_LEGACY_BIN" ] || skip "requires DOLT_LEGACY_BIN"
+    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
 
     run old_dolt schema show text_types
     [ "$status" -ne 0 ]

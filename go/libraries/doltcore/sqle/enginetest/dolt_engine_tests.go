@@ -90,12 +90,12 @@ func (tcc *testCommitClock) Now() time.Time {
 }
 
 func installTestCommitClock(tcc *testCommitClock) func() {
-	oldNowFunc := datas.CommitterDate
+	oldNowFunc := datas.CommitNow
 	oldCommitLoc := datas.CommitLoc
-	datas.CommitterDate = tcc.Now
+	datas.CommitNow = tcc.Now
 	datas.CommitLoc = time.UTC
 	return func() {
-		datas.CommitterDate = oldNowFunc
+		datas.CommitNow = oldNowFunc
 		datas.CommitLoc = oldCommitLoc
 	}
 }
@@ -357,6 +357,14 @@ func RunTestAdaptiveEncoding(t *testing.T, h DoltEnginetestHarness, columnType A
 	})
 }
 
+func RunAdaptiveEncodingScripts(t *testing.T, h DoltEnginetestHarness) {
+	defer h.Close()
+	h.Setup(setup.MydbData)
+	for _, tt := range AdaptiveEncodingScripts {
+		enginetest.TestScript(t, h, tt)
+	}
+}
+
 func RunDropEngineTest(t *testing.T, h DoltEnginetestHarness) {
 	func() {
 		h := h.NewHarness(t)
@@ -563,6 +571,17 @@ func RunLargeJsonObjectsTest(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
+func RunJsonAdaptiveEncodingTests(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
+	for _, script := range JsonAdaptiveEncodingScriptTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
 // RunTransactionTests runs transaction tests from GMS, as well as additional Dolt specific transaction tests. If
 // |prepared| is true, then the tests will be run using prepared statements, otherwise the queries will be directly
 // executed.
@@ -612,6 +631,17 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 		}()
 	}
 	for _, script := range DoltConstraintViolationTransactionTests {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
+	}
+	for _, script := range AutoIncrementTransactionTests {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
@@ -901,6 +931,12 @@ func RunDoltRevisionDbScriptsPreparedTest(t *testing.T, h DoltEnginetestHarness)
 func RunDoltDdlScripts(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	harness.Setup()
+
+	for _, script := range CreateTableScripts {
+		e, err := harness.NewEngine(t)
+		require.NoError(t, err)
+		enginetest.TestScriptWithEngine(t, e, harness, script)
+	}
 
 	for _, script := range ModifyAndChangeColumnScripts {
 		e, err := harness.NewEngine(t)

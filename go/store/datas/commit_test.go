@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"sort"
 	"testing"
+	"time"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/stretchr/testify/assert"
@@ -91,8 +92,14 @@ func mustValue(val types.Value, err error) types.Value {
 func TestIsCommit(t *testing.T) {
 	assert := assert.New(t)
 
+	meta, err := NewCommitMetaWithAuthor("test", "test@test.com", "test commit", time.UnixMilli(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta.Committer.Date = meta.Committer.Date.Or(time.UnixMilli(0))
+
 	commitMsg, _ := commit_flatbuffer(hash.Hash{}, CommitOptions{
-		Meta: &CommitMeta{Name: "test", Email: "test@test.com", Description: "test commit"},
+		Meta: meta,
 	}, nil, hash.Hash{})
 	metaCommit := types.SerialMessage(commitMsg)
 	ok, err := IsCommit(metaCommit)
@@ -185,7 +192,9 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Value) (types.Value, hash.Hash) {
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
-	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...)})
+	epoch := CommitDateAt(time.UnixMilli(0))
+	meta := &CommitMeta{Author: CommitIdent{Date: epoch}, Committer: CommitIdent{Date: epoch}}
+	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...), Meta: meta})
 	require.NoError(t, err)
 	return mustHead(ds), mustHeadAddr(ds)
 }
@@ -424,6 +433,62 @@ func TestFindCommonAncestor(t *testing.T) {
 		_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb, db.ns, rdb.ns)
 		assert.Error(err)
 	})
+}
+
+func TestFindCommonAncestorCrissCrossDeterministic(t *testing.T) {
+	// Criss-cross merge with two maximal common ancestors at the same height.
+	// Verifies that findCommonCommit returns deterministically.
+	//
+	//       base
+	//       /  \
+	//      A    B
+	//      |    |
+	//     a1    b1
+	//      |\  /|
+	//      | \/ |
+	//      | /\ |
+	//      |/  \|
+	//      C    D
+	//
+	// Maximal common ancestors of C and D: {a1, b1}
+	// findCommonCommit must pick the same one every time.
+
+	storage := &chunks.TestStorage{}
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
+	defer db.Close()
+
+	a, b, c, d := "ds-a", "ds-b", "ds-c", "ds-d"
+	base, _ := addCommit(t, db, a, "base")
+	a1, _ := addCommit(t, db, a, "a1", base)
+	b1, _ := addCommit(t, db, b, "b1", base)
+	c1, _ := addCommit(t, db, c, "c1", a1, b1)
+	d1, _ := addCommit(t, db, d, "d1", a1, b1)
+
+	// Verify determinism: run 20 times, expect the same result every time.
+	ctx := context.Background()
+	c1c, err := LoadCommitRef(ctx, db, mustRef(types.NewRef(c1, db.Format())))
+	require.NoError(t, err)
+	d1c, err := LoadCommitRef(ctx, db, mustRef(types.NewRef(d1, db.Format())))
+	require.NoError(t, err)
+
+	var firstHash hash.Hash
+	for i := 0; i < 20; i++ {
+		found, ok, err := findCommonAncestorUsingParentsList(ctx, c1c, d1c, db, db, db.ns, db.ns)
+		require.NoError(t, err)
+		require.True(t, ok, "should find common ancestor")
+		if i == 0 {
+			firstHash = found
+		} else {
+			assert.Equal(t, firstHash, found,
+				"run %d: expected deterministic result, got different hash", i)
+		}
+	}
+
+	// Also verify it's one of {a1, b1} (both are valid maximal LCAs).
+	a1Addr := mustRef(types.NewRef(a1, db.Format())).TargetHash()
+	b1Addr := mustRef(types.NewRef(b1, db.Format())).TargetHash()
+	assert.True(t, firstHash == a1Addr || firstHash == b1Addr,
+		"result should be one of the maximal common ancestors")
 }
 
 func TestPersistedCommitConsts(t *testing.T) {

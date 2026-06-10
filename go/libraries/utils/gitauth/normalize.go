@@ -32,6 +32,9 @@ func (e *NonInteractiveAuthError) Error() string {
 	if e.Output != "" {
 		b.WriteString(strings.TrimRight(e.Output, "\n"))
 		b.WriteString("\n")
+	} else if e.Cause != nil {
+		b.WriteString(e.Cause.Error())
+		b.WriteString("\n")
 	}
 	b.WriteString("hint: dolt does not support interactive credential prompts\n")
 	b.WriteString("hint: configure git credentials (credential helper, token) for HTTPS remotes\n")

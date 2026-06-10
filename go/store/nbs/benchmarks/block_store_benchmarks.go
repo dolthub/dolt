@@ -43,7 +43,7 @@ func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.Tes
 	return true
 }
 
-func noopGetAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+func noopGetAddrs(c chunks.Chunk) chunks.InsertAddrsCb {
 	return func(_ context.Context, _ hash.HashSet, _ chunks.PendingRefExists) error { return nil }
 }
 

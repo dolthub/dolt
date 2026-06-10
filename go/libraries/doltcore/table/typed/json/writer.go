@@ -164,6 +164,8 @@ func (j *RowWriter) jsonDataForSchema(ctx *sql.Context, row sql.Row) ([]byte, er
 
 			// This is kind of silly: we are unmarshalling JSON just to marshall it back again
 			// But it makes marshalling much simpler
+			// Reset val so we don't unmarshall into the old value.
+			val = nil
 			err = json.Unmarshal([]byte(str), &val)
 			if err != nil {
 				return false, err

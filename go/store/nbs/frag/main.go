@@ -69,14 +69,14 @@ func main() {
 	var store *nbs.NomsBlockStore
 	if *dir != "" {
 		var err error
-		store, err = nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), *dir, memTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
+		store, err = nbs.NewLocalStore(ctx, types.Format_DOLT.VersionString(), *dir, memTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 		d.PanicIfError(err)
 
 		*dbName = *dir
 	} else if *table != "" && *bucket != "" && *dbName != "" {
 		cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
 		d.PanicIfError(err)
-		store, err = nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), *table, *dbName, *bucket, s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), memTableSize, nbs.NewUnlimitedMemQuotaProvider())
+		store, err = nbs.NewAWSStore(context.Background(), types.Format_DOLT.VersionString(), *table, *dbName, *bucket, s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), memTableSize, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
 	} else {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")
@@ -98,7 +98,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ref, err := types.NewRef(rootValue, types.Format_Default)
+	ref, err := types.NewRef(rootValue, types.Format_DOLT)
 	d.PanicIfError(err)
 	height := ref.Height()
 	fmt.Println("Store is of height", height)
@@ -128,7 +128,7 @@ func main() {
 		orderedChildren := hash.HashSlice{}
 		nextLevel := hash.HashSlice{}
 		for _, h := range current {
-			_ = types.WalkAddrs(currentValues[h], types.Format_Default, func(h hash.Hash, isleaf bool) error {
+			_ = types.WalkAddrs(currentValues[h], types.Format_DOLT, func(h hash.Hash, isleaf bool) error {
 				orderedChildren = append(orderedChildren, h)
 				if _, ok := visited[h]; !ok && !isleaf {
 					nextLevel = append(nextLevel, h)

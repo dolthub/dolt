@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -42,6 +43,12 @@ type nomsRootTestSuite struct {
 }
 
 func (s *nomsRootTestSuite) TestBasic() {
+	epoch := datas.CommitDateAt(time.Unix(0, 0).UTC())
+	meta := &datas.CommitMeta{
+		Author:    datas.CommitIdent{Date: epoch},
+		Committer: datas.CommitIdent{Date: epoch},
+	}
+
 	datasetName := "root-get"
 	dsSpec := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 	sp, err := spec.ForDataset(dsSpec)
@@ -52,20 +59,14 @@ func (s *nomsRootTestSuite) TestBasic() {
 	dbSpecStr := spec.CreateDatabaseSpecString("nbs", s.DBDir)
 	db := ds.Database()
 
-	var goldenHello, goldenGoodbye string
-	switch types.Format_Default {
-	case types.Format_DOLT:
-		goldenHello = "sf173aaa57qjoakme0iufkg4c17beoqe\n"
-		goldenGoodbye = "gjcehnn4v0sbtt1hste082hfv1kg0hqv\n"
-	default:
-		s.Fail("no golden values exist for NBF %s", types.Format_Default.VersionString())
-	}
+	goldenHello := "sf173aaa57qjoakme0iufkg4c17beoqe\n"
+	goldenGoodbye := "gjcehnn4v0sbtt1hste082hfv1kg0hqv\n"
 
-	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("hello!"))
+	ds, _ = db.Commit(context.Background(), ds, types.String("hello!"), datas.CommitOptions{Meta: meta})
 	c1, _ := s.MustRun(main, []string{"root", dbSpecStr})
 	s.Equal(goldenHello, c1)
 
-	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("goodbye"))
+	ds, _ = db.Commit(context.Background(), ds, types.String("goodbye"), datas.CommitOptions{Meta: meta})
 	c2, _ := s.MustRun(main, []string{"root", dbSpecStr})
 	s.Equal(goldenGoodbye, c2)
 

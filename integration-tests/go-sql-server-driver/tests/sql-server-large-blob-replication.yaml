@@ -1,0 +1,81 @@
+parallel: true
+tests:
+
+- name: large blob values replicate to standby
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: |
+        CREATE TABLE large_blob (
+          id   BIGINT PRIMARY KEY,
+          data LONGBLOB
+        )
+    - exec: "INSERT INTO large_blob VALUES (1, REPEAT('abcdefghijklmnopqrst', 1250))"
+    - exec: "INSERT INTO large_blob VALUES (2, REPEAT('ABCDEFGHIJKLMNOPQRST', 1250))"
+    - exec: "INSERT INTO large_blob VALUES (3, REPEAT('01234567890123456789', 1250))"
+    - exec: "INSERT INTO large_blob VALUES (4, REPEAT('zyxwvutsrqponmlkjihg', 1250))"
+    - exec: "INSERT INTO large_blob VALUES (5, REPEAT('fedcba9876543210FEDC', 1250))"
+    - query: "SELECT COUNT(*) FROM large_blob WHERE LENGTH(data) = 25000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+  - on: server2
+    retry_attempts: 100
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM large_blob"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - query: "SELECT COUNT(*) FROM large_blob WHERE LENGTH(data) = 25000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]

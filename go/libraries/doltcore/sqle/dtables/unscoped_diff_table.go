@@ -95,6 +95,9 @@ func getUnscopedDoltDiffSchema(dbName, tableName string) sql.Schema {
 		{Name: "message", Type: types.Text, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
 		{Name: "data_change", Type: types.Boolean, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
 		{Name: "schema_change", Type: types.Boolean, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+		{Name: "author", Type: types.Text, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+		{Name: "author_email", Type: types.Text, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+		{Name: "author_date", Type: types.DatetimeMaxPrecision, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
 	}
 }
 
@@ -278,6 +281,9 @@ func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 			nil, // message
 			change.DataChange,
 			change.SchemaChange,
+			nil, // author
+			nil, // author_email
+			nil, // author_date
 		)
 
 		return sqlRow, nil
@@ -395,12 +401,15 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 	return sql.NewRow(
 		h.String(),
 		tableChange.TableName.String(),
-		meta.Name,
-		meta.Email,
-		meta.Time(),
+		meta.Committer.Name,
+		meta.Committer.Email,
+		meta.Committer.Date.Time(),
 		meta.Description,
 		tableChange.DataChange,
 		tableChange.SchemaChange,
+		meta.Author.Name,
+		meta.Author.Email,
+		meta.Author.Date.Time(),
 	), nil
 }
 

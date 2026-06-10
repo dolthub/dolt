@@ -463,7 +463,7 @@ func TestInferSchema(t *testing.T) {
 			rdCl, err := dEnv.FS.OpenForRead(importFilePath)
 			require.NoError(t, err)
 
-			csvRd, err := csv.NewCSVReader(types.Format_Default, rdCl, csv.NewCSVInfo())
+			csvRd, err := csv.NewCSVReader(types.Format_DOLT, rdCl, csv.NewCSVInfo())
 			require.NoError(t, err)
 
 			allCols, err := InferColumnTypesFromTableReader(context.Background(), csvRd, test.infArgs)

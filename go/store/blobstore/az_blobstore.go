@@ -68,6 +68,10 @@ func (bs *AzureBlobstore) Path() string {
 	return path.Join(bs.containerName, bs.prefix)
 }
 
+func (bs *AzureBlobstore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 // absKey returns the absolute key for a blob (prefix + key)
 func (bs *AzureBlobstore) absKey(key string) string {
 	return path.Join(bs.prefix, key)

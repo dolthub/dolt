@@ -68,7 +68,7 @@ var syncPool = pool.NewBuffPool()
 func (v rowV) value() val.Tuple {
 	vB.PutInt64(0, int64(v.col1))
 	vB.PutInt64(1, int64(v.col2))
-	tup, err := vB.Build(syncPool)
+	tup, err := vB.Build(context.Background(), syncPool)
 	if err != nil {
 		panic(err)
 	}
@@ -486,7 +486,7 @@ func rebuildAllProllyIndexes(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table
 	primary, _ := durable.ProllyMapFromIndex(tableRowData)
 
 	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, index, primary)
+		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, index, primary, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -501,7 +501,7 @@ func rebuildAllProllyIndexes(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table
 }
 
 func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
-	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_DOLT, doltdb.InMemDoltDB, filesys2.LocalFS)
 	err := ddb.WriteEmptyRepo(context.Background(), env.DefaultInitBranch, name, email)
 	require.NoError(t, err)
 	return ddb
@@ -571,7 +571,7 @@ var kB *val.TupleBuilder
 
 func key(i int) val.Tuple {
 	kB.PutInt64(0, int64(i))
-	tup, err := kB.Build(syncPool)
+	tup, err := kB.Build(context.Background(), syncPool)
 	if err != nil {
 		panic(err)
 	}

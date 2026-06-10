@@ -15,6 +15,7 @@
 package kvexec
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -112,7 +113,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, io.EOF
 			}
 
-			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(l.srcKey, l.srcVal)
+			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(ctx, l.srcKey, l.srcVal)
 			if err != nil {
 				return nil, err
 			}
@@ -220,7 +221,7 @@ func newLookupKeyMapping(
 	srcMapping := make(val.OrdinalMapping, len(keyExprs))
 	var litMappings val.OrdinalMapping
 	var litTypes []val.Type
-	tda := val.TupleDescriptorArgs{}
+	tda := val.TupleDescriptorArgs{ValueStore: ns}
 
 	for i, e := range keyExprs {
 		switch e := e.(type) {
@@ -267,7 +268,7 @@ func newLookupKeyMapping(
 	var litTuple val.Tuple
 	var err error
 	if litDesc.Count() > 0 {
-		litTuple, err = litTb.Build(ns.Pool())
+		litTuple, err = litTb.Build(ctx, ns.Pool())
 		if err != nil {
 			return nil, err
 		}
@@ -342,7 +343,7 @@ func (m *lookupMapping) valid(ctx *sql.Context) bool {
 	return true
 }
 
-func (m *lookupMapping) dstKeyTuple(srcKey, srcVal val.Tuple) (val.Tuple, error) {
+func (m *lookupMapping) dstKeyTuple(ctx context.Context, srcKey, srcVal val.Tuple) (val.Tuple, error) {
 	var litIdx int
 	for to := range m.srcMapping {
 		from := m.srcMapping.MapOrdinal(to)
@@ -372,5 +373,5 @@ func (m *lookupMapping) dstKeyTuple(srcKey, srcVal val.Tuple) (val.Tuple, error)
 		}
 	}
 
-	return m.targetKb.BuildPermissive(m.pool)
+	return m.targetKb.BuildPermissive(ctx, m.pool)
 }

@@ -57,29 +57,29 @@ func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string
 }
 
 // AddTableFilesToManifest adds table files to the manifest
-func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
+func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry) error {
 	return nbsMW.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs)
 }
 
 // Forwards SupportedOperations to wrapped block store.
-func (nbsMW *NBSMetricWrapper) SupportedOperations() chunks.TableFileStoreOps {
-	return nbsMW.nbs.SupportedOperations()
+func (nbsMW *NBSMetricWrapper) SupportedOperations(ctx context.Context) (chunks.TableFileStoreOps, error) {
+	return nbsMW.nbs.SupportedOperations(ctx)
 }
 
-func (nbsMW *NBSMetricWrapper) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCMode) error {
-	return nbsMW.nbs.BeginGC(keeper, mode)
+func (nbsMW *NBSMetricWrapper) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, mode chunks.GCMode) error {
+	return nbsMW.nbs.BeginGC(ctx, keeper, mode)
 }
 
 func (nbsMW *NBSMetricWrapper) EndGC(mode chunks.GCMode) {
 	nbsMW.nbs.EndGC(mode)
 }
 
-func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
-	return nbsMW.nbs.MarkAndSweepChunks(ctx, getAddrs, filter, dest, mode, cmp)
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
+	return nbsMW.nbs.MarkAndSweepChunks(ctx, getAddrs, filter, dest, gcConfig, incrementalUpdateManifest)
 }
 
-func (nbsMW *NBSMetricWrapper) Count() (uint32, error) {
-	return nbsMW.nbs.Count()
+func (nbsMW *NBSMetricWrapper) Count(ctx context.Context) (uint32, error) {
+	return nbsMW.nbs.Count(ctx)
 }
 
 func (nbsMW *NBSMetricWrapper) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {

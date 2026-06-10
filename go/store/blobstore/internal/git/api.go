@@ -131,6 +131,10 @@ type GitAPI interface {
 	// the remote |dstRef| is missing (bootstrap / create-if-missing semantics).
 	// Equivalent plumbing: GIT_DIR=... git push --force-with-lease=<dstRef>:<expectedDstOID> <remote> <srcRef>:<dstRef>
 	PushRefWithLease(ctx context.Context, remote string, srcRef string, dstRef string, expectedDstOID OID) error
+
+	// ForcePushRef force-pushes |srcRef| to |dstRef| on |remote| unconditionally.
+	// Equivalent plumbing: GIT_DIR=... git push --force <remote> <srcRef>:<dstRef>
+	ForcePushRef(ctx context.Context, remote, srcRef, dstRef string) error
 }
 
 // TreeEntry describes one entry in a git tree listing.

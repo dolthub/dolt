@@ -91,6 +91,57 @@ teardown() {
     [[ "$output" =~ "new table:" ]] || false
 }
 
+@test "rm: dolt rm --cached succeeds when a committed table has unstaged changes" {
+    # See https://github.com/dolthub/dolt/issues/10987
+    dolt sql -q "CREATE TABLE api_keys (id INT PRIMARY KEY, token VARCHAR(64))"
+    dolt sql -q "INSERT INTO api_keys VALUES (1, 'initial')"
+    dolt commit -A -m "add api_keys"
+
+    dolt sql -q "INSERT INTO api_keys VALUES (2, 'unstaged-change')"
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "modified" ]] || false
+    [[ "$output" =~ "api_keys" ]] || false
+
+    run dolt rm --cached api_keys
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "removed 'api_keys' from tracking" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "deleted:" ]] || false
+    [[ "$output" =~ "api_keys" ]] || false
+
+    # The --cached flag only removes the table from tracking and does not delete its data.
+    run dolt sql -q "SELECT COUNT(*) FROM api_keys"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+}
+
+@test "rm: dolt rm --cached succeeds when a committed table was dropped from the working set" {
+    # See https://github.com/dolthub/dolt/issues/10987
+    dolt sql -q "CREATE TABLE test (id INT PRIMARY KEY)"
+    dolt sql -q "INSERT INTO test VALUES (1)"
+    dolt commit -A -m "add test"
+
+    dolt sql -q "DROP TABLE test"
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "deleted" ]] || false
+    [[ "$output" =~ "test" ]] || false
+
+    run dolt rm --cached test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "removed 'test' from tracking" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "deleted:" ]] || false
+    [[ "$output" =~ "test" ]] || false
+}
+
 @test "rm: dolt rm errors on foreign key constrained table" {
     dolt sql -q "CREATE TABLE parent (pk int primary key, p1 int)"
     dolt sql -q "CREATE TABLE child (pk int primary key, c1 int, FOREIGN KEY (c1) REFERENCES parent (pk))"

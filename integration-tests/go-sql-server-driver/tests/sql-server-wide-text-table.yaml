@@ -1,0 +1,110 @@
+parallel: true
+tests:
+
+- name: wide text column table replicates correctly
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    # 20 TEXT columns × 2 KB per cell = ~40 KB of out-of-band data per row.
+    # Each row requires 20 separate external chunk references.
+    - exec: |
+        CREATE TABLE wide_text (
+          id  BIGINT PRIMARY KEY,
+          t00 TEXT, t01 TEXT, t02 TEXT, t03 TEXT, t04 TEXT,
+          t05 TEXT, t06 TEXT, t07 TEXT, t08 TEXT, t09 TEXT,
+          t10 TEXT, t11 TEXT, t12 TEXT, t13 TEXT, t14 TEXT,
+          t15 TEXT, t16 TEXT, t17 TEXT, t18 TEXT, t19 TEXT
+        )
+    - exec: |
+        INSERT INTO wide_text VALUES
+          (1,
+           REPEAT('a',2000), REPEAT('b',2000), REPEAT('c',2000), REPEAT('d',2000), REPEAT('e',2000),
+           REPEAT('f',2000), REPEAT('g',2000), REPEAT('h',2000), REPEAT('i',2000), REPEAT('j',2000),
+           REPEAT('k',2000), REPEAT('l',2000), REPEAT('m',2000), REPEAT('n',2000), REPEAT('o',2000),
+           REPEAT('p',2000), REPEAT('q',2000), REPEAT('r',2000), REPEAT('s',2000), REPEAT('t',2000))
+    - exec: |
+        INSERT INTO wide_text VALUES
+          (2,
+           REPEAT('A',2000), REPEAT('B',2000), REPEAT('C',2000), REPEAT('D',2000), REPEAT('E',2000),
+           REPEAT('F',2000), REPEAT('G',2000), REPEAT('H',2000), REPEAT('I',2000), REPEAT('J',2000),
+           REPEAT('K',2000), REPEAT('L',2000), REPEAT('M',2000), REPEAT('N',2000), REPEAT('O',2000),
+           REPEAT('P',2000), REPEAT('Q',2000), REPEAT('R',2000), REPEAT('S',2000), REPEAT('T',2000))
+    - exec: |
+        INSERT INTO wide_text VALUES
+          (3,
+           REPEAT('1',2000), REPEAT('2',2000), REPEAT('3',2000), REPEAT('4',2000), REPEAT('5',2000),
+           REPEAT('6',2000), REPEAT('7',2000), REPEAT('8',2000), REPEAT('9',2000), REPEAT('0',2000),
+           REPEAT('1',2000), REPEAT('2',2000), REPEAT('3',2000), REPEAT('4',2000), REPEAT('5',2000),
+           REPEAT('6',2000), REPEAT('7',2000), REPEAT('8',2000), REPEAT('9',2000), REPEAT('0',2000))
+    - query: "SELECT COUNT(*) FROM wide_text WHERE LENGTH(t00) = 2000 AND LENGTH(t19) = 2000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+    - query: "SELECT LEFT(t00,1), LEFT(t10,1) FROM wide_text WHERE id = 1"
+      result:
+        columns: ["LEFT(t00,1)","LEFT(t10,1)"]
+        rows: [["a","k"]]
+  - on: server2
+    retry_attempts: 100
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM wide_text WHERE LENGTH(t00) = 2000 AND LENGTH(t19) = 2000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+    - query: "SELECT LEFT(t00,1), LEFT(t10,1) FROM wide_text WHERE id = 1"
+      result:
+        columns: ["LEFT(t00,1)","LEFT(t10,1)"]
+        rows: [["a","k"]]
+    - query: "SELECT LEFT(t00,1), LEFT(t10,1) FROM wide_text WHERE id = 2"
+      result:
+        columns: ["LEFT(t00,1)","LEFT(t10,1)"]
+        rows: [["A","K"]]

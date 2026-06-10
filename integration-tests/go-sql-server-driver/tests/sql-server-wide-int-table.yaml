@@ -1,0 +1,104 @@
+parallel: true
+tests:
+
+- name: wide integer column table replicates correctly
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: |
+        CREATE TABLE wide_int (
+          id  BIGINT PRIMARY KEY,
+          c00 BIGINT, c01 BIGINT, c02 BIGINT, c03 BIGINT, c04 BIGINT,
+          c05 BIGINT, c06 BIGINT, c07 BIGINT, c08 BIGINT, c09 BIGINT,
+          c10 BIGINT, c11 BIGINT, c12 BIGINT, c13 BIGINT, c14 BIGINT,
+          c15 BIGINT, c16 BIGINT, c17 BIGINT, c18 BIGINT, c19 BIGINT,
+          c20 BIGINT, c21 BIGINT, c22 BIGINT, c23 BIGINT, c24 BIGINT,
+          c25 BIGINT, c26 BIGINT, c27 BIGINT, c28 BIGINT, c29 BIGINT
+        )
+    - exec: |
+        INSERT INTO wide_int VALUES
+          (1,  100,101,102,103,104, 105,106,107,108,109, 110,111,112,113,114, 115,116,117,118,119, 120,121,122,123,124, 125,126,127,128,129),
+          (2,  200,201,202,203,204, 205,206,207,208,209, 210,211,212,213,214, 215,216,217,218,219, 220,221,222,223,224, 225,226,227,228,229),
+          (3,  300,301,302,303,304, 305,306,307,308,309, 310,311,312,313,314, 315,316,317,318,319, 320,321,322,323,324, 325,326,327,328,329),
+          (4, -100,-101,-102,-103,-104,-105,-106,-107,-108,-109,-110,-111,-112,-113,-114,-115,-116,-117,-118,-119,-120,-121,-122,-123,-124,-125,-126,-127,-128,-129),
+          (5,    0,  0,  0,  0,  0,   0,  0,  0,  0,  0,   0,  0,  0,  0,  0,   0,  0,  0,  0,  0,   0,  0,  0,  0,  0,   0,  0,  0,  0,  0)
+    - query: "SELECT COUNT(*) FROM wide_int"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - query: "SELECT c00, c15, c29 FROM wide_int WHERE id = 1"
+      result:
+        columns: ["c00","c15","c29"]
+        rows: [["100","115","129"]]
+  - on: server2
+    retry_attempts: 100
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM wide_int"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - query: "SELECT c00, c15, c29 FROM wide_int WHERE id = 1"
+      result:
+        columns: ["c00","c15","c29"]
+        rows: [["100","115","129"]]
+    - query: "SELECT c00, c15, c29 FROM wide_int WHERE id = 3"
+      result:
+        columns: ["c00","c15","c29"]
+        rows: [["300","315","329"]]
+    - query: "SELECT c00, c15, c29 FROM wide_int WHERE id = 4"
+      result:
+        columns: ["c00","c15","c29"]
+        rows: [["-100","-115","-129"]]
+    - query: "SELECT COUNT(*) FROM wide_int WHERE c00 = 0 AND c29 = 0"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["1"]]

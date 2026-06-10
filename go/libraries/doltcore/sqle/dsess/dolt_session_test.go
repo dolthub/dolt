@@ -296,7 +296,7 @@ func (e emptyRevisionDatabaseProvider) IsRevisionDatabase(_ *sql.Context, _ stri
 	return false, nil
 }
 
-func (e emptyRevisionDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+func (e emptyRevisionDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote) (*doltdb.DoltDB, error) {
 	return nil, nil
 }
 

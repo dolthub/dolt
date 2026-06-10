@@ -769,3 +769,27 @@ message"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "unknown action in rebase plan: invalid" ]] || false
 }
+
+@test "rebase: dolt rebase preserves ignored tables in the working set" {
+    # Commit the ignore rule on main so private_data is invisible to status
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('private_data', true)"
+    dolt add dolt_ignore
+    dolt commit -m "add ignore rule for private_data"
+
+    # Create private_data only in the working tree, never committed
+    dolt sql -q "CREATE TABLE private_data (pk int PRIMARY KEY, secret varchar(100))"
+    dolt sql -q "INSERT INTO private_data VALUES (1, 'secret')"
+
+    # Confirm private_data is invisible to status and rebase will not reject a dirty working tree.
+    # Rebase rejects uncommitted non-ignored changes, so this verifies the ignore rule is active.
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "private_data" ]] || false
+
+    run dolt rebase b1
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk, secret FROM private_data" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,secret" ]] || false
+}

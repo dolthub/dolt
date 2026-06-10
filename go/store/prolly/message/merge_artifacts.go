@@ -78,8 +78,11 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 		valOffs = writeItemOffsets(b, values, valSz)
 		// serialize offStart of chunk addresses within |keyTups|
 		if s.keyDesc.AddressFieldCount() > 0 {
-			serial.MergeArtifactsStartKeyAddressOffsetsVector(b, countAddresses(keys, s.keyDesc))
-			keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
+			numAddressFields := countAddresses(keys, s.keyDesc)
+			if numAddressFields > 0 {
+				serial.MergeArtifactsStartKeyAddressOffsetsVector(b, numAddressFields)
+				keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
+			}
 		}
 	} else {
 		// serialize child refs and subtree counts for internal nodes

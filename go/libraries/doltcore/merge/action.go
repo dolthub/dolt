@@ -17,13 +17,13 @@ package merge
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -52,7 +52,7 @@ type MergeSpec struct {
 	Force           bool
 	Email           string
 	Name            string
-	Date            time.Time
+	Date            *datas.CommitDate
 }
 
 type MergeSpecOpt func(*MergeSpec)
@@ -87,14 +87,16 @@ func WithSquash(squash bool) MergeSpecOpt {
 	}
 }
 
-// NewMergeSpec returns a MergeSpec with the arguments provided.
+// NewMergeSpec returns a MergeSpec with the arguments provided. Pass |date| as nil when --date
+// was not explicitly specified; the merge commit will then derive the author date from the
+// dolt_author_date session variable.
 func NewMergeSpec[C doltdb.Context](
 	ctx C,
 	rsr env.RepoStateReader[C],
 	ddb *doltdb.DoltDB,
 	roots doltdb.Roots,
 	name, email, commitSpecStr string,
-	date time.Time,
+	date *datas.CommitDate,
 	opts ...MergeSpecOpt,
 ) (*MergeSpec, error) {
 	headCS, err := doltdb.NewCommitSpec("HEAD")

@@ -32,7 +32,17 @@ service ChunkStoreService {
   // Get the download locations for a list of chunk hashes. Streaming to
   // support large and incrementally available payloads. Results are generated
   // as requests come in.
+  //
+  // Deprecated: prefer StreamChunkLocations, which deduplicates
+  // table-file metadata across the stream. Kept on the wire
+  // indefinitely so old clients continue to work.
   rpc StreamDownloadLocations(stream GetDownloadLocsRequest) returns (stream GetDownloadLocsResponse);
+
+  // Get the download locations for a list of chunk hashes. Streaming
+  // variant that deduplicates table-file metadata across the stream.
+  // Preferred over StreamDownloadLocations when the server advertises
+  // FEATURE_STREAM_CHUNK_LOCATIONS in GetRepoMetadataResponse.features.
+  rpc StreamChunkLocations(stream StreamChunkLocationsRequest) returns (stream StreamChunkLocationsResponse);
 
   // Get upload locations for a list of table file hashes.
   // NOTE: We upload full table files but download individual chunks.
@@ -129,12 +139,122 @@ message GetDownloadLocsRequest {
 
   string repo_token = 3;
   string repo_path = 4;
+
+  // Capabilities the calling client declares about itself. See the
+  // ClientCapability enum. Populated by the client on every outbound
+  // request; absent means "not capable."
+  repeated ClientCapability client_capabilities = 5;
 }
 
 message GetDownloadLocsResponse {
   repeated DownloadLoc locs = 1;
 
   string repo_token = 2;
+}
+
+message StreamChunkLocationsRequest {
+  // Every request must populate RepoId/repo_token/repo_path on the
+  // wire. This matches what the current StreamDownloadLocations
+  // client already does and is load-bearing for retry correctness:
+  // the reliable-RPC layer may tear down the underlying gRPC stream
+  // and replay any unacked requests against a freshly opened stream,
+  // so the server must never need prior in-stream state to interpret
+  // a request.
+  RepoId repo_id = 1;
+  string repo_token = 2;
+  string repo_path = 3;
+
+  // Flat, packed buffer of 20-byte chunk hashes: hash N occupies
+  // bytes [N*20 : (N+1)*20]. Not a |repeated bytes| because every
+  // element is exactly 20 bytes and the 2-byte per-element
+  // tag/length overhead of |repeated bytes| is ~10% of the whole
+  // request in a 512-hash batch. Servers MUST reject requests
+  // where len(chunk_hashes) is not a multiple of 20.
+  bytes chunk_hashes = 4;
+
+  // Stream-scoped. The client's capability set does not change
+  // within a single server-side stream. Today every request on
+  // the stream MUST carry the full set (same rule as
+  // repo_id/token/path above); the reliable-RPC layer relies on
+  // this for replay correctness. A future protocol revision may
+  // allow omitting it after the first message; servers MUST
+  // continue to accept it on every message.
+  repeated ClientCapability client_capabilities = 5;
+}
+
+message StreamChunkLocationsResponse {
+  // TableFileRecord and ChunkLocation are nested inside the response
+  // rather than free-standing at package level. Their invariants
+  // (table_file_id is stream-scoped; request_index is scoped to one
+  // request's chunk_hashes) only hold in the context of this
+  // response.
+  message TableFileRecord {
+    // Opaque id assigned by the server, scoped to the current
+    // server-side stream. The server MUST emit a TableFileRecord
+    // for any id on its first use within a given server-side
+    // stream, before (or in the same response as) any
+    // ChunkLocation that references the id. Clients MUST overwrite
+    // any prior entry for the same id when a new TableFileRecord
+    // arrives.
+    uint32 table_file_id = 1;
+
+    // Signed URL the client should issue byte-range requests
+    // against.
+    string url = 2;
+
+    // When the client should consider |url| stale and call
+    // RefreshTableFileUrl.
+    google.protobuf.Timestamp refresh_after = 3;
+
+    // The file_id to use when calling RefreshTableFileUrl. All the
+    // other fields of RefreshTableFileUrlRequest (repo_id,
+    // repo_token, repo_path) are already known to the client.
+    string file_id = 4;
+  }
+
+  message ChunkLocation {
+    // Refers to a TableFileRecord.table_file_id introduced in the
+    // current server-side stream -- either in an earlier response
+    // message on this same stream, or in the same response message
+    // as this ChunkLocation.
+    uint32 table_file_id = 1;
+
+    // Hash index into the corresponding request's chunk_hashes
+    // buffer: a value of N refers to the N'th 20-byte hash, i.e.
+    // bytes [N*20 : (N+1)*20]. Not a byte offset. Avoids
+    // re-transmitting the 20-byte hash on the wire.
+    uint32 request_index = 2;
+
+    uint64 offset = 3;
+    uint32 length = 4;
+
+    // zStd dictionary span within the same table file. Same
+    // semantics as the existing RangeChunk.dictionary_{offset,length}.
+    uint64 dictionary_offset = 5;
+    uint32 dictionary_length = 6;
+  }
+
+  // If non-empty, advertises a new repo_token that the client should
+  // use on future requests on this service.
+  string repo_token = 1;
+
+  // Zero or more table-file records introduced by this response.
+  // Valid for the remainder of this server-side stream. Clients MUST
+  // integrate these into their table_file_id map (inserting or
+  // overwriting) before resolving any |locations| in this same
+  // response.
+  repeated TableFileRecord table_files = 2;
+
+  // Chunk locations for the hashes in the corresponding request.
+  // Response ordering is 1:1 with requests.
+  repeated ChunkLocation locations = 3;
+
+  // Hash indices into the corresponding request's chunk_hashes
+  // buffer that the server could not find: a value of N here means
+  // the N'th 20-byte hash (bytes [N*20 : (N+1)*20]) was not found.
+  // Not a byte offset. Sent explicitly so the client does not have
+  // to diff requested vs. returned.
+  repeated uint32 missing_indexes = 4;
 }
 
 message TableFileDetails {
@@ -233,6 +353,59 @@ enum PushConcurrencyControl {
   PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET = 2;
 }
 
+// Optional, additive capability flags advertised by the server in
+// GetRepoMetadataResponse.features. Use this for pure "does the
+// server implement X?" booleans. Mode selectors with more than two
+// states (such as the existing PushConcurrencyControl) keep their
+// own typed fields; this list is only for flag-shaped capabilities.
+//
+// Guidelines for growth:
+// - Add new values at the end; never reuse a removed value's
+//   number. If a feature is retired, reserve its number rather
+//   than re-purposing it.
+// - FEATURE_UNSPECIFIED = 0 is never sent; presence of the zero
+//   value in a received list should be ignored by the client.
+enum Feature {
+  FEATURE_UNSPECIFIED = 0;
+
+  // Server implements the StreamChunkLocations RPC. Clients should
+  // prefer it to StreamDownloadLocations when this feature is
+  // present.
+  FEATURE_STREAM_CHUNK_LOCATIONS = 1;
+}
+
+// Capabilities the client declares about itself on every request
+// that the server may use to select alternative URL endpoints,
+// wire encodings, or response shapes. Missing value => not capable.
+// Servers SHOULD continue to serve clients that send no
+// capabilities; capability-gated behaviors are intended as
+// optional upgrades, not correctness boundaries.
+//
+// Populated by the client at send time. Servers that construct
+// prebuilt RefreshTableFileUrlRequest messages for echo-style
+// responses (see ListTableFiles, GetDownloadLocations) SHOULD
+// leave this field unset; the sending client overwrites it.
+//
+// Guidelines for growth:
+// - Add new values at the end; never reuse a removed value's
+//   number. Reserve retired numbers rather than repurposing them.
+// - CLIENT_CAPABILITY_UNSPECIFIED = 0 is never sent; presence of
+//   the zero value in a received list should be ignored.
+enum ClientCapability {
+  CLIENT_CAPABILITY_UNSPECIFIED = 0;
+
+  // The client's HTTP fetcher correctly handles HTTP/2 response
+  // bodies for chunk and table-file downloads. Servers MAY return
+  // signed URLs that resolve to HTTP/2 endpoints (e.g. CDN-fronted
+  // hosts) when this is set. When this is not set, servers SHOULD
+  // prefer URLs that resolve to HTTP/1.1 endpoints if such a
+  // choice is available. Servers without a separate HTTP/1.1
+  // option may return whatever URL they have; old clients
+  // generally succeed against HTTP/2 URLs but can see degraded
+  // performance under certain network conditions.
+  CLIENT_CAPABILITY_HTTP2_DOWNLOAD = 1;
+}
+
 message GetRepoMetadataResponse {
   // Version string of the noms binary format for this repository.
   // See types.NomsBinFormat.
@@ -247,6 +420,11 @@ message GetRepoMetadataResponse {
   string repo_token = 4;
 
   PushConcurrencyControl push_concurrency_control = 5;
+
+  // Optional capability flags advertised by the server. See the
+  // Feature enum above. Order is not significant; duplicates
+  // should be treated the same as a single occurrence.
+  repeated Feature features = 6;
 }
 
 message ClientRepoFormat {
@@ -260,6 +438,11 @@ message ListTableFilesRequest  {
 
   string repo_token = 3;
   string repo_path = 4;
+
+  // Capabilities the calling client declares about itself. See the
+  // ClientCapability enum. Populated by the client on every outbound
+  // request; absent means "not capable."
+  repeated ClientCapability client_capabilities = 5;
 }
 
 message TableFileInfo {
@@ -277,6 +460,15 @@ message RefreshTableFileUrlRequest {
 
   string repo_token = 3;
   string repo_path = 4;
+
+  // Capabilities the calling client declares about itself. See the
+  // ClientCapability enum. The client stamps this field at send
+  // time on every outbound request, including when it is sending
+  // a RefreshTableFileUrlRequest that the server previously
+  // prebuilt and embedded in a response (see TableFileInfo and
+  // DownloadLoc). Servers constructing prebuilt refresh requests
+  // SHOULD leave this field unset; the client overwrites it.
+  repeated ClientCapability client_capabilities = 5;
 }
 
 message RefreshTableFileUrlResponse {

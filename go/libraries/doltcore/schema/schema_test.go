@@ -63,7 +63,7 @@ func TestNewSchema(t *testing.T) {
 	indexCol := NewIndexCollection(allColColl, pkColColl)
 
 	checkCol := NewCheckCollection()
-	_, err := checkCol.AddCheck("chk_age", "age > 0", true)
+	_, err := checkCol.AddCheck("chk_age", "age > 0", true, false)
 	require.NoError(t, err)
 
 	// Nil ordinals

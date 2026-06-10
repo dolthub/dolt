@@ -245,54 +245,6 @@ SQL
     dolt diff
     dolt add .
     dolt commit -m "Created table with one row"
-
-    skip_nbf_dolt "In __DOLT__ the following throws an error since the primary key types changed"
-    dolt merge main --no-commit
-
-    run dolt sql -q 'show create table test2'
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ '`PK2` tinyint NOT NULL' ]] || false
-    [[ "$output" =~ '`V1` varchar(300) NOT NULL' ]] || false
-
-    run dolt sql -q 'select * from test2' -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
-    [[ "$output" =~ '1,1,abc,def' ]] || false
-    [[ "$output" =~ '2,2,abc,def' ]] || false
-
-    dolt add .
-    dolt commit -m "merge main"
-
-    # push to remote
-    dolt checkout main
-    dolt merge original
-    dolt push origin main
-
-    # pull from the remote and make sure there's no issue
-    cd original
-    dolt pull
-    run dolt sql -q 'show create table test2'
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ '`PK2` tinyint NOT NULL' ]] || false
-    [[ "$output" =~ '`V1` varchar(300) NOT NULL' ]] || false
-
-    run dolt sql -q 'select * from test2' -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
-    [[ "$output" =~ '1,1,abc,def' ]] || false
-    [[ "$output" =~ '2,2,abc,def' ]] || false
-
-    # make sure diff works as expected for schema change on clone
-    dolt diff HEAD~2
-    run dolt diff HEAD~2
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ '-  `pk2` bigint NOT NULL,' ]] || false
-    [[ "$output" =~ '-  `v1` varchar(100) NOT NULL,' ]] || false
-    [[ "$output" =~ '-  `v2` varchar(120),' ]] || false
-    [[ "$output" =~ '+  `PK2` tinyint NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `V1` varchar(300) NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `V2` varchar(1024) NOT NULL,' ]] || false
-    [[ "$output" =~ 'PRIMARY KEY' ]] || false
 }
 
 @test "schema-changes: drop then add column" {

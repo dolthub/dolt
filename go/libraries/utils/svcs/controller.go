@@ -18,7 +18,21 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
+)
+
+// RunState indicates whether the controller invoked a service's Run method
+// before calling Stop. Stop implementations should use this to skip cleanup
+// that depends on Run having executed (e.g. waiting on a goroutine that was
+// only started inside Run).
+type RunState int
+
+const (
+	// RunNotInvoked means the controller did not call Run on this service.
+	// This happens when initialization fails before all services are started,
+	// or when the controller is stopped before transitioning to the running state.
+	RunNotInvoked RunState = iota
+	// RunInvoked means the controller called Run on this service.
+	RunInvoked
 )
 
 // A Service is a runnable unit of functionality that a Controller can
@@ -27,10 +41,15 @@ import (
 // bring the service up. It has a |Run| function, which will be called in a
 // separate go-routine and should run and provide the functionality associated
 // with the service until the |Stop| function is called.
+//
+// Stop receives a RunState indicating whether Run was invoked. When
+// RunNotInvoked, Stop should only undo work done in Init (e.g. close a
+// listener that was created). When RunInvoked, Stop should also wait for the
+// Run goroutine to complete if necessary.
 type Service interface {
 	Init(context.Context) error
 	Run(context.Context)
-	Stop() error
+	Stop(RunState) error
 }
 
 // AnonService is a simple struct for building Service instances with lambdas
@@ -38,7 +57,7 @@ type Service interface {
 type AnonService struct {
 	InitF func(context.Context) error
 	RunF  func(context.Context)
-	StopF func() error
+	StopF func(RunState) error
 }
 
 func (a AnonService) Init(ctx context.Context) error {
@@ -55,36 +74,11 @@ func (a AnonService) Run(ctx context.Context) {
 	a.RunF(ctx)
 }
 
-func (a AnonService) Stop() error {
+func (a AnonService) Stop(rs RunState) error {
 	if a.StopF == nil {
 		return nil
 	}
-	return a.StopF()
-}
-
-// ServiceState is a small abstraction so that a service implementation can
-// easily track what state it is in and can make decisions about what to do
-// based on what state it is coming from. In particular, it's not rare for a
-// |Close| implementation to need to do something different based on whether
-// the service is only init'd or if it is running. It's also not rare for a
-// service to decide it needs to do nothing in Init, in which case it can leave
-// the service in Off, and the Run and Close methods can check that to ensure
-// they do not do anything either.
-type ServiceState uint32
-
-const (
-	ServiceState_Off ServiceState = iota
-	ServiceState_Init
-	ServiceState_Run
-	ServiceState_Stopped
-)
-
-func (ss *ServiceState) Swap(new ServiceState) (old ServiceState) {
-	return ServiceState(atomic.SwapUint32((*uint32)(ss), uint32(new)))
-}
-
-func (ss *ServiceState) CompareAndSwap(old, new ServiceState) (swapped bool) {
-	return atomic.CompareAndSwapUint32((*uint32)(ss), uint32(old), uint32(new))
+	return a.StopF(rs)
 }
 
 // A Controller is responsible for initializing a number of registered
@@ -95,16 +89,17 @@ func (ss *ServiceState) CompareAndSwap(old, new ServiceState) (swapped bool) {
 // |Stop| is called, services are stopped in reverse-registration order. |Stop|
 // returns once the corresponding |Stop| method on all successfully |Init|ed
 // services has returned. |Stop| does not explicitly block for the goroutines
-// where the |Run| methods are called to complete.  Typically a Service's
-// |Stop| function should ensure that the |Run| method has completed before
-// returning.
+// where the |Run| methods are called to complete.  A Service's |Stop| function
+// should use the |RunState| parameter to determine whether |Run| was invoked
+// and wait for it to complete if necessary.
 //
 // Any attempt to register a service after |Start| or |Stop| has been called
 // will return an error.
 //
 // If an error occurs when initializing the services of a Controller, the
 // Stop functions of any already initialized Services are called in
-// reverse-order. The error which caused the initialization error is returned.
+// reverse-order with RunNotInvoked. The error which caused the initialization
+// error is returned.
 //
 // In the case that all Services Init successfully, the error returned from
 // |Start| is the first non-nil error which is returned from the |Stop|
@@ -221,7 +216,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		err := s.Init(ctx)
 		if err != nil {
 			for j := i - 1; j >= 0; j-- {
-				svcs[j].Stop()
+				svcs[j].Stop(RunNotInvoked)
 			}
 			c.mu.Lock()
 			c.state = controllerState_stopped
@@ -234,20 +229,26 @@ func (c *Controller) Start(ctx context.Context) error {
 	}
 	close(c.startCh)
 	c.mu.Lock()
+	runInvoked := false
 	if c.state == controllerState_starting {
 		c.state = controllerState_running
 		c.mu.Unlock()
 		for _, s := range svcs {
 			go s.Run(ctx)
 		}
+		runInvoked = true
 		<-c.stopCh
 	} else {
 		// We were stopped while initializing. Start shutting things down.
 		c.mu.Unlock()
 	}
+	rs := RunNotInvoked
+	if runInvoked {
+		rs = RunInvoked
+	}
 	var stopErr error
 	for i := len(svcs) - 1; i >= 0; i-- {
-		err := svcs[i].Stop()
+		err := svcs[i].Stop(rs)
 		if err != nil && stopErr == nil {
 			stopErr = err
 		}

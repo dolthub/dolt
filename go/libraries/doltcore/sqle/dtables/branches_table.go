@@ -243,6 +243,11 @@ func (bt *BranchesTable) Schema(ctx *sql.Context) sql.Schema {
 		columns = append(columns, &sql.Column{Name: "branch", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true})
 		columns = append(columns, &sql.Column{Name: "dirty", Type: types.Boolean, Source: bt.tableName, PrimaryKey: false, Nullable: true})
 	}
+	columns = append(columns,
+		&sql.Column{Name: "latest_author", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		&sql.Column{Name: "latest_author_email", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		&sql.Column{Name: "latest_author_date", Type: types.Datetime3, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+	)
 	return columns
 }
 
@@ -398,7 +403,7 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 		remoteBranches := itr.table.remote
 		if remoteBranches {
-			return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description), nil
+			return sql.NewRow(name, h.String(), meta.Committer.Name, meta.Committer.Email, meta.Committer.Date.Time(), meta.Description, meta.Author.Name, meta.Author.Email, meta.Author.Date.Time()), nil
 		} else {
 			branches, err := itr.table.db.DbData().Rsr.GetBranches()
 			if err != nil {
@@ -412,7 +417,7 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 				remoteName = branch.Remote
 				branchName = branch.Merge.Ref.GetPath()
 			}
-			return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, remoteName, branchName, dirty), nil
+			return sql.NewRow(name, h.String(), meta.Committer.Name, meta.Committer.Email, meta.Committer.Date.Time(), meta.Description, remoteName, branchName, dirty, meta.Author.Name, meta.Author.Email, meta.Author.Date.Time()), nil
 		}
 	}
 }

@@ -17,6 +17,7 @@ package val
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/mohae/uvarint"
@@ -119,9 +120,15 @@ func (v AdaptiveValue) convertToOutOfBand(ctx context.Context, vs ValueStore, de
 		dest = make([]byte, maxSize)
 	}
 	blob := v[1:]
-	blobLength := uint64(len(blob))
+
+	return convertBytesToOutOfBand(ctx, blob, vs, dest)
+}
+
+// convertBytesToOutOfBand writes the given byte slice to the ValueStore and returns an out-of-band AdaptiveValue
+func convertBytesToOutOfBand(ctx context.Context, value []byte, vs ValueStore, dest []byte) (AdaptiveValue, error) {
+	blobLength := uint64(len(value))
 	lengthSize, dest := makeVarInt(blobLength, dest)
-	blobHash, err := vs.WriteBytes(ctx, blob)
+	blobHash, err := vs.WriteBytes(ctx, value)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +189,7 @@ func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, bu
 	}
 	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
 	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewByteArray(ctx, address, vs).WithMaxByteLength(int64(length)), nil
+	return NewByteArray(address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
@@ -193,13 +200,81 @@ func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, 
 	}
 	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
 	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewTextStorage(ctx, address, vs).WithMaxByteLength(int64(length)), nil
+	return NewTextStorage(address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 func (v AdaptiveValue) convertToGeometryStorage(ctx context.Context, vs ValueStore) (*GeometryStorage, error) {
-	length, lengthBytes := uvarint.Uvarint(v)
-	addr := hash.New(v[lengthBytes:])
-	return NewGeometryStorageOutOfBand(ctx, addr, vs, int64(length)), nil
+	// Only out-of-band values can be converted to a GeometryStorage
+	outOfBandValue, err := v.convertToOutOfBand(ctx, vs, nil)
+	if err != nil {
+		return nil, err
+	}
+	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
+	addr := hash.New(outOfBandValue[lengthBytes:])
+	return NewGeometryStorageOutOfBand(addr, vs, int64(length)), nil
+}
+
+func (v AdaptiveValue) convertToJsonStorage(ctx context.Context, vs ValueStore) (*JsonAdaptiveStorage, error) {
+	// Only out-of-band values can be converted to a JsonStorage
+	outOfBandValue, err := v.convertToOutOfBand(ctx, vs, nil)
+	if err != nil {
+		return nil, err
+	}
+	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
+	addr := hash.New(outOfBandValue[lengthBytes:])
+	return NewJsonStorageOutOfBand(addr, vs, int64(length)), nil
+}
+
+// OutOfBandAddr returns the content address embedded in an out-of-band AdaptiveValue. It
+// returns an error if v is NULL or inline.
+func (v AdaptiveValue) OutOfBandAddr() (hash.Hash, error) {
+	if v.IsNull() {
+		return hash.Hash{}, fmt.Errorf("cannot get address from NULL adaptive value")
+	}
+	if v.isInlined() {
+		return hash.Hash{}, fmt.Errorf("cannot get address from inline adaptive value")
+	}
+	_, lengthBytes := uvarint.Uvarint(v)
+	return hash.New(v[lengthBytes:]), nil
+}
+
+// AdaptiveValueInlineBytes returns the inline encoding of the adaptive value given as a byte slice.
+func AdaptiveValueInlineBytes(value []byte) []byte {
+	result := make([]byte, 1+len(value))
+	result[0] = 0
+	copy(result[1:], value)
+	return result
+}
+
+// IsNullAdaptiveValueBytes returns whether the given byte slice represents a NULL AdaptiveValue.
+func IsNullAdaptiveValueBytes(val []byte) bool {
+	return len(val) == 0
+}
+
+// IsInlineAdaptiveBytes returns whether the given byte slice represents an inlined AdaptiveValue.
+func IsInlineAdaptiveBytes(val []byte) bool {
+	return len(val) > 0 && val[0] == 0
+}
+
+// InlineValueBytes returns the inlined bytes represented by the given byte slice if the value is inline, or nil
+// and false if it's an out-of-band value. NULL is always an inline value.
+func InlineValueBytes(val []byte) ([]byte, bool) {
+	if IsNullAdaptiveValueBytes(val) {
+		return nil, true
+	}
+
+	if IsInlineAdaptiveBytes(val) {
+		return val[1:], true
+	}
+
+	return nil, false
+}
+
+// NewOutOfBandAdaptiveValue writes |data| to |vs| and returns an out-of-band AdaptiveValue
+// encoding [varint(len(data)) | content_hash]. This is used when writing adaptive values
+// outside the TupleBuilder (e.g. in the merge path).
+func NewOutOfBandAdaptiveValue(ctx context.Context, vs ValueStore, data []byte) (AdaptiveValue, error) {
+	return convertBytesToOutOfBand(ctx, data, vs, nil)
 }
 
 // AdaptiveEncodingTypeHandler is an implementation of TypeHandler for adaptive encoding types,

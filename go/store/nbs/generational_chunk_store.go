@@ -269,7 +269,7 @@ func (gcs *GenerationalNBS) refCheck(recs []hasRecord) (hash.HashSet, error) {
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
+func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry) error {
 	return gcs.newGen.putChunk(ctx, c, getAddrs, gcs.refCheck)
 }
 
@@ -349,6 +349,15 @@ func (gcs *GenerationalNBS) Close() error {
 	return nErr
 }
 
+func (gcs *GenerationalNBS) Teardown(ctx context.Context) error {
+	oErr := gcs.oldGen.Teardown(ctx)
+	nErr := gcs.newGen.Teardown(ctx)
+	if oErr != nil {
+		return oErr
+	}
+	return nErr
+}
+
 func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSet) error {
 	notInOldGen, err := gcs.oldGen.HasMany(ctx, hashes)
 
@@ -359,7 +368,7 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 	var putErr error
 	err = gcs.newGen.GetMany(ctx, notInOldGen, func(ctx context.Context, chunk *chunks.Chunk) {
 		if putErr == nil {
-			putErr = gcs.oldGen.Put(ctx, *chunk, func(c chunks.Chunk) chunks.GetAddrsCb {
+			putErr = gcs.oldGen.Put(ctx, *chunk, func(c chunks.Chunk) chunks.InsertAddrsCb {
 				return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error { return nil }
 			})
 		}
@@ -397,7 +406,10 @@ func (gcs *GenerationalNBS) Sources(ctx context.Context) (chunks.TableFileSource
 	ret.Root = newgensources.Root
 	ret.TableFiles = append([]chunks.TableFile{}, newgensources.TableFiles...)
 	ret.AppendixTableFiles = append([]chunks.TableFile{}, newgensources.AppendixTableFiles...)
-	prefix := gcs.RelativeOldGenPath()
+	prefix, err := gcs.RelativeOldGenPath(ctx)
+	if err != nil {
+		return chunks.TableFileSources{}, err
+	}
 	for _, tf := range oldgensources.TableFiles {
 		ret.TableFiles = append(ret.TableFiles, prefixedTableFile{tf, prefix})
 	}
@@ -430,7 +442,7 @@ func (gcs *GenerationalNBS) WriteTableFile(ctx context.Context, fileId string, s
 }
 
 // AddTableFilesToManifest adds table files to the manifest of the newgen cs
-func (gcs *GenerationalNBS) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
+func (gcs *GenerationalNBS) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.InsertAddrsCurry) error {
 	return gcs.newGen.addTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs, gcs.refCheck, nil)
 }
 
@@ -446,8 +458,8 @@ func (gcs *GenerationalNBS) PruneTableFiles(ctx context.Context) error {
 }
 
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
-func (gcs *GenerationalNBS) SupportedOperations() chunks.TableFileStoreOps {
-	return gcs.newGen.SupportedOperations()
+func (gcs *GenerationalNBS) SupportedOperations(ctx context.Context) (chunks.TableFileStoreOps, error) {
+	return gcs.newGen.SupportedOperations(ctx)
 }
 
 func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
@@ -456,7 +468,10 @@ func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(ctx context.Context, hash
 		return nil, err
 	}
 	if len(hashes) > 0 {
-		prefix := gcs.RelativeOldGenPath()
+		prefix, err := gcs.RelativeOldGenPath(ctx)
+		if err != nil {
+			return nil, err
+		}
 		toadd, err := gcs.oldGen.GetChunkLocationsWithPaths(ctx, hashes)
 		if err != nil {
 			return nil, err
@@ -485,19 +500,25 @@ func (gcs *GenerationalNBS) GetChunkLocations(ctx context.Context, hashes hash.H
 	return res, nil
 }
 
-func (gcs *GenerationalNBS) RelativeOldGenPath() string {
-	newgenpath, ngpok := gcs.newGen.Path()
-	oldgenpath, ogpok := gcs.oldGen.Path()
+func (gcs *GenerationalNBS) RelativeOldGenPath(ctx context.Context) (string, error) {
+	newgenpath, ngpok, err := gcs.newGen.Path(ctx)
+	if err != nil {
+		return "", err
+	}
+	oldgenpath, ogpok, err := gcs.oldGen.Path(ctx)
+	if err != nil {
+		return "", err
+	}
 	if ngpok && ogpok {
 		if p, err := filepath.Rel(newgenpath, oldgenpath); err == nil {
-			return p
+			return p, nil
 		}
 	}
-	return "oldgen"
+	return "oldgen", nil
 }
 
-func (gcs *GenerationalNBS) Path() (string, bool) {
-	return gcs.newGen.Path()
+func (gcs *GenerationalNBS) Path(ctx context.Context) (string, bool, error) {
+	return gcs.newGen.Path(ctx)
 }
 
 func (gcs *GenerationalNBS) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
@@ -510,8 +531,8 @@ func (gcs *GenerationalNBS) OldGenGCFilter() chunks.HasManyFunc {
 	}
 }
 
-func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCMode) error {
-	err := gcs.newGen.BeginGC(keeper, mode)
+func (gcs *GenerationalNBS) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, mode chunks.GCMode) error {
+	err := gcs.newGen.BeginGC(ctx, keeper, mode)
 	if err != nil {
 		return err
 	}
@@ -521,7 +542,7 @@ func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCM
 	// going away. In Full mode, we want to take read dependencies
 	// from the OldGen as well.
 	if mode == chunks.GCMode_Full {
-		err = gcs.oldGen.BeginGC(keeper, mode)
+		err = gcs.oldGen.BeginGC(ctx, keeper, mode)
 		if err != nil {
 			gcs.newGen.EndGC(mode)
 			return err
@@ -537,8 +558,8 @@ func (gcs *GenerationalNBS) EndGC(mode chunks.GCMode) {
 	gcs.newGen.EndGC(mode)
 }
 
-func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
-	return markAndSweepChunks(ctx, gcs.newGen, gcs, dest, getAddrs, filter, mode, cmp)
+func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
+	return markAndSweepChunks(ctx, gcs.newGen, gcs, dest, getAddrs, filter, gcConfig, incrementalUpdateManifest)
 }
 
 func (gcs *GenerationalNBS) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {
@@ -553,20 +574,27 @@ func (gcs *GenerationalNBS) IterateAllChunks(ctx context.Context, cb func(chunk 
 	return nil
 }
 
-func (gcs *GenerationalNBS) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) {
-	gcs.newGen.TolerantIterateAllChunks(ctx, cb, errCb)
-	if ctx.Err() != nil {
-		return
+func (gcs *GenerationalNBS) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) error {
+	err := gcs.newGen.TolerantIterateAllChunks(ctx, cb, errCb)
+	if err != nil {
+		return err
 	}
-	gcs.oldGen.TolerantIterateAllChunks(ctx, cb, errCb)
+	if ctx.Err() != nil {
+		return nil
+	}
+	err = gcs.oldGen.TolerantIterateAllChunks(ctx, cb, errCb)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (gcs *GenerationalNBS) Count() (uint32, error) {
-	newGenCnt, err := gcs.newGen.Count()
+func (gcs *GenerationalNBS) Count(ctx context.Context) (uint32, error) {
+	newGenCnt, err := gcs.newGen.Count(ctx)
 	if err != nil {
 		return 0, err
 	}
-	oldGenCnt, err := gcs.oldGen.Count()
+	oldGenCnt, err := gcs.oldGen.Count(ctx)
 	if err != nil {
 		return 0, err
 	}

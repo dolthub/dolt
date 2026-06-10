@@ -16,11 +16,29 @@ package blobstore
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
 // DoltDataRef is the default remote ref backing a git-object-db dolt blobstore.
 const DoltDataRef = "refs/dolt/data"
+
+// DefaultInfoBranch is the default short branch name for the visible info branch
+// that indicates a repository is being used as a Dolt remote.
+const DefaultInfoBranch = "__dolt_remote_info__"
+
+// InfoBranchEnvVar is the environment variable that overrides the info branch name.
+// Set to an empty string to disable the info branch entirely.
+const InfoBranchEnvVar = "DOLT_REMOTE_INFO_BRANCH"
+
+// ResolveInfoBranch returns the info branch name from the environment, falling
+// back to the provided default. An empty return value means "disabled".
+func ResolveInfoBranch(defaultBranch string) string {
+	if v, ok := os.LookupEnv(InfoBranchEnvVar); ok {
+		return strings.TrimSpace(v)
+	}
+	return defaultBranch
+}
 
 func trimRefsPrefix(ref string) string {
 	return strings.TrimPrefix(ref, "refs/")

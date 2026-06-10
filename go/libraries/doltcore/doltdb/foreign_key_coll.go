@@ -48,6 +48,15 @@ const (
 	ForeignKeyReferentialAction_SetDefault
 )
 
+// ForeignKeyMatchType represents NULL handling semantics for composite FK columns (Doltgres-only feature).
+type ForeignKeyMatchType byte
+
+const (
+	ForeignKeyMatchType_Simple ForeignKeyMatchType = iota
+	ForeignKeyMatchType_Full
+	ForeignKeyMatchType_Partial // this is not supported in Postgres
+)
+
 // ForeignKey is the complete, internal representation of a Foreign Key.
 type ForeignKey struct {
 	Name                   string                      `noms:"name" json:"name"`
@@ -60,6 +69,8 @@ type ForeignKey struct {
 	OnUpdate               ForeignKeyReferentialAction `noms:"on_update" json:"on_update"`
 	OnDelete               ForeignKeyReferentialAction `noms:"on_delete" json:"on_delete"`
 	UnresolvedFKDetails    UnresolvedFKDetails         `noms:"unres_fk,omitempty" json:"unres_fk,omitempty"`
+	IsNotValid             bool                        `noms:"is_not_valid,omitempty" json:"is_not_valid,omitempty"`
+	MatchType              ForeignKeyMatchType         `noms:"match_type,omitempty" json:"match_type,omitempty"`
 }
 
 // UnresolvedFKDetails contains any details necessary for an unresolved foreign key to resolve to a valid foreign key.

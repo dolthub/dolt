@@ -81,21 +81,36 @@ func doDoltRm(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	roots.Staged, err = roots.Staged.RemoveTables(ctx, false, false, verifiedTables...)
+	staged, err := roots.Staged.RemoveTables(ctx, false, false, verifiedTables...)
 	if err != nil {
 		return 1, err
 	}
+	roots.Staged = staged
 
-	// RemoveTables() validates foreign keys, and the above call will not catch foreign key constraints on tables that
-	// exist only in the working set. So we need to run the below line on each dolt_rm() to avoid wiping constrained tables.
-	newWorking, err := roots.Working.RemoveTables(ctx, false, false, verifiedTables...)
-	if err != nil {
-		return 1, err
-	}
-
-	// If --cached was not used, we want to fully delete the tables, so we remove them from the working set as well.
+	// The staged root check above does not validate FK constraints that only exist in
+	// the working set, so the working set must also be checked.
 	if !checkStaged {
-		roots.Working = newWorking
+		working, err := roots.Working.RemoveTables(ctx, false, false, verifiedTables...)
+		if err != nil {
+			return 1, err
+		}
+		roots.Working = working
+	} else {
+		// With |--cached|, a table may already be absent from working (for example
+		// after a DROP TABLE), so only tables present in working are passed to the FK check.
+		var workingTables []doltdb.TableName
+		for _, tbl := range verifiedTables {
+			ok, err := roots.Working.HasTable(ctx, tbl)
+			if err != nil {
+				return 1, err
+			}
+			if ok {
+				workingTables = append(workingTables, tbl)
+			}
+		}
+		if _, err = roots.Working.RemoveTables(ctx, false, false, workingTables...); err != nil {
+			return 1, err
+		}
 	}
 
 	if err = dSess.SetRoots(ctx, dbName, roots); err != nil {
@@ -110,8 +125,9 @@ func doDoltRm(ctx *sql.Context, args []string) (int, error) {
 func verifyTables(ctx *sql.Context, unqualifiedTables []string, checkStaged bool, roots doltdb.Roots) ([]doltdb.TableName, error) {
 	var missingTables []string
 	var missingStagedTables []string
+	var tableNames []doltdb.TableName
+
 	var unstagedTables []string
-	var TableNames []doltdb.TableName
 
 	for _, name := range unqualifiedTables {
 		_, okHead, err := resolve.TableName(ctx, roots.Head, name)
@@ -123,14 +139,16 @@ func verifyTables(ctx *sql.Context, unqualifiedTables []string, checkStaged bool
 			return nil, err
 		}
 
-		// Does the table have unstaged changes? If so, error out
-		hasChanges, err := hasUnstagedChanges(ctx, roots, name, okStage, okHead)
-		if err != nil {
-			return nil, err
-		}
-		if hasChanges {
-			unstagedTables = append(unstagedTables, name)
-			continue
+		// With |--cached|, the working set is not modified, so unstaged working changes are not a problem.
+		if !checkStaged {
+			hasChanges, err := hasUnstagedChanges(ctx, roots, name, okStage, okHead)
+			if err != nil {
+				return nil, err
+			}
+			if hasChanges {
+				unstagedTables = append(unstagedTables, name)
+				continue
+			}
 		}
 
 		// If the table exists in staged:
@@ -141,13 +159,13 @@ func verifyTables(ctx *sql.Context, unqualifiedTables []string, checkStaged bool
 		// If it isn't in HEAD it doesn't exist, and so we error
 		if okStage {
 			if okHead || checkStaged {
-				TableNames = append(TableNames, tblName)
+				tableNames = append(tableNames, tblName)
 			} else {
 				missingStagedTables = append(missingStagedTables, name)
 			}
 		} else {
 			if okHead {
-				TableNames = append(TableNames, tblName)
+				tableNames = append(tableNames, tblName)
 			} else {
 				missingTables = append(missingTables, name)
 			}
@@ -156,13 +174,13 @@ func verifyTables(ctx *sql.Context, unqualifiedTables []string, checkStaged bool
 
 	if len(missingTables) > 0 {
 		return nil, actions.NewTblNotExistError(doltdb.ToTableNames(missingTables, doltdb.DefaultSchemaName))
-	} else if len(unstagedTables) > 0 {
+	} else if !checkStaged && len(unstagedTables) > 0 {
 		return nil, actions.NewTblUnstagedError(doltdb.ToTableNames(unstagedTables, doltdb.DefaultSchemaName))
 	} else if len(missingStagedTables) > 0 {
 		return nil, actions.NewTblStagedError(doltdb.ToTableNames(missingStagedTables, doltdb.DefaultSchemaName))
 	}
 
-	return TableNames, nil
+	return tableNames, nil
 }
 
 // hasUnstagedChanges checks the HEAD and staged roots for the table, then compares them against the table in the working root.

@@ -80,8 +80,10 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 			return 1, err
 		}
 	} else {
-		name = dSess.Username()
-		email = dSess.Email()
+		name, email, _, _, err = dsess.ResolveNameEmail(ctx, dsess.DoltCommitterName, dsess.DoltCommitterEmail)
+		if err != nil {
+			return 1, err
+		}
 	}
 
 	msg, _ := apr.GetValue(cli.MessageArg)

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -639,4 +640,16 @@ aws_secret_access_key = new_secret_access_key
 			assert.Equal(t, "new_secret_access_key", creds.SecretAccessKey)
 		}
 	})
+}
+
+// TestS3ClientNoChecksumWarnSpam verifies that the S3 client sets
+// DisableLogOutputChecksumValidationSkipped to suppress the per-GetObject WARN
+// emitted when objects have no stored checksum.
+//
+// See https://github.com/dolthub/dolt/issues/10895
+func TestS3ClientNoChecksumWarnSpam(t *testing.T) {
+	cfg, err := awsConfigFromParams(context.Background(), map[string]interface{}{})
+	require.NoError(t, err)
+	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
+	assert.True(t, s3c.Options().DisableLogOutputChecksumValidationSkipped)
 }

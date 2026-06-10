@@ -174,6 +174,10 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 
 	commit, err := getCommitInfo(queryist.Context, queryist.Queryist, "HEAD")
+	if err != nil {
+		cli.Printf("Commit completed, but failure to get commit details occurred: %s\n", err.Error())
+		return 0, false
+	}
 	if cli.ExecuteWithStdioRestored != nil {
 		cli.ExecuteWithStdioRestored(func() {
 			pager := outputpager.Start()
@@ -235,20 +239,15 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 		writeToBuffer("-f")
 	}
 
-	writeToBuffer("--author")
-	param = true
-	writeToBuffer("?")
-	var author string
 	if apr.Contains(cli.AuthorParam) {
-		author, _ = apr.GetValue(cli.AuthorParam)
-	} else {
-		name, email, err := env.GetNameAndEmail(cliCtx.Config())
-		if err != nil {
-			return "", nil, err
-		}
-		author = name + " <" + email + ">"
+		writeToBuffer("--author")
+		param = true
+		writeToBuffer("?")
+		author, _ := apr.GetValue(cli.AuthorParam)
+		params = append(params, author)
+	} else if _, _, err := env.GetNameAndEmail(cliCtx.Config()); err != nil {
+		return "", nil, err
 	}
-	params = append(params, author)
 
 	if apr.Contains(cli.AllFlag) {
 		writeToBuffer("-a")
@@ -291,7 +290,7 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 		return 0
 	}
 
-	if err == datas.ErrNameNotConfigured {
+	if datas.ErrNameNotConfigured.Is(err) {
 		bdr := errhand.BuildDError("Could not determine %s.", config.UserNameKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", config.UserNameKey)
@@ -299,7 +298,7 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	if err == datas.ErrEmailNotConfigured {
+	if datas.ErrEmailNotConfigured.Is(err) {
 		bdr := errhand.BuildDError("Could not determine %s.", config.UserEmailKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", config.UserEmailKey)
@@ -376,9 +375,16 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 }
 
 func checkIsTerminal() bool {
+	// In tests that drive cli commands without InitIO the stdio swap helper is unset, so
+	// treat the absence as a non-terminal context to avoid dereferencing a nil function.
+	if cli.ExecuteWithStdioRestored == nil {
+		return false
+	}
 	isTerminal := false
 	cli.ExecuteWithStdioRestored(func() {
-		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv(dconfig.EnvTestForceOpenEditor) == "1" {
+		fd := os.Stdout.Fd()
+		// IsCygwinTerminal catches MSYS and Git Bash on Windows, where stdout is a named pipe.
+		if goisatty.IsTerminal(fd) || goisatty.IsCygwinTerminal(fd) || os.Getenv(dconfig.EnvTestForceOpenEditor) == "1" {
 			isTerminal = true
 		}
 	})

@@ -49,7 +49,7 @@ func TestNBS_GitBlobstore_EmptyRemote_OpenReturnsEmptyManifest(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	exists, _, _, err := store.manifestMgr.Fetch(ctx, store.stats)
+	exists, _, err := store.manifest.ParseIfExists(ctx, store.stats, nil)
 	require.NoError(t, err)
 	require.False(t, exists)
 }
@@ -101,7 +101,7 @@ func TestNBS_GitBlobstore_EmptyRemote_FirstManifestUpdateBootstrapsRef(t *testin
 	require.NoError(t, err)
 	defer store.Close()
 
-	exists, contents, _, err := store.manifestMgr.Fetch(ctx, store.stats)
+	exists, contents, err := store.manifest.ParseIfExists(ctx, store.stats, nil)
 	require.NoError(t, err)
 	require.True(t, exists)
 	require.Equal(t, want.root, contents.root)

@@ -42,9 +42,6 @@ type tpccConfigImpl struct {
 
 	// ScaleFactors represent the scale at which to run each TpccBenchmark at.
 	ScaleFactors []int
-
-	// NomsBinFormat specifies the NomsBinFormat
-	NomsBinFormat string
 }
 
 var _ TpccConfig = &tpccConfigImpl{}
@@ -62,10 +59,6 @@ func (c *tpccConfigImpl) GetRuns() int {
 
 func (c *tpccConfigImpl) GetScriptDir() string {
 	return c.ScriptDir
-}
-
-func (c *tpccConfigImpl) GetNomsBinFormat() string {
-	return c.NomsBinFormat
 }
 
 func (c *tpccConfigImpl) GetRuntimeOs() string {

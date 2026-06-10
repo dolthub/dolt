@@ -243,10 +243,12 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		}
 	}
 
-	// included to check for invalid --decorate options
 	if decorate, hasDecorate := apr.GetValue(cli.DecorateFlag); hasDecorate {
+		if err := cli.ValidateDecorateOption(decorate); err != nil {
+			return "", err
+		}
 		writeToBuffer("?")
-		params = append(params, "--decorate="+decorate)
+		params = append(params, "--decorate="+resolveDecorateAuto(decorate))
 	}
 
 	buffer.WriteString(")")
@@ -295,27 +297,40 @@ func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Co
 
 // logCommits takes a list of sql rows that have only 1 column, commit hash, and retrieves the commit info for each hash to be printed to std out
 func logCommits(apr *argparser.ArgParseResults, commitHashes []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) error {
-	opts := commitInfoOptions{
-		showSignature: apr.Contains(cli.ShowSignatureFlag),
-	}
-
+	opts := commitInfoOptions{showSignature: apr.Contains(cli.ShowSignatureFlag)}
 	var commitsInfo []CommitInfo
 	for _, hash := range commitHashes {
 		cmHash := hash[0].(string)
 		commit, err := getCommitInfoWithOptions(sqlCtx, queryist, cmHash, opts)
-		if commit == nil {
-			return fmt.Errorf("no commits found for ref %s", cmHash)
-		}
 		if err != nil {
 			return err
+		}
+		if commit == nil {
+			return fmt.Errorf("no commits found for ref %s", cmHash)
 		}
 		commitsInfo = append(commitsInfo, *commit)
 	}
 
-	return logToStdOut(apr, commitsInfo, sqlCtx, queryist)
+	// Resolve auto before opening the pager. checkIsTerminal uses ExecuteWithStdioRestored,
+	// which mutates os.Stdout, and the pager block calls ExecuteWithStdioRestored too.
+	// Calling it from inside the pager block leaves the pager holding a stale stdout handle.
+	decoration := resolveDecorateAuto(apr.GetValueOrDefault(cli.DecorateFlag, cli.DecorateAuto))
+	return logToStdOut(apr, commitsInfo, sqlCtx, queryist, decoration)
 }
 
-func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist) error {
+// resolveDecorateAuto returns DecorateShort when stdout is a terminal and DecorateNo
+// otherwise. Other |decorate| values pass through unchanged.
+func resolveDecorateAuto(decorate string) string {
+	if decorate != cli.DecorateAuto {
+		return decorate
+	}
+	if checkIsTerminal() {
+		return cli.DecorateShort
+	}
+	return cli.DecorateNo
+}
+
+func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist, decoration string) error {
 	color.NoColor = false
 	for _, comm := range commits {
 		if len(comm.parentHashes) < apr.GetIntOrDefault(cli.MinParentsFlag, 0) {
@@ -333,7 +348,7 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 		// Write commit hash
 		pager.Writer.Write([]byte(color.YellowString("%s ", chStr)))
 
-		if decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto"); decoration != "no" {
+		if decoration != cli.DecorateNo {
 			printRefs(pager, &comm, decoration)
 		}
 
@@ -355,9 +370,9 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 	return nil
 }
 
-func logDefault(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist) error {
+func logDefault(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist, decoration string) error {
 	for _, comm := range commits {
-		PrintCommitInfo(pager, apr.GetIntOrDefault(cli.MinParentsFlag, 0), apr.Contains(cli.ParentsFlag), apr.Contains(cli.ShowSignatureFlag), apr.GetValueOrDefault(cli.DecorateFlag, "auto"), &comm)
+		PrintCommitInfo(pager, apr.GetIntOrDefault(cli.MinParentsFlag, 0), apr.Contains(cli.ParentsFlag), apr.Contains(cli.ShowSignatureFlag), decoration, &comm)
 		if apr.Contains(cli.StatFlag) {
 			if comm.parentHashes != nil && len(comm.parentHashes) == 1 { // don't print stats for merge commits
 				diffStats := make(map[string]*merge.MergeStats)
@@ -374,7 +389,7 @@ func logDefault(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 	return nil
 }
 
-func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist) (err error) {
+func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist, decoration string) (err error) {
 	if cli.ExecuteWithStdioRestored == nil {
 		return nil
 	}
@@ -384,9 +399,9 @@ func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *s
 		if apr.Contains(cli.GraphFlag) {
 			logGraph(pager, apr, commits)
 		} else if apr.Contains(cli.OneLineFlag) {
-			err = logCompact(pager, apr, commits, sqlCtx, queryist)
+			err = logCompact(pager, apr, commits, sqlCtx, queryist, decoration)
 		} else {
-			err = logDefault(pager, apr, commits, sqlCtx, queryist)
+			err = logDefault(pager, apr, commits, sqlCtx, queryist, decoration)
 		}
 	})
 

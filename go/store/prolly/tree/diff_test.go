@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"context"
 	"io"
 	"testing"
 
@@ -40,7 +41,7 @@ func TestDifferFromRoots(t *testing.T) {
 	copy(toTups, fromTups)
 	bld := val.NewTupleBuilder(desc, ns)
 	bld.PutUint32(0, uint32(42))
-	toTups[23][1], err = bld.Build(sharedPool) // modify value at index 23.
+	toTups[23][1], err = bld.Build(context.Background(), sharedPool) // modify value at index 23.
 	assert.NoError(t, err)
 	toRoot, err := MakeTreeForTest(toTups)
 	assert.NoError(t, err)

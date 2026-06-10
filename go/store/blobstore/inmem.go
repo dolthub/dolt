@@ -55,6 +55,10 @@ func NewInMemoryBlobstore(path string) *InMemoryBlobstore {
 	}
 }
 
+func (bs *InMemoryBlobstore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 func (bs *InMemoryBlobstore) Path() string {
 	return bs.path
 }

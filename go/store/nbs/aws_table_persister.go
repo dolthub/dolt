@@ -561,3 +561,7 @@ func (s3p awsTablePersister) PruneTableFiles(ctx context.Context) error {
 func (s3p awsTablePersister) Close() error {
 	return nil
 }
+
+func (s3p awsTablePersister) Teardown(ctx context.Context) error {
+	return nil
+}

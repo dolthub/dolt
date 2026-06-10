@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -281,6 +282,9 @@ type GitBlobstore struct {
 	// writeMu serializes operations that mutate shared git refs and/or perform
 	// remote-managed write workflows (commit + push + cache update).
 	writeMu sync.Mutex
+	// writeInProgress avoids fetch contention on slow remotes: syncForRead
+	// checks this flag instead of competing with an in-progress push.
+	writeInProgress atomic.Bool
 	// pendingMu guards pendingWrites, which may be appended to by non-manifest Put/Concatenate
 	// while being flushed by CheckAndPut("manifest").
 	pendingMu sync.Mutex
@@ -323,6 +327,11 @@ type GitBlobstore struct {
 	// syncForRead will skip the fetch if the last sync completed within this duration.
 	// Defaults to defaultSyncForReadTTL. Set to 0 to disable dedup (useful in tests).
 	syncForReadTTL time.Duration
+
+	// infoBranch, when non-empty, is the short branch name (e.g. "__dolt_remote_info__")
+	// for a visible info branch pushed after each successful data write. The branch
+	// contains a single DOLT_REMOTE.md file with remote metadata. Empty means disabled.
+	infoBranch string
 }
 
 var _ Blobstore = (*GitBlobstore)(nil)
@@ -373,6 +382,13 @@ type GitBlobstoreOptions struct {
 	// RemoteName is the git remote name to use for remote-managed mode (e.g. "origin").
 	// If empty, it defaults to "origin".
 	RemoteName string
+	// InfoBranch, when non-empty, enables pushing a visible branch containing a
+	// DOLT_REMOTE.md file after each successful data push. The value is the short
+	// branch name (e.g. "__dolt_remote_info__"). Overridden by DOLT_REMOTE_INFO_BRANCH env var.
+	InfoBranch string
+	// SyncForReadTTL overrides the read-side fetch dedup window. Zero means
+	// use defaultSyncForReadTTL.
+	SyncForReadTTL time.Duration
 }
 
 // NewGitBlobstoreWithOptions creates a GitBlobstore rooted at |gitDir| and |ref|.
@@ -397,6 +413,13 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 	remoteTrackingRef := RemoteTrackingRef(remoteName, remoteRef, instanceID)
 	localRef := OwnedLocalRef(remoteName, remoteRef, instanceID)
 
+	infoBranch := ResolveInfoBranch(opts.InfoBranch)
+
+	syncForReadTTL := opts.SyncForReadTTL
+	if syncForReadTTL == 0 {
+		syncForReadTTL = defaultSyncForReadTTL
+	}
+
 	return &GitBlobstore{
 		gitDir:            gitDir,
 		remoteRef:         remoteRef,
@@ -409,7 +432,8 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		maxPartSize:       opts.MaxPartSize,
 		cacheObjects:      make(map[string]cachedGitObject),
 		cacheChildren:     make(map[string][]git.TreeEntry),
-		syncForReadTTL:    defaultSyncForReadTTL,
+		syncForReadTTL:    syncForReadTTL,
+		infoBranch:        infoBranch,
 	}, nil
 }
 
@@ -624,11 +648,9 @@ func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
 	return err
 }
 
-// Close best-effort deletes this instance's UUID-owned refs and
+// Teardown best-effort deletes this instance's UUID-owned refs and
 // periodically runs git gc to repack the cache repository.
-func (gbs *GitBlobstore) Close() error {
-	ctx := context.Background()
-
+func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 	// Best-effort periodic GC to repack the cache repo. Runs outside the
 	// write lock so a slow gc cannot serialize other writers. maybeRunGC
 	// has its own file-based lock for cross-process coordination.
@@ -658,6 +680,10 @@ func (gbs *GitBlobstore) Close() error {
 	)
 }
 
+func (gbs *GitBlobstore) Close() error {
+	return nil
+}
+
 const gcInterval = 24 * time.Hour
 
 // maxParentedCommits is the number of consecutive parented commits before
@@ -679,7 +705,11 @@ func (gbs *GitBlobstore) maybeRunGC() {
 	}
 
 	lockPath := filepath.Join(gbs.gitDir, ".dolt-gc.lock")
-	lck := fslock.New(lockPath)
+	lck, err := fslock.New(lockPath)
+	if err != nil {
+		return // can't open the lock directory, skip
+	}
+	defer lck.Close()
 	if err := lck.LockWithTimeout(0); err != nil {
 		return // another process holds the lock, skip
 	}
@@ -713,6 +743,11 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		if sinceLast < ttl {
 			return nil
 		}
+	}
+
+	// Concurrent fetches contend with an in-progress push on slow remotes.
+	if gbs.writeInProgress.Load() {
+		return nil
 	}
 
 	// Fetch remote ref into our remote-tracking ref.
@@ -777,13 +812,76 @@ func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remote
 	return remoteHead, true, nil
 }
 
+const infoBranchFileName = "DOLT_REMOTE.md"
+
+func formatDoltRemoteInfo(remoteRef string, headOID git.OID, ts time.Time) []byte {
+	return []byte(fmt.Sprintf(
+		"This repository is being used as a Dolt remote.\n\nref=%s\n\nhead=%s\n\ntimestamp=%s\n",
+		remoteRef, headOID, ts.UTC().Format(time.RFC3339),
+	))
+}
+
+// pushInfoBranch creates and force-pushes a visible branch containing a single
+// DOLT_REMOTE.md file with metadata about the Dolt remote. This is best-effort:
+// failures are silently ignored and never affect the data write path.
+func (gbs *GitBlobstore) pushInfoBranch(ctx context.Context, headOID git.OID) {
+	if gbs.infoBranch == "" {
+		return
+	}
+
+	infoRef := "refs/heads/" + gbs.infoBranch
+	localInfoRef := "refs/dolt/info/" + gbs.infoBranch
+
+	content := formatDoltRemoteInfo(gbs.remoteRef, headOID, time.Now())
+
+	blobOID, err := gbs.api.HashObject(ctx, bytes.NewReader(content))
+	if err != nil {
+		return
+	}
+
+	_, indexFile, cleanup, err := git.NewTempIndex()
+	if err != nil {
+		return
+	}
+	defer cleanup()
+
+	if err := gbs.api.ReadTreeEmpty(ctx, indexFile); err != nil {
+		return
+	}
+	if err := gbs.api.UpdateIndexCacheInfo(ctx, indexFile, "100644", blobOID, infoBranchFileName); err != nil {
+		return
+	}
+	treeOID, err := gbs.api.WriteTree(ctx, indexFile)
+	if err != nil {
+		return
+	}
+
+	commitOID, err := gbs.api.CommitTree(ctx, treeOID, nil, "dolt remote info", gbs.identity)
+	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
+		commitOID, err = gbs.api.CommitTree(ctx, treeOID, nil, "dolt remote info", defaultGitBlobstoreIdentity())
+	}
+	if err != nil {
+		return
+	}
+
+	if err := gbs.api.UpdateRef(ctx, localInfoRef, commitOID, "dolt remote info"); err != nil {
+		return
+	}
+
+	_ = gbs.api.ForcePushRef(ctx, gbs.remoteName, localInfoRef, infoRef)
+}
+
 func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string, build func(parent git.OID, ok bool) (git.OID, error)) (string, error) {
 	if err := gbs.validateRemoteManaged(); err != nil {
 		return "", err
 	}
 
 	gbs.writeMu.Lock()
-	defer gbs.writeMu.Unlock()
+	gbs.writeInProgress.Store(true)
+	defer func() {
+		gbs.writeInProgress.Store(false)
+		gbs.writeMu.Unlock()
+	}()
 
 	policy := gbs.casRetryPolicy(ctx)
 
@@ -812,6 +910,9 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		if err := gbs.api.PushRefWithLease(ctx, gbs.remoteName, gbs.localRef, gbs.remoteRef, remoteHead); err != nil {
 			return err
 		}
+
+		// Best-effort: update the visible info branch with current remote metadata.
+		gbs.pushInfoBranch(ctx, newCommit)
 
 		// Merge cache additively to reflect the new head after a successful push.
 		if err := gbs.mergeCacheFromHead(ctx, newCommit); err != nil {

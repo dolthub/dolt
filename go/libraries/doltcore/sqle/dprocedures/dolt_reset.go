@@ -111,7 +111,7 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 					return 1, err
 				}
 			} else {
-				err := resetSoftToRef(ctx, dbData, apr.Arg(0), dSess, dbName)
+				err := resetMixedToRef(ctx, dbData, apr.Arg(0), dSess, dbName)
 				if err != nil {
 					return 1, err
 				}
@@ -126,15 +126,16 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 	return 0, nil
 }
 
-// resetSoftToRef resets the session HEAD to the commit ref given
-func resetSoftToRef(
+// resetMixedToRef implements git reset with no flag (default --mixed): moves the current branch
+// HEAD to |firstArg| and resets the index to that commit, leaving the working tree alone.
+func resetMixedToRef(
 	ctx *sql.Context,
 	dbData env.DbData[*sql.Context],
 	firstArg string,
 	dSess *dsess.DoltSession,
 	dbName string,
 ) error {
-	roots, err := actions.ResetSoftToRef(ctx, dbData, firstArg)
+	roots, err := actions.MoveHeadToRef(ctx, dbData, firstArg)
 	if err != nil {
 		return err
 	}
@@ -215,7 +216,8 @@ func resetSoft(
 
 	// If ref is "" that means HEAD, which makes reset --soft a no-op
 	if arg != "" {
-		roots, err := actions.ResetSoftToRef(ctx, dbData, arg)
+		// MoveHeadToRef returns Roots usable for --mixed. The --soft path ignores them per https://git-scm.com/docs/git-reset.
+		_, err := actions.MoveHeadToRef(ctx, dbData, arg)
 		if err != nil {
 			return err
 		}
@@ -223,7 +225,7 @@ func resetSoft(
 		if err != nil {
 			return err
 		}
-		err = dSess.SetWorkingSet(ctx, dbName, ws.WithStagedRoot(roots.Staged).ClearMerge().ClearRebase())
+		err = dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge().ClearRebase())
 		if err != nil {
 			return err
 		}

@@ -72,6 +72,8 @@ type tablePersister interface {
 	AccessMode() chunks.ExclusiveAccessMode
 
 	io.Closer
+
+	Teardown(ctx context.Context) error
 }
 
 type tableFilePersister interface {

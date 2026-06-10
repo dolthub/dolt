@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shopspring/decimal"
+	"github.com/cockroachdb/apd/v3"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -72,6 +72,9 @@ type TupleTypeHandler interface {
 type TupleDescriptorArgs struct {
 	Comparator TupleComparator
 	Handlers   []TupleTypeHandler
+	// ValueStore, if non-nil, is attached to the TupleDesc's Comparator via |WithValueStore|.
+	// It is required when comparing tuples with adaptive-encoded fields.
+	ValueStore ValueStore
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
@@ -96,6 +99,9 @@ func NewTupleDescriptorWithArgs(args TupleDescriptorArgs, types ...Type) (td *Tu
 		innerCmp: args.Comparator,
 		handlers: args.Handlers,
 	}).Validated(types)
+	if args.ValueStore != nil {
+		args.Comparator = args.Comparator.WithValueStore(args.ValueStore)
+	}
 
 	td = &TupleDesc{
 		Types:    types,
@@ -119,7 +125,7 @@ func IterAddressFields(td *TupleDesc, cb func(int, Type)) {
 func IterAdaptiveFields(td *TupleDesc, cb func(int, Type)) {
 	for i, typ := range td.Types {
 		switch typ.Enc {
-		case BytesAdaptiveEnc, StringAdaptiveEnc, ExtendedAdaptiveEnc, GeomAdaptiveEnc:
+		case BytesAdaptiveEnc, StringAdaptiveEnc, ExtendedAdaptiveEnc, GeomAdaptiveEnc, JsonAdaptiveEnc:
 			cb(i, typ)
 		}
 	}
@@ -149,8 +155,13 @@ func makeFixedAccess(types []Type) (acc FixedAccess) {
 	return
 }
 
+// AddressFieldCount returns the number of fields in the TupleDesc that are either address-encoded or adaptive-encoded,
+// and thus require address lookups to access. For adaptive encoded fields, this count is a maximum.
 func (td *TupleDesc) AddressFieldCount() (n int) {
 	IterAddressFields(td, func(int, Type) {
+		n++
+	})
+	IterAdaptiveFields(td, func(int, Type) {
 		n++
 	})
 	return
@@ -182,12 +193,12 @@ func (td *TupleDesc) GetField(i int, tup Tuple) []byte {
 }
 
 // Compare compares |left| and |right|.
-func (td *TupleDesc) Compare(ctx context.Context, left, right Tuple) (cmp int) {
+func (td *TupleDesc) Compare(ctx context.Context, left, right Tuple) (cmp int, err error) {
 	return td.cmp.Compare(ctx, left, right, td)
 }
 
 // CompareField compares |value| with the ith field of |tup|.
-func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup Tuple) (cmp int) {
+func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup Tuple) (cmp int, err error) {
 	var v []byte
 	if i < len(td.fast) {
 		var start, stop ByteSize
@@ -202,7 +213,7 @@ func (td *TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup 
 	return td.cmp.CompareValues(ctx, i, value, v, td.Types[i])
 }
 
-// Comparator returns the TupleDescriptor's TupleComparator.
+// Comparator returns this TupleDesc's TupleComparator.
 func (td *TupleDesc) Comparator() TupleComparator {
 	return td.cmp
 }
@@ -374,7 +385,7 @@ func (td *TupleDesc) GetBit(i int, tup Tuple) (v uint64, ok bool) {
 
 // GetDecimal reads a float64 from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
-func (td *TupleDesc) GetDecimal(i int, tup Tuple) (v decimal.Decimal, ok bool) {
+func (td *TupleDesc) GetDecimal(i int, tup Tuple) (v *apd.Decimal, ok bool) {
 	td.ExpectEncoding(i, DecimalEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
@@ -504,14 +515,14 @@ func (td *TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
 	return td.GetAddr(i, tup)
 }
 
-// GetGeomAdaptiveValue reads a geometry value from an adaptive-encoded field, returning a *GeometryStorage
-// that defers deserialization until the value is actually needed.
-func (td *TupleDesc) GetGeomAdaptiveValue(ctx context.Context, i int, vs ValueStore, tup Tuple) (*GeometryStorage, bool, error) {
+// GetGeomAdaptiveValue returns either a Geometry value or a GeometryStorage depending on whether it is stored inlined.
+func (td *TupleDesc) GetGeomAdaptiveValue(ctx context.Context, i int, vs ValueStore, tup Tuple) (any, bool, error) {
 	td.ExpectEncoding(i, GeomAdaptiveEnc)
-	return GetGeomAdaptiveValue(ctx, vs, td.GetField(i, tup))
+	return getGeomAdaptiveValue(ctx, vs, td.GetField(i, tup))
 }
 
-func GetGeomAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (*GeometryStorage, bool, error) {
+// getGeomAdaptiveValue returns either a Geometry value or a GeometryStorage depending on whether it is stored inlined.
+func getGeomAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (any, bool, error) {
 	adaptiveValue := AdaptiveValue(val)
 	if len(adaptiveValue) == 0 {
 		return nil, false, nil
@@ -521,7 +532,7 @@ func GetGeomAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (*Geom
 		if err != nil {
 			return nil, false, err
 		}
-		return NewGeometryStorageInline(bytes), true, nil
+		return bytes, true, nil
 	} else {
 		gs, err := adaptiveValue.convertToGeometryStorage(ctx, vs)
 		return gs, true, err
@@ -594,9 +605,7 @@ func GetBytesAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (inte
 }
 
 // GetStringAdaptiveValue returns either a string or a StringWrapper, but Go doesn't allow us to use a single type for that.
-func (td *TupleDesc) GetStringAdaptiveValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
-	// TODO: Add context parameter
-	ctx := context.Background()
+func (td *TupleDesc) GetStringAdaptiveValue(ctx context.Context, i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
 	td.ExpectEncoding(i, StringAdaptiveEnc)
 	adaptiveValue := AdaptiveValue(td.GetField(i, tup))
 	if len(adaptiveValue) == 0 {
@@ -609,6 +618,30 @@ func (td *TupleDesc) GetStringAdaptiveValue(i int, vs ValueStore, tup Tuple) (in
 		val, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
 		return val, true, err
 	}
+}
+
+// GetJsonAdaptiveValue reads a JSON value from an adaptive-encoded field, returning a *JsonAdaptiveStorage
+// that defers byte loading and JSON deserialization until the value is actually needed.
+func (td *TupleDesc) GetJsonAdaptiveValue(ctx context.Context, i int, vs ValueStore, tup Tuple) (any, bool, error) {
+	td.ExpectEncoding(i, JsonAdaptiveEnc)
+	return GetJsonAdaptiveValue(ctx, vs, td.GetField(i, tup))
+}
+
+// GetJsonAdaptiveValue is the standalone version used when a TupleDesc is not available.
+func GetJsonAdaptiveValue(ctx context.Context, vs ValueStore, field []byte) (any, bool, error) {
+	adaptiveValue := AdaptiveValue(field)
+	if adaptiveValue.IsNull() {
+		return nil, false, nil
+	}
+	if adaptiveValue.isInlined() {
+		bytes, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
+		if err != nil {
+			return nil, false, err
+		}
+		return bytes, true, nil
+	}
+	gs, err := adaptiveValue.convertToJsonStorage(ctx, vs)
+	return gs, true, err
 }
 
 func (td *TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {
@@ -729,6 +762,16 @@ func (td *TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value
 		return strconv.FormatUint(v, 10)
 	case StringEnc:
 		return readString(value)
+	case StringAdaptiveEnc, BytesAdaptiveEnc:
+		if b, isInline := InlineValueBytes(value); isInline {
+			return string(b)
+		}
+		// for out of band values, we don't want to load the value just to format it, so we return a hex string of the bytes
+		// TODO: this is used in user-facing error messages like duplicate key errors, but in this Format method it's not
+		//  appropriate to make assumptions about what format is correct for specific use cases involving large values.
+		//  We should find places that use adaptive encoded values for user-facing messages and decide what format is
+		//  best there.
+		return hex.EncodeToString(value)
 	case ByteStringEnc:
 		return hex.EncodeToString(value)
 	case Hash128Enc:
@@ -835,7 +878,7 @@ func (handler AddressTypeHandler) SerializeValue(ctx context.Context, val any) (
 	if len(b) == 0 {
 		return nil, nil
 	}
-	h, err := handler.vs.WriteBytes(context.Background(), b)
+	h, err := handler.vs.WriteBytes(ctx, b)
 	if err != nil {
 		return nil, err
 	}

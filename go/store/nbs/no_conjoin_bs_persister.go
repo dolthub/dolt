@@ -99,6 +99,10 @@ func (bsp *noConjoinBlobstorePersister) Close() error {
 	return nil
 }
 
+func (bsp *noConjoinBlobstorePersister) Teardown(ctx context.Context) error {
+	return bsp.bs.Teardown(ctx)
+}
+
 func (bsp *noConjoinBlobstorePersister) AccessMode() chunks.ExclusiveAccessMode {
 	return chunks.ExclusiveAccessMode_Shared
 }

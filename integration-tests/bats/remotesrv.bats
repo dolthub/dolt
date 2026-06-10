@@ -26,7 +26,13 @@ stop_remotesrv() {
     fi
 }
 
-@test "remotesrv: can read from remotesrv in repo-mode" {
+_do_read_from_remotesrv_repo_mode_scenario() {
+    local disabled_features="$1"
+    if [ -n "$disabled_features" ]; then
+        export DOLT_REMOTESAPI_DISABLED_FEATURES="$disabled_features"
+    else
+        unset DOLT_REMOTESAPI_DISABLED_FEATURES
+    fi
     mkdir remote
     mkdir cloned
     cd remote
@@ -61,7 +67,21 @@ stop_remotesrv() {
     [[ "$output" =~ "10" ]] || false
 }
 
-@test "remotesrv: can write to remotesrv in repo-mode" {
+@test "remotesrv: can read from remotesrv in repo-mode, new RPC" {
+    _do_read_from_remotesrv_repo_mode_scenario ""
+}
+
+@test "remotesrv: can read from remotesrv in repo-mode, legacy RPC" {
+    _do_read_from_remotesrv_repo_mode_scenario "FEATURE_STREAM_CHUNK_LOCATIONS"
+}
+
+_do_write_to_remotesrv_repo_mode_scenario() {
+    local disabled_features="$1"
+    if [ -n "$disabled_features" ]; then
+        export DOLT_REMOTESAPI_DISABLED_FEATURES="$disabled_features"
+    else
+        unset DOLT_REMOTESAPI_DISABLED_FEATURES
+    fi
     mkdir remote
     mkdir cloned
     cd remote
@@ -86,6 +106,14 @@ stop_remotesrv() {
     dolt reset --hard
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "5" ]] || false
+}
+
+@test "remotesrv: can write to remotesrv in repo-mode, new RPC" {
+    _do_write_to_remotesrv_repo_mode_scenario ""
+}
+
+@test "remotesrv: can write to remotesrv in repo-mode, legacy RPC" {
+    _do_write_to_remotesrv_repo_mode_scenario "FEATURE_STREAM_CHUNK_LOCATIONS"
 }
 
 @test "remotesrv: pushing new branch to remotesrv does not create new working set" {
@@ -176,7 +204,13 @@ stop_remotesrv() {
     [[ "$status" != 0 ]] || false
 }
 
-@test "remotesrv: can run grpc and http on same port" {
+_do_grpc_and_http_same_port_scenario() {
+    local disabled_features="$1"
+    if [ -n "$disabled_features" ]; then
+        export DOLT_REMOTESAPI_DISABLED_FEATURES="$disabled_features"
+    else
+        unset DOLT_REMOTESAPI_DISABLED_FEATURES
+    fi
     mkdir remote
     mkdir cloned
     cd remote
@@ -190,4 +224,12 @@ stop_remotesrv() {
 
     cd ../cloned
     dolt clone http://localhost:1234/test-org/test-repo repo1
+}
+
+@test "remotesrv: can run grpc and http on same port, new RPC" {
+    _do_grpc_and_http_same_port_scenario ""
+}
+
+@test "remotesrv: can run grpc and http on same port, legacy RPC" {
+    _do_grpc_and_http_same_port_scenario "FEATURE_STREAM_CHUNK_LOCATIONS"
 }

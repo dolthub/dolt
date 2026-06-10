@@ -16,6 +16,7 @@ package statspro
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"testing"
 
@@ -198,7 +199,7 @@ func TestBucketBuilder(t *testing.T) {
 					err := tree.PutField(ctx, nil, kb, i, v)
 					assert.NoError(t, err)
 				}
-				tup, err := kb.Build(pool)
+				tup, err := kb.Build(context.Background(), pool)
 				assert.NoError(t, err)
 				b.add(ctx, tup)
 			}

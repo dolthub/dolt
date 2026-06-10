@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // GCScheduler controls when auto-GC work is allowed to proceed.
@@ -47,24 +46,34 @@ func (noneGCScheduler) WaitForNextRun(context.Context) error {
 	return nil
 }
 
+// TODO: CPU Threshold should not be used to determine whether or not AutoGC should run
+// DEFAULT_LOAD_THRESHOLD is the minimum CPU Load to prevent AutoGC from running.
+const DEFAULT_LOAD_THRESHOLD = 0.5
+
+// DEFAULT_SKIPPED_THRESHOLD is the number of times AutoGC can be skipped before it just runs.
+const DEFAULT_SKIPPED_THRESHOLD = 30
+
 // loadAvgGCScheduler delays GC until the system load average drops
 // below a per-CPU threshold. Each call to WaitForNextRun checks the
 // current load and backs off in a loop until conditions are favorable.
 type loadAvgGCScheduler struct {
 	fs            procfs.FS
-	loadThreshold float64
+	loadThreshold float64 // TODO: make this configurable?
+	skippedCount  uint8
 }
 
 func (s *loadAvgGCScheduler) WaitForNextRun(ctx context.Context) error {
 	for {
 		loadAvg, err := s.fs.LoadAvg()
-		if err != nil || loadAvg.Load1 <= s.loadThreshold {
+		if err != nil || s.skippedCount >= DEFAULT_SKIPPED_THRESHOLD || loadAvg.Load1 <= s.loadThreshold {
+			s.skippedCount = 0
 			return nil
 		}
 		select {
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case <-time.After(1 * time.Minute):
+			s.skippedCount++
 		}
 	}
 }
@@ -82,23 +91,25 @@ func (s *loadAvgGCScheduler) WaitForNextRun(ctx context.Context) error {
 // database as wanting a GC.
 
 type AutoGCController struct {
-	workCh    chan autoGCWork
-	lgr       *logrus.Logger
-	hooks     map[string]*autoGCCommitHook
-	ctxF      func(context.Context) (*sql.Context, error)
-	threads   *sql.BackgroundThreads
-	arcLevel  chunks.GCArchiveLevel
-	scheduler GCScheduler
-	mu        sync.Mutex
+	workCh              chan autoGCWork
+	lgr                 *logrus.Logger
+	hooks               map[string]*autoGCCommitHook
+	ctxF                func(context.Context) (*sql.Context, error)
+	threads             *sql.BackgroundThreads
+	arcLevel            chunks.GCArchiveLevel
+	scheduler           GCScheduler
+	incrementalFileSize uint64
+	mu                  sync.Mutex
 }
 
-func NewAutoGCController(arcLevel chunks.GCArchiveLevel, scheduler GCScheduler, lgr *logrus.Logger) *AutoGCController {
+func NewAutoGCController(arcLevel chunks.GCArchiveLevel, incrementalArchiveSize uint64, scheduler GCScheduler, lgr *logrus.Logger) *AutoGCController {
 	return &AutoGCController{
-		workCh:    make(chan autoGCWork),
-		lgr:       lgr,
-		hooks:     make(map[string]*autoGCCommitHook),
-		arcLevel:  arcLevel,
-		scheduler: scheduler,
+		workCh:              make(chan autoGCWork),
+		lgr:                 lgr,
+		hooks:               make(map[string]*autoGCCommitHook),
+		arcLevel:            arcLevel,
+		incrementalFileSize: incrementalArchiveSize,
+		scheduler:           scheduler,
 	}
 }
 
@@ -108,12 +119,9 @@ func NewGCScheduler(gcSchStr string) GCScheduler {
 		return noneGCScheduler{}
 	default:
 		if fs, err := procfs.NewDefaultFS(); err == nil {
-			var stat procfs.Stat
-			if stat, err = fs.Stat(); err == nil {
-				return &loadAvgGCScheduler{
-					fs:            fs,
-					loadThreshold: 10 / float64(len(stat.CPU)),
-				}
+			return &loadAvgGCScheduler{
+				fs:            fs,
+				loadThreshold: DEFAULT_LOAD_THRESHOLD,
 			}
 		}
 		return noneGCScheduler{}
@@ -222,7 +230,7 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
-	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, c.arcLevel, work.name)
+	err = dprocedures.RunDoltGC(sqlCtx, work.db, chunks.NewGCConfig(chunks.GCMode_Default, c.arcLevel, c.incrementalFileSize), work.name)
 	if err != nil {
 		if !errors.Is(err, chunks.ErrNothingToCollect) {
 			c.lgr.Warnf("sqle/auto_gc: Attempt to auto GC database %s failed with error: %v", work.name, err)

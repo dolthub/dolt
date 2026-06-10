@@ -8,6 +8,7 @@ on:
 
 jobs:
   set-version-actor:
+    if: github.actor != 'dependabot[bot]'
     name: Set Version and Actor
     runs-on: ubuntu-22.04
     outputs:

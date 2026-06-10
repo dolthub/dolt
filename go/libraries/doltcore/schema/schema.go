@@ -96,6 +96,13 @@ type Schema interface {
 	// SetComment sets the table's comment.
 	SetComment(comment string)
 
+	// GetTargetRowSize returns the table's target row size in bytes.
+	// Returns the default (2048) if not explicitly set.
+	GetTargetRowSize() uint16
+
+	// SetTargetRowSize sets the table's target row size.
+	SetTargetRowSize(value uint16)
+
 	// Copy returns a copy of this Schema that can be safely modified independently.
 	Copy() Schema
 }
@@ -190,6 +197,10 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	}
 
 	if sch1.GetCollation() != sch2.GetCollation() {
+		return false
+	}
+
+	if sch1.GetTargetRowSize() != sch2.GetTargetRowSize() {
 		return false
 	}
 

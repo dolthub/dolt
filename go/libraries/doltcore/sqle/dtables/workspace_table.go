@@ -21,15 +21,19 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -87,6 +91,9 @@ var _ sql.RowUpdater = (*WorkspaceTableUpdater)(nil)
 
 type WorkspaceTableDeleter struct {
 	WorkspaceTableModifier
+	fkEditor      *plan.ForeignKeyEditor
+	fkUpdaters    []sql.ForeignKeyEditor
+	userTblEditor sql.ForeignKeyEditor
 }
 
 var _ sql.RowDeleter = (*WorkspaceTableDeleter)(nil)
@@ -201,15 +208,42 @@ func (wtu *WorkspaceTableUpdater) Close(c *sql.Context) error {
 	return nil
 }
 
+// StatementBegin resolves the underlying table through the session catalog so
+// the revert flows through the same writer ordinary DML uses, then wraps it in
+// a ForeignKeyEditor so FK actions fire on the revert.
 func (wtd *WorkspaceTableDeleter) StatementBegin(ctx *sql.Context) {
-	// Deletes are only allowed on WORKING, do not target staging.
-	sessionWriter, tableWriter, err := wtd.getWorkspaceTableWriter(ctx, false)
+	ds := dsess.DSessFromSess(ctx.Session)
+	catalog := analyzer.NewCatalog(ds.GenericProvider(), overrides.EngineOverridesFromContext(ctx))
+	catalog.AuthHandler = sql.NoopAuthorizationHandler{}
+
+	tbl, _, err := catalog.TableSchema(ctx, ctx.GetCurrentDatabase(), wtd.tableName.Schema, wtd.tableName.Name)
 	if err != nil {
 		wtd.err = &err
 		return
 	}
-	wtd.tableWriter = &tableWriter
-	wtd.sessionWriter = &sessionWriter
+	fkTbl, ok := tbl.(sql.ForeignKeyTable)
+	if !ok {
+		e := fmt.Errorf("workspace target table %s does not support foreign keys", wtd.tableName)
+		wtd.err = &e
+		return
+	}
+
+	fkEditor, updaters, err := analyzer.BuildForeignKeyEditor(ctx, catalog, fkTbl)
+	if err != nil {
+		wtd.err = &err
+		return
+	}
+
+	wtd.fkEditor = fkEditor
+	wtd.fkUpdaters = updaters
+	if fkEditor == nil {
+		wtd.userTblEditor = fkTbl.GetForeignKeyEditor(ctx)
+		wtd.userTblEditor.StatementBegin(ctx)
+		return
+	}
+	for _, u := range updaters {
+		u.StatementBegin(ctx)
+	}
 }
 
 func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
@@ -231,7 +265,6 @@ func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
 	toRow := row[3 : 3+schemaLen]
 	fromRow := row[3+schemaLen:]
 
-	// If to Row has any non-nil values, then we need to do an update. Otherwise, insert.
 	wasDelete := true
 	for _, val := range toRow {
 		if val != nil {
@@ -247,32 +280,81 @@ func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
 		}
 	}
 
-	tableWriter := (*wtd.tableWriter)
-	if tableWriter == nil {
-		return fmt.Errorf("Runtime error: table writer is nil")
+	if wtd.fkEditor != nil {
+		switch {
+		case wasInsert:
+			return wtd.fkEditor.Delete(c, toRow, 0)
+		case wasDelete:
+			for _, ref := range wtd.fkEditor.References {
+				if err := ref.CheckReference(c, fromRow); err != nil {
+					return err
+				}
+			}
+			return wtd.fkEditor.Editor.Insert(c, fromRow)
+		default:
+			return wtd.fkEditor.Update(c, toRow, fromRow, 0)
+		}
 	}
 
+	if wtd.userTblEditor == nil {
+		return fmt.Errorf("Runtime error: table writer is nil")
+	}
 	if wasInsert {
-		return tableWriter.Delete(c, toRow) // delete newly added row.
+		return wtd.userTblEditor.Delete(c, toRow)
 	} else if wasDelete {
-		return tableWriter.Insert(c, fromRow) // restore deleted row.
+		return wtd.userTblEditor.Insert(c, fromRow)
 	} else {
-		return tableWriter.Update(c, toRow, fromRow) // restore updated row.
+		return wtd.userTblEditor.Update(c, toRow, fromRow)
 	}
 }
 
 func (wtd *WorkspaceTableDeleter) Close(c *sql.Context) error {
-	// Resources released in StatementComplete
+	var firstErr error
+	for _, u := range wtd.fkUpdaters {
+		if err := u.Close(c); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if wtd.userTblEditor != nil {
+		if err := wtd.userTblEditor.Close(c); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (wtd *WorkspaceTableDeleter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	for _, u := range wtd.fkUpdaters {
+		if err := u.DiscardChanges(ctx, errorEncountered); err != nil {
+			return err
+		}
+	}
+	if wtd.userTblEditor != nil {
+		return wtd.userTblEditor.DiscardChanges(ctx, errorEncountered)
+	}
+	return nil
+}
+
+func (wtd *WorkspaceTableDeleter) StatementComplete(ctx *sql.Context) error {
+	if wtd.err != nil {
+		return *wtd.err
+	}
+	for _, u := range wtd.fkUpdaters {
+		if err := u.StatementComplete(ctx); err != nil {
+			return err
+		}
+	}
+	if wtd.userTblEditor != nil {
+		return wtd.userTblEditor.StatementComplete(ctx)
+	}
 	return nil
 }
 
 func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, targetStaging bool) (dsess.WriteSession, dsess.TableWriter, error) {
 	ds := dsess.DSessFromSess(ctx.Session)
-
-	setter := ds.SetWorkingRoot
+	var setter dsess.SessionRootSetter
 	if targetStaging {
 		setter = ds.SetStagingRoot
-
 		// Ensure table exists in staging root before getting writer.
 		// This is necessary when staging rows from a new table that exists
 		// in working but not yet in staging (e.g., 'dolt add -p' on a new table).
@@ -280,6 +362,8 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 		if err != nil {
 			return nil, nil, err
 		}
+	} else {
+		setter = ds.SetWorkingRoot
 	}
 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", wtm.ws)
@@ -287,13 +371,11 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 		return nil, nil, err
 	}
 
-	writeSession := writer.NewWriteSession(wtm.ws, gst, editor.Options{TargetStaging: targetStaging})
-
-	tableWriter, err := writeSession.GetTableWriter(ctx, wtm.tableName, ctx.GetCurrentDatabase(), setter, targetStaging)
+	writeSession := writer.NewWriteSession(ctx.GetCurrentDatabase(), wtm.ws, gst, setter, editor.Options{TargetStaging: targetStaging})
+	tableWriter, err := writeSession.GetTableWriter(ctx, wtm.tableName)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return writeSession, tableWriter, nil
 }
 
@@ -402,7 +484,10 @@ func validateWorkspaceUpdate(old, new sql.Row) (valid, staged bool) {
 	return true, isStaged
 }
 
-func (wt *WorkspaceTable) Deleter(_ *sql.Context) sql.RowDeleter {
+func (wt *WorkspaceTable) Deleter(ctx *sql.Context) sql.RowDeleter {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	cols := wt.headSchema.GetAllCols().Size()
 	modifier := WorkspaceTableModifier{
 		tableName:          wt.userTblName,
@@ -415,11 +500,14 @@ func (wt *WorkspaceTable) Deleter(_ *sql.Context) sql.RowDeleter {
 	}
 
 	return &WorkspaceTableDeleter{
-		modifier,
+		WorkspaceTableModifier: modifier,
 	}
 }
 
-func (wt *WorkspaceTable) Updater(_ *sql.Context) sql.RowUpdater {
+func (wt *WorkspaceTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	cols := wt.headSchema.GetAllCols().Size()
 	modifier := WorkspaceTableModifier{
 		tableName:          wt.userTblName,
@@ -466,11 +554,6 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		}
 	}
 
-	if wkDel == nil && stgDel == nil {
-		emptyTable := emptyWorkspaceTable{tableName}
-		return &emptyTable, nil
-	}
-
 	var fromSch schema.Schema
 	if stgDel != nil && stgDel.FromTable != nil {
 		fromSch, err = stgDel.FromTable.GetSchema(ctx)
@@ -497,7 +580,22 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		}
 	}
 	if fromSch == nil && toSch == nil {
-		return nil, errors.New("Runtime error: from and to schemas are both nil")
+		// TODO: We should use getTableInsensitiveOrError to error out here like we do for nonexistent dolt_diff tables.
+		//  https://github.com/dolthub/dolt/issues/11139
+		table, _, tableExists, err := doltdb.GetTableInsensitive(ctx, head, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !tableExists {
+			return &emptyWorkspaceTable{tableName: tableName}, nil
+		}
+
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		toSch = sch
+		fromSch = sch
 	}
 	if fromSch == nil {
 		fromSch = toSch

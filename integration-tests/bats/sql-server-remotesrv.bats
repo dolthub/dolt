@@ -28,7 +28,13 @@ teardown() {
     teardown_common
 }
 
-@test "sql-server-remotesrv: can read from sql-server with --remotesapi-port" {
+_do_read_from_sql_server_remotesapi_port_scenario() {
+    local disabled_features="$1"
+    if [ -n "$disabled_features" ]; then
+        export DOLT_REMOTESAPI_DISABLED_FEATURES="$disabled_features"
+    else
+        unset DOLT_REMOTESAPI_DISABLED_FEATURES
+    fi
     mkdir -p db/remote
     cd db/remote
     dolt init
@@ -60,9 +66,23 @@ call dolt_commit('-am', 'add some vals');
     [[ "$output" =~ "10" ]] || false
 }
 
+@test "sql-server-remotesrv: can read from sql-server with --remotesapi-port, new RPC" {
+    _do_read_from_sql_server_remotesapi_port_scenario ""
+}
+
+@test "sql-server-remotesrv: can read from sql-server with --remotesapi-port, legacy RPC" {
+    _do_read_from_sql_server_remotesapi_port_scenario "FEATURE_STREAM_CHUNK_LOCATIONS"
+}
+
 # Asserts we can use dolt_checkout() to check out a new branch that was pushed to a running
 # sql-server, and that the branch has a valid, writeable working set.
-@test "sql-server-remotesrv: can checkout a new branch pushed to a sql-server remote" {
+_do_checkout_new_branch_pushed_to_sql_server_scenario() {
+    local disabled_features="$1"
+    if [ -n "$disabled_features" ]; then
+        export DOLT_REMOTESAPI_DISABLED_FEATURES="$disabled_features"
+    else
+        unset DOLT_REMOTESAPI_DISABLED_FEATURES
+    fi
     mkdir -p db/remote
     cd db/remote
     dolt init
@@ -85,6 +105,14 @@ CREATE TABLE t123 (pk int primary key);
 SELECT 'abcdefg';"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "abcdefg" ]] || false
+}
+
+@test "sql-server-remotesrv: can checkout a new branch pushed to a sql-server remote, new RPC" {
+    _do_checkout_new_branch_pushed_to_sql_server_scenario ""
+}
+
+@test "sql-server-remotesrv: can checkout a new branch pushed to a sql-server remote, legacy RPC" {
+    _do_checkout_new_branch_pushed_to_sql_server_scenario "FEATURE_STREAM_CHUNK_LOCATIONS"
 }
 
 @test "sql-server-remotesrv: pushing a new branch creates a working set" {

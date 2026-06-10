@@ -240,12 +240,13 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			return cmdFailure, err
 		}
 	} else {
-		mode := types.GCModeDefault
+		var gcConfig chunks.GCConfig
+		gcConfig.Mode = chunks.GCMode_Default
 		if apr.Contains(cli.FullFlag) {
-			mode = types.GCModeFull
+			gcConfig.Mode = chunks.GCMode_Full
 		}
 
-		cmpLvl := chunks.SimpleArchive
+		gcConfig.ArchiveLevel = chunks.SimpleArchive
 		if apr.Contains(cli.ArchiveLevelParam) {
 			lvl, ok := apr.GetInt(cli.ArchiveLevelParam)
 			if !ok {
@@ -254,10 +255,18 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			if lvl < int(chunks.NoArchive) || lvl > int(chunks.MaxArchiveLevel) {
 				return cmdFailure, fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, lvl)
 			}
-			cmpLvl = chunks.GCArchiveLevel(lvl)
+			gcConfig.ArchiveLevel = chunks.GCArchiveLevel(lvl)
 		}
 
-		err := RunDoltGC(ctx, ddb, mode, cmpLvl, ctx.GetCurrentDatabase())
+		if apr.Contains(cli.IncrementalGCFileSize) {
+			incrementalFileSize, ok := apr.GetUint(cli.IncrementalGCFileSize)
+			if !ok {
+				return cmdFailure, fmt.Errorf("parse error for value for %s: %s", cli.IncrementalGCFileSize, apr.GetValues()[cli.IncrementalGCFileSize])
+			}
+			gcConfig.IncrementalFileSize = incrementalFileSize
+		}
+
+		err := RunDoltGC(ctx, ddb, gcConfig, ctx.GetCurrentDatabase())
 		if err != nil {
 			return cmdFailure, err
 		}
@@ -266,7 +275,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	return cmdSuccess, nil
 }
 
-func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chunks.GCArchiveLevel, dbname string) error {
+func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, gcConfig chunks.GCConfig, dbname string) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	var sc types.GCSafepointController
 	var statsDoneCh chan struct{}
@@ -325,5 +334,5 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chun
 			statsDoneCh: statsDoneCh,
 		}
 	}
-	return ddb.GC(ctx, mode, cmp, sc)
+	return ddb.GC(ctx, gcConfig, sc)
 }

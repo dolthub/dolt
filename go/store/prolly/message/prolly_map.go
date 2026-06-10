@@ -74,8 +74,11 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		valOffs = writeItemOffsets(b, values, valSz)
 		// serialize offStart of chunk addresses within |valTups|
 		if s.valDesc.AddressFieldCount() > 0 {
-			serial.ProllyTreeNodeStartValueAddressOffsetsVector(b, countAddresses(values, s.valDesc))
-			valAddrOffs = writeAddressOffsets(b, values, valSz, s.valDesc)
+			addressFields := countAddresses(values, s.valDesc)
+			if addressFields > 0 {
+				serial.ProllyTreeNodeStartValueAddressOffsetsVector(b, addressFields)
+				valAddrOffs = writeAddressOffsets(b, values, valSz, s.valDesc)
+			}
 		}
 	} else {
 		// serialize child refs and subtree counts for internal nodes

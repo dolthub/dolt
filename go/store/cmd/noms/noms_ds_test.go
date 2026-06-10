@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -45,7 +46,7 @@ type nomsDsTestSuite struct {
 func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 	dir := s.DBDir
 
-	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_DOLT.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 	s.NoError(err)
 	ds := datas.NewDatabase(cs)
 
@@ -59,16 +60,16 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.DBDir
 
-	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
-
-	var golden1, golden2 string
-	switch types.Format_Default {
-	case types.Format_DOLT:
-		golden1 = "c7g244286kom2a1326kkgs85pi97cjs7"
-		golden2 = "rn7dsl1146qr2n4chtg41n24n0jqgnte"
-	default:
-		s.Fail("no golden values exist for NBF %s", types.Format_Default.VersionString())
+	epoch := datas.CommitDateAt(time.Unix(0, 0).UTC())
+	meta := &datas.CommitMeta{
+		Author:    datas.CommitIdent{Date: epoch},
+		Committer: datas.CommitIdent{Date: epoch},
 	}
+
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_DOLT.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
+
+	golden1 := "c7g244286kom2a1326kkgs85pi97cjs7"
+	golden2 := "rn7dsl1146qr2n4chtg41n24n0jqgnte"
 
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
@@ -76,13 +77,13 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	id := "testdataset"
 	set, err := db.GetDataset(context.Background(), id)
 	s.NoError(err)
-	set, err = datas.CommitValue(context.Background(), db, set, types.String("Commit Value"))
+	set, err = db.Commit(context.Background(), set, types.String("Commit Value"), datas.CommitOptions{Meta: meta})
 	s.NoError(err)
 
 	id2 := "testdataset2"
 	set2, err := db.GetDataset(context.Background(), id2)
 	s.NoError(err)
-	set2, err = datas.CommitValue(context.Background(), db, set2, types.String("Commit Value2"))
+	set2, err = db.Commit(context.Background(), set2, types.String("Commit Value2"), datas.CommitOptions{Meta: meta})
 	s.NoError(err)
 
 	err = db.Close()

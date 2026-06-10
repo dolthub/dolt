@@ -244,6 +244,10 @@ func (bsp *blobstorePersister) Close() error {
 	return nil
 }
 
+func (bsp *blobstorePersister) Teardown(ctx context.Context) error {
+	return bsp.bs.Teardown(ctx)
+}
+
 func (bsp *blobstorePersister) AccessMode() chunks.ExclusiveAccessMode {
 	return chunks.ExclusiveAccessMode_Shared
 }

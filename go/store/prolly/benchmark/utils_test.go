@@ -91,7 +91,7 @@ func generateProllyTuples(kd, vd *val.TupleDesc, size uint64, ns tree.NodeStore)
 	for i := range tups {
 		// key
 		kb.PutUint64(0, uint64(i))
-		tups[i][0], err = kb.Build(shared)
+		tups[i][0], err = kb.Build(context.Background(), shared)
 		if err != nil {
 			panic(err)
 		}
@@ -102,7 +102,7 @@ func generateProllyTuples(kd, vd *val.TupleDesc, size uint64, ns tree.NodeStore)
 		vb.PutInt64(2, src.Int63())
 		vb.PutInt64(3, src.Int63())
 		vb.PutInt64(4, src.Int63())
-		tups[i][1], err = vb.Build(shared)
+		tups[i][1], err = vb.Build(context.Background(), shared)
 		if err != nil {
 			panic(err)
 		}

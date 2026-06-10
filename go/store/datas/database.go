@@ -196,18 +196,21 @@ type GarbageCollector interface {
 
 	// GC traverses the database starting at the Root and removes
 	// all unreferenced data from persistent storage.
-	GC(ctx context.Context, mode types.GCMode, cmp chunks.GCArchiveLevel, oldGenRefs, newGenRefs hash.HashSet, safepointController types.GCSafepointController) error
+	GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenRefs, newGenRefs hash.HashSet, safepointController types.GCSafepointController) error
 }
 
 // CanUsePuller returns true if a datas.Puller can be used to pull data from one Database into another.  Not all
 // Databases support this yet.
-func CanUsePuller(db Database) bool {
+func CanUsePuller(ctx context.Context, db Database) (bool, error) {
 	cs := db.chunkStore()
 	if tfs, ok := cs.(chunks.TableFileStore); ok {
-		ops := tfs.SupportedOperations()
-		return ops.CanRead && ops.CanWrite
+		ops, err := tfs.SupportedOperations(ctx)
+		if err != nil {
+			return false, err
+		}
+		return ops.CanRead && ops.CanWrite, nil
 	}
-	return false
+	return false, nil
 }
 
 func GetCSStatSummaryForDB(db Database) string {

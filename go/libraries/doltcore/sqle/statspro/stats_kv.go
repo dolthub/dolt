@@ -249,7 +249,7 @@ func (p *prollyStats) PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucke
 		return err
 	}
 
-	k, err := p.encodeHash(h, tupB.Desc.Count())
+	k, err := p.encodeHash(ctx, h, tupB.Desc.Count())
 	if err != nil {
 		return err
 	}
@@ -276,7 +276,7 @@ func (p *prollyStats) GetBucket(ctx context.Context, h hash.Hash, tupB *val.Tupl
 	}
 
 	// missing bucket and not GC'ing, try disk
-	k, err := p.encodeHash(h, tupB.Desc.Count())
+	k, err := p.encodeHash(ctx, h, tupB.Desc.Count())
 	if err != nil {
 		return nil, false, err
 	}
@@ -325,7 +325,7 @@ func (p *prollyStats) LoadFromMem(ctx context.Context) error {
 			if !ok {
 				return fmt.Errorf("memory KV inconsistent, missing bucket for: %s", key)
 			}
-			tupK, err := p.encodeHash(hash.New(key[:hash.ByteLen]), tb.Desc.Count())
+			tupK, err := p.encodeHash(ctx, hash.New(key[:hash.ByteLen]), tb.Desc.Count())
 			tupV, err := p.encodeBucket(ctx, b, tb)
 			if err != nil {
 				return err
@@ -361,14 +361,14 @@ func (p *prollyStats) Flush(ctx context.Context) (int, error) {
 	return cnt, err
 }
 
-func (p *prollyStats) encodeHash(h hash.Hash, len int) (val.Tuple, error) {
+func (p *prollyStats) encodeHash(ctx context.Context, h hash.Hash, len int) (val.Tuple, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.kb.PutInt64(0, int64(len))
 	if err := p.kb.PutString(1, h.String()); err != nil {
 		return nil, err
 	}
-	return p.kb.Build(p.m.NodeStore().Pool())
+	return p.kb.Build(ctx, p.m.NodeStore().Pool())
 }
 
 func (p *prollyStats) decodeHashTuple(v val.Tuple) (int, hash.Hash, error) {
@@ -468,7 +468,7 @@ func (p *prollyStats) encodeBucket(ctx context.Context, b *stats.Bucket, tupB *v
 	}
 	p.vb.PutString(10, stats.StringifyKey(mcvCntsRow, mcvTypes[:len(mcvCntsRow)]))
 
-	return p.vb.Build(p.m.NodeStore().Pool())
+	return p.vb.Build(ctx, p.m.NodeStore().Pool())
 }
 
 func (p *prollyStats) NewEmpty(ctx context.Context) (StatsKv, error) {
@@ -491,7 +491,7 @@ func EncodeRow(ctx context.Context, ns tree.NodeStore, r sql.Row, tb *val.TupleB
 			return nil, err
 		}
 	}
-	return tb.Build(ns.Pool())
+	return tb.Build(ctx, ns.Pool())
 }
 
 func DecodeRow(ctx context.Context, ns tree.NodeStore, s string, tb *val.TupleBuilder) (sql.Row, error) {

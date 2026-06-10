@@ -57,7 +57,7 @@ func (b *doltBenchmarkerImpl) checkInstallation(ctx context.Context) error {
 }
 
 func (b *doltBenchmarkerImpl) initDoltRepo(ctx context.Context) (string, error) {
-	return InitDoltRepo(ctx, b.dir, b.serverConfig.GetServerExec(), b.config.GetNomsBinFormat(), dbName)
+	return InitDoltRepo(ctx, b.dir, b.serverConfig.GetServerExec(), dbName)
 }
 
 func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
@@ -120,17 +120,11 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 }
 
 // InitDoltRepo initializes a dolt database and returns its path
-func InitDoltRepo(ctx context.Context, dir, serverExec, nomsBinFormat, dbName string) (string, error) {
+func InitDoltRepo(ctx context.Context, dir, serverExec, dbName string) (string, error) {
 	testRepo := filepath.Join(dir, dbName)
 	err := os.MkdirAll(testRepo, os.ModePerm)
 	if err != nil {
 		return "", err
-	}
-
-	if nomsBinFormat != "" {
-		if err = os.Setenv(nbfEnvVar, nomsBinFormat); err != nil {
-			return "", err
-		}
 	}
 
 	doltInit := ExecCommand(ctx, serverExec, doltInitCommand)

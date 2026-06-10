@@ -67,7 +67,7 @@ func (k tableIndexesKey) String() string {
 
 type StatsController struct {
 	logger         *logrus.Logger
-	pro            *sqle.DoltDatabaseProvider
+	pro            dsess.DoltDatabaseProvider
 	bgThreads      *sql.BackgroundThreads
 	statsBackingDb filesys.Filesys
 
@@ -349,11 +349,13 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 	}
 
 	sc.mu.Lock()
-	// Add/override with new stats
 	for k, v := range newStats.stats {
 		sc.Stats.stats[k] = v
 		sc.Stats.hashes[k] = newStats.hashes[k]
 	}
+	// Ensure the background worker does not overwrite these results if it
+	// started computing before this ANALYZE TABLE ran.
+	sc.genCnt.Add(1)
 	sc.mu.Unlock()
 
 	return err
@@ -635,7 +637,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		// Use LoadWithoutDB so DB load params can be applied before any DB is opened.
 		dEnv = env.LoadWithoutDB(ctx, sc.getUserHomeDir, statsFs, urlPath, doltversion.Version)
 		dEnv.DBLoadParams = dbLoadParams
-		err = dEnv.InitRepo(ctx, types.Format_Default, "stats", "stats@stats.com", env.DefaultInitBranch)
+		err = dEnv.InitRepo(ctx, types.Format_DOLT, "stats", "stats@stats.com", env.DefaultInitBranch)
 		if err != nil {
 			return nil, err
 		}

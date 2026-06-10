@@ -706,6 +706,35 @@ export NO_COLOR=1
     [ "$res" -eq 4 ] # exactly 1 line is added
 }
 
+# bats test_tags=no_lambda
+@test "log: --decorate=auto shows decoration on a tty" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    dolt tag tag_v0
+    # Spawning over a pseudo-terminal makes dolt resolve --decorate=auto to short, so the
+    # branch decoration must appear. DOLT_PAGER=cat keeps the pty streaming rather than
+    # launching less, which would hold the pty waiting for a keypress.
+    run expect -c '
+        set timeout 5
+        set env(DOLT_PAGER) "cat"
+        spawn dolt log --decorate=auto
+        expect {
+            "*HEAD -> *main*" { exit 0 }
+            "*refs/heads/*" { exit 1 }
+            timeout { exit 1 }
+            eof { exit 1 }
+        }
+    '
+    [ "$status" -eq 0 ]
+}
+
+@test "log: --decorate=auto suppresses decoration when stdout is not a tty" {
+    dolt tag tag_v0
+    run dolt log --decorate=auto
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "tag_v0" ]] || false
+}
+
 @test "log: --decorate=notanoption throws error" {
     run dolt log --decorate=notanoption
     [ "$status" -eq 1 ]
@@ -746,9 +775,11 @@ export NO_COLOR=1
     dolt tag commit1
     dolt commit --allow-empty -m "commit 2"
     dolt tag commit2
-    run dolt log commit1
+    # Pin --decorate=short because run captures stdout without a tty, which would otherwise
+    # resolve --decorate=auto to no and hide the HEAD decoration the test asserts on.
+    run dolt log --decorate=short commit1
     [[ ! "$output" =~ "HEAD" ]] || false
-    run dolt log commit2
+    run dolt log --decorate=short commit2
     [[ "$output" =~ "HEAD" ]] || false
 }
 

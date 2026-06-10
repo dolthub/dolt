@@ -395,11 +395,17 @@ func (ib *baseIndexImplBuilder) newPointLookup(ctx *sql.Context, rang prolly.Ran
 		return nil, fmt.Errorf("can't perform point lookup with a proximity index")
 	}
 	err = ib.sec.GetPrefix(ctx, rang.Tup, ib.prefDesc, func(key val.Tuple, value val.Tuple) (err error) {
-		if key != nil && rang.Matches(ctx, key) {
-			iter = prolly.NewPointLookup(key, value)
-		} else {
-			iter = prolly.EmptyPointLookup
+		if key != nil {
+			matches, mErr := rang.Matches(ctx, key)
+			if mErr != nil {
+				return mErr
+			}
+			if matches {
+				iter = prolly.NewPointLookup(key, value)
+				return
+			}
 		}
+		iter = prolly.EmptyPointLookup
 		return
 	})
 	return
@@ -608,7 +614,7 @@ func (i *nonCoveringMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, er
 		from := i.pkMap.MapOrdinal(to)
 		i.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk, err := i.pkBld.Build(sharePool)
+	pk, err := i.pkBld.Build(ctx, sharePool)
 	if err != nil {
 		return nil, nil, err
 	}

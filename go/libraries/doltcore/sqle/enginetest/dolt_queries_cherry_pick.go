@@ -638,6 +638,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"call dolt_checkout('main');",
 			"insert into t values (1, 'main_value');",
 			"call dolt_commit('-am', 'add row from main');",
+			// cherry-pick does not have a date flag
+			"SET dolt_committer_date = '2022-01-01T12:00:00';",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -683,8 +685,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "resolved_value"}},
 			},
 			{
-				Query:    "select committer, email, message, date from dolt_log limit 1;",
-				Expected: []sql.Row{{"Test User", "test@example.com", "add row from branch1", timeEquals("2022-01-01T12:00:00Z")}},
+				Query:    "select author, author_email, author_date, committer, email, message, date from dolt_log limit 1;",
+				Expected: []sql.Row{{"Test User", "test@example.com", timeEquals("2022-01-01T12:00:00Z"), "root", "root@localhost", "add row from branch1", timeEquals("2022-01-01T12:00:00Z")}},
 			},
 		},
 	},
@@ -721,6 +723,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"insert into t1 values (1, 'main_t1');",
 			"insert into t2 values (1, 'main_t2');",
 			"call dolt_commit('-am', 'add rows from main');",
+			// cherry-pick does not have a date flag
+			"SET dolt_committer_date = '2022-02-01T10:30:00Z';",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -781,8 +785,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select committer, email, message, date from dolt_log limit 1;",
-				Expected: []sql.Row{{"Branch User", "branch@example.com", "add rows from branch1", timeEquals("2022-02-01T10:30:00Z")}},
+				Query:    "select author, author_email, author_date, committer, email, message, date from dolt_log limit 1;",
+				Expected: []sql.Row{{"Branch User", "branch@example.com", timeEquals("2022-02-01T10:30:00Z"), "root", "root@localhost", "add rows from branch1", timeEquals("2022-02-01T10:30:00Z")}},
 			},
 		},
 	},
@@ -962,6 +966,30 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, "resolved_value"}},
+			},
+		},
+	},
+	{
+		Name: "cherry-pick: records current session as committer separately from author",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(100));",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, 'one');",
+			"call dolt_commit('-am', 'add row 1', '--author', 'Original Author <orig@example.com>');",
+			"set @cherry = dolt_hashof('HEAD');",
+			"call dolt_checkout('main');",
+			"set @@dolt_committer_name = 'Cherry Picker';",
+			"set @@dolt_committer_email = 'picker@example.com';",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_cherry_pick(@cherry);",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select author, author_email, committer, email from dolt_log limit 1;",
+				Expected: []sql.Row{{"Original Author", "orig@example.com", "Cherry Picker", "picker@example.com"}},
 			},
 		},
 	},

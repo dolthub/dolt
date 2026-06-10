@@ -19,7 +19,6 @@ import "context"
 type Config interface {
 	GetRuns() int
 	GetScriptDir() string
-	GetNomsBinFormat() string
 	GetRuntimeOs() string
 	GetRuntimeGoArch() string
 	GetServerConfigs() []ServerConfig

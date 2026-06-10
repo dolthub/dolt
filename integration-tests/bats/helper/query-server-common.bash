@@ -1,4 +1,4 @@
-load helper/windows-compat
+source "${BASH_SOURCE[0]%/*}/windows-compat.bash"
 SERVER_REQS_INSTALLED="FALSE"
 SERVER_PID=""
 DEFAULT_DB=""

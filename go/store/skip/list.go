@@ -28,11 +28,11 @@ const (
 )
 
 // A KeyOrder determines the ordering of two keys |l| and |r|.
-type KeyOrder func(ctx context.Context, l, r []byte) (cmp int)
+type KeyOrder func(ctx context.Context, l, r []byte) (cmp int, err error)
 
 // A SeekFn facilitates seeking into a List. It returns true
 // if the seek operation should advance past |key|.
-type SeekFn func(key []byte) (advance bool)
+type SeekFn func(key []byte) (advance bool, err error)
 
 // List is an in-memory skip-list.
 type List struct {
@@ -96,14 +96,17 @@ func (l *List) HasCheckpoint() bool {
 }
 
 // Revert reverts to the last recorded checkpoint.
-func (l *List) Revert(ctx context.Context) {
+func (l *List) Revert(ctx context.Context) error {
 	cp := l.checkpoint
 	keepers := l.nodes[1:cp]
 	l.Truncate()
 	for _, nd := range keepers {
-		l.Put(ctx, nd.key, nd.val)
+		if err := l.Put(ctx, nd.key, nd.val); err != nil {
+			return err
+		}
 	}
 	l.checkpoint = cp
+	return nil
 }
 
 // Truncate deletes all entries from the list.
@@ -123,21 +126,25 @@ func (l *List) Count() int {
 }
 
 // Has returns true if |key| is a member of the list.
-func (l *List) Has(ctx context.Context, key []byte) (ok bool) {
-	_, ok = l.Get(ctx, key)
+func (l *List) Has(ctx context.Context, key []byte) (ok bool, err error) {
+	_, ok, err = l.Get(ctx, key)
 	return
 }
 
 // Get returns the value associated with |key| and true
 // if |key| is a member of the list, otherwise it returns
 // nil and false.
-func (l *List) Get(ctx context.Context, key []byte) (val []byte, ok bool) {
+func (l *List) Get(ctx context.Context, key []byte) (val []byte, ok bool, err error) {
 	var id nodeId
 	next, prev := l.headTower(), sentinelId
 	for lvl := maxHeight; lvl >= 0; {
 		nd := l.nodePtr(next[lvl])
 		// descend if we can't advance at |lvl|
-		if l.compareKeys(ctx, key, nd.key) < 0 {
+		cmp, err := l.compareKeys(ctx, key, nd.key)
+		if err != nil {
+			return nil, false, err
+		}
+		if cmp < 0 {
 			id = prev
 			lvl--
 			continue
@@ -147,14 +154,18 @@ func (l *List) Get(ctx context.Context, key []byte) (val []byte, ok bool) {
 		prev = nd.id
 	}
 	node := l.nodePtr(id)
-	if l.compareKeys(ctx, key, node.key) == 0 {
+	cmp, err := l.compareKeys(ctx, key, node.key)
+	if err != nil {
+		return nil, false, err
+	}
+	if cmp == 0 {
 		val, ok = node.val, true
 	}
 	return
 }
 
 // Put adds |key| and |values| to the list.
-func (l *List) Put(ctx context.Context, key, val []byte) {
+func (l *List) Put(ctx context.Context, key, val []byte) error {
 	if key == nil {
 		panic("key must be non-nil")
 	} else if len(l.nodes) >= maxCount {
@@ -168,7 +179,11 @@ func (l *List) Put(ctx context.Context, key, val []byte) {
 	for h := maxHeight; h >= 0; {
 		curr := l.nodePtr(next[h])
 		// descend if we can't advance at |lvl|
-		if l.compareKeys(ctx, key, curr.key) <= 0 {
+		cmp, err := l.compareKeys(ctx, key, curr.key)
+		if err != nil {
+			return err
+		}
+		if cmp <= 0 {
 			path[h] = prev
 			h--
 			continue
@@ -182,12 +197,17 @@ func (l *List) Put(ctx context.Context, key, val []byte) {
 	node := l.nodePtr(path[0])
 	node = l.nodePtr(node.next[0])
 
-	if l.compareKeys(ctx, key, node.key) == 0 {
+	cmp, err := l.compareKeys(ctx, key, node.key)
+	if err != nil {
+		return err
+	}
+	if cmp == 0 {
 		l.overwrite(key, val, &path, node)
 	} else {
 		l.insert(key, val, &path)
 		l.count++
 	}
+	return nil
 }
 
 func (l *List) Copy() *List {
@@ -267,16 +287,24 @@ func (it *ListIter) Retreat() {
 
 // GetIterAt creates an iterator starting at the first item
 // of the list whose key is greater than or equal to |key|.
-func (l *List) GetIterAt(ctx context.Context, key []byte) (it *ListIter) {
-	return l.GetIterFromSeekFn(func(nodeKey []byte) bool {
-		return l.compareKeys(ctx, key, nodeKey) > 0
+func (l *List) GetIterAt(ctx context.Context, key []byte) (it *ListIter, err error) {
+	return l.GetIterFromSeekFn(func(nodeKey []byte) (bool, error) {
+		cmp, err := l.compareKeys(ctx, key, nodeKey)
+		if err != nil {
+			return false, err
+		}
+		return cmp > 0, nil
 	})
 }
 
 // GetIterFromSeekFn creates an iterator using a SeekFn.
-func (l *List) GetIterFromSeekFn(fn SeekFn) (it *ListIter) {
+func (l *List) GetIterFromSeekFn(fn SeekFn) (it *ListIter, err error) {
+	node, err := l.seekWithFn(fn)
+	if err != nil {
+		return nil, err
+	}
 	it = &ListIter{
-		curr: l.seekWithFn(fn),
+		curr: node,
 		list: l,
 	}
 	if it.curr.id == sentinelId {
@@ -304,17 +332,28 @@ func (l *List) IterAtEnd() *ListIter {
 }
 
 // seek returns the skipNode with the smallest key >= |key|.
-func (l *List) seek(ctx context.Context, key []byte) *skipNode {
-	return l.seekWithFn(func(curr []byte) (advance bool) {
-		return l.compareKeys(ctx, key, curr) > 0
+func (l *List) seek(ctx context.Context, key []byte) (*skipNode, error) {
+	return l.seekWithFn(func(curr []byte) (bool, error) {
+		cmp, err := l.compareKeys(ctx, key, curr)
+		if err != nil {
+			return false, err
+		}
+		return cmp > 0, nil
 	})
 }
 
-func (l *List) seekWithFn(cb SeekFn) (node *skipNode) {
+func (l *List) seekWithFn(cb SeekFn) (node *skipNode, err error) {
 	ptr := l.headTower()
 	for h := int64(maxHeight); h >= 0; h-- {
 		node = l.nodePtr(ptr[h])
-		for cb(node.key) {
+		for {
+			advance, err := cb(node.key)
+			if err != nil {
+				return nil, err
+			}
+			if !advance {
+				break
+			}
 			ptr = &node.next
 			node = l.nodePtr(ptr[h])
 		}
@@ -343,9 +382,9 @@ func (l *List) nextNodeId() nodeId {
 	return nodeId(len(l.nodes))
 }
 
-func (l *List) compareKeys(ctx context.Context, left, right []byte) int {
+func (l *List) compareKeys(ctx context.Context, left, right []byte) (int, error) {
 	if right == nil {
-		return -1 // |right| is sentinel key
+		return -1, nil // |right| is sentinel key
 	}
 	return l.keyOrder(ctx, left, right)
 }

@@ -54,4 +54,5 @@ enum Encoding : uint8 {
   BytesAdaptive = 136,
   ExtendedAdaptive = 137,
   GeomAdaptive = 138,
+  JsonAdaptive = 139,
 }

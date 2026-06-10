@@ -51,6 +51,7 @@ func CreateIndex(
 	prefixLengths []uint16,
 	props schema.IndexProperties,
 	opts editor.Options,
+	predicate sql.Expression,
 ) (*CreateIndexReturn, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
@@ -114,7 +115,7 @@ func CreateIndex(
 
 	// TODO: in the case that we're replacing an implicit index with one the user specified, we could do this more
 	//  cheaply in some cases by just renaming it, rather than building it from scratch. But that's harder to get right.
-	indexRows, err := BuildSecondaryIndex(ctx, newTable, index, tableName, opts)
+	indexRows, err := BuildSecondaryIndex(ctx, newTable, index, tableName, opts, predicate)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +133,7 @@ func CreateIndex(
 	}, nil
 }
 
-func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName string, opts editor.Options) (durable.Index, error) {
+func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName string, opts editor.Options, predicate sql.Expression) (durable.Index, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -146,7 +147,7 @@ func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, 
 		return nil, err
 	}
 
-	return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, idx, primary)
+	return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, idx, primary, predicate)
 }
 
 // BuildSecondaryProllyIndex builds secondary index data for the given primary
@@ -159,6 +160,7 @@ func BuildSecondaryProllyIndex(
 	tableName string,
 	idx schema.Index,
 	primary prolly.Map,
+	predicate sql.Expression,
 ) (durable.Index, error) {
 	var uniqCb DupEntryCb
 	if idx.IsUnique() {
@@ -168,7 +170,7 @@ func BuildSecondaryProllyIndex(
 			return sql.NewUniqueKeyErr(msg, false, nil)
 		}
 	}
-	return BuildProllyIndexExternal(ctx, vrw, ns, sch, tableName, idx, primary, uniqCb)
+	return BuildProllyIndexExternal(ctx, vrw, ns, sch, tableName, idx, primary, uniqCb, predicate)
 }
 
 // FormatKeyForUniqKeyErr formats the given tuple |key| using |d|. The resulting
@@ -277,7 +279,10 @@ type PrefixItr struct {
 }
 
 func NewPrefixItr(ctx context.Context, p val.Tuple, d *val.TupleDesc, m rangeIterator) (PrefixItr, error) {
-	rng := prolly.PrefixRange(ctx, p, d)
+	rng, err := prolly.PrefixRange(ctx, p, d)
+	if err != nil {
+		return PrefixItr{}, err
+	}
 	itr, err := m.IterRange(ctx, rng)
 	if err != nil {
 		return PrefixItr{}, err

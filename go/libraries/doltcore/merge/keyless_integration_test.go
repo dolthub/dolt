@@ -449,7 +449,7 @@ func (e keylessEntry) HashAndValue() ([]byte, val.Tuple, error) {
 	valBld.PutInt64(1, int64(e.c1))
 	valBld.PutInt64(2, int64(e.c2))
 
-	value, err := valBld.Build(sharePool)
+	value, err := valBld.Build(context.Background(), sharePool)
 	if err != nil {
 		return nil, nil, err
 	}

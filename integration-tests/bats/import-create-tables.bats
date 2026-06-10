@@ -460,6 +460,25 @@ DELIM
     diff compare.csv `batshelper bad-characters.csv`
 }
 
+@test "import-create-tables: import csv with invalid utf8" {
+    # See https://github.com/dolthub/dolt/issues/10924
+    # With --continue, invalid UTF-8 bytes are truncated at the first bad byte matching MySQL behavior.
+    dolt sql -q "CREATE TABLE t (id int NOT NULL, name VARCHAR(255), PRIMARY KEY (id));"
+    cat > data.csv <<EOF
+id,name
+1,"SSD 1TB 2.5$(printf '\x85') NVMe"
+2,"Normal Product"
+EOF
+    run dolt table import -u t data.csv
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Incorrect string value" ]] || false
+    run dolt table import -u --continue t data.csv
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv -q "SELECT name FROM t WHERE id = 1"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "SSD 1TB 2.5" ]
+}
+
 @test "import-create-tables: dolt diff on a newly created table" {
     dolt sql <<SQL
 CREATE TABLE test (

@@ -1662,3 +1662,22 @@ DELIM
     [ "${lines[1]}" = "1,6" ]
     [ "${lines[2]}" = "2,2" ]
 }
+
+@test "import-update-tables: import csv with invalid utf8" {
+    # See https://github.com/dolthub/dolt/issues/10924
+    # With --continue, invalid UTF-8 bytes are truncated at the first bad byte matching MySQL behavior.
+    dolt sql -q "CREATE TABLE item (id VARCHAR(10) NOT NULL, name VARCHAR(255), PRIMARY KEY (id));"
+    cat > data.csv <<EOF
+id,name
+ITEM1,"Cable 10m"
+ITEM2,"SSD 1TB 2.5$(printf '\x85') NVMe"
+EOF
+    run dolt table import -u item data.csv
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Incorrect string value" ]] || false
+    run dolt table import -u --continue item data.csv
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv -q "SELECT name FROM item WHERE id = 'ITEM2'"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "SSD 1TB 2.5" ]
+}

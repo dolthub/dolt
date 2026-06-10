@@ -94,6 +94,9 @@ func (dt *ColumnDiffTable) Schema(ctx *sql.Context) sql.Schema {
 		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 		{Name: "diff_type", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "author", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "author_email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "author_date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 
@@ -265,6 +268,9 @@ func (d *doltColDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 		nil, // date
 		nil, // message
 		d.diffTypes[d.colIndex],
+		nil, // author
+		nil, // author_email
+		nil, // author_date
 	)
 
 	return sqlRow, nil
@@ -367,11 +373,14 @@ func (itr *doltColDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, erro
 		h.String(),
 		tableChange.tableName.String(),
 		col,
-		meta.Name,
-		meta.Email,
-		meta.Time(),
+		meta.Committer.Name,
+		meta.Committer.Email,
+		meta.Committer.Date.Time(),
 		meta.Description,
 		diffType,
+		meta.Author.Name,
+		meta.Author.Email,
+		meta.Author.Date.Time(),
 	), nil
 }
 

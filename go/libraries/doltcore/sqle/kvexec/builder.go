@@ -636,7 +636,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 				from := pkMap.MapOrdinal(to)
 				pkBld.PutRaw(to, ms.idxMap.KeyDesc().GetField(from, key))
 			}
-			pk, err := pkBld.Build(ms.idxMap.Pool())
+			pk, err := pkBld.Build(ctx, ms.idxMap.Pool())
 			if err != nil {
 				return nil, nil, err
 			}

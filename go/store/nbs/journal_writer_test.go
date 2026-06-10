@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"math/rand"
 	"os"
@@ -393,15 +394,155 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, before.Size(), info.Size())
 
-			// bootstrap journal with corrupted index
+			// a corrupted index must not prevent the journal from opening;
+			// the journal writer rebuilds its state from the journal file itself.
 			corruptJournalIndex(t, idxPath)
-			jnl, ok, err := openJournalWriter(ctx, idxPath)
-			require.NoError(t, err)
-			require.True(t, ok)
-			_, err = jnl.bootstrapJournal(ctx, true, nil, nil)
-			assert.Error(t, err)
+			validateJournal(path, epochs)
 		})
 	}
+}
+
+// TestJournalIndexCorruptionRecovery verifies that a corrupt journal index does
+// not prevent the database from opening. The journal index (journal.idx) is an
+// optimization that is written without the same atomicity guarantees as the
+// journal itself, so a process or OS crash can leave it truncated, with trailing
+// garbage, or with garbage spliced into the middle. In all of those cases the
+// journal must still bootstrap successfully by rebuilding its state from the
+// journal file directly, which has its own per-record checksums.
+func TestJournalIndexCorruptionRecovery(t *testing.T) {
+	// writeIndexedJournal writes a journal with |indexed| flushed index records
+	// followed by a final un-indexed ("novel") epoch, then closes it. It returns
+	// the path to the journal, the chunks written, and the final root hash.
+	writeIndexedJournal := func(t *testing.T, indexed int) (path string, data map[hash.Hash]CompressedChunk, last hash.Hash) {
+		ctx := context.Background()
+		path = newTestFilePath(t)
+		j := newTestJournalWriter(t, path)
+		data = make(map[hash.Hash]CompressedChunk)
+
+		writeEpoch := func() hash.Hash {
+			var epochLast hash.Hash
+			for h, cc := range randomCompressedChunks(8) {
+				require.NoError(t, j.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, cc))
+				data[h] = cc
+				epochLast = h
+			}
+			return epochLast
+		}
+
+		for i := 0; i < indexed; i++ {
+			epochLast := writeEpoch()
+			o := j.offset() // offset of the root hash record written below
+			require.NoError(t, j.commitRootHash(ctx, dherrors.FatalBehaviorError, epochLast))
+			require.NoError(t, j.flushIndexRecord(ctx, epochLast, o))
+			last = epochLast
+		}
+
+		// a final novel epoch that is committed but not written to the index
+		last = writeEpoch()
+		require.NoError(t, j.commitRootHash(ctx, dherrors.FatalBehaviorError, last))
+		require.NoError(t, j.Close())
+		return path, data, last
+	}
+
+	// validateOpen reopens the journal at |path|, bootstraps it (which must
+	// succeed despite a corrupt index), and verifies every chunk is readable
+	// and the final root hash is recovered.
+	validateOpen := func(t *testing.T, path string, data map[hash.Hash]CompressedChunk, last hash.Hash) {
+		ctx := context.Background()
+		j, ok, err := openJournalWriter(ctx, path)
+		require.NoError(t, err)
+		require.True(t, ok)
+
+		got, err := j.bootstrapJournal(ctx, true, nil, nil)
+		require.NoError(t, err, "corrupt journal index should not prevent the journal from opening")
+		require.Equal(t, last, got)
+
+		for h, cc := range data {
+			act, err := j.getCompressedChunk(h)
+			require.NoError(t, err)
+			require.Equal(t, cc, act)
+		}
+		require.NoError(t, j.Close())
+	}
+
+	idxPath := func(path string) string {
+		return filepath.Join(filepath.Dir(path), journalIndexFileName)
+	}
+
+	t.Run("truncated index", func(t *testing.T) {
+		path, data, last := writeIndexedJournal(t, 3)
+		// truncate the index in the middle of a batch
+		info, err := os.Stat(idxPath(path))
+		require.NoError(t, err)
+		require.NoError(t, os.Truncate(idxPath(path), info.Size()/2))
+		validateOpen(t, path, data, last)
+	})
+
+	t.Run("trailing garbage", func(t *testing.T) {
+		path, data, last := writeIndexedJournal(t, 3)
+		// append junk after the last valid index record. A 0xff lead byte is an
+		// unknown index record tag, which today fails the open with
+		// ErrMalformedIndex.
+		f, err := os.OpenFile(idxPath(path), os.O_WRONLY|os.O_APPEND, 0666)
+		require.NoError(t, err)
+		_, err = f.Write(bytes.Repeat([]byte{0xff}, 37))
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+		validateOpen(t, path, data, last)
+	})
+
+	t.Run("spliced garbage", func(t *testing.T) {
+		path, data, last := writeIndexedJournal(t, 3)
+		// overwrite bytes in the middle of the index, corrupting a batch. This
+		// fails either a batch checksum or the record tag validation today.
+		f, err := os.OpenFile(idxPath(path), os.O_RDWR, 0666)
+		require.NoError(t, err)
+		info, err := f.Stat()
+		require.NoError(t, err)
+		_, err = f.WriteAt(bytes.Repeat([]byte{0xff}, 32), info.Size()/2)
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+		validateOpen(t, path, data, last)
+	})
+
+	// When opened read-only (canWrite == false, i.e. we do not hold the database
+	// lock), bootstrapping a corrupt index must never mutate on-disk state. The
+	// journal must still open and serve reads by rebuilding from the journal.
+	t.Run("read-only never mutates the index", func(t *testing.T) {
+		path, data, last := writeIndexedJournal(t, 3)
+		// splice garbage into the middle of the index
+		f, err := os.OpenFile(idxPath(path), os.O_RDWR, 0666)
+		require.NoError(t, err)
+		info, err := f.Stat()
+		require.NoError(t, err)
+		_, err = f.WriteAt(bytes.Repeat([]byte{0xff}, 32), info.Size()/2)
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+
+		// snapshot the (corrupt) index bytes before the read-only open
+		before, err := os.ReadFile(idxPath(path))
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		j, ok, err := openJournalWriter(ctx, path)
+		require.NoError(t, err)
+		require.True(t, ok)
+		// canWrite == false: read-only open
+		got, err := j.bootstrapJournal(ctx, false, nil, nil)
+		require.NoError(t, err)
+		require.Equal(t, last, got)
+		for h, cc := range data {
+			act, err := j.getCompressedChunk(h)
+			require.NoError(t, err)
+			require.Equal(t, cc, act)
+		}
+		require.NoError(t, j.Close())
+
+		// the index file must be byte-for-byte unchanged
+		after, err := os.ReadFile(idxPath(path))
+		require.NoError(t, err)
+		require.Equal(t, before, after, "read-only open must not mutate journal.idx")
+	})
 }
 
 func randomCompressedChunks(cnt int) (compressed map[hash.Hash]CompressedChunk) {

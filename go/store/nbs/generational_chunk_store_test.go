@@ -31,7 +31,7 @@ var randGen = rand.New(rand.NewSource(0))
 func genChunks(t *testing.T, count int, max int) []chunks.Chunk {
 	chnks := make([]chunks.Chunk, count)
 	for i := 0; i < count; i++ {
-		bytes := make([]byte, randGen.Int()%max)
+		bytes := make([]byte, 1+randGen.Int()%max)
 		n, err := randGen.Read(bytes)
 		require.NoError(t, err)
 		chnks[i] = chunks.NewChunk(bytes[:n])

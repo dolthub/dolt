@@ -1,0 +1,31 @@
+name: 'Set up Go toolchain'
+description: 'Set up Go and platform-specific dependencies (ICU4C) needed to build dolt. On macOS, sets CGO flags pointing at brew icu4c. On Windows, installs MSYS2 with icu/toolchain/pkg-config and exposes the install path via the msys2-location output. On Linux, just sets up Go.'
+
+outputs:
+  msys2-location:
+    description: 'Path to the MSYS2 installation (Windows only).'
+    value: ${{ steps.msys2.outputs.msys2-location }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go/go.mod
+    - name: Install ICU4C (MacOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        dir=$(brew --cellar icu4c)
+        dir="$dir"/$(ls "$dir")
+        echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
+        echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
+    - name: Install ICU4C (Windows)
+      id: msys2
+      if: runner.os == 'Windows'
+      uses: msys2/setup-msys2@v2
+      with:
+        path-type: inherit
+        msystem: UCRT64
+        pacboy: icu:p toolchain:p pkg-config:p

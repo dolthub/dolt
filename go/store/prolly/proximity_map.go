@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -151,6 +152,19 @@ func getConvertToVectorFunction(keyDesc *val.TupleDesc, ns tree.NodeStore) (tree
 			}
 			return sql.ConvertToVector(ctx, jsonWrapper)
 		}, nil
+	case val.JsonAdaptiveEnc:
+		return func(ctx context.Context, bytes []byte) ([]float32, error) {
+			jsonVal, _, err := keyDesc.GetJsonAdaptiveValue(ctx, 0, ns, bytes)
+			if err != nil {
+				return nil, err
+			}
+			// Inline JSON values are returned as raw bytes; wrap them so ConvertToVector
+			// treats them as JSON rather than as a binary-encoded vector.
+			if b, ok := jsonVal.([]byte); ok {
+				jsonVal = gmstypes.NewLazyJSONDocument(b)
+			}
+			return sql.ConvertToVector(ctx, jsonVal)
+		}, nil
 	case val.BytesAdaptiveEnc:
 		return func(ctx context.Context, bytes []byte) ([]float32, error) {
 			vec, _, err := keyDesc.GetBytesAdaptiveValue(ctx, 0, ns, bytes)
@@ -278,7 +292,7 @@ func (b *ProximityMapBuilder) Insert(ctx context.Context, key, value []byte) err
 	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc, b.ns)
 	levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
 	levelMapKeyBuilder.PutByteString(1, key)
-	tup, err := levelMapKeyBuilder.Build(b.ns.Pool())
+	tup, err := levelMapKeyBuilder.Build(ctx, b.ns.Pool())
 	if err != nil {
 		return err
 	}
@@ -304,7 +318,7 @@ func (b *ProximityMapBuilder) InsertAtLevel(ctx context.Context, key, value []by
 	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc, b.ns)
 	levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
 	levelMapKeyBuilder.PutByteString(1, key)
-	tup, err := levelMapKeyBuilder.Build(b.ns.Pool())
+	tup, err := levelMapKeyBuilder.Build(ctx, b.ns.Pool())
 	if err != nil {
 		return err
 	}
@@ -517,7 +531,10 @@ func (b *ProximityMapBuilder) createInitialPathMaps(ctx context.Context, maxLeve
 // getNextPathSegmentCandidates takes a list of keys, representing a path into the ProximityMap from the root.
 // It returns an iter over all possible keys that could be the next path segment.
 func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, pathMap *MutableMap, prefixTupleDesc *val.TupleDesc, prefixTuple val.Tuple) (MapIter, error) {
-	prefixRange := PrefixRange(ctx, prefixTuple, prefixTupleDesc)
+	prefixRange, err := PrefixRange(ctx, prefixTuple, prefixTupleDesc)
+	if err != nil {
+		return nil, err
+	}
 	return pathMap.IterRange(ctx, prefixRange)
 }
 

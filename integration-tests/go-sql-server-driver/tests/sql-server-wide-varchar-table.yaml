@@ -1,0 +1,121 @@
+parallel: true
+tests:
+
+- name: wide varchar column table replicates and survives gc
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    # 8 VARCHAR(300) columns: Dolt's per-column accounting is ~8000 bytes for
+    # VARCHAR(300), so 8 columns puts the row near (but under) Dolt's 64k inline limit.
+    - exec: |
+        CREATE TABLE wide_varchar (
+          id  BIGINT PRIMARY KEY,
+          v00 VARCHAR(300), v01 VARCHAR(300), v02 VARCHAR(300), v03 VARCHAR(300),
+          v04 VARCHAR(300), v05 VARCHAR(300), v06 VARCHAR(300), v07 VARCHAR(300)
+        )
+    - exec: |
+        INSERT INTO wide_varchar VALUES
+          (1,
+           REPEAT('a',300), REPEAT('b',300), REPEAT('c',300), REPEAT('d',300),
+           REPEAT('e',300), REPEAT('f',300), REPEAT('g',300), REPEAT('h',300))
+    - exec: |
+        INSERT INTO wide_varchar VALUES
+          (2,
+           REPEAT('A',300), REPEAT('B',300), REPEAT('C',300), REPEAT('D',300),
+           REPEAT('E',300), REPEAT('F',300), REPEAT('G',300), REPEAT('H',300))
+    - exec: |
+        INSERT INTO wide_varchar VALUES
+          (3,
+           REPEAT('0',300), REPEAT('1',300), REPEAT('2',300), REPEAT('3',300),
+           REPEAT('4',300), REPEAT('5',300), REPEAT('6',300), REPEAT('7',300))
+    - query: "SELECT COUNT(*) FROM wide_varchar WHERE LENGTH(v00) = 300 AND LENGTH(v07) = 300"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+    - exec: 'CALL DOLT_GC()'
+    - query: 'SELECT COUNT(*) FROM wide_varchar'
+      error_match: "this connection can no longer be used"
+  - on: server1
+    queries:
+    - query: |
+        SELECT `database`, standby_remote, role, epoch, replication_lag_millis, current_error
+        FROM dolt_cluster.dolt_cluster_status
+        ORDER BY `database` ASC
+      result:
+        columns: ["database","standby_remote","role","epoch","replication_lag_millis","current_error"]
+        rows:
+        - ["repo1","standby","primary","1","0","NULL"]
+      retry_attempts: 100
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM wide_varchar WHERE LENGTH(v00) = 300 AND LENGTH(v07) = 300"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+    - query: "SELECT LEFT(v00, 1), LEFT(v07, 1) FROM wide_varchar WHERE id = 1"
+      result:
+        columns: ["LEFT(v00, 1)","LEFT(v07, 1)"]
+        rows: [["a","h"]]
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM wide_varchar WHERE LENGTH(v00) = 300 AND LENGTH(v07) = 300"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+    - query: "SELECT LEFT(v00, 1), LEFT(v07, 1) FROM wide_varchar WHERE id = 2"
+      result:
+        columns: ["LEFT(v00, 1)","LEFT(v07, 1)"]
+        rows: [["A","H"]]
+    - exec: 'CALL DOLT_GC("--shallow")'
+    - query: "SELECT COUNT(*) FROM wide_varchar WHERE LENGTH(v00) = 300 AND LENGTH(v07) = 300"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]

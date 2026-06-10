@@ -15,6 +15,7 @@
 package merge
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
@@ -232,7 +233,7 @@ func buildTup(sch schema.Schema, r []*int) val.Tuple {
 			vB.PutInt64(i, int64(*v))
 		}
 	}
-	tup, err := vB.Build(syncPool)
+	tup, err := vB.Build(context.Background(), syncPool)
 	if err != nil {
 		panic(err)
 	}

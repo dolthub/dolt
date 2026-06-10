@@ -15,6 +15,7 @@
 package index
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -170,7 +171,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx *sql.Context, k, v val.Tupl
 			}
 		}
 	}
-	return b.builder.Build(b.pool)
+	return b.builder.Build(ctx, b.pool)
 }
 
 // BuildRow returns a sql.Row for the given key/value tuple pair
@@ -226,9 +227,9 @@ type ClusteredKeyBuilder struct {
 }
 
 // ClusteredKeyFromIndexKey builds a clustered index key from a secondary index key.
-func (b ClusteredKeyBuilder) ClusteredKeyFromIndexKey(k val.Tuple) (val.Tuple, error) {
+func (b ClusteredKeyBuilder) ClusteredKeyFromIndexKey(ctx context.Context, k val.Tuple) (val.Tuple, error) {
 	for to, from := range b.mapping {
 		b.builder.PutRaw(to, k.GetField(from))
 	}
-	return b.builder.Build(b.pool)
+	return b.builder.Build(ctx, b.pool)
 }

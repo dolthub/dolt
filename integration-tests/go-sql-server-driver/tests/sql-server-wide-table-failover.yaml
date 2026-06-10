@@ -1,0 +1,130 @@
+parallel: true
+tests:
+
+- name: wide table survives failover
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: |
+        CREATE TABLE wide_mixed (
+          id  BIGINT PRIMARY KEY,
+          i00 INT, i01 INT, i02 INT, i03 INT, i04 INT,
+          i05 INT, i06 INT, i07 INT, i08 INT, i09 INT,
+          t00 TEXT, t01 TEXT, t02 TEXT, t03 TEXT, t04 TEXT,
+          v00 VARCHAR(300), v01 VARCHAR(300), v02 VARCHAR(300), v03 VARCHAR(300), v04 VARCHAR(300)
+        )
+    - exec: |
+        INSERT INTO wide_mixed VALUES
+          (1,
+           1,2,3,4,5,6,7,8,9,10,
+           REPEAT('t00',667), REPEAT('t01',667), REPEAT('t02',667), REPEAT('t03',667), REPEAT('t04',667),
+           REPEAT('v',300), REPEAT('w',300), REPEAT('x',300), REPEAT('y',300), REPEAT('z',300))
+    - exec: |
+        INSERT INTO wide_mixed VALUES
+          (2,
+           11,12,13,14,15,16,17,18,19,20,
+           REPEAT('T00',667), REPEAT('T01',667), REPEAT('T02',667), REPEAT('T03',667), REPEAT('T04',667),
+           REPEAT('V',300), REPEAT('W',300), REPEAT('X',300), REPEAT('Y',300), REPEAT('Z',300))
+    - exec: |
+        INSERT INTO wide_mixed VALUES
+          (3,
+           -1,-2,-3,-4,-5,-6,-7,-8,-9,-10,
+           REPEAT('neg',667), REPEAT('zero',501), REPEAT('mix',668), REPEAT('data',501), REPEAT('test',501),
+           REPEAT('a',300), REPEAT('b',300), REPEAT('c',300), REPEAT('d',300), REPEAT('e',300))
+    - query: "SELECT COUNT(*) FROM wide_mixed"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+    - query: "SELECT i00, i09, LEFT(t00,3), LEFT(v04,1) FROM wide_mixed WHERE id = 1"
+      result:
+        columns: ["i00","i09","LEFT(t00,3)","LEFT(v04,1)"]
+        rows: [["1","10","t00","z"]]
+    - query: "CALL dolt_assume_cluster_role('standby', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server2
+    retry_attempts: 100
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM wide_mixed"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["3"]]
+    - query: "SELECT i00, i09, LEFT(t00,3), LEFT(v04,1) FROM wide_mixed WHERE id = 2"
+      result:
+        columns: ["i00","i09","LEFT(t00,3)","LEFT(v04,1)"]
+        rows: [["11","20","T00","Z"]]
+    - query: "CALL dolt_assume_cluster_role('primary', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - exec: |
+        INSERT INTO wide_mixed VALUES
+          (4,
+           100,200,300,400,500,600,700,800,900,1000,
+           REPEAT('new',667), REPEAT('row',667), REPEAT('ins',667), REPEAT('ert',667), REPEAT('ed!',668),
+           REPEAT('N',300), REPEAT('E',300), REPEAT('W',300), REPEAT('R',300), REPEAT('O',300))
+    - query: "SELECT COUNT(*) FROM wide_mixed"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["4"]]
+    - query: "SELECT i00, LEFT(t00,3) FROM wide_mixed WHERE id = 4"
+      result:
+        columns: ["i00","LEFT(t00,3)"]
+        rows: [["100","new"]]
+    - query: "SELECT COUNT(*) FROM wide_mixed WHERE LENGTH(t00) > 1000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["4"]]

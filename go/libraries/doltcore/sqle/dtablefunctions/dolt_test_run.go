@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
@@ -28,7 +29,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
-	"github.com/shopspring/decimal"
 	"golang.org/x/exp/constraints"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -580,10 +580,11 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value *string, qu
 			return fmt.Sprintf("Could not compare non float value '%s', with %f", *value, actualValue), nil
 		}
 		return compareTestAssertion(comparison, float32(expectedFloat), actualValue, AssertionExpectedSingleValue), nil
-	case decimal.Decimal:
-		expectedDecimal, err := decimal.NewFromString(*value)
+	case *apd.Decimal:
+		expectedDecimal, _, err := apd.NewFromString(*value)
+		actualValueStr := actualValue.Text('f')
 		if err != nil {
-			return fmt.Sprintf("Could not compare non decimal value '%s', with %s", *value, actualValue), nil
+			return fmt.Sprintf("Could not compare non decimal value '%s', with %s", *value, actualValueStr), nil
 		}
 		return compareDecimals(comparison, expectedDecimal, actualValue, AssertionExpectedSingleValue), nil
 	case time.Time:
@@ -740,31 +741,33 @@ func compareDates(comparison string, expectedValue, realValue time.Time, format 
 // compareDecimals is a function used for comparing decimals.
 // It takes in a comparison string from one of: "==", "!=", "<", ">", "<=", ">="
 // It returns a string. The string is empty if the assertion passed, or has a message explaining the failure otherwise
-func compareDecimals(comparison string, expectedValue, realValue decimal.Decimal, assertionType string) string {
+func compareDecimals(comparison string, expectedValue, realValue *apd.Decimal, assertionType string) string {
+	eVal := expectedValue.Text('f')
+	rVal := realValue.Text('f')
 	switch comparison {
 	case "==":
-		if !expectedValue.Equal(realValue) {
-			return fmt.Sprintf("Assertion failed: %s equal to %v, got %v", assertionType, expectedValue, realValue)
+		if expectedValue.Cmp(realValue) != 0 {
+			return fmt.Sprintf("Assertion failed: %s equal to %s, got %s", assertionType, eVal, rVal)
 		}
 	case "!=":
-		if expectedValue.Equal(realValue) {
-			return fmt.Sprintf("Assertion failed: %s not equal to %v, got %v", assertionType, expectedValue, realValue)
+		if expectedValue.Cmp(realValue) == 0 {
+			return fmt.Sprintf("Assertion failed: %s not equal to %s, got %s", assertionType, eVal, rVal)
 		}
 	case "<":
-		if realValue.GreaterThanOrEqual(expectedValue) {
-			return fmt.Sprintf("Assertion failed: %s less than %v, got %v", assertionType, expectedValue, realValue)
+		if realValue.Cmp(expectedValue) >= 0 {
+			return fmt.Sprintf("Assertion failed: %s less than %s, got %s", assertionType, eVal, rVal)
 		}
 	case "<=":
-		if realValue.GreaterThan(expectedValue) {
-			return fmt.Sprintf("Assertion failed: %s less than or equal to %v, got %v", assertionType, expectedValue, realValue)
+		if realValue.Cmp(expectedValue) > 0 {
+			return fmt.Sprintf("Assertion failed: %s less than or equal to %s, got %s", assertionType, eVal, rVal)
 		}
 	case ">":
-		if realValue.LessThanOrEqual(expectedValue) {
-			return fmt.Sprintf("Assertion failed: %s greater than %v, got %v", assertionType, expectedValue, realValue)
+		if realValue.Cmp(expectedValue) <= 0 {
+			return fmt.Sprintf("Assertion failed: %s greater than %s, got %s", assertionType, eVal, rVal)
 		}
 	case ">=":
-		if realValue.LessThan(expectedValue) {
-			return fmt.Sprintf("Assertion failed: %s greater than or equal to %v, got %v", assertionType, expectedValue, realValue)
+		if realValue.Cmp(expectedValue) < 0 {
+			return fmt.Sprintf("Assertion failed: %s greater than or equal to %s, got %s", assertionType, eVal, rVal)
 		}
 	default:
 		return fmt.Sprintf("%s is not a valid comparison type", comparison)

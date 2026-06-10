@@ -1141,8 +1141,9 @@ func (cfg YAMLConfig) ValueSet(value string) bool {
 }
 
 type AutoGCBehaviorYAMLConfig struct {
-	Enable_       *bool `yaml:"enable,omitempty" minver:"1.50.0"`
-	ArchiveLevel_ *int  `yaml:"archive_level,omitempty" minver:"1.52.1"`
+	Enable_              *bool   `yaml:"enable,omitempty" minver:"1.50.0"`
+	ArchiveLevel_        *int    `yaml:"archive_level,omitempty" minver:"1.52.1"`
+	IncrementalFileSize_ *uint64 `yaml:"incremental_file_size,omitempty" minver:"1.86.6"`
 }
 
 func (a *AutoGCBehaviorYAMLConfig) Enable() bool {
@@ -1157,6 +1158,13 @@ func (a *AutoGCBehaviorYAMLConfig) ArchiveLevel() int {
 		return 1
 	}
 	return *a.ArchiveLevel_
+}
+
+func (a *AutoGCBehaviorYAMLConfig) IncrementalFileSize() uint64 {
+	if a.IncrementalFileSize_ == nil {
+		return 0
+	}
+	return *a.IncrementalFileSize_
 }
 
 func toAutoGCBehaviorYAML(a AutoGCBehavior) *AutoGCBehaviorYAMLConfig {

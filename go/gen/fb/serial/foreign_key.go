@@ -55,6 +55,33 @@ func (v ForeignKeyReferentialAction) String() string {
 	return "ForeignKeyReferentialAction(" + strconv.FormatInt(int64(v), 10) + ")"
 }
 
+type ForeignKeyMatchType byte
+
+const (
+	ForeignKeyMatchTypeSimple  ForeignKeyMatchType = 0
+	ForeignKeyMatchTypeFull    ForeignKeyMatchType = 1
+	ForeignKeyMatchTypePartial ForeignKeyMatchType = 2
+)
+
+var EnumNamesForeignKeyMatchType = map[ForeignKeyMatchType]string{
+	ForeignKeyMatchTypeSimple:  "Simple",
+	ForeignKeyMatchTypeFull:    "Full",
+	ForeignKeyMatchTypePartial: "Partial",
+}
+
+var EnumValuesForeignKeyMatchType = map[string]ForeignKeyMatchType{
+	"Simple":  ForeignKeyMatchTypeSimple,
+	"Full":    ForeignKeyMatchTypeFull,
+	"Partial": ForeignKeyMatchTypePartial,
+}
+
+func (v ForeignKeyMatchType) String() string {
+	if s, ok := EnumNamesForeignKeyMatchType[v]; ok {
+		return s
+	}
+	return "ForeignKeyMatchType(" + strconv.FormatInt(int64(v), 10) + ")"
+}
+
 type ForeignKeyCollection struct {
 	_tab flatbuffers.Table
 }
@@ -341,7 +368,31 @@ func (rcv *ForeignKey) ParentTableDatabaseSchemaLength() int {
 	return 0
 }
 
-const ForeignKeyNumFields = 13
+func (rcv *ForeignKey) IsNotValid() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(30))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *ForeignKey) MutateIsNotValid(n bool) bool {
+	return rcv._tab.MutateBoolSlot(30, n)
+}
+
+func (rcv *ForeignKey) MatchType() ForeignKeyMatchType {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(32))
+	if o != 0 {
+		return ForeignKeyMatchType(rcv._tab.GetByte(o + rcv._tab.Pos))
+	}
+	return 0
+}
+
+func (rcv *ForeignKey) MutateMatchType(n ForeignKeyMatchType) bool {
+	return rcv._tab.MutateByteSlot(32, byte(n))
+}
+
+const ForeignKeyNumFields = 15
 
 func ForeignKeyStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ForeignKeyNumFields)
@@ -402,6 +453,12 @@ func ForeignKeyAddParentTableDatabaseSchema(builder *flatbuffers.Builder, parent
 }
 func ForeignKeyStartParentTableDatabaseSchemaVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
+}
+func ForeignKeyAddIsNotValid(builder *flatbuffers.Builder, isNotValid bool) {
+	builder.PrependBoolSlot(13, isNotValid, false)
+}
+func ForeignKeyAddMatchType(builder *flatbuffers.Builder, matchType ForeignKeyMatchType) {
+	builder.PrependByteSlot(14, byte(matchType), 0)
 }
 func ForeignKeyEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

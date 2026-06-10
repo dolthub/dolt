@@ -257,7 +257,11 @@ func validateJournalRecord(buf []byte) error {
 // corrupted journal file is created with a timestamped suffix before truncating. If no data loss is detected, no action
 // is taken and an empty string and error is returned.
 func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) {
-	lock := fslock.New(filepath.Join(nomsDir, lockFileName))
+	lock, err := fslock.New(filepath.Join(nomsDir, lockFileName))
+	if err != nil {
+		return "", fmt.Errorf("could not create lock on NBS store: %w", err)
+	}
+	defer lock.Close()
 	err = lock.TryLock()
 	if err != nil {
 		return "", fmt.Errorf("could not acquire lock on NBS store: %w", err)
@@ -274,7 +278,7 @@ func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) 
 	noOp := func(o int64, r journalRec) error { return nil }
 	// First verify that the journal has data loss.
 	var offset int64
-	offset, err = processJournalRecords(context.Background(), journalFile, true /* tryTruncate */, 0, noOp, nil)
+	offset, err = processJournalRecords(context.Background(), journalPath, journalFile, true /* tryTruncate */, 0, noOp, nil)
 	if err == nil {
 		// No data loss detected, nothing to do.
 		return "", fmt.Errorf("no data loss detected in chunk journal file; no recovery performed")
@@ -420,7 +424,7 @@ func processJournalRecordsReader(ctx context.Context, r io.Reader, offin int64, 
 //
 // The |warningsCb| callback is called with any errors encountered that we automatically recover from. This allows the caller
 // to handle the situation in a context specific way.
-func processJournalRecords(ctx context.Context, r io.ReadSeeker, tryTruncate bool, off int64, cb func(o int64, r journalRec) error, warningsCb func(error)) (int64, error) {
+func processJournalRecords(ctx context.Context, path string, r io.ReadSeeker, tryTruncate bool, off int64, cb func(o int64, r journalRec) error, warningsCb func(error)) (int64, error) {
 	var (
 		recovered bool
 		rdr       *bufio.Reader
@@ -451,7 +455,7 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, tryTruncate boo
 			}
 		}
 		if dataLossFound {
-			return off, NewJournalDataLossError(off)
+			return off, NewJournalDataLossError(path, off)
 		}
 	}
 
@@ -480,8 +484,11 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, tryTruncate boo
 
 var ErrJournalDataLoss = errors.New("corrupted journal")
 
-func NewJournalDataLossError(offset int64) error {
-	return fmt.Errorf("possible data loss detected in journal file at offset %d: %w", offset, ErrJournalDataLoss)
+// Because the database might be lazily loaded, this error can end up returned from many paths on
+// first access of the database. For that reason, includes UX instructions to the user, in a slight
+// layering violation.
+func NewJournalDataLossError(path string, offset int64) error {
+	return fmt.Errorf("possible data loss detected in journal file %s at offset %d: %w\nplease run 'dolt fsck' to assess the damage and attempt repairs", path, offset, ErrJournalDataLoss)
 }
 
 // possibleDataLossCheck checks for parsable data remaining in |reader| which constitutes data loss. When calling this

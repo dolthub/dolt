@@ -114,3 +114,58 @@ func TestClusterReadOnly(t *testing.T) {
 	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-cluster-read-only.yaml")
 }
+
+func TestLargeTextReplication(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-large-text-replication.yaml")
+}
+
+func TestLargeBlobReplication(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-large-blob-replication.yaml")
+}
+
+func TestLargeJSONReplication(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-large-json-replication.yaml")
+}
+
+func TestLargeMultiColumnReplication(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-large-multi-column-replication.yaml")
+}
+
+func TestLargeValuesGC(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-large-values-gc.yaml")
+}
+
+func TestTypeDiversityCluster(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-type-diversity.yaml")
+}
+
+func TestWideIntTable(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-wide-int-table.yaml")
+}
+
+func TestWideVarcharTable(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-wide-varchar-table.yaml")
+}
+
+func TestWideTextTable(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-wide-text-table.yaml")
+}
+
+func TestLargeValuesFailover(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-large-values-failover.yaml")
+}
+
+func TestWideTableFailover(t *testing.T) {
+	t.Parallel()
+	RunTestsFile(t, "tests/sql-server-wide-table-failover.yaml")
+}

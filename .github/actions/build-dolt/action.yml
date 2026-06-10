@@ -1,0 +1,51 @@
+name: 'Build dolt'
+description: 'Builds dolt (and optionally remotesrv and noms) into $GITHUB_WORKSPACE/.ci_bin and prepends that directory to $GITHUB_PATH so the binaries are on PATH for subsequent steps. On Windows, builds run inside the msys2 shell (this action expects setup-go-toolchain to have been run first so that msys2 is installed).'
+
+inputs:
+  remotesrv:
+    description: 'Also build remotesrv.'
+    required: false
+    default: 'false'
+  noms:
+    description: 'Also build noms.'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Add .ci_bin to PATH
+      shell: bash
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/.ci_bin"
+        echo "$GITHUB_WORKSPACE/.ci_bin" >> "$GITHUB_PATH"
+    - name: Build dolt
+      if: runner.os != 'Windows'
+      shell: bash
+      working-directory: ./go
+      run: go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+    - name: Build remotesrv
+      if: runner.os != 'Windows' && inputs.remotesrv == 'true'
+      shell: bash
+      working-directory: ./go
+      run: go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
+    - name: Build noms
+      if: runner.os != 'Windows' && inputs.noms == 'true'
+      shell: bash
+      working-directory: ./go
+      run: go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
+    - name: Build dolt (Windows)
+      if: runner.os == 'Windows'
+      shell: 'msys2 {0}'
+      working-directory: ./go
+      run: go.exe build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+    - name: Build remotesrv (Windows)
+      if: runner.os == 'Windows' && inputs.remotesrv == 'true'
+      shell: 'msys2 {0}'
+      working-directory: ./go
+      run: go.exe build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
+    - name: Build noms (Windows)
+      if: runner.os == 'Windows' && inputs.noms == 'true'
+      shell: 'msys2 {0}'
+      working-directory: ./go
+      run: go.exe build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.

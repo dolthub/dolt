@@ -17,13 +17,14 @@ package merge_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/json"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -111,6 +112,9 @@ func TestSchemaMerge(t *testing.T) {
 	})
 	t.Run("large json merge tests", func(t *testing.T) {
 		testSchemaMerge(t, jsonMergeLargeDocumentTests(t))
+	})
+	t.Run("adaptive encoding tests", func(t *testing.T) {
+		testSchemaMerge(t, adaptiveEncodingTests)
 	})
 }
 
@@ -548,6 +552,21 @@ var columnAddDropTests = []schemaMergeTest{
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b text)")),
 		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b text)")),
 	},
+	{
+		name:     "regression test to ensure merging uses the comparator in the result schema when comparing cells",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(1) COLLATE utf8mb4_0900_ai_ci, b char(1) COLLATE utf8mb4_0900_bin)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(1) COLLATE utf8mb4_0900_ai_ci, b char(1) COLLATE utf8mb4_0900_bin)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b char(1) COLLATE utf8mb4_0900_bin)")),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b char(1) COLLATE utf8mb4_0900_bin)")),
+		dataTests: []dataTest{
+			{
+				ancestor:     nil,
+				left:         singleRow(1, "", "a"),
+				right:        singleRow(1, "A"),
+				dataConflict: true,
+			},
+		},
+	},
 }
 
 type constraintViolation struct {
@@ -638,43 +657,43 @@ var collationTests = []schemaMergeTest{
 	},
 	{
 		name:     "no collation changes",
-		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
-		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(6,3) unique)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(6,3) unique)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(6,3) unique)")),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(6,3) unique)")),
 		dataTests: []dataTest{
 			{
 				name:     "no data change",
-				ancestor: singleRow(1, 1, 1, "foo", decimal.New(8, 0)),
-				left:     singleRow(1, 1, 2, "foo", decimal.New(8, 0)),
-				right:    singleRow(1, 2, 1, "foo", decimal.New(8, 0)),
-				merged:   singleRow(1, 2, 2, "foo", decimal.New(8, 0)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(8, 0)),
+				left:     singleRow(1, 1, 2, "foo", apd.New(8, 0)),
+				right:    singleRow(1, 2, 1, "foo", apd.New(8, 0)),
+				merged:   singleRow(1, 2, 2, "foo", apd.New(8, 0)),
 			},
 			{
 				name:     "replace varchar with equal replacement",
-				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
-				left:     singleRow(1, 1, 2, "FOO", decimal.New(100, 0)),
-				right:    singleRow(1, 2, 1, "foo", decimal.New(100, 0)),
-				merged:   singleRow(1, 2, 2, "foo", decimal.New(100, 0)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:     singleRow(1, 1, 2, "FOO", apd.New(100, 0)),
+				right:    singleRow(1, 2, 1, "foo", apd.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "foo", apd.New(100, 0)),
 			},
 			{
 				name:         "conflict removal and replace varchar with equal replacement",
-				ancestor:     singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
-				left:         singleRow(1, 1, 2, "FOO", decimal.New(100, 0)),
+				ancestor:     singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:         singleRow(1, 1, 2, "FOO", apd.New(100, 0)),
 				right:        nil,
 				dataConflict: true,
 			},
 			{
 				name:     "replace decimal with equal replacement",
-				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
-				left:     singleRow(1, 1, 2, "foo", decimal.New(1, 2)),
-				right:    singleRow(1, 2, 1, "foo", decimal.New(100, 0)),
-				merged:   singleRow(1, 2, 2, "foo", decimal.New(1, 2)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:     singleRow(1, 1, 2, "foo", apd.New(1, 2)),
+				right:    singleRow(1, 2, 1, "foo", apd.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "foo", apd.New(1, 2)),
 			},
 			{
 				name:     "conflict removal and replace decimal with equal replacement",
-				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
-				left:     singleRow(1, 1, 1, "foo", decimal.New(1, 2)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:     singleRow(1, 1, 1, "foo", apd.New(1, 2)),
 				right:    nil,
 				merged:   nil,
 			},
@@ -1395,13 +1414,32 @@ var jsonMergeTests = []schemaMergeTest{
 	},
 }
 
+var adaptiveEncodingTests = []schemaMergeTest{
+	{
+		name:     "cell-wise merge would create row with different inlining",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b text)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b text)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b text)")),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b text)")),
+		dataTests: []dataTest{
+			{
+				name:     "",
+				ancestor: singleRow(1, "", ""),
+				left:     singleRow(1, strings.Repeat("a", 2000), ""),
+				right:    singleRow(1, "", strings.Repeat("a", 2000)),
+				merged:   singleRow(1, strings.Repeat("a", 2000), strings.Repeat("a", 2000)),
+			},
+		},
+	},
+}
+
 // newIndexedJsonDocumentFromValue creates an IndexedJsonDocument from a provided value.
 func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns tree.NodeStore, v interface{}) tree.IndexedJsonDocument {
 	doc, _, err := sqltypes.JSON.Convert(ctx, v)
 	require.NoError(t, err)
 	root, err := tree.SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
-	return tree.NewIndexedJsonDocument(ctx, root, ns)
+	return tree.NewIndexedJsonDocument(root, ns)
 }
 
 // createLargeDocumentForTesting creates a JSON document large enough to be split across multiple chunks.
@@ -1872,7 +1910,8 @@ func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) doltdb.R
 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
-	sess := writer.NewWriteSession(ws, gst, eo)
+	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
+	sess := writer.NewWriteSession("test", ws, gst, noop, eo)
 
 	ws, err = sess.Flush(sql.NewContext(ctx))
 	require.NoError(t, err)
@@ -1894,12 +1933,20 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
 	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
-	sess := writer.NewWriteSession(ws, gst, eo)
-	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name}, "test", noop, false)
+	sess := writer.NewWriteSession("test", ws, gst, noop, eo)
+	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name})
 	require.NoError(t, err)
 
+	columns := tbl.ns.sch.GetAllCols().GetColumns()
 	sctx := sql.NewEmptyContext()
 	for _, r := range tbl.rows {
+		for i, column := range columns {
+			// Some SQL types (mostly Decimal) have a canonical representation for their values.
+			// We convert the test values here to ensure that we match that representation.
+			r[i], _, err = column.TypeInfo.ToSqlType().Convert(ctx, r[i])
+			require.NoError(t, err)
+		}
+
 		err = wr.Insert(sctx, r)
 		assert.NoError(t, err)
 	}

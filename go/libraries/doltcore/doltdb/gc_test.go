@@ -146,7 +146,12 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	}
 
 	ddb := dEnv.DoltDB(ctx)
-	err := ddb.GC(ctx, types.GCModeDefault, chunks.NoArchive, purgingSafepointController{ddb})
+	gcConfig := chunks.GCConfig{
+		Mode:                chunks.GCMode_Default,
+		ArchiveLevel:        chunks.NoArchive,
+		IncrementalFileSize: chunks.IncrementalGCTablesDisabled,
+	}
+	err := ddb.GC(ctx, gcConfig, purgingSafepointController{ddb})
 	require.NoError(t, err)
 	test.postGCFunc(ctx, t, dEnv.DoltDB(ctx), res)
 
@@ -215,7 +220,12 @@ func testGarbageCollectionHasCacheDataCorruptionBugFix(t *testing.T) {
 	_, err = ns.Write(ctx, c1.Node())
 	require.NoError(t, err)
 
-	err = ddb.GC(ctx, types.GCModeDefault, chunks.NoArchive, purgingSafepointController{ddb})
+	gcConfig := chunks.GCConfig{
+		Mode:                chunks.GCMode_Default,
+		ArchiveLevel:        chunks.NoArchive,
+		IncrementalFileSize: chunks.IncrementalGCTablesDisabled,
+	}
+	err = ddb.GC(ctx, gcConfig, purgingSafepointController{ddb})
 	require.NoError(t, err)
 
 	c2 := newIntMap(t, ctx, ns, 2, 2)
@@ -249,11 +259,11 @@ func newIntMap(t *testing.T, ctx context.Context, ns tree.NodeStore, k, v int8) 
 
 	tb := val.NewTupleBuilder(desc, ns)
 	tb.PutInt8(0, k)
-	keyTuple, err := tb.Build(ns.Pool())
+	keyTuple, err := tb.Build(ctx, ns.Pool())
 	require.NoError(t, err)
 
 	tb.PutInt8(0, v)
-	valueTuple, err := tb.Build(ns.Pool())
+	valueTuple, err := tb.Build(ctx, ns.Pool())
 	require.NoError(t, err)
 
 	m, err := prolly.NewMapFromTuples(ctx, ns, desc, desc, keyTuple, valueTuple)

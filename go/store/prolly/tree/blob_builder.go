@@ -199,9 +199,9 @@ func (lw *blobLevelWriter) Write(ctx context.Context, r io.Reader) (hash.Hash, u
 	i, off, totalCount := 0, 0, uint64(0)
 	for {
 		// Sketchy hack to elide a copy here...
-		//h := (*hash.Hash)(unsafe.Pointer(&lw.buf[off]))
-		//var n uint64
-		//var err error
+		// h := (*hash.Hash)(unsafe.Pointer(&lw.buf[off]))
+		// var n uint64
+		// var err error
 		h, n, err := lw.child.Write(ctx, r)
 		if err != nil && err != io.EOF {
 			return hash.Hash{}, 0, err
@@ -282,7 +282,7 @@ func (b *JSONDoc) ToIndexedJSONDocument(ctx context.Context) (sql.JSONWrapper, e
 		// We're reading a non-indexed multi-chunk document written by an older version of Dolt.
 		return b.ToLazyJSONDocument(ctx)
 	}
-	return NewIndexedJsonDocument(ctx, root, b.ns), nil
+	return NewIndexedJsonDocument(root, b.ns), nil
 }
 
 func (b *JSONDoc) ToString(ctx context.Context) (string, error) {

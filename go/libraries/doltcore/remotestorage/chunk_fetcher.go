@@ -17,6 +17,7 @@ package remotestorage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -32,6 +33,27 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
+
+// Local aliases for the deeply nested generated message types so the
+// rest of this file stays readable.
+type (
+	tableFileRec = remotesapi.StreamChunkLocationsResponse_TableFileRecord
+	chunkLoc     = remotesapi.StreamChunkLocationsResponse_ChunkLocation
+)
+
+// hashAtIndex returns the 20-byte sub-slice of |buf| at hash index
+// |idx| (i.e. buf[idx*20 : (idx+1)*20]), or ok=false if |idx| is
+// out of range for |buf| viewed as a flat 20-byte-per-hash buffer.
+// Used to decode request_index / missing_indexes returned by the
+// server against the request's chunk_hashes buffer.
+func hashAtIndex(buf []byte, idx uint32) ([]byte, bool) {
+	start := int(idx) * hash.ByteLen
+	end := start + hash.ByteLen
+	if end > len(buf) {
+		return nil, false
+	}
+	return buf[start:end], true
+}
 
 // A remotestorage.ChunkFetcher is a pipelined chunk fetcher for fetching a
 // large number of chunks where the downloads may benefit from range
@@ -82,17 +104,42 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		stats:   StatsFactory(),
 	}
 
-	locsReqCh := make(chan *remotesapi.GetDownloadLocsRequest)
 	downloadLocCh := make(chan []*remotesapi.DownloadLoc)
 	locDoneCh := make(chan struct{})
 	fetchReqCh := make(chan fetchReq)
 
-	eg.Go(func() error {
-		return fetcherHashSetToGetDlLocsReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
-	})
-	eg.Go(func() error {
-		return fetcherRPCDownloadLocsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, func(s string) { dcs.repoToken.Store(s) }, ret.resCh, dcs.host)
-	})
+	storeRepoToken := func(s string) { dcs.repoToken.Store(s) }
+
+	if hasFeature(dcs.metadata, remotesapi.Feature_FEATURE_STREAM_CHUNK_LOCATIONS) {
+		locsReqCh := make(chan *remotesapi.StreamChunkLocationsRequest)
+		eg.Go(func() error {
+			return fetcherHashSetToReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, func(hashes [][]byte) *remotesapi.StreamChunkLocationsRequest {
+				// StreamChunkLocationsRequest.chunk_hashes is a
+				// flat 20-byte-per-hash buffer, not repeated bytes
+				// (see the proto file for rationale).
+				flat := make([]byte, 0, hash.ByteLen*len(hashes))
+				for _, h := range hashes {
+					flat = append(flat, h...)
+				}
+				id, token := dcs.getRepoId()
+				return &remotesapi.StreamChunkLocationsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: flat, ClientCapabilities: clientCapabilities}
+			})
+		})
+		eg.Go(func() error {
+			return fetcherRPCChunkLocationsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, storeRepoToken, ret.resCh, dcs.host, dcs.getRepoId, dcs.repoPath)
+		})
+	} else {
+		locsReqCh := make(chan *remotesapi.GetDownloadLocsRequest)
+		eg.Go(func() error {
+			return fetcherHashSetToReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, func(hashes [][]byte) *remotesapi.GetDownloadLocsRequest {
+				id, token := dcs.getRepoId()
+				return &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: hashes, ClientCapabilities: clientCapabilities}
+			})
+		})
+		eg.Go(func() error {
+			return fetcherRPCDownloadLocsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, storeRepoToken, ret.resCh, dcs.host)
+		})
+	}
 	eg.Go(func() error {
 		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
 	})
@@ -158,16 +205,20 @@ func (f *ChunkFetcher) Close() error {
 }
 
 // Reads HashSets from reqCh and batches all the received addresses
-// into |GetDownloadLocsRequest| messages with up to |batchSize| chunk hashes
-// in them. It delivers the batched messages to |resCh|.
-func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.HashSet, abortCh chan struct{}, resCh chan *remotesapi.GetDownloadLocsRequest, batchSize int, repoPath string, idFunc func() (*remotesapi.RepoId, string)) error {
-	// This is the buffer of received that we haven't sent to |resCh| yet.
+// into request messages with up to |batchSize| chunk hashes in them.
+// |build| constructs the outbound request from a slice of wire-encoded
+// hashes. Delivers the batched messages to |resCh|.
+//
+// Parameterized on the request type so the same batching logic works
+// for both StreamDownloadLocations (legacy) and StreamChunkLocations
+// (new), which share the same wire shape for requests.
+func fetcherHashSetToReqsThread[R any](ctx context.Context, reqCh chan hash.HashSet, abortCh chan struct{}, resCh chan R, batchSize int, build func(chunkHashes [][]byte) R) error {
+	// This is the buffer of received hashes that we haven't sent to |resCh| yet.
 	var addrs [][]byte
-	// This is the current slice we're trying to send in a
-	// |GetDownloadLocsRequest|.  After we send it successfully, we will
-	// need to allocate a new one for the next message, but we can reuse
-	// its memory when we fail to send on |resCh| to form the next download
-	// request we try to send.
+	// This is the current slice we're trying to send in a request. After
+	// we send it successfully, we will need to allocate a new one for the
+	// next message, but we can reuse its memory when we fail to send on
+	// |resCh| to form the next request we try to send.
 	var outbound [][]byte
 	for {
 		if reqCh == nil && len(addrs) == 0 {
@@ -175,14 +226,14 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 			return nil
 		}
 
-		var thisResCh chan *remotesapi.GetDownloadLocsRequest
-		var thisRes *remotesapi.GetDownloadLocsRequest
+		var thisResCh chan R
+		var thisRes R
+		var thisLen int
 
-		// Each time through the loop, we build a new
-		// |GetDownloadLocsRequest| to send. It contains up to
-		// |batchSize| hashes from the end of |addrs|. If we
-		// successfully send it, then we will drop those addresses from
-		// the end of |addrs|.
+		// Each time through the loop, we build a new request to send.
+		// It contains up to |batchSize| hashes from the end of
+		// |addrs|. If we successfully send it, then we will drop those
+		// addresses from the end of |addrs|.
 		if len(addrs) > 0 {
 			end := len(addrs)
 			st := end - batchSize
@@ -193,8 +244,8 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 				outbound = make([][]byte, end-st)
 			}
 			outbound = append(outbound[:0], addrs[st:end]...)
-			id, token := idFunc()
-			thisRes = &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoPath: repoPath, RepoToken: token, ChunkHashes: outbound[:]}
+			thisRes = build(outbound[:])
+			thisLen = end - st
 			thisResCh = resCh
 		}
 
@@ -208,7 +259,7 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 				addrs = append(addrs, h[:])
 			}
 		case thisResCh <- thisRes:
-			addrs = addrs[:len(addrs)-len(thisRes.ChunkHashes)]
+			addrs = addrs[:len(addrs)-thisLen]
 			outbound = nil
 		case <-ctx.Done():
 			return context.Cause(ctx)
@@ -300,6 +351,171 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 		}
 	})
 	return eg.Wait()
+}
+
+// Peer of fetcherRPCDownloadLocsThread for the new StreamChunkLocations
+// RPC. Reads request messages off |reqCh| and drives the streaming RPC,
+// translating the deduplicated response shape back into
+// []*remotesapi.DownloadLoc so the downstream coalescing thread is
+// reused verbatim.
+//
+// Maintains |tfByID|, a long-lived table_file_id -> TableFileRecord map
+// that is never reset. reliable.MakeCall may tear the underlying stream
+// down and reopen it behind our back; a fresh handler restarts id
+// assignment and re-introduces any id it reuses with a fresh
+// TableFileRecord, which we overwrite into |tfByID| before resolving
+// any ChunkLocation that references it. See the proto file.
+func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.StreamChunkLocationsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.ToChunker, host string, getRepoId func() (*remotesapi.RepoId, string), repoPath string) error {
+	stream, err := reliable.MakeCall(
+		ctx,
+		reliable.CallOptions[*remotesapi.StreamChunkLocationsRequest, *remotesapi.StreamChunkLocationsResponse]{
+			Open: func(ctx context.Context, opts ...grpc.CallOption) (reliable.ClientStream[*remotesapi.StreamChunkLocationsRequest, *remotesapi.StreamChunkLocationsResponse], error) {
+				return client.StreamChunkLocations(ctx, opts...)
+			},
+			ErrF:               processGrpcErr,
+			BackOffF:           grpcBackOff,
+			ReadRequestTimeout: reliableCallReadRequestTimeout,
+			DeliverRespTimeout: reliableCallDeliverRespTimeout,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	tfByID := make(map[uint32]*tableFileRec)
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		for {
+			select {
+			case req, ok := <-reqCh:
+				if !ok {
+					return stream.CloseSend()
+				}
+				if err := stream.Send(req); err != nil {
+					return NewRpcError(err, "StreamChunkLocations", host, req)
+				}
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			}
+		}
+	})
+	eg.Go(func() error {
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				close(resCh)
+				return nil
+			}
+			req := stream.AssociatedReq()
+
+			if err != nil {
+				return NewRpcError(err, "StreamChunkLocations", host, req)
+			}
+			if resp == nil {
+				return NewRpcError(errors.New("no stream response"), "StreamChunkLocations", host, req)
+			}
+			if resp.RepoToken != "" {
+				storeRepoToken(resp.RepoToken)
+			}
+
+			// Integrate table-file records before resolving
+			// locations: a ChunkLocation in this response may
+			// reference an id introduced by a TableFileRecord in
+			// the same response.
+			for _, rec := range resp.TableFiles {
+				tfByID[rec.TableFileId] = rec
+			}
+
+			if missingChunkCh != nil {
+				for _, idx := range resp.MissingIndexes {
+					bs, ok := hashAtIndex(req.ChunkHashes, idx)
+					if !ok {
+						return NewRpcError(errors.New("server returned missing_index out of range"), "StreamChunkLocations", host, req)
+					}
+					var h hash.Hash
+					copy(h[:], bs)
+					select {
+					case missingChunkCh <- nbs.CompressedChunk{H: h}:
+					case <-ctx.Done():
+						return context.Cause(ctx)
+					}
+				}
+			}
+
+			locs, err := translateChunkLocations(req, resp.Locations, tfByID, getRepoId, repoPath)
+			if err != nil {
+				return NewRpcError(err, "StreamChunkLocations", host, req)
+			}
+
+			select {
+			case resCh <- locs:
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			}
+		}
+	})
+	return eg.Wait()
+}
+
+// Group the ChunkLocations in a response by table_file_id and emit one
+// *remotesapi.DownloadLoc per group, so the downstream
+// fetcherDownloadRangesThread pipeline is reused without modification.
+// RefreshRequest is synthesized locally from the TableFileRecord's
+// file_id plus the DoltChunkStore's current (repo_id, repo_token,
+// repo_path) — the server no longer sends a per-DownloadLoc
+// RefreshTableFileUrlRequest.
+func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locations []*chunkLoc, tfByID map[uint32]*tableFileRec, getRepoId func() (*remotesapi.RepoId, string), repoPath string) ([]*remotesapi.DownloadLoc, error) {
+	if len(locations) == 0 {
+		return nil, nil
+	}
+
+	// Group by table_file_id, preserving first-seen order so the
+	// output is deterministic.
+	idOrder := make([]uint32, 0, len(tfByID))
+	rangesByID := make(map[uint32][]*remotesapi.RangeChunk)
+	for _, cl := range locations {
+		bs, ok := hashAtIndex(req.ChunkHashes, cl.RequestIndex)
+		if !ok {
+			return nil, errors.New("server returned ChunkLocation.request_index out of range")
+		}
+		if _, ok := tfByID[cl.TableFileId]; !ok {
+			return nil, fmt.Errorf("server referenced unknown table_file_id %d", cl.TableFileId)
+		}
+		if _, seen := rangesByID[cl.TableFileId]; !seen {
+			idOrder = append(idOrder, cl.TableFileId)
+		}
+		rangesByID[cl.TableFileId] = append(rangesByID[cl.TableFileId], &remotesapi.RangeChunk{
+			Hash:             bs,
+			Offset:           cl.Offset,
+			Length:           cl.Length,
+			DictionaryOffset: cl.DictionaryOffset,
+			DictionaryLength: cl.DictionaryLength,
+		})
+	}
+
+	repoId, repoToken := getRepoId()
+	out := make([]*remotesapi.DownloadLoc, 0, len(idOrder))
+	for _, id := range idOrder {
+		rec := tfByID[id]
+		out = append(out, &remotesapi.DownloadLoc{
+			Location: &remotesapi.DownloadLoc_HttpGetRange{
+				HttpGetRange: &remotesapi.HttpGetRange{
+					Url:    rec.Url,
+					Ranges: rangesByID[id],
+				},
+			},
+			RefreshAfter: rec.RefreshAfter,
+			RefreshRequest: &remotesapi.RefreshTableFileUrlRequest{
+				RepoId:             repoId,
+				RepoToken:          repoToken,
+				RepoPath:           repoPath,
+				FileId:             rec.FileId,
+				ClientCapabilities: clientCapabilities,
+			},
+		})
+	}
+	return out, nil
 }
 
 func getMissingChunks(req *remotesapi.GetDownloadLocsRequest, resp *remotesapi.GetDownloadLocsResponse) (hash.HashSet, error) {

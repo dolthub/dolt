@@ -1,6 +1,6 @@
 module github.com/dolthub/dolt/proto
 
-go 1.25.6
+go 1.26.2
 
 tool golang.org/x/tools/cmd/goimports
 

@@ -148,10 +148,11 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 		})
 	}
 
-	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), pullSpec.Remote, false)
+	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), pullSpec.Remote)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("failed to get remote db; %w", err)
 	}
+	defer srcDB.Close()
 
 	err = srcDB.Rebase(ctx)
 	if err != nil {

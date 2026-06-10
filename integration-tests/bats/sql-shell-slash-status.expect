@@ -1,0 +1,32 @@
+#!/usr/bin/expect
+# Regression coverage for the interactive \status backslash command in the
+# dolt sql shell. The bug in GH#11137 surfaced against a remote host, but
+# the interactive \status path shares the same createPrintData code, so we
+# exercise it both with and without the --branch global flag.
+#
+# Usage:
+#   sql-shell-slash-status.expect <expected-branch> [extra dolt global flags...]
+#
+# argv[0] is the branch name we expect \status to report. Any remaining
+# arguments are passed through to dolt before the `sql` subcommand, so the
+# caller can supply flags like --branch=br1.
+
+set timeout 10
+set env(NO_COLOR) 1
+
+source "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+set expected_branch [lindex $argv 0]
+set extra_args [lrange $argv 1 end]
+
+spawn dolt {*}$extra_args sql
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/[a-zA-Z0-9_]+\*?> } { send "\\status\r"; }
+
+expect_with_defaults_2 "On branch $expected_branch"                     {dolt-repo-[0-9]+/[a-zA-Z0-9_]+\*?> } { send "exit\r"; }
+
+expect eof
+
+set waitval [wait -i $spawn_id]
+set exval [lindex $waitval 3]
+exit $exval

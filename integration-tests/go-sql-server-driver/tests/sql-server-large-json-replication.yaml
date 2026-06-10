@@ -1,0 +1,89 @@
+parallel: true
+tests:
+
+- name: large json values replicate to standby
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: |
+        CREATE TABLE large_json (
+          id  BIGINT PRIMARY KEY,
+          doc JSON
+        )
+    - exec: "INSERT INTO large_json VALUES (1, JSON_OBJECT('id', 1, 'payload', REPEAT('abcde', 2200)))"
+    - exec: "INSERT INTO large_json VALUES (2, JSON_OBJECT('id', 2, 'payload', REPEAT('fghij', 2200)))"
+    - exec: "INSERT INTO large_json VALUES (3, JSON_OBJECT('id', 3, 'payload', REPEAT('klmno', 2200)))"
+    - exec: "INSERT INTO large_json VALUES (4, JSON_OBJECT('id', 4, 'items', JSON_ARRAY(REPEAT('x',3700), REPEAT('y',3700), REPEAT('z',3700))))"
+    - exec: "INSERT INTO large_json VALUES (5, JSON_OBJECT('id', 5, 'nested', JSON_OBJECT('a', REPEAT('p',5500), 'b', REPEAT('q',5500))))"
+    - query: "SELECT COUNT(*) FROM large_json WHERE LENGTH(doc) > 11000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - query: "SELECT doc->>'$.id' FROM large_json WHERE id = 3"
+      result:
+        columns: ["doc->>'$.id'"]
+        rows: [["3"]]
+  - on: server2
+    retry_attempts: 100
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM large_json"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - query: "SELECT COUNT(*) FROM large_json WHERE LENGTH(doc) > 11000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - query: "SELECT doc->>'$.id' FROM large_json WHERE id = 3"
+      result:
+        columns: ["doc->>'$.id'"]
+        rows: [["3"]]

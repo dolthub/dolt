@@ -39,12 +39,12 @@ var _ sql.ReferenceChecker = (*prollyFkIndexer)(nil)
 
 // Name implements the interface sql.Table.
 func (n *prollyFkIndexer) Name() string {
-	return n.writer.tableName.Name
+	return n.writer.tblName.Name
 }
 
 // String implements the interface sql.Table.
 func (n *prollyFkIndexer) String() string {
-	return n.writer.tableName.Name
+	return n.writer.tblName.Name
 }
 
 // Schema implements the interface sql.Table.
@@ -140,7 +140,7 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		for pkPos, idxPos := range iter.pkToIdxMap {
 			pkBld.PutRaw(pkPos, k.GetField(idxPos))
 		}
-		pkTup, err := pkBld.BuildPermissive(sharePool)
+		pkTup, err := pkBld.BuildPermissive(ctx, sharePool)
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +204,7 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	hashId := k.GetField(k.Count() - 1)
 	iter.primary.keyBld.PutHash128(0, hashId)
-	primaryKey, err := iter.primary.keyBld.Build(sharePool)
+	primaryKey, err := iter.primary.keyBld.Build(ctx, sharePool)
 	if err != nil {
 		return nil, err
 	}

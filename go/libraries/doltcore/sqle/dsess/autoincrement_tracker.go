@@ -17,6 +17,7 @@ package dsess
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -41,7 +42,7 @@ type LockMode int64
 
 var (
 	LockMode_Traditional LockMode = 0
-	LockMode_Concurret   LockMode = 1
+	LockMode_Concurrent  LockMode = 1
 	LockMode_Interleaved LockMode = 2
 )
 
@@ -59,7 +60,18 @@ type AutoIncrementTracker struct {
 	// async initialization and block on the process completing.
 	cancelInit chan struct{}
 	dbName     string
-	lockMode   LockMode
+	// lockMode is the effective @@innodb_autoinc_lock_mode at the time of AutoIncrementTracker initialization.
+	// This value can only be set by config and cannot be changed in a running server.
+	lockMode LockMode
+}
+
+// currentLockMode returns the effective @@innodb_autoinc_lock_mode stored in global server vars
+func currentLockMode() LockMode {
+	_, i, _ := sql.SystemVariables.GetGlobal("innodb_autoinc_lock_mode")
+	if mode, ok := i.(int64); ok {
+		return LockMode(mode)
+	}
+	return LockMode_Interleaved
 }
 
 var _ globalstate.AutoIncrementTracker = &AutoIncrementTracker{}
@@ -184,6 +196,9 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 		return 0, err
 	}
 
+	// The read-modify-write of the sequence below must be atomic across concurrent inserters. In
+	// interleaved lock mode (the default) the engine holds no statement-level lock, so we take a
+	// short per-table lock here.
 	locked := false
 	if a.lockMode == LockMode_Interleaved {
 		release := a.mm.Lock(tbl)
@@ -193,24 +208,25 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 
 	curr, ok := loadAutoIncValue(a.sequences, tbl)
 	if !ok {
+		// Missing tracker state after initialization can happen when a running sql-server discovers a database
+		// restored after startup, so initialize it here.
 		if !locked {
-			// Missing tracker state is unusual after initialization, but can happen when
-			// a running sql-server discovers a database restored after startup. Lock before
-			// rechecking so concurrent first users do not initialize the same table twice.
-			release := a.mm.Lock(tbl)
-			defer release()
+			if a.lockMode == LockMode_Interleaved {
+				release := a.mm.Lock(tbl)
+				defer release()
+				locked = true
+			}
+
+			curr, ok = loadAutoIncValue(a.sequences, tbl)
 		}
 
-		curr, ok = loadAutoIncValue(a.sequences, tbl)
 		if !ok {
-			// The table metadata is the source of truth for a restored database that is
-			// missing from the in-memory tracker.
-			seq, found, err := a.initializeTableAutoIncrement(ctx, tbl)
+			curr, ok, err = a.initializeTableAutoIncrement(ctx, tbl)
 			if err != nil {
 				return 0, err
 			}
-			if found {
-				curr = seq
+			if !ok {
+				return 0, fmt.Errorf("autoIncrementTracker: unable to find sequence for table %s", tbl)
 			}
 		}
 	}
@@ -547,12 +563,10 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 		return nil, err
 	}
 
-	_, i, _ := sql.SystemVariables.GetGlobal("innodb_autoinc_lock_mode")
-	lockMode := LockMode(i.(int64))
-	if lockMode == LockMode_Interleaved {
+	if a.lockMode == LockMode_Interleaved {
+		// This shouldn't be possible, it's a serious programming error if it happens
 		panic("Attempted to acquire AutoInc lock for entire insert operation, but lock mode was set to Interleaved")
 	}
-	a.lockMode = lockMode
 	return a.mm.Lock(tableName), nil
 }
 
@@ -630,6 +644,7 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 		})
 	}
 
+	a.lockMode = currentLockMode()
 	a.initErr = eg.Wait()
 }
 

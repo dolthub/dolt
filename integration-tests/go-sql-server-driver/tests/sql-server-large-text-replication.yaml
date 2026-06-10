@@ -1,0 +1,81 @@
+parallel: true
+tests:
+
+- name: large text values replicate to standby
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: |
+        CREATE TABLE large_text (
+          id  BIGINT PRIMARY KEY,
+          txt LONGTEXT
+        )
+    - exec: "INSERT INTO large_text VALUES (1, REPEAT('abcdefghij', 1500))"
+    - exec: "INSERT INTO large_text VALUES (2, REPEAT('klmnopqrst', 1500))"
+    - exec: "INSERT INTO large_text VALUES (3, REPEAT('uvwxyz0123', 1500))"
+    - exec: "INSERT INTO large_text VALUES (4, REPEAT('4567890abcd', 1363))"
+    - exec: "INSERT INTO large_text VALUES (5, REPEAT('efghijklmno', 1363))"
+    - query: "SELECT COUNT(*) FROM large_text WHERE LENGTH(txt) > 10000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+  - on: server2
+    retry_attempts: 100
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM large_text"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - query: "SELECT COUNT(*) FROM large_text WHERE LENGTH(txt) > 10000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]

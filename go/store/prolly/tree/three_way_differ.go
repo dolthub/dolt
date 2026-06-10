@@ -152,7 +152,10 @@ func (d *ThreeWayDiffer[K, O]) Next(ctx *sql.Context) (ThreeWayDiff, error) {
 				nextState = dsCompare
 			}
 		case dsCompare:
-			cmp := d.lIter.order.Compare(ctx, K(d.lDiff.Key), K(d.rDiff.Key))
+			cmp, cmpErr := d.lIter.order.Compare(ctx, K(d.lDiff.Key), K(d.rDiff.Key))
+			if cmpErr != nil {
+				return ThreeWayDiff{}, cmpErr
+			}
 			switch {
 			case cmp < 0:
 				nextState = dsNewLeft

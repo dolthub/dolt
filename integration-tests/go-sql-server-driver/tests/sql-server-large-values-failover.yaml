@@ -1,0 +1,99 @@
+parallel: true
+tests:
+
+- name: large values survive failover to new primary
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: |
+        CREATE TABLE large_vals (
+          id       BIGINT PRIMARY KEY,
+          txt      LONGTEXT,
+          blob_col LONGBLOB
+        )
+    - exec: "INSERT INTO large_vals VALUES (1, REPEAT('textrow1-', 1667), REPEAT('blobrow1-', 2778))"
+    - exec: "INSERT INTO large_vals VALUES (2, REPEAT('textrow2-', 1667), REPEAT('blobrow2-', 2778))"
+    - exec: "INSERT INTO large_vals VALUES (3, REPEAT('textrow3-', 1667), REPEAT('blobrow3-', 2778))"
+    - exec: "INSERT INTO large_vals VALUES (4, REPEAT('textrow4-', 1667), REPEAT('blobrow4-', 2778))"
+    - exec: "INSERT INTO large_vals VALUES (5, REPEAT('textrow5-', 1667), REPEAT('blobrow5-', 2778))"
+    # Transition to standby; server1's epoch advances to 2 on server2.
+    - query: "CALL dolt_assume_cluster_role('standby', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  # Verify the standby received all rows, then promote it to primary.
+  - on: server2
+    retry_attempts: 100
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM large_vals WHERE LENGTH(txt) > 10000 AND LENGTH(blob_col) > 20000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - query: "CALL dolt_assume_cluster_role('primary', 2)"
+      result:
+        columns: ["status"]
+        rows: [["0"]]
+  # Open a fresh connection to the new primary and confirm large values are intact.
+  # Also insert two additional large rows to prove the new primary is writable.
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM large_vals"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - exec: "INSERT INTO large_vals VALUES (6, REPEAT('textrow6-', 1667), REPEAT('blobrow6-', 2778))"
+    - exec: "INSERT INTO large_vals VALUES (7, REPEAT('textrow7-', 1667), REPEAT('blobrow7-', 2778))"
+    - query: "SELECT COUNT(*) FROM large_vals WHERE LENGTH(txt) > 10000 AND LENGTH(blob_col) > 20000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["7"]]

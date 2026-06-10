@@ -17,7 +17,9 @@ package nbs
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"hash/crc32"
+	"io"
 	"math"
 	"math/rand"
 	"testing"
@@ -60,6 +62,71 @@ func TestRoundTripIndexLookups(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, batches*chunksPerBatch, lookupCnt)
 	require.Equal(t, batches, metaCnt)
+}
+
+// errAfterReader yields |data| until exhausted, then returns |err| on every
+// subsequent Read. It injects a read fault at a known position.
+type errAfterReader struct {
+	data []byte
+	pos  int
+	err  error
+}
+
+func (r *errAfterReader) Read(p []byte) (int, error) {
+	if r.pos >= len(r.data) {
+		return 0, r.err
+	}
+	n := copy(p, r.data[r.pos:])
+	r.pos += n
+	return n, nil
+}
+
+// TestProcessIndexRecordsReadError verifies that processIndexRecords distinguishes
+// a crash-truncated index (benign EOF) from a genuine I/O fault. The former stops
+// cleanly at the last complete batch; the latter is surfaced so the caller can
+// rebuild from the journal rather than silently trusting a partial read.
+func TestProcessIndexRecordsReadError(t *testing.T) {
+	// build a single valid batch: lookups followed by a meta record
+	buf := new(bytes.Buffer)
+	w := bufio.NewWriter(buf)
+	lookups, meta := newLookups(t, 4, 0)
+	for _, l := range lookups {
+		require.NoError(t, writeIndexLookup(w, l))
+	}
+	require.NoError(t, writeJournalIndexMeta(w, meta.latestHash, meta.batchStart, meta.batchEnd, meta.checkSum))
+	require.NoError(t, w.Flush())
+	valid := buf.Bytes()
+	batchEnd := int64(len(valid)) // index offset after the one complete batch
+
+	cb := func(m lookupMeta, ls []lookup, checksum uint32) error {
+		require.Equal(t, m.checkSum, checksum)
+		return nil
+	}
+
+	errBoom := errors.New("simulated I/O error")
+
+	for _, tc := range []struct {
+		name    string
+		readErr error
+		wantErr error
+	}{
+		{name: "clean EOF after a batch is benign", readErr: io.EOF, wantErr: nil},
+		{name: "partial trailing record is benign", readErr: io.ErrUnexpectedEOF, wantErr: nil},
+		{name: "genuine I/O error is surfaced", readErr: errBoom, wantErr: errBoom},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rd := bufio.NewReader(&errAfterReader{data: valid, err: tc.readErr})
+			// sz is one past the valid batch so the loop attempts another read and
+			// hits the injected error
+			off, err := processIndexRecords(rd, batchEnd+1, cb)
+			require.Equal(t, batchEnd, off, "off must point at the end of the last complete batch")
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.wantErr)
+			}
+		})
+	}
 }
 
 func newLookups(t *testing.T, n int, start uint64) ([]lookup, lookupMeta) {

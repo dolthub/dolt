@@ -81,7 +81,7 @@ type TableFileStore interface {
 	WriteTableFile(ctx context.Context, fileId string, splitOffSet uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) (io.Closer, error)
 
 	// AddTableFilesToManifest adds table files to the manifest
-	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs GetAddrsCurry) error
+	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs InsertAddrsCurry) error
 
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 	PruneTableFiles(ctx context.Context) error
@@ -90,7 +90,7 @@ type TableFileStore interface {
 	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 
 	// SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
-	SupportedOperations() TableFileStoreOps
+	SupportedOperations(ctx context.Context) (TableFileStoreOps, error)
 }
 
 type TableFileSources struct {

@@ -38,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
@@ -105,7 +104,8 @@ func TestSchemaOverrides(t *testing.T) {
 // Provide additional test coverage for adaptive types by running Schema Override tests
 // using adaptive types instead of address types.
 func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
-	defer func() { typeinfo.UseAdaptiveEncoding = false }()
+	adaptiveEncoding := typeinfo.UseAdaptiveEncoding
+	defer func() { typeinfo.UseAdaptiveEncoding = adaptiveEncoding }()
 	typeinfo.UseAdaptiveEncoding = true
 	harness := newDoltEnginetestHarness(t)
 	RunSchemaOverridesTest(t, harness)
@@ -807,13 +807,16 @@ func TestBigBlobs(t *testing.T) {
 }
 
 func TestAdaptiveEncoding(t *testing.T) {
-	defer func() { typeinfo.UseAdaptiveEncoding = false }()
+	adaptiveEncoding := typeinfo.UseAdaptiveEncoding
+	defer func() { typeinfo.UseAdaptiveEncoding = adaptiveEncoding }()
 	typeinfo.UseAdaptiveEncoding = true
 
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Representation)
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Correctness)
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Representation)
 	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Correctness)
+
+	RunAdaptiveEncodingScripts(t, newDoltHarness(t))
 }
 
 func TestDropDatabase(t *testing.T) {
@@ -1077,6 +1080,17 @@ func TestJsonValueScripts(t *testing.T) {
 func TestLargeJsonObjects(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunLargeJsonObjectsTest(t, harness)
+}
+
+// TestJsonAdaptiveEncoding exercises the JsonAdaptiveEnc storage path end-to-end,
+// covering small (inlined) and large (out-of-band) JSON documents.
+func TestJsonAdaptiveEncoding(t *testing.T) {
+	adaptiveEncoding := typeinfo.UseAdaptiveEncoding
+	defer func() { typeinfo.UseAdaptiveEncoding = adaptiveEncoding }()
+	typeinfo.UseAdaptiveEncoding = true
+
+	harness := newDoltEnginetestHarness(t)
+	RunJsonAdaptiveEncodingTests(t, harness)
 }
 
 func TestTransactions(t *testing.T) {
@@ -1950,12 +1964,7 @@ func TestDoltStorageFormat(t *testing.T) {
 }
 
 func TestDoltStorageFormatPrepared(t *testing.T) {
-	var expectedFormatString string
-	if types.IsFormat_DOLT(types.Format_Default) {
-		expectedFormatString = "NEW ( __DOLT__ )"
-	} else {
-		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
-	}
+	expectedFormatString := "NEW ( __DOLT__ )"
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestPreparedQuery(t, h, "SELECT dolt_storage_format()", []sql.Row{{expectedFormatString}}, nil)

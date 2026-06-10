@@ -20,8 +20,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -61,7 +61,7 @@ func (om OrdinalMapping) IsIdentityMapping() bool {
 	return true
 }
 
-var defaultTupleLengthTarget int64 = (1 << 11)
+var DefaultTupleLengthTarget uint16 = (1 << 11)
 
 type TupleBuilder struct {
 	vs                ValueStore
@@ -69,9 +69,9 @@ type TupleBuilder struct {
 	fields            [][]byte
 	buf               []byte
 	pos               int64
-	tupleLengthTarget int64 // The max tuple length before the tuple builder attempts to store values out-of-band.
-	outOfBandSize     int64 // The size of the tuple if every adaptive value is stored out-of-band
-	inlineSize        int64 // The size of the tuple if every adaptive value is inlined
+	tupleLengthTarget uint16 // The max tuple length before the tuple builder attempts to store values out-of-band.
+	outOfBandSize     int64  // The size of the tuple if every adaptive value is stored out-of-band
+	inlineSize        int64  // The size of the tuple if every adaptive value is inlined
 }
 
 func NewTupleBuilder(desc *TupleDesc, vs ValueStore) *TupleBuilder {
@@ -80,25 +80,29 @@ func NewTupleBuilder(desc *TupleDesc, vs ValueStore) *TupleBuilder {
 		fields:            make([][]byte, len(desc.Types)),
 		buf:               make([]byte, builderBufferSize),
 		vs:                vs,
-		tupleLengthTarget: defaultTupleLengthTarget,
+		tupleLengthTarget: DefaultTupleLengthTarget,
 	}
 }
 
+func (tb *TupleBuilder) WithMaxRowSize(target uint16) *TupleBuilder {
+	other := *tb
+	other.tupleLengthTarget = target
+	return &other
+}
+
 // Build materializes a Tuple from the fields written to the TupleBuilder.
-func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple, err error) {
+func (tb *TupleBuilder) Build(ctx context.Context, pool pool.BuffPool) (tup Tuple, err error) {
 	for i, typ := range tb.Desc.Types {
 		if !typ.Nullable && tb.fields[i] == nil {
 			panic("cannot write NULL to non-NULL field: " + strconv.Itoa(i))
 		}
 	}
-	return tb.BuildPermissive(pool)
+	return tb.BuildPermissive(ctx, pool)
 }
 
 // BuildPermissive materializes a Tuple from the fields
 // written to the TupleBuilder without validating nullability.
-func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err error) {
-	// TODO: add context parameter
-	ctx := context.Background()
+func (tb *TupleBuilder) BuildPermissive(ctx context.Context, pool pool.BuffPool) (tup Tuple, err error) {
 	// Values may get passed into the tuple builder in either in-band or out-of-band form.
 	// In the best case, we don't need to convert any of them, so the TupleBuilder initially stores them in the form they're given.
 	// But we track the tuple size if they're all inlined vs the tuple size if they're all out-of-band,
@@ -109,7 +113,7 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 		savings     int64 // inlineSize - outOfBandSize
 	}
 	totalSize := tb.inlineSize
-	if totalSize > tb.tupleLengthTarget {
+	if totalSize > int64(tb.tupleLengthTarget) {
 		// Collect all adaptive columns that would benefit from out-of-band storage,
 		// then sort by savings descending so we move the largest values out-of-band first.
 		var candidates []adaptiveCandidate
@@ -147,7 +151,7 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 			}
 			outOfBandSet[c.columnIndex] = true
 			totalSize -= c.savings
-			if totalSize <= tb.tupleLengthTarget {
+			if totalSize <= int64(tb.tupleLengthTarget) {
 				break
 			}
 		}
@@ -332,7 +336,7 @@ func (tb *TupleBuilder) PutBit(i int, v uint64) {
 	tb.addSize(bit64Size)
 }
 
-func (tb *TupleBuilder) PutDecimal(i int, v decimal.Decimal) {
+func (tb *TupleBuilder) PutDecimal(i int, v *apd.Decimal) {
 	tb.Desc.ExpectEncoding(i, DecimalEnc)
 	sz := sizeOfDecimal(v)
 	tb.ensureCapacity(sz)
@@ -575,6 +579,11 @@ func (tb *TupleBuilder) PutAdaptiveGeomFromInline(ctx context.Context, i int, v 
 	return tb.PutAdaptiveFromInline(ctx, i, v)
 }
 
+func (tb *TupleBuilder) PutAdaptiveJsonFromInline(ctx context.Context, i int, v []byte) error {
+	tb.Desc.ExpectEncoding(i, JsonAdaptiveEnc)
+	return tb.PutAdaptiveFromInline(ctx, i, v)
+}
+
 func (tb *TupleBuilder) PutAdaptiveExtendedFromInline(ctx context.Context, i int, v []byte) error {
 	tb.Desc.ExpectEncoding(i, ExtendedAdaptiveEnc)
 	return tb.PutAdaptiveFromInline(ctx, i, v)
@@ -582,8 +591,8 @@ func (tb *TupleBuilder) PutAdaptiveExtendedFromInline(ctx context.Context, i int
 
 func (tb *TupleBuilder) PutAdaptiveFromInline(ctx context.Context, i int, v []byte) error {
 
-	inlineSize := ByteSize(len(v)) + 1 // include extra header byte
-	if int64(inlineSize) > tb.tupleLengthTarget {
+	inlineSize := int64(len(v) + 1) // include extra header byte
+	if inlineSize > int64(tb.tupleLengthTarget) {
 		// Inline value is too large. We must store it out-of-band.
 		tb.ensureCapacity(maxOutOfBandAdaptiveValueLength)
 		blobLength := uint64(len(v))
@@ -598,24 +607,25 @@ func (tb *TupleBuilder) PutAdaptiveFromInline(ctx context.Context, i int, v []by
 		field := tb.buf[tb.pos : tb.pos+int64(outOfBandSize)]
 		tb.fields[i] = field
 		tb.pos += int64(outOfBandSize)
-		tb.inlineSize += int64(inlineSize)
+		tb.inlineSize += inlineSize
 		tb.outOfBandSize += int64(outOfBandSize)
 		return nil
 	}
 
-	tb.ensureCapacity(inlineSize)
-	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(inlineSize)])
+	// inlineSize <= tb.tupleLengthTarget, so it must fit within a 16-bit ByteSize
+	tb.ensureCapacity(ByteSize(inlineSize))
+	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+inlineSize])
 	tb.fields[i] = field
 	field[0] = 0 // Mark this as inline
 	copy(field[1:], v)
-	tb.pos += int64(inlineSize)
-	tb.inlineSize += int64(inlineSize)
+	tb.pos += inlineSize
+	tb.inlineSize += inlineSize
 	tb.outOfBandSize += field.outOfBandSize()
 	return nil
 }
 
 func (tb *TupleBuilder) PutAdaptiveValue(ctx context.Context, vs ValueStore, i int, v AdaptiveValue) error {
-	if v.getMessageLength() > tb.tupleLengthTarget {
+	if v.getMessageLength() > int64(tb.tupleLengthTarget) {
 		// The message won't fit inlined, so premptively store it out-of-band
 		byteArray, err := v.convertToByteArray(ctx, vs, nil)
 		if err != nil {
@@ -640,6 +650,11 @@ func (tb *TupleBuilder) PutAdaptiveExtendedFromOutline(i int, v *ExtendedValueWr
 func (tb *TupleBuilder) PutAdaptiveGeomFromOutOfBand(i int, maxByteLength int64, addr hash.Hash) {
 	tb.Desc.ExpectEncoding(i, GeomAdaptiveEnc)
 	tb.PutAdaptiveFromOutline(i, maxByteLength, addr)
+}
+
+func (tb *TupleBuilder) PutAdaptiveJsonFromOutline(i int, v *JsonAdaptiveStorage) {
+	tb.Desc.ExpectEncoding(i, JsonAdaptiveEnc)
+	tb.PutAdaptiveFromOutline(i, v.MaxByteLength(), v.Addr())
 }
 
 func (tb *TupleBuilder) PutAdaptiveBytesFromOutline(i int, v *ByteArray) {

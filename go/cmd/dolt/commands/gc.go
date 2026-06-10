@@ -127,6 +127,8 @@ func (cmd GarbageCollectionCmd) constructDoltGCQuery(apr *argparser.ArgParseResu
 		extraFlag = "--full"
 	}
 
+	query := "CALL DOLT_GC('--archive-level', ?"
+
 	archiveLevel := chunks.SimpleArchive
 	if apr.Contains(cli.ArchiveLevelParam) {
 		lvl, ok := apr.GetInt(cli.ArchiveLevelParam)
@@ -139,7 +141,15 @@ func (cmd GarbageCollectionCmd) constructDoltGCQuery(apr *argparser.ArgParseResu
 
 	params = append(params, archiveLevel)
 
-	query := "CALL DOLT_GC('--archive-level', ?"
+	if apr.Contains(cli.IncrementalGCFileSize) {
+		incrementalFileSize, ok := apr.GetUint(cli.IncrementalGCFileSize)
+		if !ok {
+			return "", errhand.BuildDError("Invalid Argument: --incremental-file-size must be an unsigned integer").SetPrintUsage().Build()
+		}
+		params = append(params, incrementalFileSize)
+		query += ", '--incremental-file-size', ?"
+	}
+
 	if extraFlag != "" {
 		query += ", ?)"
 		params = append(params, extraFlag)

@@ -229,7 +229,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	name, err := cfg.GetString(config.UserNameKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", datas.ErrNameNotConfigured
+		return "", "", datas.ErrNameNotConfigured.New("user")
 	} else if err != nil {
 		return "", "", err
 	}
@@ -237,7 +237,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	email, err := cfg.GetString(config.UserEmailKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", datas.ErrEmailNotConfigured
+		return "", "", datas.ErrEmailNotConfigured.New("user")
 	} else if err != nil {
 		return "", "", err
 	}

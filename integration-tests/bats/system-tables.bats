@@ -164,6 +164,12 @@ teardown() {
     [ $status -eq 0 ]
     [[ ! "$output" =~ "main" ]] || false
     [[ "$output" =~ "create-table-branch" ]] || false
+
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --allow-empty --author "Bats Author <author@email.fake>" -m "check author columns"
+    run dolt sql -r csv -q "SELECT latest_committer, latest_committer_email, latest_author, latest_author_email FROM dolt_branches WHERE name = 'create-table-branch'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: query dolt_remote_branches system table" {
@@ -342,6 +348,13 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "STAGED,testStaged,,,,,false,true" ]] || false
     [[ "$output" =~ "WORKING,testWorking,,,,,false,true" ]] || false
+
+    dolt add testWorking
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --author "Bats Author <author@email.fake>" -m "check author columns"
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_diff WHERE message = 'check author columns' LIMIT 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: query dolt_column_diff system table" {
@@ -355,6 +368,45 @@ SQL
     [[ "$output" =~ "STAGED,testStaged,c1,,,,,added" ]] || false
     [[ "$output" =~ "WORKING,testWorking,pk,,,,,added" ]] || false
     [[ "$output" =~ "WORKING,testWorking,c1,,,,,added" ]] || false
+
+    dolt add testWorking
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --author "Bats Author <author@email.fake>" -m "check author columns"
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_column_diff WHERE message = 'check author columns' LIMIT 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
+}
+
+@test "system-tables: dolt_diff author and committer columns are distinct when set differently" {
+    dolt sql <<SQL
+CREATE TABLE t_diff_ident (pk INT PRIMARY KEY);
+CALL DOLT_ADD('t_diff_ident');
+SET @@dolt_author_name = 'Diff Author';
+SET @@dolt_author_email = 'diff_author@test.com';
+SET @@dolt_committer_name = 'Diff Committer';
+SET @@dolt_committer_email = 'diff_committer@test.com';
+CALL DOLT_COMMIT('-m', 'diff identity test');
+SQL
+
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_diff WHERE message = 'diff identity test' LIMIT 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Diff Committer,diff_committer@test.com,Diff Author,diff_author@test.com" ]] || false
+}
+
+@test "system-tables: dolt_column_diff author and committer columns are distinct when set differently" {
+    dolt sql <<SQL
+CREATE TABLE t_cdiff_ident (pk INT PRIMARY KEY);
+CALL DOLT_ADD('t_cdiff_ident');
+SET @@dolt_author_name = 'CDiff Author';
+SET @@dolt_author_email = 'cdiff_author@test.com';
+SET @@dolt_committer_name = 'CDiff Committer';
+SET @@dolt_committer_email = 'cdiff_committer@test.com';
+CALL DOLT_COMMIT('-m', 'column diff identity test');
+SQL
+
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_column_diff WHERE message = 'column diff identity test' LIMIT 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CDiff Committer,cdiff_committer@test.com,CDiff Author,cdiff_author@test.com" ]] || false
 }
 
 @test "system-tables: query dolt_diff_ system table" {
@@ -713,6 +765,12 @@ SQL
     run dolt sql -q "SELECT count(*) FROM dolt_commits;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "4" ]] || false
+
+    DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
+        dolt commit --allow-empty --author "Bats Author <author@email.fake>" -m "check author columns"
+    run dolt sql -r csv -q "SELECT committer, email, author, author_email FROM dolt_commits WHERE message = 'check author columns'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Bats Committer,committer@email.fake,Bats Author,author@email.fake" ]] || false
 }
 
 @test "system-tables: query dolt_ancestor_commits" {
@@ -1064,50 +1122,57 @@ SQL
 }
 
 @test "system-tables: dolt_log table function with prepared statements" {
-    # Test for issue #9508: Can't prepare dolt_log procedure statement
+    # See https://github.com/dolthub/dolt/issues/9508
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "initial commit"
     dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
     dolt add test2
     dolt commit -m "second commit"
-    
-    # Test basic bind variable support - single parameter
+
     run dolt sql -q "prepare stmt1 from 'select count(*) from dolt_log(?)'; set @v1 = 'HEAD'; execute stmt1 using @v1;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]] || false  # Should have 3 commits (init + 2 commits)
-    
-    # Test multiple bind variables with range
+    [[ "$output" =~ "3" ]] || false
+
     run dolt sql -q "prepare stmt2 from 'select count(*) from dolt_log(?)'; set @v1 = 'HEAD~1..HEAD'; execute stmt2 using @v1;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false  # Should have 1 commit in the range
-    
-    # Test the original customer issue: dolt_log with --not flag and bind variables
+    [[ "$output" =~ "1" ]] || false
+
     run dolt sql -q "prepare stmt3 from 'select count(*) from dolt_log(?, \"--not\", ?)'; set @v1 = 'HEAD', @v2 = 'HEAD~1'; execute stmt3 using @v1, @v2;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false  # Should have 1 commit (HEAD excluding HEAD~1)
-    
-    # Test bind variables with other flags
-    run dolt sql -q "prepare stmt4 from 'select commit_hash from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt4 using @v1;"
+    [[ "$output" =~ "1" ]] || false
 
-    # Test that parents column is available when using --parents with bind variables
-    run dolt sql -q "prepare stmt5 from 'select commit_hash, parents from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt5 using @v1;"
+    # --parents flag is now accepted, so this query succeeds.
+    run dolt sql -r csv -q "prepare stmt4 from 'select count(*) as n from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt4 using @v1;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "parents" ]] || false
-    
-    # Test mixed literals and bind variables
+    [[ "${lines[0]}" == "n" ]] || false
+    [[ "${lines[1]}" == "3" ]] || false
+
+    # The parents column is populated for every commit when --parents is set; the initial
+    # commit has no parents and renders as the empty string.
+    run dolt sql -r csv -q "prepare stmt5 from 'select sum(parents = \"\") as empty_count from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt5 using @v1;"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == "empty_count" ]] || false
+    [[ "${lines[1]}" == "1" ]] || false
+
     run dolt sql -q "prepare stmt6 from 'select count(*) from dolt_log(?, \"--not\", \"HEAD~2\")'; set @v1 = 'HEAD'; execute stmt6 using @v1;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]] || false  # Should have 2 commits (HEAD excluding HEAD~2)
-    
-    # Test bind variable as option flag - schema-affecting flags as bind variables don't add columns to schema
-    run dolt sql -q "prepare stmt7 from 'select commit_hash from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt7 using @flag;"
+    [[ "$output" =~ "2" ]] || false
+
+    # The flag itself is a bind variable that resolves to --parents at execution time.
+    run dolt sql -r csv -q "prepare stmt7 from 'select count(*) as n from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt7 using @flag;"
     [ "$status" -eq 0 ]
-    
-    # Selecting optional columns when flag is bind variable fails during analysis
-    run dolt sql -q "prepare stmt_fail from 'select commit_hash, parents from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt_fail using @flag;"
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "column \"parents\" could not be found" ]] || false
+    [[ "${lines[0]}" == "n" ]] || false
+    [[ "${lines[1]}" == "3" ]] || false
+
+    # The parents column is now part of the fixed dolt_log schema, so selecting it succeeds
+    # even when the flag arrives via a bind variable. The initial commit has no parents and
+    # renders as the empty string.
+    run dolt sql -r csv -q "prepare stmt_fail from 'select sum(parents = \"\") as empty_count from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt_fail using @flag;"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == "empty_count" ]] || false
+    [[ "${lines[1]}" == "1" ]] || false
+
 }
 
 @test "system-tables: dolt_diff bind variable rejection - dynamic table function" {
@@ -1220,3 +1285,4 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt_status_ignored" ]] || false
 }
+

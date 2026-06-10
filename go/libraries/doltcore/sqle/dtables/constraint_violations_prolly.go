@@ -22,6 +22,7 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -191,6 +192,9 @@ func (cvt *prollyConstraintViolationsTable) PartitionRows(ctx *sql.Context, part
 }
 
 func (cvt *prollyConstraintViolationsTable) Deleter(context *sql.Context) sql.RowDeleter {
+	if err := branch_control.CheckAccess(context, branch_control.Permissions_Write); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	ed := cvt.artM.Editor()
 	p := cvt.artM.Pool()
 	kd, _ := cvt.artM.Descriptors()
@@ -350,7 +354,7 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	}
 	d.kb.PutByteString(numPks+2, prolly.ConstraintViolationInfoHash(violationInfoBytes))
 
-	newKey, err := d.kb.Build(d.pool)
+	newKey, err := d.kb.Build(ctx, d.pool)
 	if err != nil {
 		return err
 	}
@@ -364,7 +368,7 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	if err := fillArtifactKeyPrefix(ctx, nodeStore, legacyKeyBuilder, r, numPks, rootHash, artifactType); err != nil {
 		return err
 	}
-	legacyKey, err := legacyKeyBuilder.Build(d.pool)
+	legacyKey, err := legacyKeyBuilder.Build(ctx, d.pool)
 	if err != nil {
 		return err
 	}

@@ -201,6 +201,8 @@ func ToForeignKeyConstraint(fk doltdb.ForeignKey, dbName string, childSch, paren
 		OnUpdate:       ToReferentialAction(fk.OnUpdate),
 		OnDelete:       ToReferentialAction(fk.OnDelete),
 		IsResolved:     fk.IsResolved(),
+		IsNotValid:     fk.IsNotValid,
+		MatchType:      sql.ForeignKeyMatchType(fk.MatchType),
 	}
 
 	for i, tag := range fk.TableColumns {

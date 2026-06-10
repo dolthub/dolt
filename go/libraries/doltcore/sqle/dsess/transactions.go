@@ -271,8 +271,13 @@ func doltCommit(ctx *sql.Context,
 
 	workingSet = workingSet.ClearMerge()
 
+	name, email, _, _, err := ResolveNameEmail(ctx, DoltCommitterName, DoltCommitterEmail)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	var rsc doltdb.ReplicationStatusController
-	newCommit, err := doltDb.CommitWithWorkingSet(ctx, headRef, workingSet.Ref(), &pending, workingSet, currHash, tx.WorkingSetMeta(ctx), &rsc)
+	newCommit, err := doltDb.CommitWithWorkingSet(ctx, headRef, workingSet.Ref(), &pending, workingSet, currHash, tx.WorkingSetMeta(name, email), &rsc)
 	WaitForReplicationController(ctx, rsc)
 	return workingSet, newCommit, err
 }
@@ -288,8 +293,13 @@ func txCommit(ctx *sql.Context,
 	hash hash.Hash, // hash of the current working set to be written
 	_ editor.Options, // editor options for merges
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
+	name, email, _, _, err := ResolveNameEmail(ctx, DoltCommitterName, DoltCommitterEmail)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	var rsc doltdb.ReplicationStatusController
-	err := doltDb.UpdateWorkingSet(ctx, workingSet.Ref(), workingSet, hash, tx.WorkingSetMeta(ctx), &rsc)
+	err = doltDb.UpdateWorkingSet(ctx, workingSet.Ref(), workingSet, hash, tx.WorkingSetMeta(name, email), &rsc)
 	WaitForReplicationController(ctx, rsc)
 	return workingSet, nil, err
 }
@@ -809,12 +819,11 @@ func (tx *DoltTransaction) ClearSavepoint(name string) bool {
 	return false
 }
 
-// WorkingSetMeta returns the metadata to use for a commit of this transaction
-func (tx DoltTransaction) WorkingSetMeta(ctx *sql.Context) *datas.WorkingSetMeta {
-	sess := DSessFromSess(ctx.Session)
+// WorkingSetMeta returns the metadata to use for a commit of this transaction.
+func (tx DoltTransaction) WorkingSetMeta(name, email string) *datas.WorkingSetMeta {
 	return &datas.WorkingSetMeta{
-		Name:        sess.Username(),
-		Email:       sess.Email(),
+		Name:        name,
+		Email:       email,
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: "sql transaction",
 	}

@@ -37,7 +37,7 @@ func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns NodeS
 	require.NoError(t, err)
 	root, err := SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
-	return NewIndexedJsonDocument(ctx, root, ns)
+	return NewIndexedJsonDocument(root, ns)
 }
 
 // createLargeDocumentForTesting creates a JSON document large enough to be split across multiple chunks.
@@ -389,13 +389,13 @@ func TestJsonCompare(t *testing.T) {
 			Cmp:   1,
 		},
 		{
-			Name:  "inserting into beginning of object makes it greater",
+			Name:  "inserting an earlier key",
 			Left:  largeObject,
 			Right: noError(largeObject.Insert(ctx, "$.a", types.MustJSON("1"))),
 			Cmp:   -1,
 		},
 		{
-			Name:  "inserting into end of object makes it greater",
+			Name:  "inserting a later key",
 			Left:  largeObject,
 			Right: noError(largeObject.Insert(ctx, "$.z", types.MustJSON("1"))),
 			Cmp:   -1,
@@ -459,6 +459,165 @@ func TestJsonCompare(t *testing.T) {
 		t.Run("compare non-indexed json document with indexed", func(t *testing.T) {
 			typetests.RunJsonCompareTests(t, largeDocTests, convertOnlyRightToIndexedJsonDocument)
 		})
+	})
+}
+
+// TestIndexedJsonDocument_CompareMatchesInMemory verifies that comparing two IndexedJsonDocuments produces the same
+// result as comparing the equivalent in-memory JSONDocuments via types.CompareJSON, across a variety of document
+// sizes — including documents large enough to be split across multiple prolly tree chunks. This is the crucial
+// invariant: regardless of how a document is stored, comparisons against another document must produce identical
+// results.
+func TestIndexedJsonDocument_CompareMatchesInMemory(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+
+	// parseToInterface converts a raw test input (typically a JSON source string like `{"a": 1}` or `"foo"`)
+	// into the corresponding Go value (map / slice / scalar) that JSONDocument.Val expects.
+	parseToInterface := func(t *testing.T, raw interface{}) interface{} {
+		converted, _, err := types.JSON.Convert(ctx, raw)
+		require.NoError(t, err)
+		val, err := converted.(sql.JSONWrapper).ToInterface(ctx)
+		require.NoError(t, err)
+		return val
+	}
+
+	// padToForceChunking wraps a parsed JSON value at $.value inside an object also containing thousands of
+	// padding entries, so the resulting IndexedJsonDocument spans multiple prolly tree chunks. The padding keys
+	// all sort after "value" so the value's location in the canonical walk is the same as for the unpadded form.
+	padToForceChunking := func(val interface{}) map[string]interface{} {
+		filler := make(map[string]interface{}, 4096)
+		for i := 0; i < 4096; i++ {
+			filler[fmt.Sprintf("zzzz_%05d", i)] = "lorem ipsum dolor sit amet, consectetur adipiscing elit"
+		}
+		return map[string]interface{}{
+			"value":   val,
+			"padding": filler,
+		}
+	}
+
+	// docPair holds two equivalent representations of a JSON value: one parsed in-memory, one stored as an
+	// IndexedJsonDocument.
+	type docPair struct {
+		inMem   types.JSONDocument
+		indexed IndexedJsonDocument
+	}
+
+	makePair := func(t *testing.T, val interface{}) docPair {
+		inMem := types.JSONDocument{Val: val}
+		root, err := SerializeJsonToAddr(ctx, ns, inMem)
+		require.NoError(t, err)
+		return docPair{
+			inMem:   inMem,
+			indexed: NewIndexedJsonDocument(root, ns),
+		}
+	}
+
+	// goldenCmp computes the expected comparison result by going through the canonical in-memory CompareJSON
+	// implementation, with both inputs as plain JSONDocuments (no ComparableJSON dispatch).
+	goldenCmp := func(t *testing.T, a, b docPair) int {
+		cmp, err := types.CompareJSON(ctx, a.inMem.Val, b.inMem.Val)
+		require.NoError(t, err)
+		return cmp
+	}
+
+	// assertAllFormsAgree runs four comparisons for a given (a, b) pair and checks that all yield the same
+	// result as the golden in-memory comparison.
+	assertAllFormsAgree := func(t *testing.T, name string, a, b docPair) {
+		t.Run(name, func(t *testing.T) {
+			expected := goldenCmp(t, a, b)
+
+			// indexed <-> indexed
+			cmp, err := a.indexed.Compare(ctx, b.indexed)
+			require.NoError(t, err)
+			require.Equalf(t, expected, cmp, "indexed.Compare(indexed) mismatch")
+
+			// indexed <-> in-memory
+			cmp, err = a.indexed.Compare(ctx, b.inMem)
+			require.NoError(t, err)
+			require.Equalf(t, expected, cmp, "indexed.Compare(in-memory) mismatch")
+
+			// in-memory <-> indexed (via CompareJSON which dispatches to b.indexed.Compare and negates)
+			cmp, err = types.CompareJSON(ctx, a.inMem.Val, b.indexed)
+			require.NoError(t, err)
+			require.Equalf(t, expected, cmp, "CompareJSON(in-memory, indexed) mismatch")
+		})
+	}
+
+	// Reuse the canonical GMS test cases. Every (left, right, expected) tuple should hold regardless of storage.
+	// We skip cases where either side is Go nil (SQL NULL) or where the parsed value is nil (JSON null):
+	// types.CompareJSON's CompareNulls dispatch can't tell the two apart, which would make in-memory and
+	// indexed forms diverge for those inputs. That ambiguity is a separate, pre-existing issue.
+	tests := typetests.JsonCompareTests
+	t.Run("small_documents_match_golden", func(t *testing.T) {
+		for _, tc := range tests {
+			if tc.Left == nil || tc.Right == nil {
+				continue
+			}
+			if parseToInterface(t, tc.Left) == nil || parseToInterface(t, tc.Right) == nil {
+				continue
+			}
+			a := makePair(t, parseToInterface(t, tc.Left))
+			b := makePair(t, parseToInterface(t, tc.Right))
+			assertAllFormsAgree(t, fmt.Sprintf("%v_vs_%v", tc.Left, tc.Right), a, b)
+		}
+	})
+
+	// The padded variants take a JSON value and wrap it inside a large object so the underlying storage spans
+	// multiple chunks. The pair (left-padded, right-padded) should compare the same way as the underlying values
+	// do — the padding is identical on both sides so it cancels out and only the value at $.value differs.
+	t.Run("chunked_documents_match_golden", func(t *testing.T) {
+		// Sanity check: the padded variant actually chunks.
+		probe := makePair(t, padToForceChunking(float64(1)))
+		require.Greater(t, probe.indexed.m.Root.Count(), 1,
+			"expected padded probe document to be split across multiple chunks; if this fails, the padding "+
+				"size needs to grow so we actually exercise the chunked path")
+
+		for _, tc := range tests {
+			if tc.Left == nil || tc.Right == nil {
+				continue
+			}
+			if parseToInterface(t, tc.Left) == nil || parseToInterface(t, tc.Right) == nil {
+				continue
+			}
+			a := makePair(t, padToForceChunking(parseToInterface(t, tc.Left)))
+			b := makePair(t, padToForceChunking(parseToInterface(t, tc.Right)))
+			assertAllFormsAgree(t, fmt.Sprintf("padded_%v_vs_%v", tc.Left, tc.Right), a, b)
+		}
+	})
+
+	type pair struct {
+		name string
+		a, b interface{}
+	}
+	caseAnalysisPairs := []pair{
+		{"disjoint_single_keys", `{"a": 1}`, `{"b": 1}`},
+		{"shared_prefix_then_disjoint", `{"a": 1, "c": 2}`, `{"a": 1, "b": 3}`},
+		{"unique_key_in_first_position", `{"x": 1, "c": 2}`, `{"x": 2, "b": 1}`},
+		{"strict_prefix_short_first", `{"a": 1}`, `{"a": 1, "b": 2}`},
+		{"strict_prefix_long_first", `{"a": 1, "b": 2}`, `{"a": 1}`},
+		{"empty_vs_nonempty", `{}`, `{"a": 1}`},
+		{"inside_object", `{"outer": {"a": 1}}`, `{"outer": {"b": 1}}`},
+		{"inside_object", `{"outer": {"a": 1}}`, `{"outer": {"a": 1, "b": 2}}`},
+		{"inside_array", `[{"a": 1}]`, `[{"b": 1}]`},
+		{"inside_array", `[{"a": 1}]`, `[{"a": 1, "b": 2}]`},
+		{"array_with_modified_element", `[1, 2, 3]`, `[1, 5, 3]`},
+
+		// Same outer keys, different nested values.
+		{"deeply_nested_modified", `{"a": {"b": {"c": 1}}}`, `{"a": {"b": {"c": 2}}}`},
+	}
+	t.Run("case_analysis_unchunked", func(t *testing.T) {
+		for _, p := range caseAnalysisPairs {
+			a := makePair(t, parseToInterface(t, p.a))
+			b := makePair(t, parseToInterface(t, p.b))
+			assertAllFormsAgree(t, p.name, a, b)
+		}
+	})
+	t.Run("case_analysis_chunked", func(t *testing.T) {
+		for _, p := range caseAnalysisPairs {
+			a := makePair(t, padToForceChunking(parseToInterface(t, p.a)))
+			b := makePair(t, padToForceChunking(parseToInterface(t, p.b)))
+			assertAllFormsAgree(t, "padded_"+p.name, a, b)
+		}
 	})
 }
 

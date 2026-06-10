@@ -17,7 +17,6 @@ package schema
 import (
 	"bytes"
 	"context"
-	"unicode/utf8"
 
 	"github.com/dolthub/dolt/go/store/val"
 
@@ -26,51 +25,58 @@ import (
 
 type CollationTupleComparator struct {
 	Collations []sql.CollationID // CollationIDs are implemented as uint16
+	vs         val.ValueStore
 }
 
 var _ val.TupleComparator = CollationTupleComparator{}
 
 // Compare implements TupleComparator
-func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.Tuple, desc *val.TupleDesc) (cmp int) {
+func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.Tuple, desc *val.TupleDesc) (cmp int, err error) {
 	fast := desc.GetFixedAccess()
 	off := len(fast)
 	var start, stop val.ByteSize
 	for i := 0; i < off; i++ {
 		stop = fast[i]
-		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop])
+		cmp, err = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop], c.vs)
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
-			return cmp
+			return cmp, nil
 		}
 		start = stop
 	}
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j))
+		cmp, err = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j), c.vs)
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
-			return cmp
+			return cmp, nil
 		}
 	}
 	return
 }
 
 // CompareValues implements TupleComparator
-func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type) int {
-	return collationCompare(ctx, typ, c.Collations[index], left, right)
+func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type) (int, error) {
+	return collationCompare(ctx, typ, c.Collations[index], left, right, c.vs)
 }
 
 // Prefix implements TupleComparator
 func (c CollationTupleComparator) Prefix(n int) val.TupleComparator {
 	newCollations := make([]sql.CollationID, n)
 	copy(newCollations, c.Collations)
-	return CollationTupleComparator{newCollations}
+	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
 }
 
 // Suffix implements TupleComparator
 func (c CollationTupleComparator) Suffix(n int) val.TupleComparator {
 	newCollations := make([]sql.CollationID, n)
 	copy(newCollations, c.Collations[len(c.Collations)-n:])
-	return CollationTupleComparator{newCollations}
+	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
 }
 
 // Validated implements TupleComparator
@@ -80,7 +86,7 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 	}
 	i := 0
 	for ; i < len(c.Collations); i++ {
-		if types[i].Enc == val.StringEnc && c.Collations[i] == sql.Collation_Unspecified {
+		if isCollatedStringEnc(types[i].Enc) && c.Collations[i] == sql.Collation_Unspecified {
 			c.Collations[i] = sql.Collation_Default
 		}
 	}
@@ -90,95 +96,45 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 	newCollations := make([]sql.CollationID, len(types))
 	copy(newCollations, c.Collations)
 	for ; i < len(newCollations); i++ {
-		if types[i].Enc == val.StringEnc {
+		if isCollatedStringEnc(types[i].Enc) {
 			panic("string type encoding is missing its collation")
 		}
-		newCollations[i] = sql.Collation_Unspecified
+		if isCollatedStringEnc(types[i].Enc) {
+			newCollations[i] = sql.Collation_Default
+		} else {
+			newCollations[i] = sql.Collation_Unspecified
+		}
 	}
-	return CollationTupleComparator{Collations: newCollations}
+	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
 }
 
-func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte) int {
+func isCollatedStringEnc(enc val.Encoding) bool {
+	return enc == val.StringEnc || enc == val.StringAdaptiveEnc
+}
+
+// WithValueStore implements TupleComparator
+func (c CollationTupleComparator) WithValueStore(vs val.ValueStore) val.TupleComparator {
+	return CollationTupleComparator{Collations: c.Collations, vs: vs}
+}
+
+func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte, vs val.ValueStore) (int, error) {
 	// order NULLs first
 	if left == nil || right == nil {
 		if bytes.Equal(left, right) {
-			return 0
+			return 0, nil
 		} else if left == nil {
-			return -1
+			return -1, nil
 		} else {
-			return 1
+			return 1, nil
 		}
 	}
 
-	if typ.Enc == val.StringEnc {
-		return compareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
-	} else {
-		return (&val.DefaultTupleComparator{}).CompareValues(ctx, 0, left, right, typ)
-	}
-}
-
-func compareCollatedStrings(collation sql.CollationID, left, right []byte) int {
-	i := 0
-	for i < len(left) && i < len(right) {
-		if left[i] != right[i] {
-			break
-		}
-		i++
-	}
-	if i >= len(left) || i >= len(right) {
-		if len(left) < len(right) {
-			return -1
-		} else if len(left) > len(right) {
-			return 1
-		} else {
-			return 0
-		}
-	}
-
-	li := i
-	for ; li > 0 && !utf8.RuneStart(left[li]); li-- {
-	}
-	left = left[li:]
-
-	ri := i
-	for ; ri > 0 && !utf8.RuneStart(right[ri]); ri-- {
-	}
-	right = right[ri:]
-
-	getRuneWeight := collation.Sorter()
-	for len(left) > 0 && len(right) > 0 {
-		// Binary strings aren't handled through this function, so it is safe to use the utf8 functions
-		leftRune, leftRead := utf8.DecodeRune(left)
-		rightRune, rightRead := utf8.DecodeRune(right)
-		if leftRead == utf8.RuneError || rightRead == utf8.RuneError {
-			// Malformed strings sort after well-formed strings, and we consider two malformed strings to be equal
-			if leftRead == utf8.RuneError && rightRead != utf8.RuneError {
-				return 1
-			} else if leftRead != utf8.RuneError && rightRead == utf8.RuneError {
-				return -1
-			} else {
-				return 0
-			}
-		}
-		if leftRune != rightRune {
-			leftWeight := getRuneWeight(leftRune)
-			rightWeight := getRuneWeight(rightRune)
-			if leftWeight < rightWeight {
-				return -1
-			} else if leftWeight > rightWeight {
-				return 1
-			}
-		}
-		left = left[leftRead:]
-		right = right[rightRead:]
-	}
-
-	// Strings are equal up to the compared length, so shorter strings sort before longer strings
-	if len(left) < len(right) {
-		return -1
-	} else if len(left) > len(right) {
-		return 1
-	} else {
-		return 0
+	switch typ.Enc {
+	case val.StringEnc:
+		return val.CompareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1]), nil
+	case val.StringAdaptiveEnc:
+		return vs.CompareAdaptiveCollatedStrings(ctx, left, right, collation)
+	default:
+		return (&val.DefaultTupleComparator{}).WithValueStore(vs).CompareValues(ctx, 0, left, right, typ)
 	}
 }

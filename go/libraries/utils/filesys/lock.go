@@ -80,30 +80,41 @@ func (memLock *InMemFileLock) Unlock() error {
 
 // LocalFileLock is the lock for the localFS
 type LocalFileLock struct {
-	lck *fslock.Lock
+	filename string
+	lck      *fslock.Lock
 }
 
 // NewLocalFileLock creates a new LocalFileLock
 func NewLocalFileLock(fs Filesys, filename string) *LocalFileLock {
-	lck := fslock.New(filename)
-
-	return &LocalFileLock{lck: lck}
+	return &LocalFileLock{filename: filename}
 }
 
-// TryLock attempts to lock the lock or fails if it is already locked
+// TryLock attempts to lock the lock or fails if it is already locked. The
+// underlying fslock holds a directory handle for as long as it exists, so the
+// lock is created here and released in Unlock; this keeps the handle open only
+// while the lock is held.
 func (locLock *LocalFileLock) TryLock() (bool, error) {
-	err := locLock.lck.TryLock()
+	lck, err := fslock.New(locLock.filename)
 	if err != nil {
 		return false, err
 	}
+	if err := lck.TryLock(); err != nil {
+		_ = lck.Close()
+		return false, err
+	}
+	locLock.lck = lck
 	return true, nil
 }
 
-// Unlock unlocks the lock
+// Unlock unlocks the lock and releases the underlying directory handle
 func (locLock *LocalFileLock) Unlock() error {
-	err := locLock.lck.Unlock()
-	if err != nil {
-		return err
+	if locLock.lck == nil {
+		return nil
 	}
-	return nil
+	err := locLock.lck.Unlock()
+	if cerr := locLock.lck.Close(); err == nil {
+		err = cerr
+	}
+	locLock.lck = nil
+	return err
 }

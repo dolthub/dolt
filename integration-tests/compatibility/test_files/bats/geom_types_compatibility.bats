@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 # Tests that the current Dolt build can read, write, and alter tables containing
 # geometry types that were originally created by an older Dolt version.
-load $BATS_TEST_DIRNAME/helper/common.bash
+bats_load_library common.bash
+bats_load_library compat-common.bash
 
 setup() {
     setup_common

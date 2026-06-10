@@ -15,6 +15,7 @@
 package revert
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -52,14 +53,6 @@ func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail stri
 		return "", nil, fmt.Errorf("failed to get roots for current session")
 	}
 
-	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
-	if err != nil {
-		return "", nil, err
-	}
-	if !wsOnlyHasIgnoredTables {
-		return "", nil, ErrRevertUncommittedChanges
-	}
-
 	ddb, ok := doltSession.GetDoltDB(ctx, dbName)
 	if !ok {
 		return "", nil, fmt.Errorf("failed to get dolt database")
@@ -85,7 +78,101 @@ func Revert(ctx *sql.Context, commitSpecStr string, authorName, authorEmail stri
 		return "", nil, doltdb.ErrGhostCommitEncountered
 	}
 
+	conflicts, err := dirtyTablesConflictWithRevert(ctx, roots, ddb, commit)
+	if err != nil {
+		return "", nil, err
+	}
+	if conflicts {
+		return "", nil, ErrRevertUncommittedChanges
+	}
+
 	return applySingleRevert(ctx, dbName, doltSession, commit, commitSpecStr, seriesHeadCommit, pendingHashes, authorName, authorEmail)
+}
+
+// dirtyTablesConflictWithRevert reports whether the working set has uncommitted changes
+// that prevent the revert of |commit| from proceeding. Matches git's behavior:
+// any staged change refuses the revert, and an unstaged change to a table the revert
+// would touch refuses it.
+func dirtyTablesConflictWithRevert(ctx context.Context, roots doltdb.Roots, ddb *doltdb.DoltDB, commit *doltdb.Commit) (bool, error) {
+	staged, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+
+	if len(staged) > 0 {
+		return true, nil
+	}
+
+	unstagedDirty, err := unstagedNonIgnoredTables(ctx, roots, unstaged)
+	if err != nil {
+		return false, err
+	}
+	if len(unstagedDirty) == 0 {
+		return false, nil
+	}
+
+	if len(commit.DatasParents()) == 0 {
+		return true, nil
+	}
+	optCmt, err := ddb.ResolveParent(ctx, commit, 0)
+	if err != nil {
+		return false, err
+	}
+	parentCM, ok := optCmt.ToCommit()
+	if !ok {
+		return false, doltdb.ErrGhostCommitEncountered
+	}
+	commitRoot, err := commit.GetRootValue(ctx)
+	if err != nil {
+		return false, err
+	}
+	parentRoot, err := parentCM.GetRootValue(ctx)
+	if err != nil {
+		return false, err
+	}
+	revertDeltas, err := diff.GetTableDeltas(ctx, parentRoot, commitRoot)
+	if err != nil {
+		return false, err
+	}
+	for _, d := range revertDeltas {
+		if d.ToName.Name != "" && unstagedDirty[d.ToName] {
+			return true, nil
+		}
+		if d.FromName.Name != "" && unstagedDirty[d.FromName] {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// unstagedNonIgnoredTables filters |unstaged| down to the table names that should
+// count as dirty for revert: tables that are not new-and-ignored via dolt_ignore.
+func unstagedNonIgnoredTables(ctx context.Context, roots doltdb.Roots, unstaged []diff.TableDelta) (map[doltdb.TableName]bool, error) {
+	schemas := diff.GetUniqueSchemaNamesFromTableDeltas(unstaged)
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
+	if err != nil {
+		return nil, err
+	}
+	dirty := make(map[doltdb.TableName]bool)
+	for _, d := range unstaged {
+		if d.IsAdd() {
+			patterns := ignorePatternMap[d.ToName.Schema]
+			isIgnored, err := patterns.IsTableNameIgnored(d.ToName)
+			if err != nil {
+				return nil, err
+			}
+			if isIgnored == doltdb.Ignore {
+				continue
+			}
+		}
+		if d.ToName.Name != "" {
+			dirty[d.ToName] = true
+		}
+		if d.FromName.Name != "" {
+			dirty[d.FromName] = true
+		}
+	}
+	return dirty, nil
 }
 
 // ContinueRevert continues an in-progress revert after conflicts have been resolved. It checks that all conflicts
@@ -171,16 +258,26 @@ func ContinueRevert(ctx *sql.Context, dbName string, authorName, authorEmail str
 		return "", 0, 0, 0, fmt.Errorf("fatal: unable to load roots for %s", dbName)
 	}
 
-	commitProps := actions.CommitStagedProps{
-		Message: revertMessage,
-		Date:    ctx.QueryTime(),
-		// Allow an empty commit: when a user resolves a conflict by keeping the current
-		// value, staged == HEAD, so there are no net changes — but the revert commit
-		// is still meaningful.
-		AllowEmpty: true,
-		Name:       authorName,
-		Email:      authorEmail,
+	commitProps, committerSet, err := dsess.NewCommitStagedProps(ctx, revertMessage)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("error: failed to resolve commit identity: %w", err)
 	}
+	if authorName != "" && authorEmail != "" {
+		commitProps.Author.Name = authorName
+		commitProps.Author.Name = authorEmail
+		// Older versions of Dolt used author as a synonym for committer. Unless specified, we keep that expectation.
+		if !committerSet {
+			commitProps.Committer.Name = authorName
+			commitProps.Committer.Name = authorEmail
+		}
+	}
+	if authorEmail != "" {
+		commitProps.Author.Email = authorEmail
+	}
+	// Allow an empty commit: when a user resolves a conflict by keeping the current
+	// value, staged == HEAD and there are no net changes, but the revert commit
+	// is still meaningful.
+	commitProps.AllowEmpty = true
 
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)
 	if err != nil {
@@ -429,12 +526,18 @@ func createRevertCommit(ctx *sql.Context, dbName string, doltSession *dsess.Dolt
 		return "", fmt.Errorf("fatal: unable to load roots for %s", dbName)
 	}
 
-	commitProps := actions.CommitStagedProps{
-		Message:    message,
-		Date:       ctx.QueryTime(),
-		AllowEmpty: false,
-		Name:       authorName,
-		Email:      authorEmail,
+	commitProps, committerSet, err := dsess.NewCommitStagedProps(ctx, message)
+	if err != nil {
+		return "", fmt.Errorf("error: failed to resolve commit identity: %w", err)
+	}
+	if authorName != "" || authorEmail != "" {
+		commitProps.Author.Name = authorName
+		commitProps.Author.Email = authorEmail
+		// Older ver. of Dolt used author as a synonym for committer. Unless specified, we keep this expectation.
+		if !committerSet {
+			commitProps.Committer.Name = authorName
+			commitProps.Committer.Email = authorEmail
+		}
 	}
 
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, dbName, roots, commitProps)
@@ -470,6 +573,9 @@ func stageRevertedTables(ctx *sql.Context, mergeStats map[doltdb.TableName]*merg
 	tablesToAdd := make([]doltdb.TableName, 0, len(mergeStats))
 	for tableName, stats := range mergeStats {
 		if stats.HasArtifacts() {
+			continue
+		}
+		if stats.Operation == merge.TableUnmodified {
 			continue
 		}
 		if stats.Operation == merge.TableRemoved {

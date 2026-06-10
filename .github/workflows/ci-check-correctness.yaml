@@ -13,6 +13,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: mheap/github-action-required-labels@v5
+        if: github.actor != 'dependabot[bot]'
         with:
           mode: exactly
           count: 1

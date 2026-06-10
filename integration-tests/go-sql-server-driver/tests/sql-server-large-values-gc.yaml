@@ -1,0 +1,100 @@
+parallel: true
+tests:
+
+- name: large values survive gc on primary then replicate to standby
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          auto_gc_behavior:
+            enable: false
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: |
+        CREATE TABLE large_text (
+          id  BIGINT PRIMARY KEY,
+          txt LONGTEXT
+        )
+    - exec: "INSERT INTO large_text VALUES (1, REPEAT('abcdefghij', 1500))"
+    - exec: "INSERT INTO large_text VALUES (2, REPEAT('klmnopqrst', 1500))"
+    - exec: "INSERT INTO large_text VALUES (3, REPEAT('uvwxyz0123', 1500))"
+    - exec: "INSERT INTO large_text VALUES (4, REPEAT('4567890abc', 1500))"
+    - exec: "INSERT INTO large_text VALUES (5, REPEAT('defghijklm', 1500))"
+    - exec: 'CALL DOLT_GC()'
+    - query: 'SELECT COUNT(*) FROM large_text'
+      error_match: "this connection can no longer be used"
+  # After GC the connection is invalidated. Open a new connection to the primary
+  # and wait for the cluster to finish replicating the post-GC state.
+  - on: server1
+    queries:
+    - query: |
+        SELECT `database`, standby_remote, role, epoch, replication_lag_millis, current_error
+        FROM dolt_cluster.dolt_cluster_status
+        ORDER BY `database` ASC
+      result:
+        columns: ["database","standby_remote","role","epoch","replication_lag_millis","current_error"]
+        rows:
+        - ["repo1","standby","primary","1","0","NULL"]
+      retry_attempts: 100
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM large_text WHERE LENGTH(txt) = 15000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+  # Verify the standby received and preserved all large values post-GC, then
+  # confirm it can perform a shallow GC of its own.
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: "SELECT COUNT(*) FROM large_text WHERE LENGTH(txt) = 15000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]
+    - exec: 'CALL DOLT_GC("--shallow")'
+    - query: "SELECT COUNT(*) FROM large_text WHERE LENGTH(txt) = 15000"
+      result:
+        columns: ["COUNT(*)"]
+        rows: [["5"]]

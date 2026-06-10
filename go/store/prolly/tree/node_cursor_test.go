@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -115,7 +116,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 
 	b := val.NewTupleBuilder(desc, ns)
 	b.PutUint32(0, uint32(len(tuples)))
-	aboveItem, err := b.Build(sharedPool)
+	aboveItem, err := b.Build(context.Background(), sharedPool)
 	require.NoError(t, err)
 
 	curr, err := newCursorAtKey(ctx, ns, nd, aboveItem, desc)

@@ -108,12 +108,12 @@ func replaceUniqueKeyViolation(ctx context.Context, edt *prolly.ArtifactsEditor,
 	return nil
 }
 
-func getPKFromSecondaryKey(pKB *val.TupleBuilder, pool pool.BuffPool, pkMapping val.OrdinalMapping, k val.Tuple) (val.Tuple, error) {
+func getPKFromSecondaryKey(ctx context.Context, pKB *val.TupleBuilder, pool pool.BuffPool, pkMapping val.OrdinalMapping, k val.Tuple) (val.Tuple, error) {
 	for to := range pkMapping {
 		from := pkMapping.MapOrdinal(to)
 		pKB.PutRaw(to, k.GetField(from))
 	}
-	return pKB.Build(pool)
+	return pKB.Build(ctx, pool)
 }
 
 func ordinalMappingFromIndex(def schema.Index) (m val.OrdinalMapping) {

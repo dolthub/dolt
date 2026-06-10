@@ -195,7 +195,19 @@ func (rcv *TableSchema) Comment() []byte {
 	return nil
 }
 
-const TableSchemaNumFields = 7
+func (rcv *TableSchema) TargetRowSize() uint16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.GetUint16(o + rcv._tab.Pos)
+	}
+	return 2048
+}
+
+func (rcv *TableSchema) MutateTargetRowSize(n uint16) bool {
+	return rcv._tab.MutateUint16Slot(18, n)
+}
+
+const TableSchemaNumFields = 8
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(TableSchemaNumFields)
@@ -229,6 +241,9 @@ func TableSchemaAddHasFeaturesAfterTryAccessors(builder *flatbuffers.Builder, ha
 }
 func TableSchemaAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(comment), 0)
+}
+func TableSchemaAddTargetRowSize(builder *flatbuffers.Builder, targetRowSize uint16) {
+	builder.PrependUint16Slot(7, targetRowSize, 2048)
 }
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -438,7 +453,19 @@ func (rcv *Column) MutateHiddenSystem(n bool) bool {
 	return rcv._tab.MutateBoolSlot(34, n)
 }
 
-const ColumnNumFields = 16
+func (rcv *Column) AdaptiveEncodingBreakingChange() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(36))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateAdaptiveEncodingBreakingChange(n bool) bool {
+	return rcv._tab.MutateBoolSlot(36, n)
+}
+
+const ColumnNumFields = 17
 
 func ColumnStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ColumnNumFields)
@@ -490,6 +517,9 @@ func ColumnAddUsesAdaptiveEncoding(builder *flatbuffers.Builder, usesAdaptiveEnc
 }
 func ColumnAddHiddenSystem(builder *flatbuffers.Builder, hiddenSystem bool) {
 	builder.PrependBoolSlot(15, hiddenSystem, false)
+}
+func ColumnAddAdaptiveEncodingBreakingChange(builder *flatbuffers.Builder, adaptiveEncodingBreakingChange bool) {
+	builder.PrependBoolSlot(16, adaptiveEncodingBreakingChange, false)
 }
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -751,7 +781,15 @@ func (rcv *Index) TryVectorInfo(obj *VectorInfo) (*VectorInfo, error) {
 	return nil, nil
 }
 
-const IndexNumFields = 14
+func (rcv *Index) Predicate() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(32))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const IndexNumFields = 15
 
 func IndexStart(builder *flatbuffers.Builder) {
 	builder.StartObject(IndexNumFields)
@@ -809,6 +847,9 @@ func IndexAddVectorKey(builder *flatbuffers.Builder, vectorKey bool) {
 }
 func IndexAddVectorInfo(builder *flatbuffers.Builder, vectorInfo flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(13, flatbuffers.UOffsetT(vectorInfo), 0)
+}
+func IndexAddPredicate(builder *flatbuffers.Builder, predicate flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(14, flatbuffers.UOffsetT(predicate), 0)
 }
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -1084,7 +1125,19 @@ func (rcv *CheckConstraint) MutateEnforced(n bool) bool {
 	return rcv._tab.MutateBoolSlot(8, n)
 }
 
-const CheckConstraintNumFields = 3
+func (rcv *CheckConstraint) IsNotValid() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *CheckConstraint) MutateIsNotValid(n bool) bool {
+	return rcv._tab.MutateBoolSlot(10, n)
+}
+
+const CheckConstraintNumFields = 4
 
 func CheckConstraintStart(builder *flatbuffers.Builder) {
 	builder.StartObject(CheckConstraintNumFields)
@@ -1097,6 +1150,9 @@ func CheckConstraintAddExpression(builder *flatbuffers.Builder, expression flatb
 }
 func CheckConstraintAddEnforced(builder *flatbuffers.Builder, enforced bool) {
 	builder.PrependBoolSlot(2, enforced, false)
+}
+func CheckConstraintAddIsNotValid(builder *flatbuffers.Builder, isNotValid bool) {
+	builder.PrependBoolSlot(3, isNotValid, false)
 }
 func CheckConstraintEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

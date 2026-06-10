@@ -79,6 +79,12 @@ func (dm dynamoManifest) Name() string {
 	return dm.table + dm.db
 }
 
+// Close implements manifest. The DynamoDB client is owned by the caller, so
+// there is nothing for the manifest to release.
+func (dm dynamoManifest) Close() error {
+	return nil
+}
+
 func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
@@ -230,6 +236,13 @@ func (dm dynamoManifest) Update(ctx context.Context, behavior dherrors.FatalBeha
 	}
 
 	return newContents, nil
+}
+
+// UpdateGCGen is unsupported for dynamoManifest: the legacy DynamoDB manifest
+// format (AWSStorageVersion) has no gcGen field, so it cannot track the garbage
+// collection generation that GC relies on.
+func (dm dynamoManifest) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	return manifestContents{}, errors.New("dynamodb-backed stores do not support garbage collection")
 }
 
 func errIsConditionalCheckFailed(err error) bool {

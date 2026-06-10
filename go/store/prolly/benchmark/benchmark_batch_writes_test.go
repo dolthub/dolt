@@ -43,8 +43,8 @@ var (
 	bucket = []byte("bolt")
 )
 
-func compareBytes(ctx context.Context, a, b []byte) int {
-	return bytes.Compare(a, b)
+func compareBytes(ctx context.Context, a, b []byte) (int, error) {
+	return bytes.Compare(a, b), nil
 }
 
 func BenchmarkImportBBolt(b *testing.B) {
@@ -107,8 +107,7 @@ type bboltWriter struct {
 }
 
 func (wr *bboltWriter) Put(ctx context.Context, key, value []byte) error {
-	wr.edits.Put(ctx, key, value)
-	return nil
+	return wr.edits.Put(ctx, key, value)
 }
 
 func (wr *bboltWriter) Flush() error {

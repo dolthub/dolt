@@ -70,7 +70,7 @@ func buildTuple(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.
 		err := tree.PutField(ctx, ns, builder, i, column)
 		require.NoError(t, err)
 	}
-	tup, err := builder.Build(pool)
+	tup, err := builder.Build(context.Background(), pool)
 	require.NoError(t, err)
 	return tup
 }
@@ -537,7 +537,7 @@ func testInsertOrderIndependence(t *testing.T, keyDesc *val.TupleDesc) {
 func testIncrementalInserts(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("incremental inserts", func(t *testing.T) {
 		ctx := context.Background()
-		ns := tree.NewTestNodeStore()
+		ns, keyDesc := keyDescWithNodeStore(keyDesc)
 		pb := pool.NewBuffPool()
 		logChunkSize := uint8(1)
 		distanceType := vector.DistanceL2Squared{}
@@ -601,10 +601,23 @@ func testIncrementalInserts(t *testing.T, keyDesc *val.TupleDesc) {
 	})
 }
 
+// keyDescWithNodeStore returns a new NodeStore and a TupleDesc based on the input that uses it.
+//
+// TODO: this is necessary for VECTOR encoding because the map mutator needs to be able to call Compare() on the
+// list of keys under edit, which requires the NodeStore for `BytesAdaptiveEnc`. For this use case, this comparison
+// is expensive and unnecessary. We should change the map mutator used by vector indexes to use a custom comparator.
+func keyDescWithNodeStore(keyDesc *val.TupleDesc) (tree.NodeStore, *val.TupleDesc) {
+	ns := tree.NewTestNodeStore()
+	keyDesc = val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{
+		ValueStore: ns,
+	}, keyDesc.Types...)
+	return ns, keyDesc
+}
+
 func testIncrementalUpdates(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("incremental updates", func(t *testing.T) {
 		ctx := context.Background()
-		ns := tree.NewTestNodeStore()
+		ns, keyDesc := keyDescWithNodeStore(keyDesc)
 		pb := pool.NewBuffPool()
 		logChunkSize := uint8(1)
 		distanceType := vector.DistanceL2Squared{}
@@ -632,11 +645,11 @@ func testIncrementalUpdates(t *testing.T, keyDesc *val.TupleDesc) {
 		// update leaf node
 		{
 			putVector(t, keyBuilder, encodeVector(t, keyDesc, 0.0, 1.0))
-			nextKey, err := keyBuilder.Build(bp)
+			nextKey, err := keyBuilder.Build(context.Background(), bp)
 			require.NoError(t, err)
 
 			valueBuilder.PutInt64(0, 5)
-			nextValue, err := valueBuilder.Build(bp)
+			nextValue, err := valueBuilder.Build(context.Background(), bp)
 			require.NoError(t, err)
 
 			err = mutableMap.Put(ctx, nextKey, nextValue)
@@ -668,11 +681,11 @@ func testIncrementalUpdates(t *testing.T, keyDesc *val.TupleDesc) {
 		// update root node
 		{
 			putVector(t, keyBuilder, encodeVector(t, keyDesc, 5.0, 6.0))
-			nextKey, err := keyBuilder.Build(bp)
+			nextKey, err := keyBuilder.Build(context.Background(), bp)
 			require.NoError(t, err)
 
 			valueBuilder.PutInt64(0, 6)
-			nextValue, err := valueBuilder.Build(bp)
+			nextValue, err := valueBuilder.Build(context.Background(), bp)
 			require.NoError(t, err)
 
 			err = mutableMap.Put(ctx, nextKey, nextValue)
@@ -700,7 +713,7 @@ func testIncrementalUpdates(t *testing.T, keyDesc *val.TupleDesc) {
 func testIncrementalDeletes(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("incremental deletes", func(t *testing.T) {
 		ctx := context.Background()
-		ns := tree.NewTestNodeStore()
+		ns, keyDesc := keyDescWithNodeStore(keyDesc)
 		pb := pool.NewBuffPool()
 		logChunkSize := uint8(1)
 		distanceType := vector.DistanceL2Squared{}
@@ -727,7 +740,7 @@ func testIncrementalDeletes(t *testing.T, keyDesc *val.TupleDesc) {
 		// delete leaf node
 		{
 			putVector(t, keyBuilder, encodeVector(t, keyDesc, 0.0, 1.0))
-			nextKey, err := keyBuilder.Build(bp)
+			nextKey, err := keyBuilder.Build(context.Background(), bp)
 			require.NoError(t, err)
 
 			err = mutableMap.Put(ctx, nextKey, nil)
@@ -752,7 +765,7 @@ func testIncrementalDeletes(t *testing.T, keyDesc *val.TupleDesc) {
 		// delete root node
 		{
 			putVector(t, keyBuilder, encodeVector(t, keyDesc, 5.0, 6.0))
-			nextKey, err := keyBuilder.Build(bp)
+			nextKey, err := keyBuilder.Build(context.Background(), bp)
 			require.NoError(t, err)
 
 			err = mutableMap.Put(ctx, nextKey, nil)

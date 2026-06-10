@@ -260,7 +260,7 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
-	return ddb.WriteEmptyRepoWithCommitMetaGenerator(ctx, initBranch, datas.MakeCommitMetaGenerator(name, email, datas.CommitterDate()))
+	return ddb.WriteEmptyRepoWithCommitMetaGenerator(ctx, initBranch, datas.MakeCommitMetaGenerator(name, email, datas.CommitNow()))
 }
 
 func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGenerator(ctx context.Context, initBranch string, commitMeta datas.CommitMetaGenerator) error {
@@ -351,6 +351,10 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 
 func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
+}
+
+func (ddb *DoltDB) Teardown(ctx context.Context) error {
+	return datas.ChunkStoreFromDatabase(ddb.db).Teardown(ctx)
 }
 
 // GetHashForRefStr resolves a ref string (such as a branch name or tag) and resolves it to a hash.Hash.
@@ -1924,7 +1928,7 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 // until no possibly-stale ChunkStore state is retained in memory, or failing
 // certain in-progress operations which cannot be finalized in a timely manner,
 // etc.
-func (ddb *DoltDB) GC(ctx context.Context, mode types.GCMode, cmp chunks.GCArchiveLevel, safepointController types.GCSafepointController) error {
+func (ddb *DoltDB) GC(ctx context.Context, gcConfig chunks.GCConfig, safepointController types.GCSafepointController) error {
 	collector, ok := ddb.db.Database.(datas.GarbageCollector)
 	if !ok {
 		return fmt.Errorf("this database does not support garbage collection")
@@ -1968,7 +1972,7 @@ func (ddb *DoltDB) GC(ctx context.Context, mode types.GCMode, cmp chunks.GCArchi
 		return err
 	}
 
-	return collector.GC(ctx, mode, cmp, oldGen, newGen, safepointController)
+	return collector.GC(ctx, gcConfig, oldGen, newGen, safepointController)
 }
 
 func (ddb *DoltDB) ShallowGC(ctx context.Context) error {
@@ -2035,7 +2039,15 @@ func pullHash(
 	destCS := datas.ChunkStoreFromDatabase(destDB)
 	waf := types.WalkAddrsForNBF(srcDB.Format(), skipHashes)
 
-	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
+	srcCanUsePuller, err := datas.CanUsePuller(ctx, srcDB)
+	if err != nil {
+		return err
+	}
+	destCanUsePuller, err := datas.CanUsePuller(ctx, destDB)
+	if err != nil {
+		return err
+	}
+	if srcCanUsePuller && destCanUsePuller {
 		puller, err := pull.NewPuller(ctx, tempDir, defaultTargetFileSize, srcCS, destCS, waf, targetHashes, statsCh)
 		if err == pull.ErrDBUpToDate {
 			return nil
@@ -2049,9 +2061,9 @@ func pullHash(
 	}
 }
 
-func (ddb *DoltDB) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+func (ddb *DoltDB) getAddrs(c chunks.Chunk) chunks.InsertAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
-		return types.AddrsFromNomsValue(c, ddb.Format(), addrs)
+		return types.InsertAddrsFromNomsValue(c, ddb.Format(), addrs)
 	}
 }
 
@@ -2107,7 +2119,7 @@ func (ddb *DoltDB) restoreDefaultConjoinBehavior() {
 // NomsBlockStore instance which exposes its roots through
 // IterateRoots.  Otherwise returns |nil| without visiting any roots,
 // including the current one.
-func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error) error {
+func (ddb *DoltDB) IterateRoots(ctx context.Context, cb func(root string, timestamp *time.Time) error) error {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
 	if generationalNBS, ok := cs.(*nbs.GenerationalNBS); ok {
@@ -2115,7 +2127,7 @@ func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error
 	}
 
 	if nbsStore, ok := cs.(*nbs.NomsBlockStore); ok {
-		return nbsStore.IterateRoots(cb)
+		return nbsStore.IterateRoots(ctx, cb)
 	} else {
 		return nil
 	}
@@ -2172,7 +2184,10 @@ func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
 		if err != nil {
 			return StoreSizes{}, err
 		}
-		journalSz, ok := newGenNBS.ChunkJournalSize()
+		journalSz, ok, err := newGenNBS.ChunkJournalSize(ctx)
+		if err != nil {
+			return StoreSizes{}, err
+		}
 		if ok {
 			return StoreSizes{
 				JournalBytes: uint64(journalSz),

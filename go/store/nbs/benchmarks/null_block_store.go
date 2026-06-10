@@ -51,7 +51,7 @@ func (nb nullBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (pres
 	panic("not impl")
 }
 
-func (nb nullBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
+func (nb nullBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry) error {
 	return nil
 }
 
@@ -64,6 +64,10 @@ func (nb nullBlockStore) AccessMode() chunks.ExclusiveAccessMode {
 }
 
 func (nb nullBlockStore) Close() error {
+	return nil
+}
+
+func (nb nullBlockStore) Teardown(ctx context.Context) error {
 	return nil
 }
 

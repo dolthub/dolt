@@ -56,19 +56,20 @@ func mergeProllySecondaryIndexes(
 	}
 
 	tryGetIdx := func(sch schema.Schema, iS durable.IndexSet, indexName string) (prolly.Map, bool, error) {
-		ok := sch.Indexes().Contains(indexName)
-		if ok {
-			idx, err := iS.GetIndex(ctx, sch, nil, indexName)
-			if err != nil {
-				return prolly.Map{}, false, err
-			}
-			m, err := durable.ProllyMapFromIndex(idx)
-			if err != nil {
-				return prolly.Map{}, false, err
-			}
-			return m, true, nil
+		idxDef := sch.Indexes().GetByName(indexName)
+		// Vector indexes are stored as proximity maps, not prolly maps; they must be rebuilt.
+		if idxDef == nil || idxDef.IsVector() {
+			return prolly.Map{}, false, nil
 		}
-		return prolly.Map{}, false, nil
+		idx, err := iS.GetIndex(ctx, sch, nil, indexName)
+		if err != nil {
+			return prolly.Map{}, false, err
+		}
+		m, err := durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return prolly.Map{}, false, err
+		}
+		return m, true, nil
 	}
 
 	// Schema merge can introduce new constraints/uniqueness checks.
@@ -108,6 +109,36 @@ func mergeProllySecondaryIndexes(
 	return mergedIndexSet, nil
 }
 
+// RebuildVectorIndexes rebuilds all vector indexes defined in |sch| from
+// scratch using |mergedRows| as the source of truth. Vector indexes are stored
+// as ProximityMaps and cannot be incrementally updated, so they must be fully
+// rebuilt whenever the underlying row data changes outside of a normal write
+// path (e.g. after conflict resolution).
+func RebuildVectorIndexes(
+	ctx *sql.Context,
+	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
+	sch schema.Schema,
+	tblName string,
+	mergedRows prolly.Map,
+	idxSet durable.IndexSet,
+) (durable.IndexSet, error) {
+	for _, idx := range sch.Indexes().AllIndexes() {
+		if !idx.IsVector() {
+			continue
+		}
+		rebuilt, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, sch, tblName, idx, mergedRows, nil)
+		if err != nil {
+			return nil, err
+		}
+		idxSet, err = idxSet.PutIndex(ctx, idx.Name(), rebuilt)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return idxSet, nil
+}
+
 func buildIndex(
 	ctx *sql.Context,
 	vrw types.ValueReadWriter,
@@ -135,11 +166,11 @@ func buildIndex(
 		pkMapping := ordinalMappingFromIndex(index)
 
 		mergedMap, err := creation.BuildUniqueProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
-			eK, err := getPKFromSecondaryKey(kb, p, pkMapping, existingKey)
+			eK, err := getPKFromSecondaryKey(ctx, kb, p, pkMapping, existingKey)
 			if err != nil {
 				return err
 			}
-			nK, err := getPKFromSecondaryKey(kb, p, pkMapping, newKey)
+			nK, err := getPKFromSecondaryKey(ctx, kb, p, pkMapping, newKey)
 			if err != nil {
 				return err
 			}
@@ -159,7 +190,7 @@ func buildIndex(
 		return mergedMap, nil
 	}
 
-	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m)
+	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, nil)
 	if err != nil {
 		return nil, err
 	}

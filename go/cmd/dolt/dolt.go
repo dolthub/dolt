@@ -670,7 +670,9 @@ If you're interested in running this command against a remote host, hit us up on
 		if apr.Contains(cli.NoTLSFlag) {
 			tlsMode = sqlserver.QueryistTLSMode_Disabled
 		}
-		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, tlsMode, useDb)
+		doltConfigName := rootEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
+		doltConfigEmail := rootEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, tlsMode, useDb, doltConfigName, doltConfigEmail)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
 		if hasPort {
@@ -751,10 +753,21 @@ If you're interested in running this command against a remote host, hit us up on
 		// repositories in our MultiEnv are ReadOnly. This includes the
 		// case where there are no repositories in our MultiEnv
 		var allReposAreReadOnly bool = true
+		var anyIsReadOnly bool = false
 		err = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+			if anyIsReadOnly {
+				if dEnv.DBLoadParams == nil {
+					dEnv.DBLoadParams = map[string]any{dbfactory.SkipJournalLockTimeoutParam: true}
+				} else {
+					dEnv.DBLoadParams[dbfactory.SkipJournalLockTimeoutParam] = true
+				}
+			}
 			readOnly, err := dEnv.IsAccessModeReadOnly(ctx)
 			if err != nil {
 				return true, fmt.Errorf("Failed to load database %s due to error: %w", name, err)
+			}
+			if readOnly {
+				anyIsReadOnly = true
 			}
 
 			allReposAreReadOnly = allReposAreReadOnly && readOnly
@@ -781,7 +794,9 @@ If you're interested in running this command against a remote host, hit us up on
 			if !creds.Specified {
 				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: localCreds.Secret, Specified: false}
 			}
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb)
+			doltConfigName := targetEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
+			doltConfigEmail := targetEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
 		}
 	}
 

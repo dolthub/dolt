@@ -158,7 +158,9 @@ func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), memlimit.MemtableSize(), q)
+	// DisableLogOutputChecksumValidationSkipped silences the per-GetObject WARN emitted when objects have no stored checksum.
+	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
+	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3c, dynamodb.NewFromConfig(cfg), memlimit.MemtableSize(), q)
 }
 
 func validatePath(path string) (string, error) {

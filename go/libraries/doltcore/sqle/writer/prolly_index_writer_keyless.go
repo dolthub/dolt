@@ -147,7 +147,7 @@ func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) 
 		}
 	}
 
-	value, err = k.valBld.Build(sharePool)
+	value, err = k.valBld.Build(ctx, sharePool)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -199,6 +199,7 @@ type prollyKeylessSecondaryWriter struct {
 	keyMap        val.OrdinalMapping
 	unique        bool
 	spatial       bool
+	predicate     sql.Expression
 }
 
 var _ indexWriter = prollyKeylessSecondaryWriter{}
@@ -265,19 +266,30 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 		return err
 	}
 	writer.keyBld.PutHash128(len(writer.keyBld.Desc.Types)-1, hashId.GetField(0))
-	indexKey, err := writer.keyBld.Build(sharePool)
+	indexKey, err := writer.keyBld.Build(ctx, sharePool)
 	if err != nil {
 		return err
 	}
 
 	if writer.unique {
-		prefixKey, err := writer.prefixBld.Build(sharePool)
-		if err != nil {
-			return err
+		performUniqueCheck := true
+		if writer.predicate != nil {
+			// do not unique check if predicate result is FALSE.
+			res, err := writer.predicate.Eval(ctx.(*sql.Context), sqlRow)
+			if err != nil {
+				return err
+			}
+			performUniqueCheck = res.(bool)
 		}
-		err = writer.checkForUniqueKeyError(ctx, prefixKey, sqlRow)
-		if err != nil {
-			return err
+		if performUniqueCheck {
+			prefixKey, err := writer.prefixBld.Build(ctx, sharePool)
+			if err != nil {
+				return err
+			}
+			err = writer.checkForUniqueKeyError(ctx, prefixKey, sqlRow)
+			if err != nil {
+				return err
+			}
 		}
 	} else {
 		writer.prefixBld.Recycle()
@@ -293,7 +305,10 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 		}
 	}
 
-	rng := prolly.PrefixRange(ctx, prefixKey, writer.prefixBld.Desc)
+	rng, err := prolly.PrefixRange(ctx, prefixKey, writer.prefixBld.Desc)
+	if err != nil {
+		return err
+	}
 	itr, err := writer.mut.IterRange(ctx, rng)
 	if err != nil {
 		return err
@@ -310,7 +325,7 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 		}
 		keyStr := FormatKeyForUniqKeyErr(ctx, prefixKey, writer.prefixBld.Desc, remappedSqlRow)
 		writer.hashBld.PutRaw(0, k.GetField(k.Count()-1))
-		existingKey, err := writer.hashBld.Build(sharePool)
+		existingKey, err := writer.hashBld.Build(ctx, sharePool)
 		if err != nil {
 			return err
 		}
@@ -343,7 +358,7 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 		}
 	}
 	writer.keyBld.PutHash128(len(writer.keyBld.Desc.Types)-1, hashId.GetField(0))
-	indexKey, err := writer.keyBld.Build(sharePool)
+	indexKey, err := writer.keyBld.Build(ctx, sharePool)
 	if err != nil {
 		return err
 	}

@@ -162,7 +162,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 				return nil, err
 			}
 		}
-		k, err := keyBld.Build(sharePool)
+		k, err := keyBld.Build(ctx, sharePool)
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +173,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 				return nil, err
 			}
 		}
-		v, err := valBld.Build(sharePool)
+		v, err := valBld.Build(ctx, sharePool)
 		if err != nil {
 			return nil, err
 		}

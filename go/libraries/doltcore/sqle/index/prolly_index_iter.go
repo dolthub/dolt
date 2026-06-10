@@ -104,7 +104,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		from := p.pkMap.MapOrdinal(to)
 		p.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk, err := p.pkBld.Build(sharePool)
+	pk, err := p.pkBld.Build(ctx, sharePool)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (p prollyIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 		from := p.pkMap.MapOrdinal(to)
 		p.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk, err := p.pkBld.Build(sharePool)
+	pk, err := p.pkBld.Build(ctx, sharePool)
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +482,7 @@ func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
 			from := p.clusteredMap.MapOrdinal(to)
 			p.clusteredBld.PutRaw(to, idxKey.GetField(from))
 		}
-		pk, err := p.clusteredBld.Build(sharePool)
+		pk, err := p.clusteredBld.Build(ctx, sharePool)
 		if err != nil {
 			return err
 		}

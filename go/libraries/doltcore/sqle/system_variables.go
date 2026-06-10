@@ -300,6 +300,48 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Type:    types.NewSystemStringType(actions.DoltCommitVerificationGroups),
 		Default: "",
 	},
+	&sql.MysqlSystemVariable{
+		Name:    dsess.DoltAuthorName,
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+		Type:    types.NewSystemStringType(dsess.DoltAuthorName),
+		Default: "",
+	},
+	&sql.MysqlSystemVariable{
+		Name:    dsess.DoltAuthorEmail,
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+		Type:    types.NewSystemStringType(dsess.DoltAuthorEmail),
+		Default: "",
+	},
+	&sql.MysqlSystemVariable{
+		Name:    dsess.DoltAuthorDate,
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+		Type:    types.NewSystemStringType(dsess.DoltAuthorDate),
+		Default: "",
+	},
+	&sql.MysqlSystemVariable{
+		Name:    dsess.DoltCommitterName,
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+		Type:    types.NewSystemStringType(dsess.DoltCommitterName),
+		Default: "",
+	},
+	&sql.MysqlSystemVariable{
+		Name:    dsess.DoltCommitterEmail,
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+		Type:    types.NewSystemStringType(dsess.DoltCommitterEmail),
+		Default: "",
+	},
+	&sql.MysqlSystemVariable{
+		Name:    dsess.DoltCommitterDate,
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+		Type:    types.NewSystemStringType(dsess.DoltCommitterDate),
+		Default: "",
+	},
 }
 
 func AddDoltSystemVariables() {
@@ -561,6 +603,48 @@ func AddDoltSystemVariables() {
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
 			Type:    types.NewSystemBoolType(dsess.AllowCICreation),
 			Default: int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltAuthorName,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltAuthorName),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltAuthorEmail,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltAuthorEmail),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltAuthorDate,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltAuthorDate),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltCommitterName,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltCommitterName),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltCommitterEmail,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltCommitterEmail),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltCommitterDate,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltCommitterDate),
+			Default: "",
 		},
 	})
 	sql.SystemVariables.AddSystemVariables(DoltSystemVariables)

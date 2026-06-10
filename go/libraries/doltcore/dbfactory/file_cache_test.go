@@ -29,7 +29,7 @@ import (
 
 func TestFileFactory_CreateDB_SingletonCacheAndBypass(t *testing.T) {
 	ctx := context.Background()
-	nbf := types.Format_Default
+	nbf := types.Format_DOLT
 
 	t.Run("default uses singleton cache", func(t *testing.T) {
 		root := t.TempDir()
@@ -73,7 +73,7 @@ func TestFileFactory_CreateDB_SingletonCacheAndBypass(t *testing.T) {
 
 func TestFileFactory_CreateDB_FailOnJournalLockTimeoutParam(t *testing.T) {
 	ctx := context.Background()
-	nbf := types.Format_Default
+	nbf := types.Format_DOLT
 
 	root := t.TempDir()
 	nomsDir := filepath.Join(root, "noms")
