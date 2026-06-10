@@ -226,6 +226,8 @@ func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, incl
 	}
 	for _, col := range sch.GetPKCols().GetColumns() {
 		col.Name = prefix + "_" + col.Name
+		col.IsPartOfPK = false
+		col.Constraints = nil
 		cols = append(cols, col)
 	}
 
