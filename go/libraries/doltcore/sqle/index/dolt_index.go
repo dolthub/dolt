@@ -637,6 +637,7 @@ func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpress
 			di.colExprTypes[i] = sql.ColumnExpressionType{
 				Expression: di.tblName + "." + col.Name,
 				Type:       col.TypeInfo.ToSqlType(),
+				Nullable:   col.IsNullable(),
 			}
 		}
 	}
