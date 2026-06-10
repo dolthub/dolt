@@ -895,21 +895,6 @@ type bootstrapConfig struct {
 	homeDir string
 }
 
-// preScanDirFlag does a lightweight scan of raw args for -C/--directory before
-// the full arg parse runs, so cwdFs can be set before any filesystem operations.
-// Returns "" if neither flag is present. --chdir is handled separately in runMain.
-func preScanDirFlag(args []string) string {
-	for i, arg := range args {
-		switch arg {
-		case "-C", "--directory":
-			if i+1 < len(args) {
-				return args[i+1]
-			}
-		}
-	}
-	return ""
-}
-
 // createBootstrapConfig parses the global arguments, inspects current working directory, loads the profile, and
 // even digs into server config to build the bootstrapConfig struct. If all goes well, |cfg| is set to a struct that
 // contains all the parsed arguments and other configurations. If there is an error, |cfg| will be nil.
@@ -918,10 +903,22 @@ func preScanDirFlag(args []string) string {
 func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
 	var cwdFs filesys.Filesys
 
+	_, usage := cli.HelpAndUsagePrinters(globalDocs)
+	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+	if errors.Is(err, argparser.ErrHelp) {
+		doltCommand.PrintUsage("dolt")
+		cli.Println(globalSpecialMsg)
+		usage()
+		return nil, true, 0
+	} else if err != nil {
+		cli.PrintErrln(color.RedString("Failed to parse global arguments: %v", err))
+		return nil, true, 1
+	}
+
 	// Resolve working directory. -C/--directory changes it before any filesystem
 	// operations. --chdir (deprecated) is handled earlier in runMain via os.Chdir,
 	// so by this point the process cwd already reflects it.
-	if targetDir := preScanDirFlag(args); targetDir != "" {
+	if targetDir, ok := apr.GetValue("directory"); ok {
 		var err error
 		cwdFs, err = filesys.LocalFilesysWithWorkingDir(targetDir)
 		if err != nil {
@@ -974,18 +971,6 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		}
 		return false
 	})
-
-	_, usage := cli.HelpAndUsagePrinters(globalDocs)
-	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
-	if errors.Is(err, argparser.ErrHelp) {
-		doltCommand.PrintUsage("dolt")
-		cli.Println(globalSpecialMsg)
-		usage()
-		return nil, true, 0
-	} else if err != nil {
-		cli.PrintErrln(color.RedString("Failed to parse global arguments: %v", err))
-		return nil, true, 1
-	}
 
 	hasGlobalArgs := false
 	if len(remainingArgs) != len(args) {
