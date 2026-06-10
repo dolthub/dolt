@@ -64,7 +64,7 @@ teardown() {
     run dolt sql -q "describe plan select * from dolt_commit_diff_test_two_pk where from_commit = DOLT_HASHOF('create') and to_commit = DOLT_HASHOF('head') and to_pk1 = 2;"
     [ $status -eq 0 ]
     [[ "$output" =~ "index: [dolt_commit_diff_test_two_pk.to_commit,dolt_commit_diff_test_two_pk.from_commit,dolt_commit_diff_test_two_pk.to_pk1,dolt_commit_diff_test_two_pk.to_pk2]" ]] || false
-    [[ "$output" =~ "[2, 2], [NULL, ∞)" ]] || false
+    [[ "$output" =~ "[2, 2], (NULL, ∞)" ]] || false
 }
 
 @test "sql-commit-diff: DOLT_COMMIT_DIFF with a range on from_ key" {
@@ -86,5 +86,5 @@ teardown() {
     run dolt sql -q "describe plan select * from dolt_commit_diff_test_two_pk where from_commit = DOLT_HASHOF('create') and to_commit = DOLT_HASHOF('head') and from_pk1 = 2;"
     [ $status -eq 0 ]
     [[ "$output" =~ "index: [dolt_commit_diff_test_two_pk.to_commit,dolt_commit_diff_test_two_pk.from_commit,dolt_commit_diff_test_two_pk.from_pk1,dolt_commit_diff_test_two_pk.from_pk2]" ]] || false
-    [[ "$output" =~ "[2, 2], [NULL, ∞)" ]] || false
+    [[ "$output" =~ "[2, 2], (NULL, ∞)" ]] || false
 }

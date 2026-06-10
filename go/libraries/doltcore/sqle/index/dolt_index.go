@@ -154,6 +154,8 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		for i, col := range cols {
 			keyCols[i] = col
 			keyCols[i].Name = toFrom + "_" + col.Name
+			keyCols[i].IsPartOfPK = false
+			keyCols[i].Constraints = nil
 		}
 
 		// to_ columns
