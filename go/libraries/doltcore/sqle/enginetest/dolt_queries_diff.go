@@ -5339,7 +5339,7 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "SELECT * FROM DOLT_COMMIT_DIFF_t where from_commit=@Commit1;",
-				ExpectedErrStr: "error querying table dolt_commit_diff_t: dolt_commit_diff_* tables must be filtered to a single 'to_commit'",
+				ExpectedErrStr: dtables.ErrExactlyOneToCommit.Error(),
 			},
 		},
 	},
