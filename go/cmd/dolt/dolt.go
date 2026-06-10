@@ -901,8 +901,6 @@ type bootstrapConfig struct {
 // |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
 // |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
 func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
-	var cwdFs filesys.Filesys
-
 	_, usage := cli.HelpAndUsagePrinters(globalDocs)
 	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
 	if errors.Is(err, argparser.ErrHelp) {
@@ -915,9 +913,7 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		return nil, true, 1
 	}
 
-	// Resolve working directory. -C/--directory changes it before any filesystem
-	// operations. --chdir (deprecated) is handled earlier in runMain via os.Chdir,
-	// so by this point the process cwd already reflects it.
+	var cwdFs filesys.Filesys
 	if targetDir, ok := apr.GetValue("directory"); ok {
 		var err error
 		cwdFs, err = filesys.LocalFilesysWithWorkingDir(targetDir)
