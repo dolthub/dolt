@@ -1831,15 +1831,8 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (chunks.TableFileSources
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
-	exists, contents, err := nbs.manifest.ParseIfExists(ctx, nbs.stats, nil)
-
-	if err != nil {
-		return chunks.TableFileSources{}, err
-	}
-
-	if !exists {
-		return chunks.TableFileSources{}, nil
-	}
+	// This is our local view. Callers are responsible for Rebase() if they need it.
+	contents := nbs.upstream
 
 	css, err := nbs.chunkSourcesByAddr()
 	if err != nil {
