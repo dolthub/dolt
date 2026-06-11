@@ -604,6 +604,10 @@ _init_repo_with_remote() {
     run dolt push origin main
     [ "$status" -eq 0 ]
     [ -f "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND" ]
+    # Byte equality catches a dolt that appends, prepends, or rewrites the
+    # user's GIT_SSH_COMMAND.
+    recorded="$(cat "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND")"
+    [ "$recorded" = "$GIT_SVC_WRAPPER" ] || (echo "recorded GIT_SSH_COMMAND: $recorded, expected: $GIT_SVC_WRAPPER" >&2; false)
 }
 
 # bats test_tags=no_lambda
@@ -655,6 +659,76 @@ _init_repo_with_remote() {
 
     run dolt push origin main
     [ "$status" -eq 0 ]
+}
+
+# _setup_askpass_probe arranges an sshd, a passphrase locked key, the askpass
+# recorder, and the ssh shim, then clears every variable that could bypass or
+# mask an askpass prompt.
+_setup_askpass_probe() {
+    if ! command -v timeout >/dev/null 2>&1; then
+        skip "timeout not installed"
+    fi
+    setup_git_sshd
+    gen_ssh_key "$BATS_TMPDIR/ssh_key_locked" "test_passphrase"
+    setup_git_ssh_askpass_recorder
+    setup_git_ssh_path_shim "$BATS_TMPDIR/ssh_key_locked"
+    unset GIT_SSH_COMMAND GIT_SSH SSH_AUTH_SOCK SSH_AGENT_PID SSH_ASKPASS_REQUIRE
+}
+
+# _push_fails_without_askpass pushes with a backstop timeout and asserts dolt
+# failed on ssh auth without the askpass recorder firing.
+_push_fails_without_askpass() {
+    run timeout -k 5 15 dolt push origin main 3>&-
+    [ ! -f "$SSH_ASKPASS_MARKER" ] || (echo "askpass invoked with: $(cat "$SSH_ASKPASS_MARKER")" >&2; false)
+    [ "$status" -ne 0 ]
+    # The hint proves the push failed on ssh auth rather than unrelated
+    # breakage such as a port collision or a timeout kill.
+    [[ "$output" =~ "hint: dolt does not support interactive credential prompts" ]] || false
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: ssh push does not invoke the SSH_ASKPASS program" {
+    # See https://github.com/dolthub/dolt/issues/11027.
+    setup_git_repo
+    _setup_askpass_probe
+    setup_git_ssh_wrapper
+    # The wrapper transport succeeds without ssh, so if core.sshCommand ever
+    # won over GIT_SSH_COMMAND the push would succeed and fail the test. The
+    # variant tells git the wrapper accepts a port flag like real ssh.
+    export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0="$GIT_SVC_WRAPPER"
+    export GIT_CONFIG_KEY_1=ssh.variant GIT_CONFIG_VALUE_1=ssh
+    export GIT_SSH_COMMAND="$SSH_SHIM_DIR/ssh"
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+    _push_fails_without_askpass
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: ssh push with the default ssh transport does not invoke the SSH_ASKPASS program" {
+    # See https://github.com/dolthub/dolt/issues/11027.
+    setup_git_repo
+    _setup_askpass_probe
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+    _push_fails_without_askpass
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: askpass recorder control fires under raw ssh" {
+    # Positive control proving the recorder can observe an askpass launch, so
+    # a marker that stays absent under dolt means dolt suppressed the prompt.
+    # See https://github.com/dolthub/dolt/issues/11027.
+    if ! command -v setsid >/dev/null 2>&1; then
+        skip "setsid not installed"
+    fi
+    _setup_askpass_probe
+    # setsid removes the controlling terminal the way dolt does. With one
+    # present ssh would prompt there instead of launching askpass.
+    run timeout -k 5 15 setsid -w ssh -p "$SSHD_PORT" "$(whoami)@127.0.0.1" true 3>&-
+    [ -f "$SSH_ASKPASS_MARKER" ] || (echo "raw ssh did not invoke askpass, the regression trap is broken" >&2; false)
+    # The recorded prompt must be the passphrase request for the locked key,
+    # not some other prompt that happened to launch askpass.
+    marker="$(cat "$SSH_ASKPASS_MARKER")"
+    [ "$marker" = "Enter passphrase for key '$BATS_TMPDIR/ssh_key_locked': " ] || (echo "unexpected askpass prompt: $marker" >&2; false)
+    [ "$status" -ne 0 ]
 }
 
 
