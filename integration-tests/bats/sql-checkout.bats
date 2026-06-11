@@ -41,6 +41,22 @@ teardown() {
     [[ "$output" =~ "main" ]] || false
 }
 
+@test "sql-checkout: DOLT_CHECKOUT warning is emitted once per -q invocation" {
+    run dolt sql -q "call dolt_checkout('-b', 'feature-branch'); call dolt_checkout('main');"
+    [ $status -eq 0 ]
+
+    warning_count=$(printf '%s\n' "$output" | grep -c "warning: dolt_checkout() only affects the current session")
+    [ "$warning_count" -eq 1 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+
+    run dolt branch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "feature-branch" ]] || false
+}
+
 @test "sql-checkout: DOLT_CHECKOUT -b throws error on branches that already exist" {
     run dolt sql -q "call dolt_checkout('-b', 'main')"
     [ $status -eq 1 ]

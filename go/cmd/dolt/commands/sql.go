@@ -411,6 +411,10 @@ func queryMode(
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
+	if strings.Contains(strings.ToLower(query), "dolt_checkout") {
+		cli.PrintErrf("warning: dolt_checkout() only affects the current session. To persist the branch change, include additional statements in the same -q invocation or use 'dolt checkout' instead.\n")
+	}
+
 	return 0
 }
 
