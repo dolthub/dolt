@@ -661,6 +661,40 @@ _init_repo_with_remote() {
     [ "$status" -eq 0 ]
 }
 
+# _setup_askpass_probe arranges an sshd, a passphrase locked key, the askpass
+# recorder, and the ssh shim, then clears every variable that could bypass or
+# mask an askpass prompt.
+_setup_askpass_probe() {
+    if ! command -v timeout >/dev/null 2>&1; then
+        skip "timeout not installed"
+    fi
+    setup_git_sshd
+    gen_ssh_key "$BATS_TMPDIR/ssh_key_locked" "test_passphrase"
+    setup_git_ssh_askpass_recorder
+    setup_git_ssh_path_shim "$BATS_TMPDIR/ssh_key_locked"
+    unset GIT_SSH_COMMAND GIT_SSH SSH_AUTH_SOCK SSH_AGENT_PID SSH_ASKPASS_REQUIRE
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: askpass recorder control fires under raw ssh" {
+    # Positive control proving the recorder can observe an askpass launch, so
+    # a marker that stays absent under dolt means dolt suppressed the prompt.
+    # See https://github.com/dolthub/dolt/issues/11027.
+    if ! command -v setsid >/dev/null 2>&1; then
+        skip "setsid not installed"
+    fi
+    _setup_askpass_probe
+    # setsid removes the controlling terminal the way dolt does. With one
+    # present ssh would prompt there instead of launching askpass.
+    run timeout -k 5 15 setsid -w ssh -p "$SSHD_PORT" "$(whoami)@127.0.0.1" true 3>&-
+    [ -f "$SSH_ASKPASS_MARKER" ] || (echo "raw ssh did not invoke askpass, the regression trap is broken" >&2; false)
+    # The recorded prompt must be the passphrase request for the locked key,
+    # not some other prompt that happened to launch askpass.
+    marker="$(cat "$SSH_ASKPASS_MARKER")"
+    [ "$marker" = "Enter passphrase for key '$BATS_TMPDIR/ssh_key_locked': " ] || (echo "unexpected askpass prompt: $marker" >&2; false)
+    [ "$status" -ne 0 ]
+}
+
 
 install_fake_git_url_recorder() {
     # Fake git that records the URL passed to `git remote add` so tests can
