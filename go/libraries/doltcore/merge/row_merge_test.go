@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -165,7 +166,7 @@ func TestRowMerge(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			v := NewValueMerger(ctx, test.mergedSch, test.leftSch, test.rightSch, test.baseSch, syncPool, nil)
+			v := NewValueMerger(ctx, test.mergedSch, test.leftSch, test.rightSch, test.baseSch, syncPool, nil, "")
 
 			merged, ok, err := v.TryMerge(ctx, test.row, test.mergeRow, test.ancRow)
 			assert.NoError(t, err)
@@ -238,4 +239,104 @@ func buildTup(sch schema.Schema, r []*int) val.Tuple {
 		panic(err)
 	}
 	return tup
+}
+
+// intPtr returns a pointer to v, letting test code represent the integer 0 in a []*int slice
+// (the build() helper treats 0 as NULL, so explicit pointers are needed for zero values).
+func intPtr(v int) *int { return &v }
+
+// TestRowMergeConvergentAddColumn tests that when both branches add the same column with an
+// identical definition (convergent DDL), TryMerge uses the column default as a synthetic base
+// so that a schema-backfill value is not treated as an intentional write.
+func TestRowMergeConvergentAddColumn(t *testing.T) {
+	defaultValue := "0"
+	defaultValueInt, err := strconv.Atoi(defaultValue)
+	require.NoError(t, err)
+
+	ctx := sql.NewEmptyContext()
+
+	// baseSch: table before either branch adds "extra"
+	baseSch := calcSchema(1) // PK + 1 non-pk col (tag=1)
+
+	// extSch: same first column plus "extra INTEGER DEFAULT 0" (tag=2)
+	baseCol := schema.NewColumn("1", 1, types.IntKind, false)
+	extraCol, err := schema.NewColumnWithTypeInfo("2", 2, baseCol.TypeInfo, false, defaultValue, false, "")
+	require.NoError(t, err)
+	extSch := schema.MustSchemaFromCols(schema.NewColCollection(
+		schema.NewColumn("primaryKey", 0, types.IntKind, true),
+		baseCol,
+		extraCol,
+	))
+
+	// bv builds a base-schema value tuple (1 non-pk field).
+	bv := func(v int) val.Tuple { return buildTup(baseSch, []*int{intPtr(v)}) }
+	// ev builds an ext-schema value tuple (2 non-pk fields).
+	ev := func(v1, v2 int) val.Tuple { return buildTup(extSch, []*int{intPtr(v1), intPtr(v2)}) }
+
+	tests := []struct {
+		name           string
+		left, right    val.Tuple
+		anc            val.Tuple
+		expected       val.Tuple
+		expectConflict bool
+		noTableName    bool // if true, leave tableName unset to test fallback conflict behaviour
+	}{
+		{
+			name:           "left has backfill default, right has explicit value — right wins",
+			anc:            bv(1),
+			left:           ev(1, defaultValueInt), // extra=0 from schema backfill
+			right:          ev(1, 11),              // extra=11 from explicit UPDATE
+			expected:       ev(1, 11),
+			expectConflict: false,
+		},
+		{
+			name:           "right has backfill default, left has explicit value — left wins",
+			anc:            bv(1),
+			left:           ev(1, 7),               // extra=7 from explicit UPDATE
+			right:          ev(1, defaultValueInt), // extra=0 from schema backfill
+			expected:       ev(1, 7),
+			expectConflict: false,
+		},
+		{
+			name:           "both have same explicit non-default value — converge",
+			anc:            bv(1),
+			left:           ev(1, 5),
+			right:          ev(1, 5),
+			expected:       ev(1, 5),
+			expectConflict: false,
+		},
+		{
+			name:           "both have different explicit non-default values — genuine conflict",
+			anc:            bv(1),
+			left:           ev(1, 7),
+			right:          ev(1, 11),
+			expected:       nil,
+			expectConflict: true,
+		},
+		{
+			name:           "without table name, differing values conflict (fallback behaviour)",
+			anc:            bv(1),
+			left:           ev(1, defaultValueInt),
+			right:          ev(1, 11),
+			expected:       nil,
+			expectConflict: true,
+			noTableName:    true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var tableName string
+			if !test.noTableName {
+				tableName = "t"
+			}
+			m := NewValueMerger(ctx, extSch, extSch, extSch, baseSch, syncPool, nil, tableName)
+
+			merged, ok, err := m.TryMerge(ctx, test.left, test.right, test.anc)
+			assert.NoError(t, err)
+			assert.Equal(t, test.expectConflict, !ok, "conflict mismatch")
+			vD := extSch.GetValueDescriptor(m.ns)
+			assert.Equal(t, vD.Format(ctx, test.expected), vD.Format(ctx, merged))
+		})
+	}
 }
