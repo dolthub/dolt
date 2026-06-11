@@ -51,10 +51,22 @@ func init() {
 			panic("Invalid value for " + dconfig.EnvGCSafepointControllerChoice + ". must be session_aware or kill_connections")
 		}
 	}
+	if raw := os.Getenv(dconfig.EnvGCSafepointMaxWait); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			panic("Invalid value for " + dconfig.EnvGCSafepointMaxWait + ": " + err.Error())
+		}
+		sessionAwareSafepointMaxWait = d
+	}
 }
 
 var DoltGCFeatureFlag = true
 var UseSessionAwareSafepointController = false
+
+// sessionAwareSafepointMaxWait bounds the session-aware pre-finalize safepoint
+// wait. Zero means wait indefinitely (original behavior). Set via
+// dconfig.EnvGCSafepointMaxWait.
+var sessionAwareSafepointMaxWait time.Duration
 
 // doltGC is the stored procedure to run online garbage collection on a database.
 func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -192,6 +204,16 @@ func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper f
 }
 
 func (sc *sessionAwareSafepointController) EstablishPreFinalizeSafepoint(ctx context.Context) error {
+	// This safepoint runs strictly before finalize()/chunk swap, so aborting
+	// here collects nothing: returning an error unwinds the GC via the deferred
+	// EndGC, releasing every parked session. Bounding the wait therefore turns a
+	// session that never quiesces from an indefinite GC stall into a skipped
+	// cycle that retries on the next trigger.
+	if sessionAwareSafepointMaxWait > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, sessionAwareSafepointMaxWait)
+		defer cancel()
+	}
 	return sc.waiter.Wait(ctx)
 }
 

@@ -54,6 +54,14 @@ const (
 	// Will go away after session_aware is made default-and-only.
 	EnvGCSafepointControllerChoice = "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE"
 
+	// Optional Go duration (e.g. "5m"). When set and non-zero, bounds how long
+	// the session-aware GC safepoint will wait for all sessions to quiesce
+	// before the pre-finalize safepoint. On expiry the GC cycle is aborted
+	// (and retried on the next trigger) rather than blocking indefinitely
+	// behind a session that never ends its command. Unset/zero preserves the
+	// original unbounded wait.
+	EnvGCSafepointMaxWait = "DOLT_GC_SAFEPOINT_MAX_WAIT"
+
 	// Used for tests. If set, Dolt will error if it would rebuild a table's row data.
 	EnvAssertNoTableRewrite         = "DOLT_TEST_ASSERT_NO_TABLE_REWRITE"
 	EnvAssertNoInMemoryArchiveIndex = "DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX"
