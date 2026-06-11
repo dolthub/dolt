@@ -805,9 +805,41 @@ func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv RootValue) (RootValue,
 }
 
 func (ddb *DoltDB) writeRootValue(ctx context.Context, rv RootValue) (RootValue, types.Ref, error) {
+	return ddb.doWriteRootValue(ctx, rv, false)
+}
+
+// doWriteRootValue persists |rv| to the database and returns the updated root
+// value (with its FeatureVersion set) and a Ref to it. If |skipIfPresent| is
+// true and the root value is already present in the database, the write is
+// skipped and a Ref to the existing value is returned.
+//
+// |skipIfPresent| is used by GC safepoint root collection (see
+// WorkingSetHashes / DoltSession.VisitGCRoots), where the returned hash is
+// immediately handed to the GC keeper. There, persisting an already-present
+// root value is redundant, and--because it dirties the store's memtable--it
+// defeats the no-op GC fast path (see NomsBlockStore.hasLocalGCNovelty), so
+// that an online GC of an unchanged database would needlessly rewrite the
+// store every time. Skipping the write is safe in that path because the caller
+// keeps the chunk via the keeper whether or not we wrote it. It must NOT be
+// used on a path that relies on the write being observed by an in-progress GC
+// (the keeperFunc), since skipping the Put skips that bookkeeping.
+func (ddb *DoltDB) doWriteRootValue(ctx context.Context, rv RootValue, skipIfPresent bool) (RootValue, types.Ref, error) {
 	rv, err := rv.SetFeatureVersion(DoltFeatureVersion)
 	if err != nil {
 		return nil, types.Ref{}, err
+	}
+	if skipIfPresent {
+		ref, err := types.NewRef(rv.NomsValue(), ddb.db.Format())
+		if err != nil {
+			return nil, types.Ref{}, err
+		}
+		existing, err := ddb.vrw.ReadValue(ctx, ref.TargetHash())
+		if err != nil {
+			return nil, types.Ref{}, err
+		}
+		if existing != nil {
+			return rv, ref, nil
+		}
 	}
 	ref, err := ddb.vrw.WriteValue(ctx, rv.NomsValue())
 	if err != nil {
@@ -819,8 +851,12 @@ func (ddb *DoltDB) writeRootValue(ctx context.Context, rv RootValue) (RootValue,
 // Persists all relevant root values of the WorkingSet to the database and returns all hashes reachable
 // from the working set. This is used in GC, for example, where all dependencies of the in-memory working
 // set value need to be accounted for.
+//
+// Root values that are already present in the database are not rewritten, so
+// that collecting the GC roots of an unchanged working set does not dirty the
+// store and defeat the no-op GC fast path. See doWriteRootValue.
 func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash.Hash, error) {
-	spec, err := ws.writeValues(ctx, ddb, nil)
+	spec, err := ws.writeValues(ctx, ddb, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1832,7 +1868,7 @@ func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.Workin
 		branchName = workingSet.Name[len("heads/"):]
 	}
 
-	wsSpec, err = workingSet.writeValues(ctx, ddb, meta)
+	wsSpec, err = workingSet.writeValues(ctx, ddb, meta, false)
 	if err != nil {
 		return nil, err
 	}
