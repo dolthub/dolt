@@ -675,6 +675,42 @@ _setup_askpass_probe() {
     unset GIT_SSH_COMMAND GIT_SSH SSH_AUTH_SOCK SSH_AGENT_PID SSH_ASKPASS_REQUIRE
 }
 
+# _push_fails_without_askpass pushes with a backstop timeout and asserts dolt
+# failed on ssh auth without the askpass recorder firing.
+_push_fails_without_askpass() {
+    run timeout -k 5 15 dolt push origin main 3>&-
+    [ ! -f "$SSH_ASKPASS_MARKER" ] || (echo "askpass invoked with: $(cat "$SSH_ASKPASS_MARKER")" >&2; false)
+    [ "$status" -ne 0 ]
+    # The hint proves the push failed on ssh auth rather than unrelated
+    # breakage such as a port collision or a timeout kill.
+    [[ "$output" =~ "hint: dolt does not support interactive credential prompts" ]] || false
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: ssh push does not invoke the SSH_ASKPASS program" {
+    # See https://github.com/dolthub/dolt/issues/11027.
+    setup_git_repo
+    _setup_askpass_probe
+    setup_git_ssh_wrapper
+    # The wrapper transport succeeds without ssh, so if core.sshCommand ever
+    # won over GIT_SSH_COMMAND the push would succeed and fail the test. The
+    # variant tells git the wrapper accepts a port flag like real ssh.
+    export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0="$GIT_SVC_WRAPPER"
+    export GIT_CONFIG_KEY_1=ssh.variant GIT_CONFIG_VALUE_1=ssh
+    export GIT_SSH_COMMAND="$SSH_SHIM_DIR/ssh"
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+    _push_fails_without_askpass
+}
+
+# bats test_tags=no_lambda
+@test "remotes-git: ssh push with the default ssh transport does not invoke the SSH_ASKPASS program" {
+    # See https://github.com/dolthub/dolt/issues/11027.
+    setup_git_repo
+    _setup_askpass_probe
+    _init_repo_with_remote "git+ssh://$(whoami)@127.0.0.1:${SSHD_PORT}${GIT_SVC_DIR}"
+    _push_fails_without_askpass
+}
+
 # bats test_tags=no_lambda
 @test "remotes-git: askpass recorder control fires under raw ssh" {
     # Positive control proving the recorder can observe an askpass launch, so
