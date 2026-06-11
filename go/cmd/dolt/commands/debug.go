@@ -428,5 +428,5 @@ func execDebugMode(ctx *sql.Context, qryist cli.Queryist, queryFile *os.File, co
 	}()
 	input := bufio.NewReader(transform.NewReader(queryFile, textunicode.BOMOverride(transform.Nop)))
 
-	return execBatchMode(ctx, qryist, input, continueOnErr, format, false)
+	return execBatchMode(ctx, qryist, input, continueOnErr, format, false, nil)
 }

@@ -292,7 +292,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 		} else {
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
-			err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex)
+			err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex, nil)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
@@ -405,13 +405,38 @@ func queryMode(
 ) int {
 	_, continueOnError := apr.GetValue(continueFlag)
 
+	var info batchExecInfo
 	input := strings.NewReader(query)
-	err := execBatchMode(ctx, qryist, input, continueOnError, format, binaryAsHex)
+	err := execBatchMode(ctx, qryist, input, continueOnError, format, binaryAsHex, &info)
 	if err != nil {
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
+	if info.isLoneDoltCheckout {
+		cli.PrintErrln(color.YellowString("Warning: dolt_checkout() only changes the branch for the current session."))
+		cli.PrintErrln(color.YellowString("Since `dolt sql -q` starts a new session for each invocation, the checked-out"))
+		cli.PrintErrln(color.YellowString("branch will not persist after this command exits."))
+		cli.PrintErrln(color.YellowString("To change the checked-out branch, use `dolt checkout <branch>` instead."))
+	}
+
 	return 0
+}
+
+// batchExecInfo collects metadata from execBatchMode so callers can
+// inspect what was executed without re-parsing the query string.
+type batchExecInfo struct {
+	stmtCount          int
+	isLoneDoltCheckout bool
+}
+
+// isDoltCheckoutCall returns true when the already-parsed statement
+// is a CALL dolt_checkout(...).
+func isDoltCheckoutCall(stmt sqlparser.Statement) bool {
+	call, ok := stmt.(*sqlparser.Call)
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(call.ProcName.Name.String(), "dolt_checkout")
 }
 
 func SaveQuery(ctx *sql.Context, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {
@@ -622,8 +647,9 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	return nil
 }
 
-// execBatchMode runs all the queries in the input reader
-func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat, binaryAsHex bool) error {
+// execBatchMode runs all the queries in the input reader.
+// If info is non-nil, it is populated with metadata about the executed statements.
+func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat, binaryAsHex bool, info *batchExecInfo) error {
 	scanner := NewStreamScanner(input)
 	var query string
 	for scanner.Scan() {
@@ -652,6 +678,13 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 				return err
 			} else {
 				cli.PrintErrln(err.Error())
+			}
+		}
+
+		if info != nil {
+			info.stmtCount++
+			if isDoltCheckoutCall(sqlStatement) {
+				info.isLoneDoltCheckout = true
 			}
 		}
 
@@ -691,6 +724,10 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 
 	if err := scanner.Err(); err != nil {
 		return buildBatchSqlErr(scanner.state.statementStartLine, query, err)
+	}
+
+	if info != nil && info.stmtCount != 1 {
+		info.isLoneDoltCheckout = false
 	}
 
 	return nil
