@@ -604,6 +604,10 @@ _init_repo_with_remote() {
     run dolt push origin main
     [ "$status" -eq 0 ]
     [ -f "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND" ]
+    # Byte equality catches a dolt that appends, prepends, or rewrites the
+    # user's GIT_SSH_COMMAND.
+    recorded="$(cat "$BATS_TMPDIR/git_env_GIT_SSH_COMMAND")"
+    [ "$recorded" = "$GIT_SVC_WRAPPER" ] || (echo "recorded GIT_SSH_COMMAND: $recorded, expected: $GIT_SVC_WRAPPER" >&2; false)
 }
 
 # bats test_tags=no_lambda
