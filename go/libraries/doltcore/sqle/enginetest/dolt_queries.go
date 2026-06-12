@@ -643,9 +643,9 @@ var DoltScripts = []queries.ScriptTest{
 					{`memo:
 ├── G1: (tablescan: ab 3.0)*
 ├── G2: (tablescan: cd 3.0)*
-├── G3: (hashjoin 1[ab] 2[cd] 12.1) (hashjoin 2[cd] 1[ab] 12.1) (mergejoin 1[ab] 2[cd] 6.1)* (mergejoin 2[cd] 1[ab] 6.1)* (lookupjoin 1[ab] 2[cd] on PRIMARY 10.0) (lookupjoin 2[cd] 1[ab] on PRIMARY 10.0) (innerjoin 2[cd] 1[ab] 10.1) (innerjoin 1[ab] 2[cd] 10.1)
+├── G3: (hashjoin 1[ab] 2[cd] 12.1) (hashjoin 2[cd] 1[ab] 12.1) (mergejoin 1[ab] 2[cd] 6.1)* (mergejoin 2[cd] 1[ab] 6.1)* (lookupjoin 1[ab] 2[cd] on PRIMARY 10.1) (lookupjoin 2[cd] 1[ab] on PRIMARY 10.1) (innerjoin 2[cd] 1[ab] 10.1) (innerjoin 1[ab] 2[cd] 10.1)
 ├── G4: (tablescan: xy 3.0)*
-├── G5: (hashjoin 3 4[xy] 12.1) (hashjoin 1[ab] 7 12.1) (hashjoin 7 1[ab] 12.1) (hashjoin 2[cd] 6 12.1) (hashjoin 6 2[cd] 12.1) (hashjoin 4[xy] 3 12.1) (lookupjoin 7 1[ab] on PRIMARY 10.0) (lookupjoin 6 2[cd] on PRIMARY 10.0) (innerjoin 4[xy] 3 10.1)* (innerjoin 6 2[cd] 10.1) (innerjoin 2[cd] 6 10.1) (innerjoin 7 1[ab] 10.1) (innerjoin 1[ab] 7 10.1) (innerjoin 3 4[xy] 10.1)*
+├── G5: (hashjoin 3 4[xy] 12.1) (hashjoin 1[ab] 7 12.1) (hashjoin 7 1[ab] 12.1) (hashjoin 2[cd] 6 12.1) (hashjoin 6 2[cd] 12.1) (hashjoin 4[xy] 3 12.1) (lookupjoin 7 1[ab] on PRIMARY 10.1) (lookupjoin 6 2[cd] on PRIMARY 10.1) (innerjoin 4[xy] 3 10.1)* (innerjoin 6 2[cd] 10.1) (innerjoin 2[cd] 6 10.1) (innerjoin 7 1[ab] 10.1) (innerjoin 1[ab] 7 10.1) (innerjoin 3 4[xy] 10.1)*
 ├── G6: (hashjoin 1[ab] 4[xy] 12.1) (hashjoin 4[xy] 1[ab] 12.1) (innerjoin 4[xy] 1[ab] 10.1)* (innerjoin 1[ab] 4[xy] 10.1)*
 └── G7: (hashjoin 2[cd] 4[xy] 12.1) (hashjoin 4[xy] 2[cd] 12.1) (innerjoin 4[xy] 2[cd] 10.1)* (innerjoin 2[cd] 4[xy] 10.1)*
 `},
