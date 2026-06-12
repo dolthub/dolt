@@ -430,10 +430,17 @@ func repairColumnWithOptions(ctx context.Context, dEnv *env.DoltEnv, tableName, 
 
 // valueTupleIndexForColumn returns the column's index in the value tuple, or
 // (-1, false) if the column is a PK, virtual, or absent. Order matches
-// schemaImpl.GetValueDescriptor: NonPKCols.Iter, skipping Virtual.
+// schemaImpl.GetValueDescriptor: NonPKCols.Iter, skipping Virtual, with the
+// keyless cardinality field occupying index 0 on keyless tables.
 func valueTupleIndexForColumn(sch schema.Schema, colName string) (int, bool) {
 	idx := -1
 	i := 0
+	// Keyless tables prepend a cardinality field to the value tuple, so user
+	// columns start at index 1. Without this offset the payload scan reads a
+	// neighboring field and refuses an otherwise-valid repair as ambiguous.
+	if schema.IsKeyless(sch) {
+		i = 1
+	}
 	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Virtual {
 			return false, nil

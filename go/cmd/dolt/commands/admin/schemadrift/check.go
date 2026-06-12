@@ -532,6 +532,14 @@ type adaptiveCandidate struct {
 func collectAdaptiveValueColumns(sch schema.Schema) []adaptiveCandidate {
 	var cands []adaptiveCandidate
 	i := 0
+	// Keyless tables prepend a cardinality field to the value tuple
+	// (schemaImpl.GetValueDescriptor inserts val.KeylessCardType at index 0),
+	// so every user column sits one position later than its NonPKCols
+	// ordinal. Without this offset the scanner classifies the wrong field's
+	// bytes and silently reports drifted keyless tables as clean.
+	if schema.IsKeyless(sch) {
+		i = 1
+	}
 	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Virtual {
 			return false, nil
