@@ -154,6 +154,8 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		for i, col := range cols {
 			keyCols[i] = col
 			keyCols[i].Name = toFrom + "_" + col.Name
+			keyCols[i].IsPartOfPK = false
+			keyCols[i].Constraints = nil
 		}
 
 		// to_ columns
@@ -224,6 +226,8 @@ func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, incl
 	}
 	for _, col := range sch.GetPKCols().GetColumns() {
 		col.Name = prefix + "_" + col.Name
+		col.IsPartOfPK = false
+		col.Constraints = nil
 		cols = append(cols, col)
 	}
 
@@ -637,6 +641,7 @@ func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpress
 			di.colExprTypes[i] = sql.ColumnExpressionType{
 				Expression: di.tblName + "." + col.Name,
 				Type:       col.TypeInfo.ToSqlType(),
+				Nullable:   col.IsNullable(),
 			}
 		}
 	}

@@ -169,7 +169,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 	switch to.UpperBound.(type) {
 	case sql.Above, sql.Below:
 	default:
-		return nil, ErrInvalidCommitDiffTableArgs
+		return nil, ErrExactlyOneToCommit
 	}
 	switch from.UpperBound.(type) {
 	case sql.Above, sql.Below:
