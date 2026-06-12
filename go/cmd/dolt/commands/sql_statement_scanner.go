@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 	"unicode"
 )
 
@@ -54,11 +55,22 @@ type StreamScanner struct {
 	fill      int
 	lineNum   int
 	isEOF     bool
+	// endedAtEOF reports whether the last Scan() ended at EOF before the delimiter.
+	endedAtEOF bool
 }
 
-// NewStreamScanner returns a new StreamScanner
+// NewStreamScanner returns a new StreamScanner that splits on ";".
 func NewStreamScanner(r io.Reader) *StreamScanner {
-	return &StreamScanner{inp: r, buf: make([]byte, pageSize), maxSize: maxStatementBufferBytes, delimiter: []byte(";"), state: new(qState)}
+	return NewStreamScannerWithDelimiter(r, ";")
+}
+
+// NewStreamScannerWithDelimiter returns a new StreamScanner that splits on
+// |delimiter| (defaulting to ";" when empty).
+func NewStreamScannerWithDelimiter(r io.Reader, delimiter string) *StreamScanner {
+	if delimiter == "" {
+		delimiter = ";"
+	}
+	return &StreamScanner{inp: r, buf: make([]byte, pageSize), maxSize: maxStatementBufferBytes, delimiter: []byte(delimiter), state: new(qState)}
 }
 
 type qState struct {
@@ -92,6 +104,7 @@ func (qs qState) ignoreDelimiters() bool {
 
 func (s *StreamScanner) Scan() bool {
 	s.resetState()
+	s.endedAtEOF = false
 
 	if s.i >= s.fill {
 		// initialize buffer
@@ -132,6 +145,7 @@ func (s *StreamScanner) Scan() bool {
 		} else if s.isEOF && s.i == s.fill {
 			// token terminates with file
 			s.state.end = s.fill
+			s.endedAtEOF = true
 			return true
 		}
 		// haven't found delimiter yet, keep reading
@@ -375,4 +389,48 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 		s.state.lastChar = s.buf[i]
 	}
 	return nil, false
+}
+
+// InsideQuote reports whether the scanner is currently inside a quoted string.
+func (s *StreamScanner) InsideQuote() bool {
+	return s.state.quoteChar != 0
+}
+
+// InsideBlockComment reports whether the scanner is currently inside an
+// unclosed /* ... */ block comment.
+func (s *StreamScanner) InsideBlockComment() bool {
+	return s.state.insideBlockComment
+}
+
+// EndedAtEOF reports whether the last Scan() ended at EOF before the delimiter.
+func (s *StreamScanner) EndedAtEOF() bool {
+	return s.endedAtEOF
+}
+
+// IsShellInputComplete reports whether |text| forms one or more complete
+// statements terminated by |delimiter|. It is false when input ends inside an
+// open quote or block comment, or with a trailing unterminated statement;
+// whitespace-only input is complete (issue #10865).
+func IsShellInputComplete(text string, delimiter string) bool {
+	if strings.TrimSpace(text) == "" {
+		return true
+	}
+	sc := NewStreamScannerWithDelimiter(strings.NewReader(text), delimiter)
+	var lastEndedAtEOF bool
+	var lastBytesNonEmpty bool
+	for sc.Scan() {
+		lastEndedAtEOF = sc.EndedAtEOF()
+		lastBytesNonEmpty = len(strings.TrimSpace(sc.Text())) > 0
+	}
+	if sc.Err() != nil {
+		// On a scanner error, report complete so the executor surfaces it.
+		return true
+	}
+	if sc.InsideQuote() || sc.InsideBlockComment() {
+		return false
+	}
+	if lastEndedAtEOF && lastBytesNonEmpty {
+		return false
+	}
+	return true
 }

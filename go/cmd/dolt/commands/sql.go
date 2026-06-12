@@ -39,6 +39,8 @@ import (
 	"golang.org/x/text/transform"
 	"gopkg.in/src-d/go-errors.v1"
 
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli/prompt"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -50,7 +52,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/val"
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 var sqlDocs = cli.CommandDocumentationContent{
@@ -732,6 +733,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		LineTerminator:     ";",
 		SpecialTerminators: verticalOutputLineTerminators,
 		BackSlashCmds:      backSlashCommands,
+		IsComplete:         IsShellInputComplete,
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
@@ -849,33 +851,47 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					trackHistory(shell, query+";")
 				}
 				lastSqlCmd = query
-				sqlStmt, err := sqlparser.Parse(query)
-				// silently skip empty statements
-				if err == nil || err == sqlparser.ErrEmpty {
-					var sqlSch sql.Schema
-					var rowIter sql.RowIter
-					sqlSch, rowIter, _, err = processParsedQuery(sqlCtx, query, qryist, sqlStmt)
+
+				// Split into individual statements so multiple on one line each run.
+				scanner := NewStreamScannerWithDelimiter(strings.NewReader(query), shell.LineTerminator())
+				for scanner.Scan() {
+					stmt := scanner.Text()
+					if strings.TrimSpace(stmt) == "" {
+						continue
+					}
+					sqlStmt, err := sqlparser.Parse(stmt)
+					if err == sqlparser.ErrEmpty {
+						continue
+					}
 					if err != nil {
-						verr := formatQueryError("", err)
+						shell.Println(color.RedString(err.Error()))
+						continue
+					}
+					sqlSch, rowIter, _, execErr := processParsedQuery(sqlCtx, stmt, qryist, sqlStmt)
+					if execErr != nil {
+						verr := formatQueryError("", execErr)
 						shell.Println(verr.Verbose())
-					} else if rowIter != nil {
+						continue
+					}
+					if rowIter != nil {
 						switch closureFormat {
 						case engine.FormatTabular, engine.FormatVertical:
-							err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex)
+							if printErr := engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex); printErr != nil {
+								verr := formatQueryError("", printErr)
+								shell.Println(verr.Verbose())
+							}
 						default:
-							err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex)
+							if printErr := engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex); printErr != nil {
+								verr := formatQueryError("", printErr)
+								shell.Println(verr.Verbose())
+							}
 						}
-						if err != nil {
-							verr := formatQueryError("", err)
-							shell.Println(verr.Verbose())
-						}
-					} else {
-						if _, isUseStmt := sqlStmt.(*sqlparser.Use); isUseStmt {
-							cli.Println("Database Changed")
-						}
+					} else if _, isUseStmt := sqlStmt.(*sqlparser.Use); isUseStmt {
+						cli.Println("Database Changed")
 					}
-				} else {
-					shell.Println(color.RedString(err.Error()))
+				}
+				if scanErr := scanner.Err(); scanErr != nil {
+					shell.Println(color.RedString(scanErr.Error()))
 				}
 			}
 
