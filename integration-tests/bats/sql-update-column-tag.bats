@@ -66,3 +66,50 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "failed to parse tag" ]] || false
 }
+
+@test "sql-update-column-tag: preserves indexes, check constraints, comment, and multi-column primary key" {
+    # See https://github.com/dolthub/dolt/issues/11007
+    dolt sql <<SQL
+CREATE TABLE accounts (
+    id INT NOT NULL,
+    region VARCHAR(8) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    PRIMARY KEY (region, id),
+    UNIQUE KEY email_unique (email),
+    KEY id_idx (id),
+    CONSTRAINT email_format CHECK (email LIKE '%@%')
+) COMMENT='application accounts';
+SQL
+
+    dolt sql -q "call dolt_update_column_tag('accounts', 'id', 999);"
+    dolt sql -q "call dolt_update_column_tag('accounts', 'email', 888);"
+
+    run dolt sql -q "show create table accounts"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "PRIMARY KEY (\`region\`,\`id\`)" ]] || false
+    [[ "$output" =~ "UNIQUE KEY \`email_unique\`" ]] || false
+    [[ "$output" =~ "KEY \`id_idx\`" ]] || false
+    [[ "$output" =~ "CONSTRAINT \`email_format\` CHECK" ]] || false
+    [[ "$output" =~ "COMMENT='application accounts'" ]] || false
+
+    run dolt schema tags accounts
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "999" ]] || false
+    [[ "$output" =~ "888" ]] || false
+
+    run dolt sql -q "INSERT INTO accounts VALUES (1, 'us', 'no-at-sign')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Check constraint" ]] || false
+
+    dolt sql -q "INSERT INTO accounts VALUES (1, 'us', 'alice@example.com')"
+    run dolt sql -q "INSERT INTO accounts VALUES (2, 'eu', 'alice@example.com')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate" ]] || false
+
+    dolt sql -q "INSERT INTO accounts VALUES (1, 'eu', 'bob@example.com')"
+
+    run dolt sql -r csv -q "SELECT region, id FROM accounts ORDER BY region, id"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "eu,1" ]] || false
+    [[ "$output" =~ "us,1" ]] || false
+}

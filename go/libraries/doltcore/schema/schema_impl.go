@@ -17,6 +17,7 @@ package schema
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -129,6 +130,48 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	}
 	sch.SetCollation(Collation_Default)
 	return sch, nil
+}
+
+// WithRemappedColumnTags returns a copy of |sch| with column and index tags rewritten via
+// |tagRemap|. Schema metadata and check constraints are preserved. An empty or nil |tagRemap|
+// still returns a fresh schema equivalent to |sch|.
+func WithRemappedColumnTags(sch Schema, tagRemap map[uint64]uint64) (Schema, error) {
+	allCols := sch.GetAllCols()
+	cols := allCols.GetColumns()
+	for oldTag, newTag := range tagRemap {
+		if idx, ok := allCols.TagToIdx[oldTag]; ok {
+			cols[idx].Tag = newTag
+		}
+	}
+
+	pkOrdinals := slices.Clone(sch.GetPkOrdinals())
+	newSch, err := NewSchema(NewColCollection(cols...), pkOrdinals, sch.GetCollation(), nil, sch.Checks().Copy())
+	if err != nil {
+		return nil, err
+	}
+	newSch.SetTargetRowSize(sch.GetTargetRowSize())
+	newSch.SetComment(sch.GetComment())
+
+	err = sch.Indexes().Iter(func(idx Index) (stop bool, err error) {
+		tags := RemapTags(idx.IndexedColumnTags(), tagRemap)
+		_, err = newSch.Indexes().AddIndexByColTags(idx.Name(), tags, idx.PrefixLengths(), idx.Properties())
+		return false, err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return newSch, nil
+}
+
+// WithUpdatedColumnTag returns a copy of |sch| with the tag of the column named |name| set to |tag|.
+// It returns an error if no column named |name| exists.
+func WithUpdatedColumnTag(sch Schema, name string, tag uint64) (Schema, error) {
+	col, ok := sch.GetAllCols().GetByName(name)
+	if !ok {
+		return nil, fmt.Errorf("column %q does not exist", name)
+	}
+	return WithRemappedColumnTags(sch, map[uint64]uint64{col.Tag: tag})
 }
 
 // SchemaFromColCollections creates a schema from the three collections.
