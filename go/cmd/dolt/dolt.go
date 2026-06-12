@@ -916,12 +916,38 @@ type bootstrapConfig struct {
 // |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
 // |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
 func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
-	lfs := filesys.LocalFS
-	cwd, err := lfs.Abs("")
-	cwdFs, err := lfs.WithWorkingDir(cwd)
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+	_, usage := cli.HelpAndUsagePrinters(globalDocs)
+	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+	if errors.Is(err, argparser.ErrHelp) {
+		doltCommand.PrintUsage("dolt")
+		cli.Println(globalSpecialMsg)
+		usage()
+		return nil, true, 0
+	} else if err != nil {
+		cli.PrintErrln(color.RedString("Failed to parse global arguments: %v", err))
 		return nil, true, 1
+	}
+
+	var cwdFs filesys.Filesys
+	if targetDir, ok := apr.GetValue("directory"); ok {
+		var err error
+		cwdFs, err = filesys.LocalFilesysWithWorkingDir(targetDir)
+		if err != nil {
+			cli.PrintErrln(color.RedString("cannot change to directory %q: %v", targetDir, err))
+			return nil, true, 1
+		}
+	} else {
+		lfs := filesys.LocalFS
+		cwd, err := lfs.Abs("")
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+			return nil, true, 1
+		}
+		cwdFs, err = lfs.WithWorkingDir(cwd)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+			return nil, true, 1
+		}
 	}
 
 	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, "", doltversion.Version)
@@ -956,18 +982,6 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		}
 		return false
 	})
-
-	_, usage := cli.HelpAndUsagePrinters(globalDocs)
-	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
-	if errors.Is(err, argparser.ErrHelp) {
-		doltCommand.PrintUsage("dolt")
-		cli.Println(globalSpecialMsg)
-		usage()
-		return nil, true, 0
-	} else if err != nil {
-		cli.PrintErrln(color.RedString("Failed to parse global arguments: %v", err))
-		return nil, true, 1
-	}
 
 	hasGlobalArgs := false
 	if len(remainingArgs) != len(args) {
