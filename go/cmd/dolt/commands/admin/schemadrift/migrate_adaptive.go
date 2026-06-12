@@ -147,6 +147,7 @@ type MigrateAdaptiveResult struct {
 	RowsScanned        int
 	RowsRewritten      int // legacy rows converted to adaptive
 	CollateralRewrites int // sibling AddrEnc fields normalized to satisfy the descriptor
+	RowsMerged         int // keyless only: rewritten rows merged into an existing entry by cardinality
 	CommitHash         string
 	CommitMessage      string
 
@@ -210,14 +211,6 @@ func migrateAdaptiveColumnOpts(ctx context.Context, dEnv *env.DoltEnv, tableName
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return MigrateAdaptiveResult{}, fmt.Errorf("get schema for %s: %w", resolvedName, err)
-	}
-
-	// Keyless tables prepend a cardinality column to the value tuple; their
-	// value-tuple ordinals don't line up with NonPKCols ordering. Refuse them,
-	// exactly as recover-rows does.
-	if schema.IsKeyless(sch) {
-		return MigrateAdaptiveResult{}, fmt.Errorf(
-			"table %s is keyless; migrate-adaptive does not support keyless tables", resolvedName)
 	}
 
 	existingCol, ok := sch.GetAllCols().GetByNameCaseInsensitive(colName)
@@ -291,6 +284,16 @@ func migrateAdaptiveColumnOpts(ctx context.Context, dEnv *env.DoltEnv, tableName
 		}, nil
 	}
 
+	// Keyless tables are supported on the mutating path below (rewriteColumn
+	// rehashes their content-derived row ids), EXCEPT when the table has
+	// secondary indexes: keyless index entries embed each row's hash id, and
+	// re-keying rewritten rows would strand those entries. The check sits
+	// after the --dry-run block deliberately — dry-run never mutates, so it
+	// stays available everywhere.
+	if err := refuseKeylessWithSecondaryIndexes(sch, resolvedName, "migrate-adaptive"); err != nil {
+		return MigrateAdaptiveResult{}, err
+	}
+
 	// dolt_ignore'd tables (ignored_log, ignored_meta) live only in the working set and
 	// are NEVER committed, so their content chunks are not commit-rooted —
 	// out-of-band adaptive values would reference chunks the persist's refCheck
@@ -359,6 +362,7 @@ func migrateAdaptiveColumnOpts(ctx context.Context, dEnv *env.DoltEnv, tableName
 
 	rowsRewritten := rewritten.RowsRewritten
 	collateral := rewritten.CollateralRewrites
+	merged := rewritten.RowsMerged
 	var commitMsg string
 	if collateral > 0 {
 		commitMsg = fmt.Sprintf(
@@ -368,6 +372,9 @@ func migrateAdaptiveColumnOpts(ctx context.Context, dEnv *env.DoltEnv, tableName
 		commitMsg = fmt.Sprintf(
 			"admin: schema-encoding-drift migrate-adaptive on %s.%s (%d legacy rows rewritten to adaptive format + schema flipped to %s; content unchanged)",
 			resolvedName, existingCol.Name, rowsRewritten, encodingName(newEnc))
+	}
+	if merged > 0 {
+		commitMsg += fmt.Sprintf(" [%d duplicate keyless rows merged by cardinality]", merged)
 	}
 
 	// Non-ignored (committed) table: commit as usual so the heal lands in
@@ -389,6 +396,7 @@ func migrateAdaptiveColumnOpts(ctx context.Context, dEnv *env.DoltEnv, tableName
 		RowsScanned:        scanned,
 		RowsRewritten:      rowsRewritten,
 		CollateralRewrites: collateral,
+		RowsMerged:         merged,
 		CommitHash:         commitHash.String(),
 		CommitMessage:      commitMsg,
 	}, nil
@@ -505,8 +513,14 @@ func underlyingContent(ctx context.Context, vs val.ValueStore, b []byte) (conten
 // chunks and retains no legacy AddrEnc columns, so refCheck has nothing to
 // dangle on and the data is immune to the gc hazard.
 func migrateIgnoredTableInline(ctx context.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, sch schema.Schema, dbName, resolvedName string, tn doltdb.TableName, roots doltdb.Roots, ddb *doltdb.DoltDB) (MigrateAdaptiveResult, error) {
+	// The force-inline heal deliberately inlines content of ANY size (gc-safety
+	// for never-committed chunks trumps the engine's spill heuristic). On a
+	// keyless table that would leave rows whose bytes differ from what the
+	// engine's TupleBuilder builds for the same content, so content-derived
+	// hash lookups (UPDATE/DELETE) would miss them. Keyless + dolt_ignore'd
+	// stays refused until the force-inline path can re-key engine-canonically.
 	if schema.IsKeyless(sch) {
-		return MigrateAdaptiveResult{}, fmt.Errorf("table %s is keyless; migrate-adaptive does not support keyless tables", resolvedName)
+		return MigrateAdaptiveResult{}, fmt.Errorf("table %s is keyless and dolt_ignore'd; the force-inline heal cannot produce engine-canonical keyless rows (force-inlining diverges from the engine's spill heuristic, breaking content-derived hash lookups)", resolvedName)
 	}
 
 	// Identify every non-PK, non-virtual out-of-band-capable column and its
@@ -894,6 +908,9 @@ func emitMigrateAdaptiveResult(w io.Writer, r MigrateAdaptiveResult) {
 			encodingName(r.OldEncoding), encodingName(r.NewEncoding))
 		if r.CollateralRewrites > 0 {
 			_, _ = fmt.Fprintf(w, "  %d rows had non-target AddrEnc fields healed as collateral\n", r.CollateralRewrites)
+		}
+		if r.RowsMerged > 0 {
+			_, _ = fmt.Fprintf(w, "  %d duplicate keyless rows merged by cardinality\n", r.RowsMerged)
 		}
 		_, _ = fmt.Fprintf(w, "  commit: %s\n", r.CommitHash)
 		_, _ = fmt.Fprintf(w, "  message: %s\n", r.CommitMessage)

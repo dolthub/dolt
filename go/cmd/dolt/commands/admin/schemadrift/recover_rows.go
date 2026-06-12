@@ -15,6 +15,7 @@
 package schemadrift
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -32,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -180,6 +182,7 @@ type RecoverRowsResult struct {
 	RowsScanned        int    // total rows iterated
 	RowsRewritten      int    // subset of RowsScanned whose target field bytes changed
 	CollateralRewrites int    // subset of RowsRewritten where one or more NON-target AddrEnc fields had to be normalized to satisfy the new descriptor — surfaces residual schema-row mismatch left by a prior `repair` invocation on a sibling column
+	RowsMerged         int    // keyless only: rewritten rows whose canonical bytes collided with an existing entry and were merged by summing cardinality (duplicate logical rows stored once per format)
 	CommitHash         string // empty for RecoverRowsAlreadyOK and RecoverRowsNoLegacyRows
 	CommitMessage      string // empty for RecoverRowsAlreadyOK and RecoverRowsNoLegacyRows
 }
@@ -232,16 +235,12 @@ func recoverRowsColumn(ctx context.Context, dEnv *env.DoltEnv, tableName, colNam
 		return RecoverRowsResult{}, fmt.Errorf("get schema for %s: %w", resolvedName, err)
 	}
 
-	// Keyless tables prepend a cardinality column to the value tuple. Their
-	// value-tuple ordinals don't line up with NonPKCols ordering, so the
-	// simple value-tuple index we compute would point at the wrong column.
-	// recover-rows refuses keyless tables to keep that bug from biting; the database's
-	// affected tables (`issues`, `events`) are both keyed.
-	if schema.IsKeyless(sch) {
-		return RecoverRowsResult{}, fmt.Errorf(
-			"table %s is keyless; recover-rows does not yet support keyless tables (real-world tables are all keyed)",
-			resolvedName,
-		)
+	// Keyless tables are supported (rewriteColumn rehashes their content-
+	// derived row ids), EXCEPT when the table has secondary indexes: keyless
+	// index entries embed each row's hash id, and re-keying rewritten rows
+	// would strand those entries. Refuse with the workaround spelled out.
+	if err := refuseKeylessWithSecondaryIndexes(sch, resolvedName, "recover-rows"); err != nil {
+		return RecoverRowsResult{}, err
 	}
 
 	existingCol, ok := sch.GetAllCols().GetByNameCaseInsensitive(colName)
@@ -366,6 +365,7 @@ func recoverRowsColumn(ctx context.Context, dEnv *env.DoltEnv, tableName, colNam
 	// mismatch that this migration repaired as a side-effect.
 	rowsRewritten := rewritten.RowsRewritten
 	collateral := rewritten.CollateralRewrites
+	merged := rewritten.RowsMerged
 	var commitMsg string
 	if collateral > 0 {
 		commitMsg = fmt.Sprintf(
@@ -377,6 +377,9 @@ func recoverRowsColumn(ctx context.Context, dEnv *env.DoltEnv, tableName, colNam
 			"admin: schema-encoding-drift recover-rows on %s.%s (%d rows rewritten to legacy format + schema flipped to %s; content unchanged)",
 			resolvedName, existingCol.Name, rowsRewritten, encodingName(newEnc),
 		)
+	}
+	if merged > 0 {
+		commitMsg += fmt.Sprintf(" [%d duplicate keyless rows merged by cardinality]", merged)
 	}
 	commitHash, err := commitWorkingRoot(ctx, dEnv, headRef, roots, commitMsg)
 	if err != nil {
@@ -393,6 +396,7 @@ func recoverRowsColumn(ctx context.Context, dEnv *env.DoltEnv, tableName, colNam
 		RowsScanned:        scanned,
 		RowsRewritten:      rowsRewritten,
 		CollateralRewrites: collateral,
+		RowsMerged:         merged,
 		CommitHash:         commitHash.String(),
 		CommitMessage:      commitMsg,
 	}, nil
@@ -419,6 +423,12 @@ type rewrittenMap struct {
 	Map                prolly.Map
 	RowsRewritten      int
 	CollateralRewrites int
+	// RowsMerged counts keyless rows whose canonical rewrite collided with an
+	// existing entry (the same logical row stored once in legacy form and once
+	// in adaptive form). The colliding entries are merged by summing their
+	// cardinalities; without the merge the second Put would silently overwrite
+	// the first and lose rows.
+	RowsMerged int
 }
 
 // targetFieldResolver resolves a single value-tuple field's raw bytes into the
@@ -485,6 +495,15 @@ func rewriteColumn(
 	newValDesc := newSch.GetValueDescriptor(ns)
 	mut := pm.Rewriter(pm.KeyDesc(), newValDesc)
 
+	// Keyless tables key each row by xxh3.Hash128 of the value tuple's field
+	// bytes (val.HashTupleFromValue), so a rewritten row must (a) carry bytes
+	// the engine's own TupleBuilder would produce for the same logical content
+	// — future DML re-derives the hash from a freshly-built tuple and must hit
+	// the stored key — and (b) be re-keyed to the hash of those canonical
+	// bytes, deleting the entry under the stale key.
+	isKeyless := schema.IsKeyless(newSch)
+	keylessTarget := newSch.GetTargetRowSize()
+
 	// Pre-compute which positions in the new value descriptor are legacy
 	// AddrEnc — i.e., positions where the field bytes MUST be either NULL or
 	// exactly 20 bytes (a legacy raw content-hash address). Any other shape
@@ -517,6 +536,7 @@ func rewriteColumn(
 
 	rowsRewritten := 0
 	collateralRewrites := 0
+	rowsMerged := 0
 	keyDesc := pm.KeyDesc()
 	for {
 		key, value, iterErr := iter.Next(ctx)
@@ -633,8 +653,60 @@ func rewriteColumn(
 			values[i] = b
 		}
 		newValue := val.NewTuple(pool, values...)
+		putKey := key
 
-		if putErr := mut.Put(ctx, key, newValue); putErr != nil {
+		if isKeyless {
+			// Rebuild the tuple through the engine's TupleBuilder so the
+			// stored bytes are exactly what a future engine-built tuple for
+			// the same logical content hashes to. In particular, adaptive
+			// fields are fed inline-first and spilled out-of-band only by the
+			// builder's whole-tuple size heuristic — NOT by any fixed
+			// per-content rule.
+			canonical, cErr := buildCanonicalKeylessValue(ctx, ns, pool, newValDesc, keylessTarget, values)
+			if cErr != nil {
+				pkHex := formatKeyForError(key, keyDesc)
+				return rewrittenMap{}, scanned, sawAnyLegacy, fmt.Errorf(
+					"canonicalize keyless row with hash id %s: %w", pkHex, cErr,
+				)
+			}
+			if bytes.Equal(canonical, value) {
+				// The canonical rebuild proved this row was already in engine-
+				// canonical form; nothing to rewrite, key stays valid.
+				continue
+			}
+			newValue = canonical
+			newKey := val.HashTupleFromValue(pool, newValue)
+			if !bytes.Equal(newKey, key) {
+				// The row moves to a new content-derived key. If the
+				// destination already holds an entry (the same logical row
+				// stored once per format — possible in a heterogeneous
+				// column), MERGE by summing cardinalities; a plain Put would
+				// silently overwrite the earlier entry and lose rows.
+				var existing val.Tuple
+				if gErr := mut.Get(ctx, newKey, func(_, v val.Tuple) error {
+					existing = v
+					return nil
+				}); gErr != nil {
+					pkHex := formatKeyForError(key, keyDesc)
+					return rewrittenMap{}, scanned, sawAnyLegacy, fmt.Errorf(
+						"check destination key for keyless row %s: %w", pkHex, gErr,
+					)
+				}
+				if existing != nil {
+					newValue, _ = val.ModifyKeylessCardinality(pool, newValue, int64(val.ReadKeylessCardinality(existing)))
+					rowsMerged++
+				}
+				if dErr := mut.Delete(ctx, key); dErr != nil {
+					pkHex := formatKeyForError(key, keyDesc)
+					return rewrittenMap{}, scanned, sawAnyLegacy, fmt.Errorf(
+						"delete stale keyless key %s: %w", pkHex, dErr,
+					)
+				}
+				putKey = newKey
+			}
+		}
+
+		if putErr := mut.Put(ctx, putKey, newValue); putErr != nil {
 			pkHex := formatKeyForError(key, keyDesc)
 			return rewrittenMap{}, scanned, sawAnyLegacy, fmt.Errorf(
 				"put rewritten row with primary key %s: %w", pkHex, putErr,
@@ -654,7 +726,71 @@ func rewriteColumn(
 		Map:                newMap,
 		RowsRewritten:      rowsRewritten,
 		CollateralRewrites: collateralRewrites,
+		RowsMerged:         rowsMerged,
 	}, scanned, sawAnyLegacy, nil
+}
+
+// refuseKeylessWithSecondaryIndexes returns an error when |sch| is a keyless
+// schema with one or more secondary indexes. Keyless secondary index entries
+// embed each row's content-derived hash id; the row migrations re-key every
+// rewritten row, which would strand those entries. Until the migrations learn
+// to rebuild secondary indexes, the safe posture is an explicit refusal with
+// the workaround spelled out. Keyed tables are unaffected (their index entries
+// reference primary keys, which the migrations never change).
+func refuseKeylessWithSecondaryIndexes(sch schema.Schema, tableName, cmdName string) error {
+	if !schema.IsKeyless(sch) {
+		return nil
+	}
+	if n := len(sch.Indexes().AllIndexes()); n > 0 {
+		return fmt.Errorf(
+			"table %s is keyless and has %d secondary index(es); keyless index entries embed row hash ids that %s's re-keying would invalidate. Drop the index(es), re-run %s, then re-create them",
+			tableName, n, cmdName, cmdName,
+		)
+	}
+	return nil
+}
+
+// buildCanonicalKeylessValue rebuilds a keyless value tuple in the engine-
+// canonical form for |desc|: every adaptive field is fed to the TupleBuilder
+// as full inline content (exactly like the writer's tuplesFromRow → PutField
+// path) and the builder's whole-tuple heuristic decides inline vs out-of-band
+// placement; every other field — including the cardinality at position 0 — is
+// copied verbatim. The result is byte-identical to what the engine would
+// build for the same logical row, which is the invariant keyless DML depends
+// on: UPDATE/DELETE locate rows by hashing a freshly-built tuple.
+//
+// |fields| holds the resolved per-position bytes (length >= desc.Count();
+// positions beyond the source tuple's width are nil → NULL). |target| is the
+// schema's tuple-length target (schema.GetTargetRowSize), matching the
+// writer's WithMaxRowSize configuration.
+func buildCanonicalKeylessValue(ctx context.Context, vs val.ValueStore, bp pool.BuffPool, desc *val.TupleDesc, target uint16, fields [][]byte) (val.Tuple, error) {
+	tb := val.NewTupleBuilder(desc, vs).WithMaxRowSize(target)
+	for i := 0; i < desc.Count(); i++ {
+		var b []byte
+		if i < len(fields) {
+			b = fields[i]
+		}
+		if len(b) == 0 {
+			// NULL (zero-length and NULL are the same thing at tuple level —
+			// see val.Tuple.GetField). Leave the builder slot empty.
+			continue
+		}
+		if val.IsAdaptiveEncoding(desc.Types[i].Enc) {
+			content, present, cErr := underlyingContent(ctx, vs, b)
+			if cErr != nil {
+				return nil, fmt.Errorf("field %d: %w", i, cErr)
+			}
+			if !present {
+				return nil, fmt.Errorf("field %d: content chunk is genuinely absent; refusing to rewrite the row", i)
+			}
+			if pErr := tb.PutAdaptiveFromInline(ctx, i, content); pErr != nil {
+				return nil, fmt.Errorf("field %d: re-encode adaptive content (%d bytes): %w", i, len(content), pErr)
+			}
+			continue
+		}
+		tb.PutRaw(i, b)
+	}
+	return tb.BuildPermissive(ctx, bp)
 }
 
 // resolveFieldToLegacy is the per-row workhorse. Given a single field's bytes
@@ -800,6 +936,9 @@ func emitRecoverRowsResult(w io.Writer, r RecoverRowsResult) {
 		if r.CollateralRewrites > 0 {
 			_, _ = fmt.Fprintf(w, "  %d rows had non-target AddrEnc fields healed as collateral (residual mismatch from prior repair on a sibling column)\n",
 				r.CollateralRewrites)
+		}
+		if r.RowsMerged > 0 {
+			_, _ = fmt.Fprintf(w, "  %d duplicate keyless rows merged by cardinality\n", r.RowsMerged)
 		}
 		_, _ = fmt.Fprintf(w, "  commit: %s\n", r.CommitHash)
 		_, _ = fmt.Fprintf(w, "  message: %s\n", r.CommitMessage)
