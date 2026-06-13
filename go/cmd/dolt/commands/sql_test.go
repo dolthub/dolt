@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -89,6 +90,54 @@ func TestSqlBatchMode(t *testing.T) {
 			commandStr := "dolt sql"
 			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv, cliCtx)
 			assert.Equal(t, test.expectedRes, result)
+		})
+	}
+}
+
+func TestSqlLiteralColumnNamesIgnoreTrailingLineComments(t *testing.T) {
+	tests := []struct {
+		query         string
+		expectedNames []string
+		expectedRows  []sql.Row
+	}{
+		{
+			query:         "select null -- comment",
+			expectedNames: []string{"NULL"},
+			expectedRows:  []sql.Row{{nil}},
+		},
+		{
+			query:         "select 1, -- one\n2 -- two",
+			expectedNames: []string{"1", "2"},
+			expectedRows:  []sql.Row{{int8(1), int8(2)}},
+		},
+		{
+			query:         "select \"string\", -- string\n\"another string\" -- another string",
+			expectedNames: []string{"string", "another string"},
+			expectedRows:  []sql.Row{{"string", "another string"}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
+
+			queryEngine, err := cliCtx.QueryEngine(ctx)
+			require.NoError(t, err)
+
+			sqlSch, rowIter, _, err := processQuery(queryEngine.Context, test.query, queryEngine.Queryist)
+			require.NoError(t, err)
+			require.NotNil(t, rowIter)
+
+			rows, err := sql.RowIterToRows(queryEngine.Context, rowIter)
+			require.NoError(t, err)
+			require.Equal(t, test.expectedRows, rows)
+
+			require.Len(t, sqlSch, len(test.expectedNames))
+			for i, expectedName := range test.expectedNames {
+				require.Equal(t, expectedName, sqlSch[i].Name)
+			}
 		})
 	}
 }
