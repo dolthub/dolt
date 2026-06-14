@@ -25,6 +25,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/dolthub/fslock"
 
@@ -93,6 +95,45 @@ func (fact GitRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFo
 	}
 }
 
+// One shared GitBlobstore per (local db, URL, ref); key is cacheRepoPath.
+type gitRemoteCacheEntry struct {
+	db  datas.Database
+	vrw types.ValueReadWriter
+	ns  tree.NodeStore
+}
+
+var (
+	gitRemoteCacheMu sync.Mutex
+	gitRemoteCache   = map[string]gitRemoteCacheEntry{}
+)
+
+func TeardownGitRemotes(ctx context.Context) {
+	gitRemoteCacheMu.Lock()
+	entries := gitRemoteCache
+	gitRemoteCache = map[string]gitRemoteCacheEntry{}
+	gitRemoteCacheMu.Unlock()
+
+	for _, entry := range entries {
+		cs := datas.ChunkStoreFromDatabase(entry.db)
+		_ = cs.Teardown(ctx)
+		if g, ok := cs.(gitSharedChunkStore); ok {
+			_ = g.ForceClose()
+		}
+	}
+}
+
+type gitSharedChunkStore struct {
+	*nbs.NomsBlockStore
+}
+
+func (gitSharedChunkStore) Close() error { return nil }
+
+func (cs gitSharedChunkStore) ForceClose() error {
+	return cs.NomsBlockStore.Close()
+}
+
+var gitBlobstoreSyncForReadTTLOverride time.Duration
+
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
 	if err != nil {
@@ -113,6 +154,13 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
+	gitRemoteCacheMu.Lock()
+	if entry, ok := gitRemoteCache[cacheRepo]; ok {
+		gitRemoteCacheMu.Unlock()
+		return entry.db, entry.vrw, entry.ns, nil
+	}
+	gitRemoteCacheMu.Unlock()
+
 	remoteName := resolveGitRemoteName(params)
 
 	// Serialize cache repo setup across goroutines and processes.
@@ -120,7 +168,11 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err := os.MkdirAll(hashDir, 0o755); err != nil {
 		return nil, nil, nil, err
 	}
-	initLock := fslock.New(filepath.Join(hashDir, "init.lock"))
+	initLock, err := fslock.New(filepath.Join(hashDir, "init.lock"))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer initLock.Close()
 	if err := initLock.Lock(); err != nil {
 		return nil, nil, nil, err
 	}
@@ -144,14 +196,28 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	cs, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, blobstore.GitBlobstoreOptions{RemoteName: remoteName, InfoBranch: blobstore.DefaultInfoBranch}, memlimit.MemtableSize(), q)
+	bsOpts := blobstore.GitBlobstoreOptions{
+		RemoteName:     remoteName,
+		InfoBranch:     blobstore.DefaultInfoBranch,
+		SyncForReadTTL: gitBlobstoreSyncForReadTTLOverride,
+	}
+	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
+	cs := gitSharedChunkStore{NomsBlockStore: nbsCS}
 	vrw := types.NewValueStore(cs)
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
+
+	gitRemoteCacheMu.Lock()
+	if entry, ok := gitRemoteCache[cacheRepo]; ok {
+		gitRemoteCacheMu.Unlock()
+		return entry.db, entry.vrw, entry.ns, nil
+	}
+	gitRemoteCache[cacheRepo] = gitRemoteCacheEntry{db: db, vrw: vrw, ns: ns}
+	gitRemoteCacheMu.Unlock()
 	return db, vrw, ns, nil
 }
 

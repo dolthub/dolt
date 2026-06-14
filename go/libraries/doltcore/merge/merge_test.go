@@ -486,7 +486,7 @@ func rebuildAllProllyIndexes(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table
 	primary, _ := durable.ProllyMapFromIndex(tableRowData)
 
 	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, index, primary)
+		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, index, primary, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -501,7 +501,7 @@ func rebuildAllProllyIndexes(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table
 }
 
 func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
-	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_DOLT, doltdb.InMemDoltDB, filesys2.LocalFS)
 	err := ddb.WriteEmptyRepo(context.Background(), env.DefaultInitBranch, name, email)
 	require.NoError(t, err)
 	return ddb

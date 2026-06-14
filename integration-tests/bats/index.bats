@@ -2397,9 +2397,6 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
-
-    skip_nbf_dolt "__DOLT__ documents all matching rows for any unique key violations"
-    [[ "$output" =~ "onepk,2" ]] || false
 }
 
 @test "index: Merge into branch with index from branch without index" {

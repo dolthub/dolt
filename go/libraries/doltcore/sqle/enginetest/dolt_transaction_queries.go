@@ -3410,3 +3410,43 @@ var MultiDbSavepointTests = []queries.TransactionTest{
 		},
 	},
 }
+
+var AutoIncrementTransactionTests = []queries.TransactionTest{
+	{
+		Name: "two auto increment values in two transactions",
+		SetUpScript: []string{
+			"create table t (x int primary key auto_increment, y text)",
+			"insert into t (y) values ('abc123')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "/* client a */ start transaction",
+			},
+			{
+				Query: "/* client b */ start transaction",
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values ('client a')",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x1, InsertID: 0x2}}},
+			},
+			{
+				Query:    "/* client b */ insert into t (y) values ('client b')",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x1, InsertID: 0x3}}},
+			},
+			{
+				Query: "/* client a */ commit",
+			},
+			{
+				Query: "/* client b */ commit",
+			},
+			{
+				Query: "/* client a */ select * from t order by x",
+				Expected: []sql.Row{
+					{1, "abc123"},
+					{2, "client a"},
+					{3, "client b"},
+				},
+			},
+		},
+	},
+}

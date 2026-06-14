@@ -27,7 +27,6 @@ const (
 	EnvDoltRootPath                  = "DOLT_ROOT_PATH"
 	EnvRemoteVersionDownloadStats    = "DOLT_REMOTE_VERBOSE_DOWNLOAD_STATS"
 	EnvPushLog                       = "PUSH_LOG"
-	EnvDefaultBinFormat              = "DOLT_DEFAULT_BIN_FORMAT"
 	EnvTestForceOpenEditor           = "DOLT_TEST_FORCE_OPEN_EDITOR"
 	EnvDisableChunkJournal           = "DOLT_DISABLE_CHUNK_JOURNAL"
 	EnvDisableReflog                 = "DOLT_DISABLE_REFLOG"
@@ -58,4 +57,9 @@ const (
 	// Used for tests. If set, Dolt will error if it would rebuild a table's row data.
 	EnvAssertNoTableRewrite         = "DOLT_TEST_ASSERT_NO_TABLE_REWRITE"
 	EnvAssertNoInMemoryArchiveIndex = "DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX"
+
+	// Used for tests. Make Dolt fail if it loads table file data
+	// from disk, such as bootstraping the journal file or loading
+	// a table file with tableFilePersister.Open.
+	EnvAssertNoTableFilesRead = "DOLT_TEST_ASSERT_NO_TABLE_FILES_READ"
 )

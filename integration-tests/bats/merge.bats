@@ -1053,24 +1053,6 @@ SQL
 
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
-
-    skip_nbf_dolt "behavior in new format diverges"
-
-    # Merge should fail due to conflict and previous conflict and violation state should be retained
-    run dolt merge other2
-    [[ "$output" =~ "existing unresolved conflicts would be overridden by new conflicts produced by merge" ]] || false
-
-    run dolt sql -r csv -q "SELECT * FROM parent;"
-    [[ "${lines[1]}" = "1,2" ]] || false
-
-    run dolt sql -r csv -q "SELECT * from child;"
-    [[ "${lines[1]}" = "1,2" ]] || false
-
-    run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
-    [[ "${lines[1]}" = "1,1,2,1,3,1" ]] || false
-
-    run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
-    [[ "${lines[1]}" = "foreign key,1,2" ]] || false
 }
 
 @test "merge: violated check constraint" {

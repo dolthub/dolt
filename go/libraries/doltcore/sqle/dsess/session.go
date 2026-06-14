@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
@@ -1374,17 +1374,16 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 	}
 
-	branchState := sessionState.NewEmptyBranchState(db.Revision(), db.RevisionType())
-
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
 	//  database is deleted out from under a running server
-	branchState.dbData = dbState.DbData
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
+	branchState := sessionState.NewEmptyBranchState(db.Revision(), db.RevisionType())
+	branchState.readOnly = dbState.ReadOnly
+	branchState.dbData = dbState.DbData
 	branchState.dbData.Rsr = adapter
 	branchState.dbData.Rsw = adapter
-	branchState.readOnly = dbState.ReadOnly
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	// Or better yet, get rid of EditOptions from the database, it's a session setting
@@ -1417,7 +1416,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			if err != nil {
 				return err
 			}
-			branchState.writeSession = d.writeSessProv(branchState.WorkingSet(), tracker, editOpts)
+			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchState.workingSet, tracker, d.SetWorkingRoot, editOpts)
 		}
 	}
 
@@ -1863,7 +1862,7 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 		return config.SetFloat(conf, key, float64(v))
 	case float64:
 		return config.SetFloat(conf, key, v)
-	case decimal.Decimal:
+	case *apd.Decimal:
 		f64, _ := v.Float64()
 		return config.SetFloat(conf, key, f64)
 	case string:
@@ -1970,7 +1969,7 @@ func findPersistedGlobalVars(dEnv *env.DoltEnv) (persistedGlobalVars []sql.Syste
 
 		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
 		for _, k := range missingKeys {
-			cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
+			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
 		}
 	}
 
@@ -1984,12 +1983,12 @@ func findPersistedGlobalVars(dEnv *env.DoltEnv) (persistedGlobalVars []sql.Syste
 
 		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
 		for _, k := range missingKeys {
-			cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
+			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
 		}
 	}
 
 	if !foundConfig {
-		cli.Println("warning: no local or global Dolt configuration found; session is not persistable")
+		logrus.Warn("no local or global Dolt configuration found; session is not persistable")
 	}
 
 	return persistedGlobalVars, nil
@@ -2081,4 +2080,4 @@ func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, err
 // WriteSessFunc is a constructor that session builders use to
 // create fresh table editors.
 // The indirection avoids a writer/dsess package import cycle.
-type WriteSessFunc func(ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession
+type WriteSessFunc func(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, setter SessionRootSetter, opts editor.Options) WriteSession

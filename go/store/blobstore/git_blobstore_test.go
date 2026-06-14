@@ -288,7 +288,7 @@ func TestGitBlobstore_CleanupOwnedLocalRef_DeletesRef(t *testing.T) {
 	require.Equal(t, bs.localRef, rnf.Ref)
 }
 
-func TestGitBlobstore_Close_DeletesOwnedLocalAndTrackingRefs(t *testing.T) {
+func TestGitBlobstore_Teardown_DeletesOwnedLocalAndTrackingRefs(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
@@ -311,7 +311,7 @@ func TestGitBlobstore_Close_DeletesOwnedLocalAndTrackingRefs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Read sync no longer creates/aligns the local ref. Seed it so we can
-	// validate Close deletes it when present.
+	// validate Teardown deletes it when present.
 	_, err = localRepo.SetRefToTree(ctx, bs.localRef, map[string][]byte{
 		"manifest": []byte("seed localRef\n"),
 	}, "seed localRef")
@@ -319,7 +319,7 @@ func TestGitBlobstore_Close_DeletesOwnedLocalAndTrackingRefs(t *testing.T) {
 	_, err = localAPI.ResolveRefCommit(ctx, bs.localRef)
 	require.NoError(t, err)
 
-	require.NoError(t, bs.Close())
+	require.NoError(t, bs.Teardown(ctx))
 
 	_, err = localAPI.ResolveRefCommit(ctx, bs.localRef)
 	var rnf *git.RefNotFoundError

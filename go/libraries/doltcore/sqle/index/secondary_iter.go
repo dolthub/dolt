@@ -199,7 +199,10 @@ func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly
 			return c.m.IterKeyRange(ctx, start, stop)
 		}
 	}
-	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	rng, err := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	if err != nil {
+		return nil, err
+	}
 
 	iter, err := c.m.IterRange(ctx, rng)
 	if err != nil {
@@ -266,7 +269,10 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 			return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld}, nil
 		}
 	}
-	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	rng, err := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	if err != nil {
+		return nil, err
+	}
 	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err
@@ -322,7 +328,10 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 			return &keylessLookupIter{pri: c.pri, secIter: secIter, pkMap: c.pkMap, pkBld: c.pkBld, prefixDesc: c.prefixDesc}, nil
 		}
 	}
-	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	rng, err := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	if err != nil {
+		return nil, err
+	}
 	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err

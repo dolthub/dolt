@@ -71,6 +71,11 @@ const (
 	//
 	// Intended for embedded-driver usage so higher layers can implement their own retry/backoff policy.
 	FailOnJournalLockTimeoutParam = "fail_on_journal_lock_timeout"
+
+	// Immediatly proceed with opening the database or failing the open (based on FailOnJournalLockTimeoutParam) as
+	// soon as a non-blocking fslock call indicates that the LOCK is unavailable. Do not spend a short timeout
+	// waiting for it to become available.
+	SkipJournalLockTimeoutParam = "skip_journal_lock_timeout"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -155,6 +160,14 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	defer singletonLock.Unlock()
 
 	if s, ok := singletons[urlObj.Path]; ok {
+		// Callers to CreateDB are expecting to see the database as newly
+		// opened with any novelty present. This is potentially a little
+		// sketchy for any concurrent accessors, but this whole mechanism
+		// has already made callers reliquinish any notion that they are
+		// the sole owners of the Database they opened.
+		if err := datas.ChunkStoreFromDatabase(s.ddb).Rebase(ctx); err != nil {
+			return nil, nil, nil, err
+		}
 		return s.ddb, s.vrw, s.ns, nil
 	}
 
@@ -208,6 +221,9 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 		if params != nil {
 			if _, ok := params[FailOnJournalLockTimeoutParam]; ok {
 				opts.FailOnLockTimeout = true
+			}
+			if _, ok := params[SkipJournalLockTimeoutParam]; ok {
+				opts.SkipLockFileTimeout = true
 			}
 		}
 		newGenSt, err = nbs.NewLocalJournalingStoreWithOptions(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb, opts)

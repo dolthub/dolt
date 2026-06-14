@@ -34,7 +34,7 @@ import (
 func TestLog(t *testing.T) {
 	ctx := context.Background()
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(ctx, types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
+	err := dEnv.InitRepo(ctx, types.Format_DOLT, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
 	defer dEnv.Close()
 
 	if err != nil {
@@ -56,7 +56,7 @@ func TestLogSigterm(t *testing.T) {
 
 	ctx := context.Background()
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(ctx, types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
+	err := dEnv.InitRepo(ctx, types.Format_DOLT, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
 	defer dEnv.Close()
 
 	if err != nil {

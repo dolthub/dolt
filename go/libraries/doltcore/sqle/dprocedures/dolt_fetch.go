@@ -81,10 +81,11 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 		})
 	}
 
-	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), remote, false)
+	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), remote)
 	if err != nil {
 		return 1, err
 	}
+	defer srcDB.Close()
 
 	err = srcDB.Rebase(ctx)
 	if err != nil {

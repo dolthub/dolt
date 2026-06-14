@@ -282,6 +282,9 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 			printWithIndendationLevel(level, ret, "Generated: %t\n", col.Generated())
 			printWithIndendationLevel(level, ret, "Virtual: %t\n", col.Virtual())
 			printWithIndendationLevel(level, ret, "OnUpdateValue: %s\n", col.OnUpdateValue())
+			printWithIndendationLevel(level, ret, "UsesAdaptiveEncoding: %t\n", col.UsesAdaptiveEncoding())
+			printWithIndendationLevel(level, ret, "AdaptiveEncodingBreakingChange: %t\n", col.AdaptiveEncodingBreakingChange())
+
 			level -= 1
 			printWithIndendationLevel(level, ret, "}\n")
 

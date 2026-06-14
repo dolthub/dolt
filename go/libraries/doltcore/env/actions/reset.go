@@ -63,77 +63,71 @@ func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr str
 		}
 	}
 
-	// mirroring Git behavior, untracked tables are ignored on 'reset --hard',
-	// save the state of these tables and apply them to |newHead|'s root.
-	//
-	// as a special case, if an untracked table has a tag collision with any
-	// tables in |newHead| we silently drop it from the new working set.
-	// these tag collision is typically cause by table renames (bug #751).
-
-	untracked, err := doltdb.GetAllSchemas(ctx, roots.Working)
+	newWorking, err := MoveUntrackedTables(ctx, roots.Working, roots.Staged, roots.Head)
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}
+	return newHead, doltdb.Roots{Head: roots.Head, Working: newWorking, Staged: roots.Head}, nil
+}
 
-	// untracked tables exist in |working| but not in |staged|
-	staged := GetAllTableNames(ctx, roots.Staged)
-	for _, name := range staged {
+// MoveUntrackedTables copies tables present in |sourceWorking| but absent from |sourceStaged|
+// onto |target|, returning the resulting root. Tables that name-collide with one already in
+// |target| are skipped so the target version wins. Tables whose column tags collide with one
+// in |target| are dropped silently.
+// TODO(elianddb): retag colliding columns instead of dropping the table.
+func MoveUntrackedTables(ctx context.Context, sourceWorking, sourceStaged, target doltdb.RootValue) (doltdb.RootValue, error) {
+	untracked, err := doltdb.GetAllSchemas(ctx, sourceWorking)
+	if err != nil {
+		return nil, err
+	}
+
+	staged, err := doltdb.GetAllSchemas(ctx, sourceStaged)
+	if err != nil {
+		return nil, err
+	}
+	for name := range staged {
 		delete(untracked, name)
 	}
 
-	newWkRoot := roots.Head
-
-	ws, err := doltdb.GetAllSchemas(ctx, newWkRoot)
+	targetSchemas, err := doltdb.GetAllSchemas(ctx, target)
 	if err != nil {
-		return nil, doltdb.Roots{}, err
+		return nil, err
 	}
-	tags := mapColumnTags(ws)
+	targetTags := make(map[uint64]struct{})
+	for _, sch := range targetSchemas {
+		for _, tag := range sch.GetAllCols().Tags {
+			targetTags[tag] = struct{}{}
+		}
+	}
 
 	for name, sch := range untracked {
-		for _, pk := range sch.GetAllCols().GetColumns() {
-			if _, ok := tags[pk.Tag]; ok {
-				// |pk.Tag| collides with a schema in |newWkRoot|
+		for _, col := range sch.GetAllCols().GetColumns() {
+			if _, ok := targetTags[col.Tag]; ok {
 				delete(untracked, name)
+				break
 			}
 		}
 	}
 
 	for name := range untracked {
-		tbl, exists, err := roots.Working.GetTable(ctx, name)
+		// Skip when target has a table of the same name so the target version wins.
+		if _, exists := targetSchemas[name]; exists {
+			continue
+		}
+		tbl, exists, err := sourceWorking.GetTable(ctx, name)
 		if err != nil {
-			return nil, doltdb.Roots{}, err
+			return nil, err
 		}
 		if !exists {
-			return nil, doltdb.Roots{}, fmt.Errorf("untracked table %s does not exist in working set", name)
+			return nil, fmt.Errorf("untracked table %s does not exist in working set", name)
 		}
-
-		newWkRoot, err = newWkRoot.PutTable(ctx, name, tbl)
+		target, err = target.PutTable(ctx, name, tbl)
 		if err != nil {
-			return nil, doltdb.Roots{}, fmt.Errorf("failed to write table back to database: %s", err)
+			return nil, fmt.Errorf("failed to write table back to database: %s", err)
 		}
 	}
 
-	// need to save the state of files that aren't tracked
-	untrackedTables := make(map[doltdb.TableName]*doltdb.Table)
-	wTblNames := GetAllTableNames(ctx, roots.Working)
-
-	for _, tblName := range wTblNames {
-		untrackedTables[tblName], _, err = roots.Working.GetTable(ctx, tblName)
-
-		if err != nil {
-			return nil, doltdb.Roots{}, err
-		}
-	}
-
-	headTblNames := GetAllTableNames(ctx, roots.Staged)
-	for _, tblName := range headTblNames {
-		delete(untrackedTables, tblName)
-	}
-
-	roots.Working = newWkRoot
-	roots.Staged = roots.Head
-
-	return newHead, roots, nil
+	return target, nil
 }
 
 func GetAllTableNames(ctx context.Context, root doltdb.RootValue) []doltdb.TableName {
@@ -220,9 +214,10 @@ func ResetSoftTables(ctx context.Context, tableNames []doltdb.TableName, roots d
 	return roots, nil
 }
 
-// ResetSoftToRef matches the `git reset --soft <REF>` pattern. It returns a new Roots with the Staged and Head values
-// set to the commit specified by the spec string. The Working root is not set
-func ResetSoftToRef[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr string) (doltdb.Roots, error) {
+// MoveHeadToRef resolves |cSpecStr| to a commit and moves the current branch HEAD to it. The
+// returned Roots has Head and Staged set to the resolved commit's root, available for callers
+// composing further reset semantics on top of the HEAD move.
+func MoveHeadToRef[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr string) (doltdb.Roots, error) {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -339,16 +334,4 @@ func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryru
 	}
 	roots.Working = newRoot
 	return roots, nil
-}
-
-// mapColumnTags takes a map from table name to schema.Schema and generates
-// a map from column tags to table names (see RootValue.GetAllSchemas).
-func mapColumnTags(tables map[doltdb.TableName]schema.Schema) (m map[uint64]string) {
-	m = make(map[uint64]string, len(tables))
-	for tbl, sch := range tables {
-		for _, tag := range sch.GetAllCols().Tags {
-			m[tag] = tbl.Name
-		}
-	}
-	return
 }

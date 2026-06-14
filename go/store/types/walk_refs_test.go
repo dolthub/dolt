@@ -55,7 +55,7 @@ func TestWalkRefs(t *testing.T) {
 	t.Run("SingleRef", func(t *testing.T) {
 		t.Parallel()
 		t.Run("OfValue", func(t *testing.T) {
-			runTest(Format_Default, mustValue(ToRefOfValue(mustRef(NewRef(Bool(false), Format_Default)), Format_Default)), t)
+			runTest(Format_DOLT, mustValue(ToRefOfValue(mustRef(NewRef(Bool(false), Format_DOLT)), Format_DOLT)), t)
 		})
 	})
 }

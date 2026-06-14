@@ -28,6 +28,31 @@ import (
 
 var DiffSystemTableScriptTests = []queries.ScriptTest{
 	{
+		// See https://github.com/dolthub/dolt/issues/11159
+		Name: "dolt_diff_ table to_commit and from_commit indexes are non-unique",
+		SetUpScript: []string{
+			"create table foo (id int primary key, v int);",
+			"insert into foo values (1,1),(2,1),(3,1),(4,1);",
+			"call dolt_commit('-Am', 'seed');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_foo;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				// The harness skips assertions containing "show indexes from", so this uses the singular synonym.
+				Query: "SHOW INDEX FROM dolt_diff_foo;",
+				Expected: []sql.Row{
+					{"dolt_diff_foo", 0, "to_pks", 1, "to_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 0, "from_pks", 1, "from_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "to_commit", 1, "to_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "from_commit", 1, "from_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+				},
+			},
+		},
+	},
+	{
 		Name: "base case: added rows",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 int);",
@@ -1169,6 +1194,23 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				// Use index when to_pk is specified.
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit1, @Commit4, 't') where to_pk = 2;",
+				Expected: []sql.Row{
+					{2, "two", "three", nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"commits_to"},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit1, @Commit4, 't') where from_pk IS NULL;",
+				Expected: []sql.Row{
+					{1, "uno", "dos", nil, nil, nil, "added"},
+					{2, "two", "three", nil, nil, nil, "added"},
+					{3, "three", "four", nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"commits_from"},
+			},
+			{
 				// Reverse the to/from commits to see the diff from the other direction
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T');",
 				Expected: []sql.Row{
@@ -1176,6 +1218,23 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 					{nil, nil, nil, 2, "two", "three", "removed"},
 					{nil, nil, nil, 3, "three", "four", "removed"},
 				},
+			},
+			{
+				// Use index when from_pk is specified.
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T') where from_pk = 2;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 2, "two", "three", "removed"},
+				},
+				ExpectedIndexes: []string{"commits_from"},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T') where to_pk IS NULL;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, "uno", "dos", "removed"},
+					{nil, nil, nil, 2, "two", "three", "removed"},
+					{nil, nil, nil, 3, "three", "four", "removed"},
+				},
+				ExpectedIndexes: []string{"commits_to"},
 			},
 			{
 				Query: `
@@ -5287,12 +5346,12 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "base case: insert, update, delete",
 		SetUpScript: []string{
-			"set @Commit0 = HASHOF('HEAD');",
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit0, '-am', 'creating table t');",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
 			"set @Commit1 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'populating table t');",
 
 			"update t set c2=0 where pk=1",
 			"set @Commit2 = '';",
@@ -5373,6 +5432,20 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_commit_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 AND to_pk = 1;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"commits_to"},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_commit_DIFF_t WHERE TO_COMMIT=@Commit0 and FROM_COMMIT=@Commit1 AND from_pk = 1;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 2, 3, "removed"},
+				},
+				ExpectedIndexes: []string{"commits_from"},
 			},
 		},
 	},
@@ -6806,6 +6879,25 @@ left join dolt_commit_diff_xy cd
 			{
 				query: "select count(*) from dolt_diff_x where from_commit = @m2h2",
 				exp:   []sql.Row{{4}},
+			},
+		},
+	},
+	{
+		name: "indexes work when table doesn't exist on one branch",
+		setup: []string{
+			"call dolt_checkout('-b', 'mod')",
+			"create table newTable(id int)",
+			"call dolt_add('newTable')",
+			"call dolt_commit('-am', 'added new table')",
+		},
+		queries: []systabQuery{
+			{
+				query: "select count(*) from dolt_diff('main', 'mod', 'newTable') where to_commit='def'",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				query: "select count(*) from dolt_diff('mod', 'main', 'newTable') where to_commit='def'",
+				exp:   []sql.Row{{0}},
 			},
 		},
 	},

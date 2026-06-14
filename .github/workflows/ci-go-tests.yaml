@@ -25,26 +25,9 @@ jobs:
         os: [macos-latest, ubuntu-22.04, windows-latest]
     steps:
     - uses: actions/checkout@v6
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: go/go.mod
-      id: go
-    - name: Install ICU4C (MacOS)
-      if: ${{ matrix.os == 'macos-latest' }}
-      run: |
-        dir=$(brew --cellar icu4c)
-        dir="$dir"/$(ls "$dir")
-        echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
-        echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
-    - name: Install ICU4C (Windows)
-      id: msys2
-      if: ${{ matrix.os == 'windows-latest' }}
-      uses: msys2/setup-msys2@v2
-      with:
-        path-type: inherit
-        msystem: UCRT64
-        pacboy: icu:p toolchain:p pkg-config:p
+    - name: Set up Go toolchain
+      id: toolchain
+      uses: ./.github/actions/setup-go-toolchain
     - name: Test All
       working-directory: ./go
       run: |
@@ -84,7 +67,7 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
-        MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        MSYS2_LOCATION: ${{ steps.toolchain.outputs.msys2-location }}
   noracetest:
     name: Go tests - no race
     defaults:
@@ -97,26 +80,9 @@ jobs:
         os: [macos-latest, ubuntu-22.04, windows-latest]
     steps:
     - uses: actions/checkout@v6
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: go/go.mod
-      id: go
-    - name: Install ICU4C (MacOS)
-      if: ${{ matrix.os == 'macos-latest' }}
-      run: |
-        dir=$(brew --cellar icu4c)
-        dir="$dir"/$(ls "$dir")
-        echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
-        echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
-    - name: Install ICU4C (Windows)
-      if: ${{ matrix.os == 'windows-latest' }}
-      id: msys2
-      uses: msys2/setup-msys2@v2
-      with:
-        path-type: inherit
-        msystem: UCRT64
-        pacboy: icu:p toolchain:p pkg-config:p
+    - name: Set up Go toolchain
+      id: toolchain
+      uses: ./.github/actions/setup-go-toolchain
     - name: Test All
       working-directory: ./go
       run: |
@@ -127,4 +93,4 @@ jobs:
       env:
         MATRIX_OS: ${{ matrix.os }}
         DOLT_TEST_RUN_NON_RACE_TESTS: "true"
-        MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        MSYS2_LOCATION: ${{ steps.toolchain.outputs.msys2-location }}

@@ -85,6 +85,8 @@ type IndexProperties struct {
 	IsFullText    bool
 	IsUserDefined bool
 	Comment       string
+	// Predicate is the WHERE clause expression string for partial indexes.
+	Predicate string
 	FullTextProperties
 	IsVector bool
 	VectorProperties
@@ -231,6 +233,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		isVector:         props.IsVector,
 		isUserDefined:    props.IsUserDefined,
 		comment:          props.Comment,
+		predicate:        props.Predicate,
 		prefixLengths:    prefixLengths,
 		fullTextProps:    props.FullTextProperties,
 		vectorProperties: props.VectorProperties,

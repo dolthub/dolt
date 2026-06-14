@@ -136,6 +136,10 @@ type ChunkStore interface {
 	// Close() concurrently with any other ChunkStore method; behavior is
 	// undefined and probably crashy.
 	io.Closer
+
+	// Teardown releases resources that should be cleaned up before Close.
+	// Implementations that have no such resources may return nil.
+	Teardown(ctx context.Context) error
 }
 
 type DebugLogger interface {
@@ -258,7 +262,7 @@ type ChunkStoreGarbageCollector interface {
 	//
 	// This function should not block indefinitely and should return an
 	// error if a GC is already in progress.
-	BeginGC(addChunk func(hash.Hash) bool, mode GCMode) error
+	BeginGC(ctx context.Context, addChunk func(hash.Hash) bool, mode GCMode) error
 
 	// EndGC indicates that the GC is over. The previously provided
 	// addChunk function must not be called after this function.
@@ -273,7 +277,7 @@ type ChunkStoreGarbageCollector interface {
 	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrs, filter HasManyFunc, dest ChunkStore, config GCConfig, incrementalUpdateManifest bool) (MarkAndSweeper, error)
 
 	// Count returns the number of chunks in the store.
-	Count() (uint32, error)
+	Count(ctx context.Context) (uint32, error)
 
 	// IterateAllChunks iterates over all chunks in the store, calling the provided callback for each chunk. This is
 	// a wrapper over the internal chunkSource.iterateAllChunks() method.

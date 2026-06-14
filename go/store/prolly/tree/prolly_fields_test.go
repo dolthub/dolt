@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -106,7 +106,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		{
 			name:  "decimal",
 			typ:   val.Type{Enc: val.DecimalEnc},
-			value: mustParseDecimal("0.263419374632932747932030573792"),
+			value: decimalFromString("0.263419374632932747932030573792"),
 		},
 		{
 			name:  "string",
@@ -266,8 +266,8 @@ func mustParseJson(t *testing.T, s string) types.JSONDocument {
 	return types.JSONDocument{Val: v}
 }
 
-func mustParseDecimal(s string) decimal.Decimal {
-	d, err := decimal.NewFromString(s)
+func decimalFromString(s string) *apd.Decimal {
+	d, _, err := apd.NewFromString(s)
 	if err != nil {
 		panic(err)
 	}

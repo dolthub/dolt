@@ -428,6 +428,7 @@ SQL
     dolt diff -r json
     run no_stderr dolt diff -r json
     [ $status -eq 0 ]
+    echo "output"
     [ "$output" = '{"tables":[{"name":"t","schema_diff":["ALTER TABLE `t` DROP PRIMARY KEY;","ALTER TABLE `t` ADD PRIMARY KEY (pk);"],"data_diff":[]}]}' ]
 
     run no_stdout dolt diff -r json

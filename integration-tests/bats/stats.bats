@@ -476,53 +476,76 @@ EOF
 }
 
 @test "stats: worker thread quiesces and then runs again on new writes" {
-    get_stats_time() {
-        dolt sql -r csv -q 'call dolt_stats_info()' | tail -n 1 | sed -e 's|.*lastUpdate"":""||' -e 's|""}"$||'
+    # genCnt goes up once every time stats is swapped.
+    get_stats_gen() {
+        dolt sql -r csv -q 'call dolt_stats_info()' | tail -n 1 | sed -e 's|.*genCnt"":||' -e 's|,.*||'
     }
-    newtime=
-    wait_for_new_time() {
-        # We don't use dolt_stats_wait here, because that would
-	# trigger a stats run on its own. Here we want to assert
-	# that an incoming write triggered the run.
-        cnt=0
-        while [[ "$newtime" == "$origtime" ]]; do
-	    newtime=$(get_stats_time)
-            if [ "$cnt" -eq 8 ]; then
-                echo "took too long to run stats after a write" 1>&2
-                exit 1
-            fi
-	    sleep 1
-	done
-    }
+
+    # Poll until the generation counter holds steady, i.e. the worker has
+    # stopped running. Fails if it keeps advancing, which is what a
+    # non-quiescing worker would do.
     wait_for_quiesced() {
-        dolt sql -q 'call dolt_stats_wait();'
-        origtime=$(get_stats_time)
-        cnt=0
-        while [[ ! "$cnt" -eq 8 ]]; do
-            newtime=$(get_stats_time)
-            [[ "$newtime" == "$origtime" ]] || false
-            cnt=$((cnt+1))
+        local prev cur stable
+        prev=$(get_stats_gen)
+        stable=0
+        for _ in $(seq 1 20); do
+            sleep 0.2
+            cur=$(get_stats_gen)
+            if [[ "$cur" == "$prev" ]]; then
+                stable=$((stable+1))
+                if [[ "$stable" -ge 5 ]]; then
+                    return 0
+                fi
+            else
+                stable=0
+            fi
+            prev=$cur
         done
+        echo "stats worker never quiesced; generation still advancing (last=$cur)"
+        return 1
+    }
+
+    # Assert a trigger made the worker run, then quiesce, a small finite
+    # number of times. $1 is the generation before the trigger.
+    assert_ran_and_quiesced() {
+        local base=$1 cur delta
+        # First confirm the trigger actually woke the worker.
+        for _ in $(seq 1 20); do
+            cur=$(get_stats_gen)
+            [[ "$cur" != "$base" ]] && break
+            sleep 0.2
+        done
+        if [[ "$cur" == "$base" ]]; then
+            echo "stats did not run after a write; generation stuck at $base"
+            return 1
+        fi
+        # Then confirm it stops, after only a few runs.
+        wait_for_quiesced
+        cur=$(get_stats_gen)
+        delta=$((cur - base))
+        if [[ "$delta" -gt 6 ]]; then
+            echo "stats ran more times than expected for one change ($base -> $cur)"
+            return 1
+        fi
     }
 
     start_sql_server
 
     # After it runs, stats quiesces until a new write.
     wait_for_quiesced
+    base=$(get_stats_gen)
 
     # Doing a write makes it run again
     dolt sql -q 'create table vals (id int primary key)'
-    wait_for_new_time
-
-    wait_for_quiesced
+    assert_ran_and_quiesced "$base"
+    base=$(get_stats_gen)
 
     # Creating a new database makes it run again
     dolt sql -q 'create database newdb'
-    wait_for_new_time
-
-    wait_for_quiesced
+    assert_ran_and_quiesced "$base"
+    base=$(get_stats_gen)
 
     # Writing against the new database makes it run again
     dolt sql -q 'create table `newdb`.`newtable` (id int primary key)'
-    wait_for_new_time
+    assert_ran_and_quiesced "$base"
 }

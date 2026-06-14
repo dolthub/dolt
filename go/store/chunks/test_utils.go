@@ -75,12 +75,12 @@ func (s *TestStoreView) Put(ctx context.Context, c Chunk, getAddrs InsertAddrsCu
 	return s.ChunkStore.Put(ctx, c, getAddrs)
 }
 
-func (s *TestStoreView) BeginGC(keeper func(hash.Hash) bool, mode GCMode) error {
+func (s *TestStoreView) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, mode GCMode) error {
 	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
 	if !ok {
 		return ErrUnsupportedOperation
 	}
-	return collector.BeginGC(keeper, mode)
+	return collector.BeginGC(ctx, keeper, mode)
 }
 
 func (s *TestStoreView) EndGC(mode GCMode) {
@@ -99,7 +99,7 @@ func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetAddr
 	return collector.MarkAndSweepChunks(ctx, getAddrs, filter, collector, gcConfig, false)
 }
 
-func (s *TestStoreView) Count() (uint32, error) {
+func (s *TestStoreView) Count(_ context.Context) (uint32, error) {
 	panic("currently unused")
 }
 

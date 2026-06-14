@@ -33,8 +33,14 @@ const BytePeekLength = 128
 // The only implementation is tree.NodeStore, but ValueStore can be used without depending on the tree package.
 // This is useful for type handlers.
 type ValueStore interface {
+	// ReadBytes reads the bytes associated with the given content hash
 	ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error)
+	// WriteBytes writes the given bytes and returns the content hash
 	WriteBytes(ctx context.Context, val []byte) (hash.Hash, error)
+	// CompareAdaptive compares two adaptive values.
+	CompareAdaptive(ctx context.Context, l AdaptiveValue, r AdaptiveValue, encoding Encoding) (int, error)
+	// CompareAdaptiveCollatedStrings compares two adaptive string values with the given collation.
+	CompareAdaptiveCollatedStrings(ctx context.Context, l, r AdaptiveValue, collation sql.CollationID) (int, error)
 }
 
 // ImmutableValue represents a content-addressed value stored in a ValueStore.
@@ -67,21 +73,16 @@ func (t *ImmutableValue) GetBytes(ctx context.Context) ([]byte, error) {
 // TextStorage is a sql.AnyWrapper to wrap large string values stored out of band.
 type TextStorage struct {
 	ImmutableValue
-	// ctx is a context that can be used in driver.Value
-	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
-	ctx           context.Context
 	maxByteLength int64
 }
 
 var _ sql.StringWrapper = &TextStorage{}
-var _ driver.Valuer = &TextStorage{}
 
 // NewTextStorage creates a new TextStorage with the given content address and ValueStore.
-func NewTextStorage(ctx context.Context, addr hash.Hash, vs ValueStore) *TextStorage {
+func NewTextStorage(addr hash.Hash, vs ValueStore) *TextStorage {
 	return &TextStorage{
 		ImmutableValue: NewImmutableValue(addr, vs),
 		maxByteLength:  types.LongText.MaxByteLength(),
-		ctx:            ctx,
 	}
 }
 
@@ -135,8 +136,8 @@ func (t *TextStorage) Hash() interface{} {
 }
 
 // Value implements driver.Valuer for interoperability with other go libraries
-func (t *TextStorage) Value() (driver.Value, error) {
-	buf, err := t.GetBytes(t.ctx)
+func (t *TextStorage) ValueContext(ctx context.Context) (driver.Value, error) {
+	buf, err := t.GetBytes(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -146,21 +147,16 @@ func (t *TextStorage) Value() (driver.Value, error) {
 // ByteArray is a sql.AnyWrapper to wrap large byte array values stored out of band.
 type ByteArray struct {
 	ImmutableValue
-	// ctx is a context that can be used in driver.Value
-	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
-	ctx           context.Context
 	maxByteLength int64
 }
 
 var _ sql.BytesWrapper = &ByteArray{}
-var _ driver.Valuer = &ByteArray{}
 
 // NewByteArray creates a new ByteArray with the given content address and ValueStore.
-func NewByteArray(ctx context.Context, addr hash.Hash, vs ValueStore) *ByteArray {
+func NewByteArray(addr hash.Hash, vs ValueStore) *ByteArray {
 	return &ByteArray{
 		ImmutableValue: NewImmutableValue(addr, vs),
 		maxByteLength:  types.LongBlob.MaxByteLength(),
-		ctx:            ctx,
 	}
 }
 
@@ -228,9 +224,8 @@ func (b *ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
 	}
 }
 
-// Value implements driver.Valuer for interoperability with other go libraries
-func (b *ByteArray) Value() (driver.Value, error) {
-	return b.GetBytes(b.ctx)
+func (b *ByteArray) ValueContext(ctx context.Context) (driver.Value, error) {
+	return b.GetBytes(ctx)
 }
 
 // GeometryStorage is a sql.AnyWrapper for geometry values.

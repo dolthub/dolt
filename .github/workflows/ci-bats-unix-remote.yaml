@@ -26,12 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         if: ${{ env.use_credentials != 'true' }}
-      - name: Setup Go 1.x
+      - name: Set up Go toolchain
         if: ${{ env.use_credentials != 'true' }}
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go/go.mod
-        id: go
+        uses: ./.github/actions/setup-go-toolchain
       - name: Setup Python 3.x
         if: ${{ env.use_credentials != 'true' }}
         uses: actions/setup-python@v5
@@ -41,11 +38,12 @@ jobs:
         if: ${{ env.use_credentials != 'true' }}
         with:
           node-version: ^16
-      - name: Create CI Bin
+      - name: Build dolt
         if: ${{ env.use_credentials != 'true' }}
-        run: |
-          mkdir -p ./.ci_bin
-          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+        uses: ./.github/actions/build-dolt
+        with:
+          remotesrv: 'true'
+          noms: 'true'
       - name: Install Bats
         if: ${{ env.use_credentials != 'true' }}
         run: |
@@ -58,19 +56,9 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
-      - name: Install Dolt
-        if: ${{ env.use_credentials != 'true' }}
-        working-directory: ./go
-        run: |
-          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
-
-          go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
-          go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
       - name: Setup Dolt Config
         if: ${{ env.use_credentials != 'true' }}
-        run: |
-          dolt config --global --add user.name 'Dolthub Actions'
-          dolt config --global --add user.email 'actions@dolthub.com'
+        uses: ./.github/actions/setup-dolt-config
       - name: Install expect
         if: ${{ env.use_credentials != 'true' }}
         run: sudo apt-get install -y expect

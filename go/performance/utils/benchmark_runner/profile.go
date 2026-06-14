@@ -56,7 +56,7 @@ func (p *doltProfilerImpl) checkInstallation(ctx context.Context) error {
 }
 
 func (p *doltProfilerImpl) initDoltRepo(ctx context.Context) (string, error) {
-	return InitDoltRepo(ctx, p.dir, p.serverConfig.GetServerExec(), p.config.GetNomsBinFormat(), dbName)
+	return InitDoltRepo(ctx, p.dir, p.serverConfig.GetServerExec(), dbName)
 }
 
 func (p *doltProfilerImpl) Profile(ctx context.Context) error {

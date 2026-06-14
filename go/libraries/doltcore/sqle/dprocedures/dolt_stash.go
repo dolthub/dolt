@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -49,15 +50,15 @@ func doltStash(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 }
 
 func doDoltStash(ctx *sql.Context, args []string) (int, error) {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return cmdFailure, err
+	}
 	dbName := ctx.GetCurrentDatabase()
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
-	}
-	if !dbData.Ddb.Format().UsesFlatbuffers() {
-		return cmdFailure, fmt.Errorf("stash is not supported for old storage format")
 	}
 
 	roots, ok := dSess.GetRoots(ctx, dbName)

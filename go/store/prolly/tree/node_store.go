@@ -17,7 +17,11 @@ package tree
 import (
 	"bytes"
 	"context"
+	"io"
 	"sync"
+	"unicode/utf8"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -29,6 +33,7 @@ import (
 )
 
 // NodeStore reads and writes prolly tree Nodes.
+// TODO(next): put Compare on this interface, maybe just for adaptive types
 type NodeStore interface {
 	val.ValueStore
 
@@ -230,9 +235,150 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 	return result, err
 }
 
+// CompareJsonAdaptiveValues implements val.JsonAdaptiveValueComparator. The work is done by
+// IndexedJsonDocument.Compare, which compares two JSON documents chunk-by-chunk and applies
+// MySQL's JSON ordering rules.
+func (ns *nodeStore) CompareJsonAdaptiveValues(ctx context.Context, l, r val.AdaptiveValue) (int, error) {
+	return compareJsonAdaptiveValues(ctx, ns, l, r)
+}
+
 func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
 	_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
 	return h, err
 }
 
-var _ val.ValueStore = &nodeStore{}
+// CompareAdaptive implements val.ValueStore
+func (ns *nodeStore) CompareAdaptive(ctx context.Context, l val.AdaptiveValue, r val.AdaptiveValue, enc val.Encoding) (int, error) {
+	if enc == val.JsonAdaptiveEnc {
+		return ns.CompareJsonAdaptiveValues(ctx, l, r)
+	}
+
+	// If both values are inline we can compare their payloads without touching the ValueStore.
+	lPayload, lInline := val.InlineValueBytes(l)
+	rPayload, rInline := val.InlineValueBytes(r)
+	if lInline && rInline {
+		return bytes.Compare(lPayload, rPayload), nil
+	}
+
+	differ, err := newBlobChunkDiffer(ctx, ns, l, r)
+	if err != nil {
+		return 0, err
+	}
+
+	return compareChunkDiffer(ctx, differ)
+}
+
+func compareChunkDiffer(ctx context.Context, d chunkDiffer) (int, error) {
+	lChunk, rChunk, err := d.Next(ctx)
+	if err == io.EOF {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	return bytes.Compare(lChunk, rChunk), nil
+}
+
+// CompareAdaptiveCollatedStrings implements val.ValueStore
+func (ns *nodeStore) CompareAdaptiveCollatedStrings(ctx context.Context, l, r val.AdaptiveValue, collation sql.CollationID) (int, error) {
+	// no collation uses the faster byte order comparison
+	if collation == sql.Collation_Unspecified {
+		return ns.CompareAdaptive(ctx, l, r, val.StringAdaptiveEnc)
+	}
+
+	lPayload, lInline := val.InlineValueBytes(l)
+	rPayload, rInline := val.InlineValueBytes(r)
+	if lInline && rInline {
+		return val.CompareCollatedStrings(collation, lPayload, rPayload), nil
+	}
+
+	differ, err := newBlobChunkDiffer(ctx, ns, l, r)
+	if err != nil {
+		return 0, err
+	}
+
+	return compareCollatedChunkDiffer(ctx, differ, collation)
+}
+
+// compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings, getting just the diff between two
+// values when comparing them.
+func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sql.CollationID) (int, error) {
+	getRuneWeight := collation.Sorter()
+	var lBuf, rBuf []byte
+	lDone, rDone := false, false
+
+	// TODO: the call to Next() starts at the first differing chunk, then returns every leaf chunk in order from both
+	//  sides thereafter. This is correct, but potentially inefficient in the case where there are sparse byte differences
+	//  that are collation-equivalent spread through two large documents we are sorting. We could more efficiently
+	//  perform the comparison in this case by having Next() and NextDiff() methods for the two traversal cases.
+	pullFrom := func() error {
+		for (!lDone && !utf8.FullRune(lBuf)) || (!rDone && !utf8.FullRune(rBuf)) {
+			lChunk, rChunk, err := d.Next(ctx)
+			if err == io.EOF {
+				lDone = true
+				rDone = true
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if len(lChunk) > 0 {
+				lBuf = append(lBuf, lChunk...)
+			}
+			if len(rChunk) > 0 {
+				rBuf = append(rBuf, rChunk...)
+			}
+		}
+		return nil
+	}
+	for {
+		if err := pullFrom(); err != nil {
+			return 0, err
+		}
+		switch {
+		case len(lBuf) == 0 && len(rBuf) == 0:
+			return 0, nil
+		case len(lBuf) == 0:
+			return -1, nil
+		case len(rBuf) == 0:
+			return 1, nil
+		}
+		lr, lread := utf8.DecodeRune(lBuf)
+		rr, rread := utf8.DecodeRune(rBuf)
+
+		// RuneError should be impossible to return for the above reads unless the UTF8 bytes are malformed or the
+		// buffer is empty. We handle this error here by enforcing an arbitrary order.
+		lErr := lr == utf8.RuneError && lread == 1
+		rErr := rr == utf8.RuneError && rread == 1
+		if lErr || rErr {
+			if lErr && !rErr {
+				return 1, nil
+			}
+			if !lErr && rErr {
+				return -1, nil
+			}
+			return 0, nil
+		}
+
+		if lr != rr {
+			lw := getRuneWeight(lr)
+			rw := getRuneWeight(rr)
+			if lw < rw {
+				return -1, nil
+			}
+			if lw > rw {
+				return 1, nil
+			}
+		}
+		lBuf = lBuf[lread:]
+		rBuf = rBuf[rread:]
+	}
+}
+
+// chunkDiffer is an interface to diff chunk-encoded values in a ValueStore.
+type chunkDiffer interface {
+	// Next returns the bytes of the next chunks that differ between left and right. io.EOF signals
+	// the end of the diff.
+	Next(ctx context.Context) (left, right []byte, err error)
+}

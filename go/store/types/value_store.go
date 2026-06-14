@@ -589,7 +589,7 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 		}
 
 		err := func() error {
-			err := collector.BeginGC(lvs.gcAddChunk, gcConfig.Mode)
+			err := collector.BeginGC(ctx, lvs.gcAddChunk, gcConfig.Mode)
 			if err != nil {
 				return err
 			}
@@ -678,7 +678,7 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 		newGenRefs.InsertAll(oldGenRefs)
 
 		err := func() error {
-			err := collector.BeginGC(lvs.gcAddChunk, chunks.GCMode_Full)
+			err := collector.BeginGC(ctx, lvs.gcAddChunk, chunks.GCMode_Full)
 			if err != nil {
 				return err
 			}

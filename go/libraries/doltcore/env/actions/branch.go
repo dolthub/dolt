@@ -248,10 +248,11 @@ func validateBranchMergedIntoUpstream[C doltdb.Context](ctx context.Context, dbd
 		return fmt.Errorf("remote %s not found", remoteName)
 	}
 
-	remoteDb, err := pro.GetRemoteDB(ctx, dbdata.Ddb.ValueReadWriter().Format(), remote, false)
+	remoteDb, err := pro.GetRemoteDB(ctx, dbdata.Ddb.ValueReadWriter().Format(), remote)
 	if err != nil {
 		return err
 	}
+	defer remoteDb.Close()
 
 	cs, err := doltdb.NewCommitSpec(branch.GetPath())
 	if err != nil {

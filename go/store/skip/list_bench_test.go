@@ -133,11 +133,16 @@ func benchmarkGet(b *testing.B, vals [][]byte) {
 	ctx := context.Background()
 	l := NewSkipList(compareBytes)
 	for i := range vals {
-		l.Put(ctx, vals[i], vals[i])
+		if err := l.Put(ctx, vals[i], vals[i]); err != nil {
+			b.Fatal(err)
+		}
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, ok := l.Get(ctx, vals[i%len(vals)])
+		_, ok, err := l.Get(ctx, vals[i%len(vals)])
+		if err != nil {
+			b.Fatal(err)
+		}
 		if !ok {
 			b.Fail()
 		}
@@ -153,7 +158,9 @@ func benchmarkPut(b *testing.B, vals [][]byte) {
 		if j == 0 {
 			l.Truncate()
 		}
-		l.Put(ctx, vals[j], vals[j])
+		if err := l.Put(ctx, vals[j], vals[j]); err != nil {
+			b.Fatal(err)
+		}
 	}
 	b.ReportAllocs()
 }
@@ -162,7 +169,9 @@ func benchmarkIterAll(b *testing.B, vals [][]byte) {
 	ctx := context.Background()
 	l := NewSkipList(compareBytes)
 	for i := range vals {
-		l.Put(ctx, vals[i], vals[i])
+		if err := l.Put(ctx, vals[i], vals[i]); err != nil {
+			b.Fatal(err)
+		}
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

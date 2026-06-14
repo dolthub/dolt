@@ -321,7 +321,7 @@ func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, 
 		return logger, http.StatusBadRequest, fmt.Errorf("%s is not a valid hash", fileId)
 	}
 
-	cs, err := dbCache.Get(ctx, path, types.Format_Default.VersionString())
+	cs, err := dbCache.Get(ctx, path, types.Format_DOLT.VersionString())
 	if err != nil {
 		logger = logger.WithField("status", http.StatusInternalServerError)
 		logger.WithError(err).Error("failed to get repository")

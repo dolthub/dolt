@@ -154,7 +154,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		commitMetaGenerator = datas.MakeFunCommitMetaGenerator(name, email, t)
 	}
 
-	err := dEnv.InitRepoWithCommitMetaGenerator(context.Background(), types.Format_Default, initBranch, commitMetaGenerator)
+	err := dEnv.InitRepoWithCommitMetaGenerator(context.Background(), types.Format_DOLT, initBranch, commitMetaGenerator)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))
 		return 1

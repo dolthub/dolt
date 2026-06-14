@@ -20,11 +20,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/json"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -664,36 +664,36 @@ var collationTests = []schemaMergeTest{
 		dataTests: []dataTest{
 			{
 				name:     "no data change",
-				ancestor: singleRow(1, 1, 1, "foo", decimal.New(8, 0)),
-				left:     singleRow(1, 1, 2, "foo", decimal.New(8, 0)),
-				right:    singleRow(1, 2, 1, "foo", decimal.New(8, 0)),
-				merged:   singleRow(1, 2, 2, "foo", decimal.New(8, 0)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(8, 0)),
+				left:     singleRow(1, 1, 2, "foo", apd.New(8, 0)),
+				right:    singleRow(1, 2, 1, "foo", apd.New(8, 0)),
+				merged:   singleRow(1, 2, 2, "foo", apd.New(8, 0)),
 			},
 			{
 				name:     "replace varchar with equal replacement",
-				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
-				left:     singleRow(1, 1, 2, "FOO", decimal.New(100, 0)),
-				right:    singleRow(1, 2, 1, "foo", decimal.New(100, 0)),
-				merged:   singleRow(1, 2, 2, "foo", decimal.New(100, 0)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:     singleRow(1, 1, 2, "FOO", apd.New(100, 0)),
+				right:    singleRow(1, 2, 1, "foo", apd.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "foo", apd.New(100, 0)),
 			},
 			{
 				name:         "conflict removal and replace varchar with equal replacement",
-				ancestor:     singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
-				left:         singleRow(1, 1, 2, "FOO", decimal.New(100, 0)),
+				ancestor:     singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:         singleRow(1, 1, 2, "FOO", apd.New(100, 0)),
 				right:        nil,
 				dataConflict: true,
 			},
 			{
 				name:     "replace decimal with equal replacement",
-				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
-				left:     singleRow(1, 1, 2, "foo", decimal.New(1, 2)),
-				right:    singleRow(1, 2, 1, "foo", decimal.New(100, 0)),
-				merged:   singleRow(1, 2, 2, "foo", decimal.New(1, 2)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:     singleRow(1, 1, 2, "foo", apd.New(1, 2)),
+				right:    singleRow(1, 2, 1, "foo", apd.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "foo", apd.New(1, 2)),
 			},
 			{
 				name:     "conflict removal and replace decimal with equal replacement",
-				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
-				left:     singleRow(1, 1, 1, "foo", decimal.New(1, 2)),
+				ancestor: singleRow(1, 1, 1, "foo", apd.New(100, 0)),
+				left:     singleRow(1, 1, 1, "foo", apd.New(1, 2)),
 				right:    nil,
 				merged:   nil,
 			},
@@ -1439,7 +1439,7 @@ func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns tree.
 	require.NoError(t, err)
 	root, err := tree.SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
-	return tree.NewIndexedJsonDocument(ctx, root, ns)
+	return tree.NewIndexedJsonDocument(root, ns)
 }
 
 // createLargeDocumentForTesting creates a JSON document large enough to be split across multiple chunks.
@@ -1910,7 +1910,8 @@ func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) doltdb.R
 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
-	sess := writer.NewWriteSession(ws, gst, eo)
+	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
+	sess := writer.NewWriteSession("test", ws, gst, noop, eo)
 
 	ws, err = sess.Flush(sql.NewContext(ctx))
 	require.NoError(t, err)
@@ -1932,8 +1933,8 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
 	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
-	sess := writer.NewWriteSession(ws, gst, eo)
-	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name}, "test", noop, false)
+	sess := writer.NewWriteSession("test", ws, gst, noop, eo)
+	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name})
 	require.NoError(t, err)
 
 	columns := tbl.ns.sch.GetAllCols().GetColumns()

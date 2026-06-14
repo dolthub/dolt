@@ -150,7 +150,7 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}user_session_vars{{.EmphasisRight}}: A map of user name to a map of session variables to set on connection for each session.
 
-{{.EmphasisLeft}}cluster{{.EmphasisRight}}: Settings related to running this server in a replicated cluster. For information on setting these values, see https://docs.dolthub.com/sql-reference/server/replication
+{{.EmphasisLeft}}cluster{{.EmphasisRight}}: Settings related to running this server in a replicated cluster. For information on setting these values, see https://dolthub.com/docs/sql-reference/server/replication
 
 If a config file is not provided many of these settings may be configured on the command line.`,
 	Synopsis: []string{
@@ -663,6 +663,6 @@ func generateYamlConfig(serverConfig servercfg.ServerConfig) string {
 	return `# Dolt SQL server configuration
 #
 # Uncomment and edit lines as necessary to modify your configuration.
-# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+# Full documentation: https://dolthub.com/docs/sql-reference/server/configuration
 #` + "\n\n" + yamlConfig.VerboseString()
 }

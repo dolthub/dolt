@@ -151,6 +151,10 @@ func (bsp *singleBlobBSPersister) Close() error {
 	return nil
 }
 
+func (bsp *singleBlobBSPersister) Teardown(ctx context.Context) error {
+	return bsp.bs.Teardown(ctx)
+}
+
 func (bsp *singleBlobBSPersister) AccessMode() chunks.ExclusiveAccessMode {
 	return chunks.ExclusiveAccessMode_Shared
 }

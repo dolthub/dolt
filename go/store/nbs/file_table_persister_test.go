@@ -24,9 +24,11 @@ package nbs
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
@@ -292,5 +294,50 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		defer tr.close()
 		assertChunksInReader(testChunks, tr, assert)
 		assert.EqualValues(reps*len(testChunks), tr.count())
+	}
+}
+
+// TestFSTablePersisterWriteAndProtectCleansUpTempOnError asserts that the
+// inflight temp file is removed when writeFn fails. This is the I/O-error
+// case for ConjoinAll: when copying a source under FatalBehaviorError fails,
+// the partially written conjoined table/archive file must not be left behind.
+func TestFSTablePersisterWriteAndProtectCleansUpTempOnError(t *testing.T) {
+	hasTempFile := func(t *testing.T, dir string) bool {
+		t.Helper()
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), tempTablePrefix) {
+				return true
+			}
+		}
+		return false
+	}
+
+	addr := computeAddr([]byte("conjoined"))
+	cases := []struct {
+		name      string
+		finalName string
+	}{
+		{"table file", addr.String()},
+		{"archive file", addr.String() + ArchiveFileSuffix},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := makeTempDir(t)
+			defer file.RemoveAll(dir)
+			ftp := newFSTablePersister(dir, &UnlimitedQuotaProvider{}, false).(*fsTablePersister)
+
+			wantErr := errors.New("simulated I/O error during conjoin")
+			_, err := ftp.writeAndProtect(c.finalName, func(temp *os.File) error {
+				// Write a partial result, as a conjoin copy would before
+				// hitting an I/O error part way through.
+				_, _ = temp.Write([]byte("partial conjoined data"))
+				return wantErr
+			})
+			require.ErrorIs(t, err, wantErr)
+			assert.False(t, hasTempFile(t, dir), "inflight temp file was not cleaned up after writeFn error")
+		})
 	}
 }

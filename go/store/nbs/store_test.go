@@ -58,7 +58,7 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	require.NoError(t, err)
 
 	q = NewUnlimitedMemQuotaProvider()
-	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles, q, false)
+	st, err = newLocalStore(ctx, types.Format_DOLT.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles, q, false)
 	require.NoError(t, err)
 	return st, nomsDir, q
 }
@@ -344,7 +344,7 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	require.NoError(t, st.BeginGC(nil, chunks.GCMode_Full))
+	require.NoError(t, st.BeginGC(t.Context(), nil, chunks.GCMode_Full))
 	noopFilter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 		return hashes, nil
 	}

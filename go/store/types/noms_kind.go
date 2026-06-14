@@ -94,7 +94,6 @@ func init() {
 	KindToType[NullKind] = NullValue
 	KindToType[InlineBlobKind] = InlineBlob{}
 	KindToType[TimestampKind] = Timestamp{}
-	KindToType[DecimalKind] = Decimal{}
 	KindToType[GeometryKind] = Geometry{}
 	KindToType[PointKind] = Point{}
 	KindToType[LineStringKind] = LineString{}
@@ -125,7 +124,6 @@ func init() {
 	SupportedKinds[NullKind] = true
 	SupportedKinds[InlineBlobKind] = true
 	SupportedKinds[TimestampKind] = true
-	SupportedKinds[DecimalKind] = true
 	SupportedKinds[GeometryKind] = true
 	SupportedKinds[PointKind] = true
 	SupportedKinds[LineStringKind] = true

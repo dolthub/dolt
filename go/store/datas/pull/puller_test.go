@@ -45,7 +45,7 @@ func TestNbsPuller(t *testing.T) {
 		err := os.MkdirAll(dir, os.ModePerm)
 		require.NoError(t, err)
 
-		nbf := types.Format_Default.VersionString()
+		nbf := types.Format_DOLT.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 		st, err := nbs.NewLocalStore(ctx, nbf, dir, clienttest.DefaultMemTableSize, q, false)
 		require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestChunkJournalPuller(t *testing.T) {
 		err := os.MkdirAll(dir, os.ModePerm)
 		require.NoError(t, err)
 
-		nbf := types.Format_Default.VersionString()
+		nbf := types.Format_DOLT.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 
 		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false, nil)
@@ -95,7 +95,7 @@ func TestPuller(t *testing.T) {
 		err = os.MkdirAll(dir, os.ModePerm)
 		require.NoError(t, err)
 
-		nbf := types.Format_Default.VersionString()
+		nbf := types.Format_DOLT.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 
 		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false, nil)

@@ -169,7 +169,7 @@ func TestRepoDirNoLocal(t *testing.T) {
 
 func TestInitRepo(t *testing.T) {
 	dEnv, _ := createTestEnv(false, false)
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
+	err := dEnv.InitRepo(context.Background(), types.Format_DOLT, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
 	require.NoError(t, err)
 	defer dEnv.Close()
 
@@ -195,7 +195,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 	dEnv := createFileTestEnv(t, working, homeDir)
 	assert.NoError(t, dEnv.CfgLoadErr)
 
-	err = dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
+	err = dEnv.InitRepo(context.Background(), types.Format_DOLT, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
 	require.NoError(t, err)
 	defer dEnv.Close()
 

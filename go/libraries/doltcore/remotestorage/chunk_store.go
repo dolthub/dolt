@@ -918,6 +918,10 @@ func (dcs *DoltChunkStore) Close() error {
 	return dcs.finalizer()
 }
 
+func (dcs *DoltChunkStore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 // Uploads all chunks in |hashToChunk| to the remote store and returns
 // the manifest entries that correspond to the new table files. Used
 // by |Commit|. Typically |hashToChunk| will have come from our |wb|
@@ -1082,13 +1086,13 @@ const (
 	chunkAggDistance = 8 * 1024
 )
 
-func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
+func (dcs *DoltChunkStore) SupportedOperations(_ context.Context) (chunks.TableFileStoreOps, error) {
 	return chunks.TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: true,
 		CanPrune: false,
 		CanGC:    false,
-	}
+	}, nil
 }
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.

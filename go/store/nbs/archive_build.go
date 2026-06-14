@@ -61,7 +61,10 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 }
 
 func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, smd StorageMetadata, progress chan interface{}) error {
-	outPath, _ := blockStore.Path()
+	outPath, _, err := blockStore.Path(ctx)
+	if err != nil {
+		return err
+	}
 
 	// The source set changes out from under us, but the names of the table files will stay stable enough
 	// to iterate over them.
@@ -164,7 +167,10 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 	// Currently, we don't have any stats to report. Required for calls to the lower layers tho.
 	var stats Stats
 
-	path, _ := blockStore.Path()
+	path, _, err := blockStore.Path(ctx)
+	if err != nil {
+		return err
+	}
 
 	allFiles := make([]hash.Hash, 0, len(blockStore.tables.upstream))
 

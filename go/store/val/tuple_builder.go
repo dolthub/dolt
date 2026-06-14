@@ -20,8 +20,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -336,7 +336,7 @@ func (tb *TupleBuilder) PutBit(i int, v uint64) {
 	tb.addSize(bit64Size)
 }
 
-func (tb *TupleBuilder) PutDecimal(i int, v decimal.Decimal) {
+func (tb *TupleBuilder) PutDecimal(i int, v *apd.Decimal) {
 	tb.Desc.ExpectEncoding(i, DecimalEnc)
 	sz := sizeOfDecimal(v)
 	tb.ensureCapacity(sz)

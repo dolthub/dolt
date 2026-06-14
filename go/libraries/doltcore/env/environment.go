@@ -152,12 +152,8 @@ func IncompleteEnv(FS filesys.Filesys) *DoltEnv {
 	}
 }
 
-func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error) {
-	if withCaching {
-		return r.GetRemoteDB(ctx, format, dEnv)
-	} else {
-		return r.GetRemoteDBWithoutCaching(ctx, format, dEnv)
-	}
+func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote) (*doltdb.DoltDB, error) {
+	return r.GetRemoteDBWithoutCaching(ctx, format, dEnv)
 }
 
 func (dEnv *DoltEnv) GetConfig() config.ReadableConfig {
@@ -247,49 +243,52 @@ func LoadDoltDB(ctx context.Context, dEnv *DoltEnv) {
 				params[k] = v
 			}
 		}
-		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, dEnv.urlStr, dEnv.FS, params)
+		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_DOLT, dEnv.urlStr, dEnv.FS, params)
 		dEnv.doltDB = ddb
 		dEnv.DBLoadError = dbLoadErr
 
-		if dbLoadErr == nil && dEnv.HasDoltDir() {
-			if !dEnv.HasDoltTempTableDir() {
-				tmpDir, err := dEnv.TempTableFilesDir()
-				if err != nil {
-					dEnv.DBLoadError = err
-				}
-				err = dEnv.FS.MkDirs(tmpDir)
-				dEnv.DBLoadError = err
-			} else {
-				// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
-				// The process will not wait for this to finish so this may not always complete.
-				go func() {
-					// TODO dEnv.HasDoltTempTableDir() true but dEnv.TempTableFileDir() panics
-					tmpTableDir, err := dEnv.FS.Abs(filepath.Join(dEnv.urlStr, dbfactory.DoltDir, tempTablesDir))
+		if ddb != nil && ddb.AccessMode() != chunks.ExclusiveAccessMode_ReadOnly {
+			// Only do the following when we have write access to the database.
+			if dbLoadErr == nil && dEnv.HasDoltDir() {
+				if !dEnv.HasDoltTempTableDir() {
+					tmpDir, err := dEnv.TempTableFilesDir()
 					if err != nil {
-						return
+						dEnv.DBLoadError = err
 					}
-					_ = dEnv.FS.Iter(tmpTableDir, true, func(path string, size int64, isDir bool) (stop bool) {
-						if !isDir {
-							lm, exists := dEnv.FS.LastModified(path)
-
-							if exists && time.Now().Sub(lm) > (time.Hour*24) {
-								_ = dEnv.FS.DeleteFile(path)
-							}
+					err = dEnv.FS.MkDirs(tmpDir)
+					dEnv.DBLoadError = err
+				} else {
+					// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
+					// The process will not wait for this to finish so this may not always complete.
+					go func() {
+						// TODO dEnv.HasDoltTempTableDir() true but dEnv.TempTableFileDir() panics
+						tmpTableDir, err := dEnv.FS.Abs(filepath.Join(dEnv.urlStr, dbfactory.DoltDir, tempTablesDir))
+						if err != nil {
+							return
 						}
+						_ = dEnv.FS.Iter(tmpTableDir, true, func(path string, size int64, isDir bool) (stop bool) {
+							if !isDir {
+								lm, exists := dEnv.FS.LastModified(path)
 
-						return false
-					})
-				}()
+								if exists && time.Now().Sub(lm) > (time.Hour*24) {
+									_ = dEnv.FS.DeleteFile(path)
+								}
+							}
+
+							return false
+						})
+					}()
+				}
 			}
-		}
 
-		if dEnv.RSLoadErr == nil && dbLoadErr == nil {
-			// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
-			_, err := dEnv.WorkingSet(ctx)
-			if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-				_ = dEnv.initWorkingSetFromRepoState(ctx)
-			} else if err != nil {
-				dEnv.RSLoadErr = err
+			if dEnv.RSLoadErr == nil && dbLoadErr == nil {
+				// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
+				_, err := dEnv.WorkingSet(ctx)
+				if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+					_ = dEnv.initWorkingSetFromRepoState(ctx)
+				} else if err != nil {
+					dEnv.RSLoadErr = err
+				}
 			}
 		}
 	})

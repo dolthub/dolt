@@ -2246,7 +2246,7 @@ func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAd
 		return nil, true, err
 	}
 
-	return mergeJSON(ctx, m.ns, baseDoc, leftDoc, rightDoc)
+	return MergeJSON(ctx, m.ns, baseDoc, leftDoc, rightDoc)
 }
 
 func (m *valueMerger) mergeJSONAdaptive(ctx context.Context, baseField []byte, leftField []byte, rightField []byte) (result interface{}, conflict bool, err error) {
@@ -2279,10 +2279,15 @@ func (m *valueMerger) mergeJSONAdaptive(ctx context.Context, baseField []byte, l
 		return nil, false, err
 	}
 
-	return mergeJSON(ctx, m.ns, baseJson, leftJson, rightJson)
+	return MergeJSON(ctx, m.ns, baseJson, leftJson, rightJson)
 }
 
-func mergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, rightJson sql.JSONWrapper) (resultDoc sql.JSONWrapper, conflict bool, err error) {
+// MergeJSON performs a three-way merge of JSON documents. Non-overlapping
+// field changes are merged automatically; overlapping changes produce a
+// conflict (conflict=true). All three inputs must be JSON objects for
+// field-level merging; if any input is not an object, the function falls
+// back to equality comparison.
+func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, rightJson sql.JSONWrapper) (resultDoc sql.JSONWrapper, conflict bool, err error) {
 	// First, deserialize each value into JSON.
 	// We can only merge if the value at all three commits is a JSON object.
 	baseIsObject, err := tree.IsJsonObject(ctx, baseJson)
@@ -2339,7 +2344,7 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 		if err != nil {
 			return types.JSONDocument{}, true, err
 		}
-		merged = tree.NewIndexedJsonDocument(ctx, root, ns)
+		merged = tree.NewIndexedJsonDocument(root, ns)
 	}
 
 	for {

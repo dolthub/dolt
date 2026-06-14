@@ -353,6 +353,10 @@ func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
 }
 
+func (ddb *DoltDB) Teardown(ctx context.Context) error {
+	return datas.ChunkStoreFromDatabase(ddb.db).Teardown(ctx)
+}
+
 // GetHashForRefStr resolves a ref string (such as a branch name or tag) and resolves it to a hash.Hash.
 func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
@@ -2035,7 +2039,15 @@ func pullHash(
 	destCS := datas.ChunkStoreFromDatabase(destDB)
 	waf := types.WalkAddrsForNBF(srcDB.Format(), skipHashes)
 
-	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
+	srcCanUsePuller, err := datas.CanUsePuller(ctx, srcDB)
+	if err != nil {
+		return err
+	}
+	destCanUsePuller, err := datas.CanUsePuller(ctx, destDB)
+	if err != nil {
+		return err
+	}
+	if srcCanUsePuller && destCanUsePuller {
 		puller, err := pull.NewPuller(ctx, tempDir, defaultTargetFileSize, srcCS, destCS, waf, targetHashes, statsCh)
 		if err == pull.ErrDBUpToDate {
 			return nil
@@ -2107,7 +2119,7 @@ func (ddb *DoltDB) restoreDefaultConjoinBehavior() {
 // NomsBlockStore instance which exposes its roots through
 // IterateRoots.  Otherwise returns |nil| without visiting any roots,
 // including the current one.
-func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error) error {
+func (ddb *DoltDB) IterateRoots(ctx context.Context, cb func(root string, timestamp *time.Time) error) error {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
 	if generationalNBS, ok := cs.(*nbs.GenerationalNBS); ok {
@@ -2115,7 +2127,7 @@ func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error
 	}
 
 	if nbsStore, ok := cs.(*nbs.NomsBlockStore); ok {
-		return nbsStore.IterateRoots(cb)
+		return nbsStore.IterateRoots(ctx, cb)
 	} else {
 		return nil
 	}
@@ -2172,7 +2184,10 @@ func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
 		if err != nil {
 			return StoreSizes{}, err
 		}
-		journalSz, ok := newGenNBS.ChunkJournalSize()
+		journalSz, ok, err := newGenNBS.ChunkJournalSize(ctx)
+		if err != nil {
+			return StoreSizes{}, err
+		}
 		if ok {
 			return StoreSizes{
 				JournalBytes: uint64(journalSz),

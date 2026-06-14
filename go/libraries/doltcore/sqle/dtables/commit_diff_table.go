@@ -58,6 +58,7 @@ type CommitDiffTable struct {
 var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.IndexAddressable = (*CommitDiffTable)(nil)
 var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
+var _ sql.IndexedTable = (*CommitDiffTable)(nil)
 
 func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb *doltdb.DoltDB, wRoot, sRoot doltdb.RootValue, headRef ref.DoltRef) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName.Name
@@ -133,7 +134,7 @@ func (dt *CommitDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	return index.DoltToFromCommitIndexes(dt.tableName.Name, sch), nil
+	return index.MakeDiffTableIndexes(doltdb.DoltCommitDiffTablePrefix+dt.tableName.Name, sch, sch, true), nil
 }
 
 // IndexedAccess implements sql.IndexAddressable

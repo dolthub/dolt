@@ -199,6 +199,7 @@ type prollyKeylessSecondaryWriter struct {
 	keyMap        val.OrdinalMapping
 	unique        bool
 	spatial       bool
+	predicate     sql.Expression
 }
 
 var _ indexWriter = prollyKeylessSecondaryWriter{}
@@ -271,13 +272,24 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 	}
 
 	if writer.unique {
-		prefixKey, err := writer.prefixBld.Build(ctx, sharePool)
-		if err != nil {
-			return err
+		performUniqueCheck := true
+		if writer.predicate != nil {
+			// do not unique check if predicate result is FALSE.
+			res, err := writer.predicate.Eval(ctx.(*sql.Context), sqlRow)
+			if err != nil {
+				return err
+			}
+			performUniqueCheck = res.(bool)
 		}
-		err = writer.checkForUniqueKeyError(ctx, prefixKey, sqlRow)
-		if err != nil {
-			return err
+		if performUniqueCheck {
+			prefixKey, err := writer.prefixBld.Build(ctx, sharePool)
+			if err != nil {
+				return err
+			}
+			err = writer.checkForUniqueKeyError(ctx, prefixKey, sqlRow)
+			if err != nil {
+				return err
+			}
 		}
 	} else {
 		writer.prefixBld.Recycle()
@@ -293,7 +305,10 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 		}
 	}
 
-	rng := prolly.PrefixRange(ctx, prefixKey, writer.prefixBld.Desc)
+	rng, err := prolly.PrefixRange(ctx, prefixKey, writer.prefixBld.Desc)
+	if err != nil {
+		return err
+	}
 	itr, err := writer.mut.IterRange(ctx, rng)
 	if err != nil {
 		return err

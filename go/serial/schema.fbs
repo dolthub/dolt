@@ -79,6 +79,11 @@ table Column {
   // hidden system columns are not directly accessible or visible by users, and are used to
   // store functional expression results for use in secondary indexes
   hidden_system:bool;
+  
+  // A range of 1.x releases from approximately 1.86.0 onwards had a nasty bug with adaptive encoded values where
+  // data loss could occur during garbage collection or pull operations. This field forces clients from that release 
+  // range to upgrade before reading schemas with adaptive encoded columns.
+  adaptive_encoding_breaking_change:bool;
 }
 
 table Index {
@@ -124,6 +129,9 @@ table Index {
   // these fields should be set for vector indexes and otherwise omitted, for backwards compatibility
   vector_key:bool;
   vector_info:VectorInfo;
+
+  // WHERE clause expression string for partial indexes (empty for full indexes)
+  predicate:string;
 }
 
 table FulltextInfo {
@@ -145,6 +153,7 @@ table CheckConstraint {
     name:string;
     expression:string;
     enforced:bool;
+    is_not_valid:bool;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

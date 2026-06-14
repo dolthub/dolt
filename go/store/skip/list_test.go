@@ -24,12 +24,13 @@ import (
 	"unsafe"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var randSrc = rand.New(rand.NewSource(0))
 
-func compareBytes(ctx context.Context, a, b []byte) int {
-	return bytes.Compare(a, b)
+func compareBytes(ctx context.Context, a, b []byte) (int, error) {
+	return bytes.Compare(a, b), nil
 }
 
 func TestSkipList(t *testing.T) {
@@ -47,10 +48,10 @@ func TestSkipList(t *testing.T) {
 		testSkipList(t, compareBytes, vals...)
 	})
 	t.Run("test with custom compare function", func(t *testing.T) {
-		compare := func(ctx context.Context, left, right []byte) int {
+		compare := func(ctx context.Context, left, right []byte) (int, error) {
 			l := int64(binary.LittleEndian.Uint64(left))
 			r := int64(binary.LittleEndian.Uint64(right))
-			return int(l - r)
+			return int(l - r), nil
 		}
 		vals := randomInts((randSrc.Int63() % 10_000) + 100)
 		testSkipList(t, compare, vals...)
@@ -72,10 +73,10 @@ func TestSkipListCheckpoints(t *testing.T) {
 		testSkipListCheckpoints(t, compareBytes, vals...)
 	})
 	t.Run("test with custom compare function", func(t *testing.T) {
-		compare := func(ctx context.Context, left, right []byte) int {
+		compare := func(ctx context.Context, left, right []byte) (int, error) {
 			l := int64(binary.LittleEndian.Uint64(left))
 			r := int64(binary.LittleEndian.Uint64(right))
-			return int(l - r)
+			return int(l - r), nil
 		}
 		vals := randomInts((randSrc.Int63() % 10_000) + 100)
 		testSkipListCheckpoints(t, compare, vals...)
@@ -102,7 +103,7 @@ func testSkipList(t *testing.T, compare KeyOrder, vals ...[]byte) {
 	t.Run("test puts", func(t *testing.T) {
 		// |list| is populated
 		for _, v := range vals {
-			list.Put(ctx, v, v)
+			require.NoError(t, list.Put(ctx, v, v))
 		}
 		testSkipListPuts(t, list, vals...)
 	})
@@ -137,13 +138,15 @@ func testSkipListGets(t *testing.T, list *List, vals ...[]byte) {
 	})
 
 	for _, exp := range vals {
-		act, ok := list.Get(ctx, exp)
+		act, ok, err := list.Get(ctx, exp)
+		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, exp, act)
 	}
 
 	// test absent key
-	act, ok := list.Get(ctx, b("12345678"))
+	act, ok, err := list.Get(ctx, b("12345678"))
+	require.NoError(t, err)
 	assert.False(t, ok)
 	assert.Nil(t, act)
 }
@@ -152,7 +155,7 @@ func testSkipListUpdates(t *testing.T, list *List, vals ...[]byte) {
 	ctx := context.Background()
 	v2 := []byte("789")
 	for _, v := range vals {
-		list.Put(ctx, v, v2)
+		require.NoError(t, list.Put(ctx, v, v2))
 	}
 	assert.Equal(t, len(vals), list.Count())
 
@@ -160,7 +163,8 @@ func testSkipListUpdates(t *testing.T, list *List, vals ...[]byte) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
 	for _, exp := range vals {
-		act, ok := list.Get(ctx, exp)
+		act, ok, err := list.Get(ctx, exp)
+		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, v2, act)
 	}
@@ -173,7 +177,9 @@ func testSkipListIterForward(t *testing.T, list *List, vals ...[]byte) {
 	ctx := context.Background()
 	// put |vals| back in keyOrder
 	sort.Slice(vals, func(i, j int) bool {
-		return list.compareKeys(ctx, vals[i], vals[j]) < 0
+		cmp, err := list.compareKeys(ctx, vals[i], vals[j])
+		require.NoError(t, err)
+		return cmp < 0
 	})
 
 	idx := 0
@@ -203,7 +209,9 @@ func testSkipListIterBackward(t *testing.T, list *List, vals ...[]byte) {
 	ctx := context.Background()
 	// put |vals| back in keyOrder
 	sort.Slice(vals, func(i, j int) bool {
-		return list.compareKeys(ctx, vals[i], vals[j]) < 0
+		cmp, err := list.compareKeys(ctx, vals[i], vals[j])
+		require.NoError(t, err)
+		return cmp < 0
 	})
 
 	// test iter at
@@ -228,10 +236,13 @@ func testSkipListTruncate(t *testing.T, list *List, vals ...[]byte) {
 	assert.Equal(t, list.Count(), 0)
 
 	for i := range vals {
-		assert.False(t, list.Has(ctx, vals[i]))
+		has, err := list.Has(ctx, vals[i])
+		require.NoError(t, err)
+		assert.False(t, has)
 	}
 	for i := range vals {
-		v, ok := list.Get(ctx, vals[i])
+		v, ok, err := list.Get(ctx, vals[i])
+		require.NoError(t, err)
 		assert.False(t, ok)
 		assert.Nil(t, v)
 	}
@@ -251,26 +262,32 @@ func testSkipListTruncate(t *testing.T, list *List, vals ...[]byte) {
 
 	validateIter(list.IterAtStart())
 	validateIter(list.IterAtEnd())
-	validateIter(list.GetIterAt(ctx, vals[0]))
+	iter, err := list.GetIterAt(ctx, vals[0])
+	require.NoError(t, err)
+	validateIter(iter)
 }
 
 func validateIterForwardFrom(t *testing.T, l *List, key []byte) (count int) {
 	ctx := context.Background()
-	iter := l.GetIterAt(ctx, key)
+	iter, err := l.GetIterAt(ctx, key)
+	require.NoError(t, err)
 	k, _ := iter.Current()
 	for k != nil {
 		count++
 		iter.Advance()
 		prev := k
 		k, _ = iter.Current()
-		assert.True(t, l.compareKeys(ctx, prev, k) < 0)
+		cmp, err := l.compareKeys(ctx, prev, k)
+		require.NoError(t, err)
+		assert.True(t, cmp < 0)
 	}
 	return
 }
 
 func validateIterBackwardFrom(t *testing.T, l *List, key []byte) (count int) {
 	ctx := context.Background()
-	iter := l.GetIterAt(ctx, key)
+	iter, err := l.GetIterAt(ctx, key)
+	require.NoError(t, err)
 	k, _ := iter.Current()
 	for k != nil {
 		count++
@@ -279,7 +296,9 @@ func validateIterBackwardFrom(t *testing.T, l *List, key []byte) (count int) {
 		k, _ = iter.Current()
 
 		if k != nil {
-			assert.True(t, l.compareKeys(ctx, prev, k) > 0)
+			cmp, err := l.compareKeys(ctx, prev, k)
+			require.NoError(t, err)
+			assert.True(t, cmp > 0)
 		}
 	}
 	return
@@ -345,55 +364,64 @@ func testSkipListCheckpoints(t *testing.T, compare KeyOrder, data ...[]byte) {
 	list := NewSkipList(compare)
 
 	// test empty revert
-	list.Revert(ctx)
+	require.NoError(t, list.Revert(ctx))
 
 	for _, v := range init {
-		list.Put(ctx, v, v)
+		require.NoError(t, list.Put(ctx, v, v))
 	}
 	for _, v := range init {
-		act, ok := list.Get(ctx, v)
+		act, ok, err := list.Get(ctx, v)
+		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, v, act)
 	}
 	for _, v := range inserts {
-		assert.False(t, list.Has(ctx, v))
+		has, err := list.Has(ctx, v)
+		require.NoError(t, err)
+		assert.False(t, has)
 	}
 
 	list.Checkpoint()
 
 	up := []byte("update")
 	for _, v := range updates {
-		list.Put(ctx, v, up)
+		require.NoError(t, list.Put(ctx, v, up))
 	}
 
 	for _, v := range inserts {
-		list.Put(ctx, v, v)
+		require.NoError(t, list.Put(ctx, v, v))
 	}
 
 	for _, v := range static {
-		act, ok := list.Get(ctx, v)
+		act, ok, err := list.Get(ctx, v)
+		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, v, act)
 	}
 	for _, v := range inserts {
-		act, ok := list.Get(ctx, v)
+		act, ok, err := list.Get(ctx, v)
+		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, v, act)
 	}
 	for _, v := range updates {
-		act, ok := list.Get(ctx, v)
+		act, ok, err := list.Get(ctx, v)
+		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, up, act)
 	}
 
-	list.Revert(ctx)
+	require.NoError(t, list.Revert(ctx))
 
 	for _, v := range init {
-		act, ok := list.Get(ctx, v)
+		act, ok, err := list.Get(ctx, v)
+		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, v, act)
 	}
 	for _, v := range inserts {
-		assert.False(t, list.Has(ctx, v))
+		has, err := list.Has(ctx, v)
+		require.NoError(t, err)
+		assert.False(t, has)
 	}
 }

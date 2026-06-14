@@ -1173,17 +1173,19 @@ SQL
     dolt commit -m "hello"
     run dolt diff main another-branch
     echo $output
+    [ $status -eq 0 ]
     ! [[ "$output" =~ "panic" ]] || false
     [[ "$output" =~ "pv1" ]] || false
     [[ "$output" =~ "cv1" ]] || false
-    [ $status -eq 0 ]
+    [[ "$output" =~ "Primary key sets differ between revisions for table 'a', skipping data diff" ]] || false
 
     run dolt diff main..another-branch
     echo $output
+    [ $status -eq 0 ]
     ! [[ "$output" =~ "panic" ]] || false
     [[ "$output" =~ "pv1" ]] || false
     [[ "$output" =~ "cv1" ]] || false
-    [ $status -eq 0 ]
+    [[ "$output" =~ "Primary key sets differ between revisions for table 'a', skipping data diff" ]] || false
 }
 
 @test "diff: sql update queries only show changed columns" {
@@ -1361,9 +1363,8 @@ SQL
     dolt commit -am "cm5"
 
     dolt sql -q "alter table t add primary key (pk)"
-    dolt diff -r sql
     run dolt diff -r sql
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
     [ "${lines[2]}" = "Primary key sets differ between revisions for table 't', skipping data diff" ]
@@ -1374,7 +1375,7 @@ SQL
     dolt sql -q "alter table t drop primary key"
     dolt sql -q "alter table t add primary key (pk, val)"
     run dolt diff -r sql
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` ADD `pk2` int;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[2]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk,val);' ]
@@ -1392,12 +1393,11 @@ SQL
     dolt sql -q "alter table t add primary key (pk)"
 
     run dolt diff -r sql
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
     [ "${lines[2]}" = "Primary key sets differ between revisions for table 't', skipping data diff" ]
 
-    dolt diff
     run dolt diff
     [ $status -eq 0 ]
     [[ "$output" =~ '+  PRIMARY KEY (`pk`)' ]] || false
@@ -1408,13 +1408,11 @@ SQL
 
     dolt sql -q "alter table t drop primary key"
 
-    dolt diff -r sql
     run dolt diff -r sql
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 
-    dolt diff
     run dolt diff
     [ $status -eq 0 ]
     [[ "$output" =~ '-  PRIMARY KEY (`pk`)' ]] || false
@@ -2350,8 +2348,9 @@ EOF
     [[ $output = '' ]] || false
 
     run dolt diff HEAD~1 -r sql  --filter=modified
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` MODIFY COLUMN `val2` varchar(255);' ]
+    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
 
     # Test filter with schema changes - rename column
     dolt sql -q "ALTER TABLE t RENAME COLUMN val2 TO val3"
@@ -2464,4 +2463,69 @@ EOF
     run dolt diff HEAD~1 --filter=renamed
     [ $status -eq 0 ]
     [[ $output = '' ]] || false
+}
+
+@test "diff: -r sql returns error when data statements cannot be generated" {
+    dolt sql -q "create table t(pk int primary key, val1 int, val2 varchar(10))"
+    dolt add .
+    dolt sql -q "INSERT INTO t VALUES (1, 1, '1')"
+
+    dolt commit -am "cm1"
+    dolt branch old
+
+    dolt sql -q "UPDATE t SET val2 = '2'"
+    dolt add .
+    dolt commit -am "cm2"
+
+    dolt branch start
+    dolt sql -q "alter table t modify column val2 varchar(20)"
+    dolt add .
+    dolt commit -am "widen"
+    run dolt diff -r sql old
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'UPDATE `t` SET `val2`='"'2'"' WHERE `pk`=1;' ]] || false
+
+    dolt reset --hard start
+    dolt sql -q "alter table t modify column val2 varchar(5)"
+    dolt add .
+    dolt commit -am "narrow"
+    run dolt diff -r sql old
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
+
+    dolt reset --hard start
+    dolt sql -q "alter table t modify column val2 text"
+    dolt add .
+    dolt commit -am "typechange"
+    run dolt diff -r sql old
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
+
+    dolt reset --hard start
+    dolt sql -q "alter table t rename column val2 to val3"
+    dolt add .
+    dolt commit -am "rename"
+    run dolt diff -r sql old
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'UPDATE `t` SET `val3`='"'2'"' WHERE `pk`=1;' ]] || false
+
+    # A naive data diff would not know to emit the update statement.
+    dolt reset --hard start
+    dolt sql -q "alter table t add column val3 varchar(10) default '3'"
+    dolt sql -q "update t set val3 = NULL"
+    dolt add .
+    dolt commit -am "add"
+    run dolt diff -r sql old
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
+
+    # Dropping a column that isn't the last column leads to tuples that can't be diffed.
+    dolt reset --hard start
+    dolt sql -q "alter table t drop column val1"
+    dolt add .
+    dolt commit -am "drop"
+    run dolt diff -r sql old
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
+
 }

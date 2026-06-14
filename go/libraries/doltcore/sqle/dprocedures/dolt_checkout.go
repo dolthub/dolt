@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -632,6 +633,9 @@ func checkoutTablesFromCommit(
 	tables []string,
 	rsc *doltdb.ReplicationStatusController,
 ) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(ctx, databaseName)
 	if !ok {
@@ -673,7 +677,9 @@ func checkoutTablesFromCommit(
 
 	var tableNames []doltdb.TableName
 	if len(tables) == 1 && tables[0] == "." {
-		tableNames, err = doltdb.UnionTableNames(ctx, ws.WorkingRoot())
+		// Only include tables present in HEAD or the index. Tables that exist only
+		// in the working set are left untouched.
+		tableNames, err = doltdb.UnionTableNames(ctx, headRoot, ws.StagedRoot())
 		if err != nil {
 			return err
 		}
@@ -686,19 +692,25 @@ func checkoutTablesFromCommit(
 				return err
 			}
 			if !tableExistsInHead {
-				return fmt.Errorf("tablespec '%s' did not match any table(s) known to dolt", table) // commitref not mentioned in git
+				return fmt.Errorf("tablespec '%s' did not match any table(s) known to dolt", table)
 			}
 			tableNames[i] = name
 		}
 	}
 
-	newRoot, err := actions.MoveTablesBetweenRoots(ctx, tableNames, headRoot, ws.WorkingRoot())
+	// Apply the table change to working and staged roots independently so that tables
+	// which exist only in the working root (absent from the index) are not added to the index.
+	newWorkingRoot, err := actions.MoveTablesBetweenRoots(ctx, tableNames, headRoot, ws.WorkingRoot())
+	if err != nil {
+		return err
+	}
+	newStagedRoot, err := actions.MoveTablesBetweenRoots(ctx, tableNames, headRoot, ws.StagedRoot())
 	if err != nil {
 		return err
 	}
 
 	dsess.WaitForReplicationController(ctx, *rsc)
-	return dSess.SetWorkingSet(ctx, databaseName, ws.WithStagedRoot(newRoot).WithWorkingRoot(newRoot))
+	return dSess.SetWorkingSet(ctx, databaseName, ws.WithWorkingRoot(newWorkingRoot).WithStagedRoot(newStagedRoot))
 }
 
 // doGlobalCheckout implements the behavior of the `dolt checkout` command line, moving the working set into
@@ -713,15 +725,20 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 }
 
 // checkoutTablesFromHead checks out the tables named from the current head and overwrites those tables in the
-// working root. The working root is then set as the new staged root. Necessary since tables may exist outside
-// of HEAD commit
+// working root. The working root is then set as the new staged root so that the checked-out tables are not
+// shown as pending staged changes. This is necessary because tables may exist outside of the HEAD commit.
 func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	var tableNames []doltdb.TableName
 	var warningMsg strings.Builder
 	var err error
 
 	if len(tables) == 1 && tables[0] == "." {
-		tableNames, err = doltdb.UnionTableNames(ctx, roots.Working)
+		// Only include tables present in HEAD or the index. Tables that exist only
+		// in the working set are left untouched.
+		tableNames, err = doltdb.UnionTableNames(ctx, roots.Head, roots.Staged)
 		if err != nil {
 			return err
 		}

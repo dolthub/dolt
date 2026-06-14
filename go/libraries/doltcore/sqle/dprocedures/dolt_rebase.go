@@ -24,6 +24,7 @@ import (
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -188,6 +189,9 @@ func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 	if ctx.GetCurrentDatabase() == "" {
 		return 1, "", sql.ErrNoDatabaseSelected.New()
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return 1, "", err
 	}
 
 	apr, err := cli.CreateRebaseArgParser().Parse(args)
@@ -770,6 +774,19 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 		return newRebaseError(err)
 	}
 
+	// Save the rebase branch's pre-copy roots so tables present only in Working can be restored
+	// after copyABranch overwrites it with the onto state.
+	rebaseBranchWSRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseBranch))
+	if err != nil {
+		return newRebaseError(err)
+	}
+	preRebaseWS, err := dbData.Ddb.ResolveWorkingSet(ctx, rebaseBranchWSRef)
+	if err != nil {
+		return newRebaseError(err)
+	}
+	preRebaseWorkingRoot := preRebaseWS.WorkingRoot()
+	preRebaseStagedRoot := preRebaseWS.StagedRoot()
+
 	// TODO: copyABranch (and the underlying call to doltdb.NewBranchAtCommit) has a race condition
 	//       where another session can set the branch head AFTER doltdb.NewBranchAtCommit updates
 	//       the branch head, but BEFORE doltdb.NewBranchAtCommit retrieves the working set for the
@@ -781,17 +798,35 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 		return newRebaseError(err)
 	}
 
-	// Checkout the branch being rebased
-	previousBranchWorkingSetRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseBranchWorkingSet.RebaseState().Branch()))
+	// Apply the working-set-only restoration to the rebase branch in doltdb before switching the
+	// session to it. This keeps the rebase transaction shape intact and avoids a session-level
+	// SetWorkingSet after StartTransaction.
+	postCopyWS, err := dbData.Ddb.ResolveWorkingSet(ctx, rebaseBranchWSRef)
 	if err != nil {
 		return newRebaseError(err)
 	}
-	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), previousBranchWorkingSetRef)
+	postCopyHash, err := postCopyWS.HashOf()
+	if err != nil {
+		return newRebaseError(err)
+	}
+	restoredWorking, err := actions.MoveUntrackedTables(ctx, preRebaseWorkingRoot, preRebaseStagedRoot, postCopyWS.WorkingRoot())
+	if err != nil {
+		return newRebaseError(err)
+	}
+	err = dbData.Ddb.UpdateWorkingSet(ctx, rebaseBranchWSRef,
+		postCopyWS.WithWorkingRoot(restoredWorking),
+		postCopyHash, doltdb.TodoWorkingSetMeta(), nil)
 	if err != nil {
 		return newRebaseError(err)
 	}
 
-	// Start a new transaction so the session will see the changes to the branch pointer
+	// Checkout the branch being rebased
+	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), rebaseBranchWSRef)
+	if err != nil {
+		return newRebaseError(err)
+	}
+
+	// Start a new transaction so the session will see the changes to the branch pointer.
 	if _, err = doltSession.StartTransaction(ctx, sql.ReadWrite); err != nil {
 		return newRebaseError(err)
 	}

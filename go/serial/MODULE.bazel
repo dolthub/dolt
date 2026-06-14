@@ -1,8 +1,8 @@
 module(name = "com_github_dolthub_dolt_go_serial")
 
 bazel_dep(name = "rules_pkg", version = "1.2.0")
-bazel_dep(name = "rules_cc", version = "0.2.17")
-bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "platforms", version = "1.1.0")
 
 git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 

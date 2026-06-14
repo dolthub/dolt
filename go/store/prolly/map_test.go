@@ -367,7 +367,9 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 			// find the expected ordinal return value for this non-existent key
 			exp := len(tuples)
 			for i := 0; i < len(tuples); i++ {
-				if kd.Compare(ctx, tuples[i][0], kv[0]) >= 0 {
+				cmp, cmpErr := kd.Compare(ctx, tuples[i][0], kv[0])
+				require.NoError(t, cmpErr)
+				if cmp >= 0 {
 					exp = i
 					break
 				}
@@ -438,7 +440,11 @@ func testIterAll(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 
 func pointRangeFromTuple(tup val.Tuple, desc *val.TupleDesc) Range {
 	ctx := context.Background()
-	return closedRange(ctx, tup, tup, desc)
+	rng, err := closedRange(ctx, tup, tup, desc)
+	if err != nil {
+		panic(err)
+	}
+	return rng
 }
 
 func formatTuples(tuples [][2]val.Tuple, kd, vd *val.TupleDesc) string {

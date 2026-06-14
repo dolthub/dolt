@@ -79,17 +79,37 @@ type DoltDatabaseProvider struct {
 	// when accessed.
 	deletingDatabases map[string]struct{}
 
-	// remoteDbs caches remote DoltDB instances by URL so that repeated push calls
-	// to the same remote reuse the store (and its already-opened table chunk sources)
-	// instead of re-opening every table file from the blobstore each time.
-	remoteDbs map[string]*doltdb.DoltDB
-
 	txLocks keymutex.Keymutex
 
 	defaultBranch     string
 	dbFactoryUrl      string
 	DropDatabaseHooks []DropDatabaseHook
 	InitDatabaseHooks []InitDatabaseHook
+	gitRemotes        map[string]*doltdb.DoltDB
+	gitRemotesMu      *sync.Mutex
+}
+
+// ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
+// provider.
+type ProviderFactory interface {
+	NewProvider(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error)
+}
+
+// DoltProviderUnwrapper is an optional interface for sql.DatabaseProvider implementations
+// that wrap a *DoltDatabaseProvider. NewSqlEngine uses it to access the underlying
+// provider for Dolt-specific configuration (hooks, dialer, etc.) that is not part of
+// the sql.DatabaseProvider interface.
+type DoltProviderUnwrapper interface {
+	UnderlyingDoltProvider() *DoltDatabaseProvider
+}
+
+// DoltProviderFactory is the default ProviderFactory used by Dolt.
+type DoltProviderFactory struct{}
+
+var _ ProviderFactory = DoltProviderFactory{}
+
+func (DoltProviderFactory) NewProvider(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, databases, locations, overrides)
 }
 
 type remoteDialerWithGitCacheRoot struct {
@@ -111,6 +131,7 @@ var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ DatabaseHookRegistrar = (*DoltDatabaseProvider)(nil)
 
 func (p *DoltDatabaseProvider) DefaultBranch() string {
 	return p.defaultBranch
@@ -197,8 +218,9 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		isStandby:              new(bool),
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 		overrides:              overrides,
-		remoteDbs:              make(map[string]*doltdb.DoltDB),
 		txLocks:                keymutex.NewMapped(),
+		gitRemotes:             map[string]*doltdb.DoltDB{},
+		gitRemotesMu:           &sync.Mutex{},
 	}, nil
 }
 
@@ -226,11 +248,9 @@ func (p *DoltDatabaseProvider) WithDbFactoryUrl(url string) *DoltDatabaseProvide
 	return &cp
 }
 
-// WithRemoteDialer returns a copy of this provider with the dialer provided
-func (p *DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvider) *DoltDatabaseProvider {
-	cp := *p
-	cp.remoteDialer = provider
-	return &cp
+// SetRemoteDialer sets the remote dialer on this provider in place and returns it.
+func (p *DoltDatabaseProvider) SetRemoteDialer(provider dbfactory.GRPCDialProvider) {
+	p.remoteDialer = provider
 }
 
 // SetDBLoadParams sets optional DB load params for newly created / registered databases. The provided map is cloned.
@@ -313,19 +333,13 @@ func (p *DoltDatabaseProvider) Close() {
 		}
 	}
 
-	// Close cached remote databases.
-	var remoteDbs []*doltdb.DoltDB
-	func() {
-		p.mu.RLock()
-		defer p.mu.RUnlock()
-		remoteDbs = make([]*doltdb.DoltDB, 0, len(p.remoteDbs))
-		for _, rdb := range p.remoteDbs {
-			remoteDbs = append(remoteDbs, rdb)
-		}
-	}()
-	for _, rdb := range remoteDbs {
-		_ = rdb.Close()
-	}
+}
+
+func (p *DoltDatabaseProvider) Teardown(ctx context.Context) {
+	dbfactory.TeardownGitRemotes(ctx)
+	p.gitRemotesMu.Lock()
+	p.gitRemotes = map[string]*doltdb.DoltDB{}
+	p.gitRemotesMu.Unlock()
 }
 
 // Installs an InitDatabaseHook which configures new databases--those
@@ -571,7 +585,7 @@ func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlData
 	return revDbs, nil
 }
 
-func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote) (*doltdb.DoltDB, error) {
 	// For git remotes, thread through the initiating database's repo root so git caches can be located under
 	// `<repoRoot>/.dolt/...` instead of a user-global cache dir.
 	dialer := p.remoteDialer
@@ -588,46 +602,38 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 		}
 	}
 
-	if withCaching {
-		// Only cache git-backed remote DBs. Other remote types (file://, aws, etc.)
-		// register their underlying NBS in a global singleton cache that is closed
-		// separately by CloseAllLocalDatabases(). Caching those here would cause a
-		// double-close panic on process exit.
-		isGitRemote := strings.HasPrefix(strings.ToLower(r.Url), "git+")
-		if isGitRemote {
-			cached := func() *doltdb.DoltDB {
-				p.mu.RLock()
-				defer p.mu.RUnlock()
-				return p.remoteDbs[r.Url]
-			}()
-			if cached != nil {
-				return cached, nil
-			}
-		}
+	key := strings.ToLower(r.Url)
+	isGit := strings.HasPrefix(key, "git+")
 
-		remoteDB, err := r.GetRemoteDB(ctx, format, dialer)
-		if err != nil {
-			return nil, err
+	if isGit {
+		p.gitRemotesMu.Lock()
+		cached, ok := p.gitRemotes[key]
+		p.gitRemotesMu.Unlock()
+		if ok {
+			return cached, nil
 		}
-
-		if isGitRemote {
-			cached := func() *doltdb.DoltDB {
-				p.mu.Lock()
-				defer p.mu.Unlock()
-				if existing, ok := p.remoteDbs[r.Url]; ok {
-					return existing
-				}
-				p.remoteDbs[r.Url] = remoteDB
-				return nil
-			}()
-			if cached != nil {
-				_ = remoteDB.Close()
-				return cached, nil
-			}
-		}
-		return remoteDB, nil
 	}
-	return r.GetRemoteDBWithoutCaching(ctx, format, dialer)
+
+	ddb, err := r.GetRemoteDBWithoutCaching(ctx, format, dialer)
+	if err != nil {
+		return nil, err
+	}
+
+	if isGit {
+		ddb = func() *doltdb.DoltDB {
+			p.gitRemotesMu.Lock()
+			defer p.gitRemotesMu.Unlock()
+			if existing, ok := p.gitRemotes[key]; ok {
+				// Lost a race; both wrap the same underlying datas.Database, so
+				// dropping ours is safe.
+				_ = ddb.Close()
+				return existing
+			}
+			p.gitRemotes[key] = ddb
+			return ddb
+		}()
+	}
+	return ddb, nil
 }
 
 func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {
@@ -717,7 +723,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	newEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 	p.applyDBLoadParamsToEnv(newEnv)
 
-	newDbStorageFormat := types.Format_Default
+	newDbStorageFormat := types.Format_DOLT
 	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)
 	if err != nil {
 		return err
@@ -842,6 +848,15 @@ func validateDBName(dbName string) error {
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
 type DropDatabaseHook func(ctx *sql.Context, name string)
 
+// DatabaseHookRegistrar is implemented by database providers that support registering
+// hooks for database init and drop lifecycle events.
+type DatabaseHookRegistrar interface {
+	// AddInitDatabaseHook adds an InitDatabaseHook that runs whenever a database is created.
+	AddInitDatabaseHook(InitDatabaseHook)
+	// AddDropDatabaseHook adds a DropDatabaseHook that runs whenever a database is dropped.
+	AddDropDatabaseHook(DropDatabaseHook)
+}
+
 // NewConfigureReplicationDatabaseHook sets up the hooks to push to a remote to replicate a newly created database.
 //
 // For a new database, this hook
@@ -962,7 +977,7 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 	if err != nil {
 		return err
 	}
-	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default, remoteDialerWithGitCacheRoot{GRPCDialProvider: p.remoteDialer, root: destRoot})
+	srcDB, err := r.GetRemoteDB(ctx, types.Format_DOLT, remoteDialerWithGitCacheRoot{GRPCDialProvider: p.remoteDialer, root: destRoot})
 	if err != nil {
 		return err
 	}
@@ -1680,7 +1695,7 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 }
 
 // Function implements the FunctionProvider interface
-func (p *DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, bool) {
+func (p *DoltDatabaseProvider) Function(_ *sql.Context, schema, name string) (sql.Function, bool) {
 	fn, ok := p.functions[strings.ToLower(name)]
 	if !ok {
 		return nil, false
