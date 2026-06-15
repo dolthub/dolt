@@ -29,8 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -345,17 +345,17 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 				return "", "", err
 			}
 
-			rightCm, err := resolveCommit(ctx, db.DbData().Ddb, headRef, refs[0])
+			leftCm, err := dfunctions.ResolveRefSpec(ctx, headRef, db.DbData().Ddb, refs[0])
 			if err != nil {
 				return "", "", err
 			}
 
-			leftCm, err := resolveCommit(ctx, db.DbData().Ddb, headRef, refs[1])
+			rightCm, err := dfunctions.ResolveRefSpec(ctx, headRef, db.DbData().Ddb, refs[1])
 			if err != nil {
 				return "", "", err
 			}
 
-			mergeBase, err := merge.MergeBase(ctx, rightCm, leftCm)
+			mergeBase, err := merge.MergeBase(ctx, leftCm, rightCm)
 			if err != nil {
 				return "", "", err
 			}
@@ -402,24 +402,6 @@ func interfaceToString(r interface{}) (string, error) {
 		return "", fmt.Errorf("received '%v' when expecting commit hash string", r)
 	}
 	return str, nil
-}
-
-func resolveCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headRef ref.DoltRef, cSpecStr string) (*doltdb.Commit, error) {
-	cs, err := doltdb.NewCommitSpec(cSpecStr)
-	if err != nil {
-		return nil, err
-	}
-
-	optCmt, err := ddb.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return nil, err
-	}
-	cm, ok := optCmt.ToCommit()
-	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered
-	}
-
-	return cm, nil
 }
 
 // WithChildren implements the sql.Node interface

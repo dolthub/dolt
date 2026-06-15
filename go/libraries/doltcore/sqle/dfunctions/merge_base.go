@@ -94,8 +94,15 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return mergeBase.String(), nil
 }
 
-// ResolveRefSpec resolves a commit spec string to a Commit object using the provided headRef and doltDB.
+// ResolveRefSpec resolves the commit spec |spec| to a commit using |headRef| and |doltDB|.
+// The pseudo-refs WORKING and STAGED name uncommitted roots rather than commits, so when one
+// of them is given it resolves to the commit at |headRef|, which is the commit those roots are
+// built on top of.
 func ResolveRefSpec(ctx *sql.Context, headRef ref.DoltRef, doltDB *doltdb.DoltDB, spec string) (*doltdb.Commit, error) {
+	if doltdb.IsWorkingSetRef(spec) {
+		return doltDB.ResolveCommitRef(ctx, headRef)
+	}
+
 	cs, err := doltdb.NewCommitSpec(spec)
 	if err != nil {
 		return nil, err

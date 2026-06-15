@@ -491,6 +491,59 @@ SQL
     [[ ! "$output" =~ "- | 2" ]] || false
 }
 
+@test "diff: three dot diff supports WORKING and STAGED" {
+    # See https://github.com/dolthub/dolt/issues/11204
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
+    dolt checkout main
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
+    dolt add .
+    dolt commit -m table
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m row
+    dolt checkout main
+    # Row 2 is staged and row 3 is left in the working set so that the staged root and
+    # the working root differ from each other.
+    dolt sql -q 'insert into test values (2,2,2,2,2,2)'
+    dolt add .
+    dolt sql -q 'insert into test values (3,3,3,3,3,3)'
+
+    # A revision to the left of the three dots only chooses the merge base, so the
+    # uncommitted rows do not appear and the result is the same as for HEAD.
+    run dolt diff WORKING...branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "+ | 2" ]] || false
+    [[ ! "$output" =~ "+ | 3" ]] || false
+
+    run dolt diff STAGED...branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "+ | 3" ]] || false
+
+    # A revision to the right of the three dots is the diff target, so the working and
+    # staged rows are surfaced.
+    run dolt diff branch1...WORKING
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 2" ]] || false
+    [[ "$output" =~ "+ | 3" ]] || false
+    [[ ! "$output" =~ "+ | 1" ]] || false
+
+    run dolt diff branch1...STAGED
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 2" ]] || false
+    [[ ! "$output" =~ "+ | 3" ]] || false
+
+    run dolt sql -q "SELECT dolt_merge_base('branch1', 'WORKING') = dolt_merge_base('branch1', 'HEAD') as eq"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+}
+
 @test "diff: data and schema changes" {
     dolt sql <<SQL
 drop table test;

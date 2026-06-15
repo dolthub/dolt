@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -496,18 +497,9 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	}
 
 	for _, revisionStr := range revisionValStrs {
-		cs, err := doltdb.NewCommitSpec(revisionStr)
+		commit, err = dfunctions.ResolveRefSpec(ctx, headRef, sqledb.DbData().Ddb, revisionStr)
 		if err != nil {
 			return nil, err
-		}
-
-		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
-		if err != nil {
-			return nil, err
-		}
-		commit, ok = optCmt.ToCommit()
-		if err != nil {
-			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		commits = append(commits, commit)
@@ -515,18 +507,9 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	var notCommits []*doltdb.Commit
 	for _, notRevisionStr := range notRevisionValStrs {
-		cs, err := doltdb.NewCommitSpec(notRevisionStr)
+		notCommit, err := dfunctions.ResolveRefSpec(ctx, headRef, sqledb.DbData().Ddb, notRevisionStr)
 		if err != nil {
 			return nil, err
-		}
-
-		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
-		if err != nil {
-			return nil, err
-		}
-		notCommit, ok := optCmt.ToCommit()
-		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		notCommits = append(notCommits, notCommit)
@@ -538,19 +521,10 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		mergeCs, err := doltdb.NewCommitSpec(mergeBase.String())
-		if err != nil {
-			return nil, err
-		}
-
 		// Use merge base as excluding commit
-		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, mergeCs, nil)
+		mergeCommit, err := dfunctions.ResolveRefSpec(ctx, nil, sqledb.DbData().Ddb, mergeBase.String())
 		if err != nil {
 			return nil, err
-		}
-		mergeCommit, ok := optCmt.ToCommit()
-		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		notCommits = append(notCommits, mergeCommit)
