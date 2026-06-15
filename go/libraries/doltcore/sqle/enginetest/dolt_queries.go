@@ -6210,6 +6210,173 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 
 func init() {
 	LargeJsonObjectScriptTests = append(LargeJsonObjectScriptTests, generateLargeJsonRoundTripTests()...)
+	LargeJsonObjectScriptTests = append(LargeJsonObjectScriptTests, generateLargeJsonControlCharTests()...)
+}
+
+func generateLargeJsonControlCharTests() []queries.ScriptTest {
+	// Construct a JSON value where the string value is a repetition of \u000b (VT) characters.
+	// Each \u000b in JSON output expands from 1 internal byte to 6 bytes, causing the
+	// serialized form to exceed the expected output buffer if not handled correctly.
+	// Bug: values > ~4004 bytes with these characters are silently stored as NULL.
+	const controlCharReps = 666
+
+	// Build the expected JSON using Go's json.Unmarshal so \u000b is interpreted correctly
+	jsonStr := `{"d":"` + strings.Repeat(`\u000b`, controlCharReps) + `"}`
+
+	return []queries.ScriptTest{
+		{
+			Name: "JSON large value with control chars should not silently store NULL",
+			SetUpScript: []string{
+				"create table t (pk int primary key, j json)",
+				"insert into t values (1, JSON_OBJECT('d', REPEAT(CHAR(11), 666)))",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "select j is not null from t where pk = 1",
+					Expected: []sql.Row{{true}},
+				},
+				{
+					Query:    "select JSON_TYPE(j) from t where pk = 1",
+					Expected: []sql.Row{{"OBJECT"}},
+				},
+				{
+					Query:    "select JSON_LENGTH(j) from t where pk = 1",
+					Expected: []sql.Row{{1}},
+				},
+				{
+					Query:    "select length(JSON_UNQUOTE(JSON_EXTRACT(j, '$.d'))) from t where pk = 1",
+					Expected: []sql.Row{{666}},
+				},
+			},
+		},
+		{
+			Name: "JSON large value with control chars round-trips correctly",
+			SetUpScript: []string{
+				"create table t2 (pk int primary key, j json)",
+				"insert into t2 values (1, JSON_OBJECT('d', REPEAT(CHAR(11), 666)))",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "select pk, j from t2",
+					Expected: []sql.Row{{1, types.MustJSON(jsonStr)}},
+				},
+				{
+					Query:    "select JSON_EXTRACT(j, '$.d') from t2 where pk = 1",
+					Expected: []sql.Row{{types.MustJSON(`"` + strings.Repeat(`\u000b`, 666) + `"`)}},
+				},
+			},
+		},
+		{
+			Name: "JSON small value with control chars round-trips correctly",
+			SetUpScript: []string{
+				"create table t3 (pk int primary key, j json)",
+				"insert into t3 values (1, JSON_OBJECT('d', REPEAT(CHAR(11), 3)))",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "select length(JSON_UNQUOTE(JSON_EXTRACT(j, '$.d'))) from t3 where pk = 1",
+					Expected: []sql.Row{{3}},
+				},
+			},
+		},
+		{
+			Name: "JSON large plain string (no control chars) round-trips correctly",
+			SetUpScript: []string{
+				"create table t4 (pk int primary key, j json)",
+				fmt.Sprintf(`insert into t4 values (1, JSON_OBJECT('d', REPEAT('x', %d)))`, 6666),
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "select length(JSON_UNQUOTE(JSON_EXTRACT(j, '$.d'))) from t4 where pk = 1",
+					Expected: []sql.Row{{6666}},
+				},
+			},
+		},
+	}
+}
+
+// JsonValidScriptTests tests JSON_VALID behavior, particularly with large LONGTEXT values
+// in keyless tables. Bug: JSON_VALID returns 0 for valid JSON stored in LONGTEXT columns
+// when the value exceeds ~2040 bytes and the table has no PRIMARY KEY.
+var JsonValidScriptTests = []queries.ScriptTest{
+	{
+		Name: "JSON_VALID on short LONGTEXT without PK",
+		SetUpScript: []string{
+			"create table nopk_short (j longtext)",
+			fmt.Sprintf("insert into nopk_short values (CONCAT('{\"d\":\"', REPEAT('x', %d), '\"}'))", 2031), // total 2039 bytes
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select JSON_VALID(j) from nopk_short",
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
+	{
+		Name: "JSON_VALID on long LONGTEXT without PK (Bug 2)",
+		SetUpScript: []string{
+			"create table nopk_long (j longtext)",
+			fmt.Sprintf("insert into nopk_long values (CONCAT('{\"d\":\"', REPEAT('x', %d), '\"}'))", 2032), // total 2040 bytes
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select JSON_VALID(j) from nopk_long",
+				Expected: []sql.Row{{true}}, // Bug: currently returns 0/false
+			},
+		},
+	},
+	{
+		Name: "JSON_VALID on very long LONGTEXT without PK (Bug 2)",
+		SetUpScript: []string{
+			"create table nopk_vlong (j longtext)",
+			fmt.Sprintf("insert into nopk_vlong values (CONCAT('{\"d\":\"', REPEAT('x', %d), '\"}'))", 10000), // ~10008 bytes
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select JSON_VALID(j) from nopk_vlong",
+				Expected: []sql.Row{{true}}, // Bug: currently returns 0/false
+			},
+		},
+	},
+	{
+		Name: "JSON_VALID on long LONGTEXT WITH PK (control test)",
+		SetUpScript: []string{
+			"create table withpk_long (id int primary key, j longtext)",
+			fmt.Sprintf("insert into withpk_long values (1, CONCAT('{\"d\":\"', REPEAT('x', %d), '\"}'))", 2032), // total 2040 bytes
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select JSON_VALID(j) from withpk_long where id = 1",
+				Expected: []sql.Row{{true}}, // Should work because of PK
+			},
+		},
+	},
+	{
+		Name: "JSON_VALID on short LONGTEXT with PK",
+		SetUpScript: []string{
+			"create table withpk_short (id int primary key, j longtext)",
+			fmt.Sprintf("insert into withpk_short values (1, CONCAT('{\"d\":\"', REPEAT('x', %d), '\"}'))", 2031), // total 2039 bytes
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select JSON_VALID(j) from withpk_short where id = 1",
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
+	{
+		Name: "JSON_VALID literal works at all sizes (control test)",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    fmt.Sprintf("SELECT JSON_VALID(CONCAT('{\"d\":\"', REPEAT('x', %d), '\"}'))", 2032),
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    fmt.Sprintf("SELECT JSON_VALID(CONCAT('{\"d\":\"', REPEAT('x', %d), '\"}'))", 10000),
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
 }
 
 func generateLargeJsonRoundTripTests() []queries.ScriptTest {

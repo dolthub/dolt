@@ -571,6 +571,13 @@ func RunLargeJsonObjectsTest(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
+func RunJsonValidScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
+	for _, script := range JsonValidScriptTests {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 func RunJsonAdaptiveEncodingTests(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	for _, script := range JsonAdaptiveEncodingScriptTests {

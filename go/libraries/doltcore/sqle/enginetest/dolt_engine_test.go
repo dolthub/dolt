@@ -1082,6 +1082,11 @@ func TestLargeJsonObjects(t *testing.T) {
 	RunLargeJsonObjectsTest(t, harness)
 }
 
+func TestJsonValidScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunJsonValidScriptsTest(t, harness)
+}
+
 // TestJsonAdaptiveEncoding exercises the JsonAdaptiveEnc storage path end-to-end,
 // covering small (inlined) and large (out-of-band) JSON documents.
 func TestJsonAdaptiveEncoding(t *testing.T) {
