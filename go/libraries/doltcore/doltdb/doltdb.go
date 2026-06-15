@@ -642,6 +642,32 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, doltRef ref.DoltRef) (*
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
+// ResolveRefSpec resolves the commit spec |spec| to a commit using |headRef|.
+// The pseudo-refs WORKING and STAGED name uncommitted roots rather than commits, so when one
+// of them is given it resolves to the commit at |headRef|, which is the commit those roots are
+// built on top of.
+func (ddb *DoltDB) ResolveRefSpec(ctx context.Context, headRef ref.DoltRef, spec string) (*Commit, error) {
+	if IsWorkingSetRef(spec) {
+		return ddb.ResolveCommitRef(ctx, headRef)
+	}
+
+	cs, err := NewCommitSpec(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	optCmt, err := ddb.Resolve(ctx, cs, headRef)
+	if err != nil {
+		return nil, err
+	}
+	commit, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, ErrGhostCommitEncountered
+	}
+
+	return commit, nil
+}
+
 // ResolveCommitRefAtRoot takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.
 func (ddb *DoltDB) ResolveCommitRefAtRoot(ctx context.Context, ref ref.DoltRef, nomsRoot hash.Hash) (*Commit, error) {

@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
@@ -298,12 +297,12 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 		return rootInfo{}, err
 	}
 
-	leftCm, err := dfunctions.ResolveRefSpec(ctx, headRef, db.DbData().Ddb, leftBranch)
+	leftCm, err := db.DbData().Ddb.ResolveRefSpec(ctx, headRef, leftBranch)
 	if err != nil {
 		return rootInfo{}, err
 	}
 
-	rightCm, err := dfunctions.ResolveRefSpec(ctx, headRef, db.DbData().Ddb, rightBranch)
+	rightCm, err := db.DbData().Ddb.ResolveRefSpec(ctx, headRef, rightBranch)
 	if err != nil {
 		return rootInfo{}, err
 	}

@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -345,12 +344,12 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 				return "", "", err
 			}
 
-			leftCm, err := dfunctions.ResolveRefSpec(ctx, headRef, db.DbData().Ddb, refs[0])
+			leftCm, err := db.DbData().Ddb.ResolveRefSpec(ctx, headRef, refs[0])
 			if err != nil {
 				return "", "", err
 			}
 
-			rightCm, err := dfunctions.ResolveRefSpec(ctx, headRef, db.DbData().Ddb, refs[1])
+			rightCm, err := db.DbData().Ddb.ResolveRefSpec(ctx, headRef, refs[1])
 			if err != nil {
 				return "", "", err
 			}

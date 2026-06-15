@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -875,7 +874,7 @@ func commitManuallyStagedChangesForStep(ctx *sql.Context, step rebase.RebasePlan
 		return err
 	}
 
-	originalCommit, err := dfunctions.ResolveRefSpec(ctx, headRef, doltDB, step.CommitHash)
+	originalCommit, err := doltDB.ResolveRefSpec(ctx, headRef, step.CommitHash)
 	if err != nil {
 		return err
 	}

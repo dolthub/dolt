@@ -22,9 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -77,11 +75,11 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, errors.New("right value is not a string")
 	}
 
-	left, err := ResolveRefSpec(ctx, headRef, doltDB, leftStr)
+	left, err := doltDB.ResolveRefSpec(ctx, headRef, leftStr)
 	if err != nil {
 		return nil, err
 	}
-	right, err := ResolveRefSpec(ctx, headRef, doltDB, rightStr)
+	right, err := doltDB.ResolveRefSpec(ctx, headRef, rightStr)
 	if err != nil {
 		return nil, err
 	}
@@ -92,30 +90,6 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	return mergeBase.String(), nil
-}
-
-// ResolveRefSpec resolves the commit spec |spec| to a commit using |headRef| and |doltDB|.
-// The pseudo-refs WORKING and STAGED name uncommitted roots rather than commits, so when one
-// of them is given it resolves to the commit at |headRef|, which is the commit those roots are
-// built on top of.
-func ResolveRefSpec(ctx *sql.Context, headRef ref.DoltRef, doltDB *doltdb.DoltDB, spec string) (*doltdb.Commit, error) {
-	if doltdb.IsWorkingSetRef(spec) {
-		return doltDB.ResolveCommitRef(ctx, headRef)
-	}
-
-	cs, err := doltdb.NewCommitSpec(spec)
-	if err != nil {
-		return nil, err
-	}
-	optCmt, err := doltDB.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return nil, err
-	}
-	commit, ok := optCmt.ToCommit()
-	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered
-	}
-	return commit, err
 }
 
 // String implements the sql.Expression interface.

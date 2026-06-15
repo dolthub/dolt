@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -497,7 +496,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	}
 
 	for _, revisionStr := range revisionValStrs {
-		commit, err = dfunctions.ResolveRefSpec(ctx, headRef, sqledb.DbData().Ddb, revisionStr)
+		commit, err := sqledb.DbData().Ddb.ResolveRefSpec(ctx, headRef, revisionStr)
 		if err != nil {
 			return nil, err
 		}
@@ -507,7 +506,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	var notCommits []*doltdb.Commit
 	for _, notRevisionStr := range notRevisionValStrs {
-		notCommit, err := dfunctions.ResolveRefSpec(ctx, headRef, sqledb.DbData().Ddb, notRevisionStr)
+		notCommit, err := sqledb.DbData().Ddb.ResolveRefSpec(ctx, headRef, notRevisionStr)
 		if err != nil {
 			return nil, err
 		}
@@ -522,7 +521,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 
 		// Use merge base as excluding commit
-		mergeCommit, err := dfunctions.ResolveRefSpec(ctx, nil, sqledb.DbData().Ddb, mergeBase.String())
+		mergeCommit, err := sqledb.DbData().Ddb.ResolveRefSpec(ctx, nil, mergeBase.String())
 		if err != nil {
 			return nil, err
 		}
