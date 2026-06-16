@@ -6446,6 +6446,62 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name: "json adaptive: large value with control characters round-trips",
+		SetUpScript: []string{
+			"create table t (id int primary key, j json, txt longtext)",
+			"insert into t values (665, json_object('d', repeat(char(11), 665)), repeat(char(11), 665))",
+			"insert into t values (666, json_object('d', repeat(char(11), 666)), repeat(char(11), 666))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from t where txt is null",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select char_length(txt) from t where id = 666",
+				Expected: []sql.Row{{666}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from t where id = 665",
+				Expected: []sql.Row{{665}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from t where id = 666",
+				Expected: []sql.Row{{666}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name: "json adaptive: json_valid on large longtext without a primary key",
+		SetUpScript: []string{
+			"create table nopk (txt longtext)",
+			"create table withpk (id int auto_increment primary key, txt longtext)",
+			"insert into nopk values (json_object('d', repeat('x', 2032)))",
+			"insert into nopk values (json_object('d', repeat('x', 2030)))",
+			"insert into withpk (txt) values (json_object('d', repeat('x', 2032)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select json_valid(json_object('d', repeat('x', 2032)))",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select json_valid(txt) from withpk",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select json_valid(txt) from nopk where length(txt) < 2040",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select json_valid(txt) from nopk where length(txt) >= 2040",
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
 }
 
 var DoltTagTestScripts = []queries.ScriptTest{
