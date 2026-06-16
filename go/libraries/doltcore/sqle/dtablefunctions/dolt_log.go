@@ -496,7 +496,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	}
 
 	for _, revisionStr := range revisionValStrs {
-		commit, err := sqledb.DbData().Ddb.ResolveRefSpec(ctx, headRef, revisionStr)
+		commit, err := sqledb.DbData().Ddb.ResolveCommitSpecStr(ctx, revisionStr, headRef)
 		if err != nil {
 			return nil, err
 		}
@@ -506,7 +506,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	var notCommits []*doltdb.Commit
 	for _, notRevisionStr := range notRevisionValStrs {
-		notCommit, err := sqledb.DbData().Ddb.ResolveRefSpec(ctx, headRef, notRevisionStr)
+		notCommit, err := sqledb.DbData().Ddb.ResolveCommitSpecStr(ctx, notRevisionStr, headRef)
 		if err != nil {
 			return nil, err
 		}
@@ -521,7 +521,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 
 		// Use merge base as excluding commit
-		mergeCommit, err := sqledb.DbData().Ddb.ResolveRefSpec(ctx, nil, mergeBase.String())
+		mergeCommit, err := sqledb.DbData().Ddb.ResolveCommitSpecStr(ctx, mergeBase.String(), nil)
 		if err != nil {
 			return nil, err
 		}

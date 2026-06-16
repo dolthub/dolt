@@ -75,11 +75,11 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, errors.New("right value is not a string")
 	}
 
-	left, err := doltDB.ResolveRefSpec(ctx, headRef, leftStr)
+	left, err := doltDB.ResolveCommitSpecStr(ctx, leftStr, headRef)
 	if err != nil {
 		return nil, err
 	}
-	right, err := doltDB.ResolveRefSpec(ctx, headRef, rightStr)
+	right, err := doltDB.ResolveCommitSpecStr(ctx, rightStr, headRef)
 	if err != nil {
 		return nil, err
 	}

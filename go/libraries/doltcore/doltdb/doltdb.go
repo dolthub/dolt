@@ -642,12 +642,17 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, doltRef ref.DoltRef) (*
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
-// ResolveRefSpec resolves the commit spec |spec| to a commit using |headRef|.
-// The pseudo-refs WORKING and STAGED name uncommitted roots rather than commits, so when one
-// of them is given it resolves to the commit at |headRef|, which is the commit those roots are
-// built on top of.
-func (ddb *DoltDB) ResolveRefSpec(ctx context.Context, headRef ref.DoltRef, spec string) (*Commit, error) {
+// ResolveCommitSpecStr resolves the commit spec string |spec| to a commit, using |headRef| to
+// anchor relative specs such as HEAD. The pseudo-refs WORKING and STAGED name uncommitted roots
+// rather than commits, so when one of them is given it resolves to the commit at |headRef| that
+// those roots are built on top of. A working set exists only relative to a branch, so |headRef|
+// must be non-nil for WORKING or STAGED, otherwise ResolveCommitSpecStr returns
+// ErrOperationNotSupportedInDetachedHead.
+func (ddb *DoltDB) ResolveCommitSpecStr(ctx context.Context, spec string, headRef ref.DoltRef) (*Commit, error) {
 	if IsWorkingSetRef(spec) {
+		if headRef == nil {
+			return nil, ErrOperationNotSupportedInDetachedHead
+		}
 		return ddb.ResolveCommitRef(ctx, headRef)
 	}
 

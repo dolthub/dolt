@@ -874,7 +874,7 @@ func commitManuallyStagedChangesForStep(ctx *sql.Context, step rebase.RebasePlan
 		return err
 	}
 
-	originalCommit, err := doltDB.ResolveRefSpec(ctx, headRef, step.CommitHash)
+	originalCommit, err := doltDB.ResolveCommitSpecStr(ctx, step.CommitHash, headRef)
 	if err != nil {
 		return err
 	}

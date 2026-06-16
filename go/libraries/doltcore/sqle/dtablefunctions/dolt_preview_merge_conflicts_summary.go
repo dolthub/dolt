@@ -297,12 +297,12 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 		return rootInfo{}, err
 	}
 
-	leftCm, err := db.DbData().Ddb.ResolveRefSpec(ctx, headRef, leftBranch)
+	leftCm, err := db.DbData().Ddb.ResolveCommitSpecStr(ctx, leftBranch, headRef)
 	if err != nil {
 		return rootInfo{}, err
 	}
 
-	rightCm, err := db.DbData().Ddb.ResolveRefSpec(ctx, headRef, rightBranch)
+	rightCm, err := db.DbData().Ddb.ResolveCommitSpecStr(ctx, rightBranch, headRef)
 	if err != nil {
 		return rootInfo{}, err
 	}

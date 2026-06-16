@@ -344,12 +344,12 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 				return "", "", err
 			}
 
-			leftCm, err := db.DbData().Ddb.ResolveRefSpec(ctx, headRef, refs[0])
+			leftCm, err := db.DbData().Ddb.ResolveCommitSpecStr(ctx, refs[0], headRef)
 			if err != nil {
 				return "", "", err
 			}
 
-			rightCm, err := db.DbData().Ddb.ResolveRefSpec(ctx, headRef, refs[1])
+			rightCm, err := db.DbData().Ddb.ResolveCommitSpecStr(ctx, refs[1], headRef)
 			if err != nil {
 				return "", "", err
 			}
