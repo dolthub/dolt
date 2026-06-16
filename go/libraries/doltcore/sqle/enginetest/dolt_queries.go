@@ -5748,7 +5748,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/11204
-		Name: "dolt_log: three dot WORKING on a detached head returns an error",
+		Name: "dolt_log: three dot WORKING on a detached head",
 		SetUpScript: []string{
 			"create table t (pk int primary key);",
 			"call dolt_add('.');",
@@ -5762,9 +5762,17 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// A working set exists only relative to a branch, so resolving WORKING
-				// without a checked out branch returns an error.
-				Query:          "SELECT count(*) from dolt_log('WORKING...new-branch');",
+				// without a checked out branch returns an error today.
+				Query:          "SELECT message from dolt_log('WORKING...new-branch') ORDER BY date DESC;",
 				ExpectedErrStr: "this operation is not supported while in a detached head state",
+			},
+			{
+				// TODO: dolt cannot yet resolve a relative ref for a merge base on a detached
+				// head, so unlike git this errors instead of listing what new-branch added.
+				// Remove Skip once dolt resolves WORKING against the detached HEAD commit.
+				Skip:     true,
+				Query:    "SELECT message from dolt_log('WORKING...new-branch') ORDER BY date DESC;",
+				Expected: []sql.Row{{"commit 2"}},
 			},
 		},
 	},
