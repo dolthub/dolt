@@ -87,7 +87,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	docscmds.Commands,
 	&commands.Assist{},
 	commands.ProfileCmd{},
-	commands.ArchiveCmd{},
 	commands.FsckCmd{},
 	commands.ConfigCmd{},
 	commands.InitCmd{},

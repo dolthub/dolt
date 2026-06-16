@@ -62,8 +62,7 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   done
   dolt sql -q "$stmt"
 
-  dolt gc
-  dolt archive
+  dolt gc --archive-level 1
 
   dolt fsck
 }
