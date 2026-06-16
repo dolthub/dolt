@@ -678,18 +678,22 @@ func (ws *WorkingSet) Ref() ref.WorkingSetRef {
 
 // writeValues write the values in this working set to the database and returns a datas.WorkingSetSpec with the
 // new values in it.
-func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.WorkingSetMeta) (spec *datas.WorkingSetSpec, err error) {
+//
+// If |skipIfPresent| is true, root values that are already present in the
+// database are not rewritten. This is only safe when the caller does not rely
+// on these writes being observed by an in-progress GC; see DoltDB.doWriteRootValue.
+func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.WorkingSetMeta, skipIfPresent bool) (spec *datas.WorkingSetSpec, err error) {
 	if ws.stagedRoot == nil || ws.workingRoot == nil {
 		return nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
 	}
 
-	r, workingRoot, err := db.writeRootValue(ctx, ws.workingRoot)
+	r, workingRoot, err := db.doWriteRootValue(ctx, ws.workingRoot, skipIfPresent)
 	if err != nil {
 		return nil, err
 	}
 	ws.workingRoot = r
 
-	r, stagedRoot, err := db.writeRootValue(ctx, ws.stagedRoot)
+	r, stagedRoot, err := db.doWriteRootValue(ctx, ws.stagedRoot, skipIfPresent)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +701,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 
 	var mergeState *datas.MergeState
 	if ws.mergeState != nil {
-		r, preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
+		r, preMergeWorking, err := db.doWriteRootValue(ctx, ws.mergeState.preMergeWorking, skipIfPresent)
 		if err != nil {
 			return nil, err
 		}
@@ -733,7 +737,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 
 	var rebaseState *datas.RebaseState
 	if ws.rebaseState != nil {
-		r, preRebaseWorking, err := db.writeRootValue(ctx, ws.rebaseState.preRebaseWorking)
+		r, preRebaseWorking, err := db.doWriteRootValue(ctx, ws.rebaseState.preRebaseWorking, skipIfPresent)
 		if err != nil {
 			return nil, err
 		}
