@@ -493,20 +493,11 @@ SQL
 
 @test "diff: three dot diff supports WORKING and STAGED" {
     # See https://github.com/dolthub/dolt/issues/11204
-    # TODO: remove this once dolt checkout is migrated
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-      skip "This test relies on dolt checkout, which has not been migrated yet."
-    fi
-
-    dolt checkout main
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt add .
     dolt commit -m table
-    dolt checkout -b branch1
-    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
-    dolt add .
-    dolt commit -m row
-    dolt checkout main
+    dolt sql -q "call dolt_branch('branch1')"
+    dolt --branch branch1 sql -q "insert into test values (1,1,1,1,1,1); call dolt_add('.'); call dolt_commit('-m', 'row');"
     # Row 2 is staged and row 3 is left in the working set so that the staged root and
     # the working root differ from each other.
     dolt sql -q 'insert into test values (2,2,2,2,2,2)'
@@ -539,9 +530,9 @@ SQL
     [[ "$output" =~ "+ | 2" ]] || false
     [[ ! "$output" =~ "+ | 3" ]] || false
 
-    run dolt sql -q "SELECT dolt_merge_base('branch1', 'WORKING') = dolt_merge_base('branch1', 'HEAD') as eq"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    working_base=$(dolt sql -r csv -q "SELECT dolt_merge_base('branch1', 'WORKING')" | tail -n 1)
+    head_base=$(dolt sql -r csv -q "SELECT dolt_merge_base('branch1', 'HEAD')" | tail -n 1)
+    [ "$working_base" = "$head_base" ]
 }
 
 @test "diff: data and schema changes" {
