@@ -5731,18 +5731,40 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT count(*) from dolt_log('main...new-branch');",
-				Expected: []sql.Row{{2}},
+				Query:    "SELECT message from dolt_log('main...new-branch') ORDER BY date DESC;",
+				Expected: []sql.Row{{"commit 3"}, {"commit 2"}},
 			},
 			{
-				Query: "SELECT count(*) from dolt_log('WORKING...new-branch');",
+				Query: "SELECT message from dolt_log('WORKING...new-branch') ORDER BY date DESC;",
 				// WORKING is not a commit, so it resolves to the current branch HEAD and
-				// this counts the same commits as main...new-branch.
-				Expected: []sql.Row{{2}},
+				// the merge base excludes exactly the commits main...new-branch does.
+				Expected: []sql.Row{{"commit 3"}, {"commit 2"}},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_log('STAGED...new-branch');",
-				Expected: []sql.Row{{2}},
+				Query:    "SELECT message from dolt_log('STAGED...new-branch') ORDER BY date DESC;",
+				Expected: []sql.Row{{"commit 3"}, {"commit 2"}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11204
+		Name: "dolt_log: three dot WORKING on a detached head returns an error",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'commit 1');",
+			"call dolt_tag('v1');",
+			"call dolt_checkout('-b', 'new-branch');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'commit 2');",
+			"use `mydb/v1`;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// A working set exists only relative to a branch, so resolving WORKING
+				// without a checked out branch returns an error.
+				Query:          "SELECT count(*) from dolt_log('WORKING...new-branch');",
+				ExpectedErrStr: "this operation is not supported while in a detached head state",
 			},
 		},
 	},

@@ -2102,6 +2102,10 @@ on a.to_pk = b.to_pk;`,
 				// The merge base and the target are both HEAD, so there is no diff.
 				Expected: []sql.Row{},
 			},
+			{
+				Query:          "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('bar...nope', 't');",
+				ExpectedErrStr: "branch not found: nope",
+			},
 		},
 	},
 }
@@ -3632,15 +3636,15 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * from dolt_diff_summary('WORKING...bar', 't');",
+				Query:    "SELECT from_table_name, to_table_name, diff_type, data_change, schema_change from dolt_diff_summary('WORKING...bar', 't');",
 				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('bar...WORKING', 't');",
+				Query:    "SELECT from_table_name, to_table_name, diff_type, data_change, schema_change from dolt_diff_summary('bar...WORKING', 't');",
 				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 			{
-				Query:    "SELECT * from dolt_diff_summary('bar...STAGED', 't');",
+				Query:    "SELECT from_table_name, to_table_name, diff_type, data_change, schema_change from dolt_diff_summary('bar...STAGED', 't');",
 				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 		},
