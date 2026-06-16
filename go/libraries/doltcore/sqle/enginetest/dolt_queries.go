@@ -6448,7 +6448,8 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/tianhuil/dolt-json-bug
-		Name: "json adaptive: large value with control characters round-trips",
+		Name:    "json adaptive: large value with control characters round-trips",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"create table t (id int primary key, j json, txt longtext)",
 			"insert into t values (665, json_object('d', repeat(char(11), 665)), repeat(char(11), 665))",
@@ -6475,7 +6476,8 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/tianhuil/dolt-json-bug
-		Name: "json adaptive: json_valid on large longtext without a primary key",
+		Name:    "json adaptive: json_valid on large longtext without a primary key",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"create table nopk (txt longtext)",
 			"create table withpk (id int auto_increment primary key, txt longtext)",
@@ -6504,7 +6506,8 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/tianhuil/dolt-json-bug
-		Name: "json adaptive: html and multibyte characters round-trip out-of-band",
+		Name:    "json adaptive: html and multibyte characters round-trip out-of-band",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"create table h (id int primary key, j json)",
 			"insert into h values (1, json_object('d', repeat('<>&', 2000)))",
@@ -6531,7 +6534,8 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/tianhuil/dolt-json-bug
-		Name: "json adaptive: json functions read large keyless longtext",
+		Name:    "json adaptive: json functions read large keyless longtext",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"create table kt (txt longtext)",
 			"insert into kt values (json_object('a', repeat('x', 3000), 'b', 2))",
