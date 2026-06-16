@@ -6559,6 +6559,29 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: large value with ansi escape sequences round-trips",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table p (id varchar(64) primary key, data json)",
+			`insert into p (id, data) select 'big', convert(concat('{"d":"', repeat(concat('Line ', char(92), 'u001b[36;1mcolored', char(92), 'u000b', char(92), 'n'), 200), '"}') using utf8mb4)`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select json_type(data) from p",
+				Expected: []sql.Row{{"OBJECT"}},
+			},
+			{
+				Query:    "select length(cast(data as char)) from p",
+				Expected: []sql.Row{{6409}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(data, '$.d'))) from p",
+				Expected: []sql.Row{{4200}},
+			},
+		},
+	},
 }
 
 var DoltTagTestScripts = []queries.ScriptTest{
