@@ -6446,6 +6446,142 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: large value with control characters round-trips",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table t (id int primary key, j json, txt longtext)",
+			"insert into t values (665, json_object('d', repeat(char(11), 665)), repeat(char(11), 665))",
+			"insert into t values (666, json_object('d', repeat(char(11), 666)), repeat(char(11), 666))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from t where txt is null",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select char_length(txt) from t where id = 666",
+				Expected: []sql.Row{{666}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from t where id = 665",
+				Expected: []sql.Row{{665}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from t where id = 666",
+				Expected: []sql.Row{{666}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: json_valid on large longtext without a primary key",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table nopk (txt longtext)",
+			"create table withpk (id int auto_increment primary key, txt longtext)",
+			"insert into nopk values (json_object('d', repeat('x', 2032)))",
+			"insert into nopk values (json_object('d', repeat('x', 2030)))",
+			"insert into withpk (txt) values (json_object('d', repeat('x', 2032)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select json_valid(json_object('d', repeat('x', 2032)))",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select json_valid(txt) from withpk",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select json_valid(txt) from nopk where length(txt) < 2040",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select json_valid(txt) from nopk where length(txt) >= 2040",
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: html and multibyte characters round-trip out-of-band",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table h (id int primary key, j json)",
+			"insert into h values (1, json_object('d', repeat('<>&', 2000)))",
+			"insert into h values (2, json_object('d', repeat(convert('😀' using utf8mb4), 2000)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select char_length(cast(j as char)) from h where id = 1",
+				Expected: []sql.Row{{6009}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from h where id = 1",
+				Expected: []sql.Row{{6000}},
+			},
+			{
+				Query:    "select char_length(cast(j as char)) from h where id = 2",
+				Expected: []sql.Row{{2009}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from h where id = 2",
+				Expected: []sql.Row{{2000}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: json functions read large keyless longtext",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table kt (txt longtext)",
+			"insert into kt values (json_object('a', repeat('x', 3000), 'b', 2))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select json_length(txt) from kt",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select json_type(txt) from kt",
+				Expected: []sql.Row{{"OBJECT"}},
+			},
+			{
+				Query:    "select json_length(json_keys(txt)) from kt",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(txt, '$.a'))) from kt",
+				Expected: []sql.Row{{3000}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: large value with ansi escape sequences round-trips",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table p (id varchar(64) primary key, data json)",
+			`insert into p (id, data) select 'big', convert(concat('{"d":"', repeat(concat('Line ', char(92), 'u001b[36;1mcolored', char(92), 'u000b', char(92), 'n'), 200), '"}') using utf8mb4)`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select json_type(data) from p",
+				Expected: []sql.Row{{"OBJECT"}},
+			},
+			{
+				Query:    "select length(cast(data as char)) from p",
+				Expected: []sql.Row{{6409}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(data, '$.d'))) from p",
+				Expected: []sql.Row{{4200}},
+			},
+		},
+	},
 }
 
 var DoltTagTestScripts = []queries.ScriptTest{
