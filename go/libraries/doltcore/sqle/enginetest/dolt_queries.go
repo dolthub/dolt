@@ -6502,6 +6502,59 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name: "json adaptive: html and multibyte characters round-trip out-of-band",
+		SetUpScript: []string{
+			"create table h (id int primary key, j json)",
+			"insert into h values (1, json_object('d', repeat('<>&', 2000)))",
+			"insert into h values (2, json_object('d', repeat(convert('😀' using utf8mb4), 2000)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select char_length(cast(j as char)) from h where id = 1",
+				Expected: []sql.Row{{6009}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from h where id = 1",
+				Expected: []sql.Row{{6000}},
+			},
+			{
+				Query:    "select char_length(cast(j as char)) from h where id = 2",
+				Expected: []sql.Row{{2009}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from h where id = 2",
+				Expected: []sql.Row{{2000}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name: "json adaptive: json functions read large keyless longtext",
+		SetUpScript: []string{
+			"create table kt (txt longtext)",
+			"insert into kt values (json_object('a', repeat('x', 3000), 'b', 2))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select json_length(txt) from kt",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select json_type(txt) from kt",
+				Expected: []sql.Row{{"OBJECT"}},
+			},
+			{
+				Query:    "select json_length(json_keys(txt)) from kt",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(txt, '$.a'))) from kt",
+				Expected: []sql.Row{{3000}},
+			},
+		},
+	},
 }
 
 var DoltTagTestScripts = []queries.ScriptTest{
