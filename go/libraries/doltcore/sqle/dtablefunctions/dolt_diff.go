@@ -339,17 +339,23 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 		if strings.Contains(dotStr, "...") {
 			refs := strings.Split(dotStr, "...")
 
+			// A merge base is a commit, so a three dot range needs at least one committed side.
+			// WORKING and STAGED are uncommitted roots, leaving no fork point when both are given.
+			if doltdb.IsWorkingSetRef(refs[0]) && doltdb.IsWorkingSetRef(refs[1]) {
+				return "", "", fmt.Errorf("ambiguous three dot range '%s': at least one side must be a commit", dotStr)
+			}
+
 			headRef, err := sess.CWBHeadRef(ctx, db.Name())
 			if err != nil {
 				return "", "", err
 			}
 
-			leftCm, err := db.DbData().Ddb.ResolveCommitSpecStr(ctx, refs[0], headRef)
+			leftCm, err := db.DbData().Ddb.ResolveCommitSpecStrForMergeBase(ctx, refs[0], headRef)
 			if err != nil {
 				return "", "", err
 			}
 
-			rightCm, err := db.DbData().Ddb.ResolveCommitSpecStr(ctx, refs[1], headRef)
+			rightCm, err := db.DbData().Ddb.ResolveCommitSpecStrForMergeBase(ctx, refs[1], headRef)
 			if err != nil {
 				return "", "", err
 			}

@@ -2076,22 +2076,18 @@ on a.to_pk = b.to_pk;`,
 				},
 			},
 			{
-				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('WORKING...STAGED', 't') ORDER BY COALESCE(from_pk, to_pk);",
-				// The merge base of two revisions on the same branch is that branch HEAD,
-				// so this compares HEAD against the staged root.
-				Expected: []sql.Row{
-					{nil, 3, "added"},
-				},
+				// Two working-set revisions have no commit fork point to anchor a merge base.
+				Query:          "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('WORKING...STAGED', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				ExpectedErrStr: "ambiguous three dot range 'WORKING...STAGED': at least one side must be a commit",
 			},
 			{
-				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('STAGED...WORKING', 't') ORDER BY COALESCE(from_pk, to_pk);",
-				Expected: []sql.Row{
-					{nil, 3, "added"},
-					{nil, 4, "added"},
-				},
+				Query:          "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('STAGED...WORKING', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				ExpectedErrStr: "ambiguous three dot range 'STAGED...WORKING': at least one side must be a commit",
 			},
 			{
 				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('HEAD...WORKING', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				// A real commit on the left keeps the working set as the diff target, so this
+				// surfaces both uncommitted rows.
 				Expected: []sql.Row{
 					{nil, 3, "added"},
 					{nil, 4, "added"},

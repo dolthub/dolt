@@ -900,6 +900,16 @@ var DoltScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{false, false, false, true, false, true}},
 			},
 			{
+				// WORKING and STAGED name uncommitted roots, not commits, so ancestry against
+				// them is rejected.
+				Query:          "select has_ancestor('HEAD', 'WORKING')",
+				ExpectedErrStr: "branch not found: WORKING",
+			},
+			{
+				Query:          "select has_ancestor('STAGED', 'HEAD')",
+				ExpectedErrStr: "branch not found: STAGED",
+			},
+			{
 				Query: "use `mydb/onetwo`;",
 			},
 			{

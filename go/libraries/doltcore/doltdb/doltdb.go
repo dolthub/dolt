@@ -644,18 +644,9 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, doltRef ref.DoltRef) (*
 
 // ResolveCommitSpecStr resolves the commit spec string |spec| to a commit, using |headRef| to
 // anchor relative specs such as HEAD. The pseudo-refs WORKING and STAGED name uncommitted roots
-// rather than commits, so when one of them is given it resolves to the commit at |headRef| that
-// those roots are built on top of. A working set exists only relative to a branch, so |headRef|
-// must be non-nil for WORKING or STAGED, otherwise ResolveCommitSpecStr returns
-// ErrOperationNotSupportedInDetachedHead.
+// rather than commits and are not valid here. Callers that need to treat them as a commit for the
+// purpose of a merge base should use [DoltDB.ResolveCommitSpecStrForMergeBase] instead.
 func (ddb *DoltDB) ResolveCommitSpecStr(ctx context.Context, spec string, headRef ref.DoltRef) (*Commit, error) {
-	if IsWorkingSetRef(spec) {
-		if headRef == nil {
-			return nil, ErrOperationNotSupportedInDetachedHead
-		}
-		return ddb.ResolveCommitRef(ctx, headRef)
-	}
-
 	cs, err := NewCommitSpec(spec)
 	if err != nil {
 		return nil, err
@@ -671,6 +662,24 @@ func (ddb *DoltDB) ResolveCommitSpecStr(ctx context.Context, spec string, headRe
 	}
 
 	return commit, nil
+}
+
+// ResolveCommitSpecStrForMergeBase resolves the commit spec string |spec| to the commit that
+// stands in for it when computing a merge base, using |headRef| to anchor relative specs. It is
+// the merge base variant of [DoltDB.ResolveCommitSpecStr]. The pseudo-refs WORKING and STAGED name
+// uncommitted roots rather than commits, so they resolve to the commit at |headRef| that those
+// roots are built on top of, which is the fork point a three dot diff or log anchors against. A
+// working set exists only relative to a branch, so |headRef| must be non-nil for WORKING or
+// STAGED, otherwise it returns [ErrOperationNotSupportedInDetachedHead].
+func (ddb *DoltDB) ResolveCommitSpecStrForMergeBase(ctx context.Context, spec string, headRef ref.DoltRef) (*Commit, error) {
+	if IsWorkingSetRef(spec) {
+		if headRef == nil {
+			return nil, ErrOperationNotSupportedInDetachedHead
+		}
+		return ddb.ResolveCommitRef(ctx, headRef)
+	}
+
+	return ddb.ResolveCommitSpecStr(ctx, spec, headRef)
 }
 
 // ResolveCommitRefAtRoot takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
