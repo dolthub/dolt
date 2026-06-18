@@ -181,7 +181,9 @@ func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 		return 1, true, nil
 	}
 	cnt, err := cc.Count()
-	return uint64(cnt + 1), true, err
+	// A shallow clone's closure counts ancestors it never fetched, so mark the
+	// total inexact and let the engine recount the rows actually present.
+	return uint64(cnt + 1), false, err
 }
 
 // Name is a sql.Table interface function which returns the name of the table
@@ -420,7 +422,14 @@ func (dt *LogTable) NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb
 		return nil, err
 	}
 
-	child, err := commitwalk.GetTopologicalOrderIterator[*sql.Context](ctx, ddb, []hash.Hash{h}, nil)
+	// Returning false for ghost commits, which stand in for ancestors a shallow
+	// clone never fetched, stops the walk at the boundary of the available history.
+	matchFn := func(optCmt *doltdb.OptionalCommit) (bool, error) {
+		_, ok := optCmt.ToCommit()
+		return ok, nil
+	}
+
+	child, err := commitwalk.GetTopologicalOrderIterator[*sql.Context](ctx, ddb, []hash.Hash{h}, matchFn)
 	if err != nil {
 		return nil, err
 	}
