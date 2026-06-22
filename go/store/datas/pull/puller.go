@@ -22,7 +22,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -55,6 +54,7 @@ type Puller struct {
 
 	wr *PullTableFileWriter
 
+	tempDir string
 	pushLog *log.Logger
 
 	statsCh chan Stats
@@ -121,23 +121,13 @@ func NewPuller(
 		GetAddrs:             getAddrs,
 	})
 
-	var pushLogger *log.Logger
-	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.EqualFold(dbg, "true") {
-		logFilePath := filepath.Join(tempDir, "push.log")
-		f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
-
-		if err == nil {
-			pushLogger = log.New(f, "", log.Lmicroseconds)
-		}
-	}
-
 	p := &Puller{
 		waf:           walkAddrs,
 		srcChunkStore: srcChunkStore,
 		sinkDBCS:      sinkCS,
 		hashes:        hash.NewHashSet(hashes...),
 		wr:            wr,
-		pushLog:       pushLogger,
+		tempDir:       tempDir,
 		statsCh:       statsCh,
 		stats: &stats{
 			wrStatsGetter: wr.GetStats,
@@ -183,7 +173,7 @@ func (c countingReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func emitStats(s *stats, ch chan Stats) (cancel func()) {
+func emitStats(s *stats, ch chan Stats, logf func(string, ...interface{})) (cancel func()) {
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -248,12 +238,20 @@ func emitStats(s *stats, ch chan Stats) (cancel func()) {
 		updateduration := 1 * time.Second
 		ticker := time.NewTicker(updateduration)
 		defer ticker.Stop()
+		emit := func(st Stats) {
+			if ch != nil {
+				ch <- st
+			}
+			logf("stats: fetched %d/%d chunks, %d bytes (%.0f B/s); sent %d bytes, buffered %d bytes (%.0f B/s)",
+				st.FetchedSourceChunks, st.TotalSourceChunks, st.FetchedSourceBytes, st.FetchedSourceBytesPerSec,
+				st.FinishedSendBytes, st.BufferedSendBytes, st.SendBytesPerSec)
+		}
 		for {
 			select {
 			case <-ticker.C:
-				ch <- s.read()
+				emit(s.read())
 			case <-done:
-				ch <- s.read()
+				emit(s.read())
 				return
 			}
 		}
@@ -314,8 +312,24 @@ func WithDiscardingStatsCh(cb func(statsCh chan Stats)) {
 
 // Pull executes the sync operation
 func (p *Puller) Pull(ctx context.Context) error {
-	if p.statsCh != nil {
-		c := emitStats(p.stats, p.statsCh)
+	// If push logging is enabled, create a unique log file for this pull
+	// operation and close it when the pull completes.
+	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.EqualFold(dbg, "true") {
+		f, err := os.CreateTemp(p.tempDir, "push-*.log")
+		if err == nil {
+			p.pushLog = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
+			p.Logf("starting pull of %d hashes", p.hashes.Size())
+			defer func() {
+				p.Logf("pull complete")
+				f.Close()
+			}()
+		}
+	}
+
+	// Run stats emission if anyone is consuming the stats channel or if we are
+	// logging stats to the push log.
+	if p.statsCh != nil || p.pushLog != nil {
+		c := emitStats(p.stats, p.statsCh, p.Logf)
 		defer c()
 	}
 
