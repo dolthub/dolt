@@ -181,9 +181,10 @@ func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 		return 1, true, nil
 	}
 	cnt, err := cc.Count()
-	// A shallow clone's closure counts ancestors it never fetched, so mark the
-	// total inexact and let the engine recount the rows actually present.
-	return uint64(cnt + 1), false, err
+	// A shallow clone's closure counts ancestors it never fetched, so its total
+	// is too high. Report it as inexact only in that case, which makes count(*)
+	// recount the rows actually present while full clones keep the exact fast path.
+	return uint64(cnt + 1), !dt.ddb.IsShallow(), err
 }
 
 // Name is a sql.Table interface function which returns the name of the table

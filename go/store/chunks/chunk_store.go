@@ -313,6 +313,13 @@ type GenerationalCS interface {
 	OldGenGCFilter() HasManyFunc
 }
 
+// GhostChunkStore is implemented by chunk stores that track the addresses of
+// chunks a shallow clone deliberately did not fetch.
+type GhostChunkStore interface {
+	// HasGhosts reports whether any ghost chunks are recorded.
+	HasGhosts() bool
+}
+
 var ErrUnsupportedOperation = errors.New("operation not supported")
 
 var ErrGCGenerationExpired = errors.New("garbage collection generation expired")
