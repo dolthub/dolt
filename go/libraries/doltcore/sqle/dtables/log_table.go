@@ -34,8 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 )
 
-const logsDefaultRowCount = 100
-
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
 	ddb               *doltdb.DoltDB
@@ -171,11 +169,10 @@ func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 // RowCount implements sql.StatisticsTable
-func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
+func (dt *LogTable) RowCount(ctx *sql.Context) (rowCount uint64, exact bool, err error) {
 	cc, err := dt.head.GetCommitClosure(ctx)
 	if err != nil {
-		// TODO: remove this when we deprecate LD
-		return logsDefaultRowCount, false, nil
+		return 0, false, err
 	}
 	if cc.IsEmpty() {
 		return 1, true, nil

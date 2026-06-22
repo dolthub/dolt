@@ -2537,11 +2537,7 @@ func (ddb *DoltDB) IsShallow() bool {
 	if !ok {
 		return false
 	}
-	ghostGen, ok := gcs.GhostGen().(chunks.GhostChunkStore)
-	if !ok {
-		return false
-	}
-	return ghostGen.HasGhosts()
+	return gcs.GhostGen().HasGhosts()
 }
 
 // Purge in-memory read caches associated with this DoltDB. This needs

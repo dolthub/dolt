@@ -304,7 +304,7 @@ type PrefixChunkStore interface {
 type GenerationalCS interface {
 	NewGen() ChunkStoreGarbageCollector
 	OldGen() ChunkStoreGarbageCollector
-	GhostGen() ChunkStore
+	GhostGen() GhostChunkStore
 
 	// Has the same return values as OldGen().HasMany, but should be used by a
 	// generational GC process as the filter function instead of
@@ -313,11 +313,13 @@ type GenerationalCS interface {
 	OldGenGCFilter() HasManyFunc
 }
 
-// GhostChunkStore is implemented by chunk stores that track the addresses of
-// chunks a shallow clone deliberately did not fetch.
+// GhostChunkStore is the ghost store of a generational chunk store. It tracks
+// the addresses of chunks a shallow clone deliberately did not fetch.
 type GhostChunkStore interface {
 	// HasGhosts reports whether any ghost chunks are recorded.
 	HasGhosts() bool
+	// PersistGhostHashes records the given addresses as ghost chunks.
+	PersistGhostHashes(ctx context.Context, refs hash.HashSet) error
 }
 
 var ErrUnsupportedOperation = errors.New("operation not supported")

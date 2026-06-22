@@ -52,7 +52,7 @@ func (gcs *GenerationalNBS) PersistGhostHashes(ctx context.Context, refs hash.Ha
 	return fmt.Errorf("runtime error. ghostGen is nil but an attempt to persist ghost hashes was made")
 }
 
-func (gcs *GenerationalNBS) GhostGen() chunks.ChunkStore {
+func (gcs *GenerationalNBS) GhostGen() chunks.GhostChunkStore {
 	return gcs.ghostGen
 }
 
