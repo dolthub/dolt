@@ -91,7 +91,10 @@ const (
 	reliableCallDeliverRespTimeout = 15 * time.Second
 )
 
-func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
+// NewChunkFetcher creates a ChunkFetcher for |dcs|. If |recorder| is non-nil,
+// it receives per-download statistics in addition to the process-global stats
+// recorder configured via StatsFactory.
+func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore, recorder nbs.StatsRecorder) *ChunkFetcher {
 	eg, ctx := errgroup.WithContext(ctx)
 	ret := &ChunkFetcher{
 		eg:    eg,
@@ -101,7 +104,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		resCh:   make(chan nbs.ToChunker),
 
 		abortCh: make(chan struct{}),
-		stats:   StatsFactory(),
+		stats:   teeStatsRecorder(StatsFactory(), recorder),
 	}
 
 	downloadLocCh := make(chan []*remotesapi.DownloadLoc)

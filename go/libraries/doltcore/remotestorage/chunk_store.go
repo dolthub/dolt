@@ -282,8 +282,8 @@ type CacheStats interface {
 	CacheHits() uint32
 }
 
-func (dcs *DoltChunkStore) ChunkFetcher(ctx context.Context) nbs.ChunkFetcher {
-	return NewChunkFetcher(ctx, dcs)
+func (dcs *DoltChunkStore) ChunkFetcher(ctx context.Context, recorder nbs.StatsRecorder) nbs.ChunkFetcher {
+	return NewChunkFetcher(ctx, dcs, recorder)
 }
 
 // Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
@@ -597,7 +597,7 @@ type RepoRequest interface {
 func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash, found func(context.Context, nbs.ToChunker)) (err error) {
 	toSend := hash.NewHashSet(hashes...)
 
-	fetcher := dcs.ChunkFetcher(ctx)
+	fetcher := dcs.ChunkFetcher(ctx, nil)
 	defer func() {
 		cerr := fetcher.Close()
 		if err == nil {
