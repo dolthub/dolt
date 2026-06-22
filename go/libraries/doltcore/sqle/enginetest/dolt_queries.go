@@ -5771,18 +5771,10 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// A working set exists only relative to a branch, so resolving WORKING
-				// without a checked out branch returns an error today.
+				// TODO(elianddb): unlike git, dolt cannot resolve WORKING for a merge base on a
+				// detached head, so this errors today instead of listing what new-branch added.
 				Query:          "SELECT message from dolt_log('WORKING...new-branch') ORDER BY date DESC;",
 				ExpectedErrStr: "this operation is not supported while in a detached head state",
-			},
-			{
-				// TODO: dolt cannot yet resolve a relative ref for a merge base on a detached
-				// head, so unlike git this errors instead of listing what new-branch added.
-				// Remove Skip once dolt resolves WORKING against the detached HEAD commit.
-				Skip:     true,
-				Query:    "SELECT message from dolt_log('WORKING...new-branch') ORDER BY date DESC;",
-				Expected: []sql.Row{{"commit 2"}},
 			},
 		},
 	},

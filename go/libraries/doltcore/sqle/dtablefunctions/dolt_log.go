@@ -495,19 +495,17 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return nil, err
 	}
 
-	// A merge base is a commit, so a three dot range needs at least one committed side. WORKING
-	// and STAGED are uncommitted roots, leaving no fork point when both are given.
 	if threeDot && doltdb.IsWorkingSetRef(revisionValStrs[0]) && doltdb.IsWorkingSetRef(revisionValStrs[1]) {
-		return nil, fmt.Errorf("ambiguous three dot range '%s...%s': at least one side must be a commit", revisionValStrs[0], revisionValStrs[1])
+		return nil, ErrAmbiguousThreeDotRange.New(revisionValStrs[0] + "..." + revisionValStrs[1])
 	}
 
+	// Only a three dot range accepts WORKING and STAGED, where they anchor the merge base.
+	resolve := sqledb.DbData().Ddb.ResolveCommitSpecStr
+	if threeDot {
+		resolve = sqledb.DbData().Ddb.ResolveCommitSpecStrForMergeBase
+	}
 	for _, revisionStr := range revisionValStrs {
-		var commit *doltdb.Commit
-		if threeDot {
-			commit, err = sqledb.DbData().Ddb.ResolveCommitSpecStrForMergeBase(ctx, revisionStr, headRef)
-		} else {
-			commit, err = sqledb.DbData().Ddb.ResolveCommitSpecStr(ctx, revisionStr, headRef)
-		}
+		commit, err := resolve(ctx, revisionStr, headRef)
 		if err != nil {
 			return nil, err
 		}

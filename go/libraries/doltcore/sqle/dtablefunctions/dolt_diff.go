@@ -44,6 +44,10 @@ const diffTableDefaultRowCount = 1000
 var ErrInvalidNonLiteralArgument = errors.NewKind("Invalid argument to %s: %s – only literal values supported")
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
 
+// ErrAmbiguousThreeDotRange is returned for a three dot range whose sides are both working set
+// refs, which has no commit fork point to anchor a merge base.
+var ErrAmbiguousThreeDotRange = errors.NewKind("ambiguous three dot range '%s': at least one side must be a commit")
+
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
 var _ sql.IndexedTable = (*DiffTableFunction)(nil)
 var _ sql.TableNode = (*DiffTableFunction)(nil)
@@ -339,10 +343,8 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 		if strings.Contains(dotStr, "...") {
 			refs := strings.Split(dotStr, "...")
 
-			// A merge base is a commit, so a three dot range needs at least one committed side.
-			// WORKING and STAGED are uncommitted roots, leaving no fork point when both are given.
 			if doltdb.IsWorkingSetRef(refs[0]) && doltdb.IsWorkingSetRef(refs[1]) {
-				return "", "", fmt.Errorf("ambiguous three dot range '%s': at least one side must be a commit", dotStr)
+				return "", "", ErrAmbiguousThreeDotRange.New(dotStr)
 			}
 
 			headRef, err := sess.CWBHeadRef(ctx, db.Name())
