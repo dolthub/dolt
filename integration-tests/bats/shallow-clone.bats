@@ -79,6 +79,38 @@ seed_and_start_serial_remote() {
     [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
 }
 
+@test "shallow-clone: select from dolt_log system table on depth 1 clone" {
+    # See https://github.com/dolthub/dolt/issues/11230
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+
+    dolt sql -q "call dolt_clone('--depth', '1','http://localhost:50051/test-org/test-repo')"
+    cd test-repo
+
+    run dolt log --oneline --decorate=no
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt sql -q "select count(*) = 1 from dolt_log()"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+
+    run dolt sql -q "select * from dolt_log"
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "Ghost commit encountered" ]] || false
+
+    run dolt sql -q "select count(*) from (select * from dolt_log) t" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+
+    # count(*) is served from table statistics, not a row scan, so it needs its own check.
+    run dolt sql -q "select count(*) = 1 from dolt_log"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+}
+
 @test "shallow-clone: dolt_clone depth 2" {
     seed_and_start_serial_remote
 
@@ -250,11 +282,18 @@ seed_and_start_serial_remote() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "true" ]] || false
 
-#   NM4 - system table bug.
-#    run dolt sql -q "select count(*) = 3 from dolt_log"
-#    [ "$status" -eq 0 ]
-#    [[ "$output" =~ "true" ]] || false
-#
+    # See https://github.com/dolthub/dolt/issues/11230
+    run dolt sql -q "select * from dolt_log"
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "Ghost commit encountered" ]] || false
+
+    run dolt sql -q "select count(*) from (select * from dolt_log) t" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" = "3" ]] || false
+
+    run dolt sql -q "select count(*) = 3 from dolt_log"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
 
     # dolt_diff table will show two rows, because each row is a delta.
     run dolt sql -q "select * from dolt_diff"

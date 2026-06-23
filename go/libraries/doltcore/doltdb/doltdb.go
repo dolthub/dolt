@@ -2529,6 +2529,17 @@ func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.Ha
 	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
 }
 
+// IsShallow reports whether this database is a shallow clone, meaning some of
+// its history was never fetched and is represented by ghost commits. Storage
+// formats that do not support shallow clones always report false.
+func (ddb *DoltDB) IsShallow() bool {
+	gcs, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.GenerationalCS)
+	if !ok {
+		return false
+	}
+	return gcs.GhostGen().HasGhosts()
+}
+
 // Purge in-memory read caches associated with this DoltDB. This needs
 // to be done at a specific point during a GC operation to ensure that
 // everything the application layer sees still exists in the database
