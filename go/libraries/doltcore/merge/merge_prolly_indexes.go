@@ -132,7 +132,7 @@ func buildIndex(
 		kb := val.NewTupleBuilder(kd, ns)
 		p := m.Pool()
 
-		pkMapping := ordinalMappingFromIndex(index)
+		pkMapping := schema.PrimaryIndexOrdinalToSecondaryIndexOrdinal(index)
 
 		mergedMap, err := creation.BuildUniqueProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
 			eK, err := getPKFromSecondaryKey(ctx, kb, p, pkMapping, existingKey)

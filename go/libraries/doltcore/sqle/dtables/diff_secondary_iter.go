@@ -318,7 +318,7 @@ func (p *SecondaryDiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, erro
 
 	// Build PK ordinal mapping: maps PK ordinal -> secondary key ordinal
 	idxDef := p.toSch.Indexes().GetByName(p.indexName)
-	pkMap := schema.OrdinalToPKOrdinal(idxDef)
+	pkMap := schema.PrimaryIndexOrdinalToSecondaryIndexOrdinal(idxDef)
 
 	secondaryToPrimaryMap := schema.IndexOrdinalToTableOrdinal(p.toSch, idxDef)
 

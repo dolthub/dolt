@@ -67,11 +67,18 @@ type Index interface {
 
 var _ Index = (*indexImpl)(nil)
 
-// OrdinalToPKOrdinal produces a mapping from the ordinals of a secondary index to the ordinals of the table's primary keys.
-func OrdinalToPKOrdinal(idx Index) val.OrdinalMapping {
+// PrimaryIndexOrdinalToSecondaryIndexOrdinal produces a mapping from a column's offset in the primary index to the same column's offset in the supplied index.
+// Since all secondary indexes implicitly include all primary key columns, this mapping is guaranteed to be dense.
+func PrimaryIndexOrdinalToSecondaryIndexOrdinal(idx Index) (pkMap val.OrdinalMapping) {
 	pkTags := idx.PrimaryKeyTags()
 	allTags := idx.AllTags()
-	pkMap := make(val.OrdinalMapping, len(pkTags))
+	if len(pkTags) == 0 { // keyless index
+		pkMap = make(val.OrdinalMapping, 1)
+		pkMap[0] = len(allTags)
+		return pkMap
+	}
+
+	pkMap = make(val.OrdinalMapping, len(pkTags))
 	for i, pk := range pkTags {
 		for j, tag := range allTags {
 			if tag == pk {
