@@ -140,6 +140,53 @@ var SystemTableFunctionIndexTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "test DOLT_DIFF() with expression index",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"create index expression_index on t ((c1+c2));",
+			"set @Commit0 = HashOf('HEAD');",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'create table');",
+			"set @Commit1 = HashOf('HEAD');",
+			"insert into t (pk, c1, c2) values(1, 2, 3), (4, 5, 6);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'insert rows');",
+			"set @Commit2 = HashOf('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't') WHERE to_c1 + to_c2 = 5;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"to_covering"},
+			},
+		},
+	},
+	{
+		Name: "test DOLT_DIFF() with unusual primary index ordinals",
+		SetUpScript: []string{
+			"create table t (c0 int, c1 int, c2 int, c3 int, c4 int, primary key (c4, c2, c0), index sec_idx (c3, c1));",
+			"set @Commit0 = HashOf('HEAD');",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'create table');",
+			"set @Commit1 = HashOf('HEAD');",
+			"insert into t (c0, c1, c2, c3, c4) values(0, 1, 2, 3, 4), (5, 6, 7, 8, 9);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'insert rows');",
+			"set @Commit2 = HashOf('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT to_c0, to_c1, to_c2, to_c3, to_c4, diff_type from dolt_diff(@Commit1, @Commit2, 't') WHERE to_c3 = 8;",
+				Expected: []sql.Row{
+					{5, 6, 7, 8, 9, "added"},
+				},
+				ExpectedIndexes: []string{"to_sec_idx"},
+			},
+		},
+	},
+	{
 		Name: "test DOLT_PATCH() indexes",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
