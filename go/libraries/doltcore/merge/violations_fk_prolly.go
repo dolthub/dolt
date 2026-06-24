@@ -417,6 +417,11 @@ func fkHandlersAreSerializationCompatible(keyDescA, keyDescB *val.TupleDesc) boo
 				return false
 			}
 		}
+		// If one handler is nil, then we're mixing native encoding with handlers
+		// TODO: fix this, this exists only to fix a customer issue
+		if handlerA == nil && handlerB != nil {
+			return false
+		}
 	}
 	return true
 }
