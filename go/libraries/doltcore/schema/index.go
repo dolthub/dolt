@@ -14,7 +14,10 @@
 
 package schema
 
-import "github.com/dolthub/dolt/go/store/val"
+import (
+	"github.com/dolthub/dolt/go/store/val"
+	"slices"
+)
 
 type Index interface {
 	// AllTags returns the tags of the columns in the entire index, including the primary keys.
@@ -58,6 +61,8 @@ type Index interface {
 	FullTextProperties() FullTextProperties
 	// VectorProperties returns all properties belonging to a vector index.
 	VectorProperties() VectorProperties
+	// CoversAllNonGeneratedColumns returns whether the index covers every non-generated column in the table.
+	CoversAllNonVirtualColumns() bool
 }
 
 var _ Index = (*indexImpl)(nil)
@@ -325,4 +330,29 @@ func (ix *indexImpl) copy() *indexImpl {
 		_ = copy(newIx.fullTextProps.KeyPositions, ix.fullTextProps.KeyPositions)
 	}
 	return &newIx
+}
+
+func (ix *indexImpl) CoversAllNonVirtualColumns() bool {
+	if len(ix.prefixLengths) > 0 {
+		return false
+	}
+
+	if ix.IsSpatial() {
+		return false
+	}
+
+	indexTags := ix.AllTags()
+
+	for _, column := range ix.indexColl.colColl.cols {
+		// Every column in the table must be either covered by the index, or generated
+		if column.Virtual {
+			continue
+		}
+
+		if !slices.Contains(indexTags, column.Tag) {
+			return false
+		}
+	}
+
+	return true
 }

@@ -93,14 +93,11 @@ func (dtf *DiffTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) 
 			if fromIdx == nil {
 				continue
 			}
-			if !toIdx.Equals(fromIdx) {
-				continue
-			}
-			if len(toIdx.AllTags()) != dtf.tableDelta.ToSch.GetAllCols().Size() {
+			if !toIdx.CoversAllNonVirtualColumns() {
 				// The index must be covering in order to detect all diffs.
 				continue
 			}
-			if len(fromIdx.AllTags()) != dtf.tableDelta.FromSch.GetAllCols().Size() {
+			if !fromIdx.CoversAllNonVirtualColumns() {
 				// The index must be covering in order to detect all diffs.
 				continue
 			}
