@@ -83,8 +83,30 @@ func OrdinalToPKOrdinal(idx Index) val.OrdinalMapping {
 	return pkMap
 }
 
-// OrdinalToPrimaryOrdinal produces a mapping from the ordinals of a secondary index to the ordinals of the table's primary index.
-func OrdinalToPrimaryOrdinal(sch Schema, idx Index) val.OrdinalMapping {
+// IndexOrdinalToTableOrdinal produces a mapping from a column's offset in the supplied index to the same column's offset in table storage.
+// TODO: Since it's possible to have both virtual columns that don't map onto storage, and storage columns that aren't in the index,
+// OrdinalMapping is a bad fit for the return type. It should be a map[int]int instead.
+func IndexOrdinalToStorageOrdinal(sch Schema, idx Index) (ord val.OrdinalMapping) {
+	ord = make(val.OrdinalMapping, len(idx.AllTags()))
+
+	for i, tag := range idx.AllTags() {
+		pkIdx, ok := sch.GetPKCols().tagToStorageIndex[tag]
+		if ok {
+			ord[i] = pkIdx
+			continue
+		}
+		nonPkIdx, ok := sch.GetNonPKCols().tagToStorageIndex[tag]
+		if ok {
+			ord[i] = nonPkIdx + sch.GetPKCols().Size()
+			continue
+		}
+		ord[i] = -1
+	}
+	return ord
+}
+
+// IndexOrdinalToTableOrdinal produces a mapping from a column's offset in the supplied index to the same column's offset in the table schema.
+func IndexOrdinalToTableOrdinal(sch Schema, idx Index) val.OrdinalMapping {
 	schemaTags := sch.GetAllCols().TagToIdx
 	indexTags := idx.AllTags()
 	ordinalMap := make(val.OrdinalMapping, len(indexTags))

@@ -116,26 +116,6 @@ func getPKFromSecondaryKey(ctx context.Context, pKB *val.TupleBuilder, pool pool
 	return pKB.Build(ctx, pool)
 }
 
-func ordinalMappingFromIndex(def schema.Index) (m val.OrdinalMapping) {
-	pks := def.PrimaryKeyTags()
-	if len(pks) == 0 { // keyless index
-		m = make(val.OrdinalMapping, 1)
-		m[0] = len(def.AllTags())
-		return m
-	}
-
-	m = make(val.OrdinalMapping, len(pks))
-	for i, pk := range pks {
-		for j, tag := range def.AllTags() {
-			if tag == pk {
-				m[i] = j
-				break
-			}
-		}
-	}
-	return
-}
-
 type NullViolationMeta struct {
 	Columns []string `json:"Columns"`
 }

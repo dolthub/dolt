@@ -320,7 +320,7 @@ func (p *SecondaryDiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, erro
 	idxDef := p.toSch.Indexes().GetByName(p.indexName)
 	pkMap := schema.OrdinalToPKOrdinal(idxDef)
 
-	secondaryToPrimaryMap := schema.OrdinalToPrimaryOrdinal(p.toSch, idxDef)
+	secondaryToPrimaryMap := schema.IndexOrdinalToTableOrdinal(p.toSch, idxDef)
 
 	// Build PK tuple builder from primary map's key descriptor
 	pkKd, _ := toPrimary.Descriptors()
