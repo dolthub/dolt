@@ -200,16 +200,13 @@ assert_col_tag() {
     [[ "$output" =~ "4,44,40" ]] || false
 }
 
-# KNOWN FIX TARGET (expected to FAIL until the bug is fixed):
-# When the merge DESTINATION holds the column adaptively encoded and the SOURCE holds it
-# non-adaptively, a row ADDED on the source side is validated against the check constraint in
-# the destination's (adaptive) context: the merge builds the new row and reads its long
-# column -- whose bytes are the source's non-adaptive encoding -- with the adaptive value
-# descriptor. On main this panics the process ("invalid hash length: 19"); on this branch the
-# panic is recovered into an error, but the merge still does not succeed. (The trigger is the
-# inserted pk=3 row; an update-only merge of the same mismatch does not hit it.) These tests
-# assert the *desired* behavior (a successful, correct, constraint-validated merge), so they
-# are red until that is implemented.
+# REGRESSION: when the merge DESTINATION holds the column adaptively encoded and the SOURCE
+# holds it non-adaptively, a row ADDED on the source side is validated against the check
+# constraint in the destination's (adaptive) context. The validator must build the new row by
+# reading its long column -- whose bytes are the source's non-adaptive encoding -- using the
+# SOURCE side's value descriptor. Before the fix it read those bytes with the destination's
+# adaptive descriptor and panicked ("invalid hash length: 19"). (The trigger is the inserted
+# pk=3 row; an update-only merge of the same mismatch does not hit it.)
 @test "merge-adaptive-encoding: TEXT with check constraint, dest converts (case 1)" {
     ddl="create table t (pk int primary key, c text, val int, check (val >= 0))"
     dolt sql -q "$ddl"
@@ -281,8 +278,8 @@ assert_col_tag() {
     [ "${lines[1]}" = "0" ]
 }
 
-# KNOWN FIX TARGET (expected to FAIL until the bug is fixed): see the note on the TEXT
-# "dest converts (case 1)" check-constraint test above. Same root cause for JSON.
+# REGRESSION: same root cause as the TEXT "dest converts (case 1)" check-constraint test
+# above, for JSON.
 @test "merge-adaptive-encoding: JSON with check constraint, dest converts (case 1)" {
     ddl="create table t (pk int primary key, c json, val int, check (val >= 0))"
     dolt sql -q "$ddl"
@@ -389,27 +386,35 @@ struct2_present() {
     if [ "$2" = "json" ]; then echo "json_extract(c,'\$.tag') = '$1'"; else echo "c like '$1-%'"; fi
 }
 
-# struct2_build <coltype> <case 1|2> <check-clause>
+# struct2_build <coltype> <case 1|2> <check-clause> [base-encoding: nonadaptive|adaptive]
 # Builds the base and both branches in the layout above, leaving HEAD on main ready to
-# 'dolt merge other'. The converting side (dest for case 1, source for case 2) recreates the
-# table as adaptive; the other side stays non-adaptive.
+# 'dolt merge other'. The base (and the non-converting side) use <base-encoding> (default
+# nonadaptive); the converting side (dest for case 1, source for case 2) recreates the table
+# in the OPPOSITE encoding. Running with both base encodings covers both directions of the
+# adaptive <-> non-adaptive mismatch, which behaved differently before the merge fixes.
 struct2_build() {
-    local typ=$1 cs=$2 chk=$3 ddl
+    local typ=$1 cs=$2 chk=$3 base_enc=${4:-nonadaptive} ddl
+    local base_adaptive convert_to
+    if [ "$base_enc" = "adaptive" ]; then
+        base_adaptive=true; convert_to=false
+    else
+        base_adaptive=false; convert_to=true
+    fi
     ddl="create table t (pk int primary key, c $typ, val int $chk)"
-    dolt sql -q "$ddl"
+    DOLT_USE_ADAPTIVE_ENCODING=$base_adaptive dolt sql -q "$ddl"
     dolt sql -q "insert into t (pk,c,val) with recursive s(n) as (select 2048 union all select n+1 from s where n < 4095) select n, $(struct2_val BASE n $typ), n from s"
     dolt add .
-    dolt commit -m "base (shared range, non-adaptive)"
+    dolt commit -m "base (shared range, $base_enc)"
 
     dolt checkout -b other
-    [ "$cs" = "2" ] && recreate_table_with_encoding t true "$ddl"
+    [ "$cs" = "2" ] && recreate_table_with_encoding t $convert_to "$ddl"
     dolt sql -q "update t set c = $(struct2_val SMOD pk $typ), val = val + 100000 where pk >= 2048 and pk < 4096 and pk % 4 = 0"
     dolt sql -q "delete from t where pk >= 2048 and pk < 4096 and pk % 4 = 2"
     dolt sql -q "insert into t (pk,c,val) with recursive s(n) as (select 0 union all select n+1 from s where n < 2047) select n, $(struct2_val SRC n $typ), n from s"
     dolt commit -am "source: shared edits + exclusive inserts [0,2048)"
 
     dolt checkout main
-    [ "$cs" = "1" ] && recreate_table_with_encoding t true "$ddl"
+    [ "$cs" = "1" ] && recreate_table_with_encoding t $convert_to "$ddl"
     dolt sql -q "update t set c = $(struct2_val DMOD pk $typ), val = val + 200000 where pk >= 2048 and pk < 4096 and pk % 4 = 1"
     dolt sql -q "delete from t where pk >= 2048 and pk < 4096 and pk % 4 = 3"
     dolt sql -q "insert into t (pk,c,val) with recursive s(n) as (select 4096 union all select n+1 from s where n < 6143) select n, $(struct2_val DST n $typ), n from s"
@@ -448,11 +453,11 @@ struct2_assert() {
     struct2_assert text
 }
 
-# KNOWN FIX TARGET (expected to FAIL until the bug is fixed): the merge SOURCE holds the
-# column adaptively encoded and inserts whole new leaf subtrees; merging into the
-# non-adaptive destination grafts those adaptive subtrees in without rewriting them. The
-# merge reports success, but the resulting table is corrupt: reading the long column fails
-# ("invalid hash length"). The forced-materialization assertions below are what expose it.
+# REGRESSION: the merge SOURCE holds the column adaptively encoded and inserts whole new leaf
+# subtrees; before the fix, merging into the non-adaptive destination grafted those adaptive
+# subtrees in without re-encoding them, so the merge reported success but the resulting table
+# was corrupt -- reading the long column failed ("invalid hash length"). The
+# forced-materialization assertions below are what expose such corruption.
 @test "merge-adaptive-encoding: structural TEXT, source converts to adaptive (case 2)" {
     struct2_build text 2 ""
     run dolt merge other -m merge
@@ -469,7 +474,7 @@ struct2_assert() {
     struct2_assert json
 }
 
-# KNOWN FIX TARGET (expected to FAIL until the bug is fixed): see the TEXT case-2 note above.
+# REGRESSION: see the TEXT case-2 note above, for JSON.
 @test "merge-adaptive-encoding: structural JSON, source converts to adaptive (case 2)" {
     struct2_build json 2 ""
     run dolt merge other -m merge
@@ -478,10 +483,10 @@ struct2_assert() {
     struct2_assert json
 }
 
-# KNOWN FIX TARGET (expected to FAIL until the bug is fixed): case-1 layout with a check
-# constraint. The source (non-adaptive) inserts new rows that are validated against the
-# check in the destination's adaptive context, reading the long column with a mismatched
-# descriptor and panicking during the merge.
+# REGRESSION: case-1 layout with a check constraint. The source (non-adaptive) inserts new
+# rows that are validated against the check in the destination's adaptive context; the
+# validator must read them with the source side's encoding (before the fix it panicked during
+# the merge).
 @test "merge-adaptive-encoding: structural TEXT with check constraint, dest converts (case 1)" {
     struct2_build text 1 ", check (val >= 0)"
     run dolt merge other -m merge
@@ -492,10 +497,77 @@ struct2_assert() {
     [ "${lines[1]}" = "0" ]
 }
 
-# KNOWN FIX TARGET (expected to FAIL until the bug is fixed): case-2 layout with a check
-# constraint -- the grafted-subtree corruption of case 2 plus constraint validation.
+# REGRESSION: case-2 layout with a check constraint -- exercises both the grafted-subtree
+# re-encoding (case 2) and constraint validation together.
 @test "merge-adaptive-encoding: structural TEXT with check constraint, source converts (case 2)" {
     struct2_build text 2 ", check (val >= 0)"
+    run dolt merge other -m merge
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "conflict" ]] || false
+    struct2_assert text
+    run dolt sql -r csv -q "select count(*) as n from dolt_constraint_violations"
+    [ "${lines[1]}" = "0" ]
+}
+
+# ---------------------------------------------------------------------------
+# Mirror direction: the base (and the non-converting side) are ADAPTIVE, and the converting
+# side flips to NON-adaptive. Before the merge fixes these behaved differently from the
+# non-adaptive-base cases above -- in particular the source-converts case here CRASHED the
+# merge process outright (rather than silently corrupting), and the destination's adaptive
+# inserts were the rows left mis-encoded under the merged non-adaptive schema.
+# ---------------------------------------------------------------------------
+
+@test "merge-adaptive-encoding: structural TEXT, dest converts to non-adaptive (case 1, adaptive base)" {
+    struct2_build text 1 "" adaptive
+    run dolt merge other -m merge
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "conflict" ]] || false
+    struct2_assert text
+}
+
+# REGRESSION: mirror of the structural case-2 graft bug. Here the SOURCE converts to
+# non-adaptive and the DESTINATION's adaptive leaf subtrees are the ones that must be
+# re-encoded into the merged non-adaptive schema rather than left in place. Before the fix
+# this crashed the merge.
+@test "merge-adaptive-encoding: structural TEXT, source converts to non-adaptive (case 2, adaptive base)" {
+    struct2_build text 2 "" adaptive
+    run dolt merge other -m merge
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "conflict" ]] || false
+    struct2_assert text
+}
+
+@test "merge-adaptive-encoding: structural JSON, dest converts to non-adaptive (case 1, adaptive base)" {
+    struct2_build json 1 "" adaptive
+    run dolt merge other -m merge
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "conflict" ]] || false
+    struct2_assert json
+}
+
+# REGRESSION: mirror of the structural case-2 graft bug, for JSON.
+@test "merge-adaptive-encoding: structural JSON, source converts to non-adaptive (case 2, adaptive base)" {
+    struct2_build json 2 "" adaptive
+    run dolt merge other -m merge
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "conflict" ]] || false
+    struct2_assert json
+}
+
+@test "merge-adaptive-encoding: structural TEXT with check constraint, dest converts to non-adaptive (case 1, adaptive base)" {
+    struct2_build text 1 ", check (val >= 0)" adaptive
+    run dolt merge other -m merge
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "conflict" ]] || false
+    struct2_assert text
+    run dolt sql -r csv -q "select count(*) as n from dolt_constraint_violations"
+    [ "${lines[1]}" = "0" ]
+}
+
+# REGRESSION: mirror case-2 layout with a check constraint -- grafted-subtree re-encoding and
+# constraint validation together, with the encodings swapped relative to the case above.
+@test "merge-adaptive-encoding: structural TEXT with check constraint, source converts to non-adaptive (case 2, adaptive base)" {
+    struct2_build text 2 ", check (val >= 0)" adaptive
     run dolt merge other -m merge
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "conflict" ]] || false
