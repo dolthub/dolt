@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime/debug"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -448,15 +449,24 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	}
 	var sec *secondaryMerger
 	var conflicts *conflictMerger
-	eg.Go(func() error {
-		var err error
+	eg.Go(func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic computing prolly tree patches during merge: %v\n%s", r, string(debug.Stack()))
+			}
+		}()
 		sec, conflicts, err = computeProllyTreePatches(errCtx, tm, finalSch, mergeTbl, valueMerger, mergeInfo, diffInfo, patchBuffer, s)
 		return err
 	})
 
 	var mergedRoot *tree.Node
 	// consume |patches| and apply them to |left|
-	eg.Go(func() error {
+	eg.Go(func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic applying patches during merge: %v\n%s", r, string(debug.Stack()))
+			}
+		}()
 		leftRowData, err := tm.leftTbl.GetRowData(errCtx)
 		if err != nil {
 			return err
