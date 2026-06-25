@@ -29,6 +29,9 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 # the very encoding-mismatch behavior these tests are meant to exercise.
 
 setup() {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        skip "These tests rely on dolt checkout and per-invocation DOLT_USE_ADAPTIVE_ENCODING env vars, neither of which work against the remote sql-server engine."
+    fi
     setup_common
     # Default every dolt invocation in these tests to NON-adaptive encoding, so that any
     # table/column we create starts out non-adaptive. recreate_table_with_encoding flips
