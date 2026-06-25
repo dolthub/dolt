@@ -81,11 +81,25 @@ func mergeProllyTable(
 	}
 	valueMerger := tm.GetNewValueMerger(ctx, mergedSch, leftRows)
 
-	if !valueMerger.leftMapping.IsIdentityMapping() {
+	// A side must be rewritten into the merged schema (rather than having its rows/subtrees
+	// spliced in as-is) when its columns don't line up with the merged schema -- either because
+	// the column ordinals differ (handled by the value mapping) or because the side's value
+	// encoding differs from the merged schema's. The latter happens when a long column
+	// (TEXT/JSON/BLOB/...) is stored with adaptive encoding on one branch and non-adaptively on
+	// the other: the merged schema picks one encoding, and the side that doesn't match it must
+	// have its rows re-encoded. Splicing those rows/subtrees in unchanged would produce a tree
+	// whose stored chunks don't match the schema's declared encoding. (Keyless tables use a
+	// different value-tuple layout, so we only compare encodings for keyed tables.)
+	mergedValDesc := mergedSch.GetValueDescriptor(tm.ns)
+	keyless := schema.IsKeyless(mergedSch)
+
+	if !valueMerger.leftMapping.IsIdentityMapping() ||
+		(!keyless && !tm.leftSch.GetValueDescriptor(tm.ns).Equals(mergedValDesc)) {
 		mergeInfo.LeftNeedsRewrite = true
 	}
 
-	if !valueMerger.rightMapping.IsIdentityMapping() {
+	if !valueMerger.rightMapping.IsIdentityMapping() ||
+		(!keyless && !tm.rightSch.GetValueDescriptor(tm.ns).Equals(mergedValDesc)) {
 		mergeInfo.RightNeedsRewrite = true
 	}
 
