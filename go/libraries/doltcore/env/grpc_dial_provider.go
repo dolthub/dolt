@@ -17,6 +17,7 @@ package env
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -30,11 +31,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	expcreds "google.golang.org/grpc/experimental/credentials"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/credentialhelper"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 var defaultDialer = &net.Dialer{
@@ -80,10 +83,10 @@ func NewGRPCDialProviderFromDoltEnv(dEnv *DoltEnv) *GRPCDialProvider {
 }
 
 // GetGRPCDialParams implements dbfactory.GRPCDialProvider
-func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error) {
-	endpoint := config.Endpoint
+func (p GRPCDialProvider) GetGRPCDialParams(grpcConfig grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error) {
+	endpoint := grpcConfig.Endpoint
 	if strings.IndexRune(endpoint, ':') == -1 {
-		if config.Insecure {
+		if grpcConfig.Insecure {
 			endpoint += ":80"
 		} else {
 			endpoint += ":443"
@@ -93,8 +96,8 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 	var httpfetcher grpcendpoint.HTTPFetcher = defaultHttpFetcher
 
 	var opts []grpc.DialOption
-	if config.TLSConfig != nil {
-		tc := expcreds.NewTLSWithALPNDisabled(config.TLSConfig)
+	if grpcConfig.TLSConfig != nil {
+		tc := expcreds.NewTLSWithALPNDisabled(grpcConfig.TLSConfig)
 		opts = append(opts, grpc.WithTransportCredentials(tc))
 
 		transport := &http.Transport{
@@ -104,14 +107,14 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 			MaxIdleConns:          1024,
 			MaxIdleConnsPerHost:   256,
 			IdleConnTimeout:       90 * time.Second,
-			TLSClientConfig:       config.TLSConfig,
+			TLSClientConfig:       grpcConfig.TLSConfig,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 		}
 		httpfetcher = &http.Client{
 			Transport: transport,
 		}
-	} else if config.Insecure {
+	} else if grpcConfig.Insecure {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
 		tc := expcreds.NewTLSWithALPNDisabled(&tls.Config{})
@@ -121,13 +124,13 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(remotesrv.MaxGRPCMessageSize)))
 	opts = append(opts, grpc.WithUserAgent(p.getUserAgentString()))
 
-	if config.Creds != nil {
-		opts = append(opts, grpc.WithPerRPCCredentials(config.Creds))
-	} else if config.WithEnvCreds {
+	if grpcConfig.Creds != nil {
+		opts = append(opts, grpc.WithPerRPCCredentials(grpcConfig.Creds))
+	} else if grpcConfig.WithEnvCreds {
 		var rpcCreds credentials.PerRPCCredentials
 		var err error
-		if config.UserIdForOsEnvAuth != "" {
-			rpcCreds, err = p.getRPCCredsFromOSEnv(config.UserIdForOsEnvAuth)
+		if grpcConfig.UserIdForOsEnvAuth != "" {
+			rpcCreds, err = p.getRPCCredsFromOSEnv(grpcConfig.UserIdForOsEnvAuth)
 			if err != nil {
 				return dbfactory.GRPCRemoteConfig{}, err
 			}
@@ -142,11 +145,53 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 		}
 	}
 
+	helper, err := p.getCredentialHelper(grpcConfig, endpoint)
+	if err != nil {
+		return dbfactory.GRPCRemoteConfig{}, err
+	}
+	if helper != nil {
+		opts = append(opts, helper.DialOptions()...)
+		httpfetcher = helper.WrapHTTPFetcher(httpfetcher)
+	}
+
 	return dbfactory.GRPCRemoteConfig{
 		Endpoint:    endpoint,
 		DialOptions: opts,
 		HTTPFetcher: httpfetcher,
 	}, nil
+}
+
+func (p GRPCDialProvider) getCredentialHelper(grpcConfig grpcendpoint.Config, endpoint string) (*credentialhelper.Helper, error) {
+	executable, ok, err := p.globalCredentialHelper()
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	scheme := "https"
+	if grpcConfig.TLSConfig == nil && grpcConfig.Insecure {
+		scheme = "http"
+	}
+	return credentialhelper.New(executable, fmt.Sprintf("%s://%s", scheme, endpoint))
+}
+
+func (p GRPCDialProvider) globalCredentialHelper() (string, bool, error) {
+	if p.dEnv == nil || p.dEnv.Config == nil {
+		return "", false, nil
+	}
+
+	global, ok := p.dEnv.Config.GetConfig(GlobalConfig)
+	if !ok {
+		return "", false, nil
+	}
+
+	executable, err := global.GetString(config.RemotesApiCredentialHelper)
+	if errors.Is(err, config.ErrConfigParamNotFound) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return executable, true, nil
 }
 
 // getRPCCredsFromOSEnv returns RPC Credentials for the specified username, using the DOLT_REMOTE_PASSWORD
