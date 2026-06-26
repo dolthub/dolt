@@ -429,8 +429,8 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 		return nil, nil, err
 	}
 
-	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
-	mergedHeadDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
+	headWorkingDiffs := doltdb.DiffTableHashes(headTableHashes, workingTableHashes)
+	mergedHeadDiffs := doltdb.DiffTableHashes(headTableHashes, mergeTableHashes)
 
 	stompedTables := make([]doltdb.TableName, 0, len(headWorkingDiffs))
 	for tName := range headWorkingDiffs {
@@ -441,28 +441,4 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 	}
 
 	return stompedTables, headWorkingDiffs, nil
-}
-
-func diffTableHashes(headTableHashes, otherTableHashes map[doltdb.TableName]hash.Hash) map[doltdb.TableName]hash.Hash {
-	diffs := make(map[doltdb.TableName]hash.Hash)
-	for tName, hh := range headTableHashes {
-		if h, ok := otherTableHashes[tName]; ok {
-			if h != hh {
-				// modification
-				diffs[tName] = h
-			}
-		} else {
-			// deletion
-			diffs[tName] = hash.Hash{}
-		}
-	}
-
-	for tName, h := range otherTableHashes {
-		if _, ok := headTableHashes[tName]; !ok {
-			// addition
-			diffs[tName] = h
-		}
-	}
-
-	return diffs
 }

@@ -809,7 +809,7 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 	if err != nil {
 		return newRebaseError(err)
 	}
-	restoredWorking, err := actions.MoveUntrackedTables(ctx, preRebaseWorkingRoot, preRebaseStagedRoot, postCopyWS.WorkingRoot())
+	restoredWorking, err := actions.CarryTablesAbsentFromBaseline(ctx, preRebaseWorkingRoot, preRebaseStagedRoot, postCopyWS.WorkingRoot(), nil)
 	if err != nil {
 		return newRebaseError(err)
 	}

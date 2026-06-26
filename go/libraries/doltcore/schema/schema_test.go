@@ -417,3 +417,40 @@ func validateCols(t *testing.T, cols []Column, colColl *ColCollection, msg strin
 		t.Error()
 	}
 }
+
+// TestWithRemappedColumnTagsPreservesMetadata verifies that WithRemappedColumnTags rewrites the
+// column and index tags and carries collation, comment, target row size, and index properties onto
+// the returned schema.
+func TestWithRemappedColumnTagsPreservesMetadata(t *testing.T) {
+	pk, err := NewColumnWithTypeInfo("id", 100, typeinfo.Int64Type, true, "", false, "", NotNullConstraint{})
+	require.NoError(t, err)
+	val, err := NewColumnWithTypeInfo("val", 101, typeinfo.StringDefaultType, false, "", false, "")
+	require.NoError(t, err)
+	sch, err := NewSchema(NewColCollection(pk, val), []int{0}, Collation_utf8mb4_general_ci, nil, nil)
+	require.NoError(t, err)
+	sch.SetComment("test comment")
+	sch.SetTargetRowSize(4096)
+	_, err = sch.Indexes().AddIndexByColTags("val_idx", []uint64{101}, nil, IndexProperties{IsUnique: true, IsUserDefined: true, Comment: "idx comment"})
+	require.NoError(t, err)
+	wantProps := sch.Indexes().GetByName("val_idx").Properties()
+
+	remapped, err := WithRemappedColumnTags(sch, map[uint64]uint64{100: 200, 101: 201})
+	require.NoError(t, err)
+
+	// New tags resolve and the old ones are gone.
+	got, ok := remapped.GetAllCols().GetByName("val")
+	require.True(t, ok)
+	require.Equal(t, uint64(201), got.Tag, "column tag must be remapped")
+	_, ok = remapped.GetAllCols().GetByTag(101)
+	require.False(t, ok, "old column tag must be gone")
+
+	// The index tags are remapped, and every other index property survives the retag.
+	idx := remapped.Indexes().GetByName("val_idx")
+	require.NotNil(t, idx)
+	require.Equal(t, []uint64{201}, idx.IndexedColumnTags(), "index tags must be remapped")
+	require.Equal(t, wantProps, idx.Properties(), "all index properties must survive the retag")
+
+	require.Equal(t, Collation_utf8mb4_general_ci, remapped.GetCollation(), "collation must survive WithRemappedColumnTags")
+	require.Equal(t, "test comment", remapped.GetComment(), "comment must survive WithRemappedColumnTags")
+	require.Equal(t, uint16(4096), remapped.GetTargetRowSize(), "target row size must survive WithRemappedColumnTags")
+}

@@ -57,7 +57,7 @@ func doltUpdateColumnTag(ctx *sql.Context, args ...string) (sql.RowIter, error) 
 		return nil, err
 	}
 
-	newSch, err := updateColumnTag(sch, columnName, tag)
+	newSch, err := schema.WithUpdatedColumnTag(sch, columnName, tag)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update column tag: %w", err)
 	}
@@ -99,36 +99,4 @@ func parseUpdateColumnTagArgs(args ...string) (tableName, columnName string, tag
 	}
 
 	return tableName, columnName, tag, nil
-}
-
-// updateColumnTag updates |sch| by setting the tag for the column named |name| to |tag|.
-func updateColumnTag(sch schema.Schema, name string, tag uint64) (schema.Schema, error) {
-	var found bool
-	columns := sch.GetAllCols().GetColumns()
-	// Find column and update its tag
-	for i, col := range columns {
-		if col.Name == name {
-			col.Tag = tag
-			columns[i] = col
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return nil, fmt.Errorf("column %s does not exist", name)
-	}
-
-	newSch, err := schema.SchemaFromCols(schema.NewColCollection(columns...))
-	if err != nil {
-		return nil, err
-	}
-
-	if err = newSch.SetPkOrdinals(sch.GetPkOrdinals()); err != nil {
-		return nil, err
-	}
-	newSch.SetCollation(sch.GetCollation())
-	newSch.SetTargetRowSize(sch.GetTargetRowSize())
-
-	return newSch, nil
 }
