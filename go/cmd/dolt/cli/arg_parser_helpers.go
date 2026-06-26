@@ -413,6 +413,7 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	ap.SupportsString("port", "", "port", "Defines the port to connect to.")
 	ap.SupportsFlag("no-tls", "", "Disables TLS for the connection to remote databases.")
 	ap.SupportsString("data-dir", "", "data-dir", "Defines a data directory whose subdirectories should all be dolt data repositories accessible as independent databases. Defaults to the current directory.")
+	ap.SupportsString("directory", "C", "dir", "Change to <dir> before executing the subcommand. Equivalent to running dolt from that directory. Matches git -C behaviour.")
 	ap.SupportsString("doltcfg-dir", "", "doltcfg-dir", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString("privilege-file", "", "privilege-file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString("branch-control-file", "", "branch-control-file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
