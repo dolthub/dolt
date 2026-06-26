@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -73,6 +74,8 @@ If a server is running for the database in question, then the query will go thro
 }
 
 var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; pass one of the directories using option --doltcfg-dir")
+
+var doltCheckoutWarned sync.Once
 
 const (
 	QueryFlag             = "query"
@@ -412,7 +415,9 @@ func queryMode(
 	}
 
 	if strings.Contains(strings.ToLower(query), "dolt_checkout") {
-		cli.PrintErrf("warning: dolt_checkout() only affects the current session. To persist the branch change, include additional statements in the same -q invocation or use 'dolt checkout' instead.\n")
+		doltCheckoutWarned.Do(func() {
+			cli.PrintErrf("warning: dolt_checkout() only affects the current session. To persist the branch change, include additional statements in the same -q invocation or use 'dolt checkout' instead.\n")
+		})
 	}
 
 	return 0
