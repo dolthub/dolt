@@ -9,12 +9,18 @@ load "$BATS_TEST_DIRNAME/helper/query-server-common.bash"
 #   GIT_SVC_DIR   path to the bare repository
 #   GIT_SVC_HOOKS_DIR  directory sourced before each wrapper invocation
 #   SSHD_PORT     TCP port the real sshd listens on (set by setup_git_sshd)
+#   SSH_ASKPASS_SCRIPT  path to the recording askpass script (set by setup_git_ssh_askpass_recorder)
+#   SSH_ASKPASS_MARKER  file the recording askpass script writes when invoked
+#   SSH_SHIM_DIR  directory holding the ssh shim (set by setup_git_ssh_path_shim)
 GIT_SVC_DIR=""
 GIT_SVC_WRAPPER=""
 GIT_SVC_HOOKS_DIR=""
 SSHD_DIR=""
 SSHD_PID=""
 SSHD_PORT=""
+SSH_ASKPASS_SCRIPT=""
+SSH_ASKPASS_MARKER=""
+SSH_SHIM_DIR=""
 
 # setup_git_repo initializes a bare git repository seeded with one commit on main.
 setup_git_repo() {
@@ -129,19 +135,66 @@ gen_ssh_key() {
     cat "${keypath}.pub" >> "$SSHD_DIR/authorized_keys"
 }
 
+# setup_git_ssh_askpass_recorder installs an SSH_ASKPASS program that writes
+# the prompt it received to SSH_ASKPASS_MARKER and exits nonzero so ssh
+# aborts instead of blocking. Tests assert on the marker to prove whether an
+# askpass prompt was raised. The script sheds the inherited stderr and bats
+# pipe descriptors so it cannot delay output capture.
+setup_git_ssh_askpass_recorder() {
+    SSH_ASKPASS_SCRIPT="$(mktemp "$BATS_TMPDIR/askpass-recorder.XXXXXX")"
+    SSH_ASKPASS_MARKER="$(mktemp -u "$BATS_TMPDIR/askpass-invoked.XXXXXX")"
+    cat > "$SSH_ASKPASS_SCRIPT" <<RECORD
+#!/usr/bin/env bash
+exec 2>/dev/null 3>&-
+printf '%s' "\$*" > "$SSH_ASKPASS_MARKER"
+exit 1
+RECORD
+    chmod +x "$SSH_ASKPASS_SCRIPT"
+    export SSH_ASKPASS="$SSH_ASKPASS_SCRIPT"
+    # ssh only launches an askpass program when DISPLAY is set.
+    export DISPLAY=":99"
+}
+
+# setup_git_ssh_path_shim places an ssh shim ahead of the real ssh on PATH
+# that injects the key and host options the test sshd needs. git resolves
+# its default transport by searching PATH for ssh, so tests can reach the
+# sshd with no GIT_SSH_COMMAND set. A scratch config file cannot do this
+# because ssh reads its config from the password database home directory,
+# not the HOME env var.
+# Arguments:
+#   $1  path to the private key the shim passes to ssh
+setup_git_ssh_path_shim() {
+    local keypath="$1"
+    local real_ssh
+    real_ssh="$(command -v ssh)"
+    SSH_SHIM_DIR="$(mktemp -d "$BATS_TMPDIR/ssh-shim.XXXXXX")"
+    cat > "$SSH_SHIM_DIR/ssh" <<SHIM
+#!/usr/bin/env bash
+exec "$real_ssh" -i "$keypath" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "\$@"
+SHIM
+    chmod +x "$SSH_SHIM_DIR/ssh"
+    export PATH="$SSH_SHIM_DIR:$PATH"
+}
+
 # teardown_git removes all resources created by the setup_git_* functions.
 # Safe to call even when only some setup functions were called.
 teardown_git() {
-    unset GIT_SSH_COMMAND GIT_SVC_HOOKS_DIR SSH_AUTH_SOCK
+    unset GIT_SSH_COMMAND GIT_SVC_HOOKS_DIR SSH_AUTH_SOCK SSH_ASKPASS
 
     [[ -n "$GIT_SVC_DIR" ]]       && rm -rf "${GIT_SVC_DIR%/*}"
     [[ -n "$GIT_SVC_WRAPPER" ]]   && rm -f  "$GIT_SVC_WRAPPER"
     [[ -n "$GIT_SVC_HOOKS_DIR" ]] && rm -rf "$GIT_SVC_HOOKS_DIR"
+    [[ -n "$SSH_ASKPASS_SCRIPT" ]] && rm -f "$SSH_ASKPASS_SCRIPT"
+    [[ -n "$SSH_ASKPASS_MARKER" ]] && rm -f "$SSH_ASKPASS_MARKER"
+    [[ -n "$SSH_SHIM_DIR" ]]       && rm -rf "$SSH_SHIM_DIR"
     rm -f "$BATS_TMPDIR"/git_env_*
 
     GIT_SVC_DIR=""
     GIT_SVC_WRAPPER=""
     GIT_SVC_HOOKS_DIR=""
+    SSH_ASKPASS_SCRIPT=""
+    SSH_ASKPASS_MARKER=""
+    SSH_SHIM_DIR=""
 
     if [[ -n "${SSHD_PID:-}" ]]; then
         kill "$SSHD_PID" 2>/dev/null || true
