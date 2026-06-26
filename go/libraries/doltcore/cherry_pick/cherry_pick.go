@@ -130,10 +130,12 @@ func CherryPick(ctx *sql.Context, commitString string, options CherryPickOptions
 		return "", nil, err
 	}
 
-	// If no commit message was explicitly provided in the cherry-pick options,
-	// use the commit message from the cherry-picked commit.
+	// If no commit message was explicitly provided in the cherry-pick options, use the
+	// cherry-picked commit's message verbatim.
+	// See https://git-scm.com/docs/git-cherry-pick.
 	if commitProps.Message == "" {
 		commitProps.Message = commitMsg
+		commitProps.CleanupMode = actions.CleanupVerbatim
 	}
 
 	// NOTE: roots are old here (after staging the tables) and need to be refreshed
@@ -334,6 +336,7 @@ func ContinueCherryPick(ctx *sql.Context, dbName string) (string, int, int, int,
 	if err != nil {
 		return "", 0, 0, 0, fmt.Errorf("error: unable to create commit staged props: %w", err)
 	}
+	commitProps.CleanupMode = actions.CleanupVerbatim
 
 	roots, ok := doltSession.GetRoots(ctx, dbName)
 	if !ok {
