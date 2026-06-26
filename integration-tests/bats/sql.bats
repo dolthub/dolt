@@ -1855,6 +1855,14 @@ CALL dolt_checkout('feature-branch');
 SQL
 }
 
+@test "sql: DOLT_CHECKOUT warning is emitted once across multiple -q invocations" {
+    run dolt sql -q "call dolt_checkout('-b', 'feature-branch')" -q "call dolt_checkout('main')"
+    [ $status -eq 0 ]
+
+    warning_count=$(printf '%s\n' "$output" | grep -c "warning: dolt_checkout() only affects the current session")
+    [ "$warning_count" -eq 1 ]
+}
+
 @test "sql: USE fake hash throws error" {
     dolt add .; dolt commit -m 'commit tables'
 
