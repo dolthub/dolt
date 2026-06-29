@@ -127,26 +127,36 @@ func (itr *prollySecondaryDiffIter) queueRows(ctx context.Context) {
 	close(itr.rows)
 }
 
+// populateRows takes a diff between two versions of a secondary index and produces a row matching the schema of DOLT_DIFF()
+// Some of the values will come from the secondary indexes being compared, while others will require a lookup into the
+// primary index at either the |to| commit or the |from| commit, depending on whether the secondary index row was inserted or deleted.
+//
+// Because secondary index maps have empty values, the only possible diff types are Added and Removed, not modified.
+// However, the schema of DOLT_DIFF() requires us to display whether or not a change represents a modification of a row in
+// the primary index. In order to do this, we extract the primary key from the diff and do a lookup in one of the primary indexes.
+//
+// For example, if the |to| secondary index has an additional row, to determine whether the primary key row was added vs modified,
+// we check to see whether the primary key existed in the |from| primary index.
 func (itr *prollySecondaryDiffIter) populateRows(ctx context.Context, pk val.Tuple, d tree.Diff) (row sql.Row, err error) {
-	var valueFromLookup val.Tuple
-	var valueExistsInLookup bool
+	// primaryMapForLookup is the primary index that requires a lookup.
 	var primaryMapForLookup prolly.Map
-	var indexedCommitInfo commitInfo2
-	var lookupCommitInfo commitInfo2
-	var indexedRow, indexedDetails, lookupRow, lookupDetails sql.Row
+	// indexedRow is the slice of the result row containing values read from the diff
+	// lookupRow is the slice of the result row containing values read from the lookup on the primary map
+	var indexedRow, lookupRow sql.Row
 	secondaryMapKey := val.Tuple(d.Key)
 
-	tLen := schemaSize(itr.targetToSch)
-	fLen := schemaSize(itr.targetFromSch)
+	toSchemaLength := schemaSize(itr.targetToSch)
+	fromSchemaLength := schemaSize(itr.targetFromSch)
 
-	if fLen == 0 && d.Type == tree.AddedDiff {
-		fLen = tLen
-	} else if tLen == 0 && d.Type == tree.RemovedDiff {
-		tLen = fLen
+	// If the table did not exist at one the commits, then DOLT_DIFF uses the schema of the side where it did exist.
+	if fromSchemaLength == 0 && d.Type == tree.AddedDiff {
+		fromSchemaLength = toSchemaLength
+	} else if toSchemaLength == 0 && d.Type == tree.RemovedDiff {
+		toSchemaLength = fromSchemaLength
 	}
 
 	// 2 commit names, 2 commit dates, 1 diff_type
-	row = make(sql.Row, fLen+tLen+5)
+	row = make(sql.Row, fromSchemaLength+toSchemaLength+5)
 
 	switch d.Type {
 	case tree.ModifiedDiff:
@@ -155,22 +165,23 @@ func (itr *prollySecondaryDiffIter) populateRows(ctx context.Context, pk val.Tup
 		return nil, fmt.Errorf("unexpected 'modified' diff when diffing secondary indexes")
 	case tree.AddedDiff:
 		primaryMapForLookup = itr.fromPrimary
-		indexedCommitInfo = itr.toCm
-		lookupCommitInfo = itr.fromCm
-		indexedRow = row[0:tLen]
-		indexedDetails = row[tLen : tLen+2]
-		lookupRow = row[tLen+2 : tLen+2+fLen]
-		lookupDetails = row[tLen+2+fLen:]
+		indexedRow = row[0:toSchemaLength]
+		lookupRow = row[toSchemaLength+2 : toSchemaLength+2+fromSchemaLength]
 
 	case tree.RemovedDiff:
 		primaryMapForLookup = itr.toPrimary
-		indexedCommitInfo = itr.fromCm
-		lookupCommitInfo = itr.toCm
-		lookupRow = row[0:tLen]
-		lookupDetails = row[tLen : tLen+2]
-		indexedRow = row[tLen+2 : tLen+2+fLen]
-		indexedDetails = row[tLen+2+fLen:]
+		lookupRow = row[0:toSchemaLength]
+		indexedRow = row[toSchemaLength+2 : toSchemaLength+2+fromSchemaLength]
 	}
+
+	row[toSchemaLength] = itr.toCm.name
+	row[toSchemaLength+1] = maybeTime(itr.toCm.ts)
+
+	row[toSchemaLength+2+fromSchemaLength] = itr.fromCm.name
+	row[toSchemaLength+2+fromSchemaLength+1] = maybeTime(itr.fromCm.ts)
+
+	var valueFromLookup val.Tuple
+	var valueExistsInLookup bool
 	err = primaryMapForLookup.Get(ctx, pk, func(key, value val.Tuple) error {
 		if key != nil {
 			valueFromLookup = value
@@ -204,12 +215,6 @@ func (itr *prollySecondaryDiffIter) populateRows(ctx context.Context, pk val.Tup
 			return nil, err
 		}
 	}
-
-	indexedDetails[0] = indexedCommitInfo.name
-	indexedDetails[1] = maybeTime(indexedCommitInfo.ts)
-
-	lookupDetails[0] = lookupCommitInfo.name
-	lookupDetails[1] = maybeTime(lookupCommitInfo.ts)
 
 	row[len(row)-1] = diffTypeStr(diffType)
 
