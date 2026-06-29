@@ -29,9 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // EnvNameAndPath is a simple tuple of the name of an environment and the path to where it is on disk
@@ -195,9 +193,15 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		if dbErr != nil {
 			if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
 				logrus.Errorf("failed to load database %s with error: %s", dbName, dbErr.Error())
-				logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
 			} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
 				logrus.Warnf("failed to load database with error: %s", dbErr.Error())
+			}
+		}
+		if skipLockTimeout, err := dEnv.IsAccessModeReadOnly(ctx); err == nil && skipLockTimeout {
+			if dbLoadParams == nil {
+				dbLoadParams = map[string]any{dbfactory.SkipJournalLockTimeoutParam: true}
+			} else {
+				dbLoadParams[dbfactory.SkipJournalLockTimeoutParam] = true
 			}
 		}
 		envSet[dbName] = dEnv
@@ -269,9 +273,16 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 }
 
 func (mrEnv *MultiRepoEnv) ReloadDBs(ctx context.Context) {
+	anyIsReadOnly := false
 	for _, namedEnv := range mrEnv.envs {
 		dEnv := namedEnv.env
-
+		if anyIsReadOnly {
+			if dEnv.DBLoadParams == nil {
+				dEnv.DBLoadParams = map[string]any{dbfactory.SkipJournalLockTimeoutParam: true}
+			} else {
+				dEnv.DBLoadParams[dbfactory.SkipJournalLockTimeoutParam] = true
+			}
+		}
 		if dEnv.doltDB == nil {
 			LoadDoltDB(ctx, dEnv)
 		}
@@ -289,9 +300,12 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(ctx context.Context) {
 			if cfgErr != nil {
 				logrus.Warnf("failed to load database configuration at %s with error: %s", dEnv.urlStr, cfgErr.Error())
 			}
+		} else if !anyIsReadOnly {
+			if isReadOnly, err := dEnv.IsAccessModeReadOnly(ctx); err == nil && isReadOnly {
+				anyIsReadOnly = true
+			}
 		}
 	}
-	mrEnv.envs = enforceSingleFormat(ctx, mrEnv.envs)
 }
 
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
@@ -403,42 +417,4 @@ func getRepoRootDir(path, pathSeparator string) string {
 	}
 
 	return name
-}
-
-// enforceSingleFormat enforces that constraint that all databases in
-// a multi-database environment have the same NomsBinFormat.
-// Databases are removed from the MultiRepoEnv to ensure this is true.
-func enforceSingleFormat(ctx context.Context, envSet []NamedEnv) []NamedEnv {
-	formats := set.NewEmptyStrSet()
-	for _, namedEnv := range envSet {
-		dEnv := namedEnv.env
-		formats.Add(dEnv.DoltDB(ctx).Format().VersionString())
-	}
-
-	var nbf string
-	// if present, prefer types.Format_Default
-	if ok := formats.Contains(types.Format_Default.VersionString()); ok {
-		nbf = types.Format_Default.VersionString()
-	} else {
-		// otherwise, pick an arbitrary format
-		for _, namedEnv := range envSet {
-			dEnv := namedEnv.env
-			nbf = dEnv.DoltDB(ctx).Format().VersionString()
-			break
-		}
-	}
-
-	prunedEnvs := make([]NamedEnv, 0, len(envSet))
-	template := "incompatible format for database '%s'; expected '%s', found '%s'"
-	for _, namedEnv := range envSet {
-		name := namedEnv.name
-		dEnv := namedEnv.env
-		found := dEnv.DoltDB(ctx).Format().VersionString()
-		if found != nbf {
-			logrus.Infof(template, name, nbf, found)
-		} else {
-			prunedEnvs = append(prunedEnvs, namedEnv)
-		}
-	}
-	return prunedEnvs
 }

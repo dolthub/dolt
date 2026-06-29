@@ -28,6 +28,31 @@ import (
 
 var DiffSystemTableScriptTests = []queries.ScriptTest{
 	{
+		// See https://github.com/dolthub/dolt/issues/11159
+		Name: "dolt_diff_ table to_commit and from_commit indexes are non-unique",
+		SetUpScript: []string{
+			"create table foo (id int primary key, v int);",
+			"insert into foo values (1,1),(2,1),(3,1),(4,1);",
+			"call dolt_commit('-Am', 'seed');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_foo;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				// The harness skips assertions containing "show indexes from", so this uses the singular synonym.
+				Query: "SHOW INDEX FROM dolt_diff_foo;",
+				Expected: []sql.Row{
+					{"dolt_diff_foo", 0, "to_pks", 1, "to_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 0, "from_pks", 1, "from_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "to_commit", 1, "to_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "from_commit", 1, "from_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+				},
+			},
+		},
+	},
+	{
 		Name: "base case: added rows",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 int);",
@@ -1102,6 +1127,116 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:       "SELECT * from dolt_diff('main..main~', LOWER('T'));",
 				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11187
+		Name: "dolt_diff: column reference commit arguments are rejected with a clear error",
+		SetUpScript: []string{
+			"CREATE TABLE airspaces (id INT PRIMARY KEY, name VARCHAR(20));",
+			"INSERT INTO airspaces VALUES (1, 'a');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'init');",
+			"CALL DOLT_BRANCH('branch-x');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SELECT branch.name, (SELECT COUNT(*) FROM DOLT_DIFF(branch.name, 'branch-x', 'airspaces')) FROM dolt_branches branch;",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT branch.name, (SELECT COUNT(*) FROM DOLT_DIFF(CONCAT(branch.name, '...branch-x'), 'airspaces')) FROM dolt_branches branch;",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT branch.name, (SELECT COUNT(*) FROM DOLT_DIFF('main', 'branch-x', branch.name)) FROM dolt_branches branch;",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query: "SELECT COUNT(*) FROM DOLT_DIFF('main', 'branch-x', 'airspaces');",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11187
+		Name: "dolt_diff: per branch diffs run as one literal statement per branch",
+		SetUpScript: []string{
+			"CREATE TABLE airspaces (id INT PRIMARY KEY, name VARCHAR(20));",
+			"INSERT INTO airspaces VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'init');",
+
+			"CALL DOLT_BRANCH('branch-x');",
+			"CALL DOLT_BRANCH('branch-y');",
+
+			"CALL DOLT_CHECKOUT('branch-x');",
+			"UPDATE airspaces SET name = 'x1' WHERE id = 1;",
+			"UPDATE airspaces SET name = 'x2' WHERE id = 2;",
+			"CALL DOLT_COMMIT('-am', 'x edits');",
+
+			"CALL DOLT_CHECKOUT('branch-y');",
+			"UPDATE airspaces SET name = 'y2' WHERE id = 2;",
+			"UPDATE airspaces SET name = 'y3' WHERE id = 3;",
+			"CALL DOLT_COMMIT('-am', 'y edits');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"CALL DOLT_CHECKOUT('-b', 'widened');",
+			"ALTER TABLE airspaces ADD COLUMN altitude INT;",
+			"UPDATE airspaces SET name = 'w2', altitude = 100 WHERE id = 2;",
+			"CALL DOLT_COMMIT('-am', 'widen and edit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+
+			`CREATE PROCEDURE airspace_warnings(IN base VARCHAR(64))
+BEGIN
+  DECLARE done INT DEFAULT FALSE;
+  DECLARE b VARCHAR(64);
+  DECLARE cur CURSOR FOR SELECT name FROM dolt_branches WHERE name != base;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+  DROP TEMPORARY TABLE IF EXISTS warning_counts;
+  CREATE TEMPORARY TABLE warning_counts (branch VARCHAR(64), warning_count INT);
+  OPEN cur;
+  read_loop: LOOP
+    FETCH cur INTO b;
+    IF done THEN LEAVE read_loop; END IF;
+    SET @q = CONCAT(
+      'INSERT INTO warning_counts SELECT ?, COUNT(*) FROM (',
+      'SELECT COALESCE(to_id, from_id) AS id FROM DOLT_DIFF(', QUOTE(CONCAT(b, '...', base)), ', ''airspaces'') ',
+      'INTERSECT ',
+      'SELECT COALESCE(to_id, from_id) FROM DOLT_DIFF(', QUOTE(CONCAT(base, '...', b)), ', ''airspaces'')',
+      ') co');
+    SET @b = b;
+    PREPARE s FROM @q;
+    EXECUTE s USING @b;
+    DEALLOCATE PREPARE s;
+  END LOOP;
+  CLOSE cur;
+  SELECT * FROM warning_counts ORDER BY branch;
+END`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "CALL airspace_warnings('branch-x');",
+				// branch-y and widened each modified a row that branch-x also modified. The
+				// widened branch has a different column set, which each per branch statement
+				// handles because its literal arguments plan with that exact pair's schemas.
+				Expected: []sql.Row{
+					{"branch-y", 1},
+					{"main", 0},
+					{"widened", 1},
+				},
+			},
+			{
+				Query: "SELECT * FROM warning_counts ORDER BY branch;",
+				Expected: []sql.Row{
+					{"branch-y", 1},
+					{"main", 0},
+					{"widened", 1},
+				},
 			},
 		},
 	},
@@ -6854,6 +6989,25 @@ left join dolt_commit_diff_xy cd
 			{
 				query: "select count(*) from dolt_diff_x where from_commit = @m2h2",
 				exp:   []sql.Row{{4}},
+			},
+		},
+	},
+	{
+		name: "indexes work when table doesn't exist on one branch",
+		setup: []string{
+			"call dolt_checkout('-b', 'mod')",
+			"create table newTable(id int)",
+			"call dolt_add('newTable')",
+			"call dolt_commit('-am', 'added new table')",
+		},
+		queries: []systabQuery{
+			{
+				query: "select count(*) from dolt_diff('main', 'mod', 'newTable') where to_commit='def'",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				query: "select count(*) from dolt_diff('mod', 'main', 'newTable') where to_commit='def'",
+				exp:   []sql.Row{{0}},
 			},
 		},
 	},

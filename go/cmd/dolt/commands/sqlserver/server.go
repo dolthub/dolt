@@ -86,6 +86,9 @@ type Config struct {
 	Controller              *svcs.Controller
 	ProtocolListenerFactory server.ProtocolListenerFunc
 	MCP                     *MCPConfig
+
+	// ProviderFactory controls how the DatabaseProvider is instantiated
+	ProviderFactory sqle.ProviderFactory
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -277,6 +280,7 @@ func ConfigureServices(
 				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
 				SkipRootUserInitialization: cfg.SkipRootUserInit,
 				EngineOverrides:            cfg.ServerConfig.Overrides(),
+				ProviderFactory:            cfg.ProviderFactory,
 			}
 			return nil
 		},
@@ -1226,8 +1230,11 @@ func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.P
 		return server.Config{}, err
 	}
 
-	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-	// to the value of mysql that we support.
+	// The server config is created before system variables are initialized, so we have to use
+	// the config to inform its responses.
+	if verstionString, hasVersionString := serverConfig.SystemVars()["version"]; hasVersionString {
+		serverConf.Version = fmt.Sprint(verstionString)
+	}
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()

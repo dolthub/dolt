@@ -90,7 +90,7 @@ func TestGitRemoteURLString(t *testing.T) {
 
 func TestGitRemoteFactory_GitFile_RequiresGitCacheRootParam(t *testing.T) {
 	ctx := context.Background()
-	_, _, _, err := CreateDB(ctx, types.Format_Default, "git+file:///tmp/remote.git", map[string]interface{}{})
+	_, _, _, err := CreateDB(ctx, types.Format_DOLT, "git+file:///tmp/remote.git", map[string]interface{}{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), GitCacheRootParam)
 }
@@ -115,7 +115,7 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 		GitCacheRootParam: localRepoRoot,
 	}
 
-	db, vrw, _, err := CreateDB(ctx, types.Format_Default, urlStr, params)
+	db, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
 	require.NoError(t, err)
 	require.NotNil(t, db)
 	require.NotNil(t, vrw)
@@ -181,7 +181,7 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 		params := map[string]interface{}{
 			GitCacheRootParam: cacheRoot,
 		}
-		d, vrw, _, err := CreateDB(ctx, types.Format_Default, urlStr, params)
+		d, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
 		require.NoError(t, err)
 		require.NotNil(t, d)
 		require.NotNil(t, vrw)
@@ -256,7 +256,7 @@ func TestGitRemoteFactory_GitFile_RemoteWithNoBranchesFails(t *testing.T) {
 		GitCacheRootParam: localRepoRoot,
 	}
 
-	_, _, _, err = CreateDB(ctx, types.Format_Default, urlStr, params)
+	_, _, _, err = CreateDB(ctx, types.Format_DOLT, urlStr, params)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrGitRemoteHasNoBranches)
 }

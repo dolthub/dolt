@@ -30,19 +30,11 @@ const (
 )
 
 func DeserializeForeignKeys(ctx context.Context, nbf *types.NomsBinFormat, fks types.Value) (*ForeignKeyCollection, error) {
-	if nbf.UsesFlatbuffers() {
-		return deserializeFlatbufferForeignKeys(fks.(types.SerialMessage))
-	} else {
-		return nil, fmt.Errorf("unsupported format for deserializing foreign keys: %s", nbf.VersionString())
-	}
+	return deserializeFlatbufferForeignKeys(fks.(types.SerialMessage))
 }
 
 func SerializeForeignKeys(ctx context.Context, vrw types.ValueReadWriter, fkc *ForeignKeyCollection) (types.Value, error) {
-	if vrw.Format().UsesFlatbuffers() {
-		return serializeFlatbufferForeignKeys(fkc), nil
-	} else {
-		return nil, fmt.Errorf("unsupported format for deserializing foreign keys: %s", vrw.Format().VersionString())
-	}
+	return serializeFlatbufferForeignKeys(fkc), nil
 }
 
 // deserializeFlatbufferForeignKeys returns a new ForeignKeyCollection using the provided map returned previously by GetMap.
@@ -117,6 +109,8 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 				TableColumns:           childUnresolved,
 				ReferencedTableColumns: parentUnresolved,
 			},
+			IsNotValid: fk.IsNotValid(),
+			MatchType:  ForeignKeyMatchType(fk.MatchType()),
 		})
 		if err != nil {
 			return nil, err
@@ -171,6 +165,8 @@ func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessa
 		serial.ForeignKeyAddUnresolvedParentColumns(b, unresolvedParent)
 		serial.ForeignKeyAddOnUpdate(b, serial.ForeignKeyReferentialAction(fk.OnUpdate))
 		serial.ForeignKeyAddOnDelete(b, serial.ForeignKeyReferentialAction(fk.OnDelete))
+		serial.ForeignKeyAddIsNotValid(b, fk.IsNotValid)
+		serial.ForeignKeyAddMatchType(b, serial.ForeignKeyMatchType(fk.MatchType))
 		offsets[i] = serial.ForeignKeyEnd(b)
 	}
 

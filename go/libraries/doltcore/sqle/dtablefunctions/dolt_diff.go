@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -201,6 +202,9 @@ func (dtf *DiffTableFunction) WithExpressions(ctx *sql.Context, expressions ...s
 		if _, ok := expr.(sql.FunctionExpression); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
+		if containsColumnReference(ctx, expr) {
+			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
+		}
 		strVal := expr.String()
 		if lit, ok := expr.(*expression.Literal); ok { // rm quotes from string literals
 			strVal = fmt.Sprintf("%v", lit.Value())
@@ -260,6 +264,17 @@ func (dtf *DiffTableFunction) WithExpressions(ctx *sql.Context, expressions ...s
 	}
 
 	return &newDtf, nil
+}
+
+// containsColumnReference reports whether |expr| contains a column reference, such as an outer
+// reference like branch.name, including when nested inside another expression. Arguments are
+// evaluated without a row during binding, so column references must be rejected up front to
+// fail with a clear error instead of an internal field lookup error.
+func containsColumnReference(ctx *sql.Context, expr sql.Expression) bool {
+	return transform.InspectExpr(ctx, expr, func(ctx *sql.Context, e sql.Expression) bool {
+		_, ok := e.(*expression.GetField)
+		return ok
+	})
 }
 
 // Children implements the sql.Node interface

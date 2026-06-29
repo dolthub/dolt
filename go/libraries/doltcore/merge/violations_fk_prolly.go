@@ -187,7 +187,10 @@ func prollyParentPriDiffFkConstraintViolations(
 				return nil
 			}
 
-			partialKeyRange := prolly.PrefixRange(ctx, partialKey, partialDesc)
+			partialKeyRange, err := prolly.PrefixRange(ctx, partialKey, partialDesc)
+			if err != nil {
+				return err
+			}
 			itr, err := postParentIndexData.IterRange(ctx, partialKeyRange)
 			if err != nil {
 				return err
@@ -413,6 +416,11 @@ func fkHandlersAreSerializationCompatible(keyDescA, keyDescB *val.TupleDesc) boo
 			if !nativeEncodingsAreSerializationCompatible(keyDescA.Types[i].Enc, keyDescB.Types[i].Enc) {
 				return false
 			}
+		}
+		// If one handler is nil, then we're mixing native encoding with handlers
+		// TODO: fix this, this exists only to fix a customer issue
+		if handlerA == nil && handlerB != nil {
+			return false
 		}
 	}
 	return true

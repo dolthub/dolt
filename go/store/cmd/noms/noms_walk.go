@@ -159,7 +159,7 @@ func walkAddrs(ctx context.Context, w io.Writer, path string, value types.Value,
 
 	switch msg := value.(type) {
 	case types.SerialMessage:
-		return msg.WalkAddrs(types.Format_Default, walk)
+		return msg.WalkAddrs(types.Format_DOLT, walk)
 	default:
 		// non-serial values can't be walked
 		return nil

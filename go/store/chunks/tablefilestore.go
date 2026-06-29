@@ -90,7 +90,7 @@ type TableFileStore interface {
 	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 
 	// SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
-	SupportedOperations() TableFileStoreOps
+	SupportedOperations(ctx context.Context) (TableFileStoreOps, error)
 }
 
 type TableFileSources struct {

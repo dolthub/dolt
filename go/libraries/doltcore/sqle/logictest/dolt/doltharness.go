@@ -136,12 +136,12 @@ func (h *DoltHarness) GetTimeout() int64 {
 func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	ctx := context.Background()
 	if !dEnv.HasDoltDir() {
-		err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
+		err := dEnv.InitRepoWithTime(context.Background(), types.Format_DOLT, name, email, env.DefaultInitBranch, time.Now())
 		if err != nil {
 			return err
 		}
 	} else {
-		err := dEnv.InitDBAndRepoState(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
+		err := dEnv.InitDBAndRepoState(context.Background(), types.Format_DOLT, name, email, env.DefaultInitBranch, time.Now())
 		if err != nil {
 			return err
 		}

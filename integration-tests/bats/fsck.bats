@@ -62,8 +62,7 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   done
   dolt sql -q "$stmt"
 
-  dolt gc
-  dolt archive
+  dolt gc --archive-level 1
 
   dolt fsck
 }
@@ -108,7 +107,7 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   printf '\x00\x00\x00\x00' >> "$journal"
   cat $BATS_CWD/corrupt_dbs/journal_data.bin >> "$journal"
 
-  run dolt status
+  run dolt log
   [ "$status" -eq 1 ]
   [[ "$output" =~ "please run 'dolt fsck' to assess the damage and attempt repairs" ]] || false
 

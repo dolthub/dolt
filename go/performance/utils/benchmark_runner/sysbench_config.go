@@ -94,8 +94,6 @@ type sysbenchRunnerConfigImpl struct {
 	ScriptDir string
 	// InitBigRepo downloads a database with existing chunks and commits
 	InitBigRepo bool
-	// NomsBinFormat specifies the NomsBinFormat
-	NomsBinFormat string
 }
 
 var _ SysbenchConfig = &sysbenchRunnerConfigImpl{}
@@ -113,10 +111,6 @@ func (c *sysbenchRunnerConfigImpl) GetRuns() int {
 
 func (c *sysbenchRunnerConfigImpl) GetScriptDir() string {
 	return c.ScriptDir
-}
-
-func (c *sysbenchRunnerConfigImpl) GetNomsBinFormat() string {
-	return c.NomsBinFormat
 }
 
 func (c *sysbenchRunnerConfigImpl) GetRuntimeOs() string {

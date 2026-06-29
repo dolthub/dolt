@@ -353,6 +353,10 @@ func (ddb *DoltDB) Close() error {
 	return ddb.db.Close()
 }
 
+func (ddb *DoltDB) Teardown(ctx context.Context) error {
+	return datas.ChunkStoreFromDatabase(ddb.db).Teardown(ctx)
+}
+
 // GetHashForRefStr resolves a ref string (such as a branch name or tag) and resolves it to a hash.Hash.
 func (ddb *DoltDB) GetHashForRefStr(ctx context.Context, ref string) (*hash.Hash, error) {
 	if err := datas.ValidateDatasetId(ref); err != nil {
@@ -801,9 +805,41 @@ func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv RootValue) (RootValue,
 }
 
 func (ddb *DoltDB) writeRootValue(ctx context.Context, rv RootValue) (RootValue, types.Ref, error) {
+	return ddb.doWriteRootValue(ctx, rv, false)
+}
+
+// doWriteRootValue persists |rv| to the database and returns the updated root
+// value (with its FeatureVersion set) and a Ref to it. If |skipIfPresent| is
+// true and the root value is already present in the database, the write is
+// skipped and a Ref to the existing value is returned.
+//
+// |skipIfPresent| is used by GC safepoint root collection (see
+// WorkingSetHashes / DoltSession.VisitGCRoots), where the returned hash is
+// immediately handed to the GC keeper. There, persisting an already-present
+// root value is redundant, and--because it dirties the store's memtable--it
+// defeats the no-op GC fast path (see NomsBlockStore.hasLocalGCNovelty), so
+// that an online GC of an unchanged database would needlessly rewrite the
+// store every time. Skipping the write is safe in that path because the caller
+// keeps the chunk via the keeper whether or not we wrote it. It must NOT be
+// used on a path that relies on the write being observed by an in-progress GC
+// (the keeperFunc), since skipping the Put skips that bookkeeping.
+func (ddb *DoltDB) doWriteRootValue(ctx context.Context, rv RootValue, skipIfPresent bool) (RootValue, types.Ref, error) {
 	rv, err := rv.SetFeatureVersion(DoltFeatureVersion)
 	if err != nil {
 		return nil, types.Ref{}, err
+	}
+	if skipIfPresent {
+		ref, err := types.NewRef(rv.NomsValue(), ddb.db.Format())
+		if err != nil {
+			return nil, types.Ref{}, err
+		}
+		existing, err := ddb.vrw.ReadValue(ctx, ref.TargetHash())
+		if err != nil {
+			return nil, types.Ref{}, err
+		}
+		if existing != nil {
+			return rv, ref, nil
+		}
 	}
 	ref, err := ddb.vrw.WriteValue(ctx, rv.NomsValue())
 	if err != nil {
@@ -815,8 +851,12 @@ func (ddb *DoltDB) writeRootValue(ctx context.Context, rv RootValue) (RootValue,
 // Persists all relevant root values of the WorkingSet to the database and returns all hashes reachable
 // from the working set. This is used in GC, for example, where all dependencies of the in-memory working
 // set value need to be accounted for.
+//
+// Root values that are already present in the database are not rewritten, so
+// that collecting the GC roots of an unchanged working set does not dirty the
+// store and defeat the no-op GC fast path. See doWriteRootValue.
 func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash.Hash, error) {
-	spec, err := ws.writeValues(ctx, ddb, nil)
+	spec, err := ws.writeValues(ctx, ddb, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1828,7 +1868,7 @@ func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.Workin
 		branchName = workingSet.Name[len("heads/"):]
 	}
 
-	wsSpec, err = workingSet.writeValues(ctx, ddb, meta)
+	wsSpec, err = workingSet.writeValues(ctx, ddb, meta, false)
 	if err != nil {
 		return nil, err
 	}
@@ -2035,7 +2075,15 @@ func pullHash(
 	destCS := datas.ChunkStoreFromDatabase(destDB)
 	waf := types.WalkAddrsForNBF(srcDB.Format(), skipHashes)
 
-	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
+	srcCanUsePuller, err := datas.CanUsePuller(ctx, srcDB)
+	if err != nil {
+		return err
+	}
+	destCanUsePuller, err := datas.CanUsePuller(ctx, destDB)
+	if err != nil {
+		return err
+	}
+	if srcCanUsePuller && destCanUsePuller {
 		puller, err := pull.NewPuller(ctx, tempDir, defaultTargetFileSize, srcCS, destCS, waf, targetHashes, statsCh)
 		if err == pull.ErrDBUpToDate {
 			return nil
@@ -2107,7 +2155,7 @@ func (ddb *DoltDB) restoreDefaultConjoinBehavior() {
 // NomsBlockStore instance which exposes its roots through
 // IterateRoots.  Otherwise returns |nil| without visiting any roots,
 // including the current one.
-func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error) error {
+func (ddb *DoltDB) IterateRoots(ctx context.Context, cb func(root string, timestamp *time.Time) error) error {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
 	if generationalNBS, ok := cs.(*nbs.GenerationalNBS); ok {
@@ -2115,7 +2163,7 @@ func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error
 	}
 
 	if nbsStore, ok := cs.(*nbs.NomsBlockStore); ok {
-		return nbsStore.IterateRoots(cb)
+		return nbsStore.IterateRoots(ctx, cb)
 	} else {
 		return nil
 	}
@@ -2172,7 +2220,10 @@ func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
 		if err != nil {
 			return StoreSizes{}, err
 		}
-		journalSz, ok := newGenNBS.ChunkJournalSize()
+		journalSz, ok, err := newGenNBS.ChunkJournalSize(ctx)
+		if err != nil {
+			return StoreSizes{}, err
+		}
 		if ok {
 			return StoreSizes{
 				JournalBytes: uint64(journalSz),
@@ -2476,6 +2527,17 @@ func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int, 
 // a shallow clone, but should not be called after the clone is complete.
 func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.HashSet) error {
 	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
+}
+
+// IsShallow reports whether this database is a shallow clone, meaning some of
+// its history was never fetched and is represented by ghost commits. Storage
+// formats that do not support shallow clones always report false.
+func (ddb *DoltDB) IsShallow() bool {
+	gcs, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.GenerationalCS)
+	if !ok {
+		return false
+	}
+	return gcs.GhostGen().HasGhosts()
 }
 
 // Purge in-memory read caches associated with this DoltDB. This needs

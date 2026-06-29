@@ -114,17 +114,6 @@ EOF
 )
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
-
-    # No data diff
-    skip_nbf_dolt "Adding a column necessarily rewrites row values in new format"
-    [ "${#lines[@]}" -eq 9 ]
-
-    run dolt sql -r csv -q "select * from test as of 'HEAD'"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,2" ]] || false
-    [[ ! "$output" =~ "1,1," ]] || false
-    [[ ! "$output" =~ "2,2," ]] || false
 }
 
 
@@ -285,10 +274,6 @@ EOF
 )
 
     [[ "$output" =~ "$EXPECTED" ]] || false
-
-    # no data diff
-    skip_nbf_dolt "Adding a column necessarily rewrites row values in new format"
-    [ "${#lines[@]}" -eq 11 ]
 }
 
 @test "drop-create: constraint changes" {

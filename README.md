@@ -25,7 +25,7 @@ Prefer Postgres instead of MySQL? Try [Doltgres](https://github.com/dolthub/dolt
 in its Beta release.
 
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
-ask questions, or [check out our roadmap](https://docs.dolthub.com/other/roadmap) 
+ask questions, or [check out our roadmap](https://dolthub.com/docs/other/roadmap) 
 to see what we're building next.
 
 # Video Introduction
@@ -152,7 +152,7 @@ Download the latest Microsoft Installer (`.msi` file) in
 [releases](https://github.com/dolthub/dolt/releases) and run
 it.
 
-For information on running on Windows, see [here](https://docs.dolthub.com/introduction/installation/windows).
+For information on running on Windows, see [here](https://dolthub.com/docs/introduction/installation/windows).
 
 #### Chocolatey
 
@@ -336,9 +336,9 @@ Dolt supports foreign keys, secondary indexes, triggers, check constraints, and 
 
 ## Make a Dolt commit
 
-It's time to use your first Dolt feature. We're going to make a Dolt [commit](https://docs.dolthub.com/concepts/dolt/commits). A Dolt commit allows you to time travel and see lineage. Make a Dolt commit whenever you want to restore or compare to this point in time.
+It's time to use your first Dolt feature. We're going to make a Dolt [commit](https://dolthub.com/docs/concepts/dolt/commits). A Dolt commit allows you to time travel and see lineage. Make a Dolt commit whenever you want to restore or compare to this point in time.
 
-Dolt exposes version control functionality through a Git-style interface. On the command line, Dolt commands map exactly to their Git equivalent with the targets being tables instead of files. In SQL, Dolt exposes version control read operations as [system tables](https://docs.dolthub.com/sql-reference/version-control/dolt-system-tables) and version control write operations as [stored procedures](https://docs.dolthub.com/sql-reference/version-control/dolt-sql-procedures). 
+Dolt exposes version control functionality through a Git-style interface. On the command line, Dolt commands map exactly to their Git equivalent with the targets being tables instead of files. In SQL, Dolt exposes version control read operations as [system tables](https://dolthub.com/docs/sql-reference/version-control/dolt-system-tables) and version control write operations as [stored procedures](https://dolthub.com/docs/sql-reference/version-control/dolt-sql-procedures). 
 
 The naming of the system tables and stored procedures follows the `dolt_<command>` pattern. So `dolt add` on the CLI becomes `dolt_add` as a stored procedure. Passing options also follows the command line model. For instance, to specify tables to add, send the table names in as options to the `dolt_add` procedure. For named arguments like sending a message into the `dolt_commit` command use two arguments in sequence like `('-m', 'This is a message')`. If you know Git, the version control procedures and system tables should feel familiar.
 
@@ -373,7 +373,7 @@ mysql> select * from dolt_log;
 
 There you have it. Your schema is created and you have a Dolt commit tracking the creation, as seen in the `dolt_log` system table.
 
-Note, a Dolt commit is different than a standard SQL transaction `COMMIT`. In this case, I am running the database with [`AUTOCOMMIT`](https://dev.mysql.com/doc/refman/5.6/en/innodb-autocommit-commit-rollback.html) on, so each SQL statement is automatically generating a transaction `COMMIT`. If you want system to generate a Dolt commit for every transaction use the system variable, [`@@dolt_transaction_commit`](https://docs.dolthub.com/sql-reference/version-control/dolt-sysvars#dolt_transaction_commit).
+Note, a Dolt commit is different than a standard SQL transaction `COMMIT`. In this case, I am running the database with [`AUTOCOMMIT`](https://dev.mysql.com/doc/refman/5.6/en/innodb-autocommit-commit-rollback.html) on, so each SQL statement is automatically generating a transaction `COMMIT`. If you want system to generate a Dolt commit for every transaction use the system variable, [`@@dolt_transaction_commit`](https://dolthub.com/docs/sql-reference/version-control/dolt-sysvars#dolt_transaction_commit).
 
 ## Insert some data
 
@@ -545,7 +545,7 @@ mysql> show tables;
 3 rows in set (0.01 sec)
 ```
 
-Dolt makes operating databases less error prone. You can always back out changes you have in progress or rewind to a known good state. You also have the ability to undo specific commits using [`dolt_revert()`](https://docs.dolthub.com/sql-reference/version-control/dolt-sql-procedures#dolt_revert). Even if you accidentally run `drop database` on the wrong database, Dolt lets you undo that by calling the [`dolt_undrop()` stored procedure](https://docs.dolthub.com/sql-reference/version-control/dolt-sql-procedures#dolt_undrop).
+Dolt makes operating databases less error prone. You can always back out changes you have in progress or rewind to a known good state. You also have the ability to undo specific commits using [`dolt_revert()`](https://dolthub.com/docs/sql-reference/version-control/dolt-sql-procedures#dolt_revert). Even if you accidentally run `drop database` on the wrong database, Dolt lets you undo that by calling the [`dolt_undrop()` stored procedure](https://dolthub.com/docs/sql-reference/version-control/dolt-sql-procedures#dolt_undrop).
 
 
 ## See the data in a SQL Workbench
@@ -831,7 +831,7 @@ Dolt provides powerful data audit capabilities down to individual cells. When, h
 
 # Additional Reading
 
-Head over to [our documentation](https://docs.dolthub.com/introduction/what-is-dolt) now that you have a feel for Dolt. You can also read about what we've been working on in [our blog](https://www.dolthub.com/blog/).
+Head over to [our documentation](https://dolthub.com/docs/introduction/what-is-dolt) now that you have a feel for Dolt. You can also read about what we've been working on in [our blog](https://www.dolthub.com/blog/).
 
 # Security Policy
 

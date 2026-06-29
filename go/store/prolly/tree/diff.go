@@ -153,7 +153,10 @@ func (td Differ[K, O]) next(ctx context.Context, advanceCursors bool) (diff Diff
 
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
-		cmp := td.order.Compare(ctx, K(f), K(t))
+		cmp, cmpErr := td.order.Compare(ctx, K(f), K(t))
+		if cmpErr != nil {
+			return Diff{}, cmpErr
+		}
 
 		switch {
 		case cmp < 0:

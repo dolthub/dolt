@@ -72,6 +72,10 @@ func fileExists(path string) (bool, error) {
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
+	} else if err != nil {
+		// some other I/O error (e.g. EIO, EACCES); surface it rather than
+		// dereferencing the nil |info| below
+		return false, err
 	} else if info.IsDir() {
 		return true, fmt.Errorf("expected file %s, found directory", path)
 	}
@@ -173,103 +177,13 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 	}
 	wr.ranges = newRangeIndex()
 
-	p := filepath.Join(filepath.Dir(wr.path), journalIndexFileName)
-	var ok bool
-	ok, err = fileExists(p)
-	if err != nil {
-		return
-	} else if ok {
-		wr.index, err = os.OpenFile(p, os.O_RDWR, 0666)
-	} else {
-		wr.index, err = os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0666)
-	}
-	if err != nil {
-		return
-	}
-	wr.indexWriter = bufio.NewWriterSize(wr.index, journalIndexDefaultMaxNovel)
-
-	if ok {
-		var info os.FileInfo
-		if info, err = wr.index.Stat(); err != nil {
-			return hash.Hash{}, err
-		}
-
-		// initialize range index with enough capacity to
-		// avoid rehashing during bootstrapping
-		cnt := estimateRangeCount(info)
-		wr.ranges.cached = make(map[addr16]Range, cnt)
-
-		eg, ectx := errgroup.WithContext(ctx)
-		ch := make(chan []lookup, 4)
-
-		// process the indexed portion of the journal
-		var safeIndexOffset int64
-		var prev int64
-
-		eg.Go(func() error {
-			defer close(ch)
-			safeIndexOffset, err = processIndexRecords(bufio.NewReader(wr.index), info.Size(), func(m lookupMeta, batch []lookup, batchChecksum uint32) error {
-				if m.checkSum != batchChecksum {
-					return fmt.Errorf("invalid index checksum (%d != %d)", batchChecksum, m.checkSum)
-				}
-
-				if m.batchStart != prev {
-					return fmt.Errorf("index records do not cover contiguous region (%d != %d)", m.batchStart, prev)
-				}
-				prev = m.batchEnd
-
-				// |r.end| is expected to point to a root hash record in |wr.journal|
-				// containing a hash equal to |r.lastRoot|, validate this here
-				if h, err := peekRootHashAt(wr.journal, int64(m.batchEnd)); err != nil {
-					return err
-				} else if h != m.latestHash {
-					return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), m.latestHash.String())
-				}
-
-				select {
-				case <-ectx.Done():
-					return ectx.Err()
-				case ch <- batch:
-					// record a high-water-mark for the indexed portion of the journal
-					wr.indexed = int64(m.batchEnd)
-				}
-				return nil
-			})
-			return err
-		})
-		// populate range hashmap
-		eg.Go(func() error {
-			for {
-				select {
-				case <-ectx.Done():
-					return nil
-				case ll, ok := <-ch:
-					if !ok {
-						return nil
-					}
-					for _, l := range ll {
-						wr.ranges.putCached(l.a, l.r)
-					}
-				}
-			}
-		})
-
-		err = eg.Wait()
-		if err != nil {
-			err = fmt.Errorf("error bootstrapping chunk journal: %s", err.Error())
-			if cerr := wr.corruptIndexRecovery(); cerr != nil {
-				err = fmt.Errorf("error recovering corrupted chunk journal index: %s", err.Error())
-			}
-			return hash.Hash{}, err
-		}
-
-		// rewind index to last safe point. Note that |safeIndexOffset| refers
-		// to a location in the index file, while |wr.indexed| refers to a position
-		// in the journal file.
-		if err := wr.truncateIndex(safeIndexOffset); err != nil {
-			return hash.Hash{}, err
-		}
-		wr.ranges = wr.ranges.flatten(ctx)
+	// Load the out-of-band journal index, which lets us skip replaying the
+	// already-indexed prefix of the journal. The index is a rebuildable
+	// optimization, so index I/O errors and corruption are non-fatal and fall back
+	// to a full journal replay; see loadJournalIndex for the lone fatal case
+	// (obtaining a writable index handle in read-write mode).
+	if err = wr.loadJournalIndex(ctx, canWrite, warningsCb); err != nil {
+		return hash.Hash{}, err
 	}
 
 	var lastOffset int64
@@ -277,7 +191,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 	// process the non-indexed portion of the journal starting at |wr.indexed|,
 	// at minimum the non-indexed portion will include a root hash record.
 	// Index lookups are added to the ongoing batch to re-synchronize.
-	wr.off, err = processJournalRecords(ctx, wr.journal, canWrite, wr.indexed, func(o int64, r journalRec) error {
+	wr.off, err = processJournalRecords(ctx, wr.path, wr.journal, canWrite, wr.indexed, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
 			rng := Range{
@@ -287,11 +201,14 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 			wr.ranges.put(r.address, rng)
 			wr.uncmpSz += r.uncompressedPayloadSize()
 
-			a := toAddr16(r.address)
-			if err := writeIndexLookup(wr.indexWriter, lookup{a: a, r: rng}); err != nil {
-				return err
+			// re-index this lookup, unless we're read-only and must not write
+			if canWrite {
+				a := toAddr16(r.address)
+				if err := writeIndexLookup(wr.indexWriter, lookup{a: a, r: rng}); err != nil {
+					return err
+				}
+				wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 			}
-			wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 
 		case rootHashJournalRecKind:
 			lastOffset = o
@@ -312,8 +229,8 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 		return hash.Hash{}, err
 	}
 
-	if wr.ranges.novelCount() > wr.maxNovel {
-		// save bootstrap progress
+	if canWrite && wr.ranges.novelCount() > wr.maxNovel {
+		// save bootstrap progress (never write the index in read-only mode)
 		if err := wr.flushIndexRecord(ctx, last, lastOffset); err != nil {
 			return hash.Hash{}, err
 		}
@@ -324,12 +241,182 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 	return
 }
 
-// corruptIndexRecovery handles a corrupted or malformed journal index by truncating
-// the index file and restarting the journal bootstrapping process without an index.
-// todo: make backup file?
-func (wr *journalWriter) corruptIndexRecovery() error {
-	if err := wr.truncateIndex(0); err != nil {
+// loadJournalIndex prepares |wr.index|/|wr.indexWriter| and, when an index file
+// already exists, reads it to pre-populate |wr.ranges| and |wr.indexed| so the
+// subsequent journal replay can skip the indexed prefix.
+//
+// The journal index is a rebuildable optimization derived entirely from the
+// journal; the database's correctness and ability to open depend only on the
+// journal. Index I/O errors are therefore classified into exactly one fatal case
+// and an otherwise-recoverable rest:
+//
+//   - Obtaining a writable index handle (read-write mode only) is the lone fatal
+//     case. Continued operation requires persisting new index records, so if we
+//     cannot open or create the index for writing we fail rather than run in a
+//     state where we silently cannot maintain the index.
+//   - Everything else about an existing index — checking for it, opening it
+//     read-only, statting it, and reading or parsing its contents (transient I/O
+//     faults and on-disk corruption alike) — is non-fatal. We surface the problem
+//     via |warningsCb| and bootstrap from the journal as if the index were absent.
+//
+// In read-only mode (we do not hold the lock) we additionally never mutate
+// on-disk state: the index is opened read-only and |wr.indexWriter| is left nil,
+// which is the signal throughout this type that index writes are disabled.
+func (wr *journalWriter) loadJournalIndex(ctx context.Context, canWrite bool, warningsCb func(error)) error {
+	p := filepath.Join(filepath.Dir(wr.path), journalIndexFileName)
+
+	exists, err := fileExists(p)
+	if err != nil {
+		if canWrite {
+			return err
+		}
+		if warningsCb != nil {
+			warningsCb(fmt.Errorf("error checking for chunk journal index %s, bootstrapping from journal: %w", p, err))
+		}
+		return nil
+	}
+
+	if canWrite {
+		flag := os.O_RDWR
+		if !exists {
+			flag |= os.O_CREATE
+		}
+		if wr.index, err = os.OpenFile(p, flag, 0666); err != nil {
+			return err
+		}
+		wr.indexWriter = bufio.NewWriterSize(wr.index, journalIndexDefaultMaxNovel)
+	} else {
+		if !exists {
+			return nil
+		}
+		if wr.index, err = os.OpenFile(p, os.O_RDONLY, 0666); err != nil {
+			if warningsCb != nil {
+				warningsCb(fmt.Errorf("error opening chunk journal index %s read-only, bootstrapping from journal: %w", p, err))
+			}
+			wr.index = nil
+			return nil
+		}
+	}
+
+	if !exists {
+		// freshly created read-write index; there is nothing to read yet
+		return nil
+	}
+
+	// Read and apply the existing index. Any failure here — a transient I/O fault
+	// or on-disk corruption — is recoverable: discard the index and rebuild from
+	// the journal.
+	if rerr := wr.readJournalIndex(ctx, canWrite); rerr != nil {
+		if warningsCb != nil {
+			warningsCb(fmt.Errorf("error reading chunk journal index %s, rebuilding from journal: %w", p, rerr))
+		}
+		if cerr := wr.corruptIndexRecovery(canWrite); cerr != nil {
+			return fmt.Errorf("error recovering corrupted chunk journal index: %w", cerr)
+		}
+	}
+	return nil
+}
+
+// readJournalIndex reads the existing index file referenced by |wr.index|,
+// validating each batch and populating |wr.ranges| and |wr.indexed|. On success,
+// and only when |canWrite|, the index is rewound to discard any partial trailing
+// batch. It returns an error if the index cannot be read or fails validation; the
+// caller is responsible for recovery.
+func (wr *journalWriter) readJournalIndex(ctx context.Context, canWrite bool) error {
+	info, err := wr.index.Stat()
+	if err != nil {
 		return err
+	}
+
+	// initialize range index with enough capacity to
+	// avoid rehashing during bootstrapping
+	cnt := estimateRangeCount(info)
+	wr.ranges.cached = make(map[addr16]Range, cnt)
+
+	eg, ectx := errgroup.WithContext(ctx)
+	ch := make(chan []lookup, 4)
+
+	// process the indexed portion of the journal
+	var safeIndexOffset int64
+	var prev int64
+
+	eg.Go(func() error {
+		defer close(ch)
+		var perr error
+		safeIndexOffset, perr = processIndexRecords(bufio.NewReader(wr.index), info.Size(), func(m lookupMeta, batch []lookup, batchChecksum uint32) error {
+			if m.checkSum != batchChecksum {
+				return fmt.Errorf("invalid index checksum (%d != %d)", batchChecksum, m.checkSum)
+			}
+
+			if m.batchStart != prev {
+				return fmt.Errorf("index records do not cover contiguous region (%d != %d)", m.batchStart, prev)
+			}
+			prev = m.batchEnd
+
+			// |r.end| is expected to point to a root hash record in |wr.journal|
+			// containing a hash equal to |r.lastRoot|, validate this here
+			if h, err := peekRootHashAt(wr.journal, int64(m.batchEnd)); err != nil {
+				return err
+			} else if h != m.latestHash {
+				return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), m.latestHash.String())
+			}
+
+			select {
+			case <-ectx.Done():
+				return ectx.Err()
+			case ch <- batch:
+				// record a high-water-mark for the indexed portion of the journal
+				wr.indexed = int64(m.batchEnd)
+			}
+			return nil
+		})
+		return perr
+	})
+	// populate range hashmap
+	eg.Go(func() error {
+		for {
+			select {
+			case <-ectx.Done():
+				return nil
+			case ll, ok := <-ch:
+				if !ok {
+					return nil
+				}
+				for _, l := range ll {
+					wr.ranges.putCached(l.a, l.r)
+				}
+			}
+		}
+	})
+
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+
+	// rewind index to last safe point. Note that |safeIndexOffset| refers to a
+	// location in the index file, while |wr.indexed| refers to a position in the
+	// journal file. Only mutate the on-disk index when we hold the lock; in
+	// read-only mode we keep the in-memory state and leave the file untouched.
+	if canWrite {
+		if err := wr.truncateIndex(safeIndexOffset); err != nil {
+			return err
+		}
+	}
+	wr.ranges = wr.ranges.flatten(ctx)
+	return nil
+}
+
+// corruptIndexRecovery handles a corrupted or malformed journal index by resetting
+// the bootstrapping state so that the journal is replayed from offset 0 without an
+// index. When |canWrite| is true, the on-disk index is also truncated so the stale
+// data is discarded; in read-only mode we leave the file untouched and only reset
+// the in-memory state.
+// todo: make backup file?
+func (wr *journalWriter) corruptIndexRecovery(canWrite bool) error {
+	if canWrite {
+		if err := wr.truncateIndex(0); err != nil {
+			return err
+		}
 	}
 	// reset bootstrapping state
 	wr.off, wr.indexed, wr.uncmpSz = 0, 0, 0
@@ -628,7 +715,10 @@ func (wr *journalWriter) Close() (err error) {
 		return err
 	}
 	if wr.index != nil {
-		_ = wr.indexWriter.Flush()
+		// indexWriter is nil when the journal was opened read-only
+		if wr.indexWriter != nil {
+			_ = wr.indexWriter.Flush()
+		}
 		_ = wr.index.Close()
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {

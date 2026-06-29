@@ -38,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
@@ -1965,12 +1964,7 @@ func TestDoltStorageFormat(t *testing.T) {
 }
 
 func TestDoltStorageFormatPrepared(t *testing.T) {
-	var expectedFormatString string
-	if types.IsFormat_DOLT(types.Format_Default) {
-		expectedFormatString = "NEW ( __DOLT__ )"
-	} else {
-		expectedFormatString = fmt.Sprintf("OLD ( %s )", types.Format_Default.VersionString())
-	}
+	expectedFormatString := "NEW ( __DOLT__ )"
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestPreparedQuery(t, h, "SELECT dolt_storage_format()", []sql.Row{{expectedFormatString}}, nil)

@@ -25,6 +25,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	sqljson "github.com/dolthub/go-mysql-server/sql/expression/function/json"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type address = []byte
@@ -46,7 +48,6 @@ var _ types.JSONBytes = IndexedJsonDocument{}
 var _ types.MutableJSON = IndexedJsonDocument{}
 var _ types.ComparableJSON = IndexedJsonDocument{}
 var _ fmt.Stringer = IndexedJsonDocument{}
-var _ driver.Valuer = IndexedJsonDocument{}
 
 func OnceContextValues[T1, T2 any](f func(ctx context.Context) (T1, T2)) func(context.Context) (T1, T2) {
 	var (
@@ -78,7 +79,7 @@ func OnceContextValues[T1, T2 any](f func(ctx context.Context) (T1, T2)) func(co
 	}
 }
 
-func NewIndexedJsonDocument(ctx context.Context, root *Node, ns NodeStore) IndexedJsonDocument {
+func NewIndexedJsonDocument(root *Node, ns NodeStore) IndexedJsonDocument {
 	m := StaticMap[jsonLocationKey, address, *jsonLocationOrdering]{
 		Root:      root,
 		NodeStore: ns,
@@ -132,6 +133,64 @@ func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []b
 		return nil
 	})
 	return bytes, err
+}
+
+// compareJsonAdaptiveValues implements the JsonAdaptiveValueComparator contract from val.
+// It hands the heavy lifting to IndexedJsonDocument.Compare when possible, which walks both
+// documents chunk-by-chunk and stops at the first observed difference. For mixed cases (one
+// inline, one indexed) the indexed side's Compare method handles the other-as-JSONWrapper
+// fallback. When neither side is indexed (both inline) we still get correct MySQL JSON
+// ordering via types.CompareJSON.
+func compareJsonAdaptiveValues(ctx context.Context, ns NodeStore, l, r val.AdaptiveValue) (int, error) {
+	lWrapper, err := openJsonDoc(ctx, ns, l)
+	if err != nil {
+		return 0, err
+	}
+
+	rWrapper, err := openJsonDoc(ctx, ns, r)
+	if err != nil {
+		return 0, err
+	}
+
+	// Order NULLs first, matching the behavior at the tuple layer.
+	if lWrapper == nil || rWrapper == nil {
+		if lWrapper == nil && rWrapper == nil {
+			return 0, nil
+		}
+		if lWrapper == nil {
+			return -1, nil
+		}
+		return 1, nil
+	}
+
+	if li, ok := lWrapper.(IndexedJsonDocument); ok {
+		return li.Compare(ctx, rWrapper)
+	}
+	if ri, ok := rWrapper.(IndexedJsonDocument); ok {
+		cmp, err := ri.Compare(ctx, lWrapper)
+		return -cmp, err
+	}
+
+	// If neither side is IndexedJsonDocument, fall back to built-in JSON comparison, which has the same semantics
+	// but is less efficient.
+	lv, err := lWrapper.ToInterface(ctx)
+	if err != nil {
+		return 0, err
+	}
+	rv, err := rWrapper.ToInterface(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return types.CompareJSON(ctx, lv, rv)
+}
+
+func openJsonDoc(ctx context.Context, ns NodeStore, v val.AdaptiveValue) (sql.JSONWrapper, error) {
+	val, _, err := val.GetJsonAdaptiveValue(ctx, ns, v)
+	if err != nil {
+		return nil, err
+	}
+
+	return OpenJsonAdaptiveValue(ctx, val, ns)
 }
 
 func tryWithFallback(
@@ -293,7 +352,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 				return IndexedJsonDocument{}, false, err
 			}
 
-			return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
+			return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
 
 		}
 		if cursorPath.getScannerState() != arrayInitialElement && cursorPath.getScannerState() != objectInitialElement {
@@ -353,7 +412,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 		return IndexedJsonDocument{}, false, err
 	}
 
-	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
+	return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
 }
 
 // Remove implements types.MutableJSON
@@ -426,7 +485,7 @@ func (i IndexedJsonDocument) removeWithLocation(ctx context.Context, keyPath jso
 		return IndexedJsonDocument{}, false, err
 	}
 
-	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
+	return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
 }
 
 // Set implements types.MutableJSON
@@ -570,7 +629,7 @@ func (i IndexedJsonDocument) replaceIntoCursor(ctx context.Context, keyPath json
 		return IndexedJsonDocument{}, false, err
 	}
 
-	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
+	return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
 }
 
 // ArrayInsert is not yet implemented, so we call it on a types.JSONDocument instead.
@@ -591,10 +650,8 @@ func (i IndexedJsonDocument) ArrayAppend(ctx context.Context, path string, val s
 	return types.JSONDocument{Val: v}.ArrayAppend(ctx, path, val)
 }
 
-// Value implements driver.Valuer for interoperability with other go libraries
-func (i IndexedJsonDocument) Value() (driver.Value, error) {
-	// :-/.
-	return types.JsonToMySqlString(context.TODO(), i)
+func (i IndexedJsonDocument) ValueContext(ctx context.Context) (driver.Value, error) {
+	return types.JsonToMySqlString(ctx, i)
 }
 
 // String implements the fmt.Stringer interface.

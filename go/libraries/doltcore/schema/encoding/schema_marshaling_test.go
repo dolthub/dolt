@@ -107,7 +107,7 @@ func TestTypeInfoMarshalling(t *testing.T) {
 
 func TestSchemaMarshalling(t *testing.T) {
 	ctx := context.Background()
-	nbf := types.Format_Default
+	nbf := types.Format_DOLT
 	vrw := getTestVRW(nbf)
 	schemas := getSchemas(t, 1000)
 	for _, sch := range schemas {

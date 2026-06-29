@@ -234,7 +234,15 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) {
 	for _, rng := range itr.ranges {
 		var err error
 		// if the filter can match all NILs, then we need to return every added/removed diff
-		if rng.Matches(ctx, val.EmptyTuple) {
+		matches, mErr := rng.Matches(ctx, val.EmptyTuple)
+		if mErr != nil {
+			select {
+			case <-ctx.Done():
+			case itr.errChan <- mErr:
+			}
+			return
+		}
+		if matches {
 			err = prolly.DiffMaps(ctx, itr.from, itr.to, false, cb)
 		} else {
 			err = prolly.RangeDiffMaps(ctx, itr.from, itr.to, rng, cb)

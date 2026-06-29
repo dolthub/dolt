@@ -40,7 +40,7 @@ const (
 
 // SerializeSchema serializes a schema.Schema as a Flatbuffer message wrapped in a serial.Message.
 func SerializeSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.SerialMessage, error) {
-	buf, err := serializeSchemaAsFlatbuffer(sch)
+	buf, err := serializeSchemaAsFlatbuffer(ctx, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -52,9 +52,9 @@ func SerializeSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.
 	return v, nil
 }
 
-func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
+func serializeSchemaAsFlatbuffer(ctx context.Context, sch schema.Schema) ([]byte, error) {
 	b := fb.NewBuilder(1024)
-	columns := serializeSchemaColumns(b, sch)
+	columns := serializeSchemaColumns(ctx, b, sch)
 	rows := serializeClusteredIndex(b, sch)
 	indexes := serializeSecondaryIndexes(b, sch, sch.Indexes().AllIndexes())
 	checks := serializeChecks(b, sch.Checks().AllChecks())
@@ -219,7 +219,7 @@ func deserializeClusteredIndex(s *serial.TableSchema) ([]int, error) {
 	return pkOrdinals, nil
 }
 
-func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
+func serializeSchemaColumns(ctx context.Context, b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	cols := sch.GetAllCols().GetColumns()
 	offs := make([]fb.UOffsetT, len(cols))
 
@@ -253,7 +253,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		do := b.CreateString(defVal)
 		ou := b.CreateString(onUpdateVal)
 
-		typeString := sqlTypeString(col.TypeInfo)
+		typeString := sqlTypeString(ctx, col.TypeInfo)
 		to := b.CreateString(typeString)
 		no := b.CreateString(col.Name)
 
@@ -372,7 +372,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 		if err != nil {
 			return nil, err
 		}
-		sqlType, err := typeinfoFromSqlType(string(c.SqlType()))
+		sqlType, err := typeinfoFromSqlType(ctx, string(c.SqlType()))
 		if err != nil {
 			return nil, err
 		}
@@ -418,6 +418,10 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		idx := indexes[i]
 		no := b.CreateString(idx.Name())
 		co := b.CreateString(idx.Comment())
+		var predOffset fb.UOffsetT
+		if idx.Predicate() != "" {
+			predOffset = b.CreateString(idx.Predicate())
+		}
 
 		// serialize indexed columns
 		tags := idx.IndexedColumnTags()
@@ -473,6 +477,9 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 			serial.IndexAddVectorKey(b, true)
 			serial.IndexAddVectorInfo(b, vectorInfo)
 		}
+		if idx.Predicate() != "" {
+			serial.IndexAddPredicate(b, predOffset)
+		}
 		offs[i] = serial.IndexEnd(b)
 	}
 
@@ -511,6 +518,7 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 			IsVector:           idx.VectorKey(),
 			IsUserDefined:      !idx.SystemDefined(),
 			Comment:            string(idx.Comment()),
+			Predicate:          string(idx.Predicate()),
 			FullTextProperties: fti,
 			VectorProperties:   vi,
 		}
@@ -551,6 +559,7 @@ func serializeChecks(b *fb.Builder, checks []schema.Check) fb.UOffsetT {
 		serial.CheckConstraintAddEnforced(b, checks[i].Enforced())
 		serial.CheckConstraintAddExpression(b, eo)
 		serial.CheckConstraintAddName(b, no)
+		serial.CheckConstraintAddIsNotValid(b, checks[i].IsNotValid())
 		offs[i] = serial.CheckConstraintEnd(b)
 	}
 
@@ -570,7 +579,7 @@ func deserializeChecks(sch schema.Schema, s *serial.TableSchema) error {
 			return err
 		}
 		n, e := string(c.Name()), string(c.Expression())
-		if _, err := coll.AddCheck(n, e, c.Enforced()); err != nil {
+		if _, err := coll.AddCheck(n, e, c.Enforced(), c.IsNotValid()); err != nil {
 			return err
 		}
 	}
@@ -702,7 +711,7 @@ func keylessSerialSchema(s *serial.TableSchema) (bool, error) {
 		string(card.Name()) == keylessCardCol, nil
 }
 
-func sqlTypeString(t typeinfo.TypeInfo) string {
+func sqlTypeString(ctx context.Context, t typeinfo.TypeInfo) string {
 	typ := t.ToSqlType()
 	if st, ok := typ.(sql.SpatialColumnType); ok {
 		// for spatial types, we must append the SRID
@@ -723,7 +732,11 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 
 	// Extended types are string serializable, so we'll just prepend a tag
 	if extendedType, ok := typ.(sql.ExtendedType); ok {
-		serializedType, err := sqltypes.SerializeTypeToString(extendedType)
+		sqlCtx, ok := ctx.(*sql.Context)
+		if !ok {
+			panic("SQL context needed for extended type deserialization")
+		}
+		serializedType, err := sqltypes.SerializeTypeToString(sqlCtx, extendedType)
 		if err != nil {
 			panic(err)
 		}
@@ -733,8 +746,8 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 	return typ.String()
 }
 
-func typeinfoFromSqlType(s string) (typeinfo.TypeInfo, error) {
-	sqlType, err := planbuilder.ParseColumnTypeString(s)
+func typeinfoFromSqlType(ctx context.Context, s string) (typeinfo.TypeInfo, error) {
+	sqlType, err := planbuilder.ParseColumnTypeString(ctx, s)
 	if err != nil {
 		return nil, err
 	}

@@ -183,7 +183,9 @@ func testKeyRngDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDelet
 
 	deletes := tups[:numDeletes]
 	sort.Slice(deletes, func(i, j int) bool {
-		return from.keyDesc.Compare(ctx, deletes[i][0], deletes[j][0]) < 0
+		cmp, err := from.keyDesc.Compare(ctx, deletes[i][0], deletes[j][0])
+		require.NoError(t, err)
+		return cmp < 0
 	})
 	inRange := getPairsInKeyRange(deletes, rngTest.keyRange)
 	to := makeMapWithDeletes(t, from, deletes...)
@@ -229,7 +231,9 @@ func testKeyRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdat
 
 	sub := tups[:numUpdates]
 	sort.Slice(sub, func(i, j int) bool {
-		return from.keyDesc.Compare(ctx, sub[i][0], sub[j][0]) < 0
+		cmp, err := from.keyDesc.Compare(ctx, sub[i][0], sub[j][0])
+		require.NoError(t, err)
+		return cmp < 0
 	})
 
 	kd, vd := from.Descriptors()
@@ -292,7 +296,9 @@ func makeBoundedKeyRangeWithMissingKeys(t *testing.T, m Map, kd *val.TupleDesc, 
 	ctx := context.Background()
 	inserts := generateInserts(t, m, kd, vd, 2)
 	low, hi := inserts[0][0], inserts[1][0]
-	if kd.Compare(ctx, low, hi) > 0 {
+	cmp, err := kd.Compare(ctx, low, hi)
+	require.NoError(t, err)
+	if cmp > 0 {
 		hi, low = low, hi
 	}
 
@@ -318,11 +324,23 @@ type keyRange struct {
 
 func (kR keyRange) includes(k val.Tuple) bool {
 	ctx := context.Background()
-	if len(kR.start) != 0 && kR.kd.Compare(ctx, k, kR.start) < 0 {
-		return false
+	if len(kR.start) != 0 {
+		cmp, err := kR.kd.Compare(ctx, k, kR.start)
+		if err != nil {
+			panic(err)
+		}
+		if cmp < 0 {
+			return false
+		}
 	}
-	if len(kR.stop) != 0 && kR.kd.Compare(ctx, k, kR.stop) >= 0 {
-		return false
+	if len(kR.stop) != 0 {
+		cmp, err := kR.kd.Compare(ctx, k, kR.stop)
+		if err != nil {
+			panic(err)
+		}
+		if cmp >= 0 {
+			return false
+		}
 	}
 	return true
 }

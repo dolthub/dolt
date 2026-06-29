@@ -92,6 +92,7 @@ var _ dsess.RevisionDatabase = Database{}
 var _ globalstate.GlobalStateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
 var _ sql.Database = Database{}
+var _ sql.IndexNameGenerator = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TableCreator = Database{}
 var _ sql.IndexedTableCreator = Database{}
@@ -1517,15 +1518,12 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 
 		cachedTable, ok := dbState.SessionCache().GetCachedTable(key, dsess.TableCacheKey{Name: tableName, Schema: db.schemaName})
 		if ok {
-			return cachedTable, true, nil
+			rebound, err := cachedTable.RebindDatabase(ctx, db)
+			if err != nil {
+				return nil, false, err
+			}
+			return rebound, true, nil
 		}
-	}
-
-	t, tblExists, err := db.checkForPgCatalogTable(ctx, tableName)
-	if err != nil {
-		return nil, false, err
-	} else if tblExists {
-		return t, tblExists, nil
 	}
 
 	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, doltdb.TableName{Schema: db.schemaName, Name: tableName})
@@ -1566,27 +1564,6 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	}
 
 	return table, true, nil
-}
-
-// checkForPgCatalogTable checks if the table is of pg_catalog schema
-// when the schema is not defined and the table name start with 'pg_'.
-func (db Database) checkForPgCatalogTable(ctx *sql.Context, tableName string) (sql.Table, bool, error) {
-	if resolve.UseSearchPath && db.schemaName == "" && strings.HasPrefix(strings.ToLower(tableName), "pg_") {
-		sdb, foundSch, err := db.GetSchema(ctx, "pg_catalog")
-		if err != nil {
-			return nil, false, err
-		}
-		if foundSch {
-			tbl, foundTbl, err := sdb.GetTableInsensitive(ctx, tableName)
-			if err != nil {
-				return nil, false, err
-			}
-			if foundTbl {
-				return tbl, foundTbl, nil
-			}
-		}
-	}
-	return nil, false, nil
 }
 
 // resolveUserTable returns the table with the given name from the root given. The table name is resolved in a
@@ -1664,14 +1641,14 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	return tableName, tbl, true, nil
 }
 
-func (db Database) newDoltTable(ctx *sql.Context, tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
+func (db Database) newDoltTable(ctx *sql.Context, tableName string, sch schema.Schema, tbl *doltdb.Table) (dsess.CacheableDoltTable, error) {
 	readonlyTable, err := NewDoltTable(ctx, tableName, sch, tbl, db, db.editOpts)
 	if err != nil {
 		return nil, err
 	}
 
 	tname := doltdb.TableName{Name: tableName, Schema: db.schemaName}
-	var table sql.Table
+	var table dsess.CacheableDoltTable
 	if doltdb.IsReadOnlySystemTable(tname) {
 		table = readonlyTable
 	} else if doltdb.IsDoltCITable(tableName) && !doltdb.IsFullTextTable(tableName) {
@@ -1715,6 +1692,11 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 
 func (db Database) SchemaName() string {
 	return db.schemaName
+}
+
+// GenerateIndexName implements the sql.IndexNameGenerator interface.
+func (db Database) GenerateIndexName(ctx *sql.Context, _ string, idxDef sql.IndexDef, tbl sql.Table) (string, error) {
+	return sql.GenerateMySqlIndexName(ctx, idxDef, tbl)
 }
 
 // GetAllTableNames returns all user-space tables, including system tables in user space
@@ -1860,13 +1842,6 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 
 // dropTable drops the table with the baseName given, without any business logic checks
 func (db Database) dropTable(ctx *sql.Context, tableName string) error {
-	_, tblExists, err := db.checkForPgCatalogTable(ctx, tableName)
-	if err != nil {
-		return err
-	} else if tblExists {
-		return sql.ErrDropTableNotSupported.New("pg_catalog")
-	}
-
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
 		ds.DropTemporaryTable(ctx, db.Name(), tableName)
@@ -2009,7 +1984,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 }
 
 // CreateIndexedTable creates a table with the name and schema given.
-func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
+func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID, comment string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
@@ -2036,7 +2011,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	return db.createIndexedSqlTable(ctx, tableName, db.schemaName, sch, idxDef, collation)
+	return db.createIndexedSqlTable(ctx, tableName, db.schemaName, sch, idxDef, collation, comment)
 }
 
 // CreateFulltextTableNames returns a set of names that will be used to create Full-Text pseudo-index tables.
@@ -2120,7 +2095,7 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 }
 
 // createIndexedSqlTable is the private version of createSqlTable. It doesn't enforce any table name checks.
-func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
+func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID, comment string) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
@@ -2153,6 +2128,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 	if err != nil {
 		return err
 	}
+	doltSch.SetComment(comment)
 
 	// Prevent any tables that use Spatial Types as Primary Key from being created
 	if schema.IsUsingSpatialColAsKey(doltSch) {
@@ -2327,11 +2303,7 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	for _, schema := range schemas {
 		if strings.EqualFold(schema.Name, schemaName) {
 			db.schemaName = schema.Name
-			handledSchema, err := HandleSchema(ctx, schemaName, db)
-			if err != nil {
-				return nil, false, err
-			}
-			return handledSchema, true, nil
+			return db, true, nil
 		}
 	}
 
@@ -2343,12 +2315,6 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	}
 
 	return nil, false, nil
-}
-
-// HandleSchema is used by Doltgres to intercept a database for the purposes of system tables. In Dolt, this just
-// returns the given database.
-var HandleSchema = func(ctx *sql.Context, schemaName string, db Database) (sql.DatabaseSchema, error) {
-	return db, nil
 }
 
 // AllSchemas implements sql.SchemaDatabase
@@ -2371,11 +2337,7 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 	for i, schema := range schemas {
 		sdb := db
 		sdb.schemaName = schema.Name
-		handledDb, err := HandleSchema(ctx, schema.Name, sdb)
-		if err != nil {
-			return nil, err
-		}
-		dbSchemas[i] = handledDb
+		dbSchemas[i] = sdb
 	}
 
 	// For doltgres, the information_schema database should be a schema.

@@ -105,8 +105,8 @@ var SystemTableFunctionIndexTests = []queries.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit0, @Commit1, 't') WHERE to_c1 = 'foo' ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{4, "foo", "d", 4, "bar", "d", "modified"},
-					{5, "foo", "e", nil, nil, nil, "added"},
+					{1, "foo", "a", nil, nil, nil, "added"},
+					{3, "foo", "c", nil, nil, nil, "added"},
 				},
 				ExpectedIndexes: []string{"to_covering"},
 			},

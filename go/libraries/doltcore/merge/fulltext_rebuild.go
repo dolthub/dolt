@@ -140,6 +140,8 @@ func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltd
 	// Even if the parent table was not visited, we still need to check every pseudo-index table due to potential
 	// name overlapping between roots. This also applies to checking whether both ours and theirs have changes.
 	_, wasVisited := visitedTables[tblName]
+
+	// The parent table must have changed relative to both roots for a rebuild to be necessary.
 	oursChanged, err := tableChangedFromRoot(ctx, tblName, tbl, ourRoot)
 	if err != nil {
 		return false, err
@@ -148,30 +150,26 @@ func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltd
 	if err != nil {
 		return false, err
 	}
+
+	// ftDiverged is true when any pseudo-index table differs between ourRoot and theirRoot. If the
+	// pseudo-tables are identical in both roots, the three-way merge already produced correct
+	// pseudo-tables — any parent-table change was to non-indexed columns (e.g. NULL-body inserts)
+	// and no rebuild is needed. When pseudo-tables diverge (different content, or one side renamed
+	// the table so the merged schema's names don't exist in the other root), the three-way merge
+	// of pseudo-tables may be incomplete and we must rebuild from the merged parent table.
+	var ftDiverged bool
 	for _, idx := range sch.Indexes().AllIndexes() {
 		if !idx.IsFullText() {
 			continue
 		}
 		props := idx.FullTextProperties()
 		for _, ftTable := range props.TableNameSlice() {
-			// Add all of the pseudo-index tables to the non-deletion set
 			doNotDeleteTables[ftTable] = struct{}{}
-
-			// Check if the pseudo-index table was visited
 			if !wasVisited {
 				_, wasVisited = visitedTables[ftTable]
 			}
-
-			// Check if the pseudo-index table changed in both our root and their root
-			if !oursChanged {
-				oursChanged, err = tableChangedBetweenRoots(ctx, tblName, ourRoot, mergedRoot)
-				if err != nil {
-					return false, err
-				}
-			}
-
-			if !theirsChanged {
-				theirsChanged, err = tableChangedBetweenRoots(ctx, tblName, theirRoot, mergedRoot)
+			if !ftDiverged {
+				ftDiverged, err = tableChangedBetweenRoots(ctx, ftTable, ourRoot, theirRoot)
 				if err != nil {
 					return false, err
 				}
@@ -179,8 +177,7 @@ func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltd
 		}
 	}
 
-	// If least one table was visited and something was different in all three roots, we rebuild all the indexes.
-	return wasVisited && oursChanged && theirsChanged, nil
+	return wasVisited && oursChanged && theirsChanged && ftDiverged, nil
 }
 
 func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildableFulltextTable, mergedRoot doltdb.RootValue) (doltdb.RootValue, error) {

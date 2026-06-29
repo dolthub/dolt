@@ -55,6 +55,8 @@ type Index interface {
 	PrimaryKeyTags() []uint64
 	// Schema returns the schema for the internal index map. Can be used for table operations.
 	Schema() Schema
+	// Predicate returns the WHERE clause expression string for partial indexes, or "" for full indexes.
+	Predicate() string
 	// PrefixLengths returns the prefix lengths for the index
 	PrefixLengths() []uint16
 	// FullTextProperties returns all properties belonging to a Full-Text index.
@@ -134,6 +136,7 @@ type indexImpl struct {
 	isVector         bool
 	isUserDefined    bool
 	comment          string
+	predicate        string
 	prefixLengths    []uint16
 	fullTextProps    FullTextProperties
 	vectorProperties VectorProperties
@@ -156,6 +159,7 @@ func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, pr
 		isVector:         props.IsVector,
 		isUserDefined:    props.IsUserDefined,
 		comment:          props.Comment,
+		predicate:        props.Predicate,
 		fullTextProps:    props.FullTextProperties,
 		vectorProperties: props.VectorProperties,
 	}
@@ -178,6 +182,11 @@ func (ix *indexImpl) ColumnNames() []string {
 // Comment implements Index.
 func (ix *indexImpl) Comment() string {
 	return ix.comment
+}
+
+// Predicate implements Index.
+func (ix *indexImpl) Predicate() string {
+	return ix.predicate
 }
 
 // Count implements Index.
@@ -204,6 +213,7 @@ func (ix *indexImpl) Equals(other Index) bool {
 		ix.IsSpatial() == other.IsSpatial() &&
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		ix.Comment() == other.Comment() &&
+		ix.Predicate() == other.Predicate() &&
 		ix.Name() == other.Name()
 }
 
@@ -226,6 +236,7 @@ func (ix *indexImpl) DeepEquals(other Index) bool {
 		ix.IsSpatial() == other.IsSpatial() &&
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		ix.Comment() == other.Comment() &&
+		ix.Predicate() == other.Predicate() &&
 		ix.Name() == other.Name()
 }
 
@@ -308,6 +319,7 @@ func (ix *indexImpl) Schema() Schema {
 		// contentHashedFields is the collection of column tags for columns in a unique index that do
 		// not have a prefix length specified and should be stored as a content hash. This information
 		// is needed to later identify that an index is using content-hashed encoding.
+		// TODO: this is imprecise, we need the encoding information from the column type
 		prefixLength := uint16(0)
 		if len(ix.PrefixLengths()) > i {
 			prefixLength = ix.PrefixLengths()[i]

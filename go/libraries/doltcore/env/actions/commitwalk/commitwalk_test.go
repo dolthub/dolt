@@ -64,7 +64,7 @@ func createUninitializedEnv() *env.DoltEnv {
 func TestGetDotDotRevisions(t *testing.T) {
 	ctx := context.Background()
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
+	err := dEnv.InitRepo(context.Background(), types.Format_DOLT, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
 	require.NoError(t, err)
 
 	cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
@@ -280,7 +280,7 @@ func mustForkDB(ctx context.Context, t *testing.T, fromDB *doltdb.DoltDB, bn str
 	h, err := cm.HashOf()
 	require.NoError(t, err)
 	forkEnv := createUninitializedEnv()
-	err = forkEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
+	err = forkEnv.InitRepo(context.Background(), types.Format_DOLT, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
 	require.NoError(t, err)
 	ps := make(chan pull.Stats)
 	go func() {

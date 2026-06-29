@@ -1439,7 +1439,7 @@ func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns tree.
 	require.NoError(t, err)
 	root, err := tree.SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
-	return tree.NewIndexedJsonDocument(ctx, root, ns)
+	return tree.NewIndexedJsonDocument(root, ns)
 }
 
 // createLargeDocumentForTesting creates a JSON document large enough to be split across multiple chunks.
@@ -1910,7 +1910,8 @@ func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) doltdb.R
 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
-	sess := writer.NewWriteSession(ws, gst, eo)
+	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
+	sess := writer.NewWriteSession("test", ws, gst, noop, eo)
 
 	ws, err = sess.Flush(sql.NewContext(ctx))
 	require.NoError(t, err)
@@ -1932,8 +1933,8 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
 	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
-	sess := writer.NewWriteSession(ws, gst, eo)
-	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name}, "test", noop, false)
+	sess := writer.NewWriteSession("test", ws, gst, noop, eo)
+	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name})
 	require.NoError(t, err)
 
 	columns := tbl.ns.sch.GetAllCols().GetColumns()

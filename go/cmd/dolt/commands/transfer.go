@@ -232,7 +232,7 @@ func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesr
 		return nil, nil, fmt.Errorf("failed to resolve bare repository path: %w", err)
 	}
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), absPath, remotesrv.MaxGRPCMessageSize, q, false)
+	cs, err := nbs.NewLocalStore(ctx, types.Format_DOLT.VersionString(), absPath, remotesrv.MaxGRPCMessageSize, q, false)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open bare repository at %s: %w", absPath, err)
 	}

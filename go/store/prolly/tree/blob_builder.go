@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"slices"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -199,9 +198,9 @@ func (lw *blobLevelWriter) Write(ctx context.Context, r io.Reader) (hash.Hash, u
 	i, off, totalCount := 0, 0, uint64(0)
 	for {
 		// Sketchy hack to elide a copy here...
-		//h := (*hash.Hash)(unsafe.Pointer(&lw.buf[off]))
-		//var n uint64
-		//var err error
+		// h := (*hash.Hash)(unsafe.Pointer(&lw.buf[off]))
+		// var n uint64
+		// var err error
 		h, n, err := lw.child.Write(ctx, r)
 		if err != nil && err != io.EOF {
 			return hash.Hash{}, 0, err
@@ -282,7 +281,7 @@ func (b *JSONDoc) ToIndexedJSONDocument(ctx context.Context) (sql.JSONWrapper, e
 		// We're reading a non-indexed multi-chunk document written by an older version of Dolt.
 		return b.ToLazyJSONDocument(ctx)
 	}
-	return NewIndexedJsonDocument(ctx, root, b.ns), nil
+	return NewIndexedJsonDocument(root, b.ns), nil
 }
 
 func (b *JSONDoc) ToString(ctx context.Context) (string, error) {
@@ -297,6 +296,8 @@ func (b *JSONDoc) ToString(ctx context.Context) (string, error) {
 	return string(buf[:toShow]), nil
 }
 
+const unicodeEscapeLen = 6
+
 // unescapeHTMLCodepoints replaces escaped HTML characters in serialized JSON with their unescaped equivalents.
 // Due to an oversight, the representation of JSON in storage escapes these characters, and we unescape them
 // before displaying them to the user.
@@ -307,25 +308,31 @@ func unescapeHTMLCodepoints(path []byte) []byte {
 	matches := 0
 	index := findNextEscapedUnicodeCodepoint(nextToRead)
 	for index != -1 {
-		newChar := byte(0)
-		if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '3', 'c'}) {
+		var newChar byte
+		switch string(nextToRead[index+2 : index+unicodeEscapeLen]) {
+		case "003c":
 			newChar = '<'
-		} else if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '3', 'e'}) {
+		case "003e":
 			newChar = '>'
-		} else if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '2', '6'}) {
+		case "0026":
 			newChar = '&'
 		}
 		if newChar != 0 {
-			matches += 1
+			matches++
 			copy(nextToWrite, nextToRead[:index])
 			nextToWrite[index] = newChar
 			nextToWrite = nextToWrite[index+1:]
+		} else {
+			// Copy a non HTML escape through unchanged. Without this the escape
+			// would be dropped and the rest of the buffer shifted over it.
+			copy(nextToWrite, nextToRead[:index+unicodeEscapeLen])
+			nextToWrite = nextToWrite[index+unicodeEscapeLen:]
 		}
-		nextToRead = nextToRead[index+6:]
+		nextToRead = nextToRead[index+unicodeEscapeLen:]
 		index = findNextEscapedUnicodeCodepoint(nextToRead)
 	}
 	copy(nextToWrite, nextToRead)
-	return path[:len(path)-5*matches]
+	return path[:len(path)-(unicodeEscapeLen-1)*matches]
 }
 
 func findNextEscapedUnicodeCodepoint(path []byte) int {
@@ -335,7 +342,10 @@ func findNextEscapedUnicodeCodepoint(path []byte) int {
 			return -1
 		}
 		if path[index] == '\\' {
-			if path[index+1] == 'u' {
+			// Require a full escape so a truncated tail near the end of the
+			// buffer is left for the caller to copy through rather than read out
+			// of bounds.
+			if index+unicodeEscapeLen <= len(path) && path[index+1] == 'u' {
 				return index
 			}
 			index++

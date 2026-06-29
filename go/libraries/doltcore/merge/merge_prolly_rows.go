@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime/debug"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -80,11 +81,25 @@ func mergeProllyTable(
 	}
 	valueMerger := tm.GetNewValueMerger(ctx, mergedSch, leftRows)
 
-	if !valueMerger.leftMapping.IsIdentityMapping() {
+	// A side must be rewritten into the merged schema (rather than having its rows/subtrees
+	// spliced in as-is) when its columns don't line up with the merged schema -- either because
+	// the column ordinals differ (handled by the value mapping) or because the side's value
+	// encoding differs from the merged schema's. The latter happens when a long column
+	// (TEXT/JSON/BLOB/...) is stored with adaptive encoding on one branch and non-adaptively on
+	// the other: the merged schema picks one encoding, and the side that doesn't match it must
+	// have its rows re-encoded. Splicing those rows/subtrees in unchanged would produce a tree
+	// whose stored chunks don't match the schema's declared encoding. (Keyless tables use a
+	// different value-tuple layout, so we only compare encodings for keyed tables.)
+	mergedValDesc := mergedSch.GetValueDescriptor(tm.ns)
+	keyless := schema.IsKeyless(mergedSch)
+
+	if !valueMerger.leftMapping.IsIdentityMapping() ||
+		(!keyless && !tm.leftSch.GetValueDescriptor(tm.ns).Equals(mergedValDesc)) {
 		mergeInfo.LeftNeedsRewrite = true
 	}
 
-	if !valueMerger.rightMapping.IsIdentityMapping() {
+	if !valueMerger.rightMapping.IsIdentityMapping() ||
+		(!keyless && !tm.rightSch.GetValueDescriptor(tm.ns).Equals(mergedValDesc)) {
 		mergeInfo.RightNeedsRewrite = true
 	}
 
@@ -448,15 +463,24 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	}
 	var sec *secondaryMerger
 	var conflicts *conflictMerger
-	eg.Go(func() error {
-		var err error
+	eg.Go(func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic computing prolly tree patches during merge: %v\n%s", r, string(debug.Stack()))
+			}
+		}()
 		sec, conflicts, err = computeProllyTreePatches(errCtx, tm, finalSch, mergeTbl, valueMerger, mergeInfo, diffInfo, patchBuffer, s)
 		return err
 	})
 
 	var mergedRoot *tree.Node
 	// consume |patches| and apply them to |left|
-	eg.Go(func() error {
+	eg.Go(func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic applying patches during merge: %v\n%s", r, string(debug.Stack()))
+			}
+		}()
 		leftRowData, err := tm.leftTbl.GetRowData(errCtx)
 		if err != nil {
 			return err
@@ -566,6 +590,17 @@ type checkValidator struct {
 	sch              schema.Schema
 	edits            *prolly.ArtifactsEditor
 	srcHash          hash.Hash
+	// leftDefaults and rightDefaults hold the resolved default/generated column expressions for
+	// remapping a left-side or right-side value tuple into the final schema, in the order of the
+	// final schema's stored columns.
+	leftDefaults  []sql.Expression
+	rightDefaults []sql.Expression
+	// leftMatchesFinal and rightMatchesFinal are true when a left- or right-side value tuple is
+	// already a valid final-schema value tuple (identity column mapping and an identical value
+	// descriptor, including storage encodings). In that common case we can validate the tuple
+	// directly and skip the decode/re-encode remap entirely.
+	leftMatchesFinal  bool
+	rightMatchesFinal bool
 }
 
 // newCheckValidator creates a new checkValidator, ready to validate diff events. |tm| provides the overall information
@@ -593,13 +628,36 @@ func newCheckValidator(ctx *sql.Context, tm *TableMerger, vm *valueMerger, sch s
 		return checkValidator{}, err
 	}
 
+	// Precompute the default/generated column expressions used to remap a left- or right-side
+	// value tuple into the final schema when validating a diff.
+	leftDefaults, err := resolveDefaults(ctx, tm.name.Name, sch, tm.leftSch)
+	if err != nil {
+		return checkValidator{}, err
+	}
+	rightDefaults, err := resolveDefaults(ctx, tm.name.Name, sch, tm.rightSch)
+	if err != nil {
+		return checkValidator{}, err
+	}
+
+	// A side's value tuple can be validated directly (no remap) when its column mapping is the
+	// identity and its value descriptor -- including per-column storage encodings -- is identical
+	// to the final schema's. This is the common case (no schema change on that side) and lets us
+	// avoid an expensive per-row decode/re-encode.
+	finalValueDesc := sch.GetValueDescriptor(tm.ns)
+	leftMatchesFinal := vm.leftMapping.IsIdentityMapping() && tm.leftSch.GetValueDescriptor(tm.ns).Equals(finalValueDesc)
+	rightMatchesFinal := vm.rightMapping.IsIdentityMapping() && tm.rightSch.GetValueDescriptor(tm.ns).Equals(finalValueDesc)
+
 	return checkValidator{
-		checkExpressions: checkExpressions,
-		valueMerger:      vm,
-		tableMerger:      tm,
-		sch:              sch,
-		edits:            edits,
-		srcHash:          srcHash,
+		checkExpressions:  checkExpressions,
+		valueMerger:       vm,
+		tableMerger:       tm,
+		sch:               sch,
+		edits:             edits,
+		srcHash:           srcHash,
+		leftDefaults:      leftDefaults,
+		rightDefaults:     rightDefaults,
+		leftMatchesFinal:  leftMatchesFinal,
+		rightMatchesFinal: rightMatchesFinal,
 	}, nil
 }
 
@@ -608,6 +666,10 @@ func newCheckValidator(ctx *sql.Context, tm *TableMerger, vm *valueMerger, sch s
 // the first return parameter and the violations are also written to the artifact editor passed in on creation.
 func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (int, error) {
 	conflictCount := 0
+
+	if len(cv.checkExpressions) == 0 {
+		return 0, nil
+	}
 
 	var valueTuple val.Tuple
 	var valueDesc *val.TupleDesc
@@ -629,30 +691,51 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 		valueTuple = diff.Left
 		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor(cv.tableMerger.ns)
 	case tree.DiffOpDivergentModifyResolved:
+		// the merged value is already encoded in the final schema
 		valueTuple = diff.Merged
 		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor(cv.tableMerger.ns)
 	}
 
-	for checkName, checkExpression := range cv.checkExpressions {
-		// Remap the value to the final schema before checking.
-		// We skip keyless tables, since their value tuples require different mapping
-		// logic and we don't currently support merges to keyless tables that contain schema changes anyway.
-		newTuple := valueTuple
-		if !cv.valueMerger.keyless {
-			if diff.Op == tree.DiffOpRightAdd || diff.Op == tree.DiffOpRightModify {
-				newTupleBytes := remapTuple(valueTuple, valueDesc, cv.valueMerger.rightMapping)
-				newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
-			} else if diff.Op == tree.DiffOpLeftAdd || diff.Op == tree.DiffOpLeftModify {
-				newTupleBytes := remapTuple(valueTuple, valueDesc, cv.valueMerger.leftMapping)
-				newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
+	// Remap the value into the final schema before checking. We skip keyless tables, since
+	// their value tuples require different mapping logic and we don't currently support merges
+	// to keyless tables that contain schema changes anyway.
+	//
+	// When the diff's source side is already a valid final-schema tuple (identity mapping and an
+	// identical value descriptor), we validate it directly -- the common case. Otherwise we must
+	// remap, reading the value with the encoding of the side it came from:
+	// remapTupleWithColumnDefaults decodes |valueTuple| with |valueDesc| (the source side's
+	// descriptor) and re-encodes into the final schema's descriptor. This matters when a column's
+	// storage encoding differs between the diff's source side and the final schema -- e.g. a
+	// TEXT/JSON column stored adaptively on one branch and non-adaptively on the other -- since
+	// decoding the raw source bytes with the final schema's descriptor would misread them.
+	newTuple := valueTuple
+	if !cv.valueMerger.keyless {
+		var err error
+		switch diff.Op {
+		case tree.DiffOpRightAdd, tree.DiffOpRightModify:
+			if !cv.rightMatchesFinal {
+				newTuple, err = remapTupleWithColumnDefaults(ctx, diff.Key, valueTuple, valueDesc,
+					cv.valueMerger.rightMapping, cv.tableMerger, cv.tableMerger.rightSch, cv.sch,
+					cv.rightDefaults, cv.valueMerger.syncPool, true)
+			}
+		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
+			if !cv.leftMatchesFinal {
+				newTuple, err = remapTupleWithColumnDefaults(ctx, diff.Key, valueTuple, valueDesc,
+					cv.valueMerger.leftMapping, cv.tableMerger, cv.tableMerger.leftSch, cv.sch,
+					cv.leftDefaults, cv.valueMerger.syncPool, false)
 			}
 		}
-
-		row, err := index.BuildRow(ctx, diff.Key, newTuple, cv.sch, cv.valueMerger.ns)
 		if err != nil {
 			return 0, err
 		}
+	}
 
+	row, err := index.BuildRow(ctx, diff.Key, newTuple, cv.sch, cv.valueMerger.ns)
+	if err != nil {
+		return 0, err
+	}
+
+	for checkName, checkExpression := range cv.checkExpressions {
 		result, err := checkExpression.Eval(ctx, row)
 		if err != nil {
 			return 0, err
@@ -2344,7 +2427,7 @@ func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 		if err != nil {
 			return types.JSONDocument{}, true, err
 		}
-		merged = tree.NewIndexedJsonDocument(ctx, root, ns)
+		merged = tree.NewIndexedJsonDocument(root, ns)
 	}
 
 	for {

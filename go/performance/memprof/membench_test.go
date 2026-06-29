@@ -44,7 +44,7 @@ func BenchmarkLoadDoltDBMemory(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ctx := context.Background()
 		var err error
-		ddb, err = doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, filesys.LocalFS)
+		ddb, err = doltdb.LoadDoltDB(ctx, types.Format_DOLT, urlStr, filesys.LocalFS)
 		if err != nil {
 			b.Fatalf("failed to load doltdb, err: %s", err.Error())
 		}

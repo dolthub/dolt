@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -632,6 +633,9 @@ func checkoutTablesFromCommit(
 	tables []string,
 	rsc *doltdb.ReplicationStatusController,
 ) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(ctx, databaseName)
 	if !ok {
@@ -724,6 +728,9 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 // working root. The working root is then set as the new staged root so that the checked-out tables are not
 // shown as pending staged changes. This is necessary because tables may exist outside of the HEAD commit.
 func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return err
+	}
 	var tableNames []doltdb.TableName
 	var warningMsg strings.Builder
 	var err error

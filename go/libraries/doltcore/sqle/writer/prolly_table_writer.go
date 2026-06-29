@@ -45,12 +45,10 @@ type prollyTableWriter struct {
 	primary   indexWriter
 	secondary map[string]indexWriter
 
-	dbName  string
-	tblName doltdb.TableName
-	sch     schema.Schema
-	sqlSch  sql.Schema
-
-	setter    dsess.SessionRootSetter
+	dbName    string
+	tblName   doltdb.TableName
+	sch       schema.Schema
+	sqlSch    sql.Schema
 	writeSess dsess.WriteSession
 
 	aiCol      schema.Column
@@ -102,6 +100,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 			pkMap:         def.PkMapping,
 			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
 			key:           make(sql.Row, keyDesc.Count()),
+			predicate:     def.Predicate,
 		}
 	}
 
@@ -139,6 +138,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 			primary:       primary,
 			unique:        def.IsUnique,
 			spatial:       def.IsSpatial,
+			predicate:     def.Predicate,
 			prefixLengths: def.PrefixLengths,
 			keyBld:        val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
 			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
@@ -421,13 +421,9 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	newRoot, err := w.writeSess.FlushTable(ctx, w.tblName, tbl)
+	_, err = w.writeSess.FlushTable(ctx, w.tblName, tbl)
 	if err != nil {
 		return err
 	}
-	err = w.Reset(ctx, tbl)
-	if err != nil {
-		return err
-	}
-	return w.setter(ctx, w.dbName, newRoot)
+	return w.Reset(ctx, tbl)
 }

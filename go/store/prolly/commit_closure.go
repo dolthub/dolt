@@ -44,14 +44,14 @@ type commitClosureKeyOrdering struct{}
 
 var _ tree.Ordering[CommitClosureKey] = commitClosureKeyOrdering{}
 
-func (o commitClosureKeyOrdering) Compare(ctx context.Context, left, right CommitClosureKey) int {
+func (o commitClosureKeyOrdering) Compare(ctx context.Context, left, right CommitClosureKey) (int, error) {
 	lh, rh := left.Height(), right.Height()
 	if lh == rh {
-		return bytes.Compare(left[prefixWidth:], right[prefixWidth:])
+		return bytes.Compare(left[prefixWidth:], right[prefixWidth:]), nil
 	} else if lh < rh {
-		return -1
+		return -1, nil
 	}
-	return 1
+	return 1, nil
 }
 
 func NewEmptyCommitClosure(ns tree.NodeStore) (CommitClosure, error) {
@@ -171,7 +171,11 @@ func (k CommitClosureKey) Addr() hash.Hash {
 }
 
 func (k CommitClosureKey) Less(ctx context.Context, other CommitClosureKey) bool {
-	return commitClosureKeyOrdering{}.Compare(ctx, k, other) < 0
+	cmp, err := commitClosureKeyOrdering{}.Compare(ctx, k, other)
+	if err != nil {
+		panic(err)
+	}
+	return cmp < 0
 }
 
 var emptyCommitClosureValue CommitClosureValue = CommitClosureValue(make([]byte, 1))

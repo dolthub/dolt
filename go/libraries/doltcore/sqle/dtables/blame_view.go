@@ -42,10 +42,10 @@ const (
 								 diff_type,
 				                 ROW_NUMBER() OVER (
 				                     PARTITION BY 
-										%s  -- pksPartitionByExpression
+											%s  -- pksPartitionByExpression
 				                     ORDER BY 
-										coalesce(to_commit_date, from_commit_date) DESC
-								) row_num
+											coalesce(to_commit_date, from_commit_date) DESC
+									) row_num
 				             FROM
 				                 ` + "`dolt_diff_%s`" + ` -- tableName
 				            )
@@ -57,12 +57,13 @@ const (
 				    dl.email,
 				    dl.message
 				FROM
-				    sorted_diffs_by_pk as sd,
-				    dolt_log as dl
+				    sorted_diffs_by_pk as sd
+				LEFT JOIN
+				    dolt_log as dl ON dl.commit_hash = sd.to_commit
 				WHERE
-				    dl.commit_hash = sd.to_commit
-				    and sd.row_num = 1
+				    sd.row_num = 1
 				    and sd.diff_type <> 'removed'
+						and sd.to_commit <> 'WORKING'
 				ORDER BY 
 					%s  -- pksOrderByExpression;
 `

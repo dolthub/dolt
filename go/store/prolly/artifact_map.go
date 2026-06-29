@@ -88,7 +88,7 @@ var _ MapInterface = (*ArtifactMap)(nil)
 // NewArtifactMap creates an artifact map based on |srcKeyDesc| which is the key descriptor for
 // the corresponding row map.
 func NewArtifactMap(node *tree.Node, ns tree.NodeStore, srcKeyDesc *val.TupleDesc) ArtifactMap {
-	keyDesc, valDesc := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
+	keyDesc, valDesc := mergeArtifactsDescriptorsFromSource(srcKeyDesc, ns)
 	tuples := tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      node,
 		NodeStore: ns,
@@ -105,7 +105,7 @@ func NewArtifactMap(node *tree.Node, ns tree.NodeStore, srcKeyDesc *val.TupleDes
 // NewArtifactMapFromTuples creates an artifact map based on |srcKeyDesc| which is the key descriptor for
 // the corresponding row map and inserts the given |tups|. |tups| must be a key followed by a value.
 func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc *val.TupleDesc, tups ...val.Tuple) (ArtifactMap, error) {
-	kd, vd := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
+	kd, vd := mergeArtifactsDescriptorsFromSource(srcKeyDesc, ns)
 	serializer := message.NewMergeArtifactSerializer(kd, ns.Pool())
 
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
@@ -394,7 +394,11 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish
 // has the same |meta.Value| but a different |meta.VInfo|, a new artifact is added (distinct key via
 // violation-info hash) instead of replacing. Same value and same |meta.VInfo| causes replace.
 func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
-	itr, err := wr.mut.IterRange(ctx, PrefixRange(ctx, srcKey, wr.srcKeyDesc))
+	rng, err := PrefixRange(ctx, srcKey, wr.srcKeyDesc)
+	if err != nil {
+		return err
+	}
+	itr, err := wr.mut.IterRange(ctx, rng)
 	if err != nil {
 		return err
 	}
@@ -469,7 +473,11 @@ func ConstraintViolationInfoHash(violationInfo []byte) []byte {
 // DeleteConstraintViolationsForRow deletes every constraint-violation artifact for the row |srcKey| with type
 // |artType|. It returns the number of artifacts deleted. Used when resolving all violations for a row.
 func (wr *ArtifactsEditor) DeleteConstraintViolationsForRow(ctx context.Context, srcKey val.Tuple, artType ArtifactType) (int, error) {
-	itr, err := wr.mut.IterRange(ctx, PrefixRange(ctx, srcKey, wr.srcKeyDesc))
+	rng, err := PrefixRange(ctx, srcKey, wr.srcKeyDesc)
+	if err != nil {
+		return 0, err
+	}
+	itr, err := wr.mut.IterRange(ctx, rng)
 	if err != nil {
 		return 0, err
 	}
@@ -680,7 +688,7 @@ type Artifact struct {
 	ArtType ArtifactType
 }
 
-func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc) (kd, vd *val.TupleDesc) {
+func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc, vs val.ValueStore) (kd, vd *val.TupleDesc) {
 	// Artifact key is: source PK, commit hash, artifact type, then a fixed-size violation-info hash so multiple
 	// violations of the same type for the same row can coexist.
 	keyTypes := srcKd.Types
@@ -700,7 +708,8 @@ func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc) (kd, vd *val.Tupl
 	handlers := make([]val.TupleTypeHandler, len(keyTypes))
 	copy(handlers, srcKd.Handlers)
 
-	return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers}, keyTypes...), val.NewTupleDescriptor(valTypes...)
+	return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs}, keyTypes...),
+		val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{ValueStore: vs}, valTypes...)
 }
 
 func ArtifactDebugFormat(ctx context.Context, m ArtifactMap) (string, error) {

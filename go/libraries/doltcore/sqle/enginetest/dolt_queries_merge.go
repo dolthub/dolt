@@ -3293,6 +3293,61 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "three-way merge of table with vector index",
+		SetUpScript: []string{
+			"CREATE TABLE chunks (id INT PRIMARY KEY, e VECTOR(3) NOT NULL, VECTOR INDEX vidx (e))",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'base schema')",
+			"CALL DOLT_CHECKOUT('-b', 'branch')",
+			"INSERT INTO chunks VALUES (1, STRING_TO_VECTOR('[1,0,0]')), (2, STRING_TO_VECTOR('[0,1,0]'))",
+			"CALL DOLT_COMMIT('-am', 'rows on branch')",
+			"CALL DOLT_CHECKOUT('main')",
+			"INSERT INTO chunks VALUES (9, STRING_TO_VECTOR('[0.5,0.5,0]'))",
+			"CALL DOLT_COMMIT('-am', 'row on main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('branch')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT id FROM chunks ORDER BY id",
+				Expected: []sql.Row{{1}, {2}, {9}},
+			},
+		},
+	},
+	{
+		Name: "dolt_conflicts_resolve keeps vector index consistent with resolved rows",
+		SetUpScript: []string{
+			"SET @@autocommit=0;",
+			"CREATE TABLE chunks (id INT PRIMARY KEY, e VECTOR(2) NOT NULL, VECTOR INDEX vidx (e))",
+			"INSERT INTO chunks VALUES (1, STRING_TO_VECTOR('[50,60]')), (2, STRING_TO_VECTOR('[42,52]')), (3, STRING_TO_VECTOR('[44,54]'))",
+			"CALL DOLT_COMMIT('-Am', 'base rows')",
+			"CALL DOLT_CHECKOUT('-b', 'branch')",
+			"UPDATE chunks SET e = STRING_TO_VECTOR('[0,0]') WHERE id = 1",
+			"CALL DOLT_COMMIT('-am', 'branch moves id 1 to the origin')",
+			"CALL DOLT_CHECKOUT('main')",
+			"UPDATE chunks SET e = STRING_TO_VECTOR('[99,99]') WHERE id = 1",
+			"CALL DOLT_COMMIT('-am', 'main moves id 1 far away')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('branch')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 'chunks')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// id 1 was resolved to the origin, so it is the nearest neighbor of '[0,0]'.
+				// The vector index must be rebuilt after conflict resolution — verify it is.
+				Query:    "SELECT id FROM chunks ORDER BY VEC_DISTANCE('[0,0]', e) LIMIT 1",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
 		Name: "no-ff merge commit uses author session variables for author identity",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk INT PRIMARY KEY)",

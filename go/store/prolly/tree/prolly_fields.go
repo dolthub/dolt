@@ -125,15 +125,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 	case val.JsonAdaptiveEnc:
 		v, ok, err = td.GetJsonAdaptiveValue(ctx, i, ns, tup)
 		if ok {
-			switch val := v.(type) {
-			case *val.JsonAdaptiveStorage:
-				v, err = NewJSONDoc(val.Addr(), ns).ToIndexedJSONDocument(ctx)
-			case []byte:
-				val = unescapeHTMLCodepoints(val)
-				return types.NewLazyJSONDocument(val), nil
-			default:
-				err = fmt.Errorf("unexpected type for JsonAdaptiveEnc: %T", val)
-			}
+			return OpenJsonAdaptiveValue(ctx, v, ns)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
@@ -141,7 +133,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		var h hash.Hash
 		h, ok = td.GetBytesAddr(i, tup)
 		if ok {
-			v = val.NewByteArray(ctx, h, ns)
+			v = val.NewByteArray(h, ns)
 		}
 	case val.JSONAddrEnc:
 		var h hash.Hash
@@ -153,7 +145,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		var h hash.Hash
 		h, ok = td.GetStringAddr(i, tup)
 		if ok {
-			v = val.NewTextStorage(ctx, h, ns)
+			v = val.NewTextStorage(h, ns)
 		}
 	case val.BytesAdaptiveEnc:
 		v, ok, err = td.GetBytesAdaptiveValue(ctx, i, ns, tup)
@@ -188,6 +180,19 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		return nil, err
 	}
 	return v, err
+}
+
+// OpenJsonAdaptiveValue returns a sql.JSONWrapper for the given value from a JsonAdaptiveEnc column
+func OpenJsonAdaptiveValue(ctx context.Context, v interface{}, ns NodeStore) (sql.JSONWrapper, error) {
+	switch val := v.(type) {
+	case *val.JsonAdaptiveStorage:
+		return NewJSONDoc(val.Addr(), ns).ToIndexedJSONDocument(ctx)
+	case []byte:
+		val = unescapeHTMLCodepoints(val)
+		return types.NewLazyJSONDocument(val), nil
+	default:
+		return nil, fmt.Errorf("unexpected type for JsonAdaptiveEnc: %T", val)
+	}
 }
 
 // GetFieldValue reads the value from the ith field of the Tuple as a sql.Value
@@ -329,7 +334,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		if !ok {
 			return v, nil
 		}
-		v.WrappedVal = val.NewByteArray(ctx, h, ns)
+		v.WrappedVal = val.NewByteArray(h, ns)
 		return v, nil
 
 	case val.JSONAddrEnc:
@@ -371,7 +376,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		// out-of-band
 		_, lengthBytes := uvarint.Uvarint(b)
 		h := hash.New(b[lengthBytes:])
-		v.WrappedVal = val.NewByteArray(ctx, h, ns)
+		v.WrappedVal = val.NewByteArray(h, ns)
 		return v, err
 
 	case val.GeomAdaptiveEnc:

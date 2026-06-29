@@ -25,10 +25,12 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+	vttypes "github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -182,9 +184,10 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		columns: []schema.Column{
 			schema.NewColumn(ToCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
 		},
-		indexSch:                      sch,
-		tableSch:                      sch,
-		unique:                        true,
+		indexSch: sch,
+		tableSch: sch,
+		// A single commit changes many rows, so the to_commit and from_commit indexes are not unique.
+		unique:                        false,
 		comment:                       "",
 		vrw:                           t.ValueReadWriter(),
 		ns:                            t.NodeStore(),
@@ -200,7 +203,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 			},
 			indexSch:                      sch,
 			tableSch:                      sch,
-			unique:                        true,
+			unique:                        false,
 			comment:                       "",
 			vrw:                           t.ValueReadWriter(),
 			ns:                            t.NodeStore(),
@@ -238,11 +241,15 @@ func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, incl
 	}
 }
 
-func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, vs val.ValueStore, includeCommits bool) (indexes []sql.Index) {
-	return []sql.Index{
-		MakeDiffTableIndex(tbl, "to", toSchema, includeCommits, vs),
-		MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits, vs),
+func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, includeCommits bool) (indexes []sql.Index) {
+	indexes = make([]sql.Index, 0)
+	if toSchema != nil {
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "to", toSchema, includeCommits))
 	}
+	if fromSchema != nil {
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits))
+	}
+	return indexes
 }
 
 type SecondaryDiffIndexType int
@@ -484,6 +491,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
+		predicate:                     idx.Predicate(),
 		vrw:                           vrw,
 		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
@@ -516,6 +524,7 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
+		predicate:                     idx.Predicate(),
 		vrw:                           nil,
 		ns:                            nil,
 		keyBld:                        nil,
@@ -590,10 +599,11 @@ type doltIndex struct {
 	tableSch    schema.Schema
 	vectorProps schema.VectorProperties
 
-	id      string
-	dbName  string
-	tblName string
-	comment string
+	id        string
+	dbName    string
+	tblName   string
+	comment   string
+	predicate string
 
 	fullTextProps schema.FullTextProperties
 	prefixLengths []uint16
@@ -627,6 +637,9 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 	for _, i := range indexes {
 		idx := i.(*doltIndex)
 		if !idx.IsUnique() {
+			continue
+		}
+		if idx.predicate != "" {
 			continue
 		}
 		var nullAccepting bool
@@ -851,7 +864,7 @@ func (di *doltIndex) HasContentHashedField() bool {
 			prefixLength = di.prefixLengths[i]
 		}
 
-		if sqltypes.IsTextBlob(col.TypeInfo.ToSqlType()) && prefixLength == 0 {
+		if isHashEncoded(col.TypeInfo) && prefixLength == 0 {
 			contentHashedField = true
 			return true, nil
 		}
@@ -860,6 +873,10 @@ func (di *doltIndex) HasContentHashedField() bool {
 	})
 
 	return contentHashedField
+}
+
+func isHashEncoded(ti typeinfo.TypeInfo) bool {
+	return val.IsAddrEncoding(ti.Encoding()) || val.IsAdaptiveEncoding(ti.Encoding())
 }
 
 func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
@@ -938,6 +955,11 @@ func (di *doltIndex) IsPrimaryKey() bool {
 // Comment implements sql.Index
 func (di *doltIndex) Comment() string {
 	return di.comment
+}
+
+// Predicate implements sql.PartialIndex
+func (di *doltIndex) Predicate() string {
+	return di.predicate
 }
 
 // PrefixLengths implements sql.Index
@@ -1136,12 +1158,18 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		fields := make([]prolly.RangeField, len(rng))
 		skipRangeMatchCallback := true
 		for j, expr := range rng {
-			if !sqltypes.IsInteger(expr.Typ) {
-				// String, decimal, float, datetime ranges can return
-				// false positive prefix matches. More precise range.Matches
-				// comparison is required.
+			// String, decimal, float, datetime ranges can return
+			// false positive prefix matches. More precise range.Matches
+			// comparison is required.
+			if extTyp, ok := expr.Typ.(sql.ExtendedType); ok {
+				// TODO: is there a better way to tell if this is an INT?
+				if !vttypes.IsIntegral(extTyp.Type()) {
+					skipRangeMatchCallback = false
+				}
+			} else if !sqltypes.IsInteger(expr.Typ) {
 				skipRangeMatchCallback = false
 			}
+
 			if rangeCutIsBinding(expr.LowerBound) {
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(ctx, expr.LowerBound, rng[j].Typ)
@@ -1212,7 +1240,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		for i, field := range fields {
 			// lookups on non-unique indexes can't be point lookups
 			typ := di.keyBld.Desc.Types[i]
-			cmp := order.CompareValues(ctx, i, field.Hi.Value, field.Lo.Value, typ)
+			cmp, err := order.CompareValues(ctx, i, field.Hi.Value, field.Lo.Value, typ)
+			if err != nil {
+				return nil, err
+			}
 			fields[i].BoundsAreEqual = cmp == 0
 
 			if !di.unique {

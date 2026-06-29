@@ -21,6 +21,35 @@ import (
 // DoltDiffPlanTests are tests that check our query plans for various operations on the dolt diff system tables
 var DoltDiffPlanTests = []queries.QueryPlanTest{
 	{
+		// See https://github.com/dolthub/dolt/issues/11159
+		Query: `select * from dolt_diff_one_pk where to_commit='abc' and to_pk=1`,
+		// A non-unique to_commit index is not a point lookup, so the planner prefers the primary key index.
+		ExpectedPlan: "Filter\n" +
+			" ├─ ((dolt_diff_one_pk.to_commit = 'abc') AND (dolt_diff_one_pk.to_pk = 1))\n" +
+			" └─ IndexedTableAccess(dolt_diff_one_pk)\n" +
+			"     ├─ index: [dolt_diff_one_pk.to_pk]\n" +
+			"     └─ filters: [{[1, 1]}]\n" +
+			"",
+	},
+	{
+		Query: `select a.to_pk from dolt_diff_one_pk a join dolt_diff_one_pk b on a.from_commit = b.from_commit`,
+		// A non-unique from_commit index can match many rows per key, so the planner chooses a hash join over a lookup join.
+		ExpectedPlan: "Project\n" +
+			" ├─ columns: [a.to_pk]\n" +
+			" └─ HashJoin\n" +
+			"     ├─ (a.from_commit = b.from_commit)\n" +
+			"     ├─ TableAlias(a)\n" +
+			"     │   └─ Table\n" +
+			"     │       └─ name: dolt_diff_one_pk\n" +
+			"     └─ HashLookup\n" +
+			"         ├─ left-key: (a.from_commit)\n" +
+			"         ├─ right-key: (b.from_commit)\n" +
+			"         └─ TableAlias(b)\n" +
+			"             └─ Table\n" +
+			"                 └─ name: dolt_diff_one_pk\n" +
+			"",
+	},
+	{
 		Query: `select * from dolt_diff_one_pk where to_pk=1`,
 		ExpectedPlan: "Filter\n" +
 			" ├─ (dolt_diff_one_pk.to_pk = 1)\n" +
