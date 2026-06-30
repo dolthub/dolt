@@ -46,6 +46,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory/grpcreresolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -1196,8 +1197,10 @@ type replicationServiceClient struct {
 	client replicationapi.ReplicationServiceClient
 	closer func() error
 	remote string
-	url    string
-	tls    bool
+	// httpUrl is the Dolt remote URL (e.g. http://53.78.2.1:3832) matching this
+	// client's endpoint. It is derived from the same remote URL as the gRPC dial
+	// target, so it stays correct regardless of the grpc target's scheme/format.
+	httpUrl string
 }
 
 func (c *Controller) replicationServiceDialOptions() []grpc.DialOption {
@@ -1213,6 +1216,9 @@ func (c *Controller) replicationServiceDialOptions() []grpc.DialOption {
 
 	ret = append(ret, grpc.WithPerRPCCredentials(c.grpcCreds))
 
+	// Use the failure-driven re-resolving load-balancing policy.
+	ret = append(ret, grpc.WithDefaultServiceConfig(grpcreresolve.ServiceConfigJSON))
+
 	return ret
 }
 
@@ -1224,30 +1230,24 @@ func (c *Controller) replicationServiceClients(ctx context.Context) ([]*replicat
 		if err != nil {
 			return nil, fmt.Errorf("could not parse remote url template [%s] for remote %s: %w", r.RemoteURLTemplate(), r.Name(), err)
 		}
-		grpcTarget := "dns:" + url.Hostname() + ":" + url.Port()
-		cc, err := grpc.DialContext(ctx, grpcTarget, c.replicationServiceDialOptions()...)
+		hostPort := url.Hostname() + ":" + url.Port()
+		grpcTarget := "dns:///" + hostPort
+		cc, err := grpc.NewClient(grpcTarget, c.replicationServiceDialOptions()...)
 		if err != nil {
 			return nil, fmt.Errorf("could not dial grpc endpoint [%s] for remote %s: %w", grpcTarget, r.Name(), err)
 		}
+		httpScheme := "http://"
+		if c.tlsCfg != nil {
+			httpScheme = "https://"
+		}
 		client := replicationapi.NewReplicationServiceClient(cc)
 		ret = append(ret, &replicationServiceClient{
-			remote: r.Name(),
-			url:    grpcTarget,
-			tls:    c.tlsCfg != nil,
-			client: client,
-			closer: cc.Close,
+			remote:  r.Name(),
+			httpUrl: httpScheme + hostPort,
+			client:  client,
+			closer:  cc.Close,
 		})
 	}
 	return ret, nil
 }
 
-// Generally r.url is a gRPC dial endpoint and will be something like "dns:53.78.2.1:3832", or something like that.
-//
-// We want to match these endpoints up with Dolt remotes URLs, which will typically be something like http://53.78.2.1:3832.
-func (r *replicationServiceClient) httpUrl() string {
-	prefix := "https://"
-	if !r.tls {
-		prefix = "http://"
-	}
-	return prefix + strings.TrimPrefix(r.url, "dns:")
-}

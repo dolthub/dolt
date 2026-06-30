@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/credentialhelper"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory/grpcreresolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -123,6 +124,9 @@ func (p GRPCDialProvider) GetGRPCDialParams(grpcConfig grpcendpoint.Config) (dbf
 
 	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(remotesrv.MaxGRPCMessageSize)))
 	opts = append(opts, grpc.WithUserAgent(p.getUserAgentString()))
+
+	// Use the failure-driven re-resolving load-balancing policy.
+	opts = append(opts, grpc.WithDefaultServiceConfig(grpcreresolve.ServiceConfigJSON))
 
 	if grpcConfig.Creds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(grpcConfig.Creds))
